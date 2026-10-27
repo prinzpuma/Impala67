@@ -9,6 +9,9 @@ pub trait Clock {
     /// Wartet `ms` Millisekunden, ohne den Thread zu blockieren; die Plattform liefert das Future
     /// (Browser: `setTimeout`-Promise).
     async fn sleep_ms(&self, ms: u64);
+    /// Neue Uhr-Korrektur nach jeder Drive-Antwort mit `Date`-Header (`U.setClockOffset`): Die
+    /// Plattform stempelt damit neue Events schon während des Durchgangs (Konflikt-Events beim Import).
+    fn set_offset_ms(&self, _offset_ms: f64) {}
 }
 
 /// Systemuhr (nicht im Browser-WASM: dort gibt es weder `SystemTime` noch blockierendes Warten).

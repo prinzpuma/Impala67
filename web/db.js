@@ -1,7 +1,6 @@
 "use strict";
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
-import { shouldUploadToSync } from "./sync-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { compactEvents, compactEventStore } from "./compact-events.js";
 import { yieldToMain } from "./cooperative.js";
@@ -189,8 +188,6 @@ export const DB = (() => {
 			: IDBKeyRange.lowerBound(lower, true);
 		return ro("events", (s) => (limit ? s.getAll(range, limit) : s.getAll(range))).then((all) => all || []);
 	}
-	const eventsAfterSeq = (seq, target = "drive", upToSeq = Infinity) =>
-		eventsAfterSeqAll(seq, upToSeq).then((all) => all.filter((ev) => shouldUploadToSync(ev, target)));
 
 	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
 	const getBlob = (id) => ro("blobs", (s) => s.get(id));
@@ -336,8 +333,8 @@ export const DB = (() => {
 	// den sie verhindert, war nur über zwei aufeinanderfolgende importAll-Aufrufe sichtbar.
 	// [A2] _derived = von einem Import SELBST erzeugtes Merge-/Konflikt-Event. Es liegt über dem
 	// Wasserstand und ist nicht _remote, ist aber keine Bearbeitung DIESES Nutzers. Ohne die Ausnahme
-	// meldet der zweite importAll-Aufruf (drive.js, Post-Upload-Sweep) Konflikte gegen den eigenen Merge.
-	// Hochgeladen werden sie trotzdem — eventsAfterSeq filtert nur _remote.
+	// meldet der zweite importAll-Aufruf (Drive-Kern, späte Deltas) Konflikte gegen den eigenen Merge.
+	// Hochgeladen werden sie trotzdem — der Upload-Filter verwirft nur _remote.
 	const isLocalOnly = (ev, unsyncedAfterSeq) => (ev.seq || 0) > unsyncedAfterSeq && !ev._remote && !ev._derived;
 
 	// Bevorzugt im Worker (compact-worker.js): Lesen und Sortieren des ganzen Logs fror die
@@ -810,5 +807,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeq, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

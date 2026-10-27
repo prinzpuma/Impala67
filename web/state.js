@@ -210,7 +210,7 @@ export const STATE = (() => {
 	const onAfterDispatch = (fn) => { _dispatchHooks.after.push(fn); };
 
 	// Importierte Fremd-Events laufen nicht durch dispatch(), sondern direkt durch
-	// reduce() (drive.js replayImported). Wer auf eingetroffene Fremdänderungen
+	// reduce() (applyRemoteEventsCooperative). Wer auf eingetroffene Fremdänderungen
 	// reagieren muss — z.B. ein offenes Heft, das sofort die Striche des anderen
 	// Geräts zeigen soll — hängt sich hier ein. fn(types: Set, events: Array).
 	const _remoteHooks = [];

@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 [dependencies]
 impala-sync = { path = "../impala-sync" }
 impala-crypto = { path = "../impala-crypto", default-features = false }
+impala-drive = { path = "../impala-drive", default-features = false }
 impala-net = { path = "../impala-net", default-features = false }
 impala-search = { path = "../impala-search", default-features = false }
 impala-ink = { path = "../impala-ink", default-features = false }

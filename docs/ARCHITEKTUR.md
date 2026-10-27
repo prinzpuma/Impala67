@@ -75,7 +75,7 @@ Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln st
 ### Sync
 - **Cloudflare** (Ablauf im Rust-Kern `core/impala-sync` + `core/impala-crypto`, als WASM aus `web/core/`; `sync-cloudflare.js` liefert nur fetch, IndexedDB, Timer, WebSocket und Status; Server: `server/worker.js`): Push nach jedem Dispatch (entprellt), Pull per WebSocket-Hinweis. Ende-zu-Ende-verschlüsselt. Protokoll v4, Details im Skill.
 - **Konflikte**: Seiteninhalte per 3-Wege-Merge (`DB.merge3`), Heft-Striche konfliktfrei als Einzel-Ops. Nicht lösbare Konflikte zeigt `render.js:854–1141` an.
-- **Google Drive** (`drive.js`): unabhängiges Backup (gzip, **nicht** verschlüsselt; liegt im privaten `appDataFolder`) aus Snapshot + Delta-Dateien + Blobs.
+- **Google Drive** (Ablauf im Rust-Kern `core/impala-drive`, Anmeldung und Timer in `drive.js`): unabhängiges Backup (gzip, **nicht** verschlüsselt; liegt im privaten `appDataFolder`) aus Snapshot + Delta-Dateien + Blobs.
 
 ---
 
@@ -162,9 +162,6 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 ### B4 – Doppelte Logik
 | Was | Wo |
 |---|---|
-| `mapLimit` | `drive.js:320`, `sync-cloudflare.js:86` |
-| `sha256Hex` | `sync-core.js:24`, `sync-crypto.js:35` |
-| gzip | `drive.js:420`, `sync-crypto.js:69` |
 | Heft-Ops erzeugen | `sync-core.js:106` (`heftBaselineOps`) vs. `heft-document-core.js` (`diffDocument`); `heftDiffOps` (sync-core.js:119) ungenutzt |
 | neue Heft-Seite | `heft.js:159` vs. `state.js:364` |
 | Handschrift-OCR | `heft.js:110–155` und `heft-indexer.js:37–86` |
@@ -178,7 +175,7 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 - Viele Module bieten mehr nach außen an, als genutzt wird (nur intern gebrauchte Funktionen im Rückgabe-Objekt).
 
 ### B6 – Altlasten mit Kompatibilitätspflicht (nicht einfach löschen!)
-Migrationen alter Datenformate: `db.js:59–75` (alte DB „notion“), `state-checkpoint.js` Format 1, `state.js:332–349` (alte Secrets), `heft.js:233–300` (Heft aus localStorage), `drive.js:17/50/527` (v1-Snapshots), `sync-cloudflare.js:648` (`migrateLocalV4`). Entfernen nur mit festgelegter Mindestversion, ab der alte Daten nicht mehr vorkommen.
+Migrationen alter Datenformate: `db.js:59–75` (alte DB „notion“), `state-checkpoint.js` Format 1, `state.js:332–349` (alte Secrets), `heft.js:233–300` (Heft aus localStorage), `core/impala-drive/src/format.rs` (v1-Snapshots, Drive-Zustand aus `localStorage`), `sync-cloudflare.js:648` (`migrateLocalV4`). Entfernen nur mit festgelegter Mindestversion, ab der alte Daten nicht mehr vorkommen.
 
 ---
 

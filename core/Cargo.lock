@@ -868,6 +868,7 @@ name = "impala-wasm"
 version = "0.1.0"
 dependencies = [
  "impala-crypto",
+ "impala-drive",
  "impala-ink",
  "impala-net",
  "impala-search",

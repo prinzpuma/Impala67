@@ -1,22 +1,6 @@
 "use strict";
 
-const UTF8_ENCODER = new TextEncoder();
-
-// Begrenzte Parallelität: höchstens `limit` gleichzeitige Aufrufe, Ergebnisse in Eingabereihenfolge.
-export async function mapLimit(items, limit, fn) {
-	const list = items || [];
-	const out = new Array(list.length);
-	let next = 0;
-	await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, list.length)) }, async () => {
-		while (next < list.length) { const i = next++; out[i] = await fn(list[i], i); }
-	}));
-	return out;
-}
-
-// UTF-8-Länge ohne Kopie, wenn der Text reines ASCII ist (Sync-Pakete: Base64/Hex). Der
-// TextEncoder legte sonst jedes bis zu 8 MB große Paket ein weiteres Mal im Speicher an.
-const NON_ASCII = /[^\x00-\x7f]/;
-export const utf8Length = (text) => (NON_ASCII.test(text) ? UTF8_ENCODER.encode(text).byteLength : text.length);
+// Anfragen des Cloudflare-Syncs mit Zeitlimit, das bei jedem übertragenen Byte neu beginnt.
 
 function responseHeaders(xhr) {
 	const headers = new Headers();

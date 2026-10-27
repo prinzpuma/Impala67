@@ -653,6 +653,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             let t1 = self.clock.now_ms();
             if let Some(server) = res.header("date").and_then(api::http_date_ms) {
                 self.skew.observe(t0, t1, server);
+                self.clock.set_offset_ms(self.skew.applied_offset_ms());
             }
             match api::outcome(&res) {
                 Outcome::Ok => return Ok(res),

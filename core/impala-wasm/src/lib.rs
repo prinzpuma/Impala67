@@ -1,6 +1,8 @@
 //! WASM-Hülle des Kerns für die PWA. Gebaut mit `npm run build:core` nach `core/target/wasm/` nach `web/core/`.
 
+mod drive;
 mod ink;
+mod js;
 mod search;
 mod sync;
 

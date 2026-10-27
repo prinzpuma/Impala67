@@ -1,8 +1,10 @@
-//! Vergleich mit dem JS-Original (Golden-Files aus `core/tools/gen-golden-drive.mjs`):
-//! - `flows.json`: ganze Abläufe gegen eine nachgebaute Drive-API. Rust muss dieselben Anfragen
+//! Vergleich mit dem JS-Original:
+//! - `flows.json` (eingefroren; letzte JS-Fassung von `web/drive.js`, seitdem läuft der Ablauf nur
+//!   noch im Kern): ganze Abläufe gegen eine nachgebaute Drive-API. Rust muss dieselben Anfragen
 //!   (Methode, URL, Header, Metadaten, Dateiinhalt nach gunzip) stellen, dasselbe einspielen und
 //!   denselben `localStorage`-Zustand hinterlassen. Die aufgezeichneten Antworten werden abgespielt.
-//! - `rules.json`: Intervalle, Status- und Backup-Anzeige, Aktionsknopf.
+//! - `rules.json` (aus `core/tools/gen-golden-drive.mjs`): Intervalle, Status- und Backup-Anzeige,
+//!   Aktionsknopf – Regeln, die in der PWA weiter in JS laufen.
 //!
 //! Bewusste Abweichungen (im Code kommentiert) sind hier als Ausnahmen markiert:
 //! - Deltas ohne lokale Marken (`seq`, `_remote`, `_remoteSource`, `_derived`),

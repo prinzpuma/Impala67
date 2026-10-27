@@ -2,42 +2,22 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { shouldUploadDelta, unseenRemoteFiles, newestFile, encodeJson, encodeJsonText, decodeJson, gzipBytes, boundedKnownIds, pruneEventsForUpload } from "./sync-core.js";
-import { sha256Hex } from "./sync-crypto.js";
-import { mapLimit } from "./sync-transfer.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
-// Google-Drive-Sync im privaten appDataFolder.
-// Regeln: Event-Pakete werden per ID zusammengeführt, Snapshots verdichten nur bereits
-// bekannte Daten, Dateien werden vor dem Download geprüft und parallele Tabs teilen ein Lock.
-// Historische Fehleranalysen und Migrationen stehen im Git-Verlauf.
+import { loadCore } from "./rust-core.js";
+// Google-Drive-Backup im privaten appDataFolder. Der Ablauf (Dateiindex über die Changes-API,
+// Snapshot + Änderungspakete, Dateien, Verdichten, Uhren-Drift, Wiederholungen) läuft im
+// Rust-Kern (core/impala-drive, über web/core/). Hier bleiben Anmeldung, Ein-/Ausgabe für den
+// Kern (fetch, localStorage, IndexedDB), Timer, Web Lock und Statusanzeige.
 export const DRIVE = (() => {
 	const SCOPE = "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email";
-	const FILE_NAME = "impala67-sync.json", LEGACY_FILE_NAME = "notion-sync.json"; // Altformat bleibt lesbar
-	const SNAPSHOT_NAME = "impala67-snapshot-v2.json.gz";
-	const DELTA_PREFIX = "impala67-delta-v2-", BLOB_PREFIX = "impala67-blob-v2-";
-	// [H4] Der Heft-Verlauf (heft.js: "heftver:<pid>:<t>:<rev>", max. 20 Stück je Heft, 24 h)
-	// ist ausdrücklich gerätelokal — er erzeugt keine Events, ein anderes Gerät kann mit den
-	// Snapshots also gar nichts anfangen. Trotzdem lief er mit: die Upload-Schleife iteriert
-	// über ALLE Blob-Schlüssel. Pro Heft und Tag landeten so bis zu 20 Vollkopien in Drive,
-	// die jedes andere Gerät auch noch herunterlud und speicherte.
-	// Ebenso der Start-Checkpoint (db.js): Er liegt im selben Store, und die Upload-Schleife las
-	// bei jedem Sync alle seine Einträge (Heft-Bilder und -Striche, schnell >10 MB), nur um sie zu überspringen.
-	const LOCAL_ONLY_BLOB = (id) => String(id).startsWith("heftver:") || DB.isStateCheckpointKey(id);
 	const LS = localStorage;
-	const lsJson = (k, fb) => { try { return JSON.parse(LS.getItem(k) ?? "null") ?? fb; } catch { return fb; } };
-	const DEVICE_ID = (() => {
-		let id = LS.getItem("impala67_drive_device_id");
-		if (!id) { id = crypto.randomUUID?.() || Date.now() + Math.random().toString(16).slice(2); LS.setItem("impala67_drive_device_id", id); }
-		return id;
-	})();
 	// Eine öffentliche Client-ID kann optional mit config.local.js ausgeliefert
 	// werden; alternativ wird sie in den Einstellungen pro Gerät hinterlegt.
 	const cfg = (k) => window.APP_CONFIG?.[k] || "";
 	const webId = () => cfg("GOOGLE_WEB_CLIENT_ID") || S.settings?.driveClientId || "";
-	let token = null;
 	let tokenRequestInFlight = null; // Timer + Sync teilen eine OAuth-Anfrage (nie zwei Popups)
 	let authGeneration = 0; // Abmelden macht auch spaet eintreffende OAuth-Antworten wirkungslos.
 	let expiryNoticeTimer = 0;
@@ -116,7 +96,6 @@ export const DRIVE = (() => {
 	}
 
 	function clearAccessToken(needsLogin) {
-		token = null;
 		LS.removeItem("impala67_drive_token");
 		LS.removeItem("impala67_drive_token_expiry");
 		sessionKnown = needsLogin;
@@ -125,9 +104,8 @@ export const DRIVE = (() => {
 
 	function saveToken(data) {
 		// Tokens bewusst nur in localStorage (pro Gerät), nie ins Event-Log/Export.
-		token = data.access_token;
 		sessionKnown = true;
-		LS.setItem("impala67_drive_token", token);
+		LS.setItem("impala67_drive_token", data.access_token);
 		LS.setItem("impala67_drive_token_expiry", String(Date.now() + (Number(data.expires_in) || 3600) * 1000 - 60000));
 		authState = DRIVE_AUTH_STATE.CONNECTED;
 		syncUi = { state: "idle", label: "", detail: "" };
@@ -144,7 +122,7 @@ export const DRIVE = (() => {
 		}, Math.max(1000, exp - Date.now()));
 	}
 
-	function getTokenBrowserPopup(interactive, generation) {
+	function getTokenBrowserPopup(generation) {
 		return new Promise((resolve, reject) => {
 			if (!window.google?.accounts) return reject(new Error("Google-Anmeldung lädt noch oder es besteht keine Internetverbindung. Bitte gleich erneut versuchen."));
 			// webId(): kennt auch config.local.js — vorher scheiterte der Notnagel-Weg, wenn die
@@ -163,7 +141,7 @@ export const DRIVE = (() => {
 							reject(new Error("Google-Drive-Zugriff wurde nicht vollständig freigegeben."));
 							return;
 						}
-						saveToken(resp); resolve(token); return;
+						saveToken(resp); resolve(resp.access_token); return;
 					}
 					reject(new Error(resp?.error_description || resp?.error || "Kein Zugriffstoken erhalten."));
 				},
@@ -175,51 +153,19 @@ export const DRIVE = (() => {
 						: "Google-Anmeldung konnte nicht geöffnet werden.";
 					reject(new Error(msg));
 				},
-			}).requestAccessToken({ prompt: interactive ? "select_account" : "" });
+			}).requestAccessToken({ prompt: "select_account" });
 		});
 	}
 
-	function getTokenBrowser(interactive) {
+	// Hintergrund-Syncs öffnen nie ein Google-Fenster: Ohne gültiges Token meldet der Kern
+	// „Sitzung abgelaufen“, und erst ein bewusster Klick meldet über authorize() neu an.
+	function getTokenBrowser() {
 		if (tokenRequestInFlight) return tokenRequestInFlight;
-		if (!interactive && (!window.google?.accounts || !webId())) {
-			return Promise.reject(new Error("Keine gültige Sitzung — bitte einmal manuell mit Google anmelden."));
-		}
 		const generation = ++authGeneration;
-		const tracked = getTokenBrowserPopup(interactive, generation)
+		const tracked = getTokenBrowserPopup(generation)
 			.finally(() => { if (tokenRequestInFlight === tracked) tokenRequestInFlight = null; });
 		tokenRequestInFlight = tracked;
 		return tracked;
-	}
-
-	async function getToken(interactive) {
-		const saved = validSavedToken();
-		if (saved) return (token = saved);
-		// Hintergrund-Syncs dürfen niemals selbst ein Google-Fenster öffnen. Ein
-		// bewusster Sync-Klick erneuert die Sitzung über renewFromUserGesture().
-		if (!interactive) {
-			setAuthState(DRIVE_AUTH_STATE.RENEWAL_REQUIRED, { resetSync: true });
-			throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
-		}
-		return getTokenBrowser(true);
-	}
-
-	async function fetchUserInfo(generation) {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 8000);
-		try {
-			const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", { headers: { Authorization: "Bearer " + token }, signal: controller.signal });
-			if (res.status === 401) {
-				if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
-				clearAccessToken(true);
-				throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
-			}
-			return res.ok ? res.json() : null;
-		} catch (error) {
-			if (error?.message?.includes("Google-Sitzung abgelaufen")) throw error;
-			return null; // E-Mail ist nur Anzeige; der bereits validierte Token bleibt nutzbar.
-		} finally {
-			clearTimeout(timeout);
-		}
 	}
 
 	async function authorize() {
@@ -233,15 +179,19 @@ export const DRIVE = (() => {
 		try {
 			// Ein ausdrücklicher Login öffnet immer die Kontowahl; nur die Erneuerung
 			// derselben Sitzung verwendet Googles stilleren Wiederholungsweg.
-			const request = getTokenBrowser(true);
+			const request = getTokenBrowser();
 			generation = authGeneration;
 			await request;
 			if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
-			const info = await fetchUserInfo(generation);
+			// Die E-Mail ist nur Anzeige: Fehler außer einem abgelehnten Token zählen nicht.
+			const email = await withCore((core) => core.accountEmail()).catch((error) => {
+				if (error?.code === "session-expired") throw error;
+				return null;
+			});
 			if (!isCurrentDriveAuthRequest(generation, authGeneration)) throw new Error("Diese Anmeldung wurde bereits verworfen.");
-			if (info?.email) saveAccountEmail(info.email);
+			if (email) saveAccountEmail(email);
 			setAuthState(DRIVE_AUTH_STATE.CONNECTED, { resetSync: true });
-			return info || { email: accountEmail || null };
+			return { email: email || accountEmail || null };
 		} catch (error) {
 			if (isCurrentDriveAuthRequest(generation, authGeneration) && authState === DRIVE_AUTH_STATE.CONNECTING) {
 				authState = fallback;
@@ -259,402 +209,79 @@ export const DRIVE = (() => {
 		authGeneration++;
 		tokenRequestInFlight = null;
 		clearTimeout(expiryNoticeTimer);
-		token = null;
 		["token", "token_expiry", "refresh_token"].forEach((k) => LS.removeItem("impala67_drive_" + k));
 		saveAccountEmail("");
 		sessionKnown = false;
 		setAuthState(DRIVE_AUTH_STATE.DISCONNECTED, { resetSync: true });
 	};
 
-	// Uhren-Drift-Erkennung: der Log-Merge entscheidet Konflikte per Zeitstempel (LWW) —
-	// eine falsch gehende Geräteuhr „gewinnt“ sonst systematisch und still. Der Date-Header
-	// jeder Drive-Antwort dient als kostenlose Referenzzeit; syncRaw warnt oberhalb der Schwelle.
-	let clockSkewMs = 0;
-	let skewSamples = []; // [G1] Ringpuffer { offset, rtt, at } für den Minimum-RTT-Schätzer
-	const CLOCK_SKEW_WARN_MS = 120000;
-	// [A8] Samples altern. Ohne Alter konnte ein einzelnes sehr schnelles Sample von vor Stunden den
-	// Offset festnageln — auch nachdem die Geräteuhr längst per NTP korrigiert war. Der Offset fließt
-	// über U.setClockOffset in jeden neuen Zeitstempel und damit in jede LWW-Entscheidung.
-	const SKEW_MAX_AGE_MS = 600000; // 10 min
-	// Ab dieser Schwelle wird der gemessene Versatz aktiv in U.now() hineinkorrigiert:
-	// Event-Zeitstempel entstehen dann in (ungefährer) Serverzeit — LWW-Konflikte werden
-	// fair entschieden, statt dass die falsch gehende Uhr systematisch „gewinnt“.
-	// Unterhalb der Schwelle bleibt alles unangetastet (Netz-Latenz verrauscht kleine Werte).
-	const CLOCK_APPLY_MS = 15000;
-	async function api(path, opts = {}, attempt = 0) {
-		const t0 = Date.now();
-		const res = await fetch("https://www.googleapis.com" + path, { ...opts, headers: { Authorization: "Bearer " + token, ...(opts.headers || {}) } });
-		const t1 = Date.now();
-		const serverDate = Date.parse(res.headers.get("date") || "");
-		if (serverDate) {
-			// [G1] NTP-Schätzer statt "Date.now() - serverDate": der Date-Header gilt in der MITTE
-			// des Round-Trips, sonst zählt jede ms Netzlatenz als Uhren-Drift. +500 ms gleicht die
-			// Sekunden-Auflösung des Headers aus (er ist immer abgerundet). Aus den letzten Samples
-			// gewinnt das mit der KLEINSTEN RTT — das ist das genaueste, Ausreißer fallen raus.
-			skewSamples.push({ offset: (t0 + t1) / 2 - (serverDate + 500), rtt: t1 - t0, at: t1 });
-			skewSamples = skewSamples.filter((s) => t1 - s.at < SKEW_MAX_AGE_MS).slice(-16); // [A8]
-			clockSkewMs = skewSamples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
-			U.setClockOffset(Math.abs(clockSkewMs) > CLOCK_APPLY_MS ? clockSkewMs : 0);
-		}
-		// Kein Popup aus einem Hintergrundlauf: Der nächste bewusste Sync-Klick
-		// erneuert ein abgelaufenes oder entzogenes Token und startet danach neu.
-		if (res.status === 401) {
-			clearAccessToken(true);
-			throw new Error("Google-Sitzung abgelaufen – bitte erneut synchronisieren.");
-		}
-		// Rate-Limit/Serverfehler: kurzer exponentieller Backoff mit Jitter statt sofortigem
-		// Fehlschlag — Drive drosselt gelegentlich (429) und 5xx sind fast immer transient.
-		if ((res.status === 429 || res.status >= 500) && attempt < 3) {
-			await new Promise((r) => setTimeout(r, (500 << attempt) * (1 + Math.random())));
-			return api(path, opts, attempt + 1);
-		}
-		if (!res.ok) throw new Error("Drive-Fehler " + res.status + ": " + (await res.text()).slice(0, 200));
-		return res;
-	}
-	// [A9] Ergebnis melden statt verschlucken: beim Snapshot-Lauf wurden knownDeltaIds und der
-	// Snapshot-Stempel bisher unabhängig vom Erfolg geleert — ein einziges fehlgeschlagenes Delete
-	// zwang den nächsten Sync, Snapshot UND alle überlebenden Deltas erneut zu laden.
-	const del = (fileId) => api("/drive/v3/files/" + fileId, { method: "DELETE" })
-		.then(() => { indexRemove(fileId); return true; })
-		.catch(() => false);
-
-
-	// ---------- Datei-Index + Changes API (v5) ----------
-	// Statt bei jedem Sync ALLE Dateien zu listen, pflegt ein lokaler Index den
-	// Stand des appDataFolder; changes.list (pageToken) liefert nur die Deltas
-	// seit dem letzten Sync. Index + Token liegen atomar in EINEM localStorage-
-	// Eintrag — so können sie nie auseinanderlaufen.
-	const IDX_KEY = "impala67_drive_file_index";
-	const slimFile = (f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime, size: f.size, appProperties: f.appProperties });
-	const loadIndex = () => { const idx = lsJson(IDX_KEY, null); return idx && idx.token && idx.files ? idx : null; };
-	const saveIndex = (idx) => LS.setItem(IDX_KEY, JSON.stringify(idx));
-	const indexPut = (file) => { const idx = loadIndex(); if (idx && file?.id) { idx.files[file.id] = slimFile(file); saveIndex(idx); } };
-	const indexRemove = (fileId) => { const idx = loadIndex(); if (idx?.files[fileId]) { delete idx.files[fileId]; saveIndex(idx); } };
-
-	async function fullFileListing() {
-		const out = [];
-		let pageToken = "";
-		do {
-			const res = await api("/drive/v3/files?spaces=appDataFolder&q=" + encodeURIComponent("trashed=false") + "&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)" + (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : ""));
-			const json = await res.json();
-			out.push(...(json.files || []));
-			pageToken = json.nextPageToken || "";
-		} while (pageToken);
-		return out;
-	}
-
-	// Wendet alle Änderungen seit idx.token auf den Index an und rückt das Token
-	// auf newStartPageToken vor. Wirft bei ungültigem/abgelaufenem Token (404/410).
-	async function applyRemoteChanges(idx) {
-		let pageToken = idx.token;
-		while (pageToken) {
-			const res = await api("/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=" + encodeURIComponent(pageToken));
-			const json = await res.json();
-			for (const ch of json.changes || []) {
-				if (ch.removed || ch.file?.trashed) delete idx.files[ch.fileId];
-				else if (ch.file?.id) idx.files[ch.file.id] = slimFile(ch.file);
-			}
-			if (json.newStartPageToken) { idx.token = json.newStartPageToken; return; }
-			pageToken = json.nextPageToken || "";
-		}
-		throw new Error("changes.list lieferte weder nextPageToken noch newStartPageToken.");
-	}
-
-	async function listSyncFiles() {
-		const idx = loadIndex();
-		if (idx) {
-			try {
-				await applyRemoteChanges(idx);
-				saveIndex(idx);
-				return Object.values(idx.files);
-			} catch (e) {
-				// Token abgelaufen/ungültig (Drive meldet 404 oder 410) → Index verwerfen
-				// und unten einmalig voll listen. Andere Fehler (Netz) normal weiterreichen.
-				if (!/Drive-Fehler (404|410)/.test(String(e?.message))) throw e;
-				console.warn("[listSyncFiles] Changes-Token ungültig — Fallback auf Voll-Listing.");
-				LS.removeItem(IDX_KEY);
-			}
-		}
-		// Erst-Sync/Fallback: Token VOR dem Listing holen — Änderungen in der Lücke
-		// tauchen dann höchstens doppelt auf (harmlos, alle Import-Pfade sind idempotent).
-		const token = (await (await api("/drive/v3/changes/startPageToken")).json()).startPageToken;
-		const files = await fullFileListing();
-		saveIndex({ token, files: Object.fromEntries(files.map((f) => [f.id, slimFile(f)])) });
-		return files;
-	}
-
-	async function uploadNamed(name, bytes, encoding, fileId, appProperties) {
-		const meta = { name, ...(fileId ? {} : { parents: ["appDataFolder"] }), appProperties: { encoding: encoding || "identity", ...(appProperties || {}) } };
-		const boundary = "impala67" + Date.now() + Math.random().toString(16).slice(2);
-		const body = new Blob([
-			"--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
-			"\r\n--" + boundary + "\r\nContent-Type: application/octet-stream\r\n\r\n",
-			bytes, "\r\n--" + boundary + "--",
-		]);
-		const res = await api("/upload/drive/v3/files" + (fileId ? "/" + fileId : "") + "?uploadType=multipart&fields=id,name,modifiedTime,appProperties", {
-			method: fileId ? "PATCH" : "POST", headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body,
+	// ---------- Ein-/Ausgabe für den Rust-Kern ----------
+	// fetch für den Kern: { method, url, headers: [[k, v]], body } → { status, headers, body }.
+	const http = {
+		async send({ method, url, headers, body }) {
+			const init = { method, headers: Object.fromEntries(headers), body };
 			// pagehide-Flush: kleine Uploads (typisch das gzip-Delta) mit keepalive absetzen —
 			// sie überleben das Tab-Schließen (fetch-keepalive-Limit ~64 KB, daher die Schranke).
-			...(flushMode && body.size < 60000 ? { keepalive: true } : {}),
-		});
-		const json = await res.json();
-		indexPut(json); // Index sofort aktuell halten — nicht erst über changes.list im nächsten Zyklus
-		return json;
-	}
+			if (flushMode && body && body.byteLength < 60000) init.keepalive = true;
+			// Die Konto-E-Mail ist nur Anzeige: nach 8 s aufgeben, statt die Anmeldung hängen zu lassen.
+			if (url.includes("/oauth2/") && typeof AbortSignal.timeout === "function") init.signal = AbortSignal.timeout(8000);
+			const res = await fetch(url, init);
+			return { status: res.status, headers: [...res.headers], body: new Uint8Array(await res.arrayBuffer()) };
+		},
+	};
 
-	async function downloadPayload(file) {
-		const res = await api("/drive/v3/files/" + file.id + "?alt=media");
-		const bytes = new Uint8Array(await res.arrayBuffer());
-		return decodeJson(bytes, file.appProperties?.encoding || (file.name.endsWith(".gz") ? "gzip" : "identity"));
-	}
-
-
-	// Offene Hefte brauchen vor dem Abspielen keinen Flush mehr: Ihr Veröffentlichungs-Schatten
-	// folgt dem Log (heft.js), fremde Striche gelten nie als eigene Neuerung und eigene, noch
-	// nicht gespeicherte Striche bleiben als Änderung erkennbar.
-	async function replayImported(events) {
-		if (!(events || []).length) return;
-		await STATE.applyRemoteEventsCooperative(events);
-	}
-
-	// v8: heftHeads/legacyHeftIds/reconcileHeftBlobs sind ersatzlos entfallen — rund 100 Zeilen
-	// Sonderbehandlung für einen Transportweg, den es nicht mehr gibt. Hefte sind Events.
-	const loadKnownIds = (k) => new Set(lsJson(k, []));
-	const saveKnownIds = (k, set) => LS.setItem(k, JSON.stringify(boundedKnownIds([...set])));
-
-	// -- v8.1: Ballast gar nicht erst hochladen ------------------------------
-	// Zwei Sorten Muell sind bisher durch die Leitung gewandert:
-	//  (a) reine Ansichts-Events (offene Tabs, aufgeklappte Baumzweige) - die
-	//      sind geraetespezifisch und auf dem anderen Geraet schlicht falsch.
-	//  (b) Heft-Striche, die im selben Paket schon von einem heftSnap
-	//      ueberholt wurden - der Snapshot enthaelt sie bereits.
-	// EIN Weg, ein Änderungspaket hochzuladen — syncRaw und flushUpload teilen ihn. Vorher stand
-	// die Paketbildung zweimal da: Dateiname, appProperties, „gelesen“-Liste und Wasserstand
-	// mussten an zwei Stellen identisch bleiben. Solche Zwillinge laufen mit der Zeit auseinander,
-	// und beim Sync fällt das erst auf, wenn Geräte divergieren.
-	async function uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds) {
-		const events = pruneEventsForUpload(DB.filterEventsForSync(
-			await DB.eventsAfterSeq(uploadedSeq), SETTINGS_SYNC.allowsSecrets(S.settings)));
-		if (events.length) {
-			const packed = await encodeJson({ app: "impala67", version: 2, exportedAt: U.now(), events, blobs: {} });
-			const created = await uploadNamed(DELTA_PREFIX + DEVICE_ID + "-" + (uploadedSeq + 1) + "-" + localMaxSeq + ".json.gz",
-				packed.bytes, packed.encoding, null, { device: DEVICE_ID, from: String(uploadedSeq + 1), to: String(localMaxSeq) });
-			const known = knownDeltaIds || loadKnownIds("impala67_drive_known_deltas");
-			known.add(created.id); // [F5] sonst lädt der nächste Sync das eigene Paket erneut
-			saveKnownIds("impala67_drive_known_deltas", known);
-		}
-		// Wasserstand auch vorrücken, wenn nur Remote-Echos lokale Sequenzen erhielten oder alles
-		// Aussortierte weggefallen ist — sonst wird derselbe Bereich bei jedem Lauf neu geprüft.
-		LS.setItem("impala67_drive_uploaded_seq", String(localMaxSeq));
-		return events.length;
-	}
-
-	// Sync v4: gzip-Deltas + deduplizierte Blob-Dateien. Unveränderte Remote-Dateien
-	// werden anhand id/modifiedTime gar nicht erst geladen.
-	async function syncRaw(onStatus) {
-		const setStatus = (state, text) => { emitSyncStatus(state, text); onStatus?.(text); };
-		setStatus("syncing", "Synchronisiere…");
-		await getToken(false);
-		const files = await listSyncFiles();
-		if (Math.abs(clockSkewMs) > CLOCK_SKEW_WARN_MS) {
-			U.toast("Die Geräteuhr weicht ~" + Math.round(Math.abs(clockSkewMs) / 60000) + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
-			console.warn("[sync] Uhren-Drift gegen Drive:", clockSkewMs, "ms");
-		}
-		// [F4] Wasserstand klemmen: ein Wert über maxSeq (Kompaktierung/Restore) würde die
-		// Konflikt-Erkennung deaktivieren — Remote überschriebe lokale Änderungen still.
-		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), await DB.maxSeq());
-		const importOpts = {
-			unsyncedAfterSeq: uploadedSeq,
-			pageInfo: (id) => S.pages[id],
-			remote: true,
-			allowSecrets: SETTINGS_SYNC.allowsSecrets(S.settings),
-		};
-		let imported = 0, uploaded = 0, conflicts = 0, merged = 0;
-		const conflictDetails = [], importedEvents = [], mergedDetails = [];
-		// Sofort anwenden (wie Cloudflare): Bisher lief das erst am Ende des Syncs. Scheiterte
-		// dazwischen ein Datei-Transfer, lagen die Events im Log und galten als gelesen, die App
-		// zeigte sie aber nie – und Weitertippen überschrieb die fremde Änderung still.
-		const importJson = async (json) => {
-			const r = await DB.importAll(json, importOpts);
-			imported += r.added; conflicts += r.conflicts || 0; merged += r.merged || 0;
-			conflictDetails.push(...(r.conflictDetails || []));
-			mergedDetails.push(...(r.mergedDetails || [])); // automatisch zusammengeführte Seiten (db.js merge3)
-			importedEvents.push(...(r.importedEvents || []));
-			await replayImported(r.importedEvents);
-		};
-
-		// ---- [G4] Pull: Snapshot + alle unbekannten Delta-Shards in EINEM Durchgang ----
-		// Vorher waren das ZWEI importAll-Aufrufe. Jeder liest den kompletten lokalen Event-Log
-		// in den Speicher — zwei Aufrufe = doppelte Arbeit bei jedem Sync. Schwerer wog aber:
-		// der zweite Aufruf sah die frisch importierten Events des ersten als „meine ungesyncten
-		// Änderungen“ und meldete Konflikte gegen den eigenen Sync (db.js/isLocalOnly). Mit einem
-		// einzigen Durchgang kann diese Fehlerklasse gar nicht mehr entstehen. Snapshot- und
-		// Delta-Downloads laufen zusätzlich parallel statt nacheinander.
-		const snapshot = newestFile(files, [SNAPSHOT_NAME, FILE_NAME, LEGACY_FILE_NAME]);
-		const snapStamp = snapshot ? snapshot.id + ":" + snapshot.modifiedTime : "";
-		const needSnapshot = !!snapshot && LS.getItem("impala67_drive_snapshot_stamp") !== snapStamp;
-		const knownDeltaIds = loadKnownIds("impala67_drive_known_deltas");
-		const remoteDeltas = unseenRemoteFiles(files.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
-		if (needSnapshot || remoteDeltas.length) {
-			setStatus("syncing", needSnapshot ? "Remote-Stand übernehmen…" : remoteDeltas.length + " Änderungspaket(e) laden…");
-		}
-		const [snapPayload, deltaPayloads] = await Promise.all([
-			needSnapshot ? downloadPayload(snapshot) : null,
-			mapLimit(remoteDeltas, 6, downloadPayload),
-		]);
-		const pullEvents = [
-			...(Array.isArray(snapPayload?.events) ? snapPayload.events : []),
-			...deltaPayloads.flatMap((p) => Array.isArray(p?.events) ? p.events : []),
-		];
-		// Alt-Snapshots (Format v1, FILE_NAME/LEGACY_FILE_NAME) trugen ihre Blobs noch im selben
-		// Dokument — die müssen mit durch importAll, sonst gingen sie beim Zusammenlegen verloren.
-		const pullBlobs = snapPayload?.blobs && typeof snapPayload.blobs === "object" ? snapPayload.blobs : {};
-		if (pullEvents.length || Object.keys(pullBlobs).length) {
-			await importJson({ app: "impala67", version: 2, exportedAt: U.now(), events: pullEvents, blobs: pullBlobs });
-		}
-		// „Gelesen“-Marken erst NACH erfolgreichem Import setzen: bricht der Import ab, wird das
-		// Paket beim nächsten Sync erneut geholt statt still übersprungen.
-		if (needSnapshot) LS.setItem("impala67_drive_snapshot_stamp", snapStamp);
-		remoteDeltas.forEach((f) => knownDeltaIds.add(f.id));
-		saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
-
-		// Binärdaten: seit v8 ausschließlich unveränderliche Dateien (PDFs, Bilder) — keine Hefte mehr.
-		const remoteBlobs = files.filter((f) => f.name.startsWith(BLOB_PREFIX))
-			.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
-		const remoteBlobHashes = new Set(remoteBlobs.map((f) => f.name.slice(BLOB_PREFIX.length).replace(/\.json\.gz$/, "")));
-		const uploadHashCache = lsJson("impala67_drive_upload_hashes", {}); // [G2] known_blobs entfiel
-		let cacheDirty = false;
-		const localBlobKeys = new Set(await DB.allBlobKeys()); // EIN Read; wird unten mitgepflegt
-		// v8: alle verbleibenden Blobs sind UNVERÄNDERLICH (PDFs, Bilder, Hintergrundbild). Damit
-		// gilt genau eine Regel: was ich schon habe, hole ich nicht — und das entscheidet sich ohne
-		// Download über appProperties.blobId aus der ohnehin geladenen Dateiliste [G2].
-		const wantsBlob = (blobId) => !LOCAL_ONLY_BLOB(blobId) && !localBlobKeys.has(blobId);
-		await mapLimit(remoteBlobs, 6, async (file) => {
-			const declared = file.appProperties?.blobId;
-			if (declared && !wantsBlob(declared)) return; // Download komplett gespart
-			const payload = await downloadPayload(file);
-			if (!payload?.id || !wantsBlob(payload.id) || await DB.getBlob(payload.id)) return;
-			await DB.putBlob(payload.id, U.b64ToBuf(payload.b64), payload.meta || {});
-			localBlobKeys.add(payload.id);
-		});
-		// Upload nur für Blobs, die laut Hash-Cache noch nicht remote liegen — kein
-		// Vollscan über Blob-INHALTE mehr; bei Heften bestätigt der Head-Hash den Cache.
-		const serializeBlob = (id, rec) => new TextEncoder().encode(JSON.stringify({ id, meta: rec.meta || {}, b64: U.bufToB64(rec.buf) }));
-		const toUpload = [];
-		for (const id of localBlobKeys) {
-			if (LOCAL_ONLY_BLOB(id)) continue; // [H4] Heft-Verlauf bleibt auf diesem Gerät
-			const cached = uploadHashCache[id];
-			if (cached && remoteBlobHashes.has(cached.hash)) continue;
+	// Token, Zustand (dieselben localStorage-Einträge wie bisher), Event-Log und Dateien.
+	const io = {
+		// Hintergrund-Syncs öffnen nie ein Fenster: ohne gültiges Token meldet der Kern „Sitzung abgelaufen“.
+		accessToken: () => validSavedToken(),
+		tokenExpired: () => clearAccessToken(true),
+		sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+		// Uhren-Drift gegen Drive: der Log-Merge entscheidet Konflikte per Zeitstempel (LWW).
+		setClockOffset: (ms) => U.setClockOffset(ms),
+		getItem: (key) => LS.getItem(key),
+		setItem: (key, value) => (value === null ? LS.removeItem(key) : LS.setItem(key, value)),
+		maxSeq: () => DB.maxSeq(),
+		eventsBetween: (after, upTo) => DB.eventsAfterSeqAll(after, upTo),
+		async importAll(payload, unsyncedAfterSeq, allowSecrets) {
+			const r = await DB.importAll(payload, { unsyncedAfterSeq, pageInfo: (id) => S.pages[id], remote: true, allowSecrets });
+			// Sofort anwenden: Scheiterte danach ein Datei-Transfer, lägen die Events sonst im Log und
+			// gälten als gelesen, die App zeigte sie aber nie. Offene Hefte brauchen keinen Flush (heft.js).
+			if (r.importedEvents?.length) await STATE.applyRemoteEventsCooperative(r.importedEvents);
+			return { added: r.added, conflicts: r.conflictDetails || [], merged: r.mergedDetails || [] };
+		},
+		exportSnapshot: (redactSecrets) => DB.exportAll({ includeBlobs: false, redactSecrets }),
+		blobIds: () => DB.allBlobKeys(),
+		async getBlob(id) {
 			const rec = await DB.getBlob(id);
-			if (!rec?.buf) continue;
-			const contentHash = rec.meta?.hash || "";
-			const size = rec.buf.byteLength || 0;
-			let raw = null, hash;
-			if (cached && cached.contentHash === contentHash && cached.size === size) hash = cached.hash;
-			else {
-				raw = serializeBlob(id, rec);
-				hash = await sha256Hex(raw);
-				uploadHashCache[id] = { contentHash, size, hash };
-				cacheDirty = true;
-			}
-			if (remoteBlobHashes.has(hash)) continue;
-			toUpload.push({ id, raw: raw || serializeBlob(id, rec), hash, contentHash });
-			remoteBlobHashes.add(hash);
-		}
-		if (toUpload.length) setStatus("syncing", toUpload.length + " Datei(en) hochladen…");
-		await mapLimit(toUpload, 3, async (u) => {
-			const packed = await gzipBytes(u.raw);
-			// blobId in den appProperties ist jetzt Pflicht — [G2] entscheidet damit ohne Download.
-			await uploadNamed(BLOB_PREFIX + u.hash + ".json.gz", packed.bytes, packed.encoding, null, { hash: u.hash, blobId: u.id });
-		});
-		if (cacheDirty) LS.setItem("impala67_drive_upload_hashes", JSON.stringify(uploadHashCache));
-		LS.removeItem("impala67_drive_known_blobs"); // [G2] Altlast, wird nicht mehr geführt
-		// v8: Es gibt keine Heft-Müllabfuhr mehr. Die alte GC war die gefährlichste Stelle im ganzen
-		// Sync — sie hat in einem Rennfenster fremde, noch referenzierte Zeichnungen gelöscht. Was
-		// gar nicht existiert, kann auch nichts kaputt machen; Hefte werden stattdessen im Log selbst
-		// verdichtet (heftSnap ersetzt ältere heftOps, db.js/compactEvents).
+			let data = rec?.buf || rec?.data;
+			if (typeof Blob !== "undefined" && data instanceof Blob) data = await data.arrayBuffer();
+			return data ? { meta: rec.meta || {}, data: data instanceof Uint8Array ? data : new Uint8Array(data) } : null;
+		},
+		putBlob: (id, meta, data) => DB.putBlob(id, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), meta),
+	};
 
-		// Nur Events seit dem letzten Upload als Delta senden. SETTINGS_SYNC redigiert
-		// sensible Felder, wenn der Nutzer die Token-Synchronisierung ausgeschaltet hat.
-		const scrubSecrets = localStorage.getItem("impala67_drive_secret_scrub") === "1" && !SETTINGS_SYNC.allowsSecrets(S.settings);
-		if (scrubSecrets) {
-			setStatus("syncing", "Token-Kopien aus Drive entfernen…");
-			const scrubPacked = await encodeJsonText(await DB.exportAll({ includeBlobs: false, redactSecrets: true }));
-			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
-			const createdScrubSnapshot = await uploadNamed(SNAPSHOT_NAME, scrubPacked.bytes, scrubPacked.encoding, oldSnapshot?.id, { protocol: "2", redacted: "1" });
-			const staleSecretFiles = files.filter((f) => f.name.startsWith(DELTA_PREFIX) || f.name === FILE_NAME || f.name === LEGACY_FILE_NAME);
-			await mapLimit(staleSecretFiles, 6, (f) => del(f.id));
-			const scrubMaxSeq = await DB.maxSeq();
-			LS.setItem("impala67_drive_uploaded_seq", String(scrubMaxSeq));
-			LS.setItem("impala67_drive_snapshot_stamp", createdScrubSnapshot.id + ":" + createdScrubSnapshot.modifiedTime);
-			LS.removeItem("impala67_drive_known_deltas");
-			LS.removeItem("impala67_drive_secret_scrub");
-		}
-		const localMaxSeq = await DB.maxSeq();
-		if (!scrubSecrets && shouldUploadDelta(localMaxSeq, uploadedSeq)) {
-			setStatus("syncing", "Änderungen hochladen…");
-			uploaded = await uploadDelta(uploadedSeq, localMaxSeq, knownDeltaIds);
-		}
+	// Der Kern lädt erst beim ersten Sync (die erste Ansicht wartet nicht auf die WASM-Datei) und
+	// führt immer nur einen Aufruf zur Zeit aus; alles Weitere wartet in dieser Schlange.
+	let corePromise = null, coreQueue = Promise.resolve();
+	const getCore = () => (corePromise ||= loadCore()
+		.then((m) => new m.DriveCore(http, io))
+		.catch((error) => { corePromise = null; throw error; }));
+	function withCore(task) {
+		const run = coreQueue.then(async () => task(await getCore()));
+		coreQueue = run.catch(() => {});
+		return run;
+	}
+	const allowSecrets = () => SETTINGS_SYNC.allowsSecrets(S.settings);
 
-		// Viele Deltas gelegentlich zu einem Snapshot kompaktieren. Gelöscht wird nur die
-		// zu Sync-Beginn gelistete (bereits gemergte) Menge — parallele Shards bleiben.
-		const listedDeltas = files.filter((f) => f.name.startsWith(DELTA_PREFIX));
-		if (!scrubSecrets && listedDeltas.length >= 50) {
-			setStatus("syncing", "Sync-Stand optimieren…");
-			// Der Snapshot folgt derselben Token-Policy wie die Deltas.
-			const packed = await encodeJsonText(await DB.exportAll({
-				includeBlobs: false,
-				redactSecrets: !SETTINGS_SYNC.allowsSecrets(S.settings),
-			}));
-			const oldSnapshot = files.find((f) => f.name === SNAPSHOT_NAME);
-			const createdSnap = await uploadNamed(SNAPSHOT_NAME, packed.bytes, packed.encoding, oldSnapshot?.id, { protocol: "2" });
-			const deleted = await mapLimit(listedDeltas, 6, (f) => del(f.id));
-			// [G3] In-Memory UND persistiert gemeinsam leeren: ein bloßes removeItem ließ
-			// knownDeltaIds gefüllt zurück, und der Late-Sweep unten schrieb sie nur dann
-			// wieder weg, wenn zufällig ein spätes Delta existierte — der persistierte Zustand
-			// hängte also vom Zufall ab.
-			// [A9] Nur die TATSÄCHLICH gelöschten Dateien vergessen. Ein pauschales clear() ließ überlebende
-			// Deltas als unbekannt zurück — der nächste Sync lud sie ein zweites Mal.
-			listedDeltas.forEach((f, i) => { if (deleted[i]) knownDeltaIds.delete(f.id); });
-			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
-			// [A7] Den eigenen Snapshot nicht wieder herunterladen. Bisher stand hier removeItem, wodurch
-			// needSnapshot im Folgelauf garantiert true war: das Gerät holte den Snapshot, den es gerade
-			// selbst hochgeladen hat, und importierte ihn vollständig (ein kompletter Log-Durchlauf).
-			// uploadNamed fordert modifiedTime bereits mit an — die Information liegt also schon vor.
-			LS.setItem("impala67_drive_snapshot_stamp", createdSnap.id + ":" + createdSnap.modifiedTime);
+	async function syncRaw(onStatus) {
+		const report = await withCore((core) => core.sync(allowSecrets(), (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }));
+		if (report.clockWarningMinutes) {
+			U.toast("Die Geräteuhr weicht ~" + report.clockWarningMinutes + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
 		}
-
-		// Bug-4-Fix Post-Upload-Sweep: Deltas anderer Clients einlesen, die WÄHREND unseres Syncs
-		// hochgeladen wurden. Der initiale listSyncFiles()-Aufruf lag vor unserem Upload — ein
-		// gleichzeitig synchender Tab fehlt sonst und beide Clients divergieren nach dem Sync.
-		// [A2] Wasserstand VOR dem zweiten Import nachziehen. [G4] hat die Geister-Konflikt-Fehlerklasse
-		// nur für die Pull-Phase strukturell geschlossen — dieser Sweep ist ein ZWEITER importAll-Aufruf.
-		// Mit dem alten uploadedSeq galten die soeben erzeugten merge3-/Konflikt-Events (bewusst nicht
-		// _remote, damit sie normal syncen) als "meine ungesyncten Änderungen" und wurden gegen späte
-		// Fremd-Deltas erneut in Konflikt gesetzt: Konfliktkopien ohne jede Nutzeraktion, bei jedem Lauf.
-		// Zweite Hälfte des Fixes: db.js kennt jetzt _derived (isLocalOnly).
-		importOpts.unsyncedAfterSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || uploadedSeq), await DB.maxSeq());
-		const filesAfter = await listSyncFiles();
-		const lateDeltas = unseenRemoteFiles(filesAfter.filter((f) => f.name.startsWith(DELTA_PREFIX)), knownDeltaIds);
-		if (lateDeltas.length) {
-			setStatus("syncing", lateDeltas.length + " nachträgliche(s) Änderungspaket(e) einlesen…");
-			const lateEvents = (await mapLimit(lateDeltas, 6, downloadPayload)).flatMap((p) => Array.isArray(p?.events) ? p.events : []);
-			if (lateEvents.length) {
-				// v8: Nachzügler-Deltas bringen Heft-Striche jetzt SELBST mit — der frühere zweite
-				// Blob-Durchgang [H1] ist damit gegenstandslos geworden.
-				await importJson({ app: "impala67", version: 2, exportedAt: U.now(), events: lateEvents, blobs: {} });
-			}
-			lateDeltas.forEach((f) => knownDeltaIds.add(f.id));
-			saveKnownIds("impala67_drive_known_deltas", knownDeltaIds);
-		}
-		const finalMaxSeq = await DB.maxSeq();
+		// Verdichten löscht Events → gespeicherter Start-Checkpoint passt nicht mehr.
 		try { if (await DB.compactLocalIfDue()) STATE.scheduleCheckpoint(); } catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
-		LS.setItem("impala67_drive_synced_seq", String(finalMaxSeq));
-		LS.setItem("impala67_drive_last_ok", new Date().toISOString());
-		// v8: Ein Sync ist fertig, wenn die Events übertragen sind — es gibt keinen zweiten Kanal
-		// mehr, auf den man noch warten müsste. Kein „n Heft-Stände werden nachgeholt“, kein Nachlauf.
-		setStatus("ok", imported || uploaded ? "Synchronisiert" : "Aktuell");
-		return { imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, importedEvents };
+		emitSyncStatus("ok", report.label);
+		return report;
 	}
 
 	// [A6] Kurzweg für pagehide: NUR hochladen — kein Pull, kein Lock-Warten, keine Blob-Runde.
@@ -663,18 +290,11 @@ export const DRIVE = (() => {
 	// der keepalive-Schranke von ~64 KB), bleibt der Wasserstand stehen und der nächste Start holt es
 	// nach — ein ehrlicher Fehlschlag statt eines Flushs, der nur auf dem Papier stattfindet.
 	async function flushUpload() {
-		if (!isConnected()) return;
-		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch — zwei gleichzeitige
-		// Uploads erzeugen nur doppelte Pakete und schreiben beide am Wasserstand.
-		if (syncInFlight) return;
-		const saved = validSavedToken();
-		if (!saved) return;
-		token = saved;
-		const localMaxSeq = await DB.maxSeq();
-		const uploadedSeq = Math.min(Number(LS.getItem("impala67_drive_uploaded_seq") || 0), localMaxSeq);
-		if (!shouldUploadDelta(localMaxSeq, uploadedSeq)) return;
+		// Ein laufender Sync lädt denselben Bereich gerade selbst hoch. Ohne schon geladenen Kern
+		// lohnt beim Schließen kein Nachladen.
+		if (!isConnected() || syncInFlight || !corePromise) return;
 		flushMode = true;
-		try { await uploadDelta(uploadedSeq, localMaxSeq); } finally { flushMode = false; }
+		try { await withCore((core) => core.flushUpload(allowSecrets())); } finally { flushMode = false; }
 	}
 
 	// Web Lock gegen Multi-Tab-Races: Datei-Index, known_deltas und uploaded_seq liegen in
@@ -700,7 +320,8 @@ export const DRIVE = (() => {
 			.catch((error) => {
 				finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
 				PERF_PROFILER.error("drive.sync-error", error, { phase: "sync" });
-				if (authState !== DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
+				if (error?.code === "session-expired") setAuthState(DRIVE_AUTH_STATE.RENEWAL_REQUIRED, { resetSync: true });
+				else if (authState !== DRIVE_AUTH_STATE.RENEWAL_REQUIRED) {
 					emitSyncStatus(navigator.onLine === false ? "waiting" : "error",
 						navigator.onLine === false ? "Offline" : "Sync fehlgeschlagen", error?.message);
 				}
@@ -772,8 +393,9 @@ export const DRIVE = (() => {
 			// MAX_DEFER_MS lang. Danach wird gesynct, egal wo der Cursor gerade steht. Nach v8 ist
 			// ein Replay ohnehin additiv, das ursprüngliche Ziel von [F3] bleibt gewahrt.
 			if (isEditing() && Date.now() - deferSince < MAX_DEFER_MS) { autoTimer = setTimeout(() => scheduleAutoSync(reason), 5000); return; }
+			// force: sonst prüfte autoSync das Tippen erneut und schob mit frischem Start wieder auf.
 			deferSince = 0;
-			autoSync(reason);
+			autoSync(reason, true);
 		}, AUTO_DELAY_MS);
 	}
 
@@ -819,17 +441,7 @@ export const DRIVE = (() => {
 	// Nur mit gültigem Token — eine Anzeige ist nie Grund für ein Anmeldefenster.
 	async function storageInfo() {
 		if (!validSavedToken()) return null;
-		token = validSavedToken();
-		const about = await (await api("/drive/v3/about?fields=storageQuota")).json();
-		let appBytes = 0, pageToken = "";
-		do {
-			const q = "/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(size)" + (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : "");
-			const page = await (await api(q)).json();
-			appBytes += (page.files || []).reduce((sum, f) => sum + (Number(f.size) || 0), 0);
-			pageToken = page.nextPageToken || "";
-		} while (pageToken);
-		const quota = about.storageQuota || {};
-		return { appBytes, usedBytes: Number(quota.usage) || 0, limitBytes: Number(quota.limit) || 0 };
+		return withCore((core) => core.storageInfo());
 	}
 
 	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync, storageInfo };

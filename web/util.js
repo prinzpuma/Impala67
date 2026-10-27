@@ -126,7 +126,7 @@ export const U = {
 	// Zeitquelle aller Event-Zeitstempel — eine HYBRIDE LOGISCHE UHR (HLC).
 	// Der Log-Merge entscheidet Konflikte per Zeitstempel (LWW); eine falsch gehende
 	// Geräteuhr würde sonst systematisch und still „gewinnen“. Drei Schichten:
-	// 1. Physisch: drive.js misst den Versatz gegen den Date-Header der Drive-Antworten
+	// 1. Physisch: der Drive-Kern (core/impala-drive) misst den Versatz gegen den Date-Header der Drive-Antworten
 	//    (NTP-artig über die kleinste Round-Trip-Zeit) und meldet ihn über setClockOffset().
 	// 2. Monoton: now() liefert nie denselben oder einen früheren Wert als zuvor — die
 	//    deterministische Replay-Reihenfolge kann lokal nie kippen.

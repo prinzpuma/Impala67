@@ -1,4 +1,67 @@
 /**
+ * Ein Gerät, ein Kern. Ein Durchgang zur Zeit (JS reiht alle Aufrufe ein).
+ */
+export class DriveCore {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DriveCoreFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_drivecore_free(ptr, 0);
+    }
+    /**
+     * E-Mail des Kontos (nur Anzeige) oder `null`; wirft nur bei abgelehntem Token.
+     * @returns {Promise<any>}
+     */
+    accountEmail() {
+        const ret = wasm.drivecore_accountEmail(this.__wbg_ptr);
+        return takeObject(ret);
+    }
+    /**
+     * Kurzweg beim Schließen: nur das eigene Änderungspaket hochladen. Liefert die Zahl der Events.
+     * @param {boolean} allow_secrets
+     * @returns {Promise<any>}
+     */
+    flushUpload(allow_secrets) {
+        const ret = wasm.drivecore_flushUpload(this.__wbg_ptr, allow_secrets);
+        return takeObject(ret);
+    }
+    /**
+     * @param {any} http
+     * @param {any} io
+     */
+    constructor(http, io) {
+        const ret = wasm.drivecore_new(addHeapObject(http), addHeapObject(io));
+        this.__wbg_ptr = ret;
+        DriveCoreFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * `{ appBytes, usedBytes, limitBytes }` oder `null` ohne gültiges Token.
+     * @returns {Promise<any>}
+     */
+    storageInfo() {
+        const ret = wasm.drivecore_storageInfo(this.__wbg_ptr);
+        return takeObject(ret);
+    }
+    /**
+     * Voller Durchgang. `on_status(label)` meldet die Etappen (darf `undefined` sein).
+     * Ergebnis: `{ imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, label, … }`.
+     * @param {boolean} allow_secrets
+     * @param {any} on_status
+     * @returns {Promise<any>}
+     */
+    sync(allow_secrets, on_status) {
+        const ret = wasm.drivecore_sync(this.__wbg_ptr, allow_secrets, addHeapObject(on_status));
+        return takeObject(ret);
+    }
+}
+if (Symbol.dispose) DriveCore.prototype[Symbol.dispose] = DriveCore.prototype.free;
+
+/**
  * Dekodierer mit optionalem Wörterbuch.
  */
 export class InkDecoder {
@@ -885,7 +948,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_1340(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_1621(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -895,6 +958,10 @@ function __wbg_get_imports() {
             } finally {
                 state0.a = 0;
             }
+        },
+        __wbg_now_aa4ccb83129e9e55: function() {
+            const ret = Date.now();
+            return ret;
         },
         __wbg_of_20798cb14708764f: function(arg0, arg1) {
             const ret = Array.of(getObject(arg0), getObject(arg1));
@@ -963,8 +1030,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 61, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1283);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 65, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1564);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -991,14 +1058,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_1340(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_1340(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_1621(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_1621(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_1283(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_1564(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_1283(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_1564(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -1009,6 +1076,9 @@ function __wasm_bindgen_func_elem_1283(arg0, arg1, arg2) {
     }
 }
 
+const DriveCoreFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_drivecore_free(ptr, 1));
 const InkDecoderFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_inkdecoder_free(ptr, 1));

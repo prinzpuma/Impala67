@@ -5,7 +5,7 @@ import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 import { SyncRoom } from "../server/worker.js";
-import { CLOUD_SYNC_PROTOCOL, pruneEventsForUpload, isBlobAlive } from "../web/sync-core.js";
+import { CLOUD_SYNC_PROTOCOL, isBlobAlive } from "../web/sync-core.js";
 import { DB } from "../web/db.js";
 // Der Sync-Client ist der Rust-Kern (web/core/, npm run build:core) – derselbe, den die PWA lädt.
 import initCore, * as CORE from "../web/core/impala_core.js";
@@ -179,10 +179,8 @@ test("Sync-Kern: Schlüssel, deterministische Anmeldung, Validierung", async () 
 // ==========================================
 // 2. APP-REGELN, DIE IN JS BLEIBEN
 // ==========================================
-test("Sync: UI-Events gehen nicht hoch, Drei-Wege-Merge, Blob-Lebenszyklus", () => {
+test("Sync: Drei-Wege-Merge, Blob-Lebenszyklus", () => {
 	assert.equal(CLOUD_SYNC_PROTOCOL, 4);
-	const pruned = pruneEventsForUpload([{ id: "e1", type: "pageCreate" }, { id: "ui", type: "uiTabsSet" }, { id: "t", type: "uiTreeSet" }]);
-	assert.deepEqual(pruned.map((e) => e.id), ["e1"]);
 
 	const merged = DB.merge3("a\nb\nc", "A\nb\nc", "a\nb\nC");
 	assert.equal(merged.ok, true);

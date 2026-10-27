@@ -66,7 +66,18 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    (`npm run test:e2e`, 15/16 – die rote Prüfung meldet nur nicht erreichbare CDNs im Container).
    Offen: WASM-Größe (582 KB, 267 KB gzip, lädt erst beim Einrichten des Syncs), Datei-Transfers seriell statt 3 parallel,
    PBKDF2 (100 000 Runden) läuft beim Verbinden einmal im Hauptthread.
-3c. **Nächste Bereiche Rust only**: Drive-Backup (`impala-drive`), Suche/RAG im Worker, Handschrift-Dekodierung,
+3c. ✅ **PWA-Drive-Backup läuft in Rust** (27. Oktober 2026): `DriveCore` (`core/impala-wasm/src/drive.rs`) führt den
+   ganzen Durchgang aus (Dateiindex über die Changes-API, Snapshot + Änderungspakete, Dateien, Verdichten, Token-Bereinigung,
+   Uhren-Drift, Wiederholungen bei 429/5xx); `web/drive.js` behält Anmeldung (Google-Popup), Timer, Web Lock und Status und
+   reicht fetch, localStorage (dieselben Schlüssel wie bisher) und IndexedDB herein. JS-Paketbau, Dateiliste, gzip und
+   Hash-Cache sind gelöscht. Alte Backups (v1-Snapshot, gzip-Deltas) und lokale Drive-Zustände werden weiter gelesen.
+   In JS bleiben die synchronen Anzeige- und Timer-Regeln (`drive-status.js`, `drive-sync-policy.js`, `backup-status.js`),
+   weil sie vor dem Laden des Kerns gebraucht werden; ihre Golden-Files (`rules.json`) erzeugt weiter
+   `core/tools/gen-golden-drive.mjs`, `flows.json` ist eingefroren.
+   Geprüft: `cargo test`, `DriveCore` in Node gegen eine nachgebaute Drive-API, `web/drive.js` in Chromium (zwei Geräte,
+   v1-Altbestand, Bilder, Reload, abgelaufene Sitzung). Offen: Downloads nacheinander statt 6 parallel, WASM +90 KB
+   (686 KB, 310 KB gzip), Test mit echtem Google-Konto (Login, resumable Upload ab 5 MB).
+3d. **Nächste Bereiche Rust only**: Suche/RAG im Worker, Handschrift-Dekodierung,
    lokale Kompaktierung (`compact-events.js`), KI-Anbieter (`impala-ai`), dann Datenmodell/Start (`impala-model`).
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.

@@ -1,45 +1,10 @@
 "use strict";
-// Sync-Hilfen, die noch in JS gebraucht werden (Drive-Backup, Blob-Aufräumen, v4-Migration).
-// Das Cloudflare-Protokoll selbst (Wire-Format, Pakete, E2EE) steht im Rust-Kern (core/impala-sync).
-import { gzip, gunzip } from "./sync-crypto.js";
-
-const enc = new TextEncoder();
-const dec = new TextDecoder();
+// Sync-Hilfen, die noch in JS gebraucht werden (Blob-Aufräumen, v4-Migration, KI-Anfrage).
+// Cloudflare-Protokoll (Wire-Format, Pakete, E2EE) und Drive-Backup stehen im Rust-Kern
+// (core/impala-sync, core/impala-drive).
 
 export const CLOUD_SYNC_PROTOCOL = 4;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
-
-export const shouldUploadToSync = (event, target) => event?._remoteSource !== target;
-export const shouldUploadDelta = (localMaxSeq, uploadedSeq) => Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
-
-export function unseenRemoteFiles(files, knownIds) {
-	const known = knownIds instanceof Set ? knownIds : new Set(knownIds || []);
-	return (files || []).filter((file) => file?.id && !known.has(file.id));
-}
-
-export function newestFile(files, names) {
-	const allowed = new Set(names || []);
-	return (files || []).filter((file) => allowed.has(file.name))
-		.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")))[0] || null;
-}
-
-// Bytes gzippen; ohne CompressionStream unverändert („identity“).
-export async function gzipBytes(raw) {
-	const packed = await gzip(raw);
-	return packed ? { bytes: packed, encoding: "gzip" } : { bytes: raw, encoding: "identity" };
-}
-
-export const encodeJson = (value) => gzipBytes(enc.encode(JSON.stringify(value)));
-// Für schon serialisierte Exporte (DB.exportAll): kein Parse-und-Stringify des ganzen Logs.
-export const encodeJsonText = (text) => gzipBytes(enc.encode(text));
-
-export async function decodeJson(bytes, encoding) {
-	return JSON.parse(dec.decode(encoding === "gzip" ? await gunzip(bytes) : bytes));
-}
-
-export function boundedKnownIds(ids, max = 2000) {
-	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
-}
 
 export function heftBaselineOps(doc) {
 	const pages = Array.isArray(doc?.pages) ? doc.pages : [];
@@ -54,10 +19,6 @@ export function heftBaselineOps(doc) {
 	return ops;
 }
 
-
-export function pruneEventsForUpload(events) {
-	return (events || []).filter((event) => event?.type !== "uiTabsSet" && event?.type !== "uiTreeSet");
-}
 
 const UUID_SRC = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const BLOB_REF_EXACT = new RegExp("^(?:img:|file:|cover:)?" + UUID_SRC + "$", "i");

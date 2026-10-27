@@ -77,7 +77,9 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [x] Schritt 2: Ganze Nicht-UI-Logik als Rust-Kern (12 Crates, Golden-Tests gegen JS, Stand im Plan).
   - [x] Kern ohne eigene Ein-/Ausgabe: `HttpClient`, Sync-, Drive- und KI-Traits asynchron.
   - [x] PWA-Sync nur noch über den Rust-Kern (`SyncCore`, WASM), JS-Sync-Logik gelöscht.
-  - [ ] Nächste Bereiche Rust only: Drive-Backup, Suche/RAG, Handschrift-Dekodierung, lokale Kompaktierung, KI, Datenmodell/Start.
+  - [x] Drive-Backup Rust only (`DriveCore` in `core/impala-wasm/src/drive.rs`, `web/drive.js` nur noch Anmeldung, Timer, Ein-/Ausgabe).
+  - [ ] Drive: Downloads wieder parallel (JS: 6 gleichzeitig, Kern: nacheinander); Login/Upload großer Dateien (resumable, `Location`-Header) mit echtem Google-Konto prüfen.
+  - [ ] Nächste Bereiche Rust only: Suche/RAG, Handschrift-Dekodierung, lokale Kompaktierung, KI, Datenmodell/Start.
   - [ ] Sync: Datei-Transfers wieder parallel (3 gleichzeitig), WASM-Größe senken.
   - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
   - [ ] PWA: RAG-Index als WASM im Worker (463 → 48 ms je Anfrage), JS als Rückfall; `opt-level` für WASM entscheiden.
@@ -86,7 +88,7 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
   - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.
   - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
-  - [ ] Drive: 60-s-Aufschub greift nie (`drive.js:775`), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync.
+  - [x] Drive: 60-s-Aufschub greift nie (in `drive.js` behoben), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync (beides mit dem Rust-Kern behoben).
   - [ ] Handschrift: Skizzen-Striche fehlen in der Strich-Bilanz (`handwriting-worker.js`, `console.error` je Seite).
   - [ ] Start-Absturz bei Patch, der kein Objekt ist (`event-order.js:16`); Heft: Kreis-Bounds NaN, `s-` ohne Liste bricht Event ab.
   - [ ] FSRS: Obergrenze der Stabilität nach Vergessen fehlt; Anzeige „60 Min“/„1 Jahre“.
