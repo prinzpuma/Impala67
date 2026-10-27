@@ -33,7 +33,10 @@ pub fn serialize(blocks: &JsValue) -> Result<String, JsError> {
 /// Ein Block → Markdown (Zwischenablage).
 #[wasm_bindgen(js_name = mdSerializeBlock)]
 pub fn serialize_block(block: &JsValue) -> Result<String, JsError> {
-    Ok(blocks_from(&js_sys::Array::of1(block).into())?.first().map(impala_markdown::serialize_block).unwrap_or_default())
+    Ok(blocks_from(&js_sys::Array::of1(block).into())?
+        .first()
+        .map(impala_markdown::serialize_block)
+        .unwrap_or_default())
 }
 
 /// MIME-Typ aus Dateiname oder URL (`""` wenn unbekannt).

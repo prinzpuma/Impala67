@@ -2,7 +2,9 @@
 import { S } from "./state.js";
 import { DB } from "./db.js";
 import { EMBEDDINGS, isValidVector, vectorModelKey } from "./embedding.js";
-import { norm, rankRag } from "./rag-ranking.js";
+import { buildRagIndex, rankRag, relatedPages } from "./rag-ranking.js";
+import { norm } from "./vector-math.js";
+import { CORE } from "./rust-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 // rag.js — Semantische Suche (RAG): Notizen werden in Chunks zerlegt, als
 // Embeddings in IndexedDB gespeichert und per Kosinus-Ähnlichkeit durchsucht.
@@ -43,42 +45,34 @@ export const RAG = (() => {
 		}
 		return rankingWorker;
 	}
-	const invalidateRankingIndex = () => { vecCache = null; try { rankingWorker?.postMessage({ type: "invalidate" }); } catch {} };
+	const invalidateRankingIndex = () => { dropMainIndex(); try { rankingWorker?.postMessage({ type: "invalidate" }); } catch {} };
 
 	// FIX: Beim Entfernen aus dem Index wurde der Speicher-Cache NICHT verworfen — bis zu 30 s
 	// lieferte die Suche danach weiter Treffer aus geleerten Seiten (Papierkorb wird zwar
 	// gefiltert, eine geleerte Seite nicht). Eine Ausgangstür statt zwei halber.
 	const dropIndex = async (pageId) => { await DB.delVec(pageId); invalidateRankingIndex(); };
 
-	// Chunking v2 (15. Juli): Überschriften beginnen neue Chunks (thematisch
-	// saubere Treffer) und benachbarte Chunks überlappen sich leicht — Antworten,
-	// die genau auf einer Chunk-Grenze liegen, gehen nicht mehr verloren.
-	function chunk(text, size = 800, overlap = 120) {
-		const parts = [];
-		const paras = String(text || "").split(/\n\n+/);
-		let cur = "";
-		const push = () => { if (cur.trim()) parts.push(cur); };
-		for (const p of paras) {
-			const isHeading = /^#{1,3}\s/.test(p);
-			if (cur && (isHeading || (cur + "\n\n" + p).length > size)) {
-				push();
-				// Überlappung: das Ende des letzten Chunks leitet den nächsten ein.
-				cur = (overlap ? cur.slice(-overlap) + "\n\n" : "") + p;
-			} else cur = cur ? cur + "\n\n" + p : p;
-		}
-		push();
-		return parts.slice(0, 80); // großzügiger, damit auch PDF-Volltext hineinpasst
-	}
+	// Abschnitte (Rust-Kern): Überschriften beginnen neue, Nachbarn überlappen leicht, höchstens 80.
+	const chunk = (text) => CORE.ragChunk(text);
 
-	async function indexPage(pageId) {
-		if (!enabled()) return;
-		const finishProfile = PERF_PROFILER.start("rag.index-page", { pageId }, 40);
-		try {
-			finishProfile(await performIndexPage(pageId) || {});
-		} catch (error) {
-			finishProfile({ failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
-			throw error;
+	// PDF-Volltext: liegt als eigener Blob ("pdftext:<id>") in IndexedDB; ältere PDFs werden
+	// einmalig nachextrahiert. `onlyPdf`: eingebettete Dateien nur, wenn sie PDFs sind.
+	async function pdfText(id, onlyPdf) {
+		let rec = await DB.getBlob("pdftext:" + id);
+		if (!rec) {
+			const pdf = await DB.getBlob(id);
+			if (pdf && (!onlyPdf || CORE.ragIsPdf(pdf.meta?.type, pdf.meta?.name))) {
+				// Nur fuer die einmalige Alt-PDF-Migration laden. Ein statischer
+				// Import wuerde rag.js -> pdfs.js -> ai.js -> rag.js erzeugen.
+				const { PDFS } = await import("./pdfs.js");
+				const ex = await PDFS.extractText(pdf.buf.slice(0));
+				if (ex && ex.text) {
+					await DB.putBlob("pdftext:" + id, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
+					rec = await DB.getBlob("pdftext:" + id);
+				}
+			}
 		}
+		return rec && rec.buf ? new TextDecoder().decode(rec.buf) : undefined;
 	}
 
 	async function performIndexPage(pageId) {
@@ -96,75 +90,23 @@ export const RAG = (() => {
 				throw new Error("Seite wurde während der Indexierung geändert.");
 			}
 		};
-		let text = pg.title + "\n\n" + pg.content;
-		// PDF-Volltext mitindexieren: der bei der Aufnahme extrahierte Text liegt als
-		// eigener Blob ("pdftext:<id>") in IndexedDB; ältere PDFs werden einmalig nachextrahiert.
+		// Gesamttext (Rust-Kern): Titel, Inhalt, PDF-Volltexte, Handschrift der Hefte.
+		let pagePdf;
 		if (pg.pdfId) {
-			try {
-				let rec = await DB.getBlob("pdftext:" + pg.pdfId);
-				if (!rec) {
-					const pdf = await DB.getBlob(pg.pdfId);
-					if (pdf) {
-						// Nur fuer die einmalige Alt-PDF-Migration laden. Ein statischer
-						// Import wuerde rag.js -> pdfs.js -> ai.js -> rag.js erzeugen.
-						const { PDFS } = await import("./pdfs.js");
-						const ex = await PDFS.extractText(pdf.buf.slice(0));
-						await DB.putBlob("pdftext:" + pg.pdfId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
-						rec = await DB.getBlob("pdftext:" + pg.pdfId);
-					}
-				}
-				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 60000);
-			} catch (e) { console.warn("PDF-Volltext für RAG fehlgeschlagen:", e); }
+			try { pagePdf = await pdfText(pg.pdfId, false); } catch (e) { console.warn("PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
-		// Auch im Editor eingebettete PDFs volltext-indexieren
-		const fileMatches = pg.content ? [...pg.content.matchAll(/:::file\s+(\S+)/g)] : [];
-		for (const m of fileMatches) {
-			const fId = m[1];
-			if (fId === pg.pdfId) continue;
+		const inlinePdfs = [];
+		for (const fId of CORE.ragInlineFileIds(String(pg.content || ""), pg.pdfId || undefined)) {
 			try {
-				let rec = await DB.getBlob("pdftext:" + fId);
-				if (!rec) {
-					const pdf = await DB.getBlob(fId);
-					if (pdf && ((pdf.meta && pdf.meta.type === "application/pdf") || (pdf.meta && /\.pdf$/i.test(pdf.meta.name)))) {
-						const { PDFS } = await import("./pdfs.js");
-						const ex = await PDFS.extractText(pdf.buf.slice(0));
-						if (ex && ex.text) {
-							await DB.putBlob("pdftext:" + fId, new TextEncoder().encode(ex.text).buffer, { type: "text/plain" });
-							rec = await DB.getBlob("pdftext:" + fId);
-						}
-					}
-				}
-				if (rec && rec.buf) text += "\n\n" + new TextDecoder().decode(rec.buf).slice(0, 40000);
+				const t = await pdfText(fId, true);
+				if (t !== undefined) inlinePdfs.push(t);
 			} catch (e) { console.warn("Inline-PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
-		// Auch Handschrift-Hefte (getippte Textfelder und erkannte Handschrift) indexieren
 		const hdoc = (S.heftDocs && S.heftDocs[pageId]) || null;
-		if (hdoc && Array.isArray(hdoc.pages) && hdoc.pages.length > 0) {
-			const pageBlocks = [];
-			for (let i = 0; i < hdoc.pages.length; i++) {
-				const hp = hdoc.pages[i];
-				const parts = [];
-				if (Array.isArray(hp.texts)) {
-					for (const t of hp.texts) {
-						if (t?.text && String(t.text).trim()) parts.push(String(t.text).trim());
-					}
-				}
-				if (hp.ocrText && String(hp.ocrText).trim()) {
-					parts.push(String(hp.ocrText).trim());
-				}
-				if (parts.length) {
-					pageBlocks.push(`### Seite ${i + 1}\n` + parts.join("\n"));
-				}
-			}
-			if (pageBlocks.length) {
-				text += "\n\n## Handschrift-Notizen\n" + pageBlocks.join("\n\n");
-			}
-		} else if (S.heftMeta && S.heftMeta[pageId] && S.heftMeta[pageId].ocrText) {
-			const metaText = String(S.heftMeta[pageId].ocrText).trim();
-			if (metaText) {
-				text += "\n\n## Handschrift-Notizen\n" + metaText;
-			}
-		}
+		const heftPages = hdoc && Array.isArray(hdoc.pages) ? hdoc.pages.map((hp) => ({ texts: Array.isArray(hp?.texts) ? hp.texts : [], ocrText: hp?.ocrText ? String(hp.ocrText) : undefined })) : [];
+		const metaOcr = S.heftMeta?.[pageId]?.ocrText;
+		const text = CORE.ragIndexText(String(pg.title || ""), String(pg.content || ""), pagePdf, inlinePdfs,
+			JSON.stringify(heftPages), metaOcr ? String(metaOcr) : undefined);
 		const chunks = chunk(text);
 		if (!chunks.length) { await dropIndex(pageId); return; }
 		// iPad/WebKit darf nie einen kompletten PDF-Index als einen einzigen
@@ -281,17 +223,26 @@ export const RAG = (() => {
 	//   eine einzige lange Seite alle Plätze belegt.
 	// - Chunks mit fremder Embedding-Dimension (Modellwechsel) werden übersprungen
 	//   statt falsche Scores zu liefern; reindexStale() ersetzt sie ohnehin.
-	let vecCache = null, vecCacheAt = 0, vecCacheIdentity = "";
+	// Rust-Index im Hauptthread (verwandte Seiten, Suche ohne Worker): bleibt bestehen, bis
+	// ein Re-Index, ein Herkunftswechsel oder 30 s ihn veralten lassen.
+	let mainIndex = null, mainIndexAt = 0, mainIndexIdentity = "";
 	const queryCache = new Map();
-	async function allVecsCached() {
-		const identity = embeddingProviderId() + "::" + embeddingModel();
-		if (!vecCache || vecCacheIdentity !== identity || Date.now() - vecCacheAt > 30000) {
-			vecCache = await DB.allVecs();
-			vecCacheAt = Date.now();
-			vecCacheIdentity = identity;
-		}
-		return vecCache;
+	function dropMainIndex() {
+		mainIndex?.index.free();
+		mainIndex = null;
 	}
+	async function mainIndexCached() {
+		const identity = embeddingProviderId() + "::" + embeddingModel();
+		if (!mainIndex || mainIndexIdentity !== identity || Date.now() - mainIndexAt > 30000) {
+			const vecs = await DB.allVecs();
+			dropMainIndex();
+			mainIndex = buildRagIndex(vecs, embeddingModel(), embeddingProviderId());
+			mainIndexAt = Date.now();
+			mainIndexIdentity = identity;
+		}
+		return mainIndex;
+	}
+	const pageFlags = () => Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed, archived: !!pg.archived }]));
 	async function queryVec(query) {
 		// Embedding-Quelle gehört mit in den Cache-Schlüssel: derselbe Modellname über eine
 		// andere Quelle darf keine gecachten Query-Vektoren der alten Quelle wiederverwenden.
@@ -310,7 +261,7 @@ export const RAG = (() => {
 	async function performSearch(query, k = 6) {
 		const qv = await queryVec(query);
 		const model = embeddingModel(), providerId = embeddingProviderId();
-		const pages = Object.fromEntries(Object.entries(S.pages).map(([id, pg]) => [id, { title: pg.title, trashed: !!pg.trashed, archived: !!pg.archived }]));
+		const pages = pageFlags();
 		const worker = getRankingWorker();
 		if (worker) {
 			const id = "rank_" + (++rankingReqId) + "_" + Date.now();
@@ -328,50 +279,13 @@ export const RAG = (() => {
 				});
 			} catch (error) { console.warn("RAG-Worker nicht verfügbar, verwende Hauptthread:", error); }
 		}
-		return rankRag({ query, qv, vecs: await allVecsCached(), pages, model, providerId, k });
+		return rankRag(await mainIndexCached(), { query, qv, pages, k });
 	}
 
-	// Verwandte Seiten: Seitenvektor = normierter Mittelwert der Chunk-Vektoren, gecacht
-	// je Vektor-Datensatz (allVecsCached liefert nach Reindex neue Objekte).
-	const pageVecCache = new WeakMap();
-	function pageVecOf(rec) {
-		let v = pageVecCache.get(rec);
-		if (v === undefined) {
-			v = null;
-			for (const c of rec.chunks || []) {
-				if (!c.vec) continue;
-				if (!v) v = new Float32Array(c.vec.length);
-				if (c.vec.length !== v.length) continue;
-				const n = c.norm || norm(c.vec);
-				if (!n) continue; // Nullvektor: würde alles zu NaN machen
-				for (let i = 0; i < v.length; i++) v[i] += c.vec[i] / n;
-			}
-			const n = v ? norm(v) : 0;
-			if (n) for (let i = 0; i < v.length; i++) v[i] /= n;
-			else v = null;
-			pageVecCache.set(rec, v);
-		}
-		return v;
-	}
-	const RELATED_MIN = 0.5;
+	// Verwandte Seiten: Ähnlichkeit der Seitenvektoren (normierter Mittelwert der Chunks), ab 0,5.
 	async function related(pageId, k = 3) {
 		if (!enabled()) return [];
-		const vecs = await allVecsCached();
-		const model = embeddingModel(), providerId = embeddingProviderId();
-		const usable = (rec) => rec && rec.model === model && String(rec.providerId || "") === providerId;
-		const base = usable(vecs[pageId]) && pageVecOf(vecs[pageId]);
-		if (!base) return [];
-		const hits = [];
-		for (const [id, rec] of Object.entries(vecs)) {
-			const pg = S.pages[id];
-			if (id === pageId || !pg || pg.trashed || pg.archived || !usable(rec)) continue;
-			const v = pageVecOf(rec);
-			if (!v || v.length !== base.length) continue;
-			let score = 0;
-			for (let i = 0; i < v.length; i++) score += v[i] * base[i];
-			if (score >= RELATED_MIN) hits.push({ id, score });
-		}
-		return hits.sort((a, b) => b.score - a.score).slice(0, k);
+		return relatedPages(await mainIndexCached(), pageFlags(), pageId, k);
 	}
 
 	return { queuePage, reindexStale, search, enabled, related };

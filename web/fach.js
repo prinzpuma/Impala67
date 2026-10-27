@@ -3,7 +3,7 @@
 import { S, STATE } from "./state.js";
 import { EMBEDDINGS } from "./embedding.js";
 import { DB } from "./db.js";
-import { dot, norm } from "./rag-ranking.js";
+import { dot, norm } from "./vector-math.js";
 
 // Offizieller Schulfächer-Katalog
 export const KNOWN_SUBJECTS = Object.freeze([

@@ -1,15 +1,15 @@
 "use strict";
 
-import { rankRag } from "./rag-ranking.js";
+import { buildRagIndex, rankRag } from "./rag-ranking.js";
 
-let dbPromise = null, vecCache = null, vecCacheAt = 0, vecCacheIdentity = "";
+let dbPromise = null, vecCacheAt = 0, vecCacheIdentity = "";
 
 function openDb() {
 	dbPromise ??= new Promise((resolve, reject) => {
 		const req = indexedDB.open("impala67");
 		req.onsuccess = () => {
 			const db = req.result;
-			db.onversionchange = () => { db.close(); dbPromise = null; vecCache = null; };
+			db.onversionchange = () => { db.close(); dbPromise = null; dropIndex(); };
 			resolve(db);
 		};
 		req.onerror = () => reject(req.error);
@@ -17,8 +17,16 @@ function openDb() {
 	return dbPromise;
 }
 
-async function loadVecs(identity) {
-	if (vecCache && vecCacheIdentity === identity && Date.now() - vecCacheAt <= 30000) return vecCache;
+// Der Rust-Index bleibt zwischen Anfragen bestehen; neu gebaut nach eigenem Re-Index
+// (invalidate), Herkunftswechsel oder nach 30 s (Änderungen aus anderen Tabs und vom Sync).
+let built = null;
+function dropIndex() {
+	built?.index.free();
+	built = null;
+}
+
+async function loadIndex(msg) {
+	if (built && vecCacheIdentity === msg.identity && Date.now() - vecCacheAt <= 30000) return built;
 	const db = await openDb();
 	const rows = await new Promise((resolve, reject) => {
 		const store = db.transaction("vecs").objectStore("vecs");
@@ -29,19 +37,19 @@ async function loadVecs(identity) {
 		valuesReq.onsuccess = () => { values = valuesReq.result; done(); };
 		keysReq.onerror = valuesReq.onerror = () => reject(keysReq.error || valuesReq.error);
 	});
-	vecCache = Object.fromEntries(rows);
+	dropIndex();
+	built = buildRagIndex(Object.fromEntries(rows), msg.model, msg.providerId);
 	vecCacheAt = Date.now();
-	vecCacheIdentity = identity;
-	return vecCache;
+	vecCacheIdentity = msg.identity;
+	return built;
 }
 
 self.addEventListener("message", async (event) => {
 	const msg = event.data || {};
-	if (msg.type === "invalidate") { vecCache = null; return; }
+	if (msg.type === "invalidate") { dropIndex(); return; }
 	if (msg.type !== "search" || !msg.id) return;
 	try {
-		const vecs = await loadVecs(msg.identity);
-		self.postMessage({ type: "result", id: msg.id, hits: rankRag({ ...msg, vecs }) });
+		self.postMessage({ type: "result", id: msg.id, hits: rankRag(await loadIndex(msg), msg) });
 	} catch (error) {
 		self.postMessage({ type: "error", id: msg.id, error: String(error?.message || error) });
 	}

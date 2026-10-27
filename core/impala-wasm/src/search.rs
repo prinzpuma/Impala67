@@ -132,6 +132,14 @@ impl RagIndex {
         Ok(())
     }
 
+    /// Inhaltlich ähnliche Seiten (ohne Papierkorb/Archiv) als JSON-Array `[{ id, score }]`.
+    /// Braucht vorher [`RagIndex::set_pages`].
+    pub fn related(&self, page_id: &str, k: usize) -> String {
+        let hits = impala_search::related(&self.index, &self.pages, page_id, k);
+        let hits: Vec<_> = hits.iter().map(|h| json!({ "id": h.page_id, "score": h.score })).collect();
+        serde_json::Value::Array(hits).to_string()
+    }
+
     /// Treffer wie `rankRag` als JSON-Array (`pageId`, `title`, `snippet`, `score`, …).
     pub fn rank(&self, query: &str, qv: &[f32], k: usize) -> String {
         let hits = impala_search::rank_rag(&self.index, &self.pages, query, qv, k);
@@ -143,6 +151,110 @@ impl RagIndex {
                     "semanticScore": h.semantic_score, "lexicalScore": h.lexical_score, "archived": h.archived,
                 })
             })
+            .collect();
+        serde_json::Value::Array(hits).to_string()
+    }
+}
+
+/// Abschnitte für die Einbettung (Überschriften beginnen neue, Nachbarn überlappen leicht).
+#[wasm_bindgen(js_name = ragChunk)]
+pub fn rag_chunk(text: &str) -> Vec<String> {
+    impala_search::chunk(text)
+}
+
+/// Gesamttext einer Seite für [`rag_chunk`]: Titel, Inhalt, PDF-Volltexte und Handschrift.
+/// `heft_pages`: JSON `[{ texts: [..], ocrText }]` (leer: kein Heft-Dokument geladen).
+#[wasm_bindgen(js_name = ragIndexText)]
+pub fn rag_index_text(
+    title: &str,
+    content: &str,
+    pdf_text: Option<String>,
+    inline_pdf_texts: Vec<String>,
+    heft_pages: &str,
+    heft_meta_ocr: Option<String>,
+) -> String {
+    let heft_pages = match serde_json::from_str::<serde_json::Value>(heft_pages) {
+        Ok(serde_json::Value::Array(pages)) => pages
+            .iter()
+            .map(|p| impala_search::HeftPageText {
+                texts: p["texts"]
+                    .as_array()
+                    .map(|t| t.iter().filter_map(|x| x["text"].as_str().map(str::to_owned)).collect())
+                    .unwrap_or_default(),
+                ocr_text: p["ocrText"].as_str().map(str::to_owned),
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    impala_search::index_text(&impala_search::IndexSource {
+        title: title.to_owned(),
+        content: content.to_owned(),
+        pdf_text,
+        inline_pdf_texts,
+        heft_pages,
+        heft_meta_ocr,
+    })
+}
+
+/// Blob-Ids der im Inhalt eingebetteten Dateien (`:::file <id>`), ohne die Seiten-PDF.
+#[wasm_bindgen(js_name = ragInlineFileIds)]
+pub fn rag_inline_file_ids(content: &str, pdf_id: Option<String>) -> Vec<String> {
+    impala_search::inline_file_ids(content, pdf_id.as_deref())
+}
+
+/// Ist die Datei eine PDF (MIME-Typ oder Endung)?
+#[wasm_bindgen(js_name = ragIsPdf)]
+pub fn rag_is_pdf(mime: Option<String>, name: Option<String>) -> bool {
+    impala_search::chunk::is_pdf(mime.as_deref(), name.as_deref())
+}
+
+/// Volltextsuche über Seiten (`STATE.searchNotes`): exakte Treffer, aufgefüllt mit
+/// Tippfehler-Treffern. Seiten werden nur bei Änderung neu übergeben.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct NoteIndex(impala_search::NoteIndex);
+
+#[wasm_bindgen]
+impl NoteIndex {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> NoteIndex {
+        NoteIndex::default()
+    }
+
+    /// Seite aufnehmen oder ersetzen. `in_archive`: archiviert oder unter einer archivierten Seite.
+    #[wasm_bindgen(js_name = setPage)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_page(
+        &mut self,
+        id: String,
+        title: String,
+        content: String,
+        ocr: String,
+        updated: String,
+        archived: bool,
+        in_archive: bool,
+    ) {
+        self.0.set_page(impala_search::NoteDoc { id, title, content, ocr, updated, archived, in_archive });
+    }
+
+    /// Nur Archiv-Angaben ändern; `false`, wenn die Seite unbekannt ist.
+    #[wasm_bindgen(js_name = setFlags)]
+    pub fn set_flags(&mut self, id: &str, archived: bool, in_archive: bool) -> bool {
+        self.0.set_flags(id, archived, in_archive)
+    }
+
+    #[wasm_bindgen(js_name = removePage)]
+    pub fn remove_page(&mut self, id: &str) {
+        self.0.remove_page(id);
+    }
+
+    /// Höchstens 8 Treffer als JSON-Array `[{ id, score, terms, snippet }]`.
+    pub fn search(&self, query: &str, include_archived: bool) -> String {
+        let hits: Vec<_> = self
+            .0
+            .search(query, include_archived)
+            .into_iter()
+            .map(|h| json!({ "id": h.id, "score": h.score, "terms": h.terms, "snippet": h.snippet }))
             .collect();
         serde_json::Value::Array(hits).to_string()
     }

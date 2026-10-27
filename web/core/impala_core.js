@@ -255,6 +255,98 @@ export class InkLine {
 if (Symbol.dispose) InkLine.prototype[Symbol.dispose] = InkLine.prototype.free;
 
 /**
+ * Volltextsuche über Seiten (`STATE.searchNotes`): exakte Treffer, aufgefüllt mit
+ * Tippfehler-Treffern. Seiten werden nur bei Änderung neu übergeben.
+ */
+export class NoteIndex {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        NoteIndexFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_noteindex_free(ptr, 0);
+    }
+    constructor() {
+        const ret = wasm.noteindex_new();
+        this.__wbg_ptr = ret;
+        NoteIndexFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {string} id
+     */
+    removePage(id) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.noteindex_removePage(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Höchstens 8 Treffer als JSON-Array `[{ id, score, terms, snippet }]`.
+     * @param {string} query
+     * @param {boolean} include_archived
+     * @returns {string}
+     */
+    search(query, include_archived) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.noteindex_search(retptr, this.__wbg_ptr, ptr0, len0, include_archived);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Nur Archiv-Angaben ändern; `false`, wenn die Seite unbekannt ist.
+     * @param {string} id
+     * @param {boolean} archived
+     * @param {boolean} in_archive
+     * @returns {boolean}
+     */
+    setFlags(id, archived, in_archive) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.noteindex_setFlags(this.__wbg_ptr, ptr0, len0, archived, in_archive);
+        return ret !== 0;
+    }
+    /**
+     * Seite aufnehmen oder ersetzen. `in_archive`: archiviert oder unter einer archivierten Seite.
+     * @param {string} id
+     * @param {string} title
+     * @param {string} content
+     * @param {string} ocr
+     * @param {string} updated
+     * @param {boolean} archived
+     * @param {boolean} in_archive
+     */
+    setPage(id, title, content, ocr, updated, archived, in_archive) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(ocr, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(updated, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len4 = WASM_VECTOR_LEN;
+        wasm.noteindex_setPage(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, archived, in_archive);
+    }
+}
+if (Symbol.dispose) NoteIndex.prototype[Symbol.dispose] = NoteIndex.prototype.free;
+
+/**
  * Hybrid-Suchindex (`rankRag`): Chunk-Vektoren, -Texte und Seitenangaben bleiben im Kern.
  */
 export class RagIndex {
@@ -327,6 +419,31 @@ export class RagIndex {
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Inhaltlich ähnliche Seiten (ohne Papierkorb/Archiv) als JSON-Array `[{ id, score }]`.
+     * Braucht vorher [`RagIndex::set_pages`].
+     * @param {string} page_id
+     * @param {number} k
+     * @returns {string}
+     */
+    related(page_id, k) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(page_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.ragindex_related(retptr, this.__wbg_ptr, ptr0, len0, k);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
         }
     }
     /**
@@ -921,6 +1038,106 @@ export function mdTeaser(body) {
 }
 
 /**
+ * Abschnitte für die Einbettung (Überschriften beginnen neue, Nachbarn überlappen leicht).
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function ragChunk(text) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.ragChunk(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v2 = getArrayJsValueFromWasm0(r0, r1);
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Gesamttext einer Seite für [`rag_chunk`]: Titel, Inhalt, PDF-Volltexte und Handschrift.
+ * `heft_pages`: JSON `[{ texts: [..], ocrText }]` (leer: kein Heft-Dokument geladen).
+ * @param {string} title
+ * @param {string} content
+ * @param {string | null | undefined} pdf_text
+ * @param {string[]} inline_pdf_texts
+ * @param {string} heft_pages
+ * @param {string | null} [heft_meta_ocr]
+ * @returns {string}
+ */
+export function ragIndexText(title, content, pdf_text, inline_pdf_texts, heft_pages, heft_meta_ocr) {
+    let deferred7_0;
+    let deferred7_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        var ptr2 = isLikeNone(pdf_text) ? 0 : passStringToWasm0(pdf_text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArrayJsValueToWasm0(inline_pdf_texts, wasm.__wbindgen_export);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(heft_pages, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len4 = WASM_VECTOR_LEN;
+        var ptr5 = isLikeNone(heft_meta_ocr) ? 0 : passStringToWasm0(heft_meta_ocr, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len5 = WASM_VECTOR_LEN;
+        wasm.ragIndexText(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred7_0 = r0;
+        deferred7_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred7_0, deferred7_1, 1);
+    }
+}
+
+/**
+ * Blob-Ids der im Inhalt eingebetteten Dateien (`:::file <id>`), ohne die Seiten-PDF.
+ * @param {string} content
+ * @param {string | null} [pdf_id]
+ * @returns {string[]}
+ */
+export function ragInlineFileIds(content, pdf_id) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(pdf_id) ? 0 : passStringToWasm0(pdf_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len1 = WASM_VECTOR_LEN;
+        wasm.ragInlineFileIds(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v3 = getArrayJsValueFromWasm0(r0, r1);
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Ist die Datei eine PDF (MIME-Typ oder Endung)?
+ * @param {string | null} [mime]
+ * @param {string | null} [name]
+ * @returns {boolean}
+ */
+export function ragIsPdf(mime, name) {
+    var ptr0 = isLikeNone(mime) ? 0 : passStringToWasm0(mime, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    var len0 = WASM_VECTOR_LEN;
+    var ptr1 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    var len1 = WASM_VECTOR_LEN;
+    const ret = wasm.ragIsPdf(ptr0, len0, ptr1, len1);
+    return ret !== 0;
+}
+
+/**
  * Wartezeit vor dem n-ten WebSocket-Neuaufbau (Versuch ab 1, Zufall aus JS).
  * @param {number} attempt
  * @returns {number}
@@ -1264,7 +1481,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_1902(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_2057(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1350,8 +1567,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 69, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1845);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 76, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1999);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -1378,14 +1595,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_1902(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_1902(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_2057(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_2057(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_1845(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_1999(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_1845(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_1999(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -1405,6 +1622,9 @@ const InkDecoderFinalization = (typeof FinalizationRegistry === 'undefined')
 const InkLineFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_inkline_free(ptr, 1));
+const NoteIndexFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_noteindex_free(ptr, 1));
 const RagIndexFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_ragindex_free(ptr, 1));
@@ -1569,6 +1789,16 @@ function passArrayF32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getFloat32ArrayMemory0().set(arg, ptr / 4);
     WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayJsValueToWasm0(array, malloc) {
+    const ptr = malloc(array.length * 4, 4) >>> 0;
+    const mem = getDataViewMemory0();
+    for (let i = 0; i < array.length; i++) {
+        mem.setUint32(ptr + 4 * i, addHeapObject(array[i]), true);
+    }
+    WASM_VECTOR_LEN = array.length;
     return ptr;
 }
 

@@ -1,5 +1,5 @@
-//! Vergleich mit dem JS-Original. Die Golden-Files erzeugt `core/tools/gen-golden-search.mjs` aus
-//! `web/search-fuzzy.js`, `web/state.js` (`searchNotes`), `web/rag.js` und `web/rag-ranking.js`.
+//! Vergleich mit dem letzten JS-Stand (eingefrorene Golden-Files der früheren `web/search-fuzzy.js`,
+//! `searchNotes`, `web/rag.js` und `web/rag-ranking.js`; die PWA sucht seit dem Umbau nur in Rust).
 //! Floats mit Toleranz (JS rechnet in `f64`, Rust die Skalarprodukte in `f32`).
 
 use std::collections::HashMap;

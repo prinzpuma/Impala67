@@ -1,5 +1,5 @@
 //! Messung nativ: Vektorsuche (20 000 × 384, Top-k), RAG-Hybrid-Ranking und Unscharf-Suche
-//! über 2 000 Seiten. Gleiche Eingaben wie `core/tools/bench-search.mjs` (gleicher Zufall).
+//! über 2 000 Seiten (feste Zufallseingaben).
 //! `cargo run -p impala-search --example bench --profile native`
 
 use std::collections::HashMap;

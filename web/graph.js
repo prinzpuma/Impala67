@@ -7,7 +7,7 @@ import { DB } from "./db.js";
 import { vectorModelKey } from "./embedding.js";
 import { TABS } from "./tabs.js";
 import { U } from "./util.js";
-import { dot, norm } from "./rag-ranking.js";
+import { dot, norm } from "./vector-math.js";
 
 // Kompakter Wissensgraph: Embeddings ordnen Karten, das LLM benennt die
 // resultierenden Skills. Fachliche Daten synchronisieren über settingsSet;

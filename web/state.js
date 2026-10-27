@@ -7,9 +7,9 @@ import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { cooperativeGate, yieldToMain } from "./cooperative.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
-import { createFuzzyIndex } from "./search-fuzzy.js";
 import { noteEventOrder, reorderSafe } from "./event-order.js";
 import { emptyHeftPage } from "./heft-document-core.js";
+import { CORE } from "./rust-core.js";
 import {
 	STATE_CHECKPOINT_CORE_KEYS,
 	STATE_CHECKPOINT_FORMAT,
@@ -1697,68 +1697,48 @@ export const STATE = (() => {
 		return partial;
 	}
 
-	// PERF: Der Heuhaufen (Titel + Inhalt + Handschrift-Index, einmal kleingeschrieben)
-	// wird granular pro Seite mit Versionsstempel gecacht — Bearbeiten einer Seite
-	// invalidiert nur diese eine Seite statt des gesamten Arbeitsbereichs.
-	const _hayMap = new Map();
-	const _fuzzy = createFuzzyIndex();
-	// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
-	const rawTextOf = (pg, heftOcr) => pg.title + "\n" + pg.content + (heftOcr ? "\n" + heftOcr : "");
-	function haystackOf(pg) {
-		let e = _hayMap.get(pg.id);
-		const heftOcr = (S.heftMeta[pg.id] && S.heftMeta[pg.id].ocrText) || "";
-		if (!e || e.updated !== pg.updated || e.ocr !== heftOcr) {
-			// contentLc: nur der Inhalt klein — genau das braucht backlinksOf, das es
-			// vorher pro Aufruf für ALLE Seiten neu erzeugt hat. Der Originaltext wird nicht
-			// mitgecacht: searchNotes() baut ihn nur für die wenigen angezeigten Treffer.
-			e = { updated: pg.updated, ocr: heftOcr, hay: rawTextOf(pg, heftOcr).toLowerCase(), title: (pg.title || "").toLowerCase(), contentLc: (pg.content || "").toLowerCase() };
-			_hayMap.set(pg.id, e);
+	// Backlinks: Inhalt einmal kleingeschrieben, gecacht je Seite mit Versionsstempel.
+	const _contentLc = new Map();
+	function contentLcOf(pg) {
+		let e = _contentLc.get(pg.id);
+		if (!e || e.updated !== pg.updated) {
+			e = { updated: pg.updated, lc: (pg.content || "").toLowerCase() };
+			_contentLc.set(pg.id, e);
 		}
-		return e;
+		return e.lc;
 	}
 
-	// Tippfehler-Treffer füllen nur auf, was die exakte Suche frei lässt. Der Wortindex
-	// wird erst hier (und nur für geänderte Seiten) gebaut — haystackOf läuft auch für Backlinks.
-	function fuzzyHits(pool, q, skip, limit) {
-		const allowed = new Map();
-		for (const pg of pool) {
-			if (skip.has(pg.id)) continue;
-			const e = haystackOf(pg);
-			if (!e.fz) { _fuzzy.setPage(pg.id, rawTextOf(pg, e.ocr)); e.fz = true; }
-			allowed.set(pg.id, pg);
+	// Seitensuche im Rust-Kern (impala-search NoteIndex): exakte Treffer (Titel +10, je
+	// Fundstelle +1), aufgefüllt mit Tippfehler-Treffern, archivierte unter den aktiven.
+	// Seiten gehen nur bei Änderung (Stempel aus updated, Titel, Handschrift-Index) über die Grenze.
+	const _notes = new CORE.NoteIndex();
+	const _noteStamps = new Map();
+	function syncNoteIndex() {
+		const active = new Set(activePages().map((pg) => pg.id));
+		const seen = new Set();
+		for (const pg of Object.values(S.pages)) {
+			if (pg.trashed) continue;
+			seen.add(pg.id);
+			// Bei Heften ergänzt der lokale Handschrift-Index die normale Seitensuche.
+			const ocr = String(S.heftMeta[pg.id]?.ocrText || "");
+			const stamp = String(pg.updated) + "\0" + (pg.title || "") + "\0" + ocr;
+			const archived = !!pg.archived, inArchive = !active.has(pg.id);
+			if (_noteStamps.get(pg.id) !== stamp) {
+				_notes.setPage(pg.id, String(pg.title || ""), String(pg.content || ""), ocr, String(pg.updated || ""), archived, inArchive);
+				_noteStamps.set(pg.id, stamp);
+			} else _notes.setFlags(pg.id, archived, inArchive);
 		}
-		return _fuzzy.search(q, (id) => allowed.has(id)).map((h) => {
-			const pg = allowed.get(h.id);
-			const { hay, title, ocr } = haystackOf(pg);
-			const titleHit = h.forms.some((f) => title.includes(f));
-			const found = h.forms.map((f) => hay.indexOf(f)).filter((i) => i >= 0);
-			const idx = found.length ? Math.min(...found) : 0;
-			return { page: pg, score: h.score + (titleHit ? 10 : 0), idx, ocr, terms: h.forms };
-		}).sort((a, b) => (!!a.page.archived - !!b.page.archived) || b.score - a.score).slice(0, limit);
+		for (const id of _noteStamps.keys()) {
+			if (!seen.has(id)) { _notes.removePage(id); _noteStamps.delete(id); }
+		}
 	}
 
 	function searchNotes(query, options = {}) {
 		return PERF_PROFILER.measure("search.notes", () => {
-			const q = String(query).toLowerCase();
-			if (!q) return [];
-			const pool = options.includeArchived
-				? Object.values(S.pages).filter((pg) => !pg.trashed)
-				: activePages();
-			const exact = pool.map((pg) => {
-				const { hay, title, ocr } = haystackOf(pg);
-				const idx = hay.indexOf(q);
-				if (idx < 0) return null;
-				// PERF: Treffer zählen ohne split() — das kopierte pro Treffer-Seite den ganzen Text in Teilstücke.
-				let score = title.includes(q) ? 10 : 0;
-				for (let i = idx; i >= 0; i = hay.indexOf(q, i + q.length)) score++;
-				return { page: pg, score, idx, ocr };
-			// Archivierte Treffer stehen immer unter den aktiven.
-			}).filter(Boolean).sort((a, b) => (!!a.page.archived - !!b.page.archived) || b.score - a.score).slice(0, 8);
-			const hits = exact.length < 8 && q.trim().length >= 3
-				? exact.concat(fuzzyHits(pool, q, new Set(exact.map((h) => h.page.id)), 8 - exact.length))
-				: exact;
-			// Ausschnitt erst für die angezeigten Treffer bauen statt für jede Fundstelle.
-			return hits.map(({ page, score, idx, ocr, terms }) => ({ page, score, terms, snippet: rawTextOf(page, ocr).slice(Math.max(0, idx - 80), idx + 160) }));
+			if (!String(query)) return [];
+			syncNoteIndex();
+			return JSON.parse(_notes.search(String(query), !!options.includeArchived))
+				.map((h) => ({ page: S.pages[h.id], score: h.score, terms: h.terms ?? undefined, snippet: h.snippet }));
 		}, { query: String(query).slice(0, 40) }, 15);
 	}
 
@@ -1959,7 +1939,7 @@ export const STATE = (() => {
 		const t = target.title.toLowerCase();
 		// PERF: kleingeschriebener Inhalt aus dem Haystack-Cache (gleiche Invalidierung
 		// über _pageRev) — Suche und Backlinks teilen sich ab jetzt EINEN Textindex.
-		const result = activePages().filter((pg) => pg.id !== pageId && haystackOf(pg).contentLc.includes(t));
+		const result = activePages().filter((pg) => pg.id !== pageId && contentLcOf(pg).includes(t));
 		_backlinkCache.map.set(pageId, result);
 		return result.slice();
 	}

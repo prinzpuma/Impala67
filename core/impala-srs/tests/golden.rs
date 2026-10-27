@@ -1,4 +1,4 @@
-//! Vergleich mit dem JS-Original (Golden-Files aus core/tools/gen-golden-srs.mjs).
+//! Vergleich mit dem letzten JS-Stand (eingefrorene Golden-Files; die PWA rechnet seit dem Umbau nur noch in Rust).
 
 use impala_srs::*;
 use serde_json::Value;

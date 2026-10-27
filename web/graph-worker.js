@@ -1,6 +1,6 @@
 "use strict";
 
-import { dot, norm } from "./rag-ranking.js";
+import { dot, norm } from "./vector-math.js";
 
 // Rechenarbeit des Wissensgraphen. Der Worker hält das UI auch bei mehreren
 // tausend Karten flüssig; bewusst kein allgemeines Graph-Framework.

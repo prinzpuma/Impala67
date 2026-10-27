@@ -85,6 +85,19 @@ impl NoteIndex {
         }
     }
 
+    /// Nur die Archiv-Angaben einer bekannten Seite ändern (Inhalt unverändert); `false`, wenn
+    /// die Seite fehlt.
+    pub fn set_flags(&mut self, id: &str, archived: bool, in_archive: bool) -> bool {
+        match self.slot_of.get(id).and_then(|&s| self.entries[s].as_mut()) {
+            Some(e) => {
+                e.doc.archived = archived;
+                e.doc.in_archive = in_archive;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Seite entfernen (gelöscht oder im Papierkorb).
     pub fn remove_page(&mut self, id: &str) {
         if let Some(s) = self.slot_of.remove(id) {
