@@ -9,4 +9,21 @@ description = "Handschrift: Vorverarbeitung, CTC-Dekodierung mit Wörterbuch, In
 [lints]
 workspace = true
 
+[features]
+# Referenz-Erkenner: web/handwriting-model.onnx über tract (reines Rust, keine nativen Binärdateien).
+# Nicht Standard: tract ist ~8× langsamer als ONNX Runtime und kompiliert minutenlang; Plattformen
+# setzen ihren eigenen LineModel/InkRecognizer ein (PWA: ONNX Runtime Web + decode_line).
+# Ohne das Feature bleibt reine Logik (Vorverarbeitung, Rasterung, Dekodierung) – baut für wasm32.
+default = []
+onnx = ["dep:tract-onnx"]
+
 [dependencies]
+tract-onnx = { version = "0.23", optional = true }
+
+[dev-dependencies]
+flate2 = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[[example]]
+name = "bench"
+required-features = ["onnx"]
