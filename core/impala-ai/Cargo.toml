@@ -9,4 +9,14 @@ description = "KI-Anbieter: Anfragen, Streaming-Parser, Agent-Schleife, LlmProvi
 [lints]
 workspace = true
 
+[features]
+# Standard-HTTP-Client (ureq) aus impala-net. Ohne dieses Feature baut das Crate für
+# wasm32-unknown-unknown; die Plattform setzt dann ihren eigenen HttpClient ein.
+default = ["client"]
+client = ["impala-net/client"]
+
 [dependencies]
+impala-net = { path = "../impala-net", default-features = false }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
