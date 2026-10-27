@@ -1,0 +1,12 @@
+[package]
+name = "impala-crypto"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "E2EE: Schlüsselableitung (PBKDF2), AES-GCM-Pakete, Blob-Layout, gzip, Base64/Hex, SecureStore"
+
+[lints]
+workspace = true
+
+[dependencies]

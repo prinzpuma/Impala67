@@ -1,0 +1,18 @@
+[package]
+name = "impala-wasm"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+impala-sync = { path = "../impala-sync" }
+js-sys = "0.3"
+# Exakt gepinnt: wasm-bindgen-cli (npm run build:core) muss dieselbe Version haben.
+wasm-bindgen = "=0.2.129"

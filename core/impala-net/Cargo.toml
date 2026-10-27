@@ -1,0 +1,19 @@
+[package]
+name = "impala-net"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Gemeinsame HTTP-Schnittstelle (HttpClient-Trait) für Drive, KI und Sync"
+
+[lints]
+workspace = true
+
+[features]
+# Standard-Client auf Basis von ureq (blockierend, rustls, ohne async-Laufzeit).
+# Plattformen können stattdessen ihren eigenen HttpClient einsetzen (URLSession, OkHttp, fetch).
+default = ["client"]
+client = ["dep:ureq"]
+
+[dependencies]
+ureq = { version = "3.5", optional = true }

@@ -1,0 +1,24 @@
+[package]
+name = "impala-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Fassade des Impala67-Kerns: bündelt alle Module für UniFFI/WASM"
+
+[lints]
+workspace = true
+
+[dependencies]
+impala-ai = { path = "../impala-ai" }
+impala-crypto = { path = "../impala-crypto" }
+impala-drive = { path = "../impala-drive" }
+impala-heft = { path = "../impala-heft" }
+impala-ink = { path = "../impala-ink" }
+impala-markdown = { path = "../impala-markdown" }
+impala-model = { path = "../impala-model" }
+impala-net = { path = "../impala-net" }
+impala-search = { path = "../impala-search" }
+impala-srs = { path = "../impala-srs" }
+impala-storage = { path = "../impala-storage" }
+impala-sync = { path = "../impala-sync" }
