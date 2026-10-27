@@ -1,4 +1,6 @@
-//! WASM-Hülle des Kerns für die PWA. Gebaut mit `npm run build:core` nach `web/core/`.
+//! WASM-Hülle des Kerns für die PWA. Gebaut mit `npm run build:core` nach `core/target/wasm/` (die PWA nutzt sie noch nicht).
+
+mod search;
 
 use impala_sync::{Field, JsLike, Kind};
 use js_sys::{Array, Object};

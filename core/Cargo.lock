@@ -766,6 +766,13 @@ dependencies = [
 [[package]]
 name = "impala-drive"
 version = "0.1.0"
+dependencies = [
+ "impala-crypto",
+ "impala-net",
+ "impala-storage",
+ "impala-sync",
+ "serde_json",
+]
 
 [[package]]
 name = "impala-heft"
@@ -795,6 +802,17 @@ dependencies = [
 [[package]]
 name = "impala-model"
 version = "0.1.0"
+dependencies = [
+ "impala-heft",
+ "impala-markdown",
+ "impala-search",
+ "impala-srs",
+ "impala-storage",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "impala-net"
@@ -849,8 +867,10 @@ dependencies = [
 name = "impala-wasm"
 version = "0.1.0"
 dependencies = [
+ "impala-search",
  "impala-sync",
  "js-sys",
+ "serde_json",
  "wasm-bindgen",
 ]
 
