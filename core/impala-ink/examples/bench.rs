@@ -63,7 +63,7 @@ fn main() {
     println!("tract: Modell laden + optimieren {:.0} ms", t.elapsed().as_secs_f64() * 1000.0);
     for width in [312, 612, 1032] {
         let Some(line) = lines.iter().find(|l| l.width == width) else { continue };
-        let ms = median(5, || drop(model.run(&line.image).unwrap()));
+        let ms = median(5, || drop(impala_net::block_on(model.run(&line.image)).unwrap()));
         println!("tract: Inferenz Breite {width} px: {ms:.1} ms (Median aus 5)");
     }
 }

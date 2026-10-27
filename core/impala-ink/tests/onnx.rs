@@ -8,6 +8,7 @@ use common::*;
 use impala_ink::onnx::OnnxModel;
 use impala_ink::vocab::CLASSES;
 use impala_ink::{DecodeOptions, InkRecognizer, LineCache, LineModel, ModelRecognizer, decode_line};
+use impala_net::block_on;
 
 fn model() -> OnnxModel {
     OnnxModel::from_bytes(&model_bytes()).expect("Modell lädt")
@@ -19,7 +20,7 @@ fn tract_wie_onnx_runtime() {
     let width = g["width"].as_u64().unwrap() as usize;
     let img = image(width, g["image"].as_str().unwrap());
     let reference = f32s(g["logits"].as_str().unwrap());
-    let ours = model().run(&img).unwrap();
+    let ours = block_on(model().run(&img)).unwrap();
     assert_eq!(ours.len(), reference.len());
     assert_eq!(ours.len(), g["steps"].as_u64().unwrap() as usize * CLASSES);
     let max = ours.iter().zip(&reference).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
@@ -46,7 +47,7 @@ fn ganze_seiten_nativ() {
     for (page, pre) in g["pipeline"].as_array().unwrap().iter().zip(g["preprocess"].as_array().unwrap()) {
         let strokes = strokes(&pre["strokes"]);
         let js = page["runs"][0]["result"]["text"].as_str().unwrap();
-        let rust = recognizer.recognize_page(&strokes, &DecodeOptions::default(), &LineCache::new());
+        let rust = block_on(recognizer.recognize_page(&strokes, &DecodeOptions::default(), &LineCache::new()));
         for (a, b) in rust.text.lines().zip(js.lines()) {
             total += 1;
             if a == b {

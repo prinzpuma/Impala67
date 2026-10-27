@@ -11,17 +11,22 @@ use crate::preprocess::{self, Stroke, Tool};
 use crate::raster::{self, LineImage, WORD_GAP_PX};
 use crate::vocab::CLASSES;
 
-/// Ein Modell: Zeilenbild → Logits (`steps × CLASSES`, zeilenweise).
+/// Ein Modell: Zeilenbild → Logits (`steps × CLASSES`, zeilenweise). Asynchron, weil die Plattform
+/// rechnet (Browser: ONNX Runtime Web im Worker); native Modelle antworten sofort.
+#[allow(async_fn_in_trait)]
 pub trait LineModel {
-    fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError>;
+    async fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError>;
+    /// Vor jeder Zeile (1-basiert) einer Seite – Fortschritt bzw. Absturz-Spur der Plattform.
+    fn line_started(&self, _line: usize, _lines: usize) {}
 }
 
 /// Erkennt die Striche einer Seite (oder Auswahl). Standard: [`ModelRecognizer`]; Plattformen
 /// (iOS Vision, Android ML Kit) können eigene Erkenner einsetzen.
+#[allow(async_fn_in_trait)]
 pub trait InkRecognizer {
     /// `known`: schon gelesene Zeilen (Zeilenschlüssel → Ergebnis); nur neue oder geänderte Zeilen
     /// werden gelesen und kommen in [`PageRecognition::fresh`] zurück.
-    fn recognize_page(&self, strokes: &[Stroke], options: &DecodeOptions, known: &LineCache) -> PageRecognition;
+    async fn recognize_page(&self, strokes: &[Stroke], options: &DecodeOptions, known: &LineCache) -> PageRecognition;
 }
 
 /// Ergebnis einer Zeile, wie es im Zeilen-Cache liegt.
@@ -112,17 +117,17 @@ pub struct ModelRecognizer<M> {
 }
 
 impl<M: LineModel> InkRecognizer for ModelRecognizer<M> {
-    fn recognize_page(&self, strokes: &[Stroke], options: &DecodeOptions, known: &LineCache) -> PageRecognition {
-        recognize_page(strokes, options, known, &self.model, self.lexicon.as_ref())
+    async fn recognize_page(&self, strokes: &[Stroke], options: &DecodeOptions, known: &LineCache) -> PageRecognition {
+        recognize_page(strokes, options, known, &self.model, self.lexicon.as_ref()).await
     }
 }
 
 /// Erkennt die Striche einer Seite mit `model`.
-pub fn recognize_page(
+pub async fn recognize_page(
     strokes: &[Stroke],
     options: &DecodeOptions,
     known: &LineCache,
-    model: &dyn LineModel,
+    model: &impl LineModel,
     lexicon: Option<&Lexicon>,
 ) -> PageRecognition {
     let mut status: Vec<StrokeStatus> = strokes
@@ -135,7 +140,10 @@ pub fn recognize_page(
         .collect();
     let mut page = PageRecognition::default();
 
-    for line in preprocess::segment_lines(strokes) {
+    let lines = preprocess::segment_lines(strokes);
+    let total = lines.len();
+    for (n, line) in lines.into_iter().enumerate() {
+        model.line_started(n + 1, total);
         let line_strokes: Vec<Stroke> = line.strokes.iter().map(|&i| strokes[i].clone()).collect();
         let points: usize = line_strokes.iter().map(|s| s.points.len()).sum();
         let key = if points >= 5 { line_signature(&line_strokes, options) } else { String::new() };
@@ -152,7 +160,7 @@ pub fn recognize_page(
                     LineOutcome::TooShort,
                     0,
                 ),
-                Some(image) => match recognize_wide_line(&image, options, model, lexicon) {
+                Some(image) => match recognize_wide_line(&image, options, model, lexicon).await {
                     Ok(r) => {
                         page.fresh.insert(key.clone(), r.clone());
                         let status = r.status;
@@ -192,35 +200,35 @@ pub fn recognize_page(
 }
 
 /// Liest ein Zeilenbild: Modell, Leerzeichen an breiten Lücken erzwingen, dekodieren.
-pub fn recognize_line_image(
+pub async fn recognize_line_image(
     image: &LineImage,
     options: &DecodeOptions,
-    model: &dyn LineModel,
+    model: &impl LineModel,
     lexicon: Option<&Lexicon>,
 ) -> Result<ctc::LineDecoding, InkError> {
-    let mut logits = model.run(image)?;
+    let mut logits = model.run(image).await?;
     ctc::mark_gap_spaces(&mut logits, CLASSES, &raster::find_ink_gaps(image, WORD_GAP_PX), image.width)?;
     ctc::decode_line(&logits, CLASSES, options, lexicon)
 }
 
 /// Wie [`recognize_line_image`], breite Zeilen aber in Stücken ([`raster::chunk_cuts`]). Stücke, die das Modell
 /// für eine Zeichnung hält, fallen weg; die Konfidenz ist nach Stückbreite gewichtet.
-pub fn recognize_wide_line(
+pub async fn recognize_wide_line(
     image: &LineImage,
     options: &DecodeOptions,
-    model: &dyn LineModel,
+    model: &impl LineModel,
     lexicon: Option<&Lexicon>,
 ) -> Result<LineReading, InkError> {
     let cuts = raster::chunk_cuts(image);
     if cuts.is_empty() {
-        let d = recognize_line_image(image, options, model, lexicon)?;
+        let d = recognize_line_image(image, options, model, lexicon).await?;
         return Ok(LineReading { text: d.text, confidence: d.confidence, status: d.status });
     }
     let (mut text, mut text_width, mut weighted) = (String::new(), 0usize, 0.0);
     let (mut all_recognized, mut saw_drawing, mut from) = (true, false, 0);
     for i in 0..=cuts.len() {
         let to = cuts.get(i).map_or(image.width, |c| c.at);
-        let rec = recognize_line_image(&image.slice(from, to), options, model, lexicon)?;
+        let rec = recognize_line_image(&image.slice(from, to), options, model, lexicon).await?;
         let part = rec.text.trim();
         if rec.status == Status::Drawing {
             saw_drawing = true;
@@ -314,7 +322,7 @@ mod tests {
 
     struct Blank;
     impl LineModel for Blank {
-        fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
+        async fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
             let mut out = vec![0.0; image.width / 4 * CLASSES];
             out.chunks_exact_mut(CLASSES).for_each(|r| r[0] = 10.0);
             Ok(out)
@@ -330,7 +338,8 @@ mod tests {
             s(&[[0.0, 0.0], [1.0, 1.0]], Tool::Shape),
             s(&[[0.0, 100.0], [1.0, 101.0]], Tool::Ink),
         ];
-        let page = recognize_page(&strokes, &DecodeOptions::default(), &LineCache::new(), &Blank, None);
+        let page =
+            impala_net::block_on(recognize_page(&strokes, &DecodeOptions::default(), &LineCache::new(), &Blank, None));
         assert_eq!(page.strokes[0], StrokeStatus::Line(LineOutcome::Read(Status::Empty)));
         assert_eq!(page.strokes[1], StrokeStatus::Empty);
         assert_eq!(page.strokes[2], StrokeStatus::NotInk);
@@ -338,7 +347,8 @@ mod tests {
         assert_eq!(page.accounting(), Accounting { recognized: 0, uncertain: 0, skipped: 4 });
         assert_eq!(page.fresh.len(), 1);
         // zweiter Durchlauf: Zeile aus dem Cache
-        let again = recognize_page(&strokes, &DecodeOptions::default(), &page.fresh, &Blank, None);
+        let again =
+            impala_net::block_on(recognize_page(&strokes, &DecodeOptions::default(), &page.fresh, &Blank, None));
         assert!(again.report[0].cached && again.fresh.is_empty());
     }
 }

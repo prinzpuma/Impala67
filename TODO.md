@@ -19,7 +19,7 @@ Stand: v2.2.85 (21. Oktober 2026)
   - Hardware-Back-Button, Haptik, lokale SRS-Erinnerungen, Dateisystem-Backup (`Documents/Impala67/`), ML Kit Document Scanner, Offline-Spracheingabe und „Senden an Impala67" (Share-Intent).
 - [x] **Lokale Handschrifterkennung (Bild-Modell v2)**:
   - Plattformunabhängige ONNX-Erkennung im Worker (`handwriting/` → `web/handwriting-model.onnx`, ResNet18 + BiLSTM + CTC) ersetzt ML Kit OCR.
-  - Beam-Search mit deutschem Wörterbuch (`web/handwriting-ctc.js`), Mathe-Formeln (MathWriting) und eigener Abschreib-Modus (`web/abschreiben.js`).
+  - Beam-Search mit deutschem Wörterbuch (`core/impala-ink/src/ctc.rs`), Mathe-Formeln (MathWriting) und eigener Abschreib-Modus (`web/abschreiben.js`).
   - Benchmark-Stand (Lauf 3, siehe `handwriting/README.md`): **0,0 % TEST-CER** auf eigenen Benchmark-Wörtern, **5,3 % CER** auf Abschreib-Zeilen.
   - Zentrale, akkuschonende Hintergrund-Indexierung über `HEFT_INDEXER.schedulePage` (`web/heft-indexer.js`) und reduzierte Stiftlatenz (`desynchronized: true`).
 - [x] **UI-Designsystem & Icon-Sprache**:

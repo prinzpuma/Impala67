@@ -1,4 +1,4 @@
-//! Vergleich mit dem JS-Original (Golden-Files von core/tools/gen-golden-ink.mjs): Dekodierung realer
+//! Vergleich mit dem letzten JS-Stand (eingefrorene Golden-Files; die PWA erkennt seit dem Umbau nur noch in Rust): Dekodierung realer
 //! Modellausgaben, Wortkorrektur, Wörterbuch, Zeilentrennung, Rasterung und der ganze Seiten-Ablauf.
 
 mod common;
@@ -10,6 +10,7 @@ use impala_ink::preprocess::{self, Bbox};
 use impala_ink::raster::{self, rasterize_line};
 use impala_ink::vocab::{self, CLASSES};
 use impala_ink::{DecodeOptions, LineCache, LineDecoding, LineReading, Mode, Status, decode_line, recognize_page};
+use impala_net::block_on;
 use serde_json::Value;
 
 fn options(name: &str) -> (DecodeOptions, bool) {
@@ -207,7 +208,7 @@ fn seiten_ablauf() {
             let known: LineCache =
                 run["known"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), reading(v))).collect();
             let model = Replay::new(inferences(&run["inferences"]));
-            let rust = recognize_page(&strokes, &DecodeOptions::default(), &known, &model, Some(lexicon()));
+            let rust = block_on(recognize_page(&strokes, &DecodeOptions::default(), &known, &model, Some(lexicon())));
             let js = &run["result"];
             assert_eq!(model.remaining(), 0, "{name}: weniger Inferenzen als im JS");
             assert_eq!(rust.text, js["text"].as_str().unwrap(), "{name}: Text");

@@ -1,12 +1,13 @@
 //! Kleines Wörterbuch häufiger Wörter: Bonus in der Beam-Search und Ein-Fehler-Korrektur.
-//! Die 5.000 häufigsten Wörter stehen nur einmal im Repo (`web/handwriting-words-de.js`).
+//! Die 5.000 häufigsten Wörter (klein, nach Häufigkeit) stehen nur einmal im Repo (`words-de.txt`; auch
+//! `handwriting/build_lexicon.py` liest sie).
 
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-const WORDS_JS: &str = include_str!("../../../web/handwriting-words-de.js");
+const WORDS_DE: &str = include_str!("words-de.txt");
 
-/// Notiz-, Kalender- und Mathe-Begriffe zusätzlich zur Häufigkeitsliste (wie `COMMON_WORDS` in handwriting-ctc.js).
+/// Notiz-, Kalender- und Mathe-Begriffe zusätzlich zur Häufigkeitsliste (früher `COMMON_WORDS` in handwriting-ctc.js).
 const EXTRA: &str = "der die das und in den von zu mit sich des auf für ist im dem nicht ein eine als auch es an \
     werden aus er hat dass sie nach wird bei einer um am sind noch wie einem über einen so zum war haben nur oder \
     aber vor zur bis mehr durch man sein wurde sei prozent ich du wir ihr mein meine meiner dein deine unser kann \
@@ -27,8 +28,7 @@ pub(crate) struct Words {
 pub(crate) fn words() -> &'static Words {
     static WORDS: OnceLock<Words> = OnceLock::new();
     WORDS.get_or_init(|| {
-        // Wortliste steht im JS zwischen den beiden Backticks
-        let list = WORDS_JS.split('`').nth(1).unwrap_or("");
+        let list = WORDS_DE;
         let mut set = HashSet::new();
         let mut chars = Vec::new();
         for w in list.split_whitespace().chain(EXTRA.split_whitespace()) {

@@ -62,63 +62,29 @@ export class DriveCore {
 if (Symbol.dispose) DriveCore.prototype[Symbol.dispose] = DriveCore.prototype.free;
 
 /**
- * Dekodierer mit optionalem Wörterbuch.
+ * Erkenner mit (optionalem) großem Wörterbuch.
  */
-export class InkDecoder {
+export class InkEngine {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        InkDecoderFinalization.unregister(this);
+        InkEngineFinalization.unregister(this);
         return ptr;
     }
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_inkdecoder_free(ptr, 0);
-    }
-    /**
-     * Dekodiert eine Zeile (`steps × classes`, zeilenweise) wie `decodeWithConfidence`.
-     * `mode`: `"text"`, `"math"`, sonst automatisch; `threshold` ohne Angabe 0,8.
-     * `gaps` (Paare `[von, bis)` in Bildspalten) und `image_width` wie `markGapSpaces`; leer = nichts markieren.
-     * @param {Float32Array} logits
-     * @param {number} classes
-     * @param {string | null | undefined} mode
-     * @param {number | null | undefined} threshold
-     * @param {Uint32Array} gaps
-     * @param {number} image_width
-     * @returns {InkLine}
-     */
-    decodeLine(logits, classes, mode, threshold, gaps, image_width) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArrayF32ToWasm0(logits, wasm.__wbindgen_export);
-            const len0 = WASM_VECTOR_LEN;
-            var ptr1 = isLikeNone(mode) ? 0 : passStringToWasm0(mode, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            var len1 = WASM_VECTOR_LEN;
-            const ptr2 = passArray32ToWasm0(gaps, wasm.__wbindgen_export);
-            const len2 = WASM_VECTOR_LEN;
-            wasm.inkdecoder_decodeLine(retptr, this.__wbg_ptr, ptr0, len0, classes, ptr1, len1, !isLikeNone(threshold), isLikeNone(threshold) ? 0 : threshold, ptr2, len2, image_width);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return InkLine.__wrap(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
+        wasm.__wbg_inkengine_free(ptr, 0);
     }
     /**
      * Wörter im Wörterbuch (0 ohne).
      * @returns {number}
      */
     get lexiconSize() {
-        const ret = wasm.inkdecoder_lexiconSize(this.__wbg_ptr);
+        const ret = wasm.inkengine_lexiconSize(this.__wbg_ptr);
         return ret >>> 0;
     }
     /**
-     * `lexicon`: Bytes von `handwriting-lexicon-de.txt` (UTF-8, ein Wort je Zeile), etwa aus
-     * `fetch(…).arrayBuffer()` – als Bytes spart es das Umkodieren eines 3-MB-Strings. Ohne Angabe kein Wörterbuch.
+     * `lexicon`: Bytes von `handwriting-lexicon-de.txt` (UTF-8, ein Wort je Zeile). Ohne Angabe kein Wörterbuch.
      * @param {Uint8Array | null} [lexicon]
      */
     constructor(lexicon) {
@@ -126,7 +92,7 @@ export class InkDecoder {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             var ptr0 = isLikeNone(lexicon) ? 0 : passArray8ToWasm0(lexicon, wasm.__wbindgen_export);
             var len0 = WASM_VECTOR_LEN;
-            wasm.inkdecoder_new(retptr, ptr0, len0);
+            wasm.inkengine_new(retptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -134,125 +100,45 @@ export class InkDecoder {
                 throw takeObject(r1);
             }
             this.__wbg_ptr = r0;
-            InkDecoderFinalization.register(this, this.__wbg_ptr, this);
+            InkEngineFinalization.register(this, this.__wbg_ptr, this);
             return this;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
     }
-}
-if (Symbol.dispose) InkDecoder.prototype[Symbol.dispose] = InkDecoder.prototype.free;
-
-/**
- * Ergebnis von [`InkDecoder::decode_line`]; Felder wie im JS-Ergebnis.
- */
-export class InkLine {
-    static __wrap(ptr) {
-        const obj = Object.create(InkLine.prototype);
-        obj.__wbg_ptr = ptr;
-        InkLineFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        InkLineFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_inkline_free(ptr, 0);
-    }
     /**
-     * @returns {number}
+     * Erkennt die Striche einer Seite (JSON). `known`: `{ Zeilenschlüssel: { text, confidence, status } }`
+     * schon gelesener Zeilen; nur neue gehen durchs Modell. Ergebnis wie bisher:
+     * `{ text, lines, lineCache, accounting: { total, recognized, uncertain, skipped, unassigned, balanced, groups } }`.
+     * @param {string} strokes
+     * @param {string} options
+     * @param {string} known
+     * @param {any} model
+     * @returns {Promise<any>}
      */
-    get blankRatio() {
-        const ret = wasm.inkline_blankRatio(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {Float32Array}
-     */
-    get charConfidences() {
+    recognizePage(strokes, options, known, model) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.inkline_charConfidences(retptr, this.__wbg_ptr);
+            const ptr0 = passStringToWasm0(strokes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(options, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(known, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.inkengine_recognizePage(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, addHeapObject(model));
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var v1 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export5(r0, r1 * 4, 4);
-            return v1;
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * @returns {number}
-     */
-    get confidence() {
-        const ret = wasm.inkline_confidence(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {string}
-     */
-    get rawText() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.inkline_rawText(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * `"empty"`, `"drawing"`, `"uncertain"` oder `"recognized"`.
-     * @returns {string}
-     */
-    get status() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.inkline_status(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * @returns {string}
-     */
-    get text() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.inkline_text(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
         }
     }
 }
-if (Symbol.dispose) InkLine.prototype[Symbol.dispose] = InkLine.prototype.free;
+if (Symbol.dispose) InkEngine.prototype[Symbol.dispose] = InkEngine.prototype.free;
 
 /**
  * Volltextsuche über Seiten (`STATE.searchNotes`): exakte Treffer, aufgefüllt mit
@@ -804,6 +690,70 @@ export function generateSyncKey() {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Editierabstand zweier Texte (Zeichenfehler der Erkennung).
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+export function inkLevenshtein(a, b) {
+    const ptr0 = passStringToWasm0(a, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(b, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.inkLevenshtein(ptr0, len0, ptr1, len1);
+    return ret >>> 0;
+}
+
+/**
+ * Lesereihenfolge der Striche einer (waagerechten) Zeile als Indizes.
+ * @param {string} strokes
+ * @returns {Uint32Array}
+ */
+export function inkOrderLineStrokes(strokes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(strokes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.inkOrderLineStrokes(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v2 = getArrayU32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Textzeilen einer Seite: je Zeile die Indizes ihrer Striche (JSON) in Lesereihenfolge.
+ * @param {string} strokes
+ * @returns {any}
+ */
+export function inkSegmentLines(strokes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(strokes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.inkSegmentLines(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
     }
 }
 
@@ -1442,6 +1392,10 @@ function __wbg_get_imports() {
             const ret = Object.keys(getObject(arg0));
             return addHeapObject(ret);
         },
+        __wbg_length_58572db4c38f3c3e: function(arg0) {
+            const ret = getObject(arg0).length;
+            return ret;
+        },
         __wbg_length_7f3c00c40364105e: function(arg0) {
             const ret = getObject(arg0).length;
             return ret;
@@ -1466,12 +1420,20 @@ function __wbg_get_imports() {
             const ret = new Object();
             return addHeapObject(ret);
         },
+        __wbg_new_63c4c65d2534e5d3: function(arg0) {
+            const ret = new Float32Array(getObject(arg0));
+            return addHeapObject(ret);
+        },
         __wbg_new_ee2291f50781bf1d: function() {
             const ret = new Array();
             return addHeapObject(ret);
         },
         __wbg_new_from_slice_9a868026ffa4208a: function(arg0, arg1) {
             const ret = new Uint8Array(getArrayU8FromWasm0(arg0, arg1));
+            return addHeapObject(ret);
+        },
+        __wbg_new_from_slice_ca6ad97db1f4779a: function(arg0, arg1) {
+            const ret = new Float32Array(getArrayF32FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
         __wbg_new_typed_b01cb72a8af741a3: function(arg0, arg1) {
@@ -1481,7 +1443,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_2057(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_2198(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1508,6 +1470,9 @@ function __wbg_get_imports() {
             const ret = JSON.parse(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         }, arguments); },
+        __wbg_prototypesetcall_8b03c01e2c0f8066: function(arg0, arg1, arg2) {
+            Float32Array.prototype.set.call(getArrayF32FromWasm0(arg0, arg1), getObject(arg2));
+        },
         __wbg_prototypesetcall_bc27214492979395: function(arg0, arg1, arg2) {
             Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), getObject(arg2));
         },
@@ -1567,8 +1532,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 76, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1999);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 78, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2140);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -1595,14 +1560,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2057(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_2057(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_2198(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_2198(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_1999(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_2140(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_1999(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_2140(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -1616,12 +1581,9 @@ function __wasm_bindgen_func_elem_1999(arg0, arg1, arg2) {
 const DriveCoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_drivecore_free(ptr, 1));
-const InkDecoderFinalization = (typeof FinalizationRegistry === 'undefined')
+const InkEngineFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_inkdecoder_free(ptr, 1));
-const InkLineFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_inkline_free(ptr, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_inkengine_free(ptr, 1));
 const NoteIndexFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_noteindex_free(ptr, 1));

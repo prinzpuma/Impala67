@@ -7,11 +7,13 @@ Kein Cloud-Dienst, kein API-Schlüssel, läuft offline im Browser.
 
 ```
 web/heft.js (Striche)
-  → web/handwriting-preprocessor.js  Zeilentrennung (segmentLines, Skizzen-Filter), Begradigung (deskewLine)
-  → web/handwriting-rasterizer.js    Zeile → Graustufenbild, 64 px hoch (gleiche Regeln wie rasterize.py)
-  → web/handwriting-worker.js        ONNX Runtime Web (WASM), Modell: web/handwriting-model.onnx
-  → web/handwriting-ctc.js           Leerzeichen an großen Strich-Lücken, CTC-Beam-Search + Wörterbuch (nicht bei Formeln)
-  → web/handwriting-lexicon.js       jedes Wort zusätzlich entlang echter Wörter lesen (handwriting-lexicon-de.txt, 233.000 Wörter + Endungen)
+  → web/handwriting-worker.js        lädt Modell und Wörterbuch, führt die Inferenz aus (ONNX Runtime Web, web/handwriting-model.onnx)
+  → Rust-Kern core/impala-ink (WASM, impala-wasm/src/ink.rs):
+       preprocess.rs  Zeilentrennung (Skizzen-Filter), Begradigung
+       raster.rs      Zeile → Graustufenbild, 64 px hoch (gleiche Regeln wie rasterize.py), breite Zeilen in Stücken
+       ctc.rs         Leerzeichen an großen Strich-Lücken, CTC-Beam-Search + Wörterbuch (nicht bei Formeln)
+       lexicon.rs     jedes Wort zusätzlich entlang echter Wörter lesen (handwriting-lexicon-de.txt, 233.000 Wörter + Endungen)
+       page.rs        Seitenablauf mit Zeilen-Cache und Strich-Bilanz
   → web/heft-indexer.js              Hintergrund-Erkennung aller Seiten → Suche/RAG, Fortschritt in den Einstellungen
 ```
 
@@ -19,7 +21,7 @@ web/heft.js (Striche)
   9,7 MB ONNX (Gewichte int8, gerechnet wird in float, daher in ONNX Runtime Web lauffähig).
 - **Start**: [de-htr-web-v2](https://huggingface.co/naeyn/de-htr-web-v2) (naeyn, Apache-2.0, trainiert auf ScaDS.AI + fhswf),
   Gewichte per `load_dehtr_onnx` übernommen und auf unser Vokabular abgebildet (`^ ~ √ ∫ ∑ π λ α β` neu).
-- **Vokabular** (`vocabulary.py`, `web/handwriting-vocab.js`): 101 Token (Buchstaben, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
+- **Vokabular** (`vocabulary.py`, `core/impala-ink/src/vocab.rs`): 101 Token (Buchstaben, Umlaute, ß, Ziffern, Satz- und Mathezeichen, Blank = 0).
 - **Wörterbuch** (`build_lexicon.py` → `web/handwriting-lexicon-de.txt`): aus `dictionary_de.txt` plus den 5.000 häufigsten
   Wörtern; ersetzt eine Lesung nur, wenn das Modell die Wörterbuch-Lesung nicht viel unwahrscheinlicher findet.
 - **Neu-Erkennung**: Neues Modell oder Wörterbuch → Version setzt der Release-Workflow automatisch; geänderte Vorverarbeitung →
@@ -30,7 +32,7 @@ web/heft.js (Striche)
 | Datei | Zweck |
 | :--- | :--- |
 | `image_model.py` | Modell, Gewichts-Import aus de-htr, int8-Export (`export_image_onnx`) |
-| `rasterize.py` | Striche bzw. Punkt-Features → Zeilenbild (muss zu `web/handwriting-rasterizer.js` passen) |
+| `rasterize.py` | Striche bzw. Punkt-Features → Zeilenbild (muss zu `core/impala-ink/src/raster.rs` passen) |
 | `train_image.py` | Feintuning: Formeln lernen, Text behalten; best.pt nur, wenn Text höchstens 1 Punkt schlechter wird |
 | `train_image_colab.ipynb` | **Empfohlener Weg**: Colab (L4), Datensätze und Zwischenstände in Drive (`Impala67-Handschrift/`) |
 | `image_datasets.py` | ScaDS- und fhswf-Zeilenbilder laden (Cache) |

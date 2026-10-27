@@ -136,7 +136,7 @@ impl Replay {
 }
 
 impl LineModel for Replay {
-    fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
+    async fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
         let rec = self.queue.borrow_mut().pop_front().ok_or(InkError::Model("keine Aufzeichnung mehr".into()))?;
         assert_eq!(rec.width, image.width, "Bildbreite weicht vom JS ab");
         self.seen.borrow_mut().push((rec.image, image.clone()));

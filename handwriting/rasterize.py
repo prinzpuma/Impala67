@@ -1,6 +1,6 @@
 """Striche → Zeilenbild für das Bild-Modell (image_model.py).
 
-Gleiche Regeln wie web/handwriting-rasterizer.js: Zeile auf 64 px Höhe skalieren (Bounding-Box mit Rand),
+Gleiche Regeln wie core/impala-ink/src/raster.rs: Zeile auf 64 px Höhe skalieren (Bounding-Box mit Rand),
 runde Strichenden, schwarz auf weiß, Werte in [0, 1], Breite auf ein Vielfaches von 4 aufgefüllt.
 """
 

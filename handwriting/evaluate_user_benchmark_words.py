@@ -134,7 +134,7 @@ def evaluate_benchmark(model_path=MODEL_PATH, session=None, verbose=True):
         parsed_strokes = [[(float(p[0]), float(p[1])) for p in s] for s in row["strokes"] if s]
         line_pred, conf = "", 0.0
         if parsed_strokes:
-            # Zeile wie in der App als Bild (rasterize.py ↔ web/handwriting-rasterizer.js)
+            # Zeile wie in der App als Bild (rasterize.py ↔ core/impala-ink/src/raster.rs)
             line_pred, conf = ctc_greedy(session.run(["output"], {"input": render_strokes(parsed_strokes)[None, None]})[0][:, 0, :], mode=line_mode)
         dist, gt_len = line_distance(line_pred, gt, line_mode)
         acc = max(0.0, (1.0 - dist / gt_len) * 100.0)

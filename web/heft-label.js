@@ -2,8 +2,7 @@
 
 import { S } from "./state.js";
 import { HANDSCHRIFT } from "./handschrift.js";
-import { HANDWRITING_PREPROCESSOR as PRE } from "./handwriting-preprocessor.js";
-import { HANDWRITING_CTC } from "./handwriting-ctc.js";
+import { CORE } from "./rust-core.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
 
 // web/heft-label.js — Heftseiten von einer Bild-KI beschriften lassen (MCP), damit das lokale
@@ -16,11 +15,22 @@ import { PAGE_W, PAGE_H } from "./heft-document-core.js";
 export const HEFT_LABEL = (() => {
 	const GRID = 100;
 
+	// Schreibstriche (ohne Form, Radierer, Laser) und ihre Umrandung.
+	const filterInkStrokes = (strokes) => strokes.filter((s) => s && Array.isArray(s.pts) && s.pts.length && !["shape", "eraser", "laser"].includes(s.tool));
+	function strokeBbox(stroke) {
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		for (const [x, y] of stroke.pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+		return { minX, maxX, minY, maxY, cy: (minY + maxY) / 2 };
+	}
+	// Zeilenzerlegung und Lesereihenfolge des Kerns (impala-ink), als Strich-Objekte.
+	const segmentLines = (strokes) => CORE.inkSegmentLines(JSON.stringify(strokes)).map((idx) => idx.map((i) => strokes[i]));
+	const orderLineStrokes = (strokes) => [...CORE.inkOrderLineStrokes(JSON.stringify(strokes))].map((i) => strokes[i]);
+
 	function getPage(pageId, pageIdx) {
 		const doc = S.heftDocs?.[pageId];
 		const pg = doc?.pages?.[pageIdx];
 		if (!pg) throw new Error(`Heftseite nicht gefunden: ${pageId}, Seite ${pageIdx}`);
-		return { doc, pg, strokes: PRE.filterInkStrokes(pg.strokes || []) };
+		return { doc, pg, strokes: filterInkStrokes(pg.strokes || []) };
 	}
 
 	function renderPage(strokes) {
@@ -113,7 +123,7 @@ export const HEFT_LABEL = (() => {
 		const unassigned = [];
 		let ambiguous = 0;
 		for (const s of strokes) {
-			const b = PRE.strokeBbox(s);
+			const b = strokeBbox(s);
 			if (!b) continue;
 			const cx = (b.minX + b.maxX) / 2, cy = b.cy;
 			const hits = boxes.map((bx, j) => (cx >= bx.x0 && cx <= bx.x1 && cy >= bx.y0 && cy <= bx.y1 ? j : -1)).filter((j) => j >= 0);
@@ -125,7 +135,7 @@ export const HEFT_LABEL = (() => {
 
 		// Zeilenzerlegung der App zum Vergleich
 		const appLineOf = new Map();
-		PRE.segmentLines(strokes).forEach((line, k) => line.strokes.forEach((s) => appLineOf.set(s, k)));
+		segmentLines(strokes).forEach((line, k) => line.forEach((s) => appLineOf.set(s, k)));
 		const llmLinesPerAppLine = new Map();
 		for (const [s, j] of owner) {
 			const k = appLineOf.get(s);
@@ -142,10 +152,10 @@ export const HEFT_LABEL = (() => {
 			const appLines = new Set(own.map((s) => appLineOf.get(s)));
 			const row = { nr: j + 1, text, strokes: own.length, splitByApp: appLines.size > 1 };
 			if (!own.length || !text) { results.push({ ...row, skipped: own.length ? "kein Text" : "keine Striche im Rahmen" }); continue; }
-			const lineStrokes = PRE.orderLineStrokes(rotateToReading(own, Number(lines[j].angle) || 0));
+			const lineStrokes = orderLineStrokes(rotateToReading(own, Number(lines[j].angle) || 0));
 			try {
 				row.app = String(await HANDSCHRIFT.recognizeStrokes(lineStrokes, {}, "label")).replace(/\n/g, " ");
-				row.errors = HANDWRITING_CTC.levenshtein(row.app, text);
+				row.errors = CORE.inkLevenshtein(row.app, text);
 				errApp += row.errors;
 				chars += text.length;
 			} catch (e) {

@@ -42,7 +42,8 @@ impl OnnxModel {
 }
 
 impl LineModel for OnnxModel {
-    fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
+    // Rechnet sofort (tract blockiert den aufrufenden Thread).
+    async fn run(&self, image: &LineImage) -> Result<Vec<f32>, InkError> {
         if image.data.len() != image.width * IMAGE_HEIGHT || image.width == 0 {
             return Err(InkError::Model(format!(
                 "Bildgröße passt nicht: {} Werte, Breite {}",

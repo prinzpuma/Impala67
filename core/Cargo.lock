@@ -787,6 +787,7 @@ name = "impala-ink"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "impala-net",
  "serde_json",
  "tract-onnx",
 ]
