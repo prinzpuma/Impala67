@@ -77,4 +77,3 @@ impl HttpClient for UreqClient {
         }
     }
 }
-

@@ -74,7 +74,18 @@ Stand: v2.2.85 (21. Oktober 2026)
 ### Langfristig: Rust-Kern & native Apps
 - [ ] **Plan in `docs/NATIV-PLAN.md`**: Gemeinsamer Rust-Kern (auch als WASM in der PWA), danach iPad, Android, Windows/Linux nativ.
   - [x] Schritt 1: Spike `core/` – Event-Kompaktierung in Rust; als WASM langsamer als JS, deshalb rechnet die PWA weiter in JS. Ergebnis und Messwerte im Plan.
-  - [ ] Schritt 2: CTC-Dekodierung (`web/handwriting-ctc.js`) in den Kern – rechenintensiv, typisierte Arrays, messbarer Gewinn.
+  - [x] Schritt 2: Ganze Nicht-UI-Logik als Rust-Kern (12 Crates, Golden-Tests gegen JS, Stand im Plan).
+  - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
+  - [ ] PWA: RAG-Index als WASM im Worker (463 → 48 ms je Anfrage), JS als Rückfall; `opt-level` für WASM entscheiden.
+  - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract; Downloads in Sync/Drive parallel.
+- [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
+  - [ ] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung (`sync-cloudflare.js:417`); Fehler ohne Status werden endlos wiederholt (`sync-transfer.js:29`).
+  - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.
+  - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
+  - [ ] Drive: 60-s-Aufschub greift nie (`drive.js:775`), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync.
+  - [ ] Handschrift: Skizzen-Striche fehlen in der Strich-Bilanz (`handwriting-worker.js`, `console.error` je Seite).
+  - [ ] Start-Absturz bei Patch, der kein Objekt ist (`event-order.js:16`); Heft: Kreis-Bounds NaN, `s-` ohne Liste bricht Event ab.
+  - [ ] FSRS: Obergrenze der Stabilität nach Vergessen fehlt; Anzeige „60 Min“/„1 Jahre“.
   - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.
 
 ### Priorität 3: Android & Plattform-Ergänzungen

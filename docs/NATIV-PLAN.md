@@ -48,10 +48,11 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
 
 1. ✅ **Spike**: `core/` angelegt, Event-Kompaktierung in Rust (Ergebnis siehe unten). Weil WASM hier langsamer
    als JS ist, bleibt die PWA bei JS; die Worker-Anbindung des Spikes wurde nicht übernommen.
-2. **Reine Logik in den Kern, PWA nutzt sie** – zuerst, was rechenintensiv ist und über Bytes/typisierte
-   Arrays mit JS spricht: CTC-Dekodierung → RAG-Ranking/Vektorsuche → FSRS → Sync-Formate & -Krypto
-   (Einheitlichkeit für native Apps, kein Tempo-Gewinn in der PWA) → Event-Reihenfolge → Markdown.
-3. **Speicherschicht** (SQLite im Kern; Web behält IndexedDB über Adapter, Migration ohne Datenverlust).
+2. ✅ **Ganze Nicht-UI-Logik als Rust-Kern** (27. Oktober 2026, Stand siehe unten). Die PWA ist noch nicht
+   umgestellt; als WASM vorbereitet ist nur, was gemessen schneller ist (Suche/RAG, CTC-Dekodierung).
+   Nächster Schritt: UniFFI-Schnittstelle (`impala-core`) und RAG-Index im PWA-Worker hinter Rückfall auf JS.
+3. ✅ **Speicherschicht** im Kern (`impala-storage`, SQLite). Web behält IndexedDB (`web/db.js`); der Trait ist
+   synchron, ein WASM-Adapter für IndexedDB bräuchte eine asynchrone Variante.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
@@ -91,6 +92,44 @@ Gegen vergessene Neubauten hält `core/wasm-build.json` Hashes von Quellen und A
 - Die Kompaktierung wird erst schneller, wenn die Events gar nicht mehr über die Grenze müssen (Speicherschicht im Kern, Schritt 3).
 - Kein `serde-wasm-bindgen` für große Objekt-Bäume: zu langsam und zu groß. Gezielter Zugriff über ein Trait hält den Kern
   zudem plattformneutral – dasselbe Muster passt für UniFFI.
+
+## Stand Rust-Kern (27. Oktober 2026)
+
+Workspace `core/`: ein Crate je Fachgebiet, Fassade `impala-core`, WASM-Hülle `impala-wasm`. Regeln für Arbeiten
+daran: `core/AGENT-REGELN.md`. Jedes Crate hat Golden-Tests aus dem JS-Original (`core/tools/gen-golden-*.mjs`).
+Gesamt: 242 Tests grün, `cargo clippy -D warnings` sauber, alles außer ONNX/SQLite/HTTP baut für wasm32.
+
+| Crate | Inhalt | Rust nativ vs. JS |
+|---|---|---|
+| `impala-crypto` | PBKDF2, AES-GCM-Pakete, Blob-Layout byte-gleich; `SecureStore` (verschl. Tresor) | Einheitlichkeit, kein Tempo (WebCrypto) |
+| `impala-sync` | Protokoll v4: Wire-Format, Chunking, Pakete, Worker-API, `SyncClient`, Kompaktierung | Paketbau ~2,5×, Kompaktierung ≈ gleich |
+| `impala-storage` | `Storage`-Trait, SQLite + Speicher, exportAll/importAll, Checkpoints 1–3 | Lesen ~2× (gegen fake-indexeddb) |
+| `impala-model` | Zustand, Reducer (46 Typen), Laden/Reihenfolge, merge3, Konflikte, Lernwarteschlange | Replay 100 000 Events 2,5–3× |
+| `impala-heft` | Dokument, heftOps, Diff, Geometrie, Lasso, Radierer, PDF (byte-gleich), SVG neu | 2–6× |
+| `impala-ink` | Vorverarbeitung, Rasterung, CTC-Beam-Search + Wörterbuch, `InkRecognizer` | Dekodieren ~4× |
+| `impala-search` | Chunking, Vektorsuche, RAG-Ranking, Unscharf-Suche, `Embedder` (ONNX optional) | Vektor 5×, RAG-Anfrage 20× (Index) |
+| `impala-markdown` | Markdown ↔ Blöcke, Text-Helfer | parse 2×, serialize 8× |
+| `impala-srs` | FSRS-5 | – |
+| `impala-ai` | Anbieter, Anfragen, Stream-Parser, Agent-Schleife, `LlmProvider`, `ToolExecutor` | netzgebunden |
+| `impala-drive` | Drive-Formate, API v3, Backup-Ablauf, Status-Regeln | netzgebunden |
+| `impala-net` | `HttpClient`-Trait, ureq-Standard | – |
+
+**WASM in der PWA** (Node, gleiche Ergebnisse geprüft, `node core/tools/bench-wasm.mjs`):
+
+| Messung | JS | WASM | Entscheidung |
+|---|---|---|---|
+| RAG-Anfrage 20 000 Chunks | 463 ms | 48 ms (+0,6 s einmaliger Indexbau) | Binding vorbereitet; lohnt sich |
+| Vektorsuche 20 000 × 384, Top-10 | 15–35 ms | 10 ms | Binding vorbereitet |
+| CTC-Dekodierung 10 Zeilen + Wörterbuch | 24–29 ms | 20–22 ms | Binding vorbereitet, allein keine Umstellung |
+| Heft-Treffer-Test/Lasso/Radierer | 1,5–2,3× langsamer | – | verworfen: < 1 ms je Ereignis, doppelter Zustand |
+| Markdown parse/serialize | 11 / 6 ms | 15–31 / 12–18 ms | verworfen: JSON über die Grenze |
+| Kompaktierung 100 000 Events | 52 ms | 155–170 ms | verworfen (Spike) |
+
+`.wasm` mit Kompaktierung, Suche und Dekodierung: 277 KB (117 KB gzip). `opt-level 3` wäre 15–25 % schneller, aber ~30 % größer.
+
+**Grenzen**: tract (reines Rust-ONNX) ist ~8× langsamer als ONNX Runtime → für native Apps Plattform-Erkenner
+(Vision, ML Kit) oder `ort`. Das Bekko-Embedding-Modell war im Container nicht ladbar, Ende-zu-Ende ungeprüft.
+Rust-Code ist meist 1,5–2× länger als das JS (Typen, Doku, JS-genaue Zahlen-/Text-Semantik).
 
 ## iOS ohne Mac
 
