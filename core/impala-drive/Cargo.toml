@@ -9,4 +9,15 @@ description = "Google-Drive-Backup: Dateiformate, Snapshot/Delta, API-Anfragen"
 [lints]
 workspace = true
 
+[features]
+# Reicht den Standard-HTTP-Client von impala-net durch. Ohne: reine Logik (baut für WASM).
+default = ["client"]
+client = ["impala-net/client"]
+
 [dependencies]
+impala-crypto = { path = "../impala-crypto", default-features = false }
+impala-net = { path = "../impala-net", default-features = false }
+impala-storage = { path = "../impala-storage", default-features = false }
+impala-sync = { path = "../impala-sync" }
+# preserve_order: Schlüsselreihenfolge wie JSON.stringify (Dateiinhalte byte-gleich mit der PWA).
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }

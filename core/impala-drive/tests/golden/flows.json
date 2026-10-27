@@ -1,0 +1,5609 @@
+{
+ "fixedNow": 1793109900000,
+ "cases": [
+  {
+   "name": "erster-sync",
+   "op": "sync",
+   "allowSecrets": false,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [
+     {
+      "id": "a1",
+      "t": "2026-10-27T09:00:10.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "p1",
+       "title": "Hallo",
+       "content": "Welt"
+      },
+      "seq": 1
+     },
+     {
+      "id": "a2",
+      "t": "2026-10-27T09:00:11.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "theme": "dark",
+       "notionToken": "geheim",
+       "aiProviders": [
+        {
+         "id": "x",
+         "key": "k1",
+         "name": "X"
+        }
+       ]
+      },
+      "seq": 2
+     },
+     {
+      "id": "a3",
+      "t": "2026-10-27T09:00:12.000Z",
+      "type": "uiTabsSet",
+      "payload": {
+       "tabs": [
+        "p1"
+       ]
+      },
+      "seq": 3
+     },
+     {
+      "id": "a4",
+      "t": "2026-10-27T09:00:13.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "Welt!"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "cloudflare",
+      "seq": 4
+     },
+     {
+      "id": "a5",
+      "t": "2026-10-27T09:00:14.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "Echo"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 5
+     },
+     {
+      "id": "a6",
+      "t": "2026-10-27T09:00:15.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "notionToken": "nur-geheim"
+      },
+      "seq": 6
+     },
+     {
+      "id": "a7",
+      "t": "2026-10-27T09:00:16.000Z",
+      "type": "pageMove",
+      "payload": {
+       "id": "p1",
+       "parentId": null
+      },
+      "_derived": true,
+      "seq": 7
+     }
+    ],
+    "blobs": {
+     "img:11111111-1111-4111-8111-111111111111": {
+      "meta": {
+       "name": "a.png",
+       "type": "image/png",
+       "hash": "h-img"
+      },
+      "b64": "AQID"
+     },
+     "file:22222222-2222-4222-8222-222222222222": {
+      "meta": {
+       "name": "b.pdf",
+       "type": "application/pdf"
+      },
+      "b64": "JVBERg=="
+     },
+     "cover:33333333-3333-4333-8333-333333333333": {
+      "meta": {
+       "name": "c.jpg",
+       "type": "image/jpeg"
+      },
+      "b64": "CQkJ"
+     },
+     "heftver:p1:1:1": {
+      "meta": {},
+      "b64": "Bw=="
+     },
+     "__impala67_state_checkpoint_v2__": {
+      "meta": {},
+      "b64": "CA=="
+     },
+     "bgImage": {
+      "b64": "BQU="
+     }
+    }
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"kind\":\"drive#startPageToken\",\"startPageToken\":\"tok-9\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 503,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":503,\"message\":\"Störung\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"3\",\"files\":[{\"id\":\"f001\",\"name\":\"impala67-sync.json\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\",\"size\":\"156\"},{\"id\":\"f002\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"190\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},{\"id\":\"f003\",\"name\":\"impala67-delta-v2-dev-B-3-4.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"197\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"3\",\"to\":\"4\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)&pageToken=3",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"6\",\"files\":[{\"id\":\"f004\",\"name\":\"impala67-delta-v2-dev-B-5-5.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"177\"},{\"id\":\"f005\",\"name\":\"impala67-delta-v2-dev-X-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:04.000Z\",\"size\":\"230\",\"appProperties\":{\"encoding\":\"identity\",\"device\":\"dev-X\",\"from\":\"1\",\"to\":\"1\"}},{\"id\":\"f006\",\"name\":\"impala67-blob-v2-b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:05.000Z\",\"size\":\"99\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\",\"blobId\":\"cover:33333333-3333-4333-8333-333333333333\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)&pageToken=6",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"id\":\"f007\",\"name\":\"impala67-blob-v2-442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:06.000Z\",\"size\":\"93\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}},{\"id\":\"f008\",\"name\":\"impala67-blob-v2-0000.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:07.000Z\",\"size\":\"66\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"0000\",\"blobId\":\"heftver:p9:1:1\"}},{\"id\":\"f009\",\"name\":\"notizen.txt\",\"modifiedTime\":\"2026-10-27T10:00:08.000Z\",\"size\":\"5\"}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f002?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA33NwQrCMBAE0F+ROaeyjaC4N/UX1IPiIbWLFmqytEGUkn+XiOJFvc4M8wY4VTCai7rWTWcwuErXN8GDSwO5aeii1IsIBgzkKj724P2ApgajKmGQO0t2WpRU2Nma5kzEZMdEtMv1XQUMdSdZdeKiwEDdvQ2uBr9+1OZhE9u83AY/WsLgGHwU/5RTMm/R/hQnX8SN1n9EdfF4ztGHWhZruUWklA4GVRuqHjyk9AD3b49lKAEAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f003?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA33NwYrCQBCE4VdZ6jxKO0p0+6a+gnpQ9jAxzW4gzjRJI0qYd5eIOSzsei346+sRVMGoLxqaUCzhcJW2q1MEewe5aWpNqrWB4ckXkxlNfLGjFRMx0ZSIjnCQq0TrwKcedQVGOYfDr2a5o89nsxgbu6uAoeFb9loFEzhouDcpVODXj/rnaOefYbLamiHZeOSc3WjN/rX8H9a2lTfWSBxS/NjA4ZyiSRzekfOXQ9mksgP3OT8ALs9CJjoBAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f004?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMwQnCMBQG4F3+cyqvgbb6buIKPSkeUhOhWJuQhmIpARGH8OYCbuEmTuAIoujBAb5vhHIOjHrvVKPyAgK98V1tW7AUMAdnfTB6HsCQJPMkpUTmJU2ZiIkmRLSEgOlNGzrwakStwagyCPyZoqTZx2Q/EwZnwNgorxfeqGAg4NTQWKXB32eXQmDrbfu+7ufH6fa8Xo6IcS1QNbbqwGOMLw8tihjFAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f005?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "eyJhcHAiOiJpbXBhbGE2NyIsInZlcnNpb24iOjIsImV4cG9ydGVkQXQiOiIyMDI2LTEwLTI2VDA4OjAwOjAwLjAwMFoiLCJldmVudHMiOlt7ImlkIjoieDEiLCJ0IjoiMjAyNi0xMC0yN1QwOTowMDowNi4wMDBaIiwidHlwZSI6InBhZ2VDcmVhdGUiLCJwYXlsb2FkIjp7ImlkIjoicHgifSwic2VxIjo5OSwiX3JlbW90ZSI6dHJ1ZSwiX3JlbW90ZVNvdXJjZSI6ImNsb3VkZmxhcmUifV0sImJsb2JzIjp7fX0="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f007?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA6tWykxRslLKzE23MoECXQRhAWPBgJKOUm5qSaKSVbVSXmJuqpKVUopeQV66ko5SSWVBKtigxPRUfZBQrY5SkpmJkpWSk2OgrVItAM1J5CFpAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"}}",
+        "encoding": "gzip",
+        "content": "{\"id\":\"bgImage\",\"meta\":{},\"b64\":\"BQU=\"}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f010\",\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"}}",
+        "encoding": "gzip",
+        "content": "{\"id\":\"file:22222222-2222-4222-8222-222222222222\",\"meta\":{\"name\":\"b.pdf\",\"type\":\"application/pdf\"},\"b64\":\"JVBERg==\"}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f011\",\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"}}",
+        "encoding": "gzip",
+        "content": "{\"id\":\"img:11111111-1111-4111-8111-111111111111\",\"meta\":{\"name\":\"a.png\",\"type\":\"image/png\",\"hash\":\"h-img\"},\"b64\":\"AQID\"}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f012\",\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":2,\"exportedAt\":\"\",\"events\":[{\"id\":\"a1\",\"t\":\"2026-10-27T09:00:10.000Z\",\"type\":\"pageCreate\",\"payload\":{\"id\":\"p1\",\"title\":\"Hallo\",\"content\":\"Welt\"},\"seq\":1},{\"id\":\"a2\",\"t\":\"2026-10-27T09:00:11.000Z\",\"type\":\"settingsSet\",\"payload\":{\"theme\":\"dark\",\"aiProviders\":[{\"id\":\"x\",\"name\":\"X\"}]},\"seq\":2},{\"id\":\"a4\",\"t\":\"2026-10-27T09:00:13.000Z\",\"type\":\"pageUpdate\",\"payload\":{\"id\":\"p1\",\"patch\":{\"content\":\"Welt!\"}},\"_remote\":true,\"_remoteSource\":\"cloudflare\",\"seq\":4},{\"id\":\"a7\",\"t\":\"2026-10-27T09:00:16.000Z\",\"type\":\"pageMove\",\"payload\":{\"id\":\"p1\",\"parentId\":null},\"_derived\":true,\"seq\":7}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-9",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f010\",\"removed\":false,\"file\":{\"id\":\"f010\",\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"59\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"},\"trashed\":false}},{\"fileId\":\"f011\",\"removed\":false,\"file\":{\"id\":\"f011\",\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"},\"trashed\":false}},{\"fileId\":\"f012\",\"removed\":false,\"file\":{\"id\":\"f012\",\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"},\"trashed\":false}}],\"nextPageToken\":\"tok-12\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-12",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f013\",\"removed\":false,\"file\":{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"size\":\"320\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"},\"trashed\":false}},{\"fileId\":\"f014\",\"removed\":false,\"file\":{\"id\":\"f014\",\"name\":\"impala67-delta-v2-dev-C-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:13.000Z\",\"size\":\"170\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-C\",\"from\":\"1\",\"to\":\"1\"},\"trashed\":false}}],\"newStartPageToken\":\"tok-14\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f014?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBBG4bv86yjTLFqdnXeoG8VF2gxaqM3QhGIpuY038WJSEcHtg+8tcKpgdHd1vSsrGEwyxi4MYGsgDw1jEn9IYFiy5aagjS1r2jERE22J6AQDmWRIEXxe0Hkw2gIGf6aqab8a+zNpVgFD3VWO6l0SGKib++A8+PvR4hNTe1tTG4Ykw7qN+nom5JwvBk0fmghecn4DEcWkq80AAAA="
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 0,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "b1",
+        "t": "2026-10-27T09:00:02.000Z",
+        "type": "pageCreate",
+        "payload": {
+         "id": "p2",
+         "title": "Von B",
+         "content": ""
+        }
+       },
+       {
+        "id": "b2",
+        "t": "2026-10-27T09:00:03.000Z",
+        "type": "pageUpdate",
+        "payload": {
+         "id": "p2",
+         "patch": {
+          "content": "B-Text"
+         }
+        }
+       },
+       {
+        "id": "b3",
+        "t": "2026-10-27T09:00:04.000Z",
+        "type": "pageUpdate",
+        "payload": {
+         "id": "p2",
+         "patch": {
+          "title": "B2"
+         }
+        }
+       },
+       {
+        "id": "b1",
+        "t": "2026-10-27T09:00:02.000Z",
+        "type": "pageCreate",
+        "payload": {
+         "id": "p2",
+         "title": "Von B",
+         "content": ""
+        }
+       },
+       {
+        "id": "b5",
+        "t": "2026-10-27T09:00:05.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "k1",
+         "front": "Ä€😀"
+        }
+       },
+       {
+        "id": "x1",
+        "t": "2026-10-27T09:00:06.000Z",
+        "type": "pageCreate",
+        "payload": {
+         "id": "px"
+        },
+        "seq": 99,
+        "_remote": true,
+        "_remoteSource": "cloudflare"
+       }
+      ],
+      "blobs": {}
+     }
+    },
+    {
+     "unsyncedAfterSeq": 12,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "c1",
+        "t": "2026-10-27T09:00:20.000Z",
+        "type": "pageUpdate",
+        "payload": {
+         "id": "p1",
+         "patch": {
+          "content": "spät"
+         }
+        }
+       }
+      ],
+      "blobs": {}
+     }
+    }
+   ],
+   "puts": [
+    {
+     "id": "img:44444444-4444-4444-8444-444444444444",
+     "b64": "BAQ=",
+     "meta": {
+      "name": "d.png",
+      "type": "image/png"
+     }
+    }
+   ],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-14\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-sync.json\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\",\"size\":\"156\"},\"f002\":{\"id\":\"f002\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"190\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},\"f003\":{\"id\":\"f003\",\"name\":\"impala67-delta-v2-dev-B-3-4.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"197\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"3\",\"to\":\"4\"}},\"f004\":{\"id\":\"f004\",\"name\":\"impala67-delta-v2-dev-B-5-5.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"177\"},\"f005\":{\"id\":\"f005\",\"name\":\"impala67-delta-v2-dev-X-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:04.000Z\",\"size\":\"230\",\"appProperties\":{\"encoding\":\"identity\",\"device\":\"dev-X\",\"from\":\"1\",\"to\":\"1\"}},\"f006\":{\"id\":\"f006\",\"name\":\"impala67-blob-v2-b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:05.000Z\",\"size\":\"99\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\",\"blobId\":\"cover:33333333-3333-4333-8333-333333333333\"}},\"f007\":{\"id\":\"f007\",\"name\":\"impala67-blob-v2-442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:06.000Z\",\"size\":\"93\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}},\"f008\":{\"id\":\"f008\",\"name\":\"impala67-blob-v2-0000.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:07.000Z\",\"size\":\"66\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"0000\",\"blobId\":\"heftver:p9:1:1\"}},\"f009\":{\"id\":\"f009\",\"name\":\"notizen.txt\",\"modifiedTime\":\"2026-10-27T10:00:08.000Z\",\"size\":\"5\"},\"f010\":{\"id\":\"f010\",\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"59\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"}},\"f011\":{\"id\":\"f011\",\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"}},\"f012\":{\"id\":\"f012\",\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"}},\"f013\":{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"size\":\"320\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"}},\"f014\":{\"id\":\"f014\",\"name\":\"impala67-delta-v2-dev-C-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:13.000Z\",\"size\":\"170\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-C\",\"from\":\"1\",\"to\":\"1\"}}}}",
+     "impala67_drive_known_deltas": "[\"f003\",\"f004\",\"f005\",\"f013\",\"f014\"]",
+     "impala67_drive_uploaded_seq": "12",
+     "impala67_drive_snapshot_stamp": "f002:2026-10-27T10:00:01.000Z",
+     "impala67_drive_upload_hashes": "{\"bgImage\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\"},\"cover:33333333-3333-4333-8333-333333333333\":{\"contentHash\":\"\",\"size\":3,\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\"},\"file:22222222-2222-4222-8222-222222222222\":{\"contentHash\":\"\",\"size\":4,\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\"},\"img:11111111-1111-4111-8111-111111111111\":{\"contentHash\":\"h-img\",\"size\":3,\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\"},\"img:44444444-4444-4444-8444-444444444444\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}}",
+     "impala67_drive_synced_seq": "13",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 6,
+    "uploaded": 4,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "Remote-Stand übernehmen…",
+     "3 Datei(en) hochladen…",
+     "Änderungen hochladen…",
+     "1 nachträgliche(s) Änderungspaket(e) einlesen…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": [
+    750
+   ]
+  },
+  {
+   "name": "folge-sync",
+   "op": "sync",
+   "allowSecrets": false,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-14\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-sync.json\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\",\"size\":\"156\"},\"f002\":{\"id\":\"f002\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"190\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},\"f003\":{\"id\":\"f003\",\"name\":\"impala67-delta-v2-dev-B-3-4.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"197\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"3\",\"to\":\"4\"}},\"f004\":{\"id\":\"f004\",\"name\":\"impala67-delta-v2-dev-B-5-5.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"177\"},\"f005\":{\"id\":\"f005\",\"name\":\"impala67-delta-v2-dev-X-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:04.000Z\",\"size\":\"230\",\"appProperties\":{\"encoding\":\"identity\",\"device\":\"dev-X\",\"from\":\"1\",\"to\":\"1\"}},\"f006\":{\"id\":\"f006\",\"name\":\"impala67-blob-v2-b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:05.000Z\",\"size\":\"99\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\",\"blobId\":\"cover:33333333-3333-4333-8333-333333333333\"}},\"f007\":{\"id\":\"f007\",\"name\":\"impala67-blob-v2-442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:06.000Z\",\"size\":\"93\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}},\"f008\":{\"id\":\"f008\",\"name\":\"impala67-blob-v2-0000.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:07.000Z\",\"size\":\"66\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"0000\",\"blobId\":\"heftver:p9:1:1\"}},\"f009\":{\"id\":\"f009\",\"name\":\"notizen.txt\",\"modifiedTime\":\"2026-10-27T10:00:08.000Z\",\"size\":\"5\"},\"f010\":{\"id\":\"f010\",\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"59\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"}},\"f011\":{\"id\":\"f011\",\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"}},\"f012\":{\"id\":\"f012\",\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"}},\"f013\":{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"size\":\"320\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"}},\"f014\":{\"id\":\"f014\",\"name\":\"impala67-delta-v2-dev-C-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:13.000Z\",\"size\":\"170\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-C\",\"from\":\"1\",\"to\":\"1\"}}}}",
+     "impala67_drive_known_deltas": "[\"f003\",\"f004\",\"f005\",\"f013\",\"f014\"]",
+     "impala67_drive_uploaded_seq": "12",
+     "impala67_drive_snapshot_stamp": "f002:2026-10-27T10:00:01.000Z",
+     "impala67_drive_upload_hashes": "{\"bgImage\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\"},\"cover:33333333-3333-4333-8333-333333333333\":{\"contentHash\":\"\",\"size\":3,\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\"},\"file:22222222-2222-4222-8222-222222222222\":{\"contentHash\":\"\",\"size\":4,\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\"},\"img:11111111-1111-4111-8111-111111111111\":{\"contentHash\":\"h-img\",\"size\":3,\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\"},\"img:44444444-4444-4444-8444-444444444444\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}}",
+     "impala67_drive_synced_seq": "13",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [
+     {
+      "id": "a1",
+      "t": "2026-10-27T09:00:10.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "p1",
+       "title": "Hallo",
+       "content": "Welt"
+      },
+      "seq": 1
+     },
+     {
+      "id": "a2",
+      "t": "2026-10-27T09:00:11.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "theme": "dark",
+       "notionToken": "geheim",
+       "aiProviders": [
+        {
+         "id": "x",
+         "key": "k1",
+         "name": "X"
+        }
+       ]
+      },
+      "seq": 2
+     },
+     {
+      "id": "a3",
+      "t": "2026-10-27T09:00:12.000Z",
+      "type": "uiTabsSet",
+      "payload": {
+       "tabs": [
+        "p1"
+       ]
+      },
+      "seq": 3
+     },
+     {
+      "id": "a4",
+      "t": "2026-10-27T09:00:13.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "Welt!"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "cloudflare",
+      "seq": 4
+     },
+     {
+      "id": "a5",
+      "t": "2026-10-27T09:00:14.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "Echo"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 5
+     },
+     {
+      "id": "a6",
+      "t": "2026-10-27T09:00:15.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "notionToken": "nur-geheim"
+      },
+      "seq": 6
+     },
+     {
+      "id": "a7",
+      "t": "2026-10-27T09:00:16.000Z",
+      "type": "pageMove",
+      "payload": {
+       "id": "p1",
+       "parentId": null
+      },
+      "_derived": true,
+      "seq": 7
+     },
+     {
+      "id": "b1",
+      "t": "2026-10-27T09:00:02.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "p2",
+       "title": "Von B",
+       "content": ""
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 8
+     },
+     {
+      "id": "b2",
+      "t": "2026-10-27T09:00:03.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p2",
+       "patch": {
+        "content": "B-Text"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 9
+     },
+     {
+      "id": "b3",
+      "t": "2026-10-27T09:00:04.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p2",
+       "patch": {
+        "title": "B2"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 10
+     },
+     {
+      "id": "b5",
+      "t": "2026-10-27T09:00:05.000Z",
+      "type": "cardCreate",
+      "payload": {
+       "id": "k1",
+       "front": "Ä€😀"
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 11
+     },
+     {
+      "id": "x1",
+      "t": "2026-10-27T09:00:06.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "px"
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 12
+     },
+     {
+      "id": "c1",
+      "t": "2026-10-27T09:00:20.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "spät"
+       }
+      },
+      "_remote": true,
+      "_remoteSource": "drive",
+      "seq": 13
+     },
+     {
+      "id": "a8",
+      "t": "2026-10-27T09:00:30.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "p1",
+       "patch": {
+        "content": "neu"
+       }
+      },
+      "seq": 14
+     }
+    ],
+    "blobs": {
+     "img:11111111-1111-4111-8111-111111111111": {
+      "meta": {
+       "name": "a.png",
+       "type": "image/png",
+       "hash": "h-img"
+      },
+      "b64": "AQID"
+     },
+     "file:22222222-2222-4222-8222-222222222222": {
+      "meta": {
+       "name": "b.pdf",
+       "type": "application/pdf"
+      },
+      "b64": "JVBERg=="
+     },
+     "cover:33333333-3333-4333-8333-333333333333": {
+      "meta": {
+       "name": "c.jpg",
+       "type": "image/jpeg"
+      },
+      "b64": "CQkJ"
+     },
+     "heftver:p1:1:1": {
+      "meta": {},
+      "b64": "Bw=="
+     },
+     "__impala67_state_checkpoint_v2__": {
+      "meta": {},
+      "b64": "CA=="
+     },
+     "bgImage": {
+      "b64": "BQU="
+     },
+     "img:44444444-4444-4444-8444-444444444444": {
+      "meta": {
+       "name": "d.png",
+       "type": "image/png"
+      },
+      "b64": "BAQ="
+     }
+    }
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-14",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f003\",\"removed\":true},{\"fileId\":\"f009\",\"removed\":false,\"file\":{\"id\":\"f009\",\"name\":\"notizen.txt\",\"modifiedTime\":\"2026-10-27T10:00:08.000Z\",\"size\":\"5\",\"trashed\":true}},{\"fileId\":\"f015\",\"removed\":false,\"file\":{\"id\":\"f015\",\"name\":\"impala67-delta-v2-dev-B-6-7.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:14.000Z\",\"size\":\"166\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"6\",\"to\":\"7\"},\"trashed\":false}}],\"newStartPageToken\":\"tok-17\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f015?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMwQqCQBRG4Xf512NcR9C6u3oG2xQtRudSgjkXHSSRefcwatH2wHdWOFUwuqe63pUVDGYZpy4MYGsgLw1jFH+MYFiyZZZTZsua9kzERDsiusBAZhniBL6u6DwYTQmDP1PVdNhMkf9MXFTAUHeXs3oXBQbqlj44D/5+1H5ibB9basMQZdi2pwIppZtB04dmAq8pvQGJqTSzygAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f007?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA6tWykxRslLKzE23MoECXQRhAWPBgJKOUm5qSaKSVbVSXmJuqpKVUopeQV66ko5SSWVBKtigxPRUfZBQrY5SkpmJkpWSk2OgrVItAM1J5CFpAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-delta-v2-dev-A-13-15.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"13\",\"to\":\"15\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":2,\"exportedAt\":\"\",\"events\":[{\"id\":\"a8\",\"t\":\"2026-10-27T09:00:30.000Z\",\"type\":\"pageUpdate\",\"payload\":{\"id\":\"p1\",\"patch\":{\"content\":\"neu\"}},\"seq\":14}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f016\",\"name\":\"impala67-delta-v2-dev-A-13-15.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:15.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"13\",\"to\":\"15\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-17",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f016\",\"removed\":false,\"file\":{\"id\":\"f016\",\"name\":\"impala67-delta-v2-dev-A-13-15.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:15.000Z\",\"size\":\"172\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"13\",\"to\":\"15\"},\"trashed\":false}}],\"newStartPageToken\":\"tok-18\"}"
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 12,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "b6",
+        "t": "2026-10-27T09:00:31.000Z",
+        "type": "pageUpdate",
+        "payload": {
+         "id": "p2",
+         "patch": {
+          "content": "B3"
+         }
+        }
+       }
+      ],
+      "blobs": {}
+     }
+    }
+   ],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-18\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-sync.json\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\",\"size\":\"156\"},\"f002\":{\"id\":\"f002\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"190\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},\"f004\":{\"id\":\"f004\",\"name\":\"impala67-delta-v2-dev-B-5-5.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"177\"},\"f005\":{\"id\":\"f005\",\"name\":\"impala67-delta-v2-dev-X-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:04.000Z\",\"size\":\"230\",\"appProperties\":{\"encoding\":\"identity\",\"device\":\"dev-X\",\"from\":\"1\",\"to\":\"1\"}},\"f006\":{\"id\":\"f006\",\"name\":\"impala67-blob-v2-b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:05.000Z\",\"size\":\"99\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\",\"blobId\":\"cover:33333333-3333-4333-8333-333333333333\"}},\"f007\":{\"id\":\"f007\",\"name\":\"impala67-blob-v2-442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:06.000Z\",\"size\":\"93\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}},\"f008\":{\"id\":\"f008\",\"name\":\"impala67-blob-v2-0000.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:07.000Z\",\"size\":\"66\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"0000\",\"blobId\":\"heftver:p9:1:1\"}},\"f010\":{\"id\":\"f010\",\"name\":\"impala67-blob-v2-636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"59\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\",\"blobId\":\"bgImage\"}},\"f011\":{\"id\":\"f011\",\"name\":\"impala67-blob-v2-44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\",\"blobId\":\"file:22222222-2222-4222-8222-222222222222\"}},\"f012\":{\"id\":\"f012\",\"name\":\"impala67-blob-v2-fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"size\":\"107\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\",\"blobId\":\"img:11111111-1111-4111-8111-111111111111\"}},\"f013\":{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-A-1-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"size\":\"320\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"1\",\"to\":\"12\"}},\"f014\":{\"id\":\"f014\",\"name\":\"impala67-delta-v2-dev-C-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:13.000Z\",\"size\":\"170\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-C\",\"from\":\"1\",\"to\":\"1\"}},\"f015\":{\"id\":\"f015\",\"name\":\"impala67-delta-v2-dev-B-6-7.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:14.000Z\",\"size\":\"166\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"6\",\"to\":\"7\"}},\"f016\":{\"id\":\"f016\",\"name\":\"impala67-delta-v2-dev-A-13-15.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:15.000Z\",\"size\":\"172\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"13\",\"to\":\"15\"}}}}",
+     "impala67_drive_known_deltas": "[\"f003\",\"f004\",\"f005\",\"f013\",\"f014\",\"f015\",\"f016\"]",
+     "impala67_drive_uploaded_seq": "15",
+     "impala67_drive_snapshot_stamp": "f002:2026-10-27T10:00:01.000Z",
+     "impala67_drive_upload_hashes": "{\"bgImage\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"636a043d7e39e1069c869d60dd6d8cfb9fc20c60c7170cf1bf513239c1508ab1\"},\"cover:33333333-3333-4333-8333-333333333333\":{\"contentHash\":\"\",\"size\":3,\"hash\":\"b99c8de321bc4800334acf58e6248fe0c0cb76efd508f651624ec3bf998b2bc9\"},\"file:22222222-2222-4222-8222-222222222222\":{\"contentHash\":\"\",\"size\":4,\"hash\":\"44d5eaec39313259c15b429477ce0a6065f3712b11165a4e4852e279f893a95c\"},\"img:11111111-1111-4111-8111-111111111111\":{\"contentHash\":\"h-img\",\"size\":3,\"hash\":\"fc83117792b15aadef97257ef294e5b6f0ce129410454cf488a977c7c5c9068d\"},\"img:44444444-4444-4444-8444-444444444444\":{\"contentHash\":\"\",\"size\":2,\"hash\":\"442454d4f595d97e86fc6b42eaa3bad71a5b43fc5311209101a774530353a837\"}}",
+     "impala67_drive_synced_seq": "15",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 1,
+    "uploaded": 1,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "1 Änderungspaket(e) laden…",
+     "Änderungen hochladen…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "v1-wiederherstellen",
+   "op": "sync",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"kind\":\"drive#startPageToken\",\"startPageToken\":\"tok-1\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"id\":\"f001\",\"name\":\"notion-sync.json\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"520\"}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f001?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "eyJhcHAiOiJub3Rpb24iLCJ2ZXJzaW9uIjoxLCJleHBvcnRlZEF0IjoiMjAyNS0wMS0wMVQwMDowMDowMC4wMDBaIiwiZXZlbnRzIjpbeyJpZCI6InYxIiwidCI6IjIwMjYtMTAtMjdUMDk6MDA6MDEuMDAwWiIsInR5cGUiOiJwYWdlQ3JlYXRlIiwicGF5bG9hZCI6eyJpZCI6InExIiwidGl0bGUiOiJBbHQiLCJjb250ZW50IjoiIVtdKGltZzo1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUpIn19LHsiaWQiOiJ2MiIsInQiOiIyMDI2LTEwLTI3VDA5OjAwOjAyLjAwMFoiLCJ0eXBlIjoic2V0dGluZ3NTZXQiLCJwYXlsb2FkIjp7InRoZW1lIjoibGlnaHQiLCJub3Rpb25Ub2tlbiI6ImFsdC1nZWhlaW0ifX1dLCJibG9icyI6eyJpbWc6NTU1NTU1NTUtNTU1NS00NTU1LTg1NTUtNTU1NTU1NTU1NTU1Ijp7Im1ldGEiOnsibmFtZSI6ImUucG5nIiwidHlwZSI6ImltYWdlL3BuZyJ9LCJiNjQiOiJBUUVDQXdVSSJ9LCJfX2ltcGFsYTY3X3N0YXRlX2NoZWNrcG9pbnRfdjJfXyI6eyJiNjQiOiJBQT09In19fQ=="
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-blob-v2-5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239\",\"blobId\":\"img:55555555-5555-4555-8555-555555555555\"}}",
+        "encoding": "gzip",
+        "content": "{\"id\":\"img:55555555-5555-4555-8555-555555555555\",\"meta\":{\"name\":\"e.png\",\"type\":\"image/png\"},\"b64\":\"AQECAwUI\"}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f002\",\"name\":\"impala67-blob-v2-5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239\",\"blobId\":\"img:55555555-5555-4555-8555-555555555555\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-1",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f002\",\"removed\":false,\"file\":{\"id\":\"f002\",\"name\":\"impala67-blob-v2-5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"100\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239\",\"blobId\":\"img:55555555-5555-4555-8555-555555555555\"},\"trashed\":false}}],\"newStartPageToken\":\"tok-2\"}"
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 0,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "v1",
+        "t": "2026-10-27T09:00:01.000Z",
+        "type": "pageCreate",
+        "payload": {
+         "id": "q1",
+         "title": "Alt",
+         "content": "![](img:55555555-5555-4555-8555-555555555555)"
+        }
+       },
+       {
+        "id": "v2",
+        "t": "2026-10-27T09:00:02.000Z",
+        "type": "settingsSet",
+        "payload": {
+         "theme": "light",
+         "notionToken": "alt-geheim"
+        }
+       }
+      ],
+      "blobs": {
+       "img:55555555-5555-4555-8555-555555555555": {
+        "meta": {
+         "name": "e.png",
+         "type": "image/png"
+        },
+        "b64": "AQECAwUI"
+       },
+       "__impala67_state_checkpoint_v2__": {
+        "b64": "AA=="
+       }
+      }
+     }
+    }
+   ],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-2\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"notion-sync.json\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"520\"},\"f002\":{\"id\":\"f002\",\"name\":\"impala67-blob-v2-5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"100\",\"appProperties\":{\"encoding\":\"gzip\",\"hash\":\"5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239\",\"blobId\":\"img:55555555-5555-4555-8555-555555555555\"}}}}",
+     "impala67_drive_known_deltas": "[]",
+     "impala67_drive_uploaded_seq": "2",
+     "impala67_drive_snapshot_stamp": "f001:2026-10-27T10:00:01.000Z",
+     "impala67_drive_upload_hashes": "{\"img:55555555-5555-4555-8555-555555555555\":{\"contentHash\":\"\",\"size\":6,\"hash\":\"5d66ffca63eea526af3b48b63a70a78e8b0ded0da5c2c4afb5fc4e5998ed3239\"}}",
+     "impala67_drive_synced_seq": "2",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 2,
+    "uploaded": 0,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "Remote-Stand übernehmen…",
+     "1 Datei(en) hochladen…",
+     "Änderungen hochladen…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "kompaktierung",
+   "op": "sync",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_known_deltas": "[\"f002\",\"weg\"]",
+     "impala67_drive_uploaded_seq": "1",
+     "impala67_drive_snapshot_stamp": "f001:2026-10-27T10:00:01.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [
+     {
+      "id": "l1",
+      "t": "2026-10-27T09:00:01.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "z"
+      },
+      "seq": 1
+     },
+     {
+      "id": "l2",
+      "t": "2026-10-27T09:00:02.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "notionToken": "bleibt"
+      },
+      "seq": 2
+     }
+    ],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"kind\":\"drive#startPageToken\",\"startPageToken\":\"tok-52\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"25\",\"files\":[{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"87\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},{\"id\":\"f002\",\"name\":\"impala67-delta-v2-dev-B-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"150\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"1\",\"to\":\"1\"}},{\"id\":\"f003\",\"name\":\"impala67-delta-v2-dev-B-2-2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"2\",\"to\":\"2\"}},{\"id\":\"f004\",\"name\":\"impala67-delta-v2-dev-B-3-3.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:04.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"3\",\"to\":\"3\"}},{\"id\":\"f005\",\"name\":\"impala67-delta-v2-dev-B-4-4.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:05.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"4\",\"to\":\"4\"}},{\"id\":\"f006\",\"name\":\"impala67-delta-v2-dev-B-5-5.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:06.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"5\",\"to\":\"5\"}},{\"id\":\"f007\",\"name\":\"impala67-delta-v2-dev-B-6-6.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:07.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"6\",\"to\":\"6\"}},{\"id\":\"f008\",\"name\":\"impala67-delta-v2-dev-B-7-7.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:08.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"7\",\"to\":\"7\"}},{\"id\":\"f009\",\"name\":\"impala67-delta-v2-dev-B-8-8.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"8\",\"to\":\"8\"}},{\"id\":\"f010\",\"name\":\"impala67-delta-v2-dev-B-9-9.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:10.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"9\",\"to\":\"9\"}},{\"id\":\"f011\",\"name\":\"impala67-delta-v2-dev-B-10-10.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:11.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"10\",\"to\":\"10\"}},{\"id\":\"f012\",\"name\":\"impala67-delta-v2-dev-B-11-11.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:12.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"11\",\"to\":\"11\"}},{\"id\":\"f013\",\"name\":\"impala67-delta-v2-dev-B-12-12.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:13.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"12\",\"to\":\"12\"}},{\"id\":\"f014\",\"name\":\"impala67-delta-v2-dev-B-13-13.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:14.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"13\",\"to\":\"13\"}},{\"id\":\"f015\",\"name\":\"impala67-delta-v2-dev-B-14-14.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:15.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"14\",\"to\":\"14\"}},{\"id\":\"f016\",\"name\":\"impala67-delta-v2-dev-B-15-15.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:16.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"15\",\"to\":\"15\"}},{\"id\":\"f017\",\"name\":\"impala67-delta-v2-dev-B-16-16.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:17.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"16\",\"to\":\"16\"}},{\"id\":\"f018\",\"name\":\"impala67-delta-v2-dev-B-17-17.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:18.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"17\",\"to\":\"17\"}},{\"id\":\"f019\",\"name\":\"impala67-delta-v2-dev-B-18-18.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:19.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"18\",\"to\":\"18\"}},{\"id\":\"f020\",\"name\":\"impala67-delta-v2-dev-B-19-19.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:20.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"19\",\"to\":\"19\"}},{\"id\":\"f021\",\"name\":\"impala67-delta-v2-dev-B-20-20.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:21.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"20\",\"to\":\"20\"}},{\"id\":\"f022\",\"name\":\"impala67-delta-v2-dev-B-21-21.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:22.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"21\",\"to\":\"21\"}},{\"id\":\"f023\",\"name\":\"impala67-delta-v2-dev-B-22-22.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:23.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"22\",\"to\":\"22\"}},{\"id\":\"f024\",\"name\":\"impala67-delta-v2-dev-B-23-23.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:24.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"23\",\"to\":\"23\"}},{\"id\":\"f025\",\"name\":\"impala67-delta-v2-dev-B-24-24.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:25.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"24\",\"to\":\"24\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)&pageToken=25",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"50\",\"files\":[{\"id\":\"f026\",\"name\":\"impala67-delta-v2-dev-B-25-25.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:26.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"25\",\"to\":\"25\"}},{\"id\":\"f027\",\"name\":\"impala67-delta-v2-dev-B-26-26.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:27.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"26\",\"to\":\"26\"}},{\"id\":\"f028\",\"name\":\"impala67-delta-v2-dev-B-27-27.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:28.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"27\",\"to\":\"27\"}},{\"id\":\"f029\",\"name\":\"impala67-delta-v2-dev-B-28-28.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:29.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"28\",\"to\":\"28\"}},{\"id\":\"f030\",\"name\":\"impala67-delta-v2-dev-B-29-29.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:30.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"29\",\"to\":\"29\"}},{\"id\":\"f031\",\"name\":\"impala67-delta-v2-dev-B-30-30.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:31.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"30\",\"to\":\"30\"}},{\"id\":\"f032\",\"name\":\"impala67-delta-v2-dev-B-31-31.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:32.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"31\",\"to\":\"31\"}},{\"id\":\"f033\",\"name\":\"impala67-delta-v2-dev-B-32-32.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:33.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"32\",\"to\":\"32\"}},{\"id\":\"f034\",\"name\":\"impala67-delta-v2-dev-B-33-33.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:34.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"33\",\"to\":\"33\"}},{\"id\":\"f035\",\"name\":\"impala67-delta-v2-dev-B-34-34.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:35.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"34\",\"to\":\"34\"}},{\"id\":\"f036\",\"name\":\"impala67-delta-v2-dev-B-35-35.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:36.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"35\",\"to\":\"35\"}},{\"id\":\"f037\",\"name\":\"impala67-delta-v2-dev-B-36-36.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:37.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"36\",\"to\":\"36\"}},{\"id\":\"f038\",\"name\":\"impala67-delta-v2-dev-B-37-37.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:38.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"37\",\"to\":\"37\"}},{\"id\":\"f039\",\"name\":\"impala67-delta-v2-dev-B-38-38.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:39.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"38\",\"to\":\"38\"}},{\"id\":\"f040\",\"name\":\"impala67-delta-v2-dev-B-39-39.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:40.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"39\",\"to\":\"39\"}},{\"id\":\"f041\",\"name\":\"impala67-delta-v2-dev-B-40-40.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:41.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"40\",\"to\":\"40\"}},{\"id\":\"f042\",\"name\":\"impala67-delta-v2-dev-B-41-41.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:42.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"41\",\"to\":\"41\"}},{\"id\":\"f043\",\"name\":\"impala67-delta-v2-dev-B-42-42.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:43.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"42\",\"to\":\"42\"}},{\"id\":\"f044\",\"name\":\"impala67-delta-v2-dev-B-43-43.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:44.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"43\",\"to\":\"43\"}},{\"id\":\"f045\",\"name\":\"impala67-delta-v2-dev-B-44-44.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:45.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"44\",\"to\":\"44\"}},{\"id\":\"f046\",\"name\":\"impala67-delta-v2-dev-B-45-45.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:46.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"45\",\"to\":\"45\"}},{\"id\":\"f047\",\"name\":\"impala67-delta-v2-dev-B-46-46.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:47.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"46\",\"to\":\"46\"}},{\"id\":\"f048\",\"name\":\"impala67-delta-v2-dev-B-47-47.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:48.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"47\",\"to\":\"47\"}},{\"id\":\"f049\",\"name\":\"impala67-delta-v2-dev-B-48-48.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:49.000Z\",\"size\":\"152\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"48\",\"to\":\"48\"}},{\"id\":\"f050\",\"name\":\"impala67-delta-v2-dev-B-49-49.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:50.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"49\",\"to\":\"49\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)&pageToken=50",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"id\":\"f051\",\"name\":\"impala67-delta-v2-dev-B-50-50.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:51.000Z\",\"size\":\"153\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"50\",\"to\":\"50\"}},{\"id\":\"f052\",\"name\":\"impala67-delta-v2-dev-B-51-51.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:52.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"51\",\"to\":\"51\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f003?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSqTIK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jAzkBfMaSi/lLAcOTaxlLj2p5OTMREByK6wUBXXUoG33dMHgxvYfBnup7OH3O0P1O2qGCMkvw1qRSFQZRtDuLB32e0qPVhMMxhyOC91jcmkUhVsQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f004?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrjIK3OTrxCV4qLaTOLQm1CGkpLyd1F0IUHeG+HxgjB8Io6at3AYbE0D2GCsIOtMaRs/pohYOK6OlLFdUtnIRKiAxHd4WCLTXmGPHYMHgLPcPgzTUuXjznxz+QtGgS9Jn9LptngEHUbg3rI9+kZpTwdujF0M2Qv5Q1ew0NbsQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f005?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjMaCzM1yBlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9PCYNWYJr+ArYG+go9Z3TWDYck21ZEq2/R0ZiImOhDRDQa66pIT+L5jcmC4GgZ/pu3p8jGn+mfyFhSMUaLrokpWGATZZi8O/H3GGqU8DIbZDwm8l/IGSQ9q6LEAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f006?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjCK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXs6MRETHYjoBgNddSkZfN8xeTC8g8Gf6Xo6f4xzP1O2qGCMkvw1qRSFQZRtDuLB32d0qPVhMMxhyOC91jeuZ1VHsQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f007?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjI6CzM1yBlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9PCYNWYJr+ArYG+go9Z3TWDYck21ZEq2/R0ZiImOhDRDQa66pIT+L5jcmC4GgZ/pu3p8jGn+mfyFhSMUaLrokpWGATZZi8O/H3GGqU8DIbZDwm8l/IGuat89LEAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f008?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkFRnJ16hK8XFtJlFoTYhCaWl5O4i6MIDvLdDYgRjfEWZxLUwWDTlMcxga6BrDKmovxYwLFnXHKmxrqMzEzHRgYjuMNBF55LBjx2jB8M7GPyZtqPLx5zcz5QtKhiDJH9LKkVhEGWbgnjw9xkcan0a9FPoM3iv9Q3B+Xf6sQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f009?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkEZnJ16hK8XFtJlFoTYhCcVScncp6MIDvLdBYgRjfEWZpHUwWDTlMcxga6DvGFJRfy1gWLJtc6TGth2dmYiJDkR0h4EuOpcMfmwYPRh+j/6M6+iym5P7mbJGBWOQ5G9JpSgMoqxTEA/+PoNDrU+Dfgp9Bm+1fgDWNV5JsQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f010?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkDbOTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXtyTMREByK6wUBXXUoG33dMHgzvYPBnup7OH3NyP1O2qGCMkvw1qRSFQZRtDuLB32d0qPVhMMxhyOC91jdOLnh/sQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f011?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkNbMTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXs6MxETHYjoBgNddSkZfN8xeTC8g8Gf6XpyH3NyP1O2qGCMkvw1qRSFQZRtDuLB32d0qPVhMMxhyOC91jdZ4lHMsQAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f012?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrTgKnOTrxCV4qLaTOLQG1CGoql5O4iiOAB3tshKYERnkkmcR0MVs1LiDPYGugrxVzUXwoYlqxrWmqs6+nEREx0IKIbDHTVuSzg+47gwfAtweAPdT2dP+j4Q2VLCsYo2V+zSlEYJNmmKB78jcaWUOvDYJjisID3Wt+wuE8eswAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f013?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSqTgK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jAzkBfMaSi/lLAcOTaxlLj2p5OTMREByK6wUBXXUoG33dMHgxvLQz+UNfT+YOO9ofKFhWMUZK/JpWiMIiyzUE8+BuN1qLWh8EwhyGD91rfGWnb9bMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f014?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrTAVudnXiFrhQX02YWhdqENBRLyd1F0IUHeG+HxgjB+Iw6adPCYbW0jGGGsIO9YkjZ/CVDwMRNVVPFTUcnIRKiAxHd4GCrzXmB3HeMHgJfMxz+UNvR+YOO/EN5iwbBoMlfk2k2OETdpqAe8o2GmlHKw6GfQr9A9lLeox0XErMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f015?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFDiaCzM16BlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9vBYNWYJr+ArYG+go9Z3SWDYcm2VU2VbXs6MRETHYjoBgNddckJfN8xOTBc3cDgD3U9nT/o2PxQ3oKCMUp016iSFQZBttmLA3+jsW5QysNgmP2QwHspbwrMg/mzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f016?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFDg6CzM16BlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9vBYNWYJr+ArYG+go9Z3SWDYcm2VU2VbXs6MRETHYjoBgNddckJfN8xOTBc3cDgD3U9nT/o2PxQ3oKCMUp016iSFQZBttmLA3+jsW5QysNgmP2QwHspb5by/gazAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f017?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSxjINrOrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGWwPdYkhZ/TWDYck2VU2VbTo6MxETnYjoDgNddc4L+HFg9GD42sHgD7UdXT7IuR/Ke1QwBkn+llSywiDKPgXx4G801A6lPA36KfQL+CjlDT8jau2zAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f018?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrTgKnOTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZxXUwWDXlKSxga6CvGFJRfylgWLKuaamxrqcTEzHRgYhuMNBVl5LB9x2TB8O3DgZ/qOvp/EFH90NliwrGKMlfk0pRGETZ5iAe/I3G1qHWh8EwhyGD91rfhVemCrMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f019?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSxjoKadXekVXLV0MZpZCNaEGESR3L0I7aIHeG+HxAjG8I4ySuNgsGiahzCBrYGuMaSs/pbBsGSbqqbKNi1dmIiJTkT0gIEuOuUZ/NwxeDB8fUx/yLV0PdDZ/VDeooLRS/L3pJIVBlG2MYgHf6O+dijlZdCNoZvBeykfLIYy4bMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f020?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSxjoJrOrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGWwPdYkhZ/TWDYck2VU2VbTpyTMREJyK6w0BXnfMCfhwYPRi+djD4Q21Hlw86ux/Ke1QwBkn+llSywiDKPgXx4G801A6lPA36KfQL+CjlDfwsLS+zAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f021?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSxjoNrMrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGWwPdYkhZ/TWDYck2VU2VbTq6MBETnYjoDgNddc4L+HFg9GD42sHgD7UduQ86ux/Ke1QwBkn+llSywiDKPgXx4G801A6lPA36KfQL+CjlDVX9ucSzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f022?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkFZnJ16hK8XFtJlFIDYhDaWl5O4iiOAB3tshKYHhX0mCtB0MFs2zjxPYGuiaYi7qrgUMS7ZtjtTYtqczEzHRgYjuMNBFpzKDHzu8A8NZgsEf6nq6fNDph8qWFIxRsrtllaIwSLKFKA78jUZLqPVpMIQ4zOC91jfbjbnvswAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f023?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSqTIK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jAzkBfMaSi/lLAcOTaxlLj2p5OTMREByK6wUBXXUoG33dMHgzvLAz+UNfT+YOO9ofKFhWMUZK/JpWiMIiyzUE8+BuNzqLWh8EwhyGD91rfclwtBLMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f024?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrjIK3OTrxCV4qLaTOLQm1CGkpLyd1F0IUHeG+HxgjB8Io6at3AYbE0D2GCsIOtMaRs/pohYOK6OlLFdUtnIRKiAxHd4WCLTXmGPHYMHgLPDIc/1LR0+aAT/1DeokHQa/K3ZJoNDlG3MaiHfKOeGaU8HboxdDNkL+UNyCjh47MAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f025?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjMaCzM1yBlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9PCYNWYJr+ArYG+go9Z3TWDYck21ZEq2/R0ZiImOhDRDQa66pIT+L5jcmA4W8PgD7U9XT7oVP9Q3oKCMUp0XVTJCoMg2+zFgb/RaGuU8jAYZj8k8F7KG2H5dQizAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f026?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjCK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXs6MRETHYjoBgNddSkZfN8xeTC8dTD4Q11P5w9y7ofKFhWMUZK/JpWiMIiyzUE8+BuN1qHWh8EwhyGD91rf/ccI97MAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f027?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjI6CzM1yBlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9PCYNWYJr+ArYG+go9Z3TWDYck21ZEq2/R0ZiImOhDRDQa66pIT+L5jcmA4W8PgD7U9XT7oVP9Q3oKCMUp0XVTJCoMg2+zFgb/RaGuU8jAYZj8k8F7KG1QWnByzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f028?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkFRnJ16hK8XFtJlFoTYhCaWl5O4i6MIDvLdDYgRjfEWZxLUwWDTlMcxga6BrDKmovxYwLFnXHKmxrqMzEzHRgYjuMNBF55LBjx2jB8NbB4M/1HZ0+aCT+6GyRQVjkORvSaUoDKJsUxAP/kaDdaj1adBPoc/gvdY37mJQ+7MAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f029?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkEZnJ16hK8XFtJlFoTYhCcVScncp6MIDvLdBYgRjfEWZpHUwWDTlMcxga6DvGFJRfy1gWLJtc6TGth2dmYiJDkR0h4EuOpcMfmwYPRje7tMfch1ddnRyP1TWqGAMkvwtqRSFQZR1CuLB32iwDrU+Dfop9Bm81foBR7PEELMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f030?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkDbOTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXtyTMREByK6wUBXXUoG33dMHgxvHQz+UNfT+YNO7ofKFhWMUZK/JpWiMIiyzUE8+BuN1qHWh8EwhyGD91rflxnb3rMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f031?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjkNbMTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXs6MxETHYjoBgNddSkZfN8xeTC8dTD4Q11P7oNO7ofKFhWMUZK/JpWiMIiyzUE8+BuN1qHWh8EwhyGD91rfPshPNbMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f032?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjiq3OTnqFrhQX02YWhdqEJBRLyd1FEMEDvLdDQgBjegaZpWlhsGpMk1/A1kBfwces7prBsGSb6kiVbXo6MxETHYjoBgNddckJfN8xOTBcTTD4Q21Plw86/VDegoIxSnRdVMkKgyDb7MWBv9FYE0p5GAyzHxJ4L+UNRgJYQLMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f033?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTHTEkFnZ7wCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwySdPCYNW0jGEGOwN9xZCy+ksGw5FrKkuVazo6MRETHYjoBgNddc4L+L5j9GD42sLgD7UdnT/oaH8ob1HBGCT5a1LJCoMo2xTEg7/RUFuU8jDop9Av4L2UN+/TzKuzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f034?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dZRxiq3OTrxCV4qLaTOLQm1CGoql5O4i6MIDvLdBY4RgeEYdtW7gsFiahzBB2MFeMaRs/pIhYOJ6d6Ad1y2dhEiI9kR0g4MtNuUZct8weAh8xXD4Q01L5w868g/lNRoEvSZ/TabZ4BB1HYN6yDfqK0YpD4duDN0M2Up5A1WnAEyzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f035?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjG0FnZ7gCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwySd3AYNW0jGEGWwN9xZCy+msGw5KtqyNVtu7ozERMdCCiGwx01Tkv4PuO0YPhnYPBH2o6unzQyf1Q3qKCMUjybVLJCoMo2xTEg7/R4BxKeRj0U+gX8F7KG/x2lKezAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f036?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjQdDZEa/ASuNioLMgQdqUhkhI725MdOEB3tshIYAxPoNMUjcwWDUuo5/B1kBfwcekrk1gWLJ1caTC1h2dmYiJDkR0g4GuOqcFfN8xOjBcWcHgDzUdXT7oVP1Q2oKCMUh016iSFAZBtsmLA3+joayQ88Ogn3y/gPec32BI6VizAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f037?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjSUFnZ7wCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwySdPCYNW0jGEGWwN9xZCy+ksGw5JtqiNVtunoxERMdCCiGwx01Tkv4PuO0YPhaweDP9R2dP4g534ob1HBGCT5a1LJCoMo2xTEg7/RUDuU8jDop9Av4L2UN8mZfbOzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f038?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjiUVnZ7gCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwyiWtgsGpaxjCDrYG+YkhZ/TWDYcm66kiVdR2dmYiJDkR0g4GuOucFfN8xejB87WDwh5qOLh90cj+Ut6hgDJJ8m1SywiDKNgXx4G801A6lPAz6KfQLeC/lDXPtsVSzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f039?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjiVRnZ7wCK42Lgc6CBGlTGiIhvbsh0YUHeG+DxAjG8IoySuNgsGiahzCBrYG+Y0hZ/TWDYck21ZEq27R0ZiImOhDRHQa66JRn8GPD4MHw9T79IdfSZUcn90N5jQpGL8nfkkpWGERZxyAe/I362qGUp0E3hm4Gb6V8ANo8Jb+zAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f040?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjiVBnZ7wCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwySdPCYNW0jGEGWwN9xZCy+ksGw5JtqiNVtunIMRETHYjoBgNddc4L+L5j9GD42sHgD7UdnT/o5H4ob1HBGCT5a1LJCoMo2xTEg7/RUDuU8jDop9Av4L2UNwqWOnGzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f041?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjiWBnZ7wCK42Lgc6CBGlTGiIhvbsx0YUHeG+HxAjG+IwySdPCYNW0jGEGWwN9xZCy+ksGw5JtqiNVtunozERMdCCiGwx01Tkv4PuO0YPhaweDP9R25D7o5H4ob1HBGCT5a1LJCoMo2xTEg7/RUDuU8jDop9Av4L2UN6NHrpqzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f042?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjKK3OTrxCV4qLaTOLQG1CGool5O4iiOAB3iuQGMHwzyizdD0MNk2rDwvYGugrhpTVXTIYlmzXHKmx3UAnJmKiAxHdYKCbLnkF3wu8A8O1BIM/1A90/qD2h/IeFYxJkrsmlawwiLLPQRz4G00todaHwTiHcQWXWt/BQoENswAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f043?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSyTINrOrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGOwPdYkhZ/TWD4cg1laXKNR2dmYiJTkR0h4GuOucF/DgwejB8bWHwh9qOLh9U2x/Ke1QwBkn+llSywiDKPgXx4G801BalPA36KfQL+CjlDWiTFeazAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f044?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrjUFqdnXiFrhQX02YWhdqENBRLyd1F0IUHeG+HxgjB+Iw6adPCYbW0jGGGsIO9YkjZ/CVDwMRNdaSKm45OQiREByK6wcFWm/MCue8YPQS+Zjj8obaj8wfV/EN5iwbBoMlfk2k2OETdpqAe8o2GmlHKw6GfQr9A9lLe0ufZAbMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f045?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQ6CMBAF0Lv8dTFjIaCzM16BlcbFQGdBgrRpGyIhvbsx0YUHeG+HhADG9AwyS9vBYNWYJr+ArYG+go9Z3SWDYcm21ZEq2/Z0YiImOhDRDQa66pIT+L5jcmC4pobBH+p6On9QU/9Q3oKCMUp016iSFQZBttmLA3+jsalRysNgmP2QwHspb3s2TeqzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f046?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjCK3OTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZpe1gsGrKU1jA1kBfMaSi/lLAsGTb5kiNbXs6MRETHYjoBgNddSkZfN8xeTC8czD4Q11P5w9y7ofKFhWMUZK/JpWiMIiyzUE8+BuNzqHWh8EwhyGD91rf5wgwFbMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f047?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMTQrCMBAG0Lt861TG0B+dnXiFrhQX02YWhdqEJBRLyd1F0IUHeG+HhADG9AwyS9vBYNWYJr+ArYG+go9Z3SWDYcm21ZEq2/Z0YiImOhDRDQa66pIT+L5jcmC4uoHBH+p6On9Q3fxQ3oKCMUp016iSFQZBttmLA3+jsW5QysNgmP2QwHspb07ZpP6zAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f048?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjKKnOTrxCV4qLaTOLQm1CEoql5O4i6MIDvLdDYgRjekaZxXUwWDXlKSxga6CvGFJRfylgWLKuOVJjXU8nJmKiAxHdYKCrLiWD7zsmD4ZvHQz+UNfT+YNa90NliwrGKMlfk0pRGETZ5iAe/I3G1qHWh8EwhyGD91rf9K1oGbMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f049?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSzTIKadXekVXLV0MZpZCNaEGESR3L0I7aIHeG+HxAjG8I4ySuNgsGiahzCBrYGuMaSs/pbBsGSb6kyVbVq6MBETnYjoAQNddMoz+Llj8GD4+pj+kGvpeqDa/VDeooLRS/L3pJIVBlG2MYgHf6O+dijlZdCNoZvBeykfXXz88rMAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f050?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSzTIJrOrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGWwPdYkhZ/TWDYck21Zkq23TkmIiJTkR0h4GuOucF/DgwejB87WDwh9qOLh9Uux/Ke1QwBkn+llSywiDKPgXx4G801A6lPA36KfQL+CjlDY3W4zyzAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f051?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQqDMBAF0Lv8dSzTINrMrvQKrlq6GM0sBGtCDKJI7l4K7aIHeO+AxAjG+IoySdPCYNW0jGEGWwPdYkhZ/TWDYck21Zkq23R0YSImOhHRHQa66pwX8OPA6MHwtYPBH2o7ch9Uux/Ke1QwBkn+llSywiDKPgXx4G801A6lPA36KfQL+CjlDSQHd9ezAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f052?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSpjoK3OTrxCV4qLaTOLQG1CGool5O4iiOAB3iuQGMHwzyizdD0MNk2rDwvYGugrhpTVXTIYlmzXHKmx3UAnJmKiAxHdYKCbLnkF3wu8A8O1BIM/1A90/qD2h/IeFYxJkrsmlawwiLLPQRz4G00todaHwTiHcQWXWt9czWCiswAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-delta-v2-dev-A-2-52.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"52\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":2,\"exportedAt\":\"\",\"events\":[{\"id\":\"l2\",\"t\":\"2026-10-27T09:00:02.000Z\",\"type\":\"settingsSet\",\"payload\":{\"notionToken\":\"bleibt\"},\"seq\":2}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f053\",\"name\":\"impala67-delta-v2-dev-A-2-52.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:53.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"52\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "PATCH",
+      "url": "https://www.googleapis.com/upload/drive/v3/files/f001?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-snapshot-v2.json.gz\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":1,\"exportedAt\":\"\",\"events\":[{\"id\":\"l1\",\"t\":\"2026-10-27T09:00:01.000Z\",\"type\":\"pageCreate\",\"payload\":{\"id\":\"z\"}},{\"id\":\"l2\",\"t\":\"2026-10-27T09:00:02.000Z\",\"type\":\"settingsSet\",\"payload\":{\"notionToken\":\"bleibt\"}},{\"id\":\"d1\",\"t\":\"2026-10-27T09:00:41.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c1\"}},{\"id\":\"d2\",\"t\":\"2026-10-27T09:00:42.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c2\"}},{\"id\":\"d3\",\"t\":\"2026-10-27T09:00:43.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c3\"}},{\"id\":\"d4\",\"t\":\"2026-10-27T09:00:44.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c4\"}},{\"id\":\"d5\",\"t\":\"2026-10-27T09:00:45.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c5\"}},{\"id\":\"d6\",\"t\":\"2026-10-27T09:00:46.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c6\"}},{\"id\":\"d7\",\"t\":\"2026-10-27T09:00:47.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c7\"}},{\"id\":\"d8\",\"t\":\"2026-10-27T09:00:48.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c8\"}},{\"id\":\"d9\",\"t\":\"2026-10-27T09:00:49.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c9\"}},{\"id\":\"d10\",\"t\":\"2026-10-27T09:00:50.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c10\"}},{\"id\":\"d11\",\"t\":\"2026-10-27T09:00:51.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c11\"}},{\"id\":\"d12\",\"t\":\"2026-10-27T09:00:52.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c12\"}},{\"id\":\"d13\",\"t\":\"2026-10-27T09:00:53.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c13\"}},{\"id\":\"d14\",\"t\":\"2026-10-27T09:00:54.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c14\"}},{\"id\":\"d15\",\"t\":\"2026-10-27T09:00:55.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c15\"}},{\"id\":\"d16\",\"t\":\"2026-10-27T09:00:56.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c16\"}},{\"id\":\"d17\",\"t\":\"2026-10-27T09:00:57.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c17\"}},{\"id\":\"d18\",\"t\":\"2026-10-27T09:00:58.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c18\"}},{\"id\":\"d19\",\"t\":\"2026-10-27T09:00:59.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c19\"}},{\"id\":\"d20\",\"t\":\"2026-10-27T09:00:40.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c20\"}},{\"id\":\"d21\",\"t\":\"2026-10-27T09:00:41.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c21\"}},{\"id\":\"d22\",\"t\":\"2026-10-27T09:00:42.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c22\"}},{\"id\":\"d23\",\"t\":\"2026-10-27T09:00:43.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c23\"}},{\"id\":\"d24\",\"t\":\"2026-10-27T09:00:44.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c24\"}},{\"id\":\"d25\",\"t\":\"2026-10-27T09:00:45.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c25\"}},{\"id\":\"d26\",\"t\":\"2026-10-27T09:00:46.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c26\"}},{\"id\":\"d27\",\"t\":\"2026-10-27T09:00:47.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c27\"}},{\"id\":\"d28\",\"t\":\"2026-10-27T09:00:48.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c28\"}},{\"id\":\"d29\",\"t\":\"2026-10-27T09:00:49.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c29\"}},{\"id\":\"d30\",\"t\":\"2026-10-27T09:00:50.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c30\"}},{\"id\":\"d31\",\"t\":\"2026-10-27T09:00:51.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c31\"}},{\"id\":\"d32\",\"t\":\"2026-10-27T09:00:52.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c32\"}},{\"id\":\"d33\",\"t\":\"2026-10-27T09:00:53.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c33\"}},{\"id\":\"d34\",\"t\":\"2026-10-27T09:00:54.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c34\"}},{\"id\":\"d35\",\"t\":\"2026-10-27T09:00:55.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c35\"}},{\"id\":\"d36\",\"t\":\"2026-10-27T09:00:56.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c36\"}},{\"id\":\"d37\",\"t\":\"2026-10-27T09:00:57.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c37\"}},{\"id\":\"d38\",\"t\":\"2026-10-27T09:00:58.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c38\"}},{\"id\":\"d39\",\"t\":\"2026-10-27T09:00:59.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c39\"}},{\"id\":\"d40\",\"t\":\"2026-10-27T09:00:40.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c40\"}},{\"id\":\"d41\",\"t\":\"2026-10-27T09:00:41.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c41\"}},{\"id\":\"d42\",\"t\":\"2026-10-27T09:00:42.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c42\"}},{\"id\":\"d43\",\"t\":\"2026-10-27T09:00:43.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c43\"}},{\"id\":\"d44\",\"t\":\"2026-10-27T09:00:44.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c44\"}},{\"id\":\"d45\",\"t\":\"2026-10-27T09:00:45.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c45\"}},{\"id\":\"d46\",\"t\":\"2026-10-27T09:00:46.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c46\"}},{\"id\":\"d47\",\"t\":\"2026-10-27T09:00:47.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c47\"}},{\"id\":\"d48\",\"t\":\"2026-10-27T09:00:48.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c48\"}},{\"id\":\"d49\",\"t\":\"2026-10-27T09:00:49.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c49\"}},{\"id\":\"d50\",\"t\":\"2026-10-27T09:00:50.000Z\",\"type\":\"cardCreate\",\"payload\":{\"id\":\"c50\"}}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:54.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f002",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f003",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f004",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f005",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f006",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f007",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f008",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f009",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 404,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":404,\"message\":\"Störung\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f010",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f011",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f012",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f013",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f014",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f015",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f016",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f017",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f018",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f019",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f020",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f021",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f022",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f023",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f024",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f025",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f026",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f027",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f028",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f029",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f030",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f031",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f032",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f033",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f034",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f035",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f036",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f037",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f038",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f039",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f040",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f041",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f042",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f043",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f044",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f045",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f046",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f047",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f048",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f049",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f050",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f051",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f052",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-52",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f053\",\"removed\":false,\"file\":{\"id\":\"f053\",\"name\":\"impala67-delta-v2-dev-A-2-52.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:53.000Z\",\"size\":\"167\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"52\"},\"trashed\":false}},{\"fileId\":\"f001\",\"removed\":false,\"file\":{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:54.000Z\",\"size\":\"522\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"},\"trashed\":false}},{\"fileId\":\"f002\",\"removed\":true},{\"fileId\":\"f003\",\"removed\":true},{\"fileId\":\"f004\",\"removed\":true},{\"fileId\":\"f005\",\"removed\":true},{\"fileId\":\"f006\",\"removed\":true},{\"fileId\":\"f007\",\"removed\":true},{\"fileId\":\"f008\",\"removed\":true},{\"fileId\":\"f010\",\"removed\":true},{\"fileId\":\"f011\",\"removed\":true},{\"fileId\":\"f012\",\"removed\":true},{\"fileId\":\"f013\",\"removed\":true},{\"fileId\":\"f014\",\"removed\":true},{\"fileId\":\"f015\",\"removed\":true},{\"fileId\":\"f016\",\"removed\":true},{\"fileId\":\"f017\",\"removed\":true},{\"fileId\":\"f018\",\"removed\":true},{\"fileId\":\"f019\",\"removed\":true},{\"fileId\":\"f020\",\"removed\":true},{\"fileId\":\"f021\",\"removed\":true},{\"fileId\":\"f022\",\"removed\":true},{\"fileId\":\"f023\",\"removed\":true},{\"fileId\":\"f024\",\"removed\":true},{\"fileId\":\"f025\",\"removed\":true}],\"nextPageToken\":\"tok-77\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-77",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f026\",\"removed\":true},{\"fileId\":\"f027\",\"removed\":true},{\"fileId\":\"f028\",\"removed\":true},{\"fileId\":\"f029\",\"removed\":true},{\"fileId\":\"f030\",\"removed\":true},{\"fileId\":\"f031\",\"removed\":true},{\"fileId\":\"f032\",\"removed\":true},{\"fileId\":\"f033\",\"removed\":true},{\"fileId\":\"f034\",\"removed\":true},{\"fileId\":\"f035\",\"removed\":true},{\"fileId\":\"f036\",\"removed\":true},{\"fileId\":\"f037\",\"removed\":true},{\"fileId\":\"f038\",\"removed\":true},{\"fileId\":\"f039\",\"removed\":true},{\"fileId\":\"f040\",\"removed\":true},{\"fileId\":\"f041\",\"removed\":true},{\"fileId\":\"f042\",\"removed\":true},{\"fileId\":\"f043\",\"removed\":true},{\"fileId\":\"f044\",\"removed\":true},{\"fileId\":\"f045\",\"removed\":true},{\"fileId\":\"f046\",\"removed\":true},{\"fileId\":\"f047\",\"removed\":true},{\"fileId\":\"f048\",\"removed\":true},{\"fileId\":\"f049\",\"removed\":true},{\"fileId\":\"f050\",\"removed\":true}],\"nextPageToken\":\"tok-102\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-102",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f051\",\"removed\":true},{\"fileId\":\"f052\",\"removed\":true}],\"newStartPageToken\":\"tok-104\"}"
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 1,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "d1",
+        "t": "2026-10-27T09:00:41.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c1"
+        }
+       },
+       {
+        "id": "d2",
+        "t": "2026-10-27T09:00:42.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c2"
+        }
+       },
+       {
+        "id": "d3",
+        "t": "2026-10-27T09:00:43.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c3"
+        }
+       },
+       {
+        "id": "d4",
+        "t": "2026-10-27T09:00:44.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c4"
+        }
+       },
+       {
+        "id": "d5",
+        "t": "2026-10-27T09:00:45.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c5"
+        }
+       },
+       {
+        "id": "d6",
+        "t": "2026-10-27T09:00:46.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c6"
+        }
+       },
+       {
+        "id": "d7",
+        "t": "2026-10-27T09:00:47.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c7"
+        }
+       },
+       {
+        "id": "d8",
+        "t": "2026-10-27T09:00:48.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c8"
+        }
+       },
+       {
+        "id": "d9",
+        "t": "2026-10-27T09:00:49.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c9"
+        }
+       },
+       {
+        "id": "d10",
+        "t": "2026-10-27T09:00:50.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c10"
+        }
+       },
+       {
+        "id": "d11",
+        "t": "2026-10-27T09:00:51.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c11"
+        }
+       },
+       {
+        "id": "d12",
+        "t": "2026-10-27T09:00:52.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c12"
+        }
+       },
+       {
+        "id": "d13",
+        "t": "2026-10-27T09:00:53.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c13"
+        }
+       },
+       {
+        "id": "d14",
+        "t": "2026-10-27T09:00:54.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c14"
+        }
+       },
+       {
+        "id": "d15",
+        "t": "2026-10-27T09:00:55.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c15"
+        }
+       },
+       {
+        "id": "d16",
+        "t": "2026-10-27T09:00:56.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c16"
+        }
+       },
+       {
+        "id": "d17",
+        "t": "2026-10-27T09:00:57.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c17"
+        }
+       },
+       {
+        "id": "d18",
+        "t": "2026-10-27T09:00:58.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c18"
+        }
+       },
+       {
+        "id": "d19",
+        "t": "2026-10-27T09:00:59.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c19"
+        }
+       },
+       {
+        "id": "d20",
+        "t": "2026-10-27T09:00:40.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c20"
+        }
+       },
+       {
+        "id": "d21",
+        "t": "2026-10-27T09:00:41.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c21"
+        }
+       },
+       {
+        "id": "d22",
+        "t": "2026-10-27T09:00:42.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c22"
+        }
+       },
+       {
+        "id": "d23",
+        "t": "2026-10-27T09:00:43.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c23"
+        }
+       },
+       {
+        "id": "d24",
+        "t": "2026-10-27T09:00:44.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c24"
+        }
+       },
+       {
+        "id": "d25",
+        "t": "2026-10-27T09:00:45.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c25"
+        }
+       },
+       {
+        "id": "d26",
+        "t": "2026-10-27T09:00:46.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c26"
+        }
+       },
+       {
+        "id": "d27",
+        "t": "2026-10-27T09:00:47.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c27"
+        }
+       },
+       {
+        "id": "d28",
+        "t": "2026-10-27T09:00:48.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c28"
+        }
+       },
+       {
+        "id": "d29",
+        "t": "2026-10-27T09:00:49.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c29"
+        }
+       },
+       {
+        "id": "d30",
+        "t": "2026-10-27T09:00:50.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c30"
+        }
+       },
+       {
+        "id": "d31",
+        "t": "2026-10-27T09:00:51.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c31"
+        }
+       },
+       {
+        "id": "d32",
+        "t": "2026-10-27T09:00:52.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c32"
+        }
+       },
+       {
+        "id": "d33",
+        "t": "2026-10-27T09:00:53.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c33"
+        }
+       },
+       {
+        "id": "d34",
+        "t": "2026-10-27T09:00:54.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c34"
+        }
+       },
+       {
+        "id": "d35",
+        "t": "2026-10-27T09:00:55.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c35"
+        }
+       },
+       {
+        "id": "d36",
+        "t": "2026-10-27T09:00:56.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c36"
+        }
+       },
+       {
+        "id": "d37",
+        "t": "2026-10-27T09:00:57.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c37"
+        }
+       },
+       {
+        "id": "d38",
+        "t": "2026-10-27T09:00:58.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c38"
+        }
+       },
+       {
+        "id": "d39",
+        "t": "2026-10-27T09:00:59.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c39"
+        }
+       },
+       {
+        "id": "d40",
+        "t": "2026-10-27T09:00:40.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c40"
+        }
+       },
+       {
+        "id": "d41",
+        "t": "2026-10-27T09:00:41.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c41"
+        }
+       },
+       {
+        "id": "d42",
+        "t": "2026-10-27T09:00:42.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c42"
+        }
+       },
+       {
+        "id": "d43",
+        "t": "2026-10-27T09:00:43.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c43"
+        }
+       },
+       {
+        "id": "d44",
+        "t": "2026-10-27T09:00:44.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c44"
+        }
+       },
+       {
+        "id": "d45",
+        "t": "2026-10-27T09:00:45.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c45"
+        }
+       },
+       {
+        "id": "d46",
+        "t": "2026-10-27T09:00:46.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c46"
+        }
+       },
+       {
+        "id": "d47",
+        "t": "2026-10-27T09:00:47.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c47"
+        }
+       },
+       {
+        "id": "d48",
+        "t": "2026-10-27T09:00:48.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c48"
+        }
+       },
+       {
+        "id": "d49",
+        "t": "2026-10-27T09:00:49.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c49"
+        }
+       },
+       {
+        "id": "d50",
+        "t": "2026-10-27T09:00:50.000Z",
+        "type": "cardCreate",
+        "payload": {
+         "id": "c50"
+        }
+       }
+      ],
+      "blobs": {}
+     }
+    }
+   ],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-104\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:54.000Z\",\"size\":\"522\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},\"f009\":{\"id\":\"f009\",\"name\":\"impala67-delta-v2-dev-B-8-8.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:09.000Z\",\"size\":\"151\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"8\",\"to\":\"8\"}},\"f053\":{\"id\":\"f053\",\"name\":\"impala67-delta-v2-dev-A-2-52.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:53.000Z\",\"size\":\"167\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"52\"}}}}",
+     "impala67_drive_known_deltas": "[\"weg\",\"f009\",\"f053\"]",
+     "impala67_drive_uploaded_seq": "52",
+     "impala67_drive_snapshot_stamp": "f001:2026-10-27T10:00:54.000Z",
+     "impala67_drive_synced_seq": "52",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 50,
+    "uploaded": 1,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "50 Änderungspaket(e) laden…",
+     "Änderungen hochladen…",
+     "Sync-Stand optimieren…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "changes-token-ungueltig",
+   "op": "sync",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-alt\",\"files\":{\"zz\":{\"id\":\"zz\",\"name\":\"impala67-delta-v2-dev-B-9-9.json.gz\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\"}}}",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-alt",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 410,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":410,\"message\":\"Invalid page token\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"kind\":\"drive#startPageToken\",\"startPageToken\":\"tok-1\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"id\":\"f001\",\"name\":\"impala67-delta-v2-dev-B-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"148\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"1\",\"to\":\"1\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f001?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XMQQrCMBAF0Lv8dSrTLFqdnXiFrhQXUzJIoTZDE4ol5O6C0IUHeK9AzMCY3iazdD0cNl3TFBewd9CPxTVruGYwPPmuaanx3UBnJmKiExHd4aCbLjmBHwVTAENbOPyZfqDLz7SHybspGCYvva0qWeFgss9RAvh4UOvTYZzjmMCl1i/QE4qOsAAAAA=="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-1",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[],\"newStartPageToken\":\"tok-1\"}"
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 0,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "e1",
+        "t": "2026-10-27T09:00:01.000Z",
+        "type": "pageCreate",
+        "payload": {
+         "id": "e"
+        }
+       }
+      ],
+      "blobs": {}
+     }
+    }
+   ],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-1\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-delta-v2-dev-B-1-1.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"148\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"1\",\"to\":\"1\"}}}}",
+     "impala67_drive_known_deltas": "[\"f001\"]",
+     "impala67_drive_uploaded_seq": "1",
+     "impala67_drive_synced_seq": "1",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 1,
+    "uploaded": 0,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "1 Änderungspaket(e) laden…",
+     "Änderungen hochladen…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "geheimnisse-entfernen",
+   "op": "sync",
+   "allowSecrets": false,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_secret_scrub": "1",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [
+     {
+      "id": "m1",
+      "t": "2026-10-27T09:00:05.000Z",
+      "type": "settingsSet",
+      "payload": {
+       "theme": "blue",
+       "aiProviders": [
+        {
+         "id": "o",
+         "key": "sk"
+        }
+       ]
+      },
+      "seq": 1
+     }
+    ],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"kind\":\"drive#startPageToken\",\"startPageToken\":\"tok-3\"}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed%3Dfalse&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime,size,appProperties)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"size\":\"149\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\"}},{\"id\":\"f002\",\"name\":\"impala67-sync.json\",\"modifiedTime\":\"2026-01-01T00:00:00.000Z\",\"size\":\"53\"},{\"id\":\"f003\",\"name\":\"impala67-delta-v2-dev-B-1-2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:02.000Z\",\"size\":\"165\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-B\",\"from\":\"1\",\"to\":\"2\"}}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f001?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAAxXKQQrCMBAF0Lv8dSqTLlqcnWewK8VFSgYJxiQ0Q7GE3F26fq/BlQJG+BYX3TTDYJethpzA1kB+JW8q/qZgwEB2SVrBz4bgwagWBqeNNE6DpWGcF7oyEZO9ENHj5KPIWUU1pHe9i8KguCNm58ENKWvIackfSWC4qOj9ZbDGvFZw6/0Pbhjs+6QAAAA="
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files/f003?alt=media",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/octet-stream"
+       ]
+      ],
+      "b64": "H4sIAAAAAAAAA1XLsQ6CMBAG4Hf552rODqC3+QwyaRxKuGgDtA29EAjpuxtMHNy/b4NLCQw/Jje4qobBLFP2MYCtgSwpTirdVcGwZKvDiQ62aujMREx0JKI7DGSWoBn82OA7MLKFwd+pG7p8j/0dXZPsVFR9eOWbKAySW4foOvAGfcu4g85NPQxCVB9DE3sJYCwo5WnQDrHN4K2UDz+Z3rDJAAAA"
+     }
+    },
+    {
+     "request": {
+      "method": "PATCH",
+      "url": "https://www.googleapis.com/upload/drive/v3/files/f001?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-snapshot-v2.json.gz\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\",\"redacted\":\"1\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":1,\"exportedAt\":\"\",\"events\":[{\"id\":\"m1\",\"t\":\"2026-10-27T09:00:05.000Z\",\"type\":\"settingsSet\",\"payload\":{\"theme\":\"blue\",\"aiProviders\":[{\"id\":\"o\"}]}},{\"id\":\"s2\",\"t\":\"2026-10-27T09:00:02.000Z\",\"type\":\"settingsSet\",\"payload\":{\"theme\":\"dark\"}}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\",\"redacted\":\"1\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f002",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "DELETE",
+      "url": "https://www.googleapis.com/drive/v3/files/f003",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 204,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ]
+      ],
+      "text": null
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,size,appProperties,trashed))&pageToken=tok-3",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"changes\":[{\"fileId\":\"f001\",\"removed\":false,\"file\":{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"180\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\",\"redacted\":\"1\"},\"trashed\":false}},{\"fileId\":\"f002\",\"removed\":true},{\"fileId\":\"f003\",\"removed\":true}],\"newStartPageToken\":\"tok-6\"}"
+     }
+    }
+   ],
+   "imports": [
+    {
+     "unsyncedAfterSeq": 0,
+     "data": {
+      "app": "impala67",
+      "version": 2,
+      "exportedAt": "",
+      "events": [
+       {
+        "id": "s1",
+        "t": "2026-10-27T09:00:01.000Z",
+        "type": "settingsSet",
+        "payload": {
+         "notionToken": "alt"
+        }
+       },
+       {
+        "id": "s2",
+        "t": "2026-10-27T09:00:02.000Z",
+        "type": "settingsSet",
+        "payload": {
+         "theme": "dark",
+         "notionToken": "x"
+        }
+       }
+      ],
+      "blobs": {}
+     }
+    }
+   ],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_file_index": "{\"token\":\"tok-6\",\"files\":{\"f001\":{\"id\":\"f001\",\"name\":\"impala67-snapshot-v2.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:03.000Z\",\"size\":\"180\",\"appProperties\":{\"encoding\":\"gzip\",\"protocol\":\"2\",\"redacted\":\"1\"}}}}",
+     "impala67_drive_uploaded_seq": "3",
+     "impala67_drive_snapshot_stamp": "f001:2026-10-27T10:00:03.000Z",
+     "impala67_drive_synced_seq": "3",
+     "impala67_drive_last_ok": "2026-10-27T14:05:00.000Z",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "imported": 2,
+    "uploaded": 0,
+    "conflicts": 0,
+    "merged": 0,
+    "statuses": [
+     "Synchronisiere…",
+     "Remote-Stand übernehmen…",
+     "Token-Kopien aus Drive entfernen…",
+     "Synchronisiert"
+    ]
+   },
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "token-abgelehnt",
+   "op": "sync",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/changes/startPageToken",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 401,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":401,\"message\":\"Störung\"}}"
+     }
+    }
+   ],
+   "imports": [],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A"
+    },
+    "status": "renewal-required",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": null,
+   "error": "Google-Sitzung abgelaufen – bitte erneut synchronisieren.",
+   "sleeps": []
+  },
+  {
+   "name": "schliessen-flush",
+   "op": "flush",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_uploaded_seq": "1",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [
+     {
+      "id": "h1",
+      "t": "2026-10-27T09:00:01.000Z",
+      "type": "pageCreate",
+      "payload": {
+       "id": "h"
+      },
+      "seq": 1
+     },
+     {
+      "id": "h2",
+      "t": "2026-10-27T09:00:02.000Z",
+      "type": "pageUpdate",
+      "payload": {
+       "id": "h",
+       "patch": {
+        "content": "x"
+       }
+      },
+      "seq": 2
+     },
+     {
+      "id": "h3",
+      "t": "2026-10-27T09:00:03.000Z",
+      "type": "uiTreeSet",
+      "payload": {
+       "key": "h"
+      },
+      "seq": 3
+     }
+    ],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "POST",
+      "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,appProperties",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ],
+       [
+        "Content-Type",
+        "multipart/related; boundary=impala6717931099000008"
+       ]
+      ],
+      "body": {
+       "multipart": {
+        "meta": "{\"name\":\"impala67-delta-v2-dev-A-2-3.json.gz\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"3\"}}",
+        "encoding": "gzip",
+        "content": "{\"app\":\"impala67\",\"version\":2,\"exportedAt\":\"\",\"events\":[{\"id\":\"h2\",\"t\":\"2026-10-27T09:00:02.000Z\",\"type\":\"pageUpdate\",\"payload\":{\"id\":\"h\",\"patch\":{\"content\":\"x\"}},\"seq\":2}],\"blobs\":{}}"
+       }
+      }
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"id\":\"f001\",\"name\":\"impala67-delta-v2-dev-A-2-3.json.gz\",\"modifiedTime\":\"2026-10-27T10:00:01.000Z\",\"appProperties\":{\"encoding\":\"gzip\",\"device\":\"dev-A\",\"from\":\"2\",\"to\":\"3\"}}"
+     }
+    }
+   ],
+   "imports": [],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_known_deltas": "[\"f001\"]",
+     "impala67_drive_uploaded_seq": "3",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": null,
+   "error": null,
+   "sleeps": []
+  },
+  {
+   "name": "speicher",
+   "op": "storage",
+   "allowSecrets": true,
+   "before": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "events": [],
+    "blobs": {}
+   },
+   "exchanges": [
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 429,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":429,\"message\":\"Störung\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 429,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"error\":{\"code\":429,\"message\":\"Störung\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"storageQuota\":{\"limit\":\"16106127360\",\"usage\":\"5368709120\",\"usageInDrive\":\"1000\"}}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(size)",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"2\",\"files\":[{\"size\":\"10\"},{\"size\":\"11\"}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(size)&pageToken=2",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"nextPageToken\":\"4\",\"files\":[{\"size\":\"12\"},{\"size\":\"13\"}]}"
+     }
+    },
+    {
+     "request": {
+      "method": "GET",
+      "url": "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(size)&pageToken=4",
+      "headers": [
+       [
+        "Authorization",
+        "Bearer tok-A"
+       ]
+      ],
+      "body": null
+     },
+     "response": {
+      "status": 200,
+      "headers": [
+       [
+        "date",
+        "Tue, 27 Oct 2026 14:04:30 GMT"
+       ],
+       [
+        "content-type",
+        "application/json"
+       ]
+      ],
+      "text": "{\"files\":[{\"size\":\"14\"}]}"
+     }
+    }
+   ],
+   "imports": [],
+   "puts": [],
+   "after": {
+    "ls": {
+     "impala67_drive_device_id": "dev-A",
+     "impala67_drive_token": "tok-A",
+     "impala67_drive_token_expiry": "1793113500000"
+    },
+    "status": "connected",
+    "clockOffsetMs": 29500,
+    "toasts": []
+   },
+   "result": {
+    "appBytes": 60,
+    "usedBytes": 5368709120,
+    "limitBytes": 16106127360
+   },
+   "error": null,
+   "sleeps": [
+    750,
+    1500
+   ]
+  }
+ ]
+}

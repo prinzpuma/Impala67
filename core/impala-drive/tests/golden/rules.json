@@ -1,0 +1,2086 @@
+{
+ "intervals": [
+  {
+   "input": null,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": null,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": 5,
+   "minutes": 5,
+   "ms": 300000
+  },
+  {
+   "input": 15,
+   "minutes": 15,
+   "ms": 900000
+  },
+  {
+   "input": 30,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": 60,
+   "minutes": 60,
+   "ms": 3600000
+  },
+  {
+   "input": 180,
+   "minutes": 180,
+   "ms": 10800000
+  },
+  {
+   "input": 1440,
+   "minutes": 1440,
+   "ms": 86400000
+  },
+  {
+   "input": 7,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": "15",
+   "minutes": 15,
+   "ms": 900000
+  },
+  {
+   "input": "abc",
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": 0,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": -5,
+   "minutes": 30,
+   "ms": 1800000
+  },
+  {
+   "input": 30.5,
+   "minutes": 30,
+   "ms": 1800000
+  }
+ ],
+ "afterChange": [
+  {
+   "input": true,
+   "result": true
+  },
+  {
+   "input": false,
+   "result": false
+  },
+  {
+   "input": "true",
+   "result": false
+  },
+  {
+   "input": 1,
+   "result": false
+  },
+  {
+   "input": null,
+   "result": false
+  }
+ ],
+ "authState": [
+  {
+   "tokenValid": false,
+   "sessionKnown": false,
+   "result": "disconnected"
+  },
+  {
+   "tokenValid": false,
+   "sessionKnown": true,
+   "result": "renewal-required"
+  },
+  {
+   "tokenValid": true,
+   "sessionKnown": false,
+   "result": "connected"
+  },
+  {
+   "tokenValid": true,
+   "sessionKnown": true,
+   "result": "connected"
+  }
+ ],
+ "statusView": [
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "disconnected",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Nicht verbunden",
+    "detail": "Google Drive ist nicht verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connecting",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Anmeldung läuft…",
+    "detail": "Google-Verbindung wird hergestellt"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Verbunden",
+    "detail": "Google Drive ist verbunden"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Verbunden",
+    "detail": "Verbunden als a@b.de"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Verbunden",
+    "detail": "Verbunden als a@b.de"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Drive-Sync",
+    "detail": "Drive-Sync"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Synchronisiere…",
+    "detail": "Synchronisiere…"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "syncing",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Drive-Sync",
+    "detail": "Drive-Sync"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Synchronisiere…",
+    "detail": "Synchronisiere…"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "ok",
+    "label": "Drive-Sync",
+    "detail": "Drive-Sync"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "ok",
+    "label": "Synchronisiere…",
+    "detail": "Synchronisiere…"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "ok",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "error",
+    "label": "Drive-Sync",
+    "detail": "Drive-Sync"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "error",
+    "label": "Synchronisiere…",
+    "detail": "Synchronisiere…"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "error",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "connected",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "idle",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "syncing",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "waiting",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "ok",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": true,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": true,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "idle",
+    "label": "Pausiert",
+    "detail": "Sichert weiter, sobald du auf „Jetzt sichern“ tippst"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": false,
+    "email": "",
+    "label": "",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Synchronisiere…",
+    "detail": ""
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  },
+  {
+   "input": {
+    "authState": "renewal-required",
+    "syncState": "error",
+    "online": false,
+    "email": "a@b.de",
+    "label": "Sync fehlgeschlagen",
+    "detail": "Drive-Fehler 500"
+   },
+   "result": {
+    "state": "waiting",
+    "label": "Offline",
+    "detail": "Drive-Sync wartet auf eine Internetverbindung"
+   }
+  }
+ ],
+ "backupView": [
+  {
+   "hasChannel": true,
+   "unsafeSince": null,
+   "now": 1793109900000,
+   "result": {
+    "level": "safe",
+    "since": null
+   }
+  },
+  {
+   "hasChannel": true,
+   "unsafeSince": "kaputt",
+   "now": 1793109900000,
+   "result": {
+    "level": "safe",
+    "since": null
+   }
+  },
+  {
+   "hasChannel": true,
+   "unsafeSince": "2026-10-27T13:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "pending",
+    "since": "2026-10-27T13:05:00.000Z"
+   }
+  },
+  {
+   "hasChannel": true,
+   "unsafeSince": "2026-10-26T14:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "stale",
+    "since": "2026-10-26T14:05:00.000Z"
+   }
+  },
+  {
+   "hasChannel": true,
+   "unsafeSince": "2026-10-26T08:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "stale",
+    "since": "2026-10-26T08:05:00.000Z"
+   }
+  },
+  {
+   "hasChannel": false,
+   "unsafeSince": null,
+   "now": 1793109900000,
+   "result": {
+    "level": "safe",
+    "since": null
+   }
+  },
+  {
+   "hasChannel": false,
+   "unsafeSince": "kaputt",
+   "now": 1793109900000,
+   "result": {
+    "level": "safe",
+    "since": null
+   }
+  },
+  {
+   "hasChannel": false,
+   "unsafeSince": "2026-10-27T13:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "pending",
+    "since": "2026-10-27T13:05:00.000Z"
+   }
+  },
+  {
+   "hasChannel": false,
+   "unsafeSince": "2026-10-26T14:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "local",
+    "since": "2026-10-26T14:05:00.000Z"
+   }
+  },
+  {
+   "hasChannel": false,
+   "unsafeSince": "2026-10-26T08:05:00.000Z",
+   "now": 1793109900000,
+   "result": {
+    "level": "local",
+    "since": "2026-10-26T08:05:00.000Z"
+   }
+  }
+ ],
+ "actionState": [
+  {
+   "hasClient": true,
+   "connected": true,
+   "needsLogin": true,
+   "result": {
+    "action": "sync",
+    "label": "Jetzt sichern"
+   }
+  },
+  {
+   "hasClient": true,
+   "connected": true,
+   "needsLogin": false,
+   "result": {
+    "action": "sync",
+    "label": "Drive synchronisieren"
+   }
+  },
+  {
+   "hasClient": true,
+   "connected": false,
+   "needsLogin": true,
+   "result": {
+    "action": "sync",
+    "label": "Jetzt sichern"
+   }
+  },
+  {
+   "hasClient": true,
+   "connected": false,
+   "needsLogin": false,
+   "result": {
+    "action": "sync",
+    "label": "Mit Google anmelden & synchronisieren"
+   }
+  },
+  {
+   "hasClient": false,
+   "connected": true,
+   "needsLogin": true,
+   "result": {
+    "action": "setup",
+    "label": "Drive einrichten"
+   }
+  },
+  {
+   "hasClient": false,
+   "connected": true,
+   "needsLogin": false,
+   "result": {
+    "action": "setup",
+    "label": "Drive einrichten"
+   }
+  },
+  {
+   "hasClient": false,
+   "connected": false,
+   "needsLogin": true,
+   "result": {
+    "action": "setup",
+    "label": "Drive einrichten"
+   }
+  },
+  {
+   "hasClient": false,
+   "connected": false,
+   "needsLogin": false,
+   "result": {
+    "action": "setup",
+    "label": "Drive einrichten"
+   }
+  }
+ ]
+}
