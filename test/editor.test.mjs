@@ -6,10 +6,6 @@ import {
 	serialize,
 	serializeBlock,
 	FENCE,
-	COLOR_META_RE,
-	IMAGE_RE,
-	HEFT_RE,
-	FILE_RE,
 	mimeFromName,
 	LISTY,
 } from "../web/editor-markdown.js";
@@ -21,10 +17,6 @@ test("Editor Markdown: Konstanten und MIME-Erkennung", () => {
 	assert.equal(mimeFromName("document.pdf"), "application/pdf");
 	assert.equal(mimeFromName("image.png"), "image/png");
 	assert.equal(mimeFromName("unknown.xyz"), "");
-
-	assert.ok(IMAGE_RE.test("![Alt-Text](https://example.com/img.jpg)"));
-	assert.ok(HEFT_RE.test(":::heft heft-12345"));
-	assert.ok(FILE_RE.test(":::file file:blob123 mein-dokument.pdf"));
 
 	assert.equal(LISTY.bullet, 1);
 	assert.equal(LISTY.number, 1);

@@ -19,6 +19,7 @@ import { AI } from "./ai.js";
 import { RAG } from "./rag.js";
 import { BUS } from "./event-bus.js";
 import { FACH } from "./fach.js";
+import { CORE } from "./rust-core.js";
 
 const LEGACY_KEY = "impala67.homeArticles"; // vor dem Sync: nur localStorage
 const KEEP = 30;
@@ -201,12 +202,8 @@ const sourcesHtml = (a) => (a.sources || []).length
 	? '<nav class="hv-article-src" aria-label="Quellen"><small>Aus deinen Notizen</small>' +
 		a.sources.map((s) => `<button class="hv-pin" data-page="${esc(s.id)}">${esc(s.title)}${s.archived ? " · Archiv" : ""}</button>`).join("") + "</nav>"
 	: "";
-const teaser = (body) => {
-	// Erster Fließtext-Absatz, ohne Überschriften, Listen und Formeln
-	const para = String(body || "").split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !/^(#|[-*+]\s|\d+\.\s|\$\$)/.test(p)) || "";
-	const t = para.replace(/\$[^$]*\$/g, "…").replace(/[*_`>#~]/g, "").replace(/\s+/g, " ").trim();
-	return t.length > 180 ? t.slice(0, 179) + "…" : t;
-};
+// Erster Fließtext-Absatz, ohne Überschriften, Listen und Formeln
+const teaser = (body) => CORE.mdTeaser(String(body || ""));
 
 // Markup für die Startseite (home-view.js setzt es nur ein)
 function homeHtml() {

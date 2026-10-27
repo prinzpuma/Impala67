@@ -3,6 +3,7 @@
 mod drive;
 mod ink;
 mod js;
+mod markdown;
 mod search;
 mod srs;
 mod sync;

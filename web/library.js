@@ -11,6 +11,7 @@ import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { icon, lead, pageIcon } from "./icons.js";
 import { PLATFORM } from "./platform.js";
+import { CORE } from "./rust-core.js";
 
 const renderMain = () => BUS.emit("ui:render-main");
 const render = (opts) => BUS.emit("ui:render", opts);
@@ -55,7 +56,7 @@ export function libCoverHtml(pg) {
 // bewusst Notion-Look; nur GoodNotes-Hefte bekommen das Notizbuch-Cover.
 export function libDocHtml(pg) {
 	const pgIcon = pageIcon(pg);
-	const firstLine = ((pg.content || "").split("\n").find((l) => l.trim() && !l.trim().startsWith("#")) || "").replace(/[#>*`\[\]]/g, "").slice(0, 80);
+	const firstLine = CORE.mdFirstLine(String(pg.content || ""));
 	return '<div class="lib-docsheet">' +
 		'<span class="lib-docsheet-icon">' + pgIcon + "</span>" +
 		'<span class="lib-docsheet-title">' + U.esc((pg.title || "Ohne Titel").slice(0, 44)) + "</span>" +

@@ -870,6 +870,7 @@ dependencies = [
  "impala-crypto",
  "impala-drive",
  "impala-ink",
+ "impala-markdown",
  "impala-net",
  "impala-search",
  "impala-srs",

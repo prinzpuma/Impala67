@@ -14,6 +14,7 @@ import {
 	FENCE,
 	LISTY,
 	mimeFromName,
+	plainTextOf,
 } from "./editor-markdown.js";
 import {
 	initEditorMenus,
@@ -198,20 +199,6 @@ export const EDITOR = (() => {
 		return b;
 	}
 	const cloneBlock = (b) => reassignIds(JSON.parse(JSON.stringify(b)));
-
-	function plainTextOf(b) {
-		if (TEXTY[b.type]) return String(b.text || "");
-		if (b.type === "code" || b.type === "math") return String(b.text || "");
-		if (b.type === "callout" || b.type === "toggle") {
-			return (b.type === "toggle" ? String(b.summary || "") + "\n" : "") +
-				(b.children || []).map(plainTextOf).join("\n");
-		}
-		if (b.type === "table") return (b.rows || []).map((r) => r.join(" ")).join("\n");
-		if (b.type === "columns") return (b.columns || []).map((col) => col.map(plainTextOf).join("\n")).join("\n");
-		if (b.type === "image") return b.alt || "";
-		if (b.type === "file") return b.name || "";
-		return "";
-	}
 
 	// ---------- Markdown-Parsing und Serialisierung (editor-markdown.js) ----------
 	const parse = (md, customUid) => PERF_PROFILER.measure("editor.parse", () => parseMarkdown(md, customUid || uid), { length: (md || "").length }, 15);

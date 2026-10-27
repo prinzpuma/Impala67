@@ -6,6 +6,7 @@ import { U } from "./util.js";
 import { icon } from "./icons.js";
 import { HEFT } from "./heft.js";
 import { TELE } from "./telemetrie.js";
+import { CORE } from "./rust-core.js";
 
 const esc = (s) => U.esc(s);
 const DAY = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -43,15 +44,7 @@ function secPerCard() {
 }
 
 // Erste Textzeilen als Vorschau — Markdown-Zeichen weg, Leerzeilen raus, keine Titel-Dopplung
-const plain = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-function excerpt(pg) {
-	const lines = String(pg.content || "").split("\n")
-		.map((l) => l.replace(/<[^>]+>/g, "").replace(/^\s*>\s*\[![a-z]+\]/i, ">").replace(/^\s*(#{1,6}|[-*+]|\d+\.|>|- \[[ x]\])\s*/i, "").replace(/[*_`~]|!?\[([^\]]*)\]\([^)]*\)/g, "$1").trim())
-		.filter(Boolean);
-	const t = plain(pg.title);
-	if (lines.length && t && plain(lines[0]).includes(t)) lines.shift();
-	return lines.slice(0, 7);
-}
+const excerpt = (pg) => CORE.mdExcerpt(String(pg.title || ""), String(pg.content || ""));
 
 function preview(pg) {
 	if (pg.kind === "heft") return `<span class="hv-prev heft"><img data-key="th:${esc(pg.id)}" data-heftthumb="${esc(pg.id)}" alt=""></span>`;
@@ -70,10 +63,7 @@ function contMeta(pg) {
 // „Weißt du's noch?“: täglich eine andere schon gelernte Karte, nur zum Aufdecken (keine Bewertung,
 // der Lernplan bleibt unberührt). Bilder/Formeln/HTML raus, Lückentext wird zur Lücke.
 const CLOZE = /\{\{c\d+::(.*?)(?:::[^}]*)?\}\}/g;
-function cardText(md) {
-	return String(md || "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<[^>]+>/g, " ").replace(/\$\$?[^$]*\$\$?/g, "…")
-		.replace(/[*_`#>~]/g, "").replace(/\s+/g, " ").trim();
-}
+const cardText = (md) => CORE.mdCardText(String(md || ""));
 function recall(cards) {
 	const pool = cards.filter((c) => c && !c.suspended && c.srs && c.srs.state === "review" && cardText(c.front).length >= 3);
 	if (pool.length < 5) return "";
