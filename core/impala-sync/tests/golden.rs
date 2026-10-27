@@ -1,5 +1,5 @@
 //! Vergleich mit dem JS-Original: Die Golden-Files enthalten Event-Listen und die Indizes,
-//! die `compactEvents` aus `web/compact-events.js` behält (erzeugt von core/tools/gen-golden.mjs).
+//! die `compactEvents` aus `web/compact-events.js` behält (erzeugt von core/tools/gen-golden-sync.mjs).
 
 use impala_sync::{Event, Field, JsLike, Kind, Unsupported, compact, decode};
 use serde_json::Value;
@@ -43,7 +43,7 @@ fn parse(json: &str) -> Result<Vec<Event>, Unsupported> {
 
 #[test]
 fn matches_js_compaction() {
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden");
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/compact");
     let mut files: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
     files.sort();
     assert!(files.len() >= 5, "Golden-Files fehlen in {dir}");
@@ -88,4 +88,17 @@ fn compares_strings_like_javascript() {
     // UTF-16-Ordnung: U+1F600 (Surrogat 0xD83D) liegt in JS vor U+FF5E – in UTF-8 umgekehrt.
     let events = parse(r#"[{"t":"😀","seq":1,"type":"settingsSet","payload":{"a":1}},{"t":"～","seq":2,"type":"settingsSet","payload":{"a":2}}]"#).unwrap();
     assert_eq!(compact(&events), vec![1]);
+}
+
+#[test]
+fn json_adapter_matches_test_adapter() {
+    // Die öffentliche JSON-Hülle des Crates entscheidet wie die Test-Hülle oben.
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/compact");
+    for file in std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()) {
+        let golden: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        let events = golden["events"].as_array().unwrap();
+        let kept: Vec<usize> =
+            golden["kept"].as_array().unwrap().iter().map(|i| i.as_u64().unwrap() as usize).collect();
+        assert_eq!(impala_sync::compact_values(events).unwrap(), kept, "{}", file.display());
+    }
 }
