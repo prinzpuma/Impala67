@@ -89,6 +89,10 @@ const APP_FILES = [
 	"./embedding-worker.js",
 	"./compact-events.js",
 	"./compact-worker.js",
+	"./compact-core.js",
+	// Rust-Kern als WASM (core/, npm run build:core)
+	"./core/impala_core.js",
+	"./core/impala_core_bg.wasm",
 	"./drive.js",
 	"./drive-status.js",
 	"./backup-status.js",

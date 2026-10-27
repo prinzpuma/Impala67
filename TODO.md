@@ -71,6 +71,13 @@ Stand: v2.2.85 (21. Oktober 2026)
 - [ ] **Handschrifterkennung gezielt weiter schärfen**:
   - Erkennungsqualität auf echten Notizseiten (`handwriting/evaluate_notes_benchmark.py`) bei längeren Sätzen, Skizzen-Abgrenzung und Mathe-Ausdrücken weiter verbessern.
 
+### Langfristig: Rust-Kern & native Apps
+- [ ] **Plan in `docs/NATIV-PLAN.md`**: Gemeinsamer Rust-Kern (auch als WASM in der PWA), danach iPad, Android, Windows/Linux nativ.
+  - [x] Schritt 1: Spike `core/` – Event-Kompaktierung in Rust, als WASM im Kompaktierungs-Worker (JS als Rückfall). Ergebnis und Messwerte im Plan.
+  - [ ] WASM-Kompaktierung einmal in der Android-APK prüfen (Konsole: keine Warnung „Rust-Kern nicht geladen“).
+  - [ ] Schritt 2: CTC-Dekodierung (`web/handwriting-ctc.js`) in den Kern – rechenintensiv, typisierte Arrays, messbarer Gewinn.
+  - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.
+
 ### Priorität 3: Android & Plattform-Ergänzungen
 - [ ] **Google Drive Login in Android-APK verifizieren**:
   - OAuth2-Ablauf in der nativen Capacitor-Umgebung testen und absichern (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).

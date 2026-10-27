@@ -1,0 +1,18 @@
+# Rust-Kern von Impala67 (Plan: docs/NATIV-PLAN.md).
+# impala-core: reine Logik, plattformneutral (später auch per UniFFI für Swift/Kotlin).
+# impala-wasm: dünne wasm-bindgen-Hülle für die PWA (Build: npm run build:core).
+[workspace]
+resolver = "3"
+members = ["impala-core", "impala-wasm"]
+
+[workspace.package]
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

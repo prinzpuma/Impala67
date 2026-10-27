@@ -85,16 +85,17 @@ export function compactEvents(events) {
 }
 
 // Kompaktiert den events-Store in EINER readwrite-Transaktion (Hauptthread oder compact-worker.js).
+// `compact` muss compactEvents gleichen (compact-worker.js setzt den Rust-Kern ein).
 // Das Event mit der höchsten seq bleibt immer: DB.maxSeq() ist der Wasserstand für Upload-Cursor
 // und Start-Checkpoint. Sänke er, hielte der Cloudflare-Push den Log für zurückgesetzt und lüde
 // alles neu hoch. Ein zusätzlich behaltenes Event ist harmlos, der Log bleibt eine Obermenge.
-export function compactEventStore(db, minDrop) {
+export function compactEventStore(db, minDrop, compact = compactEvents) {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
 		const req = store.getAll();
 		let dropped = 0, floor = "";
 		req.onsuccess = () => {
-			const evs = req.result || [], compacted = compactEvents(evs);
+			const evs = req.result || [], compacted = compact(evs);
 			if (evs.length - compacted.length < minDrop) return;
 			const keep = new Set(compacted.map((ev) => ev.seq));
 			keep.add(evs.reduce((top, ev) => Math.max(top, ev.seq || 0), 0));
