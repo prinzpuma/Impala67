@@ -1,5 +1,5 @@
 //! Vergleich mit dem JS-Original: Die Golden-Files enthalten Event-Listen und die Indizes,
-//! die `compactEvents` aus `web/compact-events.js` behält (erzeugt von core/tools/gen-golden-sync.mjs).
+//! die `compactEvents` aus `web/compact-events.js` behielt (eingefrorener letzter JS-Stand; die PWA kompaktiert seit dem Umbau in Rust).
 
 use impala_sync::{Event, Field, JsLike, Kind, Unsupported, compact, decode};
 use serde_json::Value;
