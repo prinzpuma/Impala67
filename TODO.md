@@ -78,12 +78,13 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [x] Kern ohne eigene Ein-/Ausgabe: `HttpClient`, Sync-, Drive- und KI-Traits asynchron.
   - [x] PWA-Sync nur noch über den Rust-Kern (`SyncCore`, WASM), JS-Sync-Logik gelöscht.
   - [x] Drive-Backup Rust only (`DriveCore` in `core/impala-wasm/src/drive.rs`, `web/drive.js` nur noch Anmeldung, Timer, Ein-/Ausgabe).
-  - [ ] Drive: Downloads wieder parallel (JS: 6 gleichzeitig, Kern: nacheinander); Login/Upload großer Dateien (resumable, `Location`-Header) mit echtem Google-Konto prüfen.
+  - [x] Drive und Sync: Dateien wieder parallel (Drive 6 herunter/3 hoch, Sync 3), über `impala_net::join_all`.
+  - [ ] Drive: Login/Upload großer Dateien (resumable, `Location`-Header) mit echtem Google-Konto prüfen.
   - [ ] Nächste Bereiche Rust only: Suche/RAG, Handschrift-Dekodierung, lokale Kompaktierung, KI, Datenmodell/Start.
-  - [ ] Sync: Datei-Transfers wieder parallel (3 gleichzeitig), WASM-Größe senken.
+  - [ ] Sync: WASM-Größe senken.
   - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
   - [ ] PWA: RAG-Index als WASM im Worker (463 → 48 ms je Anfrage), JS als Rückfall; `opt-level` für WASM entscheiden.
-  - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract; Downloads in Sync/Drive parallel.
+  - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
   - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.

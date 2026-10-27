@@ -14,7 +14,7 @@ use impala_crypto::json::stringify;
 use impala_crypto::{
     CipherKey, OsRandom, Random, StorageUsage, SyncCredentials, decrypt_blob, encrypt_blob, format_storage_usage,
 };
-use impala_net::HttpClient;
+use impala_net::{HttpClient, join_all};
 use serde_json::{Map, Value};
 
 use crate::SyncError;
@@ -23,6 +23,9 @@ use crate::blobs::{BlobAliveChecker, blob_opaque_key, blob_refs_in_event, is_syn
 use crate::js::{compact_values, count_or, truthy};
 use crate::packet::{ChunkLimits, WireEvent, build_packets, open_packets, upload_bodies};
 use crate::wire::{Transport, prepare_cloud_events, prune_for_upload, should_upload_to};
+
+/// Gleichzeitige Datei-Übertragungen (hoch wie herunter), wie früher in JS.
+const PARALLEL_TRANSFERS: usize = 3;
 
 /// Dauerhafter Sync-Zustand je Konto (JS: `localStorage`, Schlüssel mit User-ID).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -543,32 +546,43 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
 
         let upload: Vec<&(String, String)> =
             local.iter().filter(|(k, _)| !remote_set.contains(k.as_str()) && !self.oversized.contains(k)).collect();
-        for (i, (key, id)) in upload.iter().enumerate() {
-            self.report("Übertrage Dateien…", i as u64, upload.len() as u64);
-            let Some(blob) = self.store.get_blob(id).await? else { continue };
-            let name =
-                blob.meta.get("name").filter(|n| truthy(Some(n))).and_then(Value::as_str).unwrap_or(id).to_owned();
-            let enc = encrypt_blob(&self.key, id, Some(&blob.meta), &blob.data, self.rng.as_ref())?;
-            if enc.bytes.len() > MAX_BLOB_BYTES {
-                self.oversized.insert(key.clone());
-                report.oversized.push(name);
-                continue;
-            }
-            let res = self.http.send(&self.endpoint.put_blob(key, &enc.iv, enc.bytes)).await?;
-            if !res.is_success() {
-                let err = api::response_error(&res, &format!("Blob {id} konnte nicht hochgeladen werden"));
-                // 413 ohne „Quota“: Datei zu groß für den Server – bleibt lokal, blockiert nichts.
-                if err.status() != Some(413) || err.is_quota() {
-                    return Err(err);
+        // Wie in JS: höchstens PARALLEL_TRANSFERS Dateien gleichzeitig unterwegs.
+        let mut done = 0;
+        for chunk in upload.chunks(PARALLEL_TRANSFERS) {
+            self.report("Übertrage Dateien…", done, upload.len() as u64);
+            done += chunk.len() as u64;
+            let mut ready = Vec::new();
+            for (key, id) in chunk {
+                let Some(blob) = self.store.get_blob(id).await? else { continue };
+                let name =
+                    blob.meta.get("name").filter(|n| truthy(Some(n))).and_then(Value::as_str).unwrap_or(id).to_owned();
+                let enc = encrypt_blob(&self.key, id, Some(&blob.meta), &blob.data, self.rng.as_ref())?;
+                if enc.bytes.len() > MAX_BLOB_BYTES {
+                    self.oversized.insert(key.clone());
+                    report.oversized.push(name);
+                    continue;
                 }
-                self.oversized.insert(key.clone());
-                report.oversized.push(name);
-                continue;
+                ready.push((key, id, name, self.endpoint.put_blob(key, &enc.iv, enc.bytes)));
             }
-            if let Some(usage) = api::usage_header(&res) {
-                self.usage = usage;
+            let http = &self.http;
+            let responses = join_all(ready.iter().map(|(.., req)| http.send(req))).await;
+            for ((key, id, name, _), res) in ready.into_iter().zip(responses) {
+                let res = res?;
+                if !res.is_success() {
+                    let err = api::response_error(&res, &format!("Blob {id} konnte nicht hochgeladen werden"));
+                    // 413 ohne „Quota“: Datei zu groß für den Server – bleibt lokal, blockiert nichts.
+                    if err.status() != Some(413) || err.is_quota() {
+                        return Err(err);
+                    }
+                    self.oversized.insert(key.clone());
+                    report.oversized.push(name);
+                    continue;
+                }
+                if let Some(usage) = api::usage_header(&res) {
+                    self.usage = usage;
+                }
+                report.uploaded += 1;
             }
-            report.uploaded += 1;
         }
 
         let ignored_before = self.state.ignored_blobs.len();
@@ -588,27 +602,34 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             .filter(|k| !local_keys.contains(k.as_str()) && !self.state.ignored_blobs.contains_key(*k))
             .collect();
         let mut downloaded_ids = Vec::new();
-        for (i, key) in download.iter().enumerate() {
-            self.report("Empfange Dateien…", i as u64, download.len() as u64);
-            let res = self.http.send(&self.endpoint.get_blob(key)).await?;
-            if !res.is_success() {
-                return Err(api::response_error(&res, "Blob konnte nicht geladen werden"));
+        let mut done = 0;
+        for chunk in download.chunks(PARALLEL_TRANSFERS) {
+            self.report("Empfange Dateien…", done, download.len() as u64);
+            done += chunk.len() as u64;
+            let (http, endpoint) = (&self.http, &self.endpoint);
+            let responses =
+                join_all(chunk.iter().map(|key| async move { http.send(&endpoint.get_blob(key)).await })).await;
+            for (key, res) in chunk.iter().zip(responses) {
+                let res = res?;
+                if !res.is_success() {
+                    return Err(api::response_error(&res, "Blob konnte nicht geladen werden"));
+                }
+                let iv = res.header("X-Impala-IV").unwrap_or_default();
+                let record = decrypt_blob(&self.key, iv, &res.body)?;
+                if self.opaque_key(&record.id) != **key {
+                    return Err(SyncError::Protocol(
+                        "Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.".into(),
+                    ));
+                }
+                if !is_sync_blob_id(&record.id) || !alive.is_alive(&record.id) {
+                    self.state.ignored_blobs.insert((*key).clone(), record.id);
+                    report.ignored += 1;
+                    continue;
+                }
+                self.store.put_blob(&record.id, LocalBlob { meta: record.meta, data: record.data }).await?;
+                downloaded_ids.push(record.id);
+                report.downloaded += 1;
             }
-            let iv = res.header("X-Impala-IV").unwrap_or_default();
-            let record = decrypt_blob(&self.key, iv, &res.body)?;
-            if self.opaque_key(&record.id) != **key {
-                return Err(SyncError::Protocol(
-                    "Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.".into(),
-                ));
-            }
-            if !is_sync_blob_id(&record.id) || !alive.is_alive(&record.id) {
-                self.state.ignored_blobs.insert((*key).clone(), record.id);
-                report.ignored += 1;
-                continue;
-            }
-            self.store.put_blob(&record.id, LocalBlob { meta: record.meta, data: record.data }).await?;
-            downloaded_ids.push(record.id);
-            report.downloaded += 1;
         }
         if !download.is_empty() || self.state.ignored_blobs.len() != ignored_before {
             self.save().await?;

@@ -8,7 +8,7 @@
 
 use std::fmt;
 use std::future::Future;
-use std::pin::pin;
+use std::pin::{Pin, pin};
 use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 use std::thread::{self, Thread};
@@ -169,7 +169,58 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
     }
 }
 
+/// Wartet auf alle `futures` gleichzeitig; Ergebnisse in Eingabereihenfolge (wie `Promise.all`).
+/// Ohne Laufzeit: Im Browser laufen die dahinterliegenden `fetch`-Aufrufe parallel, mit
+/// blockierenden Clients ([`UreqClient`]) nacheinander.
+pub async fn join_all<F: Future>(futures: impl IntoIterator<Item = F>) -> Vec<F::Output> {
+    let mut futures: Vec<Pin<Box<F>>> = futures.into_iter().map(Box::pin).collect();
+    let mut outs: Vec<Option<F::Output>> = futures.iter().map(|_| None).collect();
+    std::future::poll_fn(|cx| {
+        let mut pending = false;
+        for (future, out) in futures.iter_mut().zip(&mut outs).filter(|(_, out)| out.is_none()) {
+            match future.as_mut().poll(cx) {
+                Poll::Ready(v) => *out = Some(v),
+                Poll::Pending => pending = true,
+            }
+        }
+        if pending { Poll::Pending } else { Poll::Ready(()) }
+    })
+    .await;
+    outs.into_iter().flatten().collect()
+}
+
 #[cfg(feature = "client")]
 mod ureq_client;
 #[cfg(feature = "client")]
 pub use ureq_client::UreqClient;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    /// Gibt einmal ab (wie ein wartendes `fetch`) und meldet Start und Ende.
+    async fn step(log: &RefCell<Vec<String>>, name: &str) -> usize {
+        log.borrow_mut().push(format!("start {name}"));
+        let mut yielded = false;
+        std::future::poll_fn(|cx| {
+            if yielded {
+                return Poll::Ready(());
+            }
+            yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        })
+        .await;
+        log.borrow_mut().push(format!("end {name}"));
+        name.len()
+    }
+
+    #[test]
+    fn join_all_laesst_alle_gleichzeitig_laufen() {
+        let log = RefCell::new(Vec::new());
+        let out = block_on(join_all(["a", "bb", "ccc"].map(|n| step(&log, n))));
+        assert_eq!(out, vec![1, 2, 3]);
+        assert_eq!(log.into_inner(), ["start a", "start bb", "start ccc", "end a", "end bb", "end ccc"]);
+    }
+}

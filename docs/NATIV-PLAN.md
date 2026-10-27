@@ -64,7 +64,7 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    hält Timer, WebSocket, Status. JS-Verschlüsselung, Paketbau, Chunking und Cursor-Logik sind gelöscht.
    Geprüft: `cargo test`, `test/sync.test.mjs` (Rust-Client gegen den echten Worker-Code) und die Browser-E2E-Suite
    (`npm run test:e2e`, 15/16 – die rote Prüfung meldet nur nicht erreichbare CDNs im Container).
-   Offen: WASM-Größe (582 KB, 267 KB gzip, lädt erst beim Einrichten des Syncs), Datei-Transfers seriell statt 3 parallel,
+   Offen: WASM-Größe (582 KB, 267 KB gzip, lädt erst beim Einrichten des Syncs),
    PBKDF2 (100 000 Runden) läuft beim Verbinden einmal im Hauptthread.
 3c. ✅ **PWA-Drive-Backup läuft in Rust** (27. Oktober 2026): `DriveCore` (`core/impala-wasm/src/drive.rs`) führt den
    ganzen Durchgang aus (Dateiindex über die Changes-API, Snapshot + Änderungspakete, Dateien, Verdichten, Token-Bereinigung,
@@ -75,9 +75,13 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    weil sie vor dem Laden des Kerns gebraucht werden; ihre Golden-Files (`rules.json`) erzeugt weiter
    `core/tools/gen-golden-drive.mjs`, `flows.json` ist eingefroren.
    Geprüft: `cargo test`, `DriveCore` in Node gegen eine nachgebaute Drive-API, `web/drive.js` in Chromium (zwei Geräte,
-   v1-Altbestand, Bilder, Reload, abgelaufene Sitzung). Offen: Downloads nacheinander statt 6 parallel, WASM +90 KB
+   v1-Altbestand, Bilder, Reload, abgelaufene Sitzung). Offen: WASM +90 KB
    (686 KB, 310 KB gzip), Test mit echtem Google-Konto (Login, resumable Upload ab 5 MB).
-3d. **Nächste Bereiche Rust only**: Suche/RAG im Worker, Handschrift-Dekodierung,
+3d. ✅ **Dateien wieder parallel** (27. Oktober 2026): `impala_net::join_all` wartet ohne Laufzeit auf mehrere
+   Anfragen (im Browser laufen die `fetch`-Aufrufe gleichzeitig, mit `block_on` nacheinander). Sync überträgt Dateien zu
+   dritt, Drive lädt Snapshot/Deltas/Dateien zu sechst, lädt Dateien zu dritt hoch und löscht zu sechst – wie die
+   frühere JS-Fassung. Große Dateien gehen häppchenweise, im Speicher liegen höchstens so viele wie gleichzeitig laufen.
+3e. **Nächste Bereiche Rust only**: Suche/RAG im Worker, Handschrift-Dekodierung,
    lokale Kompaktierung (`compact-events.js`), KI-Anbieter (`impala-ai`), dann Datenmodell/Start (`impala-model`).
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.

@@ -4,12 +4,14 @@
 //!
 //! Netz über [`HttpClient`], Zugriffstoken über [`TokenSource`], lokale Daten über
 //! [`DriveStore`], Zeit über [`Clock`]. Nie zwei Durchgänge parallel: `&mut self`; mehrere
-//! Instanzen (Tabs, Prozesse) muss die Plattform gegeneinander sperren.
+//! Instanzen (Tabs, Prozesse) muss die Plattform gegeneinander sperren. Innerhalb eines Durchgangs
+//! laufen Dateien gleichzeitig ([`join_all`]); Token und Uhren-Drift liegen dafür in `RefCell`s.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 
 use impala_crypto::{OsRandom, Random, gzip, hex_encode};
-use impala_net::{HttpClient, Request, Response};
+use impala_net::{HttpClient, Request, Response, join_all};
 use impala_storage::checkpoint::is_checkpoint_key;
 use impala_storage::event::{redact_secrets, strip_local_flags};
 use impala_storage::js::iso_from_ms;
@@ -31,6 +33,9 @@ use crate::store::DriveStore;
 pub const COMPACT_AFTER_DELTAS: usize = 50;
 /// Wiederholungen bei 429/5xx.
 const MAX_RETRIES: u32 = 3;
+/// Gleichzeitige Downloads und Löschungen bzw. Uploads (wie früher in JS).
+const PARALLEL_DOWNLOADS: usize = 6;
+const PARALLEL_UPLOADS: usize = 3;
 
 /// Liefert das OAuth-Zugriffstoken. Die Anmeldung selbst (Popup, Kontowahl) ist Plattformsache;
 /// ein Hintergrund-Sync öffnet nie ein Fenster.
@@ -132,8 +137,8 @@ pub struct DriveBackup<H, T, S, C> {
     clock: C,
     rng: Box<dyn Random>,
     options: DriveOptions,
-    skew: ClockSkew,
-    token: String,
+    skew: RefCell<ClockSkew>,
+    token: RefCell<String>,
 }
 
 impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S, C> {
@@ -145,8 +150,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             clock,
             rng: Box::new(OsRandom),
             options: DriveOptions::default(),
-            skew: ClockSkew::default(),
-            token: String::new(),
+            skew: RefCell::default(),
+            token: RefCell::default(),
         }
     }
 
@@ -179,7 +184,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     /// Uhr-Korrektur für neue Event-Zeitstempel (`U.setClockOffset`): erst ab 15 s Versatz.
     pub fn clock_offset_ms(&self) -> f64 {
-        self.skew.applied_offset_ms()
+        self.skew.borrow().applied_offset_ms()
     }
 
     // ---- Durchgänge ----------------------------------------------------------------
@@ -226,8 +231,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         if !late.is_empty() {
             on_phase(Phase::LateDeltas(late.len()));
             let mut events = Vec::new();
-            for f in &late {
-                events.extend(payload_events(&self.download(f).await?));
+            for payload in self.download_all(&late.iter().collect::<Vec<_>>()).await? {
+                events.extend(payload_events(&payload));
             }
             if !events.is_empty() {
                 self.import(events, Map::new(), unsynced, &mut report).await?;
@@ -238,8 +243,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         st.synced_seq = Some(self.store.max_seq().await?);
         st.last_ok = iso_from_ms(self.clock.now_ms());
         self.store.save_state(&st).await?;
-        report.clock_skew_ms = self.skew.skew_ms();
-        report.clock_warning_minutes = self.skew.warning_minutes();
+        report.clock_skew_ms = self.skew.borrow().skew_ms();
+        report.clock_warning_minutes = self.skew.borrow().warning_minutes();
         Ok(report)
     }
 
@@ -281,7 +286,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
     /// E-Mail des Kontos (nur Anzeige): Netz- und andere Fehler ergeben `None`, nur 401 ist ein Fehler.
     pub async fn account_email(&mut self) -> Result<Option<String>, DriveError> {
         self.take_token().await?;
-        match self.http.send(&api::user_info(&self.token)).await {
+        let req = api::user_info(&self.token.borrow());
+        match self.http.send(&req).await {
             Ok(res) if res.status == 401 => {
                 self.tokens.expired().await;
                 Err(DriveError::SessionExpired)
@@ -313,13 +319,12 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         if need_snapshot || !deltas.is_empty() {
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
-        let snap = match snapshot {
-            Some(f) if need_snapshot => Some(self.download(f).await?),
-            _ => None,
-        };
+        let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(&deltas).collect();
+        let mut payloads = self.download_all(&wanted).await?.into_iter();
+        let snap = if need_snapshot { payloads.next() } else { None };
         let mut events = snap.as_ref().map(payload_events).unwrap_or_default();
-        for f in &deltas {
-            events.extend(payload_events(&self.download(f).await?));
+        for payload in payloads {
+            events.extend(payload_events(&payload));
         }
         // v1-Snapshots tragen ihre Blobs im selben Dokument.
         let blobs = snap.as_ref().map(payload_blobs).unwrap_or_default();
@@ -355,24 +360,30 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         // den Dateinamen-Hash jedes lokalen Blobs – damit entfällt der Download.
         let cached_hashes: HashSet<String> =
             st.upload_hashes.iter().filter(|(id, _)| local.contains(*id)).map(|(_, h)| h.hash.clone()).collect();
-        for file in remote_blobs {
-            let wanted = |id: &str, local: &HashSet<String>| !is_local_only(id) && !local.contains(id);
-            match file.app_property("blobId") {
-                Some(id) if !wanted(id, &local) => continue,
-                None if blob_file_hash(file).is_some_and(|h| cached_hashes.contains(&h)) => continue,
-                _ => {}
+        let wanted = |id: &str, local: &HashSet<String>| !is_local_only(id) && !local.contains(id);
+        let missing: Vec<&DriveFile> = remote_blobs
+            .into_iter()
+            .filter(|file| match file.app_property("blobId") {
+                Some(id) => wanted(id, &local),
+                None => !blob_file_hash(file).is_some_and(|h| cached_hashes.contains(&h)),
+            })
+            .collect();
+        // Häppchenweise: Blobs können groß sein, im Speicher liegen höchstens PARALLEL_DOWNLOADS.
+        for chunk in missing.chunks(PARALLEL_DOWNLOADS) {
+            for payload in self.download_all(chunk).await? {
+                let Some(blob) = parse_blob_payload(&payload) else {
+                    report.skipped_blob_files += 1;
+                    continue;
+                };
+                // Erneut prüfen: zwei Dateien (Alt-Dateien ohne `blobId`) können denselben Blob tragen.
+                if !wanted(&blob.id, &local) {
+                    continue;
+                }
+                self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data }).await?;
+                local.insert(blob.id.clone());
+                local_order.push(blob.id);
+                report.blobs_downloaded += 1;
             }
-            let Some(blob) = parse_blob_payload(&self.download(file).await?) else {
-                report.skipped_blob_files += 1;
-                continue;
-            };
-            if !wanted(&blob.id, &local) {
-                continue;
-            }
-            self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data }).await?;
-            local.insert(blob.id.clone());
-            local_order.push(blob.id);
-            report.blobs_downloaded += 1;
         }
 
         let mut uploads = Vec::new();
@@ -405,18 +416,37 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         if !uploads.is_empty() {
             on_phase(Phase::UploadBlobs(uploads.len()));
         }
-        for (id, raw, hash) in uploads {
-            let bytes = gzip(raw.as_bytes());
-            let name = blob_name(&hash);
-            let up = Upload {
-                name: &name,
-                file_id: None,
-                encoding: Encoding::Gzip,
-                properties: vec![("hash", hash.clone()), ("blobId", id)],
-                bytes: &bytes,
-            };
-            self.upload(st, &up).await?;
-            report.blobs_uploaded += 1;
+        for chunk in uploads.chunks(PARALLEL_UPLOADS) {
+            let files: Vec<(String, Vec<u8>)> =
+                chunk.iter().map(|(_, raw, hash)| (blob_name(hash), gzip(raw.as_bytes()))).collect();
+            let ups: Vec<Upload<'_>> = chunk
+                .iter()
+                .zip(&files)
+                .map(|((id, _, hash), (name, bytes))| Upload {
+                    name,
+                    file_id: None,
+                    encoding: Encoding::Gzip,
+                    properties: vec![("hash", hash.clone()), ("blobId", id.clone())],
+                    bytes,
+                })
+                .collect();
+            let results = join_all(ups.iter().map(|up| self.send_upload(up))).await;
+            // Erst alle Erfolge in den Index, dann den ersten Fehler melden.
+            let mut first_err = None;
+            for res in results {
+                match res {
+                    Ok(file) => {
+                        index_put(st, file);
+                        report.blobs_uploaded += 1;
+                    }
+                    Err(e) => {
+                        first_err.get_or_insert(e);
+                    }
+                }
+            }
+            if let Some(e) = first_err {
+                return Err(e);
+            }
         }
         self.store.save_state(st).await.map_err(DriveError::from)
     }
@@ -426,13 +456,11 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         let text = self.store.export_snapshot(true, &self.now_iso()).await?;
         let created =
             self.upload_snapshot(st, files, &text, vec![("protocol", "2".into()), ("redacted", "1".into())]).await?;
-        for f in files.iter().filter(|f| matches!(f.kind(), FileKind::Delta | FileKind::V1Snapshot)) {
-            // Abweichung von JS: JS vergaß ALLE gelesenen Delta-IDs; hier nur die gelöschten –
-            // ein Delta, dessen Löschen scheiterte, wird so nicht erneut geladen.
-            if self.delete(st, &f.id).await {
-                st.known_deltas.retain(|k| *k != f.id);
-            }
-        }
+        let old: Vec<&DriveFile> =
+            files.iter().filter(|f| matches!(f.kind(), FileKind::Delta | FileKind::V1Snapshot)).collect();
+        // Abweichung von JS: JS vergaß ALLE gelesenen Delta-IDs; hier nur die gelöschten –
+        // ein Delta, dessen Löschen scheiterte, wird so nicht erneut geladen.
+        self.delete_all(st, &old).await;
         st.uploaded_seq = Some(self.store.max_seq().await?);
         st.snapshot_stamp = Some(created.stamp());
         st.secret_scrub = false;
@@ -449,12 +477,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
     ) -> Result<(), DriveError> {
         let text = self.store.export_snapshot(!self.options.allow_secrets, &self.now_iso()).await?;
         let created = self.upload_snapshot(st, files, &text, vec![("protocol", "2".into())]).await?;
-        for f in listed {
-            // [A9] Nur tatsächlich Gelöschtes vergessen.
-            if self.delete(st, &f.id).await {
-                st.known_deltas.retain(|k| *k != f.id);
-            }
-        }
+        self.delete_all(st, listed).await;
         // [A7] Den eigenen Snapshot nicht wieder herunterladen.
         st.snapshot_stamp = Some(created.stamp());
         self.store.save_state(st).await.map_err(DriveError::from)
@@ -603,14 +626,33 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     // ---- Dateien ---------------------------------------------------------------------
 
-    async fn download(&mut self, file: &DriveFile) -> Result<Value, DriveError> {
+    async fn download(&self, file: &DriveFile) -> Result<Value, DriveError> {
         let res = self.call(|t| api::download(t, &file.id)).await?;
         Ok(decode_json(&res.body, file.encoding())?)
     }
 
-    /// Großes per resumable Upload, sonst multipart. Hält den Index sofort aktuell.
-    // Abweichung von JS: JS lud alles multipart hoch, auch Snapshots und PDFs über 5 MB.
+    /// Lädt `files` mit höchstens [`PARALLEL_DOWNLOADS`] gleichzeitigen Anfragen; Ergebnisse in
+    /// Eingabereihenfolge.
+    async fn download_all(&self, files: &[&DriveFile]) -> Result<Vec<Value>, DriveError> {
+        let mut out = Vec::with_capacity(files.len());
+        for chunk in files.chunks(PARALLEL_DOWNLOADS) {
+            for payload in join_all(chunk.iter().map(|f| self.download(f))).await {
+                out.push(payload?);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Hochladen und den Index sofort aktuell halten.
     async fn upload(&mut self, st: &mut DriveState, up: &Upload<'_>) -> Result<DriveFile, DriveError> {
+        let file = self.send_upload(up).await?;
+        index_put(st, file.clone());
+        Ok(file)
+    }
+
+    /// Großes per resumable Upload, sonst multipart.
+    // Abweichung von JS: JS lud alles multipart hoch, auch Snapshots und PDFs über 5 MB.
+    async fn send_upload(&self, up: &Upload<'_>) -> Result<DriveFile, DriveError> {
         let res = if up.is_large() {
             let session = api::parse_session_url(&self.call(|t| up.resumable_start(t)).await?)?;
             self.call(|t| up.resumable_put(t, &session)).await?
@@ -618,50 +660,66 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             let boundary = self.boundary();
             self.call(|t| up.multipart(t, &boundary)).await?
         };
-        let file = api::parse_uploaded(&res)?;
-        if let Some(idx) = st.index.as_mut() {
-            idx.put(file.clone());
-        }
-        Ok(file)
+        api::parse_uploaded(&res)
     }
 
-    /// [A9] Ergebnis melden statt verschlucken.
-    async fn delete(&mut self, st: &mut DriveState, id: &str) -> bool {
-        let ok = self.call(|t| api::delete(t, id)).await.is_ok();
-        if ok && let Some(idx) = st.index.as_mut() {
-            idx.remove(id);
+    /// Löscht `files` ([`PARALLEL_DOWNLOADS`] gleichzeitig). [A9] Nur tatsächlich Gelöschtes
+    /// verschwindet aus Index und gelesenen Deltas; der Rest wird beim nächsten Mal erneut versucht.
+    async fn delete_all(&self, st: &mut DriveState, files: &[&DriveFile]) {
+        for chunk in files.chunks(PARALLEL_DOWNLOADS) {
+            let results = join_all(chunk.iter().map(|f| self.call(|t| api::delete(t, &f.id)))).await;
+            for (f, res) in chunk.iter().zip(results) {
+                if res.is_ok() {
+                    if let Some(idx) = st.index.as_mut() {
+                        idx.remove(&f.id);
+                    }
+                    st.known_deltas.retain(|k| *k != f.id);
+                }
+            }
         }
-        ok
     }
 
     // ---- Anfragen ----------------------------------------------------------------------
 
     async fn take_token(&mut self) -> Result<(), DriveError> {
-        self.token = self.tokens.access_token().await.filter(|t| !t.is_empty()).ok_or(DriveError::SessionExpired)?;
+        let token = self.tokens.access_token().await.filter(|t| !t.is_empty()).ok_or(DriveError::SessionExpired)?;
+        *self.token.get_mut() = token;
         Ok(())
     }
 
     /// Eine Anfrage mit Token. 401: einmal erneuern lassen, sonst Sitzung abgelaufen.
     /// 429/5xx: bis zu dreimal mit exponentiellem Backoff und Jitter. Jede Antwort mit
-    /// `Date`-Header verbessert die Uhren-Drift-Schätzung.
-    async fn call(&mut self, build: impl Fn(&str) -> Request) -> Result<Response, DriveError> {
+    /// `Date`-Header verbessert die Uhren-Drift-Schätzung. Läuft auch gleichzeitig mit anderen
+    /// Anfragen desselben Durchgangs (kein `RefCell`-Borrow über ein `await`).
+    async fn call(&self, build: impl Fn(&str) -> Request) -> Result<Response, DriveError> {
         let (mut attempt, mut renewed) = (0, false);
         loop {
-            let req = build(&self.token);
+            let sent = self.token.borrow().clone();
+            let req = build(&sent);
             let t0 = self.clock.now_ms();
             let res = self.http.send(&req).await?;
             let t1 = self.clock.now_ms();
             if let Some(server) = res.header("date").and_then(api::http_date_ms) {
-                self.skew.observe(t0, t1, server);
-                self.clock.set_offset_ms(self.skew.applied_offset_ms());
+                let offset = {
+                    let mut skew = self.skew.borrow_mut();
+                    skew.observe(t0, t1, server);
+                    skew.applied_offset_ms()
+                };
+                self.clock.set_offset_ms(offset);
             }
             match api::outcome(&res) {
                 Outcome::Ok => return Ok(res),
                 Outcome::Unauthorized => {
-                    if !renewed && let Some(token) = self.tokens.renew(&self.token).await.filter(|t| !t.is_empty()) {
-                        self.token = token;
+                    if !renewed {
                         renewed = true;
-                        continue;
+                        // Eine gleichzeitige Anfrage hat das Token schon erneuert: damit wiederholen.
+                        if *self.token.borrow() != sent {
+                            continue;
+                        }
+                        if let Some(token) = self.tokens.renew(&sent).await.filter(|t| !t.is_empty()) {
+                            *self.token.borrow_mut() = token;
+                            continue;
+                        }
                     }
                     self.tokens.expired().await;
                     return Err(DriveError::SessionExpired);
@@ -692,7 +750,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     /// Zeitstempel für `exportedAt` (mit Uhr-Korrektur wie `U.now()`).
     fn now_iso(&self) -> String {
-        iso_from_ms(self.clock.now_ms() - self.skew.applied_offset_ms()).unwrap_or_default()
+        iso_from_ms(self.clock.now_ms() - self.skew.borrow().applied_offset_ms()).unwrap_or_default()
     }
 
     async fn ensure_device_id(&mut self, st: &mut DriveState) -> Result<(), DriveError> {
@@ -705,6 +763,12 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             self.store.save_state(st).await?;
         }
         Ok(())
+    }
+}
+
+fn index_put(st: &mut DriveState, file: DriveFile) {
+    if let Some(idx) = st.index.as_mut() {
+        idx.put(file);
     }
 }
 
