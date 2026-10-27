@@ -57,12 +57,13 @@ const { TOOLS } = await import("../../web/tools.js");
 const { THINK } = await import("../../web/think-heuristik.js");
 const { RAG } = await import("../../web/rag.js");
 const { HEFT } = await import("../../web/heft.js");
-const { deriveSyncCredentials } = await import("../../web/sync-crypto.js");
+const CORE = await import("../../web/core/impala_core.js");
+await CORE.default({ module_or_path: fs.readFileSync(path.join(here, "../../web/core/impala_core_bg.wasm")) });
 STATE.dispatch = async (type, payload) => STATE.reduce({ id: crypto.randomUUID(), t: new Date().toISOString(), type, payload });
 
 let uidCounter = 0;
 U.uid = () => "u" + String(++uidCounter).padStart(7, "0") + "-golden";
-const creds = await deriveSyncCredentials(SYNC_KEY);
+const creds = CORE.syncAuth(SYNC_KEY);
 
 // ── Hilfen ───────────────────────────────────────────────────────────────
 function rng(seed) {

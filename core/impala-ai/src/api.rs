@@ -19,9 +19,14 @@ pub struct Sources<'a> {
 const MODELS_TIMEOUT_S: u64 = 5;
 
 /// Modell-IDs einer Quelle.
-pub fn model_ids(client: &dyn HttpClient, base: &str, key: &str, sources: Sources<'_>) -> Result<Vec<String>, AiError> {
+pub async fn model_ids(
+    client: &impl HttpClient,
+    base: &str,
+    key: &str,
+    sources: Sources<'_>,
+) -> Result<Vec<String>, AiError> {
     let req = models_request(base, key, is_cloudflare_base(base, sources.sync_url, sources.providers));
-    let res = client.send(&req).map_err(|e| match e {
+    let res = client.send(&req).await.map_err(|e| match e {
         NetError::Timeout => {
             AiError::Other(format!("Zeitüberschreitung nach {MODELS_TIMEOUT_S} s — der Server hat nicht geantwortet."))
         }
@@ -42,12 +47,12 @@ pub struct ListedModel {
 }
 
 /// Modelle aller abfragbaren Quellen; Fehler nur, wenn alle scheitern.
-pub fn list_models(client: &dyn HttpClient, sources: Sources<'_>) -> Result<Vec<ListedModel>, AiError> {
+pub async fn list_models(client: &impl HttpClient, sources: Sources<'_>) -> Result<Vec<ListedModel>, AiError> {
     let mut found = vec![];
     let mut first_error = None;
     let mut any_ok = false;
     for p in model_providers(sources.providers) {
-        match model_ids(client, &p.base, &p.key, sources) {
+        match model_ids(client, &p.base, &p.key, sources).await {
             Ok(ids) => {
                 any_ok = true;
                 found.extend(ids.into_iter().map(|id| ListedModel { id, provider_id: p.id.clone() }));
@@ -80,14 +85,14 @@ fn has_version_segment(base: &str) -> bool {
 }
 
 /// Verbindungstest einer (noch ungespeicherten) Quelle.
-pub fn ping_provider(client: &dyn HttpClient, provider: &Provider, sources: Sources<'_>) -> PingResult {
+pub async fn ping_provider(client: &impl HttpClient, provider: &Provider, sources: Sources<'_>) -> PingResult {
     let fail = |status, error: String| PingResult { status, error: Some(error), ..Default::default() };
     let trimmed = crate::js::trim(&provider.base);
     if trimmed.is_empty() {
         return fail(None, "Keine Server-URL eingetragen.".into());
     }
     let base = clean_base(trimmed);
-    match model_ids(client, base, &provider.key, sources) {
+    match model_ids(client, base, &provider.key, sources).await {
         Ok(ids) => PingResult { ok: true, models: ids.len(), ..Default::default() },
         Err(AiError::Http { status, .. }) => {
             if matches!(status, 401 | 403) {
@@ -98,7 +103,7 @@ pub fn ping_provider(client: &dyn HttpClient, provider: &Provider, sources: Sour
             }
             if status == 404 && !has_version_segment(base) {
                 let v1 = format!("{base}/v1");
-                if model_ids(client, &v1, &provider.key, sources).is_ok() {
+                if model_ids(client, &v1, &provider.key, sources).await.is_ok() {
                     return PingResult {
                         error: Some(format!(
                             "Unter dieser URL gibt es keinen /models-Endpunkt — mit „{v1}“ antwortet der Server."
@@ -163,8 +168,8 @@ pub fn embed_provider<'a>(
 }
 
 /// Vektoren über `POST /embeddings` einer Cloud-API (für `impala-search`).
-pub fn embed_remote(
-    client: &dyn HttpClient,
+pub async fn embed_remote(
+    client: &impl HttpClient,
     provider: &Provider,
     model: &str,
     texts: &[String],
@@ -172,11 +177,12 @@ pub fn embed_remote(
     if provider.base.is_empty() {
         return Err(AiError::Other("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).".into()));
     }
-    let res = client.send(&embeddings_request(&provider.base, &provider.key, model, texts)).map_err(|e| match e {
-        NetError::Timeout => AiError::Timeout { phase: "die Embedding-Antwort", ms: 30_000 },
-        NetError::Aborted => AiError::Aborted,
-        NetError::Connect(m) | NetError::Other(m) => AiError::Network(m),
-    })?;
+    let res =
+        client.send(&embeddings_request(&provider.base, &provider.key, model, texts)).await.map_err(|e| match e {
+            NetError::Timeout => AiError::Timeout { phase: "die Embedding-Antwort", ms: 30_000 },
+            NetError::Aborted => AiError::Aborted,
+            NetError::Connect(m) | NetError::Other(m) => AiError::Network(m),
+        })?;
     if !res.is_success() {
         return Err(AiError::http(res.status, &res.text(), 0));
     }

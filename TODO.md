@@ -75,11 +75,15 @@ Stand: v2.2.85 (21. Oktober 2026)
 - [ ] **Plan in `docs/NATIV-PLAN.md`**: Gemeinsamer Rust-Kern (auch als WASM in der PWA), danach iPad, Android, Windows/Linux nativ.
   - [x] Schritt 1: Spike `core/` – Event-Kompaktierung in Rust; als WASM langsamer als JS, deshalb rechnet die PWA weiter in JS. Ergebnis und Messwerte im Plan.
   - [x] Schritt 2: Ganze Nicht-UI-Logik als Rust-Kern (12 Crates, Golden-Tests gegen JS, Stand im Plan).
+  - [x] Kern ohne eigene Ein-/Ausgabe: `HttpClient`, Sync-, Drive- und KI-Traits asynchron.
+  - [x] PWA-Sync nur noch über den Rust-Kern (`SyncCore`, WASM), JS-Sync-Logik gelöscht.
+  - [ ] Nächste Bereiche Rust only: Drive-Backup, Suche/RAG, Handschrift-Dekodierung, lokale Kompaktierung, KI, Datenmodell/Start.
+  - [ ] Sync: Datei-Transfers wieder parallel (3 gleichzeitig), WASM-Größe senken.
   - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
   - [ ] PWA: RAG-Index als WASM im Worker (463 → 48 ms je Anfrage), JS als Rückfall; `opt-level` für WASM entscheiden.
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract; Downloads in Sync/Drive parallel.
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
-  - [ ] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung (`sync-cloudflare.js:417`); Fehler ohne Status werden endlos wiederholt (`sync-transfer.js:29`).
+  - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
   - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.
   - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
   - [ ] Drive: 60-s-Aufschub greift nie (`drive.js:775`), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync.

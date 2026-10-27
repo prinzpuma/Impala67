@@ -1,4 +1,5 @@
-//! Standard-[`HttpClient`] auf Basis von ureq.
+//! Standard-[`HttpClient`] auf Basis von ureq: blockiert im `send`, also nur mit [`crate::block_on`]
+//! bzw. auf einem Hintergrund-Thread verwenden.
 
 use std::io::Read;
 use std::time::Duration;
@@ -54,14 +55,18 @@ fn head(res: &ureq::http::Response<ureq::Body>) -> Response {
 }
 
 impl HttpClient for UreqClient {
-    fn send(&self, req: &Request) -> Result<Response, NetError> {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
         let mut res = self.call(req)?;
         let mut out = head(&res);
         out.body = res.body_mut().with_config().limit(u64::MAX).read_to_vec().map_err(map_err)?;
         Ok(out)
     }
 
-    fn send_streaming(&self, req: &Request, on_chunk: &mut dyn FnMut(&[u8]) -> bool) -> Result<Response, NetError> {
+    async fn send_streaming(
+        &self,
+        req: &Request,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<Response, NetError> {
         let mut res = self.call(req)?;
         let out = head(&res);
         let mut reader = res.body_mut().as_reader();

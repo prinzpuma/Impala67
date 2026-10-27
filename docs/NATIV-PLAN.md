@@ -15,8 +15,13 @@ und ersetzen Kern-Funktionen schrittweise durch native, wo es sich lohnt. Die PW
   Was sich als unnötig erweist, entfällt. Maßstab ist das Verhalten, nicht die JS-Struktur.
 - **Formate bleiben byte-kompatibel**: Sync-Pakete, Verschlüsselung, Blob-Layout und IndexedDB-Daten müssen alte Daten
   lesen und von älteren App-Versionen lesbar bleiben. Jedes Modul bekommt Vergleichstests gegen die JS-Implementierung (Golden-Files).
-- **Schrittweise (Strangler)**: Immer nur ein JS-Modul ersetzen; die App bleibt nach jedem Schritt auslieferbar.
-  Kein langlebiger Umbau-Branch – kurze Branches pro Schritt, oft nach `main` mergen.
+- **Rust only**: Ein umgestellter Bereich läuft nur noch in Rust; die JS-Fassung wird gelöscht, es gibt keinen
+  JS-Rückfall (Entscheidung 27. Oktober 2026). Die App bleibt nach jedem Bereich auslieferbar; der Umbau läuft auf
+  einem eigenen Branch und geht nach `main`, wenn der Bereich im Browser geprüft ist.
+- **Kern ohne Ein-/Ausgabe** (Muster von Crux): Der Kern rechnet nur und fragt die Plattform über asynchrone Traits
+  (`HttpClient`, `SyncStore`, `DriveStore`, `TokenSource`, `ToolExecutor` …). Im Browser stecken `fetch`,
+  IndexedDB und JS-Promises dahinter, auf iOS URLSession, auf Android OkHttp, nativ SQLite/ureq mit `block_on`.
+  Der Kern bringt keine eigene Async-Laufzeit mit.
 - **Fähigkeiten mit Standard-Implementierung**: Austauschbares liegt hinter einem Trait mit Rust-Standard;
   jede Plattform darf eine native Implementierung einsetzen, muss aber nicht.
 
@@ -51,8 +56,18 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
 2. ✅ **Ganze Nicht-UI-Logik als Rust-Kern** (27. Oktober 2026, Stand siehe unten). Die PWA ist noch nicht
    umgestellt; als WASM vorbereitet ist nur, was gemessen schneller ist (Suche/RAG, CTC-Dekodierung).
    Nächster Schritt: UniFFI-Schnittstelle (`impala-core`) und RAG-Index im PWA-Worker hinter Rückfall auf JS.
-3. ✅ **Speicherschicht** im Kern (`impala-storage`, SQLite). Web behält IndexedDB (`web/db.js`); der Trait ist
-   synchron, ein WASM-Adapter für IndexedDB bräuchte eine asynchrone Variante.
+3. ✅ **Speicherschicht** im Kern (`impala-storage`, SQLite). Web behält IndexedDB (`web/db.js`).
+3a. ✅ **Kern ohne eigene Ein-/Ausgabe** (27. Oktober 2026): `HttpClient` und alle Plattform-Traits in Sync, Drive
+   und KI sind asynchron; Warten (Backoff) liefert die Plattform. Native Werkzeuge und Tests nutzen `impala_net::block_on`.
+3b. ✅ **PWA-Sync läuft in Rust** (27. Oktober 2026): `SyncCore` (`core/impala-wasm/src/sync.rs`) führt den ganzen
+   Cloudflare-Ablauf aus; `web/sync-cloudflare.js` reicht nur fetch, IndexedDB, localStorage und App-Zustand herein und
+   hält Timer, WebSocket, Status. JS-Verschlüsselung, Paketbau, Chunking und Cursor-Logik sind gelöscht.
+   Geprüft: `cargo test`, `test/sync.test.mjs` (Rust-Client gegen den echten Worker-Code) und die Browser-E2E-Suite
+   (`npm run test:e2e`, 15/16 – die rote Prüfung meldet nur nicht erreichbare CDNs im Container).
+   Offen: WASM-Größe (582 KB, 267 KB gzip, lädt erst beim Einrichten des Syncs), Datei-Transfers seriell statt 3 parallel,
+   PBKDF2 (100 000 Runden) läuft beim Verbinden einmal im Hauptthread.
+3c. **Nächste Bereiche Rust only**: Drive-Backup (`impala-drive`), Suche/RAG im Worker, Handschrift-Dekodierung,
+   lokale Kompaktierung (`compact-events.js`), KI-Anbieter (`impala-ai`), dann Datenmodell/Start (`impala-model`).
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.

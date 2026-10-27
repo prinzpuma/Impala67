@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Mutex;
 
 use impala_crypto::{SyncKey, decrypt_payload};
-use impala_net::{HttpClient, Method, NetError, Request, Response};
+use impala_net::{HttpClient, Method, NetError, Request, Response, block_on};
 use impala_sync::*;
 use serde_json::{Map, Value, json};
 
@@ -183,8 +183,8 @@ impl Worker {
     }
 }
 
-impl HttpClient for &FakeWorker {
-    fn send(&self, req: &Request) -> Result<Response, NetError> {
+impl HttpClient for FakeWorker {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
         Ok(self.0.lock().unwrap().handle(req))
     }
 }
@@ -216,23 +216,23 @@ impl Mem {
 }
 
 impl SyncStore for Mem {
-    fn load_state(&self) -> SyncState {
+    async fn load_state(&self) -> SyncState {
         self.state.clone()
     }
-    fn save_state(&mut self, state: &SyncState) -> Result<(), StoreError> {
+    async fn save_state(&mut self, state: &SyncState) -> Result<(), StoreError> {
         self.state = state.clone();
         Ok(())
     }
-    fn max_seq(&self) -> Result<u64, StoreError> {
+    async fn max_seq(&self) -> Result<u64, StoreError> {
         Ok(self.events.len() as u64)
     }
-    fn events_after(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
+    async fn events_after(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
         Ok(self.events.iter().filter(|e| (after + 1..=up_to).contains(&e["seq"].as_u64().unwrap())).cloned().collect())
     }
     fn filter_for_upload(&self, events: Vec<Value>) -> Vec<Value> {
         events.into_iter().filter(|e| !self.local_only.contains(e["id"].as_str().unwrap_or(""))).collect()
     }
-    fn import_remote(&mut self, events: Vec<Value>, _unsynced_after: u64) -> Result<(), StoreError> {
+    async fn import_remote(&mut self, events: Vec<Value>, _unsynced_after: u64) -> Result<(), StoreError> {
         let known: HashSet<String> = self.ids().into_iter().collect();
         for ev in events {
             assert_eq!((ev["_remote"].clone(), ev["_remoteSource"].clone()), (json!(true), json!("cloudflare")));
@@ -246,15 +246,15 @@ impl SyncStore for Mem {
     fn pages(&self) -> Map<String, Value> {
         self.pages.clone()
     }
-    fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
+    async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
         let mut ids: Vec<String> = self.blobs.keys().cloned().collect();
         ids.sort();
         Ok(ids)
     }
-    fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
+    async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
         Ok(self.blobs.get(id).cloned())
     }
-    fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
+    async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
         self.blobs.insert(id.to_owned(), blob);
         Ok(())
     }
@@ -266,7 +266,7 @@ fn creds() -> &'static impala_crypto::SyncCredentials {
 }
 
 fn device<'w>(worker: &'w FakeWorker, name: &str) -> SyncClient<&'w FakeWorker, Mem> {
-    SyncClient::new(worker, Mem::default(), "https://worker.test/", creds(), name)
+    block_on(SyncClient::new(worker, Mem::default(), "https://worker.test/", creds(), name))
 }
 
 fn ev(id: &str, t: &str, ty: &str, payload: Value) -> Value {
@@ -298,7 +298,7 @@ fn two_devices_converge_without_echo() {
     a.store_mut().local_only.insert("a3".into());
     a.store_mut().add(ev("a3", "2026-01-01T00:00:03Z", "pageCreate", json!({"id": "privat"})));
 
-    let r = a.sync(false).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     assert!(r.push.uploaded && r.push.confirmed, "lückenlose Bestätigung erspart den zweiten Abruf");
     assert_eq!(r.push.events, 1, "UI-Zustand und lokale Seiten bleiben lokal");
     let requests = worker.with(|w| w.requests.clone());
@@ -314,19 +314,19 @@ fn two_devices_converge_without_echo() {
         ]
     );
 
-    let r = b.sync(false).unwrap();
+    let r = block_on(b.sync(false)).unwrap();
     assert_eq!((r.received, r.push.uploaded), (1, false));
     assert_eq!(b.store().ids(), ["a1"]);
     // Fremdevent geht nicht zurück (Echo), der Cursor steht trotzdem oben.
     assert_eq!(b.state().last_uploaded_seq, 1);
 
     b.store_mut().add(ev("b1", "2026-01-01T00:00:04Z", "pageUpdate", json!({"id": "p1", "patch": {"title": "Zwei"}})));
-    b.sync(false).unwrap();
-    let r = a.sync(false).unwrap();
+    block_on(b.sync(false)).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     assert_eq!(r.received, 1);
     assert_eq!(a.store().ids(), ["a1", "a2", "a3", "b1"]);
     // Erneuter Durchgang: nichts zu tun.
-    let r = a.sync(false).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     assert_eq!((r.received, r.push.uploaded), (0, false));
     assert_eq!(server_events(&worker).len(), 2);
 }
@@ -337,12 +337,12 @@ fn concurrent_upload_needs_confirming_pull() {
     let mut a = device(&worker, "A");
     let mut b = device(&worker, "B");
     b.store_mut().add(ev("b1", "t1", "pageCreate", json!({"id": "x"})));
-    b.sync(false).unwrap();
+    block_on(b.sync(false)).unwrap();
     let foreign = worker.with(|w| w.packets[0].clone());
     worker.with(|w| w.reset_packets_for_inject(foreign));
 
     a.store_mut().add(ev("a1", "t2", "pageCreate", json!({"id": "y"})));
-    let r = a.run_pass(false).unwrap();
+    let r = block_on(a.run_pass(false)).unwrap();
     assert!(r.push.uploaded && !r.push.confirmed);
     // Der bestätigende Abruf holt das fremde Paket und überspringt das eigene Echo.
     assert_eq!(a.store().ids(), ["a1", "b1"]);
@@ -375,7 +375,7 @@ fn full_upload_is_compacted_and_bounded() {
     for i in 0..7 {
         a.store_mut().add(ev(&format!("e{i}"), "2026-01-02T00:00:00Z", "pageCreate", json!({"id": format!("p{i}")})));
     }
-    let r = a.sync(false).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     assert_eq!((r.push.events, r.push.packets), (8, 3), "nur die letzte Einstellung, Pakete zu je 3");
     assert_eq!(server_events(&worker)[0]["id"], "s9");
 }
@@ -386,18 +386,18 @@ fn foreign_generation_cut_rebuilds() {
     let mut a = device(&worker, "A");
     let mut b = device(&worker, "B");
     a.store_mut().add(ev("a1", "t1", "pageCreate", json!({"id": "x"})));
-    a.sync(false).unwrap();
-    b.sync(false).unwrap();
+    block_on(a.sync(false)).unwrap();
+    block_on(b.sync(false)).unwrap();
     b.store_mut().add(ev("b1", "t2", "pageCreate", json!({"id": "y"})));
-    b.compact_cloud(false).unwrap();
+    block_on(b.compact_cloud(false)).unwrap();
     assert_eq!(worker.with(|w| w.generation), 2);
     assert_eq!(server_events(&worker).len(), 2, "B lädt den ganzen Stand neu hoch, samt Fremdevent a1");
 
     // Die WebSocket-Nachricht an A: neue Generation → Cursor zurück, voller Durchgang.
-    let action = a.handle_server_message(r#"{"type":"reset","generation":2}"#).unwrap();
+    let action = block_on(a.handle_server_message(r#"{"type":"reset","generation":2}"#)).unwrap();
     assert_eq!(action, WsAction::Sync { force_all: true });
     assert_eq!((a.state().generation, a.state().last_synced_seq), (2, 0));
-    a.sync(true).unwrap();
+    block_on(a.sync(true)).unwrap();
     assert_eq!(a.store().ids(), ["a1", "b1"]);
     assert_eq!(server_events(&worker).len(), 2, "gleiche Pakete werden nicht doppelt gespeichert");
 }
@@ -407,12 +407,12 @@ fn generation_change_seen_while_pulling() {
     let worker = FakeWorker::new();
     let mut a = device(&worker, "A");
     a.store_mut().add(ev("a1", "t1", "pageCreate", json!({"id": "x"})));
-    a.sync(false).unwrap();
+    block_on(a.sync(false)).unwrap();
     worker.with(|w| {
         w.packets.clear();
         w.generation = 7;
     });
-    a.sync(false).unwrap();
+    block_on(a.sync(false)).unwrap();
     assert_eq!(a.state().generation, 7);
     assert_eq!(server_events(&worker).len(), 1, "nach dem fremden Schnitt neu hochgeladen");
 }
@@ -423,17 +423,17 @@ fn missing_packet_repairs_once() {
     let mut a = device(&worker, "A");
     let mut b = device(&worker, "B");
     a.store_mut().add(ev("a1", "t1", "pageCreate", json!({"id": "x"})));
-    a.sync(false).unwrap();
+    block_on(a.sync(false)).unwrap();
     worker.with(|w| w.missing = Some(1));
     b.store_mut().add(ev("b1", "t2", "pageCreate", json!({"id": "y"})));
-    b.sync(false).unwrap();
+    block_on(b.sync(false)).unwrap();
     assert!(worker.with(|w| w.requests.contains(&"POST /api/reset".to_owned())));
     worker.with(|w| w.missing = None);
     assert_eq!(server_events(&worker).len(), 1, "B baut die Cloud aus seinem Stand neu auf");
     // Bleibt das Paket nach der Reparatur weg, gibt es keine zweite.
     worker.with(|w| (w.missing, w.always_missing) = (Some(1), true));
     let mut c = device(&worker, "C");
-    let err = c.sync(false).unwrap_err();
+    let err = block_on(c.sync(false)).unwrap_err();
     assert_eq!(err.status(), Some(410));
     assert_eq!(worker.with(|w| w.requests.iter().filter(|r| r.as_str() == "POST /api/reset").count()), 2);
 }
@@ -456,24 +456,24 @@ fn blobs_up_down_ignored_and_oversized() {
         a.store_mut().blobs.insert(id, blob);
     }
     worker.with(|w| w.max_blob = 200);
-    let r = a.sync(false).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     let blobs = r.blobs.unwrap();
     assert_eq!((blobs.uploaded, blobs.oversized.as_slice()), (2, &["riesig.bin".to_owned()][..]));
     assert_eq!(worker.with(|w| w.blobs.len()), 2);
 
     // B kennt nur das Bild: die PDF ist dort verwaist und wird ignoriert – auch beim nächsten Mal.
     b.store_mut().pages.insert("p1".into(), json!({ "content": format!("img:{U}") }));
-    let blobs = b.sync(false).unwrap().blobs.unwrap();
+    let blobs = block_on(b.sync(false)).unwrap().blobs.unwrap();
     assert_eq!((blobs.downloaded, blobs.ignored), (1, 1));
     assert_eq!(b.store().blobs[&format!("img:{U}")].data, vec![7; 10]);
     assert_eq!(b.state().ignored_blobs.values().collect::<Vec<_>>(), ["file:alt.pdf"]);
-    b.handle_server_message(r#"{"type":"changed","maxSeq":0,"blob":true}"#).unwrap();
-    let blobs = b.sync(false).unwrap().blobs.unwrap();
+    block_on(b.handle_server_message(r#"{"type":"changed","maxSeq":0,"blob":true}"#)).unwrap();
+    let blobs = block_on(b.sync(false)).unwrap().blobs.unwrap();
     assert_eq!((blobs.downloaded, blobs.ignored), (0, 0));
     // Verweist eine Seite später darauf, kommt sie doch.
     b.store_mut().pages.insert("p2".into(), json!({ "content": "file:alt.pdf" }));
     assert!(b.note_local_event(&ev("x", "t", "pageUpdate", json!({"id": "p2", "patch": {"content": "file:alt.pdf"}}))));
-    let blobs = b.sync(false).unwrap().blobs.unwrap();
+    let blobs = block_on(b.sync(false)).unwrap().blobs.unwrap();
     assert_eq!(blobs.downloaded, 1);
     assert!(b.state().ignored_blobs.is_empty());
 }
@@ -485,12 +485,12 @@ fn full_quota_triggers_one_cloud_compaction() {
     // Viele einzelne Deltas füllen die Cloud mit überholten Ständen.
     for i in 0..6 {
         a.store_mut().add(ev(&format!("s{i}"), &format!("t{i}"), "settingsSet", json!({"note": "x".repeat(300)})));
-        a.sync(false).unwrap();
+        block_on(a.sync(false)).unwrap();
     }
     let used = worker.with(|w| w.total_bytes);
     worker.with(|w| w.quota = used + 100);
     a.store_mut().add(ev("s6", "t6", "settingsSet", json!({"note": "y".repeat(300)})));
-    let r = a.sync(false).unwrap();
+    let r = block_on(a.sync(false)).unwrap();
     assert!(r.push.uploaded);
     assert!(worker.with(|w| w.generation) == 2 && worker.with(|w| w.total_bytes) < used);
     assert_eq!(server_events(&worker).iter().map(|e| e["id"].clone()).collect::<Vec<_>>(), [json!("s6")]);
@@ -498,7 +498,7 @@ fn full_quota_triggers_one_cloud_compaction() {
     // Reicht auch die Kompaktierung nicht, bleibt der Quota-Fehler.
     worker.with(|w| w.quota = 10);
     a.store_mut().add(ev("s7", "t7", "pageCreate", json!({"id": "p"})));
-    let err = a.sync(false).unwrap_err();
+    let err = block_on(a.sync(false)).unwrap_err();
     assert!(err.is_quota() && !err.is_retryable());
 }
 
@@ -507,27 +507,28 @@ fn websocket_messages_and_stop() {
     let worker = FakeWorker::new();
     let mut a = device(&worker, "A");
     assert_eq!(
-        a.handle_server_message(r#"{"type":"changed","maxSeq":3,"senderClientId":"A"}"#).unwrap(),
+        block_on(a.handle_server_message(r#"{"type":"changed","maxSeq":3,"senderClientId":"A"}"#)).unwrap(),
         WsAction::Nothing
     );
     assert_eq!(
-        a.handle_server_message(r#"{"type":"changed","maxSeq":3}"#).unwrap(),
+        block_on(a.handle_server_message(r#"{"type":"changed","maxSeq":3}"#)).unwrap(),
         WsAction::Sync { force_all: false }
     );
     assert_eq!(
-        a.handle_server_message(r#"{"type":"authenticated","protocol":4,"generation":5}"#).unwrap(),
+        block_on(a.handle_server_message(r#"{"type":"authenticated","protocol":4,"generation":5}"#)).unwrap(),
         WsAction::Sync { force_all: false }
     );
     assert_eq!(a.state().generation, 5);
-    assert_eq!(a.handle_server_message(r#"{"type":"reset","generation":5}"#).unwrap(), WsAction::Nothing);
-    assert_eq!(a.handle_server_message(r#"{"type":"pong","t":1}"#).unwrap(), WsAction::Nothing);
+    assert_eq!(block_on(a.handle_server_message(r#"{"type":"reset","generation":5}"#)).unwrap(), WsAction::Nothing);
+    assert_eq!(block_on(a.handle_server_message(r#"{"type":"pong","t":1}"#)).unwrap(), WsAction::Nothing);
     assert_eq!(
-        a.handle_server_message(r#"{"type":"unauthorized","error":"Ungültiger Autorisierungs-Token"}"#).unwrap(),
+        block_on(a.handle_server_message(r#"{"type":"unauthorized","error":"Ungültiger Autorisierungs-Token"}"#))
+            .unwrap(),
         WsAction::Rejected("Ungültiger Autorisierungs-Token".into())
     );
-    assert!(a.handle_server_message("kein json").is_err());
+    assert!(block_on(a.handle_server_message("kein json")).is_err());
     assert!(!a.note_local_event(&ev("u", "t", "uiTabsSet", json!({}))));
     a.stop_flag().store(true, std::sync::atomic::Ordering::Relaxed);
-    assert_eq!(a.sync(false).unwrap_err(), SyncError::Stopped);
+    assert_eq!(block_on(a.sync(false)).unwrap_err(), SyncError::Stopped);
     assert!(worker.with(|w| w.requests.is_empty()));
 }

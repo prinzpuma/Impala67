@@ -1,35 +1,20 @@
 "use strict";
 
+// Cloudflare-Live-Sync. Der Ablauf (Abrufen, Zusammenführen der Cursor, Pakete, E2EE, Dateien,
+// Kompaktierung) läuft im Rust-Kern (core/impala-sync, über web/core/). Hier bleiben nur
+// Ein-/Ausgabe für den Kern (fetch, IndexedDB, localStorage, App-Zustand), Timer, WebSocket
+// und Statusanzeige.
+
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { cooperativeGate } from "./cooperative.js";
-import {
-	CLOUD_SYNC_PROTOCOL,
-	CLOUD_SYNC_PROTOCOL_HEADER,
-	chunkCloudEvents,
-	cloudEventsEnvelope,
-	heftBaselineOps,
-	blobAliveChecker,
-	isSyncBlobId,
-	prepareCloudEvents,
-	prepareIncomingCloudEvents,
-	pruneEventsForUpload,
-} from "./sync-core.js";
-import {
-	decryptBlobRecord,
-	decryptPayload,
-	deriveSyncCredentials,
-	encryptBlobRecord,
-	encryptPayload,
-	formatStorageUsage,
-	generateSyncKey,
-	sha256Hex,
-} from "./sync-crypto.js";
-import { isRetryableSyncError, mapLimit, requestWithStallTimeout, syncRetryDelayMs, transferBodyBytes, utf8Length } from "./sync-transfer.js";
+import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, heftBaselineOps } from "./sync-core.js";
+import { sha256Hex } from "./sync-crypto.js";
+import { requestWithStallTimeout } from "./sync-transfer.js";
+import { loadCore } from "./rust-core.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -39,16 +24,9 @@ const LS_RECV = "impala67_cf_last_seq";
 const LS_SEND = "impala67_cf_last_uploaded_local_seq";
 const LS_GEN = "impala67_cf_generation";
 const LS_IGNORED_BLOBS = "impala67_cf_ignored_blobs";
-const PAGE_LIMIT = 100;
-const MAX_HTTP_PACKETS = 20;
-const MAX_HTTP_CHARS = 6_000_000;
 const LOCAL_SYNC_DELAY = 80;
 const SYNC_FETCH_TIMEOUT_MS = 45000;
 const BLOB_FETCH_TIMEOUT_MS = 120000;
-// Obergrenze des Servers je Datei (server/worker.js MAX_BLOB_BYTES).
-const MAX_BLOB_BYTES = 100_000_000;
-// Der Server meldet volle Quota UND zu große Einzeldateien mit 413 — nur die Meldung unterscheidet sie.
-const isQuotaError = (error) => /quota/i.test(error?.message || "");
 const LS_LOCAL_V4 = "impala67_sync_v4_local_migrated";
 const CLIENT_ID = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
 	? crypto.randomUUID()
@@ -61,52 +39,29 @@ const LS = {
 	removeItem: (k) => (typeof localStorage !== "undefined" ? localStorage : fallbackStorage).removeItem(k),
 };
 
-export function syncCursorStorageKeys(userId) {
-	const id = String(userId || "").trim();
-	if (!id) throw new Error("Sync-Cursor benötigen eine User-ID.");
-	return { lastSynced: `${LS_RECV}_${id}`, lastUploaded: `${LS_SEND}_${id}`, generation: `${LS_GEN}_${id}` };
-}
+const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
 
-// Nur eine lückenlose, zur lokalen Ausgangsposition passende Server-Bestätigung
-// darf den Empfangs-Cursor vorsetzen. Alte Server oder konkurrierende Uploads
-// liefern null; dann bleibt der bisherige bestätigende Pull aktiv.
-export function acknowledgedUploadCursor(data, expectedGeneration, currentSeq) {
-	const ack = data?.ack;
-	const generation = Number(data?.generation);
-	const fromSeq = Number(ack?.fromSeq), toSeq = Number(ack?.toSeq), savedCount = Number(ack?.savedCount);
-	if (!ack || !Number.isSafeInteger(generation) || generation !== Number(expectedGeneration)) return null;
-	if (![fromSeq, toSeq, savedCount].every(Number.isSafeInteger)) return null;
-	if (fromSeq !== Number(currentSeq) || toSeq < fromSeq || savedCount !== toSeq - fromSeq) return null;
-	return toSeq;
-}
+// fetch für den Kern: { method, url, headers: [[k, v]], body } → { status, headers, body }.
+const http = {
+	async send({ method, url, headers, body }) {
+		const stallTimeoutMs = url.includes("/api/blob/") ? BLOB_FETCH_TIMEOUT_MS : SYNC_FETCH_TIMEOUT_MS;
+		const response = await requestWithStallTimeout(url, { method, headers: Object.fromEntries(headers), body }, { stallTimeoutMs });
+		return { status: response.status, headers: [...response.headers], body: new Uint8Array(await response.arrayBuffer()) };
+	},
+};
 
+const toBytes = async (raw) => {
+	if (raw instanceof Uint8Array) return raw;
+	if (typeof Blob !== "undefined" && raw instanceof Blob) return new Uint8Array(await raw.arrayBuffer());
+	return raw ? new Uint8Array(raw) : null;
+};
 
 export const CLOUDFLARE_SYNC = (() => {
 	let socket = null, reconnectTimer = 0, retryTimer = 0, pingTimer = 0, localTimer = 0;
-	let reconnectAttempts = 0, retryAttempts = 0, credentials = null, socketAuthenticated = false, initialized = false;
-	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false, quotaCompacting = false;
-	// Neue Zugangsdaten: Der laufende Durchgang hört an der nächsten Etappe auf. Sonst gingen
-	// die restlichen, mit dem alten Schlüssel verschlüsselten Pakete an das neue Konto (und in
-	// dessen Cursor) – alle Geräte mit dem neuen Schlüssel scheiterten danach am Entschlüsseln.
-	let stopPass = false;
-	const PASS_STOPPED = "cf-pass-stopped";
-	const checkPass = () => {
-		if (stopPass) throw Object.assign(new Error("Sync-Durchgang abgebrochen (Zugangsdaten geändert)."), { code: PASS_STOPPED });
-	};
-	// ignoredBlobKeys: Server-Schlüssel → entschlüsselte Blob-ID verworfener (verwaister) Blobs.
-	const blobHashCache = new Map(), ignoredBlobKeys = new Map();
-	// Zu große Dateien (Server-Limit je Datei): bleiben lokal und blockieren den Sync nicht mehr.
-	const oversizedBlobKeys = new Set();
-	const pendingUploadedEventIds = new Set();
-	let blobInventoryDirty = true;
-	// Datei-IDs, die schon abgeglichen (oder dabei als lokal fehlend erkannt) wurden. Nur ein
-	// Verweis außerhalb dieser Menge macht einen erneuten Datei-Abgleich nötig; solche neuen
-	// Verweise sammelt pendingBlobRefs bis zum nächsten Abgleich.
-	const syncedBlobIds = new Set(), pendingBlobRefs = new Set();
-	const forgetBlobInventory = () => {
-		blobHashCache.clear(); ignoredBlobKeys.clear(); syncedBlobIds.clear(); pendingBlobRefs.clear();
-		blobInventoryDirty = true;
-	};
+	let reconnectAttempts = 0, retryAttempts = 0, core = null, socketAuthenticated = false, initialized = false;
+	let configureGeneration = 0, syncPromise = null, syncAgain = false, forceAgain = false;
+	// Geladenes Kern-Modul (Hilfsfunktionen) und der Sync-Client des aktuellen Kontos.
+	let coreModule = null;
 
 	let state = {
 		status: "disconnected",
@@ -118,7 +73,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		lastUploadedLocalSeq: 0,
 		generation: 0,
 		progress: null,
-		usage: formatStorageUsage(0),
+		usage: { bytes: 0, limit: 1_000_000_000, mbUsed: 0, mbLimit: 1000, percent: 0, formatted: "0.0 MB / 1000 MB (0 %)" },
 		lastError: null,
 	};
 
@@ -130,498 +85,110 @@ export const CLOUDFLARE_SYNC = (() => {
 	const setStatus = (status, label, detail = label) => { Object.assign(state, { status, label, detail }); emit(); };
 	const setProgress = (label, current, total) => {
 		const previous = state.progress;
-		const safeTotal = Math.max(0, Number(total) || 0);
-		const safeCurrent = Math.min(safeTotal, Math.max(0, Number(current) || 0));
-		state.progress = safeTotal > 0 ? {
-			label,
-			current: safeCurrent,
-			total: safeTotal,
-			percent: Math.round((safeCurrent / safeTotal) * 100),
-		} : null;
+		state.progress = total > 0 ? { label, current, total, percent: Math.round((current / total) * 100) } : null;
 		if (previous?.label !== state.progress?.label || previous?.percent !== state.progress?.percent || previous?.total !== state.progress?.total) emit();
 	};
-	const keys = () => syncCursorStorageKeys(credentials?.userId);
-	const saveRecv = (seq) => { state.lastSyncedSeq = Number(seq) || 0; LS.setItem(keys().lastSynced, String(state.lastSyncedSeq)); };
-	const saveSend = (seq) => { state.lastUploadedLocalSeq = Number(seq) || 0; LS.setItem(keys().lastUploaded, String(state.lastUploadedLocalSeq)); };
-	const saveGeneration = (generation) => { state.generation = Number(generation) || 0; LS.setItem(keys().generation, String(state.generation)); };
-	// Verworfene Server-Blobs überdauern einen Neustart: Sonst lud jeder App-Start alle verwaisten
-	// Dateien erneut herunter und entschlüsselte sie, nur um sie wieder zu verwerfen.
-	const ignoredBlobsKey = () => `${LS_IGNORED_BLOBS}_${credentials.userId}`;
-	const loadIgnoredBlobKeys = () => {
-		ignoredBlobKeys.clear();
-		try {
-			for (const [key, id] of Object.entries(JSON.parse(LS.getItem(ignoredBlobsKey()) || "{}"))) ignoredBlobKeys.set(key, String(id));
-		} catch { /* beschädigter Eintrag: dann eben einmal neu prüfen */ }
-	};
-	const saveIgnoredBlobKeys = () => {
-		if (ignoredBlobKeys.size) LS.setItem(ignoredBlobsKey(), JSON.stringify(Object.fromEntries(ignoredBlobKeys)));
-		else LS.removeItem(ignoredBlobsKey());
+	// Stand des Kerns in die Anzeige übernehmen (während eines Durchgangs liefert er null).
+	const refreshState = () => {
+		const s = core?.state();
+		if (!s) return;
+		Object.assign(state, { lastSyncedSeq: s.lastSyncedSeq, lastUploadedLocalSeq: s.lastUploadedSeq, generation: s.generation, usage: s.usage });
 	};
 
-	function clearCursors(generation = state.generation) {
-		pendingUploadedEventIds.clear();
-		saveRecv(0); saveSend(0); saveGeneration(generation);
-	}
-
-	function api(endpoint, baseUrl = state.url, creds = credentials) {
-		const base = String(baseUrl || "").trim().replace(/\/+$/, "");
-		const sep = endpoint.includes("?") ? "&" : "?";
-		return creds ? `${base}${endpoint}${sep}user=${encodeURIComponent(creds.userId)}` : `${base}${endpoint}`;
-	}
-
-	const fetchTimed = (url, init = {}, stallTimeoutMs = SYNC_FETCH_TIMEOUT_MS, onProgress) =>
-		requestWithStallTimeout(url, init, { stallTimeoutMs, onProgress });
-
-	function authHeaders(extra = {}, includeClientId = true, creds = credentials) {
-		return creds ? {
-			Authorization: `Bearer ${creds.authToken}`,
-			"X-User-Id": creds.userId,
-			...(includeClientId ? { "X-Impala-Client-Id": CLIENT_ID } : {}),
-			[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
-			...extra,
-		} : extra;
-	}
-
-	async function responseError(response, fallback) {
-		let message = "";
-		try { message = String((await response.json())?.error || "").trim(); } catch {}
-		const error = new Error(message || `${fallback} (Status ${response.status})`);
-		error.status = Number(response.status) || 0;
-		return error;
+	// Ein-/Ausgabe des Kerns für ein Konto. Cursor und verworfene Blobs liegen wie bisher je
+	// User-ID im localStorage, damit vorhandene Geräte nach dem Update nahtlos weitermachen.
+	function storeFor(id) {
+		const keys = { recv: `${LS_RECV}_${id}`, send: `${LS_SEND}_${id}`, gen: `${LS_GEN}_${id}`, ignored: `${LS_IGNORED_BLOBS}_${id}` };
+		const allowSecrets = () => SETTINGS_SYNC.allowsSecrets(S.settings);
+		return {
+			loadState() {
+				let ignoredBlobs = {};
+				try { ignoredBlobs = JSON.parse(LS.getItem(keys.ignored) || "{}") || {}; } catch { /* beschädigt: einmal neu prüfen */ }
+				return {
+					lastSyncedSeq: Number(LS.getItem(keys.recv)) || 0,
+					lastUploadedSeq: Number(LS.getItem(keys.send)) || 0,
+					generation: Number(LS.getItem(keys.gen)) || 0,
+					ignoredBlobs,
+				};
+			},
+			saveState(s) {
+				LS.setItem(keys.recv, String(s.lastSyncedSeq));
+				LS.setItem(keys.send, String(s.lastUploadedSeq));
+				LS.setItem(keys.gen, String(s.generation));
+				if (Object.keys(s.ignoredBlobs).length) LS.setItem(keys.ignored, JSON.stringify(s.ignoredBlobs));
+				else LS.removeItem(keys.ignored);
+				Object.assign(state, { lastSyncedSeq: s.lastSyncedSeq, lastUploadedLocalSeq: s.lastUploadedSeq, generation: s.generation });
+			},
+			maxSeq: () => DB.maxSeq(),
+			eventsAfter: (after, upTo) => DB.eventsAfterSeqAll(after, upTo),
+			filterForUpload: (events) => DB.filterEventsForSync(SETTINGS_SYNC.sanitizeEvents(events, allowSecrets())),
+			async importRemote(events, unsyncedAfterSeq) {
+				const result = await PERF_PROFILER.run("cloudflare.import", async () => DB.importAll({ app: "impala67", events }, {
+					localEvents: await DB.eventsAfterSeqAll(unsyncedAfterSeq),
+					unsyncedAfterSeq,
+					pageInfo: (pageId) => S.pages[pageId],
+					remote: true,
+					remoteSource: "cloudflare",
+					allowSecrets: allowSecrets(),
+				}), { eventCount: events.length }, 15);
+				const imported = result.importedEvents || [];
+				// Offene Hefte brauchen hier keinen Flush: ihr Veröffentlichungs-Schatten folgt dem Log (heft.js).
+				if (imported.length) await STATE.applyRemoteEventsCooperative(imported);
+			},
+			pages: () => S.pages,
+			blobIds: () => DB.allBlobKeys(),
+			async getBlob(blobId) {
+				const record = await DB.getBlob(blobId);
+				const data = await toBytes(record?.buf || record?.data);
+				return data ? { meta: record.meta || {}, data } : null;
+			},
+			putBlob: (blobId, meta, data) => DB.putBlob(blobId, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), meta),
+		};
 	}
 
 	function readable(error) {
 		const message = error?.message || String(error || "Sync-Fehler");
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return new Error("Das Gerät ist offline. Lokale Änderungen bleiben erhalten und werden später synchronisiert.");
+		if (isOffline()) return new Error("Das Gerät ist offline. Lokale Änderungen bleiben erhalten und werden später synchronisiert.");
 		if (/failed to fetch|load failed|networkerror|network request failed/i.test(message)) return new Error("Der Cloudflare-Sync-Server ist nicht erreichbar.");
 		return error instanceof Error ? error : new Error(message);
 	}
 
-	function isUploadableToCloudflare(ev) {
-		if (!ev || typeof ev !== "object") return false;
-		const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
-			SETTINGS_SYNC.sanitizeEvents([ev], SETTINGS_SYNC.allowsSecrets(S.settings))
-		)), { includeRemote: false });
-		return wire.length > 0;
-	}
-
-	async function getUnconfirmedLocalEvents(afterSeq) {
-		if (typeof DB.eventsAfterSeqAll === "function") {
-			try {
-				const delta = await DB.eventsAfterSeqAll(afterSeq);
-				if (Array.isArray(delta)) return delta;
-			} catch {
-				// Fallback für Umgebungen/Tests, in denen die DB nicht geöffnet oder nur allEvents gemockt ist
-			}
-		}
-		const all = await DB.allEvents();
-		return (Array.isArray(all) ? all : []).filter((e) => (Number(e?.seq) || 0) > Number(afterSeq || 0));
-	}
-
-	async function importRemote(events) {
-		if (!events.length) return;
-		// Der bestätigende Pull liefert das gerade hochgeladene Paket als Server-Echo
-		// zurück. Diese Events liegen bereits lokal vor. Ohne diesen schnellen Pfad
-		// wurde für wenige eigene Events der komplette IndexedDB-Log deserialisiert.
-		const candidates = events.filter((event) => !pendingUploadedEventIds.delete(event?.id));
-		if (!candidates.length) return;
-		const unconfirmedLocal = await getUnconfirmedLocalEvents(state.lastUploadedLocalSeq);
-		const serverEventIds = new Set(candidates.map((e) => e?.id).filter(Boolean));
-		let confirmedCursor = state.lastUploadedLocalSeq;
-
-		// Start-Performance/Tippen: Der Prefix-Scan läuft nur noch über das unbestätigte
-		// lokale Delta statt über den vollen 16k-Log. Das Gate gibt ab, wenn 12ms voll sind.
-		const yieldCursor = cooperativeGate();
-		for (const ev of unconfirmedLocal) {
-			const seq = Number(ev?.seq) || 0;
-			if (seq <= confirmedCursor) { await yieldCursor(); continue; }
-			if (!isUploadableToCloudflare(ev)) {
-				// Nicht für Cloudflare uploadpflichtig (z. B. Fremd-Event oder lokales UI-Event)
-				confirmedCursor = seq;
-				await yieldCursor();
-				continue;
-			}
-			if (serverEventIds.has(ev.id)) {
-				// Uploadpflichtiges lokales Event ist vom Server bestätigt
-				confirmedCursor = seq;
-				await yieldCursor();
-			} else {
-				// Erstes unbestätigtes uploadpflichtiges Event -> STOP (niemals vorspulen)
-				break;
-			}
-		}
-
-		if (confirmedCursor > state.lastUploadedLocalSeq) {
-			saveSend(confirmedCursor);
-		}
-
-		// Nach E2EE liegen die Daten bereits als Objekte vor. Der JSON-Roundtrip hier
-		// blockierte den Main Thread bei gebündelten Sync-Paketen unnötig.
-		const result = await DB.importAll({ app: "impala67", events: candidates }, {
-			localEvents: unconfirmedLocal,
-			unsyncedAfterSeq: state.lastUploadedLocalSeq,
-			pageInfo: (id) => S.pages[id],
-			remote: true,
-			remoteSource: "cloudflare",
-			allowSecrets: SETTINGS_SYNC.allowsSecrets(S.settings),
-		});
-		const imported = result.importedEvents || [];
-		// Offene Hefte brauchen hier keinen Flush mehr: ihr Veröffentlichungs-Schatten folgt dem
-		// Log (heft.js), noch nicht gespeicherte Striche bleiben dadurch als Änderung erkennbar.
-		if (imported.length) await STATE.applyRemoteEventsCooperative(imported);
-	}
-
-	// repaired: höchstens EINE automatische Reparatur je Abruf — meldet der Server danach
-	// weiterhin 410, wäre die Cloud sonst in einer Endlosschleife immer wieder geleert worden.
-	async function pull(repaired = false) {
-		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		let received = 0, progressStart = state.lastSyncedSeq;
-		while (true) {
-			checkPass();
-			const since = state.lastSyncedSeq;
-			const finishRequest = PERF_PROFILER.start("cloudflare.pull-request", { since }, 500);
-			let response, data;
-			try {
-				response = await fetchTimed(api(`/api/sync?since=${since}&limit=${PAGE_LIMIT}`), { headers: authHeaders() });
-				if (!response.ok) {
-					if (response.status === 410 && !repaired) {
-						finishRequest({ failed: true, status: 410, errorName: "PacketMissing" });
-						// Ein anderes Gerät baut die Cloud gerade neu auf (Kompaktierung): neue Generation
-						// übernehmen und weiter abrufen. Ein eigener Reset löschte sonst dessen frischen Upload.
-						const info = await response.json().catch(() => ({}));
-						const serverGeneration = Number(info?.generation) || 0;
-						if (serverGeneration && serverGeneration !== state.generation) { clearCursors(serverGeneration); continue; }
-						console.warn("[cf-sync] Cloud-Historie unvollständig oder beschädigt. Führe automatische Reparatur aus...");
-						await purgeCloudData();
-						return pull(true);
-					}
-					throw await responseError(response, "Abruf vom Cloudflare-Server fehlgeschlagen");
-				}
-				data = await response.json();
-				const responsePackets = Array.isArray(data.events) ? data.events : [];
-				// Nur ein Messwert: die Base64-Länge reicht, ohne jedes Paket erneut zu serialisieren.
-				finishRequest({ status: response.status, packets: responsePackets.length, encryptedChars: responsePackets.reduce((sum, packet) => sum + (packet?.data?.length || 0), 0) });
-			} catch (error) {
-				finishRequest({ failed: true, status: Number(error?.status) || response?.status || 0, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
-				throw error;
-			}
-			const serverGeneration = Number(data.generation) || 1;
-
-			if (state.generation !== serverGeneration) {
-				clearCursors(serverGeneration);
-				continue;
-			}
-			if (Number(data.maxSeq || 0) < since) {
-				clearCursors(serverGeneration);
-				continue;
-			}
-
-			const packets = data.events || [];
-			const maxSeq = Math.max(since, Number(data.maxSeq) || 0);
-			if (maxSeq > progressStart) setProgress("Empfange Notizen…", since - progressStart, maxSeq - progressStart);
-			if (!packets.length) {
-				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
-				break;
-			}
-
-			let expected = since + 1;
-			const incoming = [];
-			const finishDecrypt = PERF_PROFILER.start("cloudflare.decrypt", { packets: packets.length }, 15);
-			const yieldDecrypt = cooperativeGate();
-			try {
-				for (const packet of packets) {
-					if (packet.seq !== expected) throw new Error(`Server-Sequenzlücke: erwartet ${expected}, erhalten ${packet.seq}.`);
-					const envelope = await decryptPayload(credentials.cryptoKey, packet);
-					incoming.push(...prepareIncomingCloudEvents([envelope]));
-					expected++;
-					await yieldDecrypt();
-				}
-				finishDecrypt({ eventCount: incoming.length });
-			} catch (error) {
-				finishDecrypt({ eventCount: incoming.length, failed: true, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
-				throw error;
-			}
-			await PERF_PROFILER.run("cloudflare.import", () => importRemote(incoming), { eventCount: incoming.length }, 15);
-			received += incoming.length;
-			saveRecv(packets.at(-1).seq);
-			if (maxSeq > progressStart) setProgress("Empfange Notizen…", state.lastSyncedSeq - progressStart, maxSeq - progressStart);
-			if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
-			if (!data.hasMore) break;
-		}
-		return received;
-	}
-
-	async function postPackets(packets) {
-		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		const finishProfile = PERF_PROFILER.start("cloudflare.upload", { packets: packets.length }, 20);
-		const batches = [];
-		// Jedes Paket nur EINMAL serialisieren: Der Text zählt fürs Größenlimit und wird direkt
-		// zum Request-Body zusammengesetzt (identisch zu JSON.stringify({ events: batch })).
-		for (let i = 0; i < packets.length;) {
-			const parts = [];
-			let chars = 0;
-			while (i < packets.length && parts.length < MAX_HTTP_PACKETS) {
-				const json = JSON.stringify(packets[i]), n = utf8Length(json) + 1;
-				if (parts.length && chars + n > MAX_HTTP_CHARS) break;
-				parts.push(json); chars += n; i++;
-			}
-			const body = '{"events":[' + parts.join(",") + "]}";
-			batches.push({ body, bytes: transferBodyBytes(body) });
-		}
-		const totalBytes = batches.reduce((sum, batch) => sum + batch.bytes, 0);
-		let requests = 0, utf8Bytes = 0, completedBytes = 0, cursorAcknowledged = true;
-		setProgress("Übertrage Notizen…", 0, totalBytes);
-		try {
-			for (const batch of batches) {
-				checkPass();
-				requests++;
-				utf8Bytes += batch.bytes;
-				const finishRequest = PERF_PROFILER.start("cloudflare.upload-request", { request: requests, utf8Bytes: batch.bytes }, 500);
-				let response, data;
-				try {
-					response = await fetchTimed(api("/api/events"), {
-						method: "POST",
-						headers: authHeaders({ "Content-Type": "application/json" }),
-						body: batch.body,
-					}, SYNC_FETCH_TIMEOUT_MS, ({ direction, loaded }) => {
-						if (direction === "upload") setProgress("Übertrage Notizen…", completedBytes + Math.min(batch.bytes, loaded), totalBytes);
-					});
-					if (!response.ok) throw await responseError(response, "Upload zum Cloudflare-Server fehlgeschlagen");
-					data = await response.json();
-					finishRequest({ status: response.status, savedCount: Number(data.savedCount) || 0 });
-				} catch (error) {
-					finishRequest({ failed: true, status: Number(error?.status) || response?.status || 0, errorName: error?.name || "Error", errorMessage: error?.message || String(error) });
-					throw error;
-				}
-				const acknowledged = acknowledgedUploadCursor(data, state.generation, state.lastSyncedSeq);
-				if (acknowledged === null) cursorAcknowledged = false;
-				else if (cursorAcknowledged) saveRecv(acknowledged);
-				if (data.usage !== undefined) state.usage = formatStorageUsage(data.usage, data.limit);
-				completedBytes += batch.bytes;
-				setProgress("Übertrage Notizen…", completedBytes, totalBytes);
-			}
-			finishProfile({ requests, utf8Bytes, cursorAcknowledged });
-			return cursorAcknowledged;
-		} catch (error) {
-			finishProfile({ requests, utf8Bytes, failed: true, errorName: error?.name || "Error" });
-			throw error;
-		}
-	}
-
-	async function push(forceAll = false) {
-		if (typeof navigator !== "undefined" && navigator.onLine === false) throw readable(new Error("Das Gerät ist offline."));
-		const maxSeq = await PERF_PROFILER.run("cloudflare.db-max-seq", () => DB.maxSeq(), {}, 10);
-		let uploaded = Number(LS.getItem(keys().lastUploaded)) || 0;
-		if (forceAll || uploaded > maxSeq) uploaded = 0;
-		const local = maxSeq <= uploaded ? [] : await PERF_PROFILER.run(uploaded ? "cloudflare.db-read-delta" : "cloudflare.db-read-full", () => (
-			uploaded ? DB.eventsAfterSeq(uploaded, "cloudflare", maxSeq) : DB.allEvents()
-		), { afterSeq: uploaded, upToSeq: maxSeq }, 10);
-		const prepared = PERF_PROFILER.measure("cloudflare.prepare-upload", () => {
-			const source = uploaded ? local : DB.compactEvents(local);
-			const wire = prepareCloudEvents(pruneEventsForUpload(DB.filterEventsForSync(
-				SETTINGS_SYNC.sanitizeEvents(source, SETTINGS_SYNC.allowsSecrets(S.settings))
-			)), { includeRemote: !uploaded });
-			return wire;
-		}, { localEvents: local.length, forceAll: !!forceAll }, 10);
-		const wire = prepared;
-		if (!wire.length) { saveSend(maxSeq); return { uploaded: false, confirmed: true }; }
-
-		const chunks = chunkCloudEvents(wire);
-		const packets = [];
-		const finishEncrypt = PERF_PROFILER.start("cloudflare.encrypt", { eventCount: wire.length, chunks: chunks.length }, 10);
-		const yieldEncrypt = cooperativeGate();
-		try {
-			setProgress("Bereite Notizen vor…", 0, chunks.length);
-			for (let i = 0; i < chunks.length; i++) {
-				const events = chunks[i];
-				const id = `p-${await sha256Hex(events.map((event) => event.id).join("\n"))}`;
-				const encrypted = await encryptPayload(credentials.cryptoKey, cloudEventsEnvelope(events));
-				packets.push({ id, ...encrypted });
-				setProgress("Bereite Notizen vor…", i + 1, chunks.length);
-				await yieldEncrypt();
-			}
-			finishEncrypt({ packets: packets.length });
-		} catch (error) {
-			finishEncrypt({ packets: packets.length, failed: true, errorName: error?.name || "Error" });
-			throw error;
-		}
-		const confirmed = await postPackets(packets);
-		for (const event of wire) if (event?.id) pendingUploadedEventIds.add(event.id);
-		saveSend(maxSeq);
-		state.progress = null;
-		return { uploaded: true, confirmed };
-	}
-
-	const blobOpaqueKey = async (id) => {
-		let key = blobHashCache.get(id);
-		if (!key) { key = await sha256Hex(`impala67_blob:${id}`); blobHashCache.set(id, key); }
-		return key;
-	};
-
-	async function listRemoteBlobs() {
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return new Set();
-		const keys = [];
-		let cursor = "";
-		do {
-			const response = await fetchTimed(api(`/api/blobs${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`), { headers: authHeaders() });
-			if (!response.ok) throw await responseError(response, "Blob-Liste konnte nicht geladen werden");
-			const data = await response.json();
-			keys.push(...(data.keys || []));
-			cursor = data.cursor || "";
-		} while (cursor);
-		return new Set(keys);
-	}
-
-	async function syncBlobs() {
-		if (!DB.allBlobKeys || !DB.getBlob || !DB.putBlob) return false;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
-		const checkedRefs = [...pendingBlobRefs];
-		pendingBlobRefs.clear();
-		const alive = blobAliveChecker(S.pages);
-		const localIds = (await DB.allBlobKeys()).filter((id) => isSyncBlobId(id) && alive(id));
-		const localByKey = new Map();
-		await mapLimit(localIds, 6, async (id) => localByKey.set(await blobOpaqueKey(id), id));
-		const remote = await listRemoteBlobs();
-
-		const upload = [...localByKey].filter(([key]) => !remote.has(key) && !oversizedBlobKeys.has(key));
-		// FIX: Eine einzige Datei über dem Server-Limit warf bisher den ganzen Sync um — Dateien
-		// laufen VOR den Notizen, also synchronisierte danach gar nichts mehr. Ihre 413 hielt der
-		// Client zudem für „Speicher voll“ und löste bei jedem Versuch eine komplette Cloud-
-		// Kompaktierung aus. Jetzt bleibt die Datei lokal und der Nutzer erfährt es einmal.
-		const skipOversized = (key, id, record) => {
-			oversizedBlobKeys.add(key);
-			const name = record?.meta?.name || id;
+	function reportOversized(names) {
+		for (const name of names || []) {
 			console.warn("[cf-sync] Datei zu groß für den Cloud-Sync, bleibt lokal:", name);
 			U.toast(`„${name}“ ist größer als 100 MB und wird nicht synchronisiert — sie bleibt nur auf diesem Gerät.`, "error");
-		};
-		const uploadProgress = new Array(upload.length).fill(0);
-		const updateFileProgress = (label, values) => setProgress(label, values.reduce((sum, value) => sum + value, 0), values.length);
-		if (upload.length) updateFileProgress("Übertrage Dateien…", uploadProgress);
-		await mapLimit(upload, 3, async ([key, id], index) => {
-			const record = await DB.getBlob(id);
-			if (!record) { uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress); return; }
-			const encrypted = await encryptBlobRecord(credentials.cryptoKey, id, record);
-			if (encrypted.bytes.byteLength > MAX_BLOB_BYTES) {
-				skipOversized(key, id, record);
-				uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress);
-				return;
-			}
-			const response = await fetchTimed(api(`/api/blob/${key}`), {
-				method: "PUT",
-				headers: authHeaders({ "Content-Type": "application/octet-stream", "X-Impala-IV": encrypted.iv }),
-				body: encrypted.bytes,
-			}, BLOB_FETCH_TIMEOUT_MS, ({ direction, loaded, total }) => {
-				if (direction !== "upload") return;
-				uploadProgress[index] = Math.min(0.99, loaded / Math.max(1, total || encrypted.bytes.byteLength));
-				updateFileProgress("Übertrage Dateien…", uploadProgress);
-			});
-			if (!response.ok) {
-				const error = await responseError(response, `Blob ${id} konnte nicht hochgeladen werden`);
-				if (error.status !== 413 || isQuotaError(error)) throw error;
-				skipOversized(key, id, record);
-				uploadProgress[index] = 1; updateFileProgress("Übertrage Dateien…", uploadProgress);
-				return;
-			}
-			const usage = Number(response.headers.get("X-Impala-Usage"));
-			if (Number.isFinite(usage)) state.usage = formatStorageUsage(usage);
-			uploadProgress[index] = 1;
-			updateFileProgress("Übertrage Dateien…", uploadProgress);
-		});
-
-		// Verworfene Blobs nicht bei jedem Sync erneut laden und entschlüsseln: Ihre ID ist
-		// bekannt, also genügt die Prüfung, ob inzwischen eine Seite auf sie verweist.
-		const stillIgnored = (key) => {
-			if (!ignoredBlobKeys.has(key)) return false;
-			const id = ignoredBlobKeys.get(key);
-			if (isSyncBlobId(id) && alive(id)) { ignoredBlobKeys.delete(key); return false; }
-			return true;
-		};
-		const ignoredBefore = ignoredBlobKeys.size;
-		for (const key of ignoredBlobKeys.keys()) if (!remote.has(key)) ignoredBlobKeys.delete(key);
-		const download = [...remote].filter((key) => !localByKey.has(key) && !stillIgnored(key));
-		const downloadProgress = new Array(download.length).fill(0), downloadedIds = [];
-		if (download.length) updateFileProgress("Empfange Dateien…", downloadProgress);
-		await mapLimit(download, 3, async (key, index) => {
-			const response = await fetchTimed(api(`/api/blob/${key}`), { headers: authHeaders() }, BLOB_FETCH_TIMEOUT_MS, ({ direction, loaded, total, lengthComputable }) => {
-				if (direction !== "download" || !lengthComputable) return;
-				downloadProgress[index] = Math.min(0.99, loaded / Math.max(1, total));
-				updateFileProgress("Empfange Dateien…", downloadProgress);
-			});
-			if (!response.ok) throw await responseError(response, "Blob konnte nicht geladen werden");
-			const iv = response.headers.get("X-Impala-IV");
-			const record = await decryptBlobRecord(credentials.cryptoKey, iv, new Uint8Array(await response.arrayBuffer()));
-			if (await blobOpaqueKey(record.id) !== key) throw new Error("Blob-ID stimmt nach Entschlüsselung nicht mit dem Server-Schlüssel überein.");
-			// Den oben einmal gebauten Prüfer nutzen: isBlobAlive() setzte je Blob den Text ALLER
-			// Seiten neu zusammen — beim ersten Sync mit vielen Dateien fror das die Oberfläche ein.
-			if (!isSyncBlobId(record.id) || !alive(record.id)) {
-				ignoredBlobKeys.set(key, record.id);
-				downloadProgress[index] = 1;
-				updateFileProgress("Empfange Dateien…", downloadProgress);
-				return;
-			}
-			await DB.putBlob(record.id, record.buf, record.meta);
-			downloadedIds.push(record.id);
-			downloadProgress[index] = 1;
-			updateFileProgress("Empfange Dateien…", downloadProgress);
-		});
-		if (download.length || ignoredBlobKeys.size !== ignoredBefore) saveIgnoredBlobKeys();
-		for (const id of [...localIds, ...downloadedIds, ...checkedRefs]) syncedBlobIds.add(id);
-		return upload.length > 0 || download.length > 0;
+		}
 	}
 
 	async function runPass(forceAll) {
 		const finishProfile = PERF_PROFILER.start("cloudflare.sync", { forceAll: !!forceAll }, 40);
-		if (typeof navigator !== "undefined" && navigator.onLine === false) {
-			finishProfile({ failed: true, offline: true });
-			throw readable(new Error("Das Gerät ist offline."));
-		}
 		try {
 			state.progress = null;
-			setStatus("syncing", "Synchronisiere…", "Hole Änderungen…");
-			const received = await PERF_PROFILER.run("cloudflare.pull", () => pull(), {}, 20);
-			checkPass();
-			if (blobInventoryDirty || received > 0) {
-				state.progress = null;
-				setStatus("syncing", "Synchronisiere…", "Gleiche Dateien ab…");
-				// VOR dem Abgleich zurücksetzen: Ein währenddessen eingefügtes Bild setzt das Flag
-				// erneut und wird im nächsten Durchlauf hochgeladen, statt hier überschrieben zu werden.
-				blobInventoryDirty = false;
-				try { await PERF_PROFILER.run("cloudflare.blobs", () => syncBlobs(), { afterReceive: received > 0 }, 20); }
-				catch (error) { blobInventoryDirty = true; throw error; }
-			}
-			checkPass();
-			state.progress = null;
-			setStatus("syncing", "Synchronisiere…", "Sende lokale Änderungen…");
-			const pushed = await PERF_PROFILER.run("cloudflare.push", () => push(forceAll), { forceAll: !!forceAll }, 20);
-			const uploaded = !!pushed.uploaded;
-			// Nur ein echter Upload braucht den bestaetigenden Pull. Beim warmen No-op
-			// spart das eine vollstaendige serielle Netz-Rundreise. Ein beweisbar
-			// lückenloses Server-Ack spart sie nun auch nach einem Upload; alte Server
-			// und konkurrierende Schreiber bleiben automatisch beim sicheren Pull.
-			if (uploaded && !pushed.confirmed) {
-				await PERF_PROFILER.run("cloudflare.confirm-pull", () => pull(), {}, 20);
-			}
-			if (uploaded) pendingUploadedEventIds.clear();
+			setStatus("syncing", "Synchronisiere…", "Gleiche Änderungen ab…");
+			const report = await core.sync(!!forceAll);
+			refreshState();
+			reportOversized(report.blobs?.oversized);
+			if (report.compactionSkipped) console.warn("[cf-sync] Kompaktierung übersprungen, ganzes Log hochgeladen:", report.compactionSkipped);
 			state.progress = null; state.lastError = null;
 			clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
 			setStatus("connected", socketAuthenticated ? "Live verbunden" : "Synchronisiert", "Aktueller Stand synchronisiert");
-			finishProfile({ received, uploaded, uploadAcknowledged: uploaded && !!pushed.confirmed });
+			finishProfile({ received: report.received, uploaded: report.uploaded, uploadAcknowledged: report.uploaded && report.confirmed });
 			// Erst nach dem Upload verdichten: überholte Schnappschüsse sind dann sicher entbehrlich.
 			// Verdichten löscht Events → gespeicherter Start-Checkpoint passt nicht mehr (Voll-Replay beim nächsten Start).
 			try { if (await PERF_PROFILER.run("db.compact-local", () => DB.compactLocalIfDue(), {}, 50)) STATE.scheduleCheckpoint(); }
 			catch (e) { console.warn("Event-Log-Kompaktierung übersprungen:", e); }
 			return true;
 		} catch (error) {
+			refreshState();
 			finishProfile({ failed: true, errorName: error?.name || "Error" });
 			throw error;
 		}
 	}
 
 	function scheduleHttpRetry(error) {
-		if (!isRetryableSyncError(error) || !state.url || !credentials) return false;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+		if (!error?.retryable || !state.url || !core || isOffline()) return false;
 		clearTimeout(retryTimer);
-		const delay = syncRetryDelayMs(retryAttempts++);
+		const delay = coreModule.syncRetryDelayMs(retryAttempts++);
 		setStatus("syncing", "Verbindung unterbrochen", `Sync wird in ${Math.max(1, Math.ceil(delay / 1000))} s fortgesetzt.`);
 		retryTimer = setTimeout(() => {
 			retryTimer = 0;
@@ -635,11 +202,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		return Boolean(BUS.call("heft:is-writing"));
 	}
 
+	// Ein Durchgang zur Zeit; Anfragen währenddessen hängen genau einen weiteren an.
 	function requestSync(forceAll = false) {
-		if (!state.url || !credentials) return Promise.reject(new Error("Cloudflare-Sync ist nicht eingerichtet."));
-		if (typeof navigator !== "undefined" && navigator.onLine === false) {
-			return Promise.reject(readable(new Error("Das Gerät ist offline.")));
-		}
+		if (!state.url || !core) return Promise.reject(new Error("Cloudflare-Sync ist nicht eingerichtet."));
+		if (isOffline()) return Promise.reject(readable(new Error("Das Gerät ist offline.")));
 		if (!forceAll && isWritingActive()) {
 			scheduleSync();
 			return Promise.resolve(false);
@@ -655,65 +221,21 @@ export const CLOUDFLARE_SYNC = (() => {
 				}
 				return true;
 			} catch (error) {
-				if (error?.code === PASS_STOPPED) return false;
+				if (error?.code === "stopped") return false;
 				const e = readable(error);
-				PERF_PROFILER.error("cloudflare.sync-error", e, {
-					phase: "requestSync",
-					retryable: isRetryableSyncError(e),
-				});
-				const fail = (err) => {
-					state.lastError = err.message;
-					if (!scheduleHttpRetry(err)) setStatus("error", "Sync-Fehler", err.message);
-					throw err;
-				};
-				// quotaCompacting: Scheitert auch der Sync INNERHALB der Kompaktierung, nicht erneut verdichten.
-				if (!quotaCompacting && isQuotaError(error)) {
-					console.warn("[cf-sync] Quota überschritten. Führe sofortige Cloud-Kompaktierung durch...");
-					// FIX (Verklemmung): compactCloudData ruft selbst syncNow() auf. Direkt hier hätte es
-					// genau diesen noch offenen Lauf zurückbekommen und auf sich selbst gewartet — der Sync
-					// hing dann bis zum Neuladen. syncPromise wird erst im finally frei; das erste await der
-					// Kompaktierung läuft danach, deren syncNow() startet also einen frischen Lauf.
-					quotaCompacting = true;
-					return (async () => {
-						try {
-							const { compactCloudData } = await import("./sync-maintenance.js");
-							await compactCloudData(CLOUDFLARE_SYNC, { bypassCooldown: true });
-							return true;
-						} catch (compactErr) {
-							console.error("[cf-sync] Auto-Kompaktierung nach Quota-Überschreitung fehlgeschlagen:", compactErr);
-							return fail(e);
-						} finally { quotaCompacting = false; }
-					})();
-				}
-				return fail(e);
-			} finally { syncPromise = null; stopPass = false; }
+				e.retryable = error?.retryable;
+				PERF_PROFILER.error("cloudflare.sync-error", e, { phase: "requestSync", retryable: !!e.retryable });
+				state.lastError = e.message;
+				if (!scheduleHttpRetry(e)) setStatus("error", "Sync-Fehler", e.message);
+				throw e;
+			} finally { syncPromise = null; }
 		})();
 		return syncPromise;
 	}
 
-	// Bringt ein lokales Event einen Verweis auf eine noch nicht abgeglichene Datei mit?
-	// Seiten tragen Verweise in payload (pageCreate) bzw. payload.patch (pageUpdate): Bilder und
-	// Anhänge im Inhalt (img:/file:/cover:), Cover-Bild und PDF. Vorher wurde payload.changes
-	// geprüft, das es nie gab — neue Bilder, Cover und PDFs warteten bis zum nächsten App-Start.
-	const BLOB_REF_RE = /(?:img|file|cover):[^\s)"'<>\]]+/g;
-	// Ohne Event (nur aufgeschobener Sync, z. B. während des Schreibens) gibt es keinen neuen
-	// Verweis. Vorher erzwang das nach jedem Stiftstrich mit WS-Hinweis einen vollen Datei-Abgleich.
-	function hasUnsyncedBlobRef(ev) {
-		if (!ev || typeof ev !== "object") return false;
-		if (ev.type !== "pageCreate" && ev.type !== "pageUpdate") return false;
-		const fields = ev.type === "pageUpdate" ? ev.payload?.patch : ev.payload;
-		if (!fields) return false;
-		const refs = [fields.coverImg, fields.pdfId].filter(Boolean).map(String);
-		if (typeof fields.content === "string") refs.push(...(fields.content.match(BLOB_REF_RE) || []));
-		let fresh = false;
-		for (const id of refs) if (!syncedBlobIds.has(id)) { pendingBlobRefs.add(id); fresh = true; }
-		return fresh;
-	}
-
 	function scheduleSync(event = null) {
-		if (!credentials) return;
-		if (hasUnsyncedBlobRef(event)) blobInventoryDirty = true;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) {
+		if (!core) return;
+		if (isOffline()) {
 			closeSocket();
 			return;
 		}
@@ -724,7 +246,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			: LOCAL_SYNC_DELAY;
 		localTimer = setTimeout(() => {
 			if (isWritingActive()) {
-				scheduleSync(event);
+				scheduleSync();
 				return;
 			}
 			if (typeof requestIdleCallback === "function") {
@@ -761,86 +283,80 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	function scheduleReconnect() {
 		clearTimeout(reconnectTimer);
-		if (!state.url || !credentials) return;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-		const jitter = 0.8 + Math.random() * 0.4;
-		const delay = Math.min(30000, Math.round(1000 * 1.6 ** ++reconnectAttempts * jitter));
-		reconnectTimer = setTimeout(connectWebSocket, delay);
+		if (!state.url || !core || isOffline()) return;
+		reconnectTimer = setTimeout(connectWebSocket, coreModule.reconnectDelayMs(++reconnectAttempts));
+	}
+
+	async function onSocketMessage(ws, text) {
+		const type = (() => { try { return JSON.parse(text)?.type; } catch { return ""; } })();
+		const { action, forceAll, message } = await core.handleServerMessage(text);
+		if (socket !== ws) return;
+		refreshState();
+		if (type === "authenticated") {
+			socketAuthenticated = true; reconnectAttempts = 0;
+			setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
+			clearInterval(pingTimer);
+			pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(coreModule.wsPingMessage()); }, coreModule.wsPingIntervalMs());
+		}
+		if (action === "sync") requestSync(forceAll).catch(() => {});
+		else if (action === "rejected") {
+			state.lastError = message || "Nicht autorisiert"; setStatus("error", "Nicht autorisiert", state.lastError); closeSocket();
+		}
 	}
 
 	function connectWebSocket() {
-		if (typeof WebSocket === "undefined" || !credentials || !state.url) return;
-		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+		if (typeof WebSocket === "undefined" || !core || !state.url || isOffline()) return;
 		if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return;
 		clearTimeout(reconnectTimer); clearInterval(pingTimer);
-		const base = state.url.replace(/\/+$/, "");
-		const url = `${base.startsWith("https:") ? "wss:" : "ws:"}//${base.replace(/^https?:\/\//, "")}/ws?user=${encodeURIComponent(credentials.userId)}`;
-		const ws = socket = new WebSocket(url);
+		const ws = socket = new WebSocket(core.wsUrl);
 		socketAuthenticated = false;
 
 		ws.addEventListener("open", () => {
 			if (socket !== ws) return;
 			reconnectAttempts = 0;
-			ws.send(JSON.stringify({ type: "auth", protocol: CLOUD_SYNC_PROTOCOL, token: credentials.authToken, clientId: CLIENT_ID }));
+			ws.send(core.wsAuthMessage);
 		});
 		ws.addEventListener("message", (event) => {
 			if (socket !== ws) return;
-			try {
-				const msg = JSON.parse(event.data);
-				if (msg.type === "authenticated") {
-					if (msg.protocol !== CLOUD_SYNC_PROTOCOL) throw new Error("Server und App verwenden unterschiedliche Sync-Protokolle.");
-					socketAuthenticated = true; reconnectAttempts = 0;
-					if (Number(msg.generation) && Number(msg.generation) !== state.generation) clearCursors(Number(msg.generation));
-					setStatus("connected", "Live verbunden", "Echtzeit-Synchronisierung aktiv");
-					pingTimer = setInterval(() => { if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); }, 30000);
-					requestSync().catch(() => {});
-				} else if (msg.type === "changed") {
-					if (msg.senderClientId && msg.senderClientId === CLIENT_ID) return;
-					if (msg.blob) blobInventoryDirty = true;
-					else if (Number(msg.maxSeq || 0) <= state.lastSyncedSeq) blobInventoryDirty = true;
-					requestSync().catch(() => {});
-				}
-				else if (msg.type === "reset") {
-					// Der eigene Reset kommt hier auch an: Kennt das Gerät die Generation schon, wäre
-					// ein zweiter Komplett-Upload reine Doppelarbeit.
-					const generation = Number(msg.generation) || 1;
-					if (generation !== state.generation) { clearCursors(generation); requestSync(true).catch(() => {}); }
-				}
-				else if (msg.type === "unauthorized" || msg.type === "unsupported_protocol") {
-					state.lastError = msg.error || "Nicht autorisiert"; setStatus("error", "Nicht autorisiert", state.lastError); closeSocket();
-				}
-			} catch (error) {
+			onSocketMessage(ws, String(event.data)).catch((error) => {
 				PERF_PROFILER.error("cloudflare.websocket-error", error, { phase: "message" });
 				console.error("[cf-sync] WebSocket-Nachricht ungültig:", error);
-			}
+			});
 		});
 		ws.addEventListener("close", () => { if (socket !== ws) return; socket = null; socketAuthenticated = false; clearInterval(pingTimer); scheduleReconnect(); });
 		ws.addEventListener("error", () => {});
 	}
 
+	// Beendet den laufenden Durchgang des alten Kontos, bevor ein neues übernimmt. Sonst gingen
+	// die restlichen, mit dem alten Schlüssel verschlüsselten Pakete an das neue Konto.
+	async function stopCurrent() {
+		clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
+		closeSocket();
+		const old = core; core = null;
+		old?.stop();
+		if (syncPromise) await syncPromise.catch(() => {});
+		old?.free();
+	}
+
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		const generation = ++configureGeneration;
-		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
-		closeSocket();
-		if (syncPromise) { stopPass = true; await syncPromise.catch(() => {}); }
+		await stopCurrent();
 		if (generation !== configureGeneration) return false;
-		clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0;
-		credentials = null; pendingUploadedEventIds.clear();
-		forgetBlobInventory();
 		state.url = cleanUrl; state.syncKey = cleanKey;
 		cleanUrl ? LS.setItem(LS_URL, cleanUrl) : LS.removeItem(LS_URL);
 		cleanKey ? LS.setItem(LS_KEY, cleanKey) : LS.removeItem(LS_KEY);
 		if (!cleanUrl || !cleanKey) { setStatus("disconnected", "Nicht eingerichtet", "URL oder Sync-Schlüssel fehlt."); return false; }
 		try {
 			setStatus("connecting", "Verbindung wird aufgebaut…");
-			credentials = await deriveSyncCredentials(cleanKey);
-			if (generation !== configureGeneration) return false;
-			const k = keys();
-			state.lastSyncedSeq = Number(LS.getItem(k.lastSynced)) || 0;
-			state.lastUploadedLocalSeq = Number(LS.getItem(k.lastUploaded)) || 0;
-			state.generation = Number(LS.getItem(k.generation)) || 0;
-			loadIgnoredBlobKeys();
+			coreModule = await loadCore();
+			const id = coreModule.syncAuth(cleanKey).userId;
+			const next = await coreModule.SyncCore.open(cleanUrl, cleanKey, CLIENT_ID, http, storeFor(id), (label, current, total) => {
+				if (generation === configureGeneration) setProgress(label, current, total);
+			});
+			if (generation !== configureGeneration) { next.free(); return false; }
+			core = next;
+			refreshState();
 			await requestSync();
 			if (generation !== configureGeneration) return false;
 			connectWebSocket();
@@ -852,27 +368,39 @@ export const CLOUDFLARE_SYNC = (() => {
 	}
 
 	function disconnect() {
-		if (syncPromise) stopPass = true;
-		configureGeneration++; clearTimeout(localTimer); clearTimeout(retryTimer); retryTimer = 0; retryAttempts = 0; closeSocket(); credentials = null;
-		forgetBlobInventory(); pendingUploadedEventIds.clear();
+		configureGeneration++;
+		void stopCurrent();
 		// Der Schlüssel muss mit weg: init() verband sich sonst beim nächsten Start still wieder.
 		state.syncKey = ""; LS.removeItem(LS_KEY);
 		setStatus("disconnected", "Getrennt");
 	}
 
+	// Belegt den Platz des Durchgangs: Der Kern führt immer nur einen Ablauf zur Zeit aus.
+	// Was währenddessen angefragt wird, läuft danach als normaler Durchgang.
+	async function exclusive(task) {
+		while (syncPromise) await syncPromise.catch(() => {});
+		if (!core) throw new Error("Cloudflare-Sync ist nicht eingerichtet.");
+		const run = task(core);
+		syncPromise = run.then(() => true, () => false).finally(() => {
+			syncPromise = null;
+			if (syncAgain) requestSync().catch(() => {});
+		});
+		try { return await run; } finally { refreshState(); emit(); }
+	}
+
+	// Generationsschnitt: löscht alle Pakete und Dateien auf dem Server.
 	async function purgeCloudData() {
-		if (!credentials) return false;
-		const response = await fetchTimed(api("/api/reset"), { method: "POST", headers: authHeaders() });
-		if (!response.ok) throw await responseError(response, "Cloud-Daten konnten nicht gelöscht werden");
-		const data = await response.json();
-		forgetBlobInventory(); saveIgnoredBlobKeys();
-		clearCursors(Number(data.generation) || state.generation + 1);
+		if (!core) return false;
+		await exclusive((c) => c.resetCloud());
 		return true;
 	}
 
+	// Cloud-Kompaktierung im Kern (abgleichen, Generationsschnitt, Neuaufbau).
+	const compactCloud = (bypassCooldown = false) => exclusive((c) => c.compactCloud(!!bypassCooldown));
+
 	// Nur Events, die tatsächlich hochgeladen werden, brauchen einen Sync-Lauf. Reine UI-Events
 	// (Tab-Wechsel, Ordner auf/zu) lösten sonst jedes Mal einen Netz-Abgleich aus.
-	STATE.onAfterDispatch((ev) => { if (isUploadableToCloudflare(ev)) scheduleSync(ev); });
+	STATE.onAfterDispatch((ev) => { if (core?.noteLocalEvent(ev)) scheduleSync(ev); });
 
 	function init() {
 		if (initialized) return;
@@ -883,7 +411,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			window.addEventListener("visibilitychange", () => {
 				if (document.hidden) {
 					closeSocket();
-				} else if (credentials) {
+				} else if (core) {
 					clearTimeout(reconnectTimer);
 					clearTimeout(retryTimer);
 					connectWebSocket();
@@ -892,7 +420,7 @@ export const CLOUDFLARE_SYNC = (() => {
 			});
 			window.addEventListener("freeze", () => { closeSocket(); });
 			window.addEventListener("resume", () => {
-				if (credentials && !document.hidden) {
+				if (core && !document.hidden) {
 					connectWebSocket();
 					requestSync().catch(() => {});
 				}
@@ -908,35 +436,31 @@ export const CLOUDFLARE_SYNC = (() => {
 		})();
 	}
 
-	// Die KI braucht nur die Anmeldung, nicht den Sync. Eigene Zugangsdaten statt der globalen:
-	// Vorher setzte eine KI-Anfrage vor (oder nach) configure() die Sync-Zugangsdaten — der Sync
-	// lief dann ohne geladene Cursor los und konnte den Upload-Stand auf 0 zurücksetzen.
-	let aiCredentials = null; // { key, creds: Promise }
-	function credentialsForAi() {
-		if (credentials) return Promise.resolve(credentials);
-		if (!state.syncKey) return Promise.resolve(null);
-		if (aiCredentials?.key !== state.syncKey) {
-			const key = state.syncKey;
-			aiCredentials = { key, creds: deriveSyncCredentials(key).catch((error) => { if (aiCredentials?.key === key) aiCredentials = null; throw error; }) };
-		}
-		return aiCredentials.creds;
+	async function generateSyncKey() {
+		return (await loadCore()).generateSyncKey();
 	}
 
+	// Die KI braucht nur die Anmeldung (User-ID, Token), nicht den Sync und kein PBKDF2.
 	async function aiRequest(payload, options = {}) {
-		const target = options.base || state.url || DEFAULT_WORKER_URL;
-		const creds = await credentialsForAi();
-		if (!target || !creds) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
-		return fetch(api("/api/ai", target, creds), {
-			method: "POST", headers: authHeaders({ "Content-Type": "application/json" }, false, creds),
+		const target = String(options.base || state.url || DEFAULT_WORKER_URL).trim().replace(/\/+$/, "");
+		if (!target || !state.syncKey) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
+		const { userId: user, authToken } = (await loadCore()).syncAuth(state.syncKey);
+		return fetch(`${target}/api/ai?user=${encodeURIComponent(user)}`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${authToken}`,
+				"X-User-Id": user,
+				[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
+				"Content-Type": "application/json",
+			},
 			body: JSON.stringify(Array.isArray(payload) ? { messages: payload } : payload || {}), signal: options.signal,
 		});
 	}
 
-
 	return {
-		init, configure, disconnect, syncNow: () => requestSync(false), purgeCloudData,
+		init, configure, disconnect, syncNow: () => requestSync(false), purgeCloudData, compactCloud,
 		generateSyncKey, status: () => ({ ...state }), aiRequest,
-		isConfigured: () => !!(state.url && (credentials || state.syncKey)),
+		isConfigured: () => !!(state.url && (core || state.syncKey)),
 		migrateLocalV4,
 	};
 })();

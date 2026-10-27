@@ -13,10 +13,11 @@
     "check:syntax": "node test/check-syntax.mjs",
     "check:pwa": "node .github/scripts/check-pwa-cache.mjs",
     "check:version": "node .github/scripts/check-version-sync.mjs",
-    "verify": "npm test && npm run check:syntax && npm run check:pwa && npm run check:version",
+    "verify": "npm test && npm run check:syntax && npm run check:pwa && npm run check:version && npm run check:core",
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run",
-    "build:core": "node core/tools/build.mjs"
+    "build:core": "node core/tools/build.mjs",
+    "check:core": "node .github/scripts/check-core-build.mjs"
   },
   "devDependencies": {
     "@capacitor-mlkit/document-scanner": "^8.2.1",

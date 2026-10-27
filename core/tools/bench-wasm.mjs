@@ -3,14 +3,14 @@
 // (langsamer, Blöcke müssen als JSON über die Grenze) und Heft-Geometrie (schneller, aber nur
 // Bruchteile einer Millisekunde je Ereignis bei doppeltem Zustand). Prüft vorher, dass beide dasselbe liefern. JS und WASM
 // laufen abwechselnd im selben Prozess (gleiche Last für beide), Median nach Aufwärmen.
-//   node core/tools/build.mjs && node core/tools/bench-wasm.mjs [WASM-Ordner, Standard core/target/wasm]
+//   node core/tools/build.mjs && node core/tools/bench-wasm.mjs [WASM-Ordner, Standard web/core]
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { dot, norm, rankRag } from "../../web/rag-ranking.js";
 
 
-const dir = path.resolve(process.argv[2] || new URL("../target/wasm", import.meta.url).pathname);
+const dir = path.resolve(process.argv[2] || new URL("../../web/core", import.meta.url).pathname);
 const core = await import(path.join(dir, "impala_core.js"));
 const wasmBytes = fs.readFileSync(path.join(dir, "impala_core_bg.wasm"));
 await core.default({ module_or_path: wasmBytes });

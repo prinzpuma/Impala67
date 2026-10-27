@@ -16,7 +16,7 @@ use impala_crypto::{CryptoError, Random, base64_decode, base64_encode, gunzip};
 use impala_drive::state::DriveState;
 use impala_drive::store::{DriveStore, ImportOutcome, LocalBlob, StoreError};
 use impala_drive::{Clock, DriveBackup, DriveError, DriveOptions, TokenSource, policy, status};
-use impala_net::{HttpClient, NetError, Request, Response};
+use impala_net::{HttpClient, NetError, Request, Response, block_on};
 use impala_storage::event::{redact_secrets, strip_local_flags};
 use serde_json::{Map, Value, json};
 
@@ -174,7 +174,7 @@ impl Replay {
 struct Net(Arc<Replay>);
 
 impl HttpClient for Net {
-    fn send(&self, req: &Request) -> Result<Response, NetError> {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
         let mut pending = self.0.pending.lock().unwrap();
         // Parallele Uploads (mapLimit) dürfen in JS die Reihenfolge tauschen: kleines Fenster.
         let window = pending.len().min(4);
@@ -208,21 +208,21 @@ struct MockStore {
 }
 
 impl DriveStore for MockStore {
-    fn load_state(&self) -> Result<DriveState, StoreError> {
+    async fn load_state(&self) -> Result<DriveState, StoreError> {
         Ok(self.state.clone())
     }
-    fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError> {
+    async fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError> {
         self.state = state.clone();
         Ok(())
     }
-    fn max_seq(&self) -> Result<u64, StoreError> {
+    async fn max_seq(&self) -> Result<u64, StoreError> {
         Ok(self.last_seq)
     }
-    fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
+    async fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
         let seq = |e: &Map<String, Value>| e["seq"].as_u64().unwrap();
         Ok(self.events.iter().filter(|e| seq(e) > after && seq(e) <= up_to).cloned().map(Value::Object).collect())
     }
-    fn import(&mut self, mut payload: Value, unsynced: u64, _allow: bool) -> Result<ImportOutcome, StoreError> {
+    async fn import(&mut self, mut payload: Value, unsynced: u64, _allow: bool) -> Result<ImportOutcome, StoreError> {
         payload["exportedAt"] = json!("");
         self.imports.push(json!({ "unsyncedAfterSeq": unsynced, "data": payload }));
         let mut out = ImportOutcome::default();
@@ -250,7 +250,7 @@ impl DriveStore for MockStore {
         }
         Ok(out)
     }
-    fn export_snapshot(&self, redact: bool, _at: &str) -> Result<String, StoreError> {
+    async fn export_snapshot(&self, redact: bool, _at: &str) -> Result<String, StoreError> {
         let events: Vec<Value> = self
             .events
             .iter()
@@ -260,13 +260,13 @@ impl DriveStore for MockStore {
             .collect();
         Ok(stringify(&json!({"app": "impala67", "version": 1, "exportedAt": "", "events": events, "blobs": {}})))
     }
-    fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
+    async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
         Ok(self.blobs.keys().cloned().collect())
     }
-    fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
+    async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
         Ok(self.blobs.get(id).cloned())
     }
-    fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
+    async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
         self.puts.push(json!({"id": id, "b64": base64_encode(&blob.data), "meta": blob.meta}));
         self.blobs.insert(id.to_owned(), blob);
         Ok(())
@@ -279,10 +279,10 @@ struct Tokens {
 }
 
 impl TokenSource for Tokens {
-    fn access_token(&self) -> Option<String> {
+    async fn access_token(&self) -> Option<String> {
         self.token.clone()
     }
-    fn expired(&self) {
+    async fn expired(&self) {
         *self.expired.lock().unwrap() = true;
     }
 }
@@ -296,7 +296,7 @@ impl Clock for FixedClock {
     fn now_ms(&self) -> f64 {
         self.now
     }
-    fn sleep_ms(&self, ms: u64) {
+    async fn sleep_ms(&self, ms: u64) {
         self.sleeps.lock().unwrap().push(ms);
     }
 }
@@ -373,7 +373,7 @@ fn flows_match_js() {
         let (result, error): (Value, Option<String>) = match s(&case["op"]) {
             "sync" => {
                 let mut statuses = Vec::new();
-                match backup.sync(&mut |p| statuses.push(p.label())) {
+                match block_on(backup.sync(&mut |p| statuses.push(p.label()))) {
                     Ok(r) => {
                         statuses.push(r.label().to_owned());
                         let v = json!({"imported": r.imported, "uploaded": r.uploaded, "conflicts": r.conflicts.len(),
@@ -383,11 +383,11 @@ fn flows_match_js() {
                     Err(e) => (Value::Null, Some(e.to_string())),
                 }
             }
-            "flush" => match backup.flush_upload() {
+            "flush" => match block_on(backup.flush_upload()) {
                 Ok(_) => (Value::Null, None),
                 Err(e) => (Value::Null, Some(e.to_string())),
             },
-            "storage" => match backup.storage_info() {
+            "storage" => match block_on(backup.storage_info()) {
                 Ok(Some(i)) => {
                     (json!({"appBytes": i.app_bytes, "usedBytes": i.used_bytes, "limitBytes": i.limit_bytes}), None)
                 }

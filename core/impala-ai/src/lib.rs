@@ -27,7 +27,7 @@ pub use agent::{
 pub use api::{
     EmbedRoute, ListedModel, PingResult, Sources, embed_provider, embed_remote, embed_route, list_models, ping_provider,
 };
-pub use chat::{ChatTurn, HttpProvider, LlmProvider, ModelInfo, complete};
+pub use chat::{ChatTurn, HttpProvider, LlmProvider, ModelInfo, SleepFuture, Sleeper, complete};
 pub use error::AiError;
 pub use message::{AssistantMessage, Content, Message, Part, Role, ToolCall, ToolDef};
 pub use prompt::{

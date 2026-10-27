@@ -484,9 +484,9 @@ export async function handleCfSyncNow(t) {
 	}
 }
 
-export function handleCfGenKey() {
+export async function handleCfGenKey() {
 	const keyEl = document.getElementById("inpCfKey");
-	const newKey = CLOUDFLARE_SYNC.generateSyncKey();
+	const newKey = await CLOUDFLARE_SYNC.generateSyncKey();
 	if (keyEl) {
 		keyEl.value = newKey;
 		keyEl.type = "text";

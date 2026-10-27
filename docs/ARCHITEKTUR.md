@@ -73,7 +73,7 @@ Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln st
 - Die Handschrift-Erkennung wird beim Speichern für jede Seite mit geänderten Strichen angestoßen (`persistDoc` → `heft:schedule-page`).
 
 ### Sync
-- **Cloudflare** (`sync-cloudflare.js` + `sync-core.js` + `sync-crypto.js` + `sync-transfer.js`, Server: `server/worker.js`): Push nach jedem Dispatch (entprellt), Pull per WebSocket-Hinweis. Ende-zu-Ende-verschlüsselt. Protokoll v4, Details im Skill.
+- **Cloudflare** (Ablauf im Rust-Kern `core/impala-sync` + `core/impala-crypto`, als WASM aus `web/core/`; `sync-cloudflare.js` liefert nur fetch, IndexedDB, Timer, WebSocket und Status; Server: `server/worker.js`): Push nach jedem Dispatch (entprellt), Pull per WebSocket-Hinweis. Ende-zu-Ende-verschlüsselt. Protokoll v4, Details im Skill.
 - **Konflikte**: Seiteninhalte per 3-Wege-Merge (`DB.merge3`), Heft-Striche konfliktfrei als Einzel-Ops. Nicht lösbare Konflikte zeigt `render.js:854–1141` an.
 - **Google Drive** (`drive.js`): unabhängiges Backup (gzip, **nicht** verschlüsselt; liegt im privaten `appDataFolder`) aus Snapshot + Delta-Dateien + Blobs.
 

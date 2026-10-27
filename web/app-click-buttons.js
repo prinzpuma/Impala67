@@ -169,7 +169,7 @@ export async function handleButtonClick(t) {
 			await SETTINGS.handleCfPrimaryAction(t);
 			break;
 		case "btnCfGenKey":
-			SETTINGS.handleCfGenKey();
+			await SETTINGS.handleCfGenKey();
 			break;
 		case "btnCfCopyKey":
 			await SETTINGS.handleCfCopyKey();

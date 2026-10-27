@@ -42,17 +42,23 @@ impl SyncKey {
         &self.0
     }
 
+    /// Partition auf dem Server – billig, ohne PBKDF2 (z. B. für die KI-Anmeldung).
+    pub fn user_id(&self) -> String {
+        sha256_hex(&format!("impala67_user_partition:{}", self.0))
+    }
+
+    /// Bearer-Token – billig, ohne PBKDF2.
+    pub fn auth_token(&self) -> String {
+        sha256_hex(&format!("impala67_auth_token:{}", self.0))
+    }
+
     /// User-ID, Auth-Token und AES-Schlüssel. Teuer (100 000 PBKDF2-Runden): einmal je Schlüssel.
     pub fn derive(&self) -> SyncCredentials {
         let key = &self.0;
         let salt = sha256(format!("impala67_e2ee_salt:{key}").as_bytes());
         let mut raw = [0u8; 32];
         pbkdf2::pbkdf2_hmac::<sha2::Sha256>(key.as_bytes(), &salt, SYNC_KEY_ITERATIONS, &mut raw);
-        SyncCredentials {
-            user_id: sha256_hex(&format!("impala67_user_partition:{key}")),
-            auth_token: sha256_hex(&format!("impala67_auth_token:{key}")),
-            key: CipherKey::from_bytes(raw),
-        }
+        SyncCredentials { user_id: self.user_id(), auth_token: self.auth_token(), key: CipherKey::from_bytes(raw) }
     }
 }
 

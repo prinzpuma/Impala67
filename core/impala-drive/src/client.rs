@@ -34,16 +34,17 @@ const MAX_RETRIES: u32 = 3;
 
 /// Liefert das OAuth-Zugriffstoken. Die Anmeldung selbst (Popup, Kontowahl) ist Plattformsache;
 /// ein Hintergrund-Sync öffnet nie ein Fenster.
+#[allow(async_fn_in_trait)]
 pub trait TokenSource {
     /// Gültiges Token oder `None` (dann: [`DriveError::SessionExpired`]).
-    fn access_token(&self) -> Option<String>;
+    async fn access_token(&self) -> Option<String>;
     /// Drive hat `rejected` mit 401 abgelehnt. Ein neues Token (z. B. per Refresh-Token) oder
     /// `None`. Die Web-Anmeldung kennt keinen Refresh-Token und bleibt beim Standard.
-    fn renew(&self, _rejected: &str) -> Option<String> {
+    async fn renew(&self, _rejected: &str) -> Option<String> {
         None
     }
     /// Abgelehnt und nicht erneuerbar: Token verwerfen, Anzeige „Pausiert“.
-    fn expired(&self) {}
+    async fn expired(&self) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,24 +125,24 @@ pub struct StorageInfo {
     pub limit_bytes: f64,
 }
 
-pub struct DriveBackup<H, T, S> {
+pub struct DriveBackup<H, T, S, C> {
     http: H,
     tokens: T,
     store: S,
-    clock: Box<dyn Clock>,
+    clock: C,
     rng: Box<dyn Random>,
     options: DriveOptions,
     skew: ClockSkew,
     token: String,
 }
 
-impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
-    pub fn new(http: H, tokens: T, store: S, clock: impl Clock + 'static) -> Self {
+impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S, C> {
+    pub fn new(http: H, tokens: T, store: S, clock: C) -> Self {
         DriveBackup {
             http,
             tokens,
             store,
-            clock: Box::new(clock),
+            clock,
             rng: Box::new(OsRandom),
             options: DriveOptions::default(),
             skew: ClockSkew::default(),
@@ -185,58 +186,58 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     /// Voller Sync. Fehler lassen alle bis dahin gespeicherten Marken stehen; der nächste
     /// Durchgang setzt dort fort (alle Importe sind idempotent).
-    pub fn sync(&mut self, on_phase: &mut dyn FnMut(Phase)) -> Result<SyncReport, DriveError> {
+    pub async fn sync(&mut self, on_phase: &mut dyn FnMut(Phase)) -> Result<SyncReport, DriveError> {
         on_phase(Phase::Start);
-        self.take_token()?;
-        let mut st = self.store.load_state()?;
-        self.ensure_device_id(&mut st)?;
-        let files = self.list_sync_files(&mut st)?;
+        self.take_token().await?;
+        let mut st = self.store.load_state().await?;
+        self.ensure_device_id(&mut st).await?;
+        let files = self.list_sync_files(&mut st).await?;
         let mut report = SyncReport::default();
         // [F4] Wasserstand klemmen: über maxSeq (Kompaktierung/Restore) würde er die
         // Konflikterkennung abschalten.
-        let uploaded_seq = st.uploaded_seq.unwrap_or(0).min(self.store.max_seq()?);
+        let uploaded_seq = st.uploaded_seq.unwrap_or(0).min(self.store.max_seq().await?);
 
-        self.pull(&mut st, &files, uploaded_seq, &mut report, on_phase)?;
-        self.sync_blobs(&mut st, &files, &mut report, on_phase)?;
+        self.pull(&mut st, &files, uploaded_seq, &mut report, on_phase).await?;
+        self.sync_blobs(&mut st, &files, &mut report, on_phase).await?;
 
         let scrub = st.secret_scrub && !self.options.allow_secrets;
         if scrub {
             on_phase(Phase::Scrub);
-            self.scrub(&mut st, &files)?;
+            self.scrub(&mut st, &files).await?;
             report.scrubbed = true;
         }
-        let local_max = self.store.max_seq()?;
+        let local_max = self.store.max_seq().await?;
         if !scrub && local_max > uploaded_seq {
             on_phase(Phase::UploadDelta);
-            report.uploaded = self.upload_delta(&mut st, uploaded_seq, local_max)?;
+            report.uploaded = self.upload_delta(&mut st, uploaded_seq, local_max).await?;
         }
         let listed: Vec<&DriveFile> = files.iter().filter(|f| f.kind() == FileKind::Delta).collect();
         if !scrub && listed.len() >= COMPACT_AFTER_DELTAS {
             on_phase(Phase::Compact);
-            self.compact(&mut st, &files, &listed)?;
+            self.compact(&mut st, &files, &listed).await?;
             report.compacted = true;
         }
 
         // Späte Deltas: was andere Geräte WÄHREND dieses Durchgangs hochgeladen haben.
         // [A2] Wasserstand vorher nachziehen, sonst gälten eigene Merge-Events als ungesynct.
-        let unsynced = st.uploaded_seq.unwrap_or(uploaded_seq).min(self.store.max_seq()?);
-        let files_after = self.list_sync_files(&mut st)?;
+        let unsynced = st.uploaded_seq.unwrap_or(uploaded_seq).min(self.store.max_seq().await?);
+        let files_after = self.list_sync_files(&mut st).await?;
         let late = unseen_deltas(&files_after, &st);
         if !late.is_empty() {
             on_phase(Phase::LateDeltas(late.len()));
             let mut events = Vec::new();
             for f in &late {
-                events.extend(payload_events(&self.download(f)?));
+                events.extend(payload_events(&self.download(f).await?));
             }
             if !events.is_empty() {
-                self.import(events, Map::new(), unsynced, &mut report)?;
+                self.import(events, Map::new(), unsynced, &mut report).await?;
             }
             late.iter().for_each(|f| st.add_known_delta(&f.id));
-            self.store.save_state(&st)?;
+            self.store.save_state(&st).await?;
         }
-        st.synced_seq = Some(self.store.max_seq()?);
+        st.synced_seq = Some(self.store.max_seq().await?);
         st.last_ok = iso_from_ms(self.clock.now_ms());
-        self.store.save_state(&st)?;
+        self.store.save_state(&st).await?;
         report.clock_skew_ms = self.skew.skew_ms();
         report.clock_warning_minutes = self.skew.warning_minutes();
         Ok(report)
@@ -244,29 +245,29 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     /// Kurzweg beim Schließen: nur das eigene Delta hochladen (kein Ziehen, keine Blobs).
     /// Ohne gültiges Token passiert nichts. Liefert die Zahl hochgeladener Events.
-    pub fn flush_upload(&mut self) -> Result<usize, DriveError> {
-        if self.take_token().is_err() {
+    pub async fn flush_upload(&mut self) -> Result<usize, DriveError> {
+        if self.take_token().await.is_err() {
             return Ok(0);
         }
-        let mut st = self.store.load_state()?;
-        self.ensure_device_id(&mut st)?;
-        let local_max = self.store.max_seq()?;
+        let mut st = self.store.load_state().await?;
+        self.ensure_device_id(&mut st).await?;
+        let local_max = self.store.max_seq().await?;
         let uploaded = st.uploaded_seq.unwrap_or(0).min(local_max);
         if local_max <= uploaded {
             return Ok(0);
         }
-        self.upload_delta(&mut st, uploaded, local_max)
+        self.upload_delta(&mut st, uploaded, local_max).await
     }
 
     /// Speicheranzeige; ohne gültiges Token `None` (nie Grund für eine Anmeldung).
-    pub fn storage_info(&mut self) -> Result<Option<StorageInfo>, DriveError> {
-        if self.take_token().is_err() {
+    pub async fn storage_info(&mut self) -> Result<Option<StorageInfo>, DriveError> {
+        if self.take_token().await.is_err() {
             return Ok(None);
         }
-        let quota = api::parse_about(&self.call(api::about)?)?;
+        let quota = api::parse_about(&self.call(api::about).await?)?;
         let (mut app_bytes, mut page) = (0.0, None::<String>);
         loop {
-            let res = self.call(|t| api::list_sizes(t, page.as_deref()))?;
+            let res = self.call(|t| api::list_sizes(t, page.as_deref())).await?;
             let (sum, next) = api::parse_size_page(&res)?;
             app_bytes += sum;
             match next {
@@ -278,11 +279,11 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
     }
 
     /// E-Mail des Kontos (nur Anzeige): Netz- und andere Fehler ergeben `None`, nur 401 ist ein Fehler.
-    pub fn account_email(&mut self) -> Result<Option<String>, DriveError> {
-        self.take_token()?;
-        match self.http.send(&api::user_info(&self.token)) {
+    pub async fn account_email(&mut self) -> Result<Option<String>, DriveError> {
+        self.take_token().await?;
+        match self.http.send(&api::user_info(&self.token)).await {
             Ok(res) if res.status == 401 => {
-                self.tokens.expired();
+                self.tokens.expired().await;
                 Err(DriveError::SessionExpired)
             }
             Ok(res) if res.is_success() => Ok(api::parse_user_email(&res)),
@@ -294,7 +295,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     /// [G4] Snapshot + alle unbekannten Deltas in EINEM Import: Ein zweiter Import sähe die eben
     /// übernommenen Events als eigene ungesyncte Änderungen und meldete Geister-Konflikte.
-    fn pull(
+    async fn pull(
         &mut self,
         st: &mut DriveState,
         files: &[DriveFile],
@@ -313,30 +314,30 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
         let snap = match snapshot {
-            Some(f) if need_snapshot => Some(self.download(f)?),
+            Some(f) if need_snapshot => Some(self.download(f).await?),
             _ => None,
         };
         let mut events = snap.as_ref().map(payload_events).unwrap_or_default();
         for f in &deltas {
-            events.extend(payload_events(&self.download(f)?));
+            events.extend(payload_events(&self.download(f).await?));
         }
         // v1-Snapshots tragen ihre Blobs im selben Dokument.
         let blobs = snap.as_ref().map(payload_blobs).unwrap_or_default();
         if !events.is_empty() || !blobs.is_empty() {
-            self.import(events, blobs, uploaded_seq, report)?;
+            self.import(events, blobs, uploaded_seq, report).await?;
         }
         // „Gelesen“ erst nach erfolgreichem Import: sonst würde ein Paket still übersprungen.
         if need_snapshot {
             st.snapshot_stamp = stamp;
         }
         deltas.iter().for_each(|f| st.add_known_delta(&f.id));
-        self.store.save_state(st)?;
+        self.store.save_state(st).await?;
         Ok(())
     }
 
     /// Unveränderliche Blobs (PDFs, Bilder): fehlende holen, eigene ohne Drive-Kopie hochladen.
     /// Gleiche Inhalte liegen nur einmal in Drive (Dateiname = Hash des Inhalts).
-    fn sync_blobs(
+    async fn sync_blobs(
         &mut self,
         st: &mut DriveState,
         files: &[DriveFile],
@@ -347,7 +348,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
             files.iter().filter(|f| matches!(f.kind(), FileKind::Blob { .. })).collect();
         remote_blobs.sort_by(|a, b| b.modified_time.cmp(&a.modified_time));
         let mut remote_hashes: HashSet<String> = remote_blobs.iter().filter_map(|f| blob_file_hash(f)).collect();
-        let mut local_order = self.store.blob_ids()?;
+        let mut local_order = self.store.blob_ids().await?;
         let mut local: HashSet<String> = local_order.iter().cloned().collect();
         // Abweichung von JS: Alt-Dateien ohne `appProperties.blobId` lud JS bei JEDEM Sync erneut
         // herunter, nur um festzustellen, dass der Blob schon da ist. Der Hash-Cache kennt aber
@@ -361,14 +362,14 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
                 None if blob_file_hash(file).is_some_and(|h| cached_hashes.contains(&h)) => continue,
                 _ => {}
             }
-            let Some(blob) = parse_blob_payload(&self.download(file)?) else {
+            let Some(blob) = parse_blob_payload(&self.download(file).await?) else {
                 report.skipped_blob_files += 1;
                 continue;
             };
             if !wanted(&blob.id, &local) {
                 continue;
             }
-            self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data })?;
+            self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data }).await?;
             local.insert(blob.id.clone());
             local_order.push(blob.id);
             report.blobs_downloaded += 1;
@@ -383,7 +384,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
             if cached.as_ref().is_some_and(|c| remote_hashes.contains(&c.hash)) {
                 continue;
             }
-            let Some(rec) = self.store.get_blob(id)? else { continue };
+            let Some(rec) = self.store.get_blob(id).await? else { continue };
             let content_hash = rec.meta.get("hash").and_then(Value::as_str).unwrap_or("").to_owned();
             let size = rec.data.len() as u64;
             let (raw, hash) = match cached {
@@ -414,47 +415,52 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
                 properties: vec![("hash", hash.clone()), ("blobId", id)],
                 bytes: &bytes,
             };
-            self.upload(st, &up)?;
+            self.upload(st, &up).await?;
             report.blobs_uploaded += 1;
         }
-        self.store.save_state(st).map_err(DriveError::from)
+        self.store.save_state(st).await.map_err(DriveError::from)
     }
 
     /// Token-Kopien aus Drive entfernen: Snapshot ohne Geheimnisse ersetzt alles Bisherige.
-    fn scrub(&mut self, st: &mut DriveState, files: &[DriveFile]) -> Result<(), DriveError> {
-        let text = self.store.export_snapshot(true, &self.now_iso())?;
+    async fn scrub(&mut self, st: &mut DriveState, files: &[DriveFile]) -> Result<(), DriveError> {
+        let text = self.store.export_snapshot(true, &self.now_iso()).await?;
         let created =
-            self.upload_snapshot(st, files, &text, vec![("protocol", "2".into()), ("redacted", "1".into())])?;
+            self.upload_snapshot(st, files, &text, vec![("protocol", "2".into()), ("redacted", "1".into())]).await?;
         for f in files.iter().filter(|f| matches!(f.kind(), FileKind::Delta | FileKind::V1Snapshot)) {
             // Abweichung von JS: JS vergaß ALLE gelesenen Delta-IDs; hier nur die gelöschten –
             // ein Delta, dessen Löschen scheiterte, wird so nicht erneut geladen.
-            if self.delete(st, &f.id) {
+            if self.delete(st, &f.id).await {
                 st.known_deltas.retain(|k| *k != f.id);
             }
         }
-        st.uploaded_seq = Some(self.store.max_seq()?);
+        st.uploaded_seq = Some(self.store.max_seq().await?);
         st.snapshot_stamp = Some(created.stamp());
         st.secret_scrub = false;
-        self.store.save_state(st).map_err(DriveError::from)
+        self.store.save_state(st).await.map_err(DriveError::from)
     }
 
     /// Viele Deltas zu einem Snapshot verdichten. Gelöscht wird nur die zu Beginn gelistete (schon
     /// eingespielte) Menge – Deltas, die parallel hinzukamen, bleiben.
-    fn compact(&mut self, st: &mut DriveState, files: &[DriveFile], listed: &[&DriveFile]) -> Result<(), DriveError> {
-        let text = self.store.export_snapshot(!self.options.allow_secrets, &self.now_iso())?;
-        let created = self.upload_snapshot(st, files, &text, vec![("protocol", "2".into())])?;
+    async fn compact(
+        &mut self,
+        st: &mut DriveState,
+        files: &[DriveFile],
+        listed: &[&DriveFile],
+    ) -> Result<(), DriveError> {
+        let text = self.store.export_snapshot(!self.options.allow_secrets, &self.now_iso()).await?;
+        let created = self.upload_snapshot(st, files, &text, vec![("protocol", "2".into())]).await?;
         for f in listed {
             // [A9] Nur tatsächlich Gelöschtes vergessen.
-            if self.delete(st, &f.id) {
+            if self.delete(st, &f.id).await {
                 st.known_deltas.retain(|k| *k != f.id);
             }
         }
         // [A7] Den eigenen Snapshot nicht wieder herunterladen.
         st.snapshot_stamp = Some(created.stamp());
-        self.store.save_state(st).map_err(DriveError::from)
+        self.store.save_state(st).await.map_err(DriveError::from)
     }
 
-    fn upload_snapshot(
+    async fn upload_snapshot(
         &mut self,
         st: &mut DriveState,
         files: &[DriveFile],
@@ -470,16 +476,17 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
             properties,
             bytes: &bytes,
         };
-        self.upload(st, &up)
+        self.upload(st, &up).await
     }
 
     /// Eigene Events `from < seq <= to` als ein Paket. Rückt den Wasserstand auch dann vor, wenn
     /// nichts übrig blieb (nur Drive-Echos oder UI-Zustand).
-    fn upload_delta(&mut self, st: &mut DriveState, from: u64, to: u64) -> Result<usize, DriveError> {
+    async fn upload_delta(&mut self, st: &mut DriveState, from: u64, to: u64) -> Result<usize, DriveError> {
         let allow = self.options.allow_secrets;
         let events: Vec<Value> = self
             .store
-            .events_between(from, to)?
+            .events_between(from, to)
+            .await?
             .into_iter()
             .filter(|ev| should_upload_to(ev, Transport::Drive))
             .filter_map(|ev| match ev {
@@ -509,15 +516,15 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
                 properties: delta_properties(&st.device_id, from + 1, to),
                 bytes: &bytes,
             };
-            let created = self.upload(st, &up)?;
+            let created = self.upload(st, &up).await?;
             st.add_known_delta(&created.id); // [F5] sonst lädt der nächste Sync das eigene Paket
         }
         st.uploaded_seq = Some(to);
-        self.store.save_state(st)?;
+        self.store.save_state(st).await?;
         Ok(count)
     }
 
-    fn import(
+    async fn import(
         &mut self,
         events: Vec<Value>,
         blobs: Map<String, Value>,
@@ -525,7 +532,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
         report: &mut SyncReport,
     ) -> Result<(), DriveError> {
         let payload = import_payload(events, blobs, &self.now_iso());
-        let out = self.store.import(payload, unsynced_after_seq, self.options.allow_secrets)?;
+        let out = self.store.import(payload, unsynced_after_seq, self.options.allow_secrets).await?;
         report.imported += out.added;
         report.conflicts.extend(out.conflicts);
         report.merged.extend(out.merged);
@@ -537,28 +544,28 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     /// Dateien des App-Ordners: über den lokalen Index + Changes-API, beim ersten Mal (oder
     /// abgelaufenem Token) einmal voll gelistet.
-    fn list_sync_files(&mut self, st: &mut DriveState) -> Result<Vec<DriveFile>, DriveError> {
+    async fn list_sync_files(&mut self, st: &mut DriveState) -> Result<Vec<DriveFile>, DriveError> {
         if let Some(mut idx) = st.index.clone() {
-            match self.apply_changes(&mut idx) {
+            match self.apply_changes(&mut idx).await {
                 Ok(()) => {
                     let files = idx.files.clone();
                     st.index = Some(idx);
-                    self.store.save_state(st)?;
+                    self.store.save_state(st).await?;
                     return Ok(files);
                 }
                 Err(e) if e.is_stale_token() => {
                     st.index = None;
-                    self.store.save_state(st)?;
+                    self.store.save_state(st).await?;
                 }
                 Err(e) => return Err(e),
             }
         }
         // Token VOR dem Listing: Änderungen in der Lücke kommen höchstens doppelt (harmlos).
-        let token = api::parse_start_page_token(&self.call(api::start_page_token)?)?;
+        let token = api::parse_start_page_token(&self.call(api::start_page_token).await?)?;
         let mut files = Vec::new();
         let mut page: Option<String> = None;
         loop {
-            let res = self.call(|t| api::list_files(t, page.as_deref()))?;
+            let res = self.call(|t| api::list_files(t, page.as_deref())).await?;
             let p = api::parse_file_page(&res)?;
             files.extend(p.files);
             match p.next_page_token {
@@ -569,14 +576,14 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
         let mut idx = FileIndex { token, files: Vec::new() };
         files.iter().cloned().for_each(|f| idx.put(f));
         st.index = Some(idx);
-        self.store.save_state(st)?;
+        self.store.save_state(st).await?;
         Ok(files)
     }
 
-    fn apply_changes(&mut self, idx: &mut FileIndex) -> Result<(), DriveError> {
+    async fn apply_changes(&mut self, idx: &mut FileIndex) -> Result<(), DriveError> {
         let mut page = idx.token.clone();
         loop {
-            let res = self.call(|t| api::list_changes(t, &page))?;
+            let res = self.call(|t| api::list_changes(t, &page)).await?;
             let p = api::parse_change_page(&res)?;
             for ch in p.changes {
                 match ch {
@@ -596,20 +603,20 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     // ---- Dateien ---------------------------------------------------------------------
 
-    fn download(&mut self, file: &DriveFile) -> Result<Value, DriveError> {
-        let res = self.call(|t| api::download(t, &file.id))?;
+    async fn download(&mut self, file: &DriveFile) -> Result<Value, DriveError> {
+        let res = self.call(|t| api::download(t, &file.id)).await?;
         Ok(decode_json(&res.body, file.encoding())?)
     }
 
     /// Großes per resumable Upload, sonst multipart. Hält den Index sofort aktuell.
     // Abweichung von JS: JS lud alles multipart hoch, auch Snapshots und PDFs über 5 MB.
-    fn upload(&mut self, st: &mut DriveState, up: &Upload) -> Result<DriveFile, DriveError> {
+    async fn upload(&mut self, st: &mut DriveState, up: &Upload<'_>) -> Result<DriveFile, DriveError> {
         let res = if up.is_large() {
-            let session = api::parse_session_url(&self.call(|t| up.resumable_start(t))?)?;
-            self.call(|t| up.resumable_put(t, &session))?
+            let session = api::parse_session_url(&self.call(|t| up.resumable_start(t)).await?)?;
+            self.call(|t| up.resumable_put(t, &session)).await?
         } else {
             let boundary = self.boundary();
-            self.call(|t| up.multipart(t, &boundary))?
+            self.call(|t| up.multipart(t, &boundary)).await?
         };
         let file = api::parse_uploaded(&res)?;
         if let Some(idx) = st.index.as_mut() {
@@ -619,8 +626,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
     }
 
     /// [A9] Ergebnis melden statt verschlucken.
-    fn delete(&mut self, st: &mut DriveState, id: &str) -> bool {
-        let ok = self.call(|t| api::delete(t, id)).is_ok();
+    async fn delete(&mut self, st: &mut DriveState, id: &str) -> bool {
+        let ok = self.call(|t| api::delete(t, id)).await.is_ok();
         if ok && let Some(idx) = st.index.as_mut() {
             idx.remove(id);
         }
@@ -629,20 +636,20 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
 
     // ---- Anfragen ----------------------------------------------------------------------
 
-    fn take_token(&mut self) -> Result<(), DriveError> {
-        self.token = self.tokens.access_token().filter(|t| !t.is_empty()).ok_or(DriveError::SessionExpired)?;
+    async fn take_token(&mut self) -> Result<(), DriveError> {
+        self.token = self.tokens.access_token().await.filter(|t| !t.is_empty()).ok_or(DriveError::SessionExpired)?;
         Ok(())
     }
 
     /// Eine Anfrage mit Token. 401: einmal erneuern lassen, sonst Sitzung abgelaufen.
     /// 429/5xx: bis zu dreimal mit exponentiellem Backoff und Jitter. Jede Antwort mit
     /// `Date`-Header verbessert die Uhren-Drift-Schätzung.
-    fn call(&mut self, build: impl Fn(&str) -> Request) -> Result<Response, DriveError> {
+    async fn call(&mut self, build: impl Fn(&str) -> Request) -> Result<Response, DriveError> {
         let (mut attempt, mut renewed) = (0, false);
         loop {
             let req = build(&self.token);
             let t0 = self.clock.now_ms();
-            let res = self.http.send(&req)?;
+            let res = self.http.send(&req).await?;
             let t1 = self.clock.now_ms();
             if let Some(server) = res.header("date").and_then(api::http_date_ms) {
                 self.skew.observe(t0, t1, server);
@@ -650,16 +657,16 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
             match api::outcome(&res) {
                 Outcome::Ok => return Ok(res),
                 Outcome::Unauthorized => {
-                    if !renewed && let Some(token) = self.tokens.renew(&self.token).filter(|t| !t.is_empty()) {
+                    if !renewed && let Some(token) = self.tokens.renew(&self.token).await.filter(|t| !t.is_empty()) {
                         self.token = token;
                         renewed = true;
                         continue;
                     }
-                    self.tokens.expired();
+                    self.tokens.expired().await;
                     return Err(DriveError::SessionExpired);
                 }
                 Outcome::Retry if attempt < MAX_RETRIES => {
-                    self.clock.sleep_ms(retry_delay_ms(attempt, self.jitter()));
+                    self.clock.sleep_ms(retry_delay_ms(attempt, self.jitter())).await;
                     attempt += 1;
                 }
                 Outcome::Retry | Outcome::Failed => return Err(api::http_error(&res)),
@@ -687,14 +694,14 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore> DriveBackup<H, T, S> {
         iso_from_ms(self.clock.now_ms() - self.skew.applied_offset_ms()).unwrap_or_default()
     }
 
-    fn ensure_device_id(&mut self, st: &mut DriveState) -> Result<(), DriveError> {
+    async fn ensure_device_id(&mut self, st: &mut DriveState) -> Result<(), DriveError> {
         if st.device_id.is_empty() {
             let h = self.random_hex(16);
             // UUID v4 wie `crypto.randomUUID()`.
             let variant = ['8', '9', 'a', 'b'][usize::from(h.as_bytes()[16] % 4)];
             st.device_id =
                 format!("{}-{}-4{}-{}{}-{}", &h[0..8], &h[8..12], &h[13..16], variant, &h[17..20], &h[20..32]);
-            self.store.save_state(st)?;
+            self.store.save_state(st).await?;
         }
         Ok(())
     }

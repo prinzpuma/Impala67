@@ -8,6 +8,7 @@
   - **Smartphone / Android**: Schnelles Lesen und mobile Kurznotizen.
 - **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
 - **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Capacitor kopiert nur die fertigen Dateien in die Android-Hülle.
+- **Rust-Kern**: Die Logik ohne Oberfläche wird schrittweise nach Rust verlagert (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`). Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall); die PWA lädt den Kern als WASM aus `web/core/` (über `web/rust-core.js`). Nach Änderungen in `core/`: `npm run build:core` und `web/core/` + `core/wasm-build.json` mitcommitten.
 - **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren.
 
 ## 2. Daten und Synchronisation
@@ -23,7 +24,8 @@
 - **Editor & Notizen**: `web/editor.js`, `web/render.js`
 - **Handschrift & Zeichnen (Heft)**: `web/heft.js`
 - **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
-- **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-core.js`, `web/sync-crypto.js`, `web/sync-cloudflare.js`, `web/drive.js`, `server/`
+- **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js`, `server/`
+- **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Sync: `core/impala-sync`, E2EE: `core/impala-crypto`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - **Rust-Kern**: `core/` (Cargo-Workspace, `cargo test`, Regeln `core/AGENT-REGELN.md`, Plan `docs/NATIV-PLAN.md`); die PWA nutzt ihn noch nicht
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`

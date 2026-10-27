@@ -1,13 +1,13 @@
 "use strict";
+// Sync-Hilfen, die noch in JS gebraucht werden (Drive-Backup, Blob-Aufräumen, v4-Migration).
+// Das Cloudflare-Protokoll selbst (Wire-Format, Pakete, E2EE) steht im Rust-Kern (core/impala-sync).
 import { gzip, gunzip } from "./sync-crypto.js";
-import { utf8Length } from "./sync-transfer.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 export const CLOUD_SYNC_PROTOCOL = 4;
 export const CLOUD_SYNC_PROTOCOL_HEADER = "X-Impala-Sync-Protocol";
-export const LOCAL_EVENT_METADATA_KEYS = Object.freeze(["seq", "_remote", "_remoteSource", "_derived"]);
 
 export const shouldUploadToSync = (event, target) => event?._remoteSource !== target;
 export const shouldUploadDelta = (localMaxSeq, uploadedSeq) => Number(localMaxSeq || 0) > Number(uploadedSeq || 0);
@@ -22,8 +22,6 @@ export function newestFile(files, names) {
 	return (files || []).filter((file) => allowed.has(file.name))
 		.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")))[0] || null;
 }
-
-export const jsonByteLength = (value) => utf8Length(JSON.stringify(value));
 
 // Bytes gzippen; ohne CompressionStream unverändert („identity“).
 export async function gzipBytes(raw) {
@@ -43,55 +41,6 @@ export function boundedKnownIds(ids, max = 2000) {
 	return [...new Set(ids || [])].slice(-Math.max(1, Number(max) || 2000));
 }
 
-export function prepareCloudEvents(events, { includeRemote = false } = {}) {
-	return (events || [])
-		.filter((event) => includeRemote || shouldUploadToSync(event, "cloudflare"))
-		.map((event) => {
-			const wire = { ...(event || {}) };
-			for (const key of LOCAL_EVENT_METADATA_KEYS) delete wire[key];
-			return wire;
-		});
-}
-
-function prepareIncomingCloudEvent(event) {
-	if (!event || typeof event !== "object" || Array.isArray(event)) throw new Error("Cloud-Event ist ungültig.");
-	for (const key of LOCAL_EVENT_METADATA_KEYS) {
-		if (Object.hasOwn(event, key)) throw new Error("Cloud-Event enthält unzulässige lokale Metadaten.");
-	}
-	return { ...event, _remote: true, _remoteSource: "cloudflare" };
-}
-
-export function prepareIncomingCloudEvents(envelopes) {
-	return (envelopes || []).flatMap((envelope) => {
-		if (!envelope || envelope.v !== CLOUD_SYNC_PROTOCOL) throw new Error(`Sync-Protokoll v${CLOUD_SYNC_PROTOCOL} erforderlich.`);
-		const events = Array.isArray(envelope.events) ? envelope.events : envelope.event ? [envelope.event] : [];
-		if (!events.length) throw new Error("Cloud-Event-Paket ist leer.");
-		return events.map(prepareIncomingCloudEvent);
-	});
-}
-
-export function cloudEventsEnvelope(events) {
-	if (!Array.isArray(events) || !events.length) throw new Error("Cloud-Event-Paket ist leer.");
-	return { v: CLOUD_SYNC_PROTOCOL, events };
-}
-
-export function chunkCloudEvents(events, { maxEvents = 250, maxJsonBytes, maxJsonChars = 1_000_000 } = {}) {
-	// maxJsonChars bleibt als rückwärtskompatibler Optionsname erhalten; gemessen
-	// wird seit v4.1 ausschließlich die tatsächliche UTF-8-Größe.
-	const byteLimit = Math.max(1, Number(maxJsonBytes ?? maxJsonChars) || 1_000_000);
-	const out = [];
-	let chunk = [], bytes = 0;
-	for (const event of events || []) {
-		const n = jsonByteLength(event) + 1;
-		if (chunk.length && (chunk.length >= maxEvents || bytes + n > byteLimit)) {
-			out.push(chunk); chunk = []; bytes = 0;
-		}
-		chunk.push(event); bytes += n;
-	}
-	if (chunk.length) out.push(chunk);
-	return out;
-}
-
 export function heftBaselineOps(doc) {
 	const pages = Array.isArray(doc?.pages) ? doc.pages : [];
 	const ops = pages.map((page, at) => ({ t: "pg+", at, page: { id: page.id, paper: page.paper || "lined" } }));
@@ -108,11 +57,6 @@ export function heftBaselineOps(doc) {
 
 export function pruneEventsForUpload(events) {
 	return (events || []).filter((event) => event?.type !== "uiTabsSet" && event?.type !== "uiTreeSet");
-}
-
-export function isSyncBlobId(id) {
-	const key = String(id || "");
-	return /^(?:img:|file:|cover:|pdftext:)/.test(key) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
 }
 
 const UUID_SRC = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";

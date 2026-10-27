@@ -24,7 +24,7 @@ pub use api::{DEFAULT_WORKER_URL, Endpoint, ServerMessage, acknowledged_upload_c
 pub use blobs::{BlobAliveChecker, blob_opaque_key, is_sync_blob_id};
 pub use client::{
     BlobReport, CompactReport, LocalBlob, PassReport, Progress, PushReport, StoreError, SyncClient, SyncState,
-    SyncStore, WsAction,
+    SyncStore, WsAction, is_uploadable,
 };
 pub use compact::compact;
 pub use error::{SyncError, is_retryable_status};

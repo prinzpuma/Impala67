@@ -1,10 +1,17 @@
 //! Gemeinsame HTTP-Schnittstelle für Drive, KI und Sync.
 //!
 //! Der Kern baut Anfragen ([`Request`]) und wertet Antworten ([`Response`]) aus; wer sie
-//! verschickt, entscheidet die Plattform über [`HttpClient`]. Standard ist [`UreqClient`]
-//! (Feature `client`); iOS/Android/Web dürfen ihren eigenen Client einsetzen.
+//! verschickt, entscheidet die Plattform über [`HttpClient`]. Der Kern macht selbst keine
+//! Ein-/Ausgabe: `send` ist asynchron, im Browser steckt `fetch` dahinter, auf iOS URLSession,
+//! auf Android OkHttp. Standard für native Werkzeuge und Tests ist [`UreqClient`] (Feature
+//! `client`) mit [`block_on`].
 
 use std::fmt;
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -101,20 +108,64 @@ impl fmt::Display for NetError {
 
 impl std::error::Error for NetError {}
 
-/// Verschickt Anfragen. Blockierend: Plattformen rufen den Kern aus einem Hintergrund-Thread.
-pub trait HttpClient: Send + Sync {
-    fn send(&self, req: &Request) -> Result<Response, NetError>;
+/// Verschickt Anfragen. Asynchron, ohne eigene Laufzeit: Die Plattform führt die Anfrage aus
+/// (Browser: `fetch`), der Kern wartet nur auf das Ergebnis.
+// Keine `Send`-Schranke: Im Browser hängen JS-Objekte am Client, und der Kern läuft dort in einem Thread.
+#[allow(async_fn_in_trait)]
+pub trait HttpClient {
+    async fn send(&self, req: &Request) -> Result<Response, NetError>;
 
     /// Liefert den Körper stückweise an `on_chunk` (Streaming, z. B. SSE der KI-Anbieter).
     /// `on_chunk` gibt `false` zurück, um abzubrechen. Die gelieferte [`Response`] hat einen leeren `body`.
     /// Standard: ganze Antwort holen und in einem Stück liefern.
-    fn send_streaming(&self, req: &Request, on_chunk: &mut dyn FnMut(&[u8]) -> bool) -> Result<Response, NetError> {
-        let mut res = self.send(req)?;
+    async fn send_streaming(
+        &self,
+        req: &Request,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<Response, NetError> {
+        let mut res = self.send(req).await?;
         let body = std::mem::take(&mut res.body);
         if !on_chunk(&body) {
             return Err(NetError::Aborted);
         }
         Ok(res)
+    }
+}
+
+impl<H: HttpClient + ?Sized> HttpClient for &H {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
+        (**self).send(req).await
+    }
+
+    async fn send_streaming(
+        &self,
+        req: &Request,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<Response, NetError> {
+        (**self).send_streaming(req, on_chunk).await
+    }
+}
+
+struct ThreadWaker(Thread);
+
+impl Wake for ThreadWaker {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+/// Führt einen Kern-Ablauf auf dem aktuellen Thread zu Ende (native Werkzeuge, Tests,
+/// blockierende Clients wie [`UreqClient`]). Nicht im Browser verwenden: Dort wartet der
+/// Ablauf auf JS-Promises.
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    let mut future = pin!(future);
+    let waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        if let Poll::Ready(out) = future.as_mut().poll(&mut cx) {
+            return out;
+        }
+        thread::park();
     }
 }
 

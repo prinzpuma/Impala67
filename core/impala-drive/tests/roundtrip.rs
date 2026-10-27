@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use impala_crypto::{CounterRandom, base64_encode, gunzip, gzip};
 use impala_drive::format::{BLOB_PREFIX, DELTA_PREFIX, SNAPSHOT_NAME};
 use impala_drive::{Clock, DriveBackup, DriveError, DriveStore, StorageStore, TokenSource};
-use impala_net::{HttpClient, Method, NetError, Request, Response};
+use impala_net::{HttpClient, Method, NetError, Request, Response, block_on};
 use impala_storage::{Blob, MemoryStorage, Storage, Write};
 use serde_json::{Value, json};
 
@@ -172,7 +172,7 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 struct Net(Arc<Mutex<Drive>>);
 
 impl HttpClient for Net {
-    fn send(&self, req: &Request) -> Result<Response, NetError> {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
         let (status, mut headers, body) = self.0.lock().unwrap().handle(req);
         headers.push(("Date".into(), "Tue, 27 Oct 2026 14:05:00 GMT".into()));
         Ok(Response { status, headers, body })
@@ -192,14 +192,14 @@ impl Tokens {
 }
 
 impl TokenSource for Tokens {
-    fn access_token(&self) -> Option<String> {
+    async fn access_token(&self) -> Option<String> {
         Some(self.token.into())
     }
-    fn renew(&self, _rejected: &str) -> Option<String> {
+    async fn renew(&self, _rejected: &str) -> Option<String> {
         self.calls.lock().unwrap().push("renew");
         self.renewed.map(str::to_owned)
     }
-    fn expired(&self) {
+    async fn expired(&self) {
         self.calls.lock().unwrap().push("expired");
     }
 }
@@ -210,10 +210,10 @@ impl Clock for Now {
     fn now_ms(&self) -> f64 {
         1_793_109_900_000.0
     }
-    fn sleep_ms(&self, _ms: u64) {}
+    async fn sleep_ms(&self, _ms: u64) {}
 }
 
-type Device = DriveBackup<Net, Tokens, StorageStore<MemoryStorage>>;
+type Device = DriveBackup<Net, Tokens, StorageStore<MemoryStorage>, Now>;
 
 fn device(drive: &Arc<Mutex<Drive>>, seed: u8) -> Device {
     DriveBackup::new(Net(drive.clone()), Tokens::ok(), StorageStore::new(MemoryStorage::new()), Now)
@@ -231,7 +231,7 @@ fn ids(dev: &Device) -> Vec<String> {
 }
 
 fn sync(dev: &mut Device) -> impala_drive::SyncReport {
-    dev.sync(&mut |_| {}).unwrap()
+    block_on(dev.sync(&mut |_| {})).unwrap()
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn backup_and_restore_between_devices() {
     let r = sync(&mut a);
     assert_eq!((r.uploaded, r.blobs_uploaded, r.label()), (1, 1, "Synchronisiert"));
     // Gerät-ID im Format von crypto.randomUUID.
-    let device_id = a.store().load_state().unwrap().device_id;
+    let device_id = block_on(a.store().load_state()).unwrap().device_id;
     assert_eq!((device_id.len(), &device_id[14..15]), (36, "4"));
     {
         let d = drive.lock().unwrap();
@@ -326,24 +326,24 @@ fn unauthorized_renews_once_then_expires() {
     drive.lock().unwrap().tokens = vec!["frisch".into()];
     let tokens = Tokens { token: "alt", renewed: Some("frisch"), calls: Mutex::default() };
     let mut a = DriveBackup::new(Net(drive.clone()), tokens, StorageStore::new(MemoryStorage::new()), Now);
-    a.sync(&mut |_| {}).unwrap();
+    block_on(a.sync(&mut |_| {})).unwrap();
     assert_eq!(*a.tokens().calls.lock().unwrap(), ["renew"]);
 
     let tokens = Tokens { token: "alt", renewed: None, calls: Mutex::default() };
     let mut b = DriveBackup::new(Net(drive.clone()), tokens, StorageStore::new(MemoryStorage::new()), Now);
-    assert_eq!(b.sync(&mut |_| {}), Err(DriveError::SessionExpired));
+    assert_eq!(block_on(b.sync(&mut |_| {})), Err(DriveError::SessionExpired));
     assert_eq!(*b.tokens().calls.lock().unwrap(), ["renew", "expired"]);
     // Ohne Token: Flush und Speicheranzeige tun nichts.
     struct NoToken;
     impl TokenSource for NoToken {
-        fn access_token(&self) -> Option<String> {
+        async fn access_token(&self) -> Option<String> {
             None
         }
     }
     let mut c = DriveBackup::new(Net(drive.clone()), NoToken, StorageStore::new(MemoryStorage::new()), Now);
-    assert_eq!((c.flush_upload(), c.storage_info()), (Ok(0), Ok(None)));
+    assert_eq!((block_on(c.flush_upload()), block_on(c.storage_info())), (Ok(0), Ok(None)));
     assert_eq!(
-        c.sync(&mut |_| {}).unwrap_err().to_string(),
+        block_on(c.sync(&mut |_| {})).unwrap_err().to_string(),
         "Google-Sitzung abgelaufen – bitte erneut synchronisieren."
     );
 }
@@ -420,7 +420,7 @@ fn storage_state_lives_in_meta_like_local_storage() {
     assert_eq!(storage.meta("impala67_drive_uploaded_seq").unwrap().as_deref(), Some("1"));
     assert!(storage.meta("impala67_drive_file_index").unwrap().unwrap().starts_with("{\"token\":"));
     assert!(storage.meta("impala67_drive_last_ok").unwrap().is_some());
-    let info = a.storage_info().unwrap().unwrap();
+    let info = block_on(a.storage_info()).unwrap().unwrap();
     assert!(info.app_bytes > 0.0);
     assert_eq!((info.used_bytes, info.limit_bytes), (100.0, 1000.0));
 }

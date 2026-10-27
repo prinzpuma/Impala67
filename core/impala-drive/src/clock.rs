@@ -1,11 +1,14 @@
 //! Zeit für den Drive-Ablauf: Uhr und Warten als Trait (der Kern hat keine eigene Uhr) und die
 //! Uhren-Drift-Schätzung über den `Date`-Header der Drive-Antworten.
 
-/// Uhr und Warten (Backoff). Tests nageln die Zeit fest.
+/// Uhr und Warten (Backoff; Warten ist asynchron). Tests nageln die Zeit fest.
+#[allow(async_fn_in_trait)]
 pub trait Clock {
     /// Gerätezeit in ms seit 1970 (`Date.now()`).
     fn now_ms(&self) -> f64;
-    fn sleep_ms(&self, ms: u64);
+    /// Wartet `ms` Millisekunden, ohne den Thread zu blockieren; die Plattform liefert das Future
+    /// (Browser: `setTimeout`-Promise).
+    async fn sleep_ms(&self, ms: u64);
 }
 
 /// Systemuhr (nicht im Browser-WASM: dort gibt es weder `SystemTime` noch blockierendes Warten).
@@ -19,7 +22,8 @@ impl Clock for SystemClock {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64() * 1000.0)
     }
 
-    fn sleep_ms(&self, ms: u64) {
+    // Native Standardlösung: blockiert den aufrufenden Thread (der Kern selbst wartet nie).
+    async fn sleep_ms(&self, ms: u64) {
         std::thread::sleep(std::time::Duration::from_millis(ms));
     }
 }

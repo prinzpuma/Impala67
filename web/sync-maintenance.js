@@ -1,6 +1,9 @@
 "use strict";
 
+// Cloud-Kompaktierung: Wann es Zeit ist und der Ablauf selbst stehen im Rust-Kern
+// (core/impala-sync); hier bleiben Zeitstempel, Timer und das Ereignis für die Anzeige.
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
+import { loadCore } from "./rust-core.js";
 
 export const CLOUD_COMPACT_THRESHOLD_PERCENT = 80;
 export const CLOUD_COMPACT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,38 +27,13 @@ function writeLastCompaction(value, storage = storageOrNull()) {
 	try { storage?.setItem(LS_LAST_COMPACT, String(value)); } catch { /* gesperrter Speicher */ }
 }
 
-export function shouldCompactCloud(status, lastCompactedAt = 0, now = Date.now(), bypassCooldown = false) {
-	const percent = Number(status?.usage?.percent);
-	if (status?.status !== "connected") return false;
-	if (bypassCooldown) return true;
-	const isQuotaExceeded = Number.isFinite(percent) && percent >= 100;
-	const cooldownPassed = Math.max(0, Number(now) || 0) - Math.max(0, Number(lastCompactedAt) || 0) >= CLOUD_COMPACT_COOLDOWN_MS;
-	return Number.isFinite(percent) && percent >= CLOUD_COMPACT_THRESHOLD_PERCENT && (cooldownPassed || isQuotaExceeded);
-}
-
 export async function compactCloudData(sync = CLOUDFLARE_SYNC, { storage = storageOrNull(), now = Date.now(), bypassCooldown = false } = {}) {
 	if (compactPromise) return compactPromise;
 	compactPromise = (async () => {
 		if (!sync?.isConfigured?.()) throw new Error("Cloudflare-Sync ist nicht eingerichtet.");
-
-		// Erst vollständig konvergieren. Danach ist der lokale Zustand die sichere
-		// Quelle für den neuen kompaktierten Generation-Stand.
-		try {
-			await sync.syncNow();
-		} catch (e) {
-			if (!bypassCooldown && Number(e?.status) !== 413) throw e;
-		}
-		const before = Number(sync.status?.()?.usage?.bytes) || 0;
-
-		// Der bestehende v4-Generation-Reset entfernt alte Eventpakete UND Blobs.
-		// Der anschließende Sync startet mit Cursor 0; push() verwendet dadurch
-		// DB.compactEvents(local) und syncBlobs() lädt nur noch lebende Blobs hoch.
-		if (!(await sync.purgeCloudData())) throw new Error("Cloud-Compaction konnte den Generation-Reset nicht ausführen.");
-		await sync.syncNow();
-
-		const after = Number(sync.status?.()?.usage?.bytes) || 0;
+		const { before, after, reclaimed } = await sync.compactCloud(bypassCooldown);
 		writeLastCompaction(now, storage);
-		const result = { compacted: true, before, after, reclaimed: Math.max(0, before - after) };
+		const result = { compacted: true, before, after, reclaimed };
 		if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
 			window.dispatchEvent(new CustomEvent("impala67:cloudflare-compacted", { detail: result }));
 		}
@@ -64,11 +42,14 @@ export async function compactCloudData(sync = CLOUDFLARE_SYNC, { storage = stora
 	return compactPromise;
 }
 
-function scheduleAutoCompaction(status) {
+async function scheduleAutoCompaction(status) {
 	if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 	if (typeof document !== "undefined" && document.hidden) return;
+	if (status?.status !== "connected" || compactPromise) return;
 	const storage = storageOrNull();
-	if (!shouldCompactCloud(status, readLastCompaction(storage))) return;
+	const percent = Number(status?.usage?.percent);
+	const core = await loadCore();
+	if (!core.shouldCompactCloud(true, Number.isFinite(percent) ? percent : undefined, readLastCompaction(storage), Date.now(), false)) return;
 	clearTimeout(autoTimer);
 	autoTimer = setTimeout(() => {
 		compactCloudData(CLOUDFLARE_SYNC, { storage }).catch((error) => {
@@ -78,12 +59,13 @@ function scheduleAutoCompaction(status) {
 }
 
 if (typeof window !== "undefined") {
-	window.addEventListener("impala67:cloudflare-sync-status", (event) => scheduleAutoCompaction(event.detail));
+	window.addEventListener("impala67:cloudflare-sync-status", (event) => {
+		scheduleAutoCompaction(event.detail).catch((error) => console.warn("Cloud-Compaction-Prüfung fehlgeschlagen:", error));
+	});
 }
 
 export const SYNC_MAINTENANCE = {
 	compactCloudData,
-	shouldCompactCloud,
 	status: () => ({
 		thresholdPercent: CLOUD_COMPACT_THRESHOLD_PERCENT,
 		cooldownMs: CLOUD_COMPACT_COOLDOWN_MS,

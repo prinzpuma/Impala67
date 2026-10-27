@@ -1,6 +1,7 @@
 //! Ein Sync-Durchgang mit dem Cloudflare-Worker (`web/sync-cloudflare.js` ohne Timer/UI):
 //! Abrufen → Dateien abgleichen → Senden → ggf. bestätigender Abruf. Netz über
-//! [`HttpClient`], lokale Daten über [`SyncStore`]. Wann ein Durchgang läuft (Timer, WebSocket,
+//! [`HttpClient`], lokale Daten über [`SyncStore`] – beides asynchron und von der Plattform
+//! ausgeführt (Browser: `fetch`/IndexedDB), der Kern selbst macht keine Ein-/Ausgabe. Wann ein Durchgang läuft (Timer, WebSocket,
 //! online/offline), entscheidet die Plattform; [`SyncClient::handle_server_message`] sagt ihr,
 //! was eine WebSocket-Nachricht verlangt.
 
@@ -59,14 +60,16 @@ impl From<StoreError> for SyncError {
     }
 }
 
-/// Lokale Ablage, wie der Sync sie braucht (Web: IndexedDB, nativ: SQLite).
+/// Lokale Ablage, wie der Sync sie braucht (Web: IndexedDB, nativ: SQLite). Lese- und
+/// Schreibzugriffe sind asynchron; die App-Regeln (`filter_for_upload`, `pages`) rechnen nur.
+#[allow(async_fn_in_trait)]
 pub trait SyncStore {
-    fn load_state(&self) -> SyncState;
-    fn save_state(&mut self, state: &SyncState) -> Result<(), StoreError>;
+    async fn load_state(&self) -> SyncState;
+    async fn save_state(&mut self, state: &SyncState) -> Result<(), StoreError>;
     /// Höchste lokale Event-`seq` (Wasserstand für den Upload-Cursor).
-    fn max_seq(&self) -> Result<u64, StoreError>;
+    async fn max_seq(&self) -> Result<u64, StoreError>;
     /// Lokale Events mit `after_seq < seq <= up_to_seq`, nach `seq` geordnet, samt `seq`.
-    fn events_after(&self, after_seq: u64, up_to_seq: u64) -> Result<Vec<Value>, StoreError>;
+    async fn events_after(&self, after_seq: u64, up_to_seq: u64) -> Result<Vec<Value>, StoreError>;
     /// App-Regeln vor dem Upload: Geheimnisse entfernen, lokale Seiten auslassen
     /// (`SETTINGS_SYNC.sanitizeEvents`, `DB.filterEventsForSync`). Darf Events weglassen.
     fn filter_for_upload(&self, events: Vec<Value>) -> Vec<Value> {
@@ -74,12 +77,12 @@ pub trait SyncStore {
     }
     /// Fremdevents übernehmen (Merge mit unbestätigten lokalen Änderungen nach `unsynced_after_seq`).
     /// Jedes Event bekommt einen neuen lokalen Schlüssel; `_remote`/`_remoteSource` sind gesetzt.
-    fn import_remote(&mut self, events: Vec<Value>, unsynced_after_seq: u64) -> Result<(), StoreError>;
+    async fn import_remote(&mut self, events: Vec<Value>, unsynced_after_seq: u64) -> Result<(), StoreError>;
     /// Seiten (ID → Seite) für die Prüfung, welche Blobs noch verwendet werden.
     fn pages(&self) -> Map<String, Value>;
-    fn blob_ids(&self) -> Result<Vec<String>, StoreError>;
-    fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError>;
-    fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError>;
+    async fn blob_ids(&self) -> Result<Vec<String>, StoreError>;
+    async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError>;
+    async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError>;
 }
 
 /// Fortschritt für die Anzeige.
@@ -167,12 +170,12 @@ pub struct SyncClient<H, S> {
     oversized: HashSet<String>,
     opaque_keys: HashMap<String, String>,
     stop: Arc<AtomicBool>,
-    progress: Option<Box<dyn FnMut(Progress) + Send>>,
+    progress: Option<Box<dyn FnMut(Progress)>>,
 }
 
 impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
-    pub fn new(http: H, store: S, base_url: &str, creds: &SyncCredentials, client_id: &str) -> Self {
-        let state = store.load_state();
+    pub async fn new(http: H, store: S, base_url: &str, creds: &SyncCredentials, client_id: &str) -> Self {
+        let state = store.load_state().await;
         SyncClient {
             http,
             endpoint: Endpoint::new(base_url, creds, client_id),
@@ -205,7 +208,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         self
     }
 
-    pub fn on_progress(&mut self, f: impl FnMut(Progress) + Send + 'static) {
+    pub fn on_progress(&mut self, f: impl FnMut(Progress) + 'static) {
         self.progress = Some(Box::new(f));
     }
 
@@ -244,17 +247,17 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         }
     }
 
-    fn save(&mut self) -> Result<(), SyncError> {
-        Ok(self.store.save_state(&self.state)?)
+    async fn save(&mut self) -> Result<(), SyncError> {
+        Ok(self.store.save_state(&self.state).await?)
     }
 
-    fn clear_cursors(&mut self, generation: u64) -> Result<(), SyncError> {
+    async fn clear_cursors(&mut self, generation: u64) -> Result<(), SyncError> {
         self.pending_uploaded.clear();
         self.received_ids.clear();
         self.state.last_synced_seq = 0;
         self.state.last_uploaded_seq = 0;
         self.state.generation = generation;
-        self.save()
+        self.save().await
     }
 
     fn forget_blob_inventory(&mut self) {
@@ -269,15 +272,13 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         self.opaque_keys.entry(id.to_owned()).or_insert_with(|| blob_opaque_key(id)).clone()
     }
 
-    /// Ablage-Filter, UI-Zustand weg, ohne lokale Metadaten (und ohne Cloudflare-Echo,
-    /// außer beim Neuaufbau).
     fn wire_events(&self, events: Vec<Value>, include_remote: bool) -> Vec<Value> {
-        prepare_cloud_events(prune_for_upload(self.store.filter_for_upload(events)), include_remote)
+        wire_events(&self.store, events, include_remote)
     }
 
     /// Ginge dieses lokale Event zu Cloudflare? Reine UI-Events brauchen keinen Durchgang.
     pub fn is_uploadable(&self, ev: &Value) -> bool {
-        ev.is_object() && !self.wire_events(vec![ev.clone()], false).is_empty()
+        is_uploadable(&self.store, ev)
     }
 
     /// Nach jedem lokalen Event: `true`, wenn ein Durchgang nötig ist. Bringt das Event einen
@@ -296,11 +297,11 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     }
 
     /// Wertet eine WebSocket-Nachricht aus (Generationswechsel übernimmt der Client selbst).
-    pub fn handle_server_message(&mut self, text: &str) -> Result<WsAction, SyncError> {
+    pub async fn handle_server_message(&mut self, text: &str) -> Result<WsAction, SyncError> {
         Ok(match api::parse_server_message(text, self.endpoint.client_id())? {
             ServerMessage::Authenticated { generation } => {
                 if let Some(g) = generation.filter(|g| *g != self.state.generation) {
-                    self.clear_cursors(g)?;
+                    self.clear_cursors(g).await?;
                 }
                 WsAction::Sync { force_all: false }
             }
@@ -313,7 +314,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 WsAction::Sync { force_all: false }
             }
             ServerMessage::Reset { generation } if generation != self.state.generation => {
-                self.clear_cursors(generation)?;
+                self.clear_cursors(generation).await?;
                 WsAction::Sync { force_all: true }
             }
             ServerMessage::Reset { .. } | ServerMessage::Other => WsAction::Nothing,
@@ -322,23 +323,23 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     }
 
     /// Ein Durchgang wie `requestSync`; volle Quota löst einmal eine Cloud-Kompaktierung aus.
-    pub fn sync(&mut self, force_all: bool) -> Result<PassReport, SyncError> {
-        match self.run_pass(force_all) {
-            Err(e) if e.is_quota() => self.compact_cloud(true).map(|r| r.pass).map_err(|_| e),
+    pub async fn sync(&mut self, force_all: bool) -> Result<PassReport, SyncError> {
+        match self.run_pass(force_all).await {
+            Err(e) if e.is_quota() => self.compact_cloud(true).await.map(|r| r.pass).map_err(|_| e),
             other => other,
         }
     }
 
     /// Abrufen → (bei Bedarf) Dateien → Senden → bestätigender Abruf, falls die Bestätigung
     /// nicht lückenlos war.
-    pub fn run_pass(&mut self, force_all: bool) -> Result<PassReport, SyncError> {
-        let received = self.pull()?;
+    pub async fn run_pass(&mut self, force_all: bool) -> Result<PassReport, SyncError> {
+        let received = self.pull().await?;
         self.check_stop()?;
         let mut blobs = None;
         if self.blobs_dirty || received > 0 {
             // Vorher zurücksetzen: Ein währenddessen eingefügtes Bild setzt es erneut.
             self.blobs_dirty = false;
-            match self.sync_blobs() {
+            match self.sync_blobs().await {
                 Ok(r) => blobs = Some(r),
                 Err(e) => {
                     self.blobs_dirty = true;
@@ -347,9 +348,9 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             }
         }
         self.check_stop()?;
-        let push = self.push(force_all)?;
+        let push = self.push(force_all).await?;
         if push.uploaded && !push.confirmed {
-            self.pull()?;
+            self.pull().await?;
         }
         if push.uploaded {
             self.pending_uploaded.clear();
@@ -358,7 +359,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     }
 
     /// Holt alle neuen Pakete. Liefert die Zahl übernommener Events.
-    pub fn pull(&mut self) -> Result<usize, SyncError> {
+    pub async fn pull(&mut self) -> Result<usize, SyncError> {
         let (mut received, progress_start) = (0, self.state.last_synced_seq);
         // Höchstens EINE automatische Reparatur je Abruf: Meldet der Server danach weiter 410,
         // würde die Cloud sonst endlos geleert.
@@ -366,7 +367,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         loop {
             self.check_stop()?;
             let since = self.state.last_synced_seq;
-            let res = self.http.send(&self.endpoint.pull(since, PAGE_LIMIT))?;
+            let res = self.http.send(&self.endpoint.pull(since, PAGE_LIMIT)).await?;
             let page = match api::parse_pull(&res)? {
                 PullResponse::Page(page) => page,
                 PullResponse::PacketMissing { .. } if repaired => {
@@ -375,16 +376,16 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 PullResponse::PacketMissing { generation } => {
                     // Ein anderes Gerät baut die Cloud gerade neu auf: dessen Generation übernehmen.
                     if let Some(g) = generation.filter(|g| *g != self.state.generation) {
-                        self.clear_cursors(g)?;
+                        self.clear_cursors(g).await?;
                         continue;
                     }
-                    self.reset_cloud()?;
+                    self.reset_cloud().await?;
                     repaired = true;
                     continue;
                 }
             };
             if page.generation != self.state.generation || page.max_seq < since as f64 {
-                self.clear_cursors(page.generation)?;
+                self.clear_cursors(page.generation).await?;
                 continue;
             }
             let max_seq = page.max_seq.max(since as f64) as u64;
@@ -400,9 +401,9 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             let (events, last_seq) = open_packets(&self.key, &page.packets, since)?;
             received += events.len();
             self.received_ids.extend(events.iter().filter_map(id_key));
-            self.import_remote(events)?;
+            self.import_remote(events).await?;
             self.state.last_synced_seq = last_seq;
-            self.save()?;
+            self.save().await?;
             if max_seq > progress_start {
                 self.report("Empfange Notizen…", last_seq - progress_start, max_seq - progress_start);
             }
@@ -418,13 +419,13 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     /// Übernimmt Fremdevents. Ein Server-Echo eigener, gerade hochgeladener Events wird
     /// übersprungen; bestätigte lokale Events setzen den Upload-Cursor vor – nur lückenlos ab
     /// dem bisherigen Stand, beim ersten unbestätigten hochladepflichtigen Event ist Schluss.
-    fn import_remote(&mut self, events: Vec<Value>) -> Result<(), SyncError> {
+    async fn import_remote(&mut self, events: Vec<Value>) -> Result<(), SyncError> {
         let candidates: Vec<Value> =
             events.into_iter().filter(|ev| id_key(ev).is_none_or(|k| !self.pending_uploaded.remove(&k))).collect();
         if candidates.is_empty() {
             return Ok(());
         }
-        let unconfirmed = self.store.events_after(self.state.last_uploaded_seq, u64::MAX)?;
+        let unconfirmed = self.store.events_after(self.state.last_uploaded_seq, u64::MAX).await?;
         let server_ids: HashSet<String> = candidates.iter().filter_map(id_key).collect();
         let mut confirmed = self.state.last_uploaded_seq;
         for ev in &unconfirmed {
@@ -440,21 +441,21 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         }
         if confirmed > self.state.last_uploaded_seq {
             self.state.last_uploaded_seq = confirmed;
-            self.save()?;
+            self.save().await?;
         }
-        Ok(self.store.import_remote(candidates, self.state.last_uploaded_seq)?)
+        Ok(self.store.import_remote(candidates, self.state.last_uploaded_seq).await?)
     }
 
     /// Lädt lokale Änderungen hoch. Nach einem Generationsschnitt (Cursor 0) oder mit
     /// `force_all` geht das ganze, kompaktierte Log hoch, in begrenzten Paketen.
-    pub fn push(&mut self, force_all: bool) -> Result<PushReport, SyncError> {
-        let max_seq = self.store.max_seq()?;
+    pub async fn push(&mut self, force_all: bool) -> Result<PushReport, SyncError> {
+        let max_seq = self.store.max_seq().await?;
         let mut uploaded = self.state.last_uploaded_seq;
         if force_all || uploaded > max_seq {
             uploaded = 0;
         }
         let mut report = PushReport { confirmed: true, ..PushReport::default() };
-        let local = if max_seq <= uploaded { Vec::new() } else { self.store.events_after(uploaded, max_seq)? };
+        let local = if max_seq <= uploaded { Vec::new() } else { self.store.events_after(uploaded, max_seq).await? };
         let full = uploaded == 0;
         let source = if full {
             let compacted = match compact_values(&local) {
@@ -475,7 +476,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         let wire: Vec<WireEvent> = self.wire_events(source, full).into_iter().map(WireEvent::new).collect();
         if wire.is_empty() {
             self.state.last_uploaded_seq = max_seq;
-            self.save()?;
+            self.save().await?;
             return Ok(report);
         }
 
@@ -488,13 +489,13 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         for body in bodies {
             self.check_stop()?;
             let len = body.len() as u64;
-            let res = self.http.send(&self.endpoint.post_events(body))?;
+            let res = self.http.send(&self.endpoint.post_events(body)).await?;
             let ack = api::parse_upload(&res, self.state.generation, self.state.last_synced_seq)?;
             match ack.acknowledged_seq {
                 None => report.confirmed = false,
                 Some(seq) if report.confirmed => {
                     self.state.last_synced_seq = seq;
-                    self.save()?;
+                    self.save().await?;
                 }
                 Some(_) => {}
             }
@@ -506,18 +507,18 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         }
         self.pending_uploaded.extend(wire.iter().filter_map(|ev| id_key(&ev.value)));
         self.state.last_uploaded_seq = max_seq;
-        self.save()?;
+        self.save().await?;
         report.uploaded = true;
         report.events = wire.len();
         report.packets = packets.len();
         Ok(report)
     }
 
-    fn list_remote_blobs(&self) -> Result<Vec<String>, SyncError> {
+    async fn list_remote_blobs(&self) -> Result<Vec<String>, SyncError> {
         let mut keys = Vec::new();
         let mut cursor = String::new();
         loop {
-            let res = self.http.send(&self.endpoint.list_blobs(&cursor))?;
+            let res = self.http.send(&self.endpoint.list_blobs(&cursor)).await?;
             let (page, next) = api::parse_blob_list(&res)?;
             keys.extend(page);
             if next.is_empty() {
@@ -528,15 +529,15 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     }
 
     /// Gleicht Dateien ab: lebende lokale hoch, fehlende herunter, verwaiste ignorieren.
-    pub fn sync_blobs(&mut self) -> Result<BlobReport, SyncError> {
+    pub async fn sync_blobs(&mut self) -> Result<BlobReport, SyncError> {
         let checked_refs: Vec<String> = self.pending_blob_refs.drain().collect();
         let pages = self.store.pages();
         let alive = BlobAliveChecker::new(&pages);
         let local_ids: Vec<String> =
-            self.store.blob_ids()?.into_iter().filter(|id| is_sync_blob_id(id) && alive.is_alive(id)).collect();
+            self.store.blob_ids().await?.into_iter().filter(|id| is_sync_blob_id(id) && alive.is_alive(id)).collect();
         let local: Vec<(String, String)> = local_ids.iter().map(|id| (self.opaque_key(id), id.clone())).collect();
         let local_keys: HashSet<&str> = local.iter().map(|(k, _)| k.as_str()).collect();
-        let remote = self.list_remote_blobs()?;
+        let remote = self.list_remote_blobs().await?;
         let remote_set: HashSet<&str> = remote.iter().map(String::as_str).collect();
         let mut report = BlobReport::default();
 
@@ -544,7 +545,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             local.iter().filter(|(k, _)| !remote_set.contains(k.as_str()) && !self.oversized.contains(k)).collect();
         for (i, (key, id)) in upload.iter().enumerate() {
             self.report("Übertrage Dateien…", i as u64, upload.len() as u64);
-            let Some(blob) = self.store.get_blob(id)? else { continue };
+            let Some(blob) = self.store.get_blob(id).await? else { continue };
             let name =
                 blob.meta.get("name").filter(|n| truthy(Some(n))).and_then(Value::as_str).unwrap_or(id).to_owned();
             let enc = encrypt_blob(&self.key, id, Some(&blob.meta), &blob.data, self.rng.as_ref())?;
@@ -553,7 +554,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 report.oversized.push(name);
                 continue;
             }
-            let res = self.http.send(&self.endpoint.put_blob(key, &enc.iv, enc.bytes))?;
+            let res = self.http.send(&self.endpoint.put_blob(key, &enc.iv, enc.bytes)).await?;
             if !res.is_success() {
                 let err = api::response_error(&res, &format!("Blob {id} konnte nicht hochgeladen werden"));
                 // 413 ohne „Quota“: Datei zu groß für den Server – bleibt lokal, blockiert nichts.
@@ -589,7 +590,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         let mut downloaded_ids = Vec::new();
         for (i, key) in download.iter().enumerate() {
             self.report("Empfange Dateien…", i as u64, download.len() as u64);
-            let res = self.http.send(&self.endpoint.get_blob(key))?;
+            let res = self.http.send(&self.endpoint.get_blob(key)).await?;
             if !res.is_success() {
                 return Err(api::response_error(&res, "Blob konnte nicht geladen werden"));
             }
@@ -605,12 +606,12 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 report.ignored += 1;
                 continue;
             }
-            self.store.put_blob(&record.id, LocalBlob { meta: record.meta, data: record.data })?;
+            self.store.put_blob(&record.id, LocalBlob { meta: record.meta, data: record.data }).await?;
             downloaded_ids.push(record.id);
             report.downloaded += 1;
         }
         if !download.is_empty() || self.state.ignored_blobs.len() != ignored_before {
-            self.save()?;
+            self.save().await?;
         }
         self.synced_blob_ids.extend(local_ids.into_iter().chain(downloaded_ids).chain(checked_refs));
         Ok(report)
@@ -618,29 +619,41 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
 
     /// Generationsschnitt (`purgeCloudData`): löscht alle Pakete und Blobs auf dem Server; der
     /// nächste Durchgang lädt den kompaktierten lokalen Stand und alle lebenden Blobs neu hoch.
-    pub fn reset_cloud(&mut self) -> Result<(), SyncError> {
-        let res = self.http.send(&self.endpoint.reset())?;
+    pub async fn reset_cloud(&mut self) -> Result<(), SyncError> {
+        let res = self.http.send(&self.endpoint.reset()).await?;
         let generation = api::parse_reset(&res)?;
         self.forget_blob_inventory();
-        self.clear_cursors(generation.unwrap_or(self.state.generation + 1))
+        self.clear_cursors(generation.unwrap_or(self.state.generation + 1)).await
     }
 
     /// Cloud-Kompaktierung (`compactCloudData`): erst vollständig abgleichen – danach ist der
     /// lokale Stand die sichere Quelle –, dann Generationsschnitt und Neuaufbau.
     /// Ob es Zeit dafür ist, sagt [`crate::should_compact_cloud`].
-    pub fn compact_cloud(&mut self, bypass_cooldown: bool) -> Result<CompactReport, SyncError> {
-        if let Err(e) = self.run_pass(false)
+    pub async fn compact_cloud(&mut self, bypass_cooldown: bool) -> Result<CompactReport, SyncError> {
+        if let Err(e) = self.run_pass(false).await
             && !bypass_cooldown
             && e.status() != Some(413)
         {
             return Err(e);
         }
         let before = self.usage.bytes;
-        self.reset_cloud()?;
-        let pass = self.run_pass(false)?;
+        self.reset_cloud().await?;
+        let pass = self.run_pass(false).await?;
         let after = self.usage.bytes;
         Ok(CompactReport { before, after, reclaimed: (before - after).max(0.0), pass })
     }
+}
+
+/// Ablage-Filter, UI-Zustand weg, ohne lokale Metadaten (und ohne Cloudflare-Echo,
+/// außer beim Neuaufbau).
+fn wire_events(store: &impl SyncStore, events: Vec<Value>, include_remote: bool) -> Vec<Value> {
+    prepare_cloud_events(prune_for_upload(store.filter_for_upload(events)), include_remote)
+}
+
+/// [`SyncClient::is_uploadable`] ohne Client – für Plattformen, die während eines laufenden
+/// Durchgangs fragen.
+pub fn is_uploadable(store: &impl SyncStore, ev: &Value) -> bool {
+    ev.is_object() && !wire_events(store, vec![ev.clone()], false).is_empty()
 }
 
 /// Event-ID als Mengenschlüssel; der JSON-Text hält `5` und `"5"` auseinander wie JS-`Set`.

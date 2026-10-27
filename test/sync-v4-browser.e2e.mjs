@@ -829,20 +829,17 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		assert.equal(postRestartOnB, "Post Restart");
 	});
 
-	it("L. Service-Worker Update / Cache: aktueller SW-Cache ist aktiv und enthält sync-crypto.js", async () => {
+	it("L. Service-Worker Update / Cache: aktueller SW-Cache ist aktiv und enthält den Rust-Kern", async () => {
 		const swStatus = await pageA.evaluate(async (expectedCache) => {
 			const reg = await navigator.serviceWorker?.getRegistration();
 			const cacheNames = await caches.keys();
 			const cacheName = cacheNames.find((n) => n.startsWith("impala67-v"));
-			let cryptoCode = "";
+			let wasmBytes = 0;
 			if (cacheName) {
 				const cache = await caches.open(cacheName);
 				const reqs = await cache.keys();
-				const cryptoReq = reqs.find((r) => r.url.includes("sync-crypto.js"));
-				if (cryptoReq) {
-					const res = await cache.match(cryptoReq);
-					cryptoCode = await res.text();
-				}
+				const wasmReq = reqs.find((r) => r.url.includes("core/impala_core_bg.wasm"));
+				if (wasmReq) wasmBytes = (await (await cache.match(wasmReq)).arrayBuffer()).byteLength;
 			}
 			return {
 				hasSW: !!navigator.serviceWorker,
@@ -850,14 +847,14 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 				cacheNames,
 				hasExpectedCache: cacheNames.includes(expectedCache),
 				hasLegacyV219: cacheNames.includes("impala67-v219"),
-				has16KBCompression: cryptoCode.includes("16 * 1024") || cryptoCode.includes("16384"),
+				hasCoreWasm: wasmBytes > 0,
 			};
 		}, EXPECTED_CACHE);
 
 		assert.equal(swStatus.hasSW, true, "Service Worker should be available");
 		assert.equal(swStatus.hasExpectedCache, true, `Cache ${EXPECTED_CACHE} should exist`);
 		assert.equal(swStatus.hasLegacyV219, false, "No legacy v219 cache should be present");
-		assert.equal(swStatus.has16KBCompression, true, "sync-crypto.js in cache must contain 16 KB compression threshold");
+		assert.equal(swStatus.hasCoreWasm, true, "Offline-Cache must contain the Rust core (core/impala_core_bg.wasm)");
 	});
 
 	it("M. Offline-PWA: Offline schalten -> Reload -> App lädt & speichert -> Online -> Sync", async () => {

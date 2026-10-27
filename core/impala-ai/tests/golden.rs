@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use impala_ai::prompt::{ToolMode, system_prompt};
 use impala_ai::think::split_think;
 use impala_ai::*;
-use impala_net::{HttpClient, Method, NetError, Request, Response};
+use impala_net::{HttpClient, Method, NetError, Request, Response, block_on};
 use serde_json::{Value, json};
 
 fn golden(name: &str) -> Value {
@@ -54,11 +54,15 @@ impl Fake {
 }
 
 impl HttpClient for Fake {
-    fn send(&self, req: &Request) -> Result<Response, NetError> {
+    async fn send(&self, req: &Request) -> Result<Response, NetError> {
         self.next(req).map(|r| r.0)
     }
 
-    fn send_streaming(&self, req: &Request, on_chunk: &mut dyn FnMut(&[u8]) -> bool) -> Result<Response, NetError> {
+    async fn send_streaming(
+        &self,
+        req: &Request,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<Response, NetError> {
         let (mut res, chunks) = self.next(req)?;
         let body = std::mem::take(&mut res.body);
         let sizes = if chunks.is_empty() { vec![body.len()] } else { chunks };
@@ -144,7 +148,10 @@ fn provider(v: &Value, fake: &Fake, sleeps: Arc<Mutex<Vec<u64>>>) -> HttpProvide
     };
     let fixed = e["fixedNowMs"].as_u64().unwrap();
     HttpProvider::new(fake.clone(), ChatConfig::resolve(&settings(v)), options)
-        .with_sleep(Box::new(move |ms| sleeps.lock().unwrap().push(ms)))
+        .with_sleep(Box::new(move |ms| {
+            sleeps.lock().unwrap().push(ms);
+            Box::pin(async {})
+        }))
         .with_clock(Box::new(move || fixed))
 }
 
@@ -203,7 +210,7 @@ fn chat_case(case: &Value) {
     let (mut last_delta, mut last_reasoning) = (String::new(), String::new());
     let result = if s(&call["kind"]) == "complete" {
         let system = call["system"].as_str();
-        complete(&p, &s(&call["prompt"]), system).map(|c| (c, None))
+        block_on(complete(&p, &s(&call["prompt"]), system)).map(|c| (c, None))
     } else {
         let history: Vec<Message> = call["history"]
             .as_array()
@@ -213,13 +220,13 @@ fn chat_case(case: &Value) {
             .collect();
         let messages =
             refine_messages(&history, &s(&call["instruction"]), &s(&case["settings"]["customInstructions"]), now());
-        p.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, &mut |u| {
+        block_on(p.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, &mut |u| {
             match u {
                 StreamUpdate::Content(t) => last_delta = t.to_owned(),
                 StreamUpdate::Reasoning(t) => last_reasoning = t.to_owned(),
             }
             true
-        })
+        }))
         .map(|m| (m.content.clone(), Some(m)))
     };
     check_requests(&name, &case["requests"], &fake.seen.lock().unwrap());
@@ -294,7 +301,7 @@ struct Exec {
 }
 
 impl ToolExecutor for Exec {
-    fn run(&mut self, name: &str, args: &Value) -> Result<ToolOutput, String> {
+    async fn run(&mut self, name: &str, args: &Value) -> Result<ToolOutput, String> {
         self.runs.push(json!({ "name": name, "args": args }));
         let Some(next) = self.results.pop_front() else { return Ok(ToolOutput::new(r#"{"ok":true}"#)) };
         if let Some(t) = next["throw"].as_str() {
@@ -303,13 +310,13 @@ impl ToolExecutor for Exec {
         Ok(ToolOutput { json: s(&next["json"]), undo: Some(next["undo"].clone()).filter(|u| !u.is_null()) })
     }
 
-    fn ask(&mut self, question: &str, options: &[String]) -> Option<String> {
+    async fn ask(&mut self, question: &str, options: &[String]) -> Option<String> {
         self.asks.push(json!({ "question": question, "options": options }));
         let a = self.answers.pop_front().unwrap_or_else(|| "Abbrechen".into());
         (a != "__abort__").then_some(a)
     }
 
-    fn heft_page(&mut self, _title: Option<&str>, page: Option<f64>) -> HeftPage {
+    async fn heft_page(&mut self, _title: Option<&str>, page: Option<f64>) -> HeftPage {
         let page_no = page.map_or(1, |p| p.floor().max(1.0) as u32);
         // Das Golden-Heft hat nur Seite 1 mit Text; weitere Seiten sind leer.
         match &self.heft {
@@ -435,11 +442,11 @@ fn agent_schleife() {
                 now: now(),
             };
             let mut items = vec![];
-            let outcome = run_agent(&p, &mut exec, &req, &mut session, &CancelToken::default(), &mut |e| {
+            let outcome = block_on(run_agent(&p, &mut exec, &req, &mut session, &CancelToken::default(), &mut |e| {
                 if let AgentEvent::Item(i) = e {
                     items.push(item_json(&i));
                 }
-            });
+            }));
             check_requests(&label, &run["requests"], &fake.seen.lock().unwrap());
             assert_eq!(Value::from(items), run["items"], "{label}: Chat-Einträge");
             assert_eq!(Value::from(exec.runs), run["toolRuns"], "{label}: Werkzeuge");
@@ -472,7 +479,7 @@ fn modelle_ping_embeddings() {
         let sync_url = s(&case["syncUrl"]);
         let sources = Sources { providers: &providers, sync_url: &sync_url };
         let (result, error): (Value, Option<AiError>) = if name.starts_with("list-models") {
-            match list_models(&fake, sources) {
+            match block_on(list_models(&fake, sources)) {
                 Ok(list) => (list.iter().map(|m| json!({ "id": m.id, "providerId": m.provider_id })).collect(), None),
                 Err(e) => (Value::Null, Some(e)),
             }
@@ -487,11 +494,11 @@ fn modelle_ping_embeddings() {
                 _ => "https://w.workers.dev",
             };
             let key = if name == "ping-ok" { "k" } else { "" };
-            let r = ping_provider(
+            let r = block_on(ping_provider(
                 &fake,
                 &Provider { id: "a".into(), name: String::new(), base: base.into(), key: key.into() },
                 sources,
-            );
+            ));
             let mut out = json!({ "ok": r.ok });
             if r.ok {
                 out["models"] = json!(r.models);
@@ -512,7 +519,7 @@ fn modelle_ping_embeddings() {
             assert_eq!(route, EmbedRoute::Remote);
             let p = embed_provider(&providers, &s(&case["settings"]["embedProviderId"]), &providers[0].id).unwrap();
             let texts: Vec<String> = case["requests"][0]["body"]["input"].as_array().unwrap().iter().map(s).collect();
-            match embed_remote(&fake, p, &model, &texts) {
+            match block_on(embed_remote(&fake, p, &model, &texts)) {
                 // Zahlen als f64 vergleichen (JS kennt keine Unterscheidung 1 vs. 1.0).
                 Ok(v) => {
                     let js: Vec<Vec<f64>> = serde_json::from_value(case["result"].clone()).unwrap();
@@ -548,7 +555,7 @@ fn abbruch_ueber_rueckruf() {
     let st = json!({ "providers": [{ "id": "local", "name": "Lokal", "base": "http://x/v1" }], "activeProviderId": "local", "model": "m", "thinkingEnabled": true });
     let p = provider(&st, &fake, Arc::new(Mutex::new(vec![])));
     let messages = [Message::user("hi")];
-    let r = p.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, &mut |_| false);
+    let r = block_on(p.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, &mut |_| false));
     assert_eq!(r, Err(AiError::Aborted));
     assert_eq!(fake.seen.lock().unwrap().len(), 1, "kein Wiederholungsversuch nach Abbruch");
 }

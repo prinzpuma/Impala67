@@ -19,30 +19,31 @@ pub struct ImportOutcome {
     pub imported: Vec<Value>,
 }
 
+#[allow(async_fn_in_trait)]
 pub trait DriveStore {
-    fn load_state(&self) -> Result<DriveState, StoreError>;
-    fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError>;
+    async fn load_state(&self) -> Result<DriveState, StoreError>;
+    async fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError>;
     /// Höchste lokale Event-`seq`.
-    fn max_seq(&self) -> Result<u64, StoreError>;
+    async fn max_seq(&self) -> Result<u64, StoreError>;
     /// Lokale Events mit `after < seq <= up_to` in `seq`-Reihenfolge, samt lokaler Marken
     /// (`seq`, `_remote`, `_remoteSource`, `_derived`) – der Ablauf filtert selbst.
-    fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError>;
+    async fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError>;
     /// Fremde Events und (v1-Snapshot) Blobs übernehmen: `payload` hat das `exportAll`-Format.
     /// Neue Events werden `_remote` mit `_remoteSource: "drive"` markiert; lokale Änderungen nach
     /// `unsynced_after_seq` gelten als ungesynct (Konflikterkennung). Ohne `allow_secrets`
     /// verlieren eingehende Einstellungen ihre Geheimnisse.
-    fn import(
+    async fn import(
         &mut self,
         payload: Value,
         unsynced_after_seq: u64,
         allow_secrets: bool,
     ) -> Result<ImportOutcome, StoreError>;
     /// `exportAll` ohne Blobs als JSON-Text (Drive-Snapshot).
-    fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError>;
+    async fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError>;
     /// Alle Blob-Schlüssel (ohne Checkpoint-Einträge).
-    fn blob_ids(&self) -> Result<Vec<String>, StoreError>;
-    fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError>;
-    fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError>;
+    async fn blob_ids(&self) -> Result<Vec<String>, StoreError>;
+    async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError>;
+    async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError>;
 }
 
 /// [`DriveStore`] über einen [`Storage`]: Zustand in den Meta-Einträgen (dieselben Schlüssel wie
@@ -66,7 +67,7 @@ fn err(e: impala_storage::Error) -> StoreError {
 }
 
 impl<S: Storage> DriveStore for StorageStore<S> {
-    fn load_state(&self) -> Result<DriveState, StoreError> {
+    async fn load_state(&self) -> Result<DriveState, StoreError> {
         let mut failed = None;
         let state = DriveState::from_kv(|k| match self.storage.meta(k) {
             Ok(v) => v,
@@ -78,21 +79,21 @@ impl<S: Storage> DriveStore for StorageStore<S> {
         failed.map_or(Ok(state), |e| Err(err(e)))
     }
 
-    fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError> {
+    async fn save_state(&mut self, state: &DriveState) -> Result<(), StoreError> {
         let writes = state.to_kv().into_iter().map(|(k, v)| Write::SetMeta(k.to_owned(), v)).collect();
         self.storage.apply(writes).map(drop).map_err(err)
     }
 
-    fn max_seq(&self) -> Result<u64, StoreError> {
+    async fn max_seq(&self) -> Result<u64, StoreError> {
         self.storage.log_info().map(|i| i.max_seq).map_err(err)
     }
 
-    fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
+    async fn events_between(&self, after: u64, up_to: u64) -> Result<Vec<Value>, StoreError> {
         let events = self.storage.events_after(after, Some(up_to), None).map_err(err)?;
         Ok(events.into_iter().map(Value::Object).collect())
     }
 
-    fn import(
+    async fn import(
         &mut self,
         payload: Value,
         _unsynced_after_seq: u64,
@@ -108,21 +109,21 @@ impl<S: Storage> DriveStore for StorageStore<S> {
         })
     }
 
-    fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError> {
+    async fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError> {
         let opts = ExportOptions { include_blobs: false, redact_secrets, exported_at: exported_at.to_owned() };
         exchange::export_all(&self.storage, &opts).map_err(err)
     }
 
-    fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
+    async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
         self.storage.blob_keys().map_err(err)
     }
 
-    fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
+    async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError> {
         let blob = self.storage.blob(id).map_err(err)?;
         Ok(blob.map(|b| LocalBlob { meta: b.meta.unwrap_or(Value::Null), data: b.bytes }))
     }
 
-    fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
+    async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError> {
         let write = Write::PutBlob(id.to_owned(), Blob { bytes: blob.data, meta: Some(blob.meta) });
         self.storage.apply(vec![write]).map(drop).map_err(err)
     }

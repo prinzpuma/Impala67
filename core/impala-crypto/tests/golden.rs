@@ -1,6 +1,6 @@
-//! Vergleich mit dem JS-Original `web/sync-crypto.js` (Golden-File von core/tools/gen-golden-crypto.mjs).
+//! Vergleich mit der letzten JS-Fassung von `web/sync-crypto.js` (eingefrorenes Golden-File; die
+//! JS-Verschlüsselung wurde durch den Rust-Kern ersetzt).
 //! Rust muss lesen, was JS verschlüsselt hat, und mit gleichem IV dieselben Bytes erzeugen.
-//! Umgekehrt schreibt `rust_output_for_js` Pakete, die `gen-golden-crypto.mjs --check` mit JS liest.
 
 use std::sync::OnceLock;
 
@@ -121,7 +121,7 @@ fn storage_usage_matches_js() {
     }
 }
 
-/// Schreibt Rust-Ausgaben für die Gegenprobe mit JS (`node core/tools/gen-golden-crypto.mjs --check`).
+/// Rust-Ausgaben, die die letzte JS-Fassung lesen konnte (Gegenprobe damals mit `gen-golden-crypto.mjs --check`).
 #[test]
 fn rust_output_for_js() {
     let key = &creds().key;

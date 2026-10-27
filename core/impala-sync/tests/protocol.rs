@@ -1,6 +1,6 @@
-//! Vergleich mit den JS-Originalen des Protokolls v4 (Golden-File `tests/golden/protocol.json`,
-//! erzeugt von core/tools/gen-golden-sync.mjs aus web/sync-core.js, sync-crypto.js,
-//! sync-transfer.js, sync-cloudflare.js und sync-maintenance.js).
+//! Vergleich mit dem Protokoll v4 der letzten JS-Fassung (Golden-File `tests/golden/protocol.json`,
+//! eingefroren; damals web/sync-core.js, sync-crypto.js, sync-transfer.js, sync-cloudflare.js und
+//! sync-maintenance.js). Alte Geräte und gespeicherte Pakete bleiben so lesbar.
 
 use std::collections::HashSet;
 use std::sync::OnceLock;

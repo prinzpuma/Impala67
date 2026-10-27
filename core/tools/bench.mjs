@@ -6,9 +6,9 @@ import { compactEvents } from "../../web/compact-events.js";
 import { sampleLog } from "./sample-log.mjs";
 
 const [n = 100_000, rounds = 300] = process.argv.slice(2).map(Number);
-// WASM aus core/target/wasm/ (node core/tools/build.mjs); die PWA nutzt den Kern noch nicht.
-const core = await import("../target/wasm/impala_core.js");
-await core.default({ module_or_path: fs.readFileSync(new URL("../target/wasm/impala_core_bg.wasm", import.meta.url)) });
+// WASM aus web/core/ (npm run build:core).
+const core = await import("../../web/core/impala_core.js");
+await core.default({ module_or_path: fs.readFileSync(new URL("../../web/core/impala_core_bg.wasm", import.meta.url)) });
 const wasm = (events) => Array.from(core.compactOrder(events), (i) => events[i]);
 
 const same = (a, b) => a.length === b.length && a.every((ev, i) => ev === b[i]);

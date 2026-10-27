@@ -2,6 +2,8 @@
 //! samt Wiederholungen: Überlast/Netz erneut versuchen, inkompatible Thinking-Zusätze
 //! oder Werkzeug-Schemas weglassen – aber nie, nachdem schon Text geliefert wurde.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -32,19 +34,24 @@ pub struct ChatTurn<'a> {
 /// Sprachmodell: Nachrichten + Werkzeuge → Antwort. Zwischenstände gehen an `on_update`;
 /// gibt es `false` zurück, bricht die Anfrage ab ([`AiError::Aborted`]).
 /// Plattformen (Apple Foundation Models, Gemini Nano) setzen eigene Implementierungen ein.
+#[allow(async_fn_in_trait)]
 pub trait LlmProvider {
     fn model(&self) -> ModelInfo;
-    fn chat(
+    async fn chat(
         &self,
         turn: ChatTurn<'_>,
         on_update: &mut dyn FnMut(StreamUpdate<'_>) -> bool,
     ) -> Result<AssistantMessage, AiError>;
 }
 
-/// Wartezeit zwischen Versuchen (ms). Plattformen ohne `thread::sleep` (WASM) setzen eine eigene.
-pub type Sleeper = Box<dyn Fn(u64) + Send + Sync>;
+/// Future einer Wartezeit.
+pub type SleepFuture = Pin<Box<dyn Future<Output = ()>>>;
+/// Wartezeit zwischen Versuchen (ms) als asynchrone Plattformfunktion (Browser: `setTimeout`-Promise).
+/// Standard: nativ `thread::sleep`, in WASM sofort fertig; Plattformen setzen mit
+/// [`HttpProvider::with_sleep`] ihre eigene.
+pub type Sleeper = Box<dyn Fn(u64) -> SleepFuture>;
 /// Aktuelle Zeit in ms seit 1970 (für `Retry-After` als Datum).
-pub type Clock = Box<dyn Fn() -> u64 + Send + Sync>;
+pub type Clock = Box<dyn Fn() -> u64>;
 
 /// Anbieter über OpenAI-kompatible HTTP-APIs bzw. den Cloudflare-Worker.
 pub struct HttpProvider<C: HttpClient> {
@@ -135,7 +142,7 @@ impl<C: HttpClient> HttpProvider<C> {
     }
 
     /// Ein Versuch; `produced` merkt sich, ob schon Inhalt angekommen ist.
-    fn attempt(
+    async fn attempt(
         &self,
         turn: &ChatTurn<'_>,
         attempt: Attempt<'_>,
@@ -147,7 +154,7 @@ impl<C: HttpClient> HttpProvider<C> {
         let google = self.config.family() == Family::Google;
         let mut next_id = |i| self.next_id(i);
         if !attempt.stream {
-            let res = self.client.send(&req).map_err(net_error)?;
+            let res = self.client.send(&req).await.map_err(net_error)?;
             if !res.is_success() {
                 return Err(self.http_error(&res, &res.body));
             }
@@ -156,13 +163,16 @@ impl<C: HttpClient> HttpProvider<C> {
         // Der Status steht erst nach dem Strom fest: Rohdaten für Fehler- und JSON-Antworten
         // aufheben. Fehlerkörper enthalten keine `data:`-Zeilen und erzeugen keine Ausgabe.
         let (mut parser, mut raw, mut failure, mut stopped) = (StreamParser::new(google), Vec::new(), None, false);
-        let result = self.client.send_streaming(&req, &mut |chunk| {
-            raw.extend_from_slice(chunk);
-            if let Err(e) = parser.feed(chunk, &mut |u| stopped |= !on_update(u)) {
-                failure = Some(e);
-            }
-            failure.is_none() && !stopped
-        });
+        let result = self
+            .client
+            .send_streaming(&req, &mut |chunk| {
+                raw.extend_from_slice(chunk);
+                if let Err(e) = parser.feed(chunk, &mut |u| stopped |= !on_update(u)) {
+                    failure = Some(e);
+                }
+                failure.is_none() && !stopped
+            })
+            .await;
         *produced |= parser.produced();
         let res = match result {
             Err(e) => return Err(failure.unwrap_or_else(|| if stopped { AiError::Aborted } else { net_error(e) })),
@@ -182,14 +192,17 @@ impl<C: HttpClient> HttpProvider<C> {
     }
 }
 
+/// Native Standardlösung: blockiert beim Abfragen den Thread (der Kern selbst wartet sonst nie).
 #[cfg(not(target_arch = "wasm32"))]
-fn default_sleep(ms: u64) {
-    std::thread::sleep(std::time::Duration::from_millis(ms));
+fn default_sleep(ms: u64) -> SleepFuture {
+    Box::pin(async move { std::thread::sleep(std::time::Duration::from_millis(ms)) })
 }
 
 /// In WASM gibt es kein blockierendes Warten; die Plattform setzt [`HttpProvider::with_sleep`].
 #[cfg(target_arch = "wasm32")]
-fn default_sleep(_ms: u64) {}
+fn default_sleep(_ms: u64) -> SleepFuture {
+    Box::pin(async {})
+}
 
 fn default_clock() -> u64 {
     #[cfg(not(target_arch = "wasm32"))]
@@ -207,7 +220,7 @@ impl<C: HttpClient> LlmProvider for HttpProvider<C> {
         ModelInfo { model: self.config.model.clone(), family: self.config.family() }
     }
 
-    fn chat(
+    async fn chat(
         &self,
         turn: ChatTurn<'_>,
         on_update: &mut dyn FnMut(StreamUpdate<'_>) -> bool,
@@ -223,11 +236,11 @@ impl<C: HttpClient> LlmProvider for HttpProvider<C> {
             // Ein Limit sagt nichts über das Tool-Schema – Werkzeuge bleiben dann erhalten.
             let with_tools = plans[i] || last.as_ref().and_then(AiError::status) == Some(429);
             if i > 0 {
-                (self.sleep)(waits[i].max(last.as_ref().map_or(0, AiError::retry_after_ms)));
+                (self.sleep)(waits[i].max(last.as_ref().map_or(0, AiError::retry_after_ms))).await;
             }
             let tools = if with_tools { turn.tools } else { &[] };
             let attempt = Attempt { tools, stream: turn.stream, thinking_extras: extras };
-            match self.attempt(&turn, attempt, &mut produced, on_update) {
+            match self.attempt(&turn, attempt, &mut produced, on_update).await {
                 Ok(msg) => return Ok(msg),
                 Err(e) => {
                     if e == AiError::Aborted || (e.status() == Some(429) && e.retry_after_ms() > MAX_RETRY_WAIT_MS) {
@@ -256,11 +269,11 @@ impl<C: HttpClient> LlmProvider for HttpProvider<C> {
 }
 
 /// Einfache Anfrage ohne Werkzeuge und Streaming (Zusammenfassungen, JSON-Aufgaben).
-pub fn complete(provider: &dyn LlmProvider, prompt: &str, system: Option<&str>) -> Result<String, AiError> {
+pub async fn complete(provider: &impl LlmProvider, prompt: &str, system: Option<&str>) -> Result<String, AiError> {
     let mut messages = Vec::with_capacity(2);
     if let Some(s) = system.filter(|s| !s.is_empty()) {
         messages.push(Message::system(s));
     }
     messages.push(Message::user(prompt));
-    Ok(provider.chat(ChatTurn { messages: &messages, tools: &[], stream: false }, &mut |_| true)?.content)
+    Ok(provider.chat(ChatTurn { messages: &messages, tools: &[], stream: false }, &mut |_| true).await?.content)
 }

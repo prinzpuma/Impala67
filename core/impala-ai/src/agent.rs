@@ -57,13 +57,14 @@ pub struct HeftPageContent {
 }
 
 /// Zugriff auf App-Zustand für Werkzeuge und Rückfragen.
+#[allow(async_fn_in_trait)]
 pub trait ToolExecutor {
     /// Führt ein angebotenes Werkzeug aus. `Err`: Fehlermeldung fürs Modell.
-    fn run(&mut self, name: &str, args: &Value) -> Result<ToolOutput, String>;
+    async fn run(&mut self, name: &str, args: &Value) -> Result<ToolOutput, String>;
     /// Anklickbare Rückfrage an den Nutzer; `None` = abgebrochen.
-    fn ask(&mut self, question: &str, options: &[String]) -> Option<String>;
+    async fn ask(&mut self, question: &str, options: &[String]) -> Option<String>;
     /// Heftseite (Titel leer = aktuelles Heft; Seite ab 1, leer = aktuelle).
-    fn heft_page(&mut self, title: Option<&str>, page: Option<f64>) -> HeftPage;
+    async fn heft_page(&mut self, title: Option<&str>, page: Option<f64>) -> HeftPage;
 }
 
 /// Neue Einträge im Chat (in dieser Reihenfolge anzeigen und speichern).
@@ -142,8 +143,8 @@ pub struct AgentOutcome {
 }
 
 /// Zusammenfassung älterer Nachrichten; Fehler (außer Abbruch) lassen sie still weg.
-fn summarize(
-    provider: &dyn LlmProvider,
+async fn summarize(
+    provider: &impl LlmProvider,
     overflow: &[ChatEntry],
     session: &mut AgentSession,
 ) -> Result<String, AiError> {
@@ -155,7 +156,7 @@ fn summarize(
         Err(cached) => return Ok(cached),
     };
     let cached = session.summary.as_ref().filter(|c| overflow.len() >= c.count).map(|c| c.text.clone());
-    match provider.chat(ChatTurn { messages: &messages, tools: &[], stream: false }, &mut |_| true) {
+    match provider.chat(ChatTurn { messages: &messages, tools: &[], stream: false }, &mut |_| true).await {
         Ok(msg) => {
             let text = js::trim(&msg.content).to_owned();
             if text.is_empty() {
@@ -185,16 +186,16 @@ fn field<'v>(json: &'v Option<Value>, key: &str) -> Option<&'v Value> {
     json.as_ref().and_then(|v| v.get(key))
 }
 
-struct Run<'a> {
-    provider: &'a dyn LlmProvider,
-    executor: &'a mut dyn ToolExecutor,
+struct Run<'a, P: LlmProvider, E: ToolExecutor> {
+    provider: &'a P,
+    executor: &'a mut E,
     cancel: &'a CancelToken,
     on_event: &'a mut dyn FnMut(AgentEvent<'_>),
     messages: Vec<Message>,
     edits: Vec<AgentItem>,
 }
 
-impl Run<'_> {
+impl<P: LlmProvider, E: ToolExecutor> Run<'_, P, E> {
     fn item(&mut self, item: AgentItem) {
         (self.on_event)(AgentEvent::Item(item));
     }
@@ -239,8 +240,8 @@ impl Run<'_> {
         self.messages.push(Message::tool_result(&call.id, content));
     }
 
-    fn run_tool(&mut self, name: &str, args: &Value) -> (String, Option<Value>) {
-        match self.executor.run(name, args) {
+    async fn run_tool(&mut self, name: &str, args: &Value) -> (String, Option<Value>) {
+        match self.executor.run(name, args).await {
             Ok(out) => (out.json, out.undo),
             Err(e) => (error_json(&e), None),
         }
@@ -254,14 +255,14 @@ impl Run<'_> {
         self.edits.push(AgentItem::Change { summary, undo });
     }
 
-    fn ask(&mut self, question: &str, options: &[String]) -> Result<String, AiError> {
-        match self.executor.ask(question, options) {
+    async fn ask(&mut self, question: &str, options: &[String]) -> Result<String, AiError> {
+        match self.executor.ask(question, options).await {
             Some(answer) if !self.cancel.is_cancelled() => Ok(answer),
             _ => Err(self.fail(AiError::Aborted)),
         }
     }
 
-    fn heft_page(&mut self, call: &ToolCall, args: &Value, pending: &mut Vec<Message>) {
+    async fn heft_page(&mut self, call: &ToolCall, args: &Value, pending: &mut Vec<Message>) {
         // view_heft_page {title, page}; das ältere get_heft_page_image {page_title, heft_page}.
         let (title, page) = if call.name == "view_heft_page" {
             (args.get("title"), args.get("page"))
@@ -270,7 +271,7 @@ impl Run<'_> {
         };
         let title = title.filter(|v| js::truthy(v)).map(js::string);
         let page = page.filter(|v| js::truthy(v)).and_then(|v| v.as_f64().or_else(|| js::string(v).parse().ok()));
-        let page = self.executor.heft_page(title.as_deref(), page);
+        let page = self.executor.heft_page(title.as_deref(), page).await;
         let label = title.clone().unwrap_or_else(|| "aktuelles Heft".into());
         let detail = if page.page_no > 0 { format!("{label} · Seite {}", page.page_no) } else { label };
         let json = match page.result {
@@ -298,9 +299,9 @@ impl Run<'_> {
 }
 
 /// Ein Agent-Lauf. Gibt die Antwort zurück; bei zu vielen Schritten einen Hinweistext.
-pub fn run_agent(
-    provider: &dyn LlmProvider,
-    executor: &mut dyn ToolExecutor,
+pub async fn run_agent(
+    provider: &impl LlmProvider,
+    executor: &mut impl ToolExecutor,
     req: &AgentRequest<'_>,
     session: &mut AgentSession,
     cancel: &CancelToken,
@@ -317,7 +318,7 @@ pub fn run_agent(
     let meta_def = [request_tools_def()];
     let mut tools: &[ToolDef] = if meta_only { &meta_def } else { req.tools };
     let rag = rag_context(req.rag_hits, req.active_page);
-    let summary = summarize(provider, &overflow, session)?;
+    let summary = summarize(provider, &overflow, session).await?;
     if let Some(image) = page_context_image(req.workspace) {
         history.push(image);
     }
@@ -344,13 +345,16 @@ pub fn run_agent(
         prune_run_history(&mut run.messages);
         let turn = ChatTurn { messages: &run.messages, tools, stream: true };
         let (cancel, on_event) = (run.cancel, &mut *run.on_event);
-        let reply = run.provider.chat(turn, &mut |u| {
-            match u {
-                StreamUpdate::Content(t) => on_event(AgentEvent::Draft(t)),
-                StreamUpdate::Reasoning(t) => on_event(AgentEvent::Thinking(t)),
-            }
-            !cancel.is_cancelled()
-        });
+        let reply = run
+            .provider
+            .chat(turn, &mut |u| {
+                match u {
+                    StreamUpdate::Content(t) => on_event(AgentEvent::Draft(t)),
+                    StreamUpdate::Reasoning(t) => on_event(AgentEvent::Thinking(t)),
+                }
+                !cancel.is_cancelled()
+            })
+            .await;
         let message = reply.map_err(|e| run.fail(e))?;
         run.messages.push(message.to_message(info.family));
         let reasoning = js::trim(message.reasoning.as_deref().unwrap_or_default()).to_owned();
@@ -404,7 +408,7 @@ pub fn run_agent(
             };
             (run.on_event)(AgentEvent::ToolStarted(name));
             if name == "view_heft_page" || name == "get_heft_page_image" {
-                run.heft_page(call, &args, &mut pending_images);
+                run.heft_page(call, &args, &mut pending_images).await;
                 continue;
             }
             if name == REQUEST_TOOLS {
@@ -429,14 +433,14 @@ pub fn run_agent(
             if name == "change" {
                 let (json, undo, detail) = match change_confirmation(&args) {
                     None => {
-                        let (json, undo) = run.run_tool(name, &args);
+                        let (json, undo) = run.run_tool(name, &args).await;
                         (json, undo, Some(tool_detail(name, &args, req.embed_model)))
                     }
                     Some(c) => {
                         let options = CONFIRM_OPTIONS.map(String::from);
-                        let answer = run.ask(&c.question, &options)?;
+                        let answer = run.ask(&c.question, &options).await?;
                         if answer.to_lowercase().starts_with("ja") {
-                            let (json, undo) = run.run_tool(name, &args);
+                            let (json, undo) = run.run_tool(name, &args).await;
                             let cancelled =
                                 field(&serde_json::from_str(&json).ok(), "cancelled").is_some_and(js::truthy);
                             (json, undo, (!cancelled).then_some(c.detail))
@@ -453,7 +457,7 @@ pub fn run_agent(
                 match normalize_ask_choice(&args) {
                     Err(e) => run.finish_tool(call, Some(&e), error_json(&e)),
                     Ok(choice) => {
-                        let answer = run.ask(&choice.question, &choice.options)?;
+                        let answer = run.ask(&choice.question, &choice.options).await?;
                         let json =
                             js::object(&[("answer", Value::from(answer)), ("question", Value::from(choice.question))]);
                         run.finish_tool(call, None, json);
@@ -461,7 +465,7 @@ pub fn run_agent(
                 }
                 continue;
             }
-            let (json, _) = run.run_tool(name, &args);
+            let (json, _) = run.run_tool(name, &args).await;
             run.finish_tool(call, Some(&tool_detail(name, &args, req.embed_model)), json);
         }
         if !pending_images.is_empty() {
@@ -493,8 +497,8 @@ pub fn refine_messages(
 }
 
 /// Antwort umformulieren (ohne Werkzeuge, gestreamt).
-pub fn refine(
-    provider: &dyn LlmProvider,
+pub async fn refine(
+    provider: &impl LlmProvider,
     history: &[Message],
     instruction: &str,
     custom_instructions: &str,
@@ -502,5 +506,5 @@ pub fn refine(
     on_update: &mut dyn FnMut(StreamUpdate<'_>) -> bool,
 ) -> Result<String, AiError> {
     let messages = refine_messages(history, instruction, custom_instructions, now);
-    Ok(provider.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, on_update)?.content)
+    Ok(provider.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, on_update).await?.content)
 }

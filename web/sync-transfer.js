@@ -18,23 +18,6 @@ export async function mapLimit(items, limit, fn) {
 const NON_ASCII = /[^\x00-\x7f]/;
 export const utf8Length = (text) => (NON_ASCII.test(text) ? UTF8_ENCODER.encode(text).byteLength : text.length);
 
-export function transferBodyBytes(body) {
-	if (typeof body === "string") return utf8Length(body);
-	if (body instanceof ArrayBuffer) return body.byteLength;
-	if (ArrayBuffer.isView(body)) return body.byteLength;
-	if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
-	return 0;
-}
-
-export function isRetryableSyncError(error) {
-	const status = Number(error?.status) || 0;
-	return !status || status === 408 || status === 425 || status === 429 || status >= 500;
-}
-
-export function syncRetryDelayMs(attempt, { base = 1000, max = 30000 } = {}) {
-	return Math.min(max, Math.round(base * 1.6 ** Math.max(0, Number(attempt) || 0)));
-}
-
 function responseHeaders(xhr) {
 	const headers = new Headers();
 	for (const line of String(xhr.getAllResponseHeaders?.() || "").trim().split(/[\r\n]+/)) {

@@ -1,14 +1,13 @@
-// Baut die WASM-Hülle des Kerns nach core/target/wasm/ (nur für Messungen; die PWA nutzt den
-// Kern noch nicht). Plattformneutral: node core/tools/build.mjs
-// Voraussetzungen: rustup target add wasm32-unknown-unknown und wasm-bindgen-cli in der Version
-// aus core/impala-wasm/Cargo.toml (Befehle siehe Fehlermeldungen).
+// Baut den Rust-Kern als WASM nach web/core/ (npm run build:core). Plattformneutral.
+// Voraussetzungen: Rust mit Ziel wasm32-unknown-unknown und wasm-bindgen-cli in der Version
+// aus core/impala-wasm/Cargo.toml (Befehle siehe Fehlermeldungen). Kein wasm-opt: bringt hier
+// nur ~1 KB gzip und wäre ein weiteres Werkzeug.
+// Die Ausgabe wird committet; core/wasm-build.json hält Quell- und Ausgabe-Hashes fest,
+// damit `npm run check:core` (Teil von verify) einen vergessenen Neubau bemerkt.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-export const CORE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const OUT = path.join(CORE, "target/wasm");
+import { buildStamp, CORE, OUT, STAMP } from "./stamp.mjs";
 
 const run = (cmd, args, hint) => {
 	const res = spawnSync(cmd, args, { cwd: CORE, stdio: "inherit", shell: false });
@@ -25,4 +24,7 @@ fs.rmSync(OUT, { recursive: true, force: true });
 run("wasm-bindgen", ["--target", "web", "--no-typescript", "--out-dir", OUT, "--out-name", "impala_core",
 	path.join(CORE, "target/wasm32-unknown-unknown/release/impala_wasm.wasm")],
 	`Installieren: cargo install wasm-bindgen-cli --version ${bindgenVersion} --locked`);
-for (const f of fs.readdirSync(OUT)) console.log(`core/target/wasm/${f}: ${(fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1)} KB`);
+
+fs.writeFileSync(STAMP, JSON.stringify(buildStamp(), null, "\t") + "\n");
+for (const f of fs.readdirSync(OUT)) console.log(`web/core/${f}: ${(fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1)} KB`);
+console.log("Stempel: core/wasm-build.json");
