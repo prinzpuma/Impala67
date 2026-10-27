@@ -62,6 +62,274 @@ export class DriveCore {
 if (Symbol.dispose) DriveCore.prototype[Symbol.dispose] = DriveCore.prototype.free;
 
 /**
+ * Ergebnis von [`heft_diff`]: Operationen und der Schatten des neuen Stands.
+ */
+export class HeftDiff {
+    static __wrap(ptr) {
+        const obj = Object.create(HeftDiff.prototype);
+        obj.__wbg_ptr = ptr;
+        HeftDiffFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        HeftDiffFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_heftdiff_free(ptr, 0);
+    }
+    /**
+     * @returns {any}
+     */
+    get ops() {
+        const ret = wasm.heftdiff_ops(this.__wbg_ptr);
+        return takeObject(ret);
+    }
+    /**
+     * Den neuen Schatten übernehmen (nur einmal).
+     * @returns {HeftShadow | undefined}
+     */
+    takeShadow() {
+        const ret = wasm.heftdiff_takeShadow(this.__wbg_ptr);
+        return ret === 0 ? undefined : HeftShadow.__wrap(ret);
+    }
+}
+if (Symbol.dispose) HeftDiff.prototype[Symbol.dispose] = HeftDiff.prototype.free;
+
+/**
+ * Strich-Radierer einer Geste: kennt die Striche der Seite; jeder Aufruf entfernt die
+ * getroffenen und liefert ihre Indizes in der aktuellen (schon verkürzten) Liste.
+ */
+export class HeftEraser {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        HeftEraserFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_hefteraser_free(ptr, 0);
+    }
+    /**
+     * Radiert an (x, y): Indizes (in die Eingabe von `new`) der entfernten Striche.
+     * @param {number} x
+     * @param {number} y
+     * @returns {Uint32Array}
+     */
+    eraseAt(x, y) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.hefteraser_eraseAt(retptr, this.__wbg_ptr, x, y);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayU32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export5(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Striche der Seite im Binärformat ([`unpack`]).
+     * @param {Float64Array} coords
+     * @param {Uint32Array} counts
+     * @param {Float64Array} sizes
+     * @param {Float64Array} bboxes
+     * @param {string} shapes
+     * @param {number} radius
+     */
+    constructor(coords, counts, sizes, bboxes, shapes, radius) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayF64ToWasm0(coords, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passArray32ToWasm0(counts, wasm.__wbindgen_export);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passArrayF64ToWasm0(sizes, wasm.__wbindgen_export);
+            const len2 = WASM_VECTOR_LEN;
+            const ptr3 = passArrayF64ToWasm0(bboxes, wasm.__wbindgen_export);
+            const len3 = WASM_VECTOR_LEN;
+            const ptr4 = passStringToWasm0(shapes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len4 = WASM_VECTOR_LEN;
+            wasm.hefteraser_new(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, radius);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            this.__wbg_ptr = r0;
+            HeftEraserFinalization.register(this, this.__wbg_ptr, this);
+            return this;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+}
+if (Symbol.dispose) HeftEraser.prototype[Symbol.dispose] = HeftEraser.prototype.free;
+
+/**
+ * Zuletzt veröffentlichter Stand eines Hefts (je Element nur eine Signatur).
+ */
+export class HeftShadow {
+    static __wrap(ptr) {
+        const obj = Object.create(HeftShadow.prototype);
+        obj.__wbg_ptr = ptr;
+        HeftShadowFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        HeftShadowFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_heftshadow_free(ptr, 0);
+    }
+    /**
+     * Log-Operationen fortschreiben (gleiche Regeln wie der Reducer).
+     * @param {any} ops
+     */
+    applyOps(ops) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.heftshadow_applyOps(retptr, this.__wbg_ptr, addBorrowedObject(ops));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            heap[stack_pointer++] = undefined;
+        }
+    }
+    /**
+     * Operationen, die diesen Stand in `doc` überführen.
+     * @param {any} doc
+     * @returns {HeftDiff}
+     */
+    diff(doc) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.heftshadow_diff(retptr, this.__wbg_ptr, addBorrowedObject(doc));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return HeftDiff.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            heap[stack_pointer++] = undefined;
+        }
+    }
+    /**
+     * Schatten eines Dokuments.
+     * @param {any} doc
+     * @returns {HeftShadow}
+     */
+    static of(doc) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.heftshadow_of(retptr, addBorrowedObject(doc));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return HeftShadow.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            heap[stack_pointer++] = undefined;
+        }
+    }
+}
+if (Symbol.dispose) HeftShadow.prototype[Symbol.dispose] = HeftShadow.prototype.free;
+
+/**
+ * Verschieben/Skalieren einer Auswahl während einer Geste: Die Ausgangsgeometrie bleibt im
+ * Kern; jede Bewegung rechnet absolut von ihr aus und liefert die Geometrien aller Striche.
+ */
+export class HeftTransform {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        HeftTransformFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_hefttransform_free(ptr, 0);
+    }
+    /**
+     * Geometrie aller Striche ([`pack_geometry`]) nach Verschieben um (dx, dy) (`moveStrokeFrom`).
+     * @param {number} dx
+     * @param {number} dy
+     * @returns {any}
+     */
+    moveBy(dx, dy) {
+        const ret = wasm.hefttransform_moveBy(this.__wbg_ptr, dx, dy);
+        return takeObject(ret);
+    }
+    /**
+     * Auswahl im Binärformat ([`unpack`]).
+     * @param {Float64Array} coords
+     * @param {Uint32Array} counts
+     * @param {Float64Array} sizes
+     * @param {Float64Array} bboxes
+     * @param {string} shapes
+     */
+    constructor(coords, counts, sizes, bboxes, shapes) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayF64ToWasm0(coords, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passArray32ToWasm0(counts, wasm.__wbindgen_export);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passArrayF64ToWasm0(sizes, wasm.__wbindgen_export);
+            const len2 = WASM_VECTOR_LEN;
+            const ptr3 = passArrayF64ToWasm0(bboxes, wasm.__wbindgen_export);
+            const len3 = WASM_VECTOR_LEN;
+            const ptr4 = passStringToWasm0(shapes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len4 = WASM_VECTOR_LEN;
+            wasm.hefttransform_new(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            this.__wbg_ptr = r0;
+            HeftTransformFinalization.register(this, this.__wbg_ptr, this);
+            return this;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Nach Skalieren um den Anker (`scaleStrokeFrom`); die Dicke wächst mit.
+     * @param {number} ax
+     * @param {number} ay
+     * @param {number} factor
+     * @returns {any}
+     */
+    scaleBy(ax, ay, factor) {
+        const ret = wasm.hefttransform_scaleBy(this.__wbg_ptr, ax, ay, factor);
+        return takeObject(ret);
+    }
+}
+if (Symbol.dispose) HeftTransform.prototype[Symbol.dispose] = HeftTransform.prototype.free;
+
+/**
  * Erkenner mit (optionalem) großem Wörterbuch.
  */
 export class InkEngine {
@@ -690,6 +958,558 @@ export function generateSyncKey() {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Geometrie `{ pts, shape, size }` setzen und Grenzen neu rechnen (`applyStrokeGeometry`).
+ * @param {any} geometry
+ * @returns {any}
+ */
+export function heftApplyGeometry(geometry) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftApplyGeometry(retptr, addBorrowedObject(geometry));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * ID eines Bild-Blobs aus seinen Daten (Teil des gespeicherten Formats).
+ * @param {string} data
+ * @returns {string}
+ */
+export function heftBlobId(data) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(data, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.heftBlobId(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * PDF aus JPEG-Seitenbildern (A4, zentriert). `jpegs` hintereinander, `lengths`/`widths`/`heights` je Seite.
+ * @param {Uint8Array} jpegs
+ * @param {Uint32Array} lengths
+ * @param {Uint32Array} widths
+ * @param {Uint32Array} heights
+ * @returns {Uint8Array}
+ */
+export function heftBuildPdf(jpegs, lengths, widths, heights) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(jpegs, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(lengths, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray32ToWasm0(widths, wasm.__wbindgen_export);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArray32ToWasm0(heights, wasm.__wbindgen_export);
+        const len3 = WASM_VECTOR_LEN;
+        wasm.heftBuildPdf(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v5 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        return v5;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * @param {number} total
+ * @param {number} selected
+ * @returns {boolean}
+ */
+export function heftCanDeletePages(total, selected) {
+    const ret = wasm.heftCanDeletePages(total, selected);
+    return ret !== 0;
+}
+
+/**
+ * Durchsuchbarer Seitentext: Stricherkennung, danach der Text aller Scan-Bilder.
+ * @param {string} stroke_text
+ * @param {any} page
+ * @returns {string}
+ */
+export function heftComposePageText(stroke_text, page) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(stroke_text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.heftComposePageText(retptr, ptr0, len0, addBorrowedObject(page));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr2 = r0;
+        var len2 = r1;
+        if (r3) {
+            ptr2 = 0; len2 = 0;
+            throw takeObject(r2);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Operationen, die ein leeres Heft in `doc` überführen.
+ * @param {any} doc
+ * @returns {HeftDiff}
+ */
+export function heftDiffFromEmpty(doc) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftDiffFromEmpty(retptr, addBorrowedObject(doc));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return HeftDiff.__wrap(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Kopien der Striche, 28 Einheiten versetzt; `uid` liefert die neuen IDs.
+ * @param {any} selection
+ * @param {Function} uid
+ * @returns {any}
+ */
+export function heftDuplicateStrokes(selection, uid) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftDuplicateStrokes(retptr, addBorrowedObject(selection), addBorrowedObject(uid));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Leere Heftseite.
+ * @param {string} id
+ * @param {string | null} [paper]
+ * @returns {any}
+ */
+export function heftEmptyPage(id, paper) {
+    const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    var ptr1 = isLikeNone(paper) ? 0 : passStringToWasm0(paper, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    var len1 = WASM_VECTOR_LEN;
+    const ret = wasm.heftEmptyPage(ptr0, len0, ptr1, len1);
+    return takeObject(ret);
+}
+
+/**
+ * Dateiname für Exporte aus dem Seitentitel.
+ * @param {string | null} [title]
+ * @returns {string}
+ */
+export function heftExportName(title) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        var ptr0 = isLikeNone(title) ? 0 : passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len0 = WASM_VECTOR_LEN;
+        wasm.heftExportName(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Formerkennung (Linie, Pfeil, Dreieck, Rechteck, Ellipse) aus Stiftpunkten; `null` ohne Form.
+ * @param {any} points
+ * @returns {any}
+ */
+export function heftFitShape(points) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftFitShape(retptr, addBorrowedObject(points));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Oberstes Element unter dem Punkt (`hitBox`); `frames` flach `[x, y, w, h]` je Element
+ * (`h` 0/NaN ⇒ 60). Index oder -1.
+ * @param {Float64Array} frames
+ * @param {number} x
+ * @param {number} y
+ * @returns {number}
+ */
+export function heftHitBox(frames, x, y) {
+    const ptr0 = passArrayF64ToWasm0(frames, wasm.__wbindgen_export);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.heftHitBox(ptr0, len0, x, y);
+    return ret;
+}
+
+/**
+ * Getroffener Eckgriff oder `null`.
+ * @param {number} x
+ * @param {number} y
+ * @param {any} bounds
+ * @param {number} hit_radius
+ * @returns {any}
+ */
+export function heftHitLassoHandle(x, y, bounds, hit_radius) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftHitLassoHandle(retptr, x, y, addBorrowedObject(bounds), hit_radius);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Einfügeposition (`start`, `before`, `after`, sonst Ende).
+ * @param {string} position
+ * @param {number} current
+ * @param {number} len
+ * @returns {number}
+ */
+export function heftInsertAt(position, current, len) {
+    const ptr0 = passStringToWasm0(position, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.heftInsertAt(ptr0, len0, current, len);
+    return ret >>> 0;
+}
+
+/**
+ * Liegt der Punkt im (um `tolerance` erweiterten) Auswahlrahmen?
+ * @param {number} x
+ * @param {number} y
+ * @param {any} bounds
+ * @param {number} tolerance
+ * @returns {boolean}
+ */
+export function heftIsLassoBodyHit(x, y, bounds, tolerance) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftIsLassoBodyHit(retptr, x, y, addBorrowedObject(bounds), tolerance);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return r0 !== 0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Gemeinsame Grenzen der Striche (Binärformat, [`unpack`]; ohne Rand), `null` ohne Punkte.
+ * @param {Float64Array} coords
+ * @param {Uint32Array} counts
+ * @param {Float64Array} sizes
+ * @param {Float64Array} bboxes
+ * @param {string} shapes
+ * @returns {any}
+ */
+export function heftLassoBounds(coords, counts, sizes, bboxes, shapes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArrayF64ToWasm0(coords, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(counts, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArrayF64ToWasm0(sizes, wasm.__wbindgen_export);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArrayF64ToWasm0(bboxes, wasm.__wbindgen_export);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(shapes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len4 = WASM_VECTOR_LEN;
+        wasm.heftLassoBounds(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Die vier Eckgriffe `{ tl, tr, bl, br }` eines Auswahlrahmens.
+ * @param {any} bounds
+ * @returns {any}
+ */
+export function heftLassoHandles(bounds) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftLassoHandles(retptr, addBorrowedObject(bounds));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Was ein Fingertipp im Lasso-Modus bewirkt: `"interact"`, `"dismiss"` oder `"none"`.
+ * @param {boolean} is_touch
+ * @param {boolean} lasso_tool
+ * @param {boolean} on_lasso
+ * @returns {string}
+ */
+export function heftLassoTouchAction(is_touch, lasso_tool, on_lasso) {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftLassoTouchAction(retptr, is_touch, lasso_tool, on_lasso);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * Neue Seitenreihenfolge nach Verschieben von `from` nach `to` (Indizes), `undefined` wenn ungültig.
+ * @param {number} len
+ * @param {number} from
+ * @param {number} to
+ * @returns {Uint32Array | undefined}
+ */
+export function heftMovePage(len, from, to) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftMovePage(retptr, len, from, to);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v1;
+        if (r0 !== 0) {
+            v1 = getArrayU32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        }
+        return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * @param {number} px
+ * @param {number} py
+ * @param {number} x
+ * @param {number} y
+ * @param {number} radius
+ * @returns {boolean}
+ */
+export function heftNearPoint(px, py, x, y, radius) {
+    const ret = wasm.heftNearPoint(px, py, x, y, radius);
+    return ret !== 0;
+}
+
+/**
+ * Punkt im Polygon (`poly` flach `[x, y, …]`).
+ * @param {number} x
+ * @param {number} y
+ * @param {Float64Array} poly
+ * @returns {boolean}
+ */
+export function heftPointInPolygon(x, y, poly) {
+    const ptr0 = passArrayF64ToWasm0(poly, wasm.__wbindgen_export);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.heftPointInPolygon(x, y, ptr0, len0);
+    return ret !== 0;
+}
+
+/**
+ * Indizes der vom Lasso (`poly` flach) umschlossenen Striche (Binärformat, [`unpack`]).
+ * @param {Float64Array} coords
+ * @param {Uint32Array} counts
+ * @param {Float64Array} sizes
+ * @param {Float64Array} bboxes
+ * @param {string} shapes
+ * @param {Float64Array} poly
+ * @returns {Uint32Array}
+ */
+export function heftSelectByLasso(coords, counts, sizes, bboxes, shapes, poly) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArrayF64ToWasm0(coords, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(counts, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArrayF64ToWasm0(sizes, wasm.__wbindgen_export);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArrayF64ToWasm0(bboxes, wasm.__wbindgen_export);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(shapes, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len4 = WASM_VECTOR_LEN;
+        const ptr5 = passArrayF64ToWasm0(poly, wasm.__wbindgen_export);
+        const len5 = WASM_VECTOR_LEN;
+        wasm.heftSelectByLasso(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v7 = getArrayU32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v7;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Grenzen samt Rand (`strokeBounds`), `null` ohne Punkte und Form.
+ * @param {any} s
+ * @returns {any}
+ */
+export function heftStrokeBounds(s) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftStrokeBounds(retptr, addBorrowedObject(s));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Umriss (Punkte bzw. abgetastete Form) zum Zeichnen der Auswahl.
+ * @param {any} s
+ * @returns {any}
+ */
+export function heftStrokeOutline(s) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftStrokeOutline(retptr, addBorrowedObject(s));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Verschobene Geometrie `{ pts, shape, size, bbox }` (`translateStroke`).
+ * @param {any} s
+ * @param {number} dx
+ * @param {number} dy
+ * @returns {any}
+ */
+export function heftTranslate(s, dx, dy) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftTranslate(retptr, addBorrowedObject(s), dx, dy);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
     }
 }
 
@@ -1428,12 +2248,20 @@ function __wbg_get_imports() {
             const ret = new Array();
             return addHeapObject(ret);
         },
+        __wbg_new_from_slice_37a3c3a194266cb8: function(arg0, arg1) {
+            const ret = new Uint32Array(getArrayU32FromWasm0(arg0, arg1));
+            return addHeapObject(ret);
+        },
         __wbg_new_from_slice_9a868026ffa4208a: function(arg0, arg1) {
             const ret = new Uint8Array(getArrayU8FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
         __wbg_new_from_slice_ca6ad97db1f4779a: function(arg0, arg1) {
             const ret = new Float32Array(getArrayF32FromWasm0(arg0, arg1));
+            return addHeapObject(ret);
+        },
+        __wbg_new_from_slice_f545fd22ddc142b8: function(arg0, arg1) {
+            const ret = new Float64Array(getArrayF64FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
         __wbg_new_typed_b01cb72a8af741a3: function(arg0, arg1) {
@@ -1443,7 +2271,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_2198(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_2546(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1532,8 +2360,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 78, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2140);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 87, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2490);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -1560,14 +2388,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2198(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_2198(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_2546(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_2546(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_2140(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_2490(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_2140(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_2490(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -1581,6 +2409,18 @@ function __wasm_bindgen_func_elem_2140(arg0, arg1, arg2) {
 const DriveCoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_drivecore_free(ptr, 1));
+const HeftDiffFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_heftdiff_free(ptr, 1));
+const HeftEraserFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_hefteraser_free(ptr, 1));
+const HeftShadowFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_heftshadow_free(ptr, 1));
+const HeftTransformFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_hefttransform_free(ptr, 1));
 const InkEngineFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_inkengine_free(ptr, 1));
@@ -1630,6 +2470,11 @@ function getArrayF32FromWasm0(ptr, len) {
     return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
+function getArrayF64FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
+}
+
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     const mem = getDataViewMemory0();
@@ -1664,6 +2509,14 @@ function getFloat32ArrayMemory0() {
         cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
     }
     return cachedFloat32ArrayMemory0;
+}
+
+let cachedFloat64ArrayMemory0 = null;
+function getFloat64ArrayMemory0() {
+    if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
+        cachedFloat64ArrayMemory0 = new Float64Array(wasm.memory.buffer);
+    }
+    return cachedFloat64ArrayMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {
@@ -1750,6 +2603,13 @@ function passArray8ToWasm0(arg, malloc) {
 function passArrayF32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayF64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8, 8) >>> 0;
+    getFloat64ArrayMemory0().set(arg, ptr / 8);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
@@ -1845,6 +2705,7 @@ function __wbg_finalize_init(instance, module) {
     wasmModule = module;
     cachedDataViewMemory0 = null;
     cachedFloat32ArrayMemory0 = null;
+    cachedFloat64ArrayMemory0 = null;
     cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     return wasm;

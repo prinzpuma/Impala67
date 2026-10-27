@@ -1,206 +1,35 @@
 "use strict";
 
 import { U } from "./util.js";
-import {
-	strokeBounds,
-	translateStroke,
-	pointInPolygon,
-	strokeOutline
-} from "./heft-geometry.js";
+import { CORE } from "./rust-core.js";
+import { packStrokes } from "./heft-geometry.js";
 
-/**
- * Berechnet die Bounding Box aller übergebenen Striche.
- * Schnelle Schleifen ohne Closure-Allocations.
- */
-export function lassoBounds(strokes) {
-	if (!Array.isArray(strokes) || !strokes.length) return null;
-	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-	for (let i = 0; i < strokes.length; i++) {
-		const s = strokes[i];
-		const pts = s.pts;
-		if (Array.isArray(pts) && pts.length) {
-			for (let j = 0; j < pts.length; j++) {
-				const p = pts[j];
-				if (p[0] < minX) minX = p[0];
-				if (p[0] > maxX) maxX = p[0];
-				if (p[1] < minY) minY = p[1];
-				if (p[1] > maxY) maxY = p[1];
-			}
-		}
-		if (s.shape) {
-			const outline = strokeOutline(s);
-			for (let j = 0; j < outline.length; j++) {
-				const p = outline[j];
-				if (p[0] < minX) minX = p[0];
-				if (p[0] > maxX) maxX = p[0];
-				if (p[1] < minY) minY = p[1];
-				if (p[1] > maxY) maxY = p[1];
-			}
-		}
-	}
-	return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
+// Lasso-Logik im Rust-Kern (core/impala-heft lasso.rs): Grenzen, Auswahl, Griffe, Kopien.
+// Hier bleiben Zeichnen und die Aktionen der Leiste.
 
-/**
- * Berechnet die Bounding Box eines Polygons (Array von [x, y]).
- */
-export function polygonBounds(poly) {
-	if (!Array.isArray(poly) || !poly.length) return null;
-	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-	for (let i = 0; i < poly.length; i++) {
-		const p = poly[i];
-		if (p[0] < minX) minX = p[0];
-		if (p[0] > maxX) maxX = p[0];
-		if (p[1] < minY) minY = p[1];
-		if (p[1] > maxY) maxY = p[1];
-	}
-	return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
+// Gemeinsame Grenzen der Striche (Punkte und Form-Umriss), null ohne Punkte.
+export const lassoBounds = (strokes) => (Array.isArray(strokes) && strokes.length ? CORE.heftLassoBounds(...packStrokes(strokes)) ?? null : null);
 
-/**
- * Schneller AABB-Überschneidungstest zweier Bounding Boxes.
- */
-export function boxesIntersect(a, b) {
-	return !!(a && b && a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY);
-}
-
-/**
- * Tiefe Kopie eines einzelnen Strichs ohne JSON.stringify-Overhead.
- */
-export function cloneStroke(stroke) {
-	const copy = {
-		id: U.uid(),
-		tool: stroke.tool,
-		color: stroke.color,
-		size: stroke.size,
-		pts: Array.isArray(stroke.pts) ? stroke.pts.map((p) => p.slice()) : []
-	};
-	if (stroke.shape) copy.shape = { ...stroke.shape };
-	if (stroke.opacity != null) copy.opacity = stroke.opacity;
-	strokeBounds(copy);
-	return copy;
-}
-
-/**
- * Robuste, performante Prüfung, ob ein Strich im Lasso-Polygon liegt:
- * 1. O(1) Bounding-Box-Vorfilterung gegen grobe Abstände.
- * 2. Einzelpunkte / sehr kurze Striche (z.B. i-Punkte): Ein Punkt muss im Polygon liegen.
- * 3. Längere Striche: Schwerpunkt muss im Polygon liegen ODER mindestens 25 % der Stützpunkte.
- *    Verhindert versehentliches Auswählen benachbarter Zeilen bei minimalem Randkontakt.
- */
-export function strokeInPolygon(stroke, poly, polyBox) {
-	const box = stroke.bbox || strokeBounds(stroke);
-	if (!boxesIntersect(box, polyBox)) return false;
-
-	const outline = strokeOutline(stroke);
-	if (!outline || !outline.length) return false;
-
-	if (outline.length <= 2) {
-		for (let i = 0; i < outline.length; i++) {
-			if (pointInPolygon(outline[i], poly)) return true;
-		}
-		return false;
-	}
-
-	let hits = 0;
-	let sumX = 0, sumY = 0;
-	const count = outline.length;
-	// Maximal 24 Abtastpunkte für maximale Geschwindigkeit
-	const step = count > 24 ? Math.ceil(count / 24) : 1;
-	let sampled = 0;
-
-	for (let i = 0; i < count; i += step) {
-		const pt = outline[i];
-		sumX += pt[0];
-		sumY += pt[1];
-		sampled++;
-		if (pointInPolygon(pt, poly)) hits++;
-	}
-
-	// Schwerpunkt im Polygon?
-	if (sampled > 0) {
-		const centroid = [sumX / sampled, sumY / sampled];
-		if (pointInPolygon(centroid, poly)) return true;
-	}
-
-	// Oder mindestens 2 Treffer und >= 25 % der Punkte
-	return hits >= 2 && hits / sampled >= 0.25;
-}
-
-/**
- * Filtert alle Striche einer Seite, die vom Lasso umschlossen sind.
- * Schnelle Vorfilterung über AABB.
- */
+// Striche einer Seite, die das Lasso umschließt (Schwerpunkt oder ≥ 25 % der Stützpunkte innen).
 export function selectStrokesByLasso(strokes, poly) {
 	if (!Array.isArray(strokes) || !strokes.length || !Array.isArray(poly) || poly.length < 3) return [];
-	const polyBox = polygonBounds(poly);
-	if (!polyBox) return [];
-	const results = [];
-	for (let i = 0; i < strokes.length; i++) {
-		if (strokeInPolygon(strokes[i], poly, polyBox)) {
-			results.push(strokes[i]);
-		}
-	}
-	return results;
+	return Array.from(CORE.heftSelectByLasso(...packStrokes(strokes), Float64Array.from(poly.flatMap((p) => [p[0], p[1]]))), (i) => strokes[i]);
 }
 
-/**
- * Touch-Action-Entscheidung:
- * Tippen außerhalb der Auswahl schaltet zurück auf den Stift.
- * Tippen auf die Auswahl erlaubt Draggen/Skalieren.
- */
-export const lassoTouchAction = (pointerType, currentTool, onLasso) =>
-	pointerType === "touch" && currentTool === "lasso" ? (onLasso ? "interact" : "dismiss") : "none";
+// Tippen außerhalb der Auswahl schaltet zurück auf den Stift, auf der Auswahl: verschieben/skalieren.
+export const lassoTouchAction = (pointerType, currentTool, onLasso) => CORE.heftLassoTouchAction(pointerType === "touch", currentTool === "lasso", !!onLasso);
 
-export const LASSO_HANDLE_OFFSET = 8;
 export const LASSO_HANDLE_RADIUS = 5.5;
 export const LASSO_HIT_RADIUS = 18;
 
-/**
- * Liefert die 4 Eckgriffe für eine Bounding Box:
- * tl: oben-links, tr: oben-rechts, bl: unten-links, br: unten-rechts
- * Jeder Griff hat einen gegenüberliegenden Ankerpunkt für die proportionale Skalierung.
- */
-export function getLassoHandles(bounds) {
-	if (!bounds) return null;
-	const off = LASSO_HANDLE_OFFSET;
-	return {
-		tl: { x: bounds.minX - off, y: bounds.minY - off, anchor: [bounds.maxX, bounds.maxY], name: "tl" },
-		tr: { x: bounds.maxX + off, y: bounds.minY - off, anchor: [bounds.minX, bounds.maxY], name: "tr" },
-		bl: { x: bounds.minX - off, y: bounds.maxY + off, anchor: [bounds.maxX, bounds.minY], name: "bl" },
-		br: { x: bounds.maxX + off, y: bounds.maxY + off, anchor: [bounds.minX, bounds.minY], name: "br" }
-	};
-}
+// Die 4 Eckgriffe { tl, tr, bl, br } mit gegenüberliegendem Anker für proportionales Skalieren.
+export const getLassoHandles = (bounds) => (bounds ? CORE.heftLassoHandles(bounds) : null);
 
-/**
- * Prüft, ob ein Klick/Tap einen der 4 Eckgriffe getroffen hat.
- * Gibt das Griff-Objekt mit Anker zurück oder null.
- */
-export function hitLassoHandle(pos, bounds, hitRadius = LASSO_HIT_RADIUS) {
-	if (!bounds) return null;
-	const handles = getLassoHandles(bounds);
-	if (!handles) return null;
-	const r2 = hitRadius * hitRadius;
-	for (const key of ["br", "tr", "bl", "tl"]) {
-		const h = handles[key];
-		const dx = pos[0] - h.x, dy = pos[1] - h.y;
-		if (dx * dx + dy * dy <= r2) return h;
-	}
-	return null;
-}
+// Getroffener Eckgriff (mit Anker) oder null.
+export const hitLassoHandle = (pos, bounds, hitRadius = LASSO_HIT_RADIUS) => (bounds ? CORE.heftHitLassoHandle(pos[0], pos[1], bounds, hitRadius) : null);
 
-/**
- * Prüft, ob ein Klick/Tap innerhalb des Auswahl-Bereichs zum Verschieben liegt.
- */
-export function isLassoBodyHit(pos, bounds, tolerance = 12) {
-	if (!bounds) return false;
-	return (
-		pos[0] >= bounds.minX - tolerance &&
-		pos[0] <= bounds.maxX + tolerance &&
-		pos[1] >= bounds.minY - tolerance &&
-		pos[1] <= bounds.maxY + tolerance
-	);
-}
+// Liegt der Tipp im (erweiterten) Auswahlrahmen zum Verschieben?
+export const isLassoBodyHit = (pos, bounds, tolerance = 12) => !!bounds && CORE.heftIsLassoBodyHit(pos[0], pos[1], bounds, tolerance);
 
 /**
  * Zeichnet den Lasso-Auswahlrahmen (gestrichelte Bounding-Box + 4 Eckgriffe).
@@ -208,23 +37,15 @@ export function isLassoBodyHit(pos, bounds, tolerance = 12) {
 export function drawLassoSelection(ctx, strokes, cachedBounds = null) {
 	const bb = cachedBounds || lassoBounds(strokes || []);
 	if (!bb) return;
-	const off = LASSO_HANDLE_OFFSET;
+	const h = getLassoHandles(bb);
 	ctx.save();
 	ctx.setLineDash([7, 4]);
 	ctx.strokeStyle = "#2f6fed";
 	ctx.lineWidth = 1.8;
-	ctx.strokeRect(bb.minX - off, bb.minY - off, bb.maxX - bb.minX + 2 * off, bb.maxY - bb.minY + 2 * off);
+	ctx.strokeRect(h.tl.x, h.tl.y, h.br.x - h.tl.x, h.br.y - h.tl.y);
 	ctx.setLineDash([]);
 
-	const handles = [
-		[bb.minX - off, bb.minY - off],
-		[bb.maxX + off, bb.minY - off],
-		[bb.minX - off, bb.maxY + off],
-		[bb.maxX + off, bb.maxY + off]
-	];
-
-	for (let i = 0; i < 4; i++) {
-		const [hx, hy] = handles[i];
+	for (const { x: hx, y: hy } of [h.tl, h.tr, h.bl, h.br]) {
 		ctx.beginPath();
 		ctx.arc(hx, hy, LASSO_HANDLE_RADIUS, 0, Math.PI * 2);
 		ctx.fillStyle = "#2f6fed";
@@ -286,11 +107,8 @@ export function duplicateLassoStrokes(lassoSel, doc, pushUndo) {
 	if (!lassoSel || !doc) return null;
 	const pg = doc.pages[lassoSel.pageIdx];
 	if (!pg) return null;
-	const copies = lassoSel.strokes.map((s) => {
-		const c = cloneStroke(s);
-		translateStroke(c, 28, 28);
-		return c;
-	});
+	// Kopien 28 Einheiten versetzt, mit neuen IDs (Rust-Kern).
+	const copies = CORE.heftDuplicateStrokes(lassoSel.strokes, U.uid);
 	pg.strokes.push(...copies);
 	pushUndo({ kind: "lassoDup", strokes: copies, pageIdx: lassoSel.pageIdx });
 	const newBounds = lassoBounds(copies);

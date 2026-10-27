@@ -2,12 +2,12 @@
 import { S } from "./state.js";
 import { U } from "./util.js";
 import { icon } from "./icons.js";
+import { CORE } from "./rust-core.js";
 
 // FIX unscharfe Exporte: vorher 1600px Breite (~190 dpi auf A4) — jetzt 300 dpi.
 export const EXPORT_W = 2480;
 
-export const exportName = (pageId, pages = (S && S.pages) || {}) =>
-	(String((pages[pageId] && pages[pageId].title) || "Heft").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Heft");
+export const exportName = (pageId, pages = (S && S.pages) || {}) => CORE.heftExportName(pages[pageId]?.title ? String(pages[pageId].title) : undefined);
 
 export const exportIdxs = (d, indices) =>
 	(indices && indices.length ? indices : (d && d.pages ? d.pages.map((_, i) => i) : []));
@@ -19,43 +19,13 @@ export function dataUrlBytes(du) {
 	return u;
 }
 
+// PDF aus JPEG-Seitenbildern ({ dataUrl, w, h }), A4, zentriert (Rust-Kern).
 export function buildPdf(shots) {
-	const tenc = new TextEncoder();
-	const parts = [];
-	const offsets = [];
-	let len = 0;
-	const push = (u8) => { parts.push(u8); len += u8.length; };
-	const pushStr = (s) => push(tenc.encode(s));
-	const A4W = "595.28", A4H = "841.89";
-	pushStr("%PDF-1.4\n");
-	const n = shots.length;
-	const pageObj = (i) => 3 + i * 3, imgObj = (i) => 4 + i * 3, cntObj = (i) => 5 + i * 3;
-	const obj = (num, body) => { offsets[num] = len; pushStr(num + " 0 obj\n" + body + "\nendobj\n"); };
-	obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
-	obj(2, "<< /Type /Pages /Kids [" + shots.map((_, i) => pageObj(i) + " 0 R").join(" ") + "] /Count " + n + " >>");
-	shots.forEach((sh, i) => {
-		const k = Math.min(595.28 / sh.w, 841.89 / sh.h);
-		const w = sh.w * k, h = sh.h * k, ox = (595.28 - w) / 2, oy = (841.89 - h) / 2;
-		obj(pageObj(i), "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + A4W + " " + A4H + "] " +
-			"/Resources << /XObject << /Im" + i + " " + imgObj(i) + " 0 R >> >> /Contents " + cntObj(i) + " 0 R >>");
-		const jpg = dataUrlBytes(sh.dataUrl);
-		offsets[imgObj(i)] = len;
-		pushStr(imgObj(i) + " 0 obj\n<< /Type /XObject /Subtype /Image /Width " + sh.w + " /Height " + sh.h +
-			" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpg.length + " >>\nstream\n");
-		push(jpg);
-		pushStr("\nendstream\nendobj\n");
-		const cs = "q " + w.toFixed(2) + " 0 0 " + h.toFixed(2) + " " + ox.toFixed(2) + " " + oy.toFixed(2) + " cm /Im" + i + " Do Q";
-		obj(cntObj(i), "<< /Length " + cs.length + " >>\nstream\n" + cs + "\nendstream");
-	});
-	const xrefAt = len;
-	const count = 3 + n * 3;
-	let xref = "xref\n0 " + count + "\n0000000000 65535 f \n";
-	for (let i = 1; i < count; i++) xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
-	pushStr(xref + "trailer\n<< /Size " + count + " /Root 1 0 R >>\nstartxref\n" + xrefAt + "\n%%EOF");
-	const out = new Uint8Array(len);
-	let o = 0;
-	parts.forEach((p) => { out.set(p, o); o += p.length; });
-	return out;
+	const jpgs = shots.map((sh) => dataUrlBytes(sh.dataUrl));
+	const all = new Uint8Array(jpgs.reduce((n, j) => n + j.length, 0));
+	let at = 0;
+	for (const j of jpgs) { all.set(j, at); at += j.length; }
+	return CORE.heftBuildPdf(all, Uint32Array.from(jpgs, (j) => j.length), Uint32Array.from(shots, (sh) => sh.w), Uint32Array.from(shots, (sh) => sh.h));
 }
 
 const nextFrame = () => typeof requestAnimationFrame === "function"

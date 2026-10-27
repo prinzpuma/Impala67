@@ -1,19 +1,17 @@
 "use strict";
 
+// Seitenverwaltung im Rust-Kern (core/impala-heft pages.rs).
+import { CORE } from "./rust-core.js";
+
 export function movePage(pages, from, to) {
-	if (!Array.isArray(pages) || from === to || from < 0 || to < 0 || from >= pages.length || to >= pages.length) return false;
-	const [page] = pages.splice(from, 1);
-	pages.splice(to, 0, page);
+	if (!Array.isArray(pages) || !(from >= 0) || !(to >= 0)) return false;
+	const order = CORE.heftMovePage(pages.length, from, to);
+	if (!order) return false;
+	const before = pages.slice();
+	order.forEach((i, at) => { pages[at] = before[i]; });
 	return true;
 }
 
-export function insertAt(position, current, length) {
-	if (position === "start") return 0;
-	if (position === "before") return Math.max(0, Math.min(current, length));
-	if (position === "after") return Math.max(0, Math.min(current + 1, length));
-	return Math.max(0, length);
-}
+export const insertAt = (position, current, length) => CORE.heftInsertAt(String(position || ""), Math.max(0, current | 0), Math.max(0, length | 0));
 
-export function canDeletePages(total, selected) {
-	return selected > 0 && total - selected >= 1;
-}
+export const canDeletePages = (total, selected) => CORE.heftCanDeletePages(Math.max(0, total | 0), Math.max(0, selected | 0));

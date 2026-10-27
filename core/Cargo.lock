@@ -870,6 +870,7 @@ version = "0.1.0"
 dependencies = [
  "impala-crypto",
  "impala-drive",
+ "impala-heft",
  "impala-ink",
  "impala-markdown",
  "impala-net",
@@ -877,6 +878,7 @@ dependencies = [
  "impala-srs",
  "impala-sync",
  "js-sys",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",

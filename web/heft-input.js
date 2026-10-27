@@ -8,7 +8,8 @@
 
 import { U } from "./util.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
-import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, moveStrokeFrom, scaleStrokeFrom, nearPoint, strokeHitAt } from "./heft-geometry.js";
+import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, applyGeometries, packStrokes, nearPoint } from "./heft-geometry.js";
+import { CORE } from "./rust-core.js";
 import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, isLassoBodyHit, drawLassoPath } from "./heft-lasso.js";
 
 export function createHeftInput(H) {
@@ -63,19 +64,15 @@ export function createHeftInput(H) {
 	function eraseAt(e) {
 		// PERF: erst messen, dann den Ring verschieben — andersherum erzwang jedes
 		// Pointer-Event ein zusätzliches synchrones Layout.
-		const p0 = pos(e, H.drawing.cv), r = H.eraserSize, pg = H.doc.pages[H.drawing.pageIdx];
+		const p0 = pos(e, H.drawing.cv), pg = H.doc.pages[H.drawing.pageIdx];
 		showEraserRing(e);
-		// PERF: Pointer-Events feuern viel dichter, als der Radierer breit ist —
-		// Mini-Schritte müssen nicht jedes Mal alle Striche der Seite prüfen.
-		const lp = H.drawing.lastErase;
-		if (lp && Math.hypot(p0[0] - lp[0], p0[1] - lp[1]) < r * 0.35) return;
-		H.drawing.lastErase = p0;
-		const keep = [], removed = [];
-		for (const s of pg.strokes) {
-			if (strokeHitAt(s, p0[0], p0[1], r)) removed.push(s); else keep.push(s);
-		}
-		if (removed.length) {
-			pg.strokes = keep; H.drawing.removed.push(...removed);
+		// Der Radierer des Kerns kennt die Striche der Seite seit Gestenbeginn; Mini-Schritte
+		// (unter 35 % des Radius) prüft er nicht erneut.
+		const hit = H.drawing.eraser.eraseAt(p0[0], p0[1]);
+		if (hit.length) {
+			const ids = new Set(Array.from(hit, (i) => H.drawing.eraseList[i].id));
+			const removed = pg.strokes.filter((s) => ids.has(s.id));
+			pg.strokes = pg.strokes.filter((s) => !ids.has(s.id)); H.drawing.removed.push(...removed);
 			// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
 			// als Pointer-Events eintreffen.
 			redrawNextFrame(H.drawing.pageIdx);
@@ -143,6 +140,7 @@ export function createHeftInput(H) {
 						byTouch: e.pointerType === "touch",
 						strokes: H.lassoSel.strokes,
 						originals: H.lassoSel.strokes.map(strokeGeometry),
+						transform: new CORE.HeftTransform(...packStrokes(H.lassoSel.strokes)),
 						cv,
 						pageIdx: pi,
 						anchor,
@@ -154,7 +152,7 @@ export function createHeftInput(H) {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, originals: H.lassoSel.strokes.map(strokeGeometry), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
+					H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, transform: new CORE.HeftTransform(...packStrokes(H.lassoSel.strokes)), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
 					return;
 				}
 			}
@@ -235,7 +233,7 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
-		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true, removed: [], cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true, removed: [], eraseList: pg.strokes.slice(), eraser: new CORE.HeftEraser(...packStrokes(pg.strokes), H.eraserSize), cv, ctx: x, pageIdx: pi }; eraseAt(e); }
 		else { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
 
 		setWriting(true);
@@ -283,7 +281,7 @@ export function createHeftInput(H) {
 			const pm = pos(e, H.drawing.cv);
 			const dx = pm[0] - H.drawing.start[0], dy = pm[1] - H.drawing.start[1];
 			if (dx !== H.drawing.dx || dy !== H.drawing.dy) {
-				H.drawing.strokes.forEach((s, i) => moveStrokeFrom(s, H.drawing.originals[i], dx, dy));
+				applyGeometries(H.drawing.strokes, H.drawing.transform.moveBy(dx, dy));
 				H.drawing.dx = dx; H.drawing.dy = dy;
 				const b = H.drawing.bounds0;
 				if (H.lassoSel) H.lassoSel.bounds = { minX: b.minX + dx, maxX: b.maxX + dx, minY: b.minY + dy, maxY: b.maxY + dy };
@@ -320,7 +318,7 @@ export function createHeftInput(H) {
 
 			const factor = Math.max(0.15, Math.min(6.0, maxFactor, currentDist / startDist));
 
-			H.drawing.strokes.forEach((stroke, i) => scaleStrokeFrom(stroke, H.drawing.originals[i], anchor[0], anchor[1], factor));
+			applyGeometries(H.drawing.strokes, H.drawing.transform.scaleBy(anchor[0], anchor[1], factor));
 			H.drawing.factor = factor;
 			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
 			redrawNextFrame(H.drawing.pageIdx);

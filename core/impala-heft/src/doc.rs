@@ -73,7 +73,8 @@ pub struct BBox {
 }
 
 impl BBox {
-    fn from_value(v: &Value) -> Option<Self> {
+    /// Liest `{ minX, minY, maxX, maxY }`; fehlt eine Zahl: `None`.
+    pub fn from_value(v: &Value) -> Option<Self> {
         let f = |k: &str| v.get(k).and_then(Value::as_f64);
         Some(BBox { min_x: f("minX")?, min_y: f("minY")?, max_x: f("maxX")?, max_y: f("maxY")? })
     }

@@ -1,4 +1,4 @@
-//! Laufzeit der Heft-Geometrie nativ, auf denselben Eingaben wie `core/tools/bench-heft.mjs`
+//! Laufzeit der Heft-Geometrie nativ, auf festen Zufallseingaben
 //! (gleicher Zufallsgenerator, gleiche Reihenfolge). Median aus 7 Läufen.
 //!   cargo run -p impala-heft --example bench --profile native
 

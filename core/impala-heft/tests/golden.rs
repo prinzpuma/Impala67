@@ -1,7 +1,6 @@
-//! Vergleich mit dem JS-Original: Die Golden-Files erzeugt `core/tools/gen-golden-heft.mjs`
-//! aus `web/state.js` (Reducer), `web/heft-document-core.js`, `web/heft-geometry.js`,
-//! `web/heft-lasso.js`, `web/heft.js` (Zeichnen), `web/heft-export.js` und
-//! `web/heft-pages-core.js`.
+//! Vergleich mit dem letzten JS-Stand (eingefrorene Golden-Files aus `web/state.js` (Reducer),
+//! `heft-document-core.js`, `heft-geometry.js`, `heft-lasso.js`, `heft.js` (Zeichnen),
+//! `heft-export.js` und `heft-pages-core.js`; die PWA rechnet das seit dem Umbau in Rust).
 //!
 //! Dokumente und Operationen müssen exakt gleich sein; Geometrie mit kleiner Toleranz
 //! (`sin`/`cos` können in der letzten Stelle von V8 abweichen).
