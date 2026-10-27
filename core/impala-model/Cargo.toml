@@ -10,3 +10,15 @@ description = "Datenmodell: Event-Typen, Reducer (Event → Zustand), Checkpoint
 workspace = true
 
 [dependencies]
+impala-heft = { path = "../impala-heft" }
+impala-markdown = { path = "../impala-markdown" }
+impala-search = { path = "../impala-search", default-features = false }
+impala-srs = { path = "../impala-srs" }
+impala-storage = { path = "../impala-storage", default-features = false }
+indexmap = "2"
+serde = { version = "1", features = ["derive"] }
+# preserve_order: Schlüsselreihenfolge wie JS-Objekte; float_roundtrip: Zahlen exakt wie JSON.parse.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+
+[dev-dependencies]
+sha2 = "0.10"
