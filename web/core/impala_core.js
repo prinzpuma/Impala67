@@ -1,4 +1,78 @@
 /**
+ * Ein KI-Lauf (Agent, einfache Antwort oder Umformulieren) mit Abbruch (⏹).
+ */
+export class AiRun {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        AiRunFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_airun_free(ptr, 0);
+    }
+    /**
+     * Agent-Lauf. `input`: `{ settings, options, chat, workspace, ragHits, activePage, tools,
+     * alwaysSendTools, customInstructions, embedModel, now, session }`; `on_event(ev)` mit
+     * `{ type: "draft"|"thinking", text }`, `{ type: "tool", name }` oder `{ type: "item", item }`.
+     * Ergebnis: `{ text, pageContext, session }`.
+     * @param {any} input
+     * @param {any} executor
+     * @param {Function} on_event
+     * @returns {Promise<any>}
+     */
+    agent(input, executor, on_event) {
+        const ret = wasm.airun_agent(this.__wbg_ptr, addHeapObject(input), addHeapObject(executor), addHeapObject(on_event));
+        return takeObject(ret);
+    }
+    cancel() {
+        wasm.airun_cancel(this.__wbg_ptr);
+    }
+    /**
+     * Einfache Antwort ohne Werkzeuge (`input`: `{ settings, options }`).
+     * @param {any} input
+     * @param {string} prompt
+     * @param {string | null} [system]
+     * @returns {Promise<any>}
+     */
+    complete(input, prompt, system) {
+        const ptr0 = passStringToWasm0(prompt, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(system) ? 0 : passStringToWasm0(system, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.airun_complete(this.__wbg_ptr, addHeapObject(input), ptr0, len0, ptr1, len1);
+        return takeObject(ret);
+    }
+    /**
+     * `http`: `send(req)` → `{ status, headers, body }`, `open(req)` → `{ status, headers, read(), cancel() }`.
+     * @param {any} http
+     */
+    constructor(http) {
+        const ret = wasm.airun_new(addHeapObject(http));
+        this.__wbg_ptr = ret;
+        AiRunFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Antwort umformulieren: `history` (Nachrichten im API-Format), gestreamt an
+     * `on_update({ type: "content"|"reasoning", text })`.
+     * @param {any} input
+     * @param {any} history
+     * @param {string} instruction
+     * @param {Function} on_update
+     * @returns {Promise<any>}
+     */
+    refine(input, history, instruction, on_update) {
+        const ptr0 = passStringToWasm0(instruction, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.airun_refine(this.__wbg_ptr, addHeapObject(input), addHeapObject(history), ptr0, len0, addHeapObject(on_update));
+        return takeObject(ret);
+    }
+}
+if (Symbol.dispose) AiRun.prototype[Symbol.dispose] = AiRun.prototype.free;
+
+/**
  * Ein Gerät, ein Kern. Ein Durchgang zur Zeit (JS reiht alle Aufrufe ein).
  */
 export class DriveCore {
@@ -894,6 +968,124 @@ export class VectorIndex {
     }
 }
 if (Symbol.dispose) VectorIndex.prototype[Symbol.dispose] = VectorIndex.prototype.free;
+
+/**
+ * Aktive Quelle samt Modell und Familie (Anzeige, Profiler): `{ providerId, base, model, family }`.
+ * @param {any} settings
+ * @returns {any}
+ */
+export function aiChatConfig(settings) {
+    const ret = wasm.aiChatConfig(addHeapObject(settings));
+    return takeObject(ret);
+}
+
+/**
+ * Vektoren über `POST /embeddings` einer Cloud-Quelle (`provider`: `{ id, base, key }`).
+ * @param {any} http
+ * @param {any} provider
+ * @param {string} model
+ * @param {string[]} texts
+ * @returns {Promise<any>}
+ */
+export function aiEmbedRemote(http, provider, model, texts) {
+    const ptr0 = passStringToWasm0(model, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayJsValueToWasm0(texts, wasm.__wbindgen_export);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.aiEmbedRemote(addHeapObject(http), addHeapObject(provider), ptr0, len0, ptr1, len1);
+    return takeObject(ret);
+}
+
+/**
+ * Modelle aller Quellen: `[{ id, providerId }]`.
+ * @param {any} http
+ * @param {any} providers
+ * @param {string} sync_url
+ * @returns {Promise<any>}
+ */
+export function aiListModels(http, providers, sync_url) {
+    const ptr0 = passStringToWasm0(sync_url, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.aiListModels(addHeapObject(http), addHeapObject(providers), ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Modell-Vorschläge der Einstellungen: `[{ value, label, provider }]`.
+ * @returns {any}
+ */
+export function aiModelPresets() {
+    const ret = wasm.aiModelPresets();
+    return takeObject(ret);
+}
+
+/**
+ * Argumente von `ask_choice` säubern: `{ question, options }` oder `{ error }`.
+ * @param {any} args
+ * @returns {any}
+ */
+export function aiNormalizeAskChoice(args) {
+    const ret = wasm.aiNormalizeAskChoice(addHeapObject(args));
+    return takeObject(ret);
+}
+
+/**
+ * Verbindungstest einer Quelle: `{ ok, models, status, suggestedBase, error }`.
+ * @param {any} http
+ * @param {any} provider
+ * @param {any} providers
+ * @param {string} sync_url
+ * @returns {Promise<any>}
+ */
+export function aiPingProvider(http, provider, providers, sync_url) {
+    const ptr0 = passStringToWasm0(sync_url, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.aiPingProvider(addHeapObject(http), addHeapObject(provider), addHeapObject(providers), ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Wann die automatische Notizsuche läuft: Suchtext oder `undefined`.
+ * @param {string} text
+ * @returns {string | undefined}
+ */
+export function aiRagQuery(text) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.aiRagQuery(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v2;
+        if (r0 !== 0) {
+            v2 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Dokumentierte Thinking-Stufen für Quelle und Modell (`settings` wie bei [`AiRun::agent`]).
+ * @param {any} settings
+ * @returns {any}
+ */
+export function aiThinkingCapabilities(settings) {
+    const ret = wasm.aiThinkingCapabilities(addHeapObject(settings));
+    return takeObject(ret);
+}
+
+/**
+ * Eingebaute Werkzeug-Definitionen (`[{ type: "function", function }]`).
+ * @returns {any}
+ */
+export function aiToolDefs() {
+    const ret = wasm.aiToolDefs();
+    return takeObject(ret);
+}
 
 /**
  * Kompaktiert das Event-Log und liefert die Indizes der behaltenen Events in Log-Reihenfolge.
@@ -2129,6 +2321,10 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).apply(getObject(arg1), getObject(arg2));
             return addHeapObject(ret);
         }, arguments); },
+        __wbg_call_1875a20c43a36133: function() { return handleError(function (arg0, arg1, arg2, arg3) {
+            const ret = getObject(arg0).call(getObject(arg1), getObject(arg2), getObject(arg3));
+            return addHeapObject(ret);
+        }, arguments); },
         __wbg_call_187d372bd5fdd4aa: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = getObject(arg0).call(getObject(arg1), getObject(arg2));
             return addHeapObject(ret);
@@ -2236,6 +2432,24 @@ function __wbg_get_imports() {
             const ret = new Error(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
+        __wbg_new_5502aad30c185fc8: function(arg0, arg1) {
+            try {
+                var state0 = {a: arg0, b: arg1};
+                var cb0 = (arg0, arg1) => {
+                    const a = state0.a;
+                    state0.a = 0;
+                    try {
+                        return __wasm_bindgen_func_elem_3241(a, state0.b, arg0, arg1);
+                    } finally {
+                        state0.a = a;
+                    }
+                };
+                const ret = new Promise(cb0);
+                return addHeapObject(ret);
+            } finally {
+                state0.a = 0;
+            }
+        },
         __wbg_new_617a8cdb8bb1130e: function() {
             const ret = new Object();
             return addHeapObject(ret);
@@ -2271,7 +2485,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_2546(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_3241(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -2327,6 +2541,9 @@ function __wbg_get_imports() {
             const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
             return ret;
         }, arguments); },
+        __wbg_set_name_2c630595dc90a7aa: function(arg0, arg1, arg2) {
+            getObject(arg0).name = getStringFromWasm0(arg1, arg2);
+        },
         __wbg_static_accessor_GLOBAL_266715b9d96ba635: function() {
             const ret = typeof global === 'undefined' ? null : global;
             return isLikeNone(ret) ? 0 : addHeapObject(ret);
@@ -2360,8 +2577,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 87, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2490);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 137, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_3185);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -2388,14 +2605,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2546(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_2546(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_3241(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_3241(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_2490(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_3185(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_2490(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_3185(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -2406,6 +2623,9 @@ function __wasm_bindgen_func_elem_2490(arg0, arg1, arg2) {
     }
 }
 
+const AiRunFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_airun_free(ptr, 1));
 const DriveCoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_drivecore_free(ptr, 1));

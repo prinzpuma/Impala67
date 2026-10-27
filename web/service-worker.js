@@ -71,7 +71,6 @@ const APP_FILES = [
 	"./tools.js",
 	"./ai.js",
 	"./embedding.js",
-	"./think-heuristik.js",
 	"./handschrift.js",
 	"./abschreiben.js",
 	"./abschreiben-texte.js",

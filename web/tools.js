@@ -8,47 +8,15 @@ import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { CORE } from "./rust-core.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
 // Beschreibungs-Diät (31. Juli): Die Liste geht bei JEDER Anfrage und in JEDEM Agent-Schritt
 // vollständig mit. Erzähltext, Wiederholungen und Bestätigungs-Prosa (die App erzwingt die
 // Bestätigung ohnehin im Code) sind raus — nur noch, was das Modell zur Wahl des Werkzeugs braucht.
 export const TOOLS = (() => {
-	const t = (name, description, properties, required) => ({
-		type: "function",
-		function: { name, description, parameters: { type: "object", properties, required } },
-	});
-
-	// 🃏 Karten-Design-Spezifikation (22. Juli): kompaktes Standardformat für alle neuen Karten,
-	// damit die Lern-Ansicht ruhig und einheitlich aussieht (weniger Markdown-Wildwuchs).
-	// Hängt an der Kartenliste von change — geht bei jeder Anfrage mit, daher knapp.
-	const CARD_RULES = " Format: Vorderseite = eine konkrete Frage (8–20 Wörter). Rückseite = Kernantwort in 1–2 Zeilen, optional max. 4 Stichpunkte; keine Überschrift ‚Antwort:', keine Skript-Absätze. LaTeX für Formeln. Eine Karte = ein Fakt.";
-
-	// ask_choice: Argumente säubern/validieren (vom Agent-Loop vor der UI genutzt).
-	// - leere/doppelte Optionen raus
-	// - max. 5, min. 2
-	// - Frage Pflicht
-	function normalizeAskChoice(a) {
-		a = a || {};
-		const question = String(a.question || "").trim();
-		const raw = Array.isArray(a.options) ? a.options : [];
-		const seen = new Set();
-		const options = [];
-		for (const o of raw) {
-			const s = String(o == null ? "" : o).trim();
-			if (!s) continue;
-			const key = s.toLowerCase();
-			if (seen.has(key)) continue;
-			seen.add(key);
-			options.push(s);
-			if (options.length >= 5) break;
-		}
-		if (!question) return { error: "ask_choice: Frage fehlt." };
-		if (options.length < 2) {
-			return { error: "ask_choice: mindestens 2 kurze Optionen nötig (max. 5)." };
-		}
-		return { question, options };
-	}
+	// ask_choice: Argumente säubern/validieren (leere/doppelte Optionen raus, 2–5 Optionen, Frage Pflicht).
+	const normalizeAskChoice = (a) => CORE.aiNormalizeAskChoice(a || {});
 
 	// Karte anhand des Vorderseiten-Texts finden (analog zu STATE.findPage) — exakter
 	// Treffer zuerst, sonst "beginnt mit", sonst "enthält". Optional auf einen Stapel
@@ -180,38 +148,10 @@ export const TOOLS = (() => {
 		};
 	}
 
-	// Kleine, aufgabenorientierte Oberfläche für das Modell. Die historisch gewachsenen
-	// Einzel-Handler bleiben intern erhalten; dadurch bleiben Datenformat und Sync kompatibel,
-	// ohne bei jeder Anfrage dutzende Schemas an das Modell zu schicken.
-	const defs = [
-		t("inspect", "Liest App-Daten. Mehrere Seiten oder Karten in einem Aufruf abrufen.", {
-			kind: { type: "string", enum: ["context", "pages", "page", "decks", "cards", "due", "search", "chats", "archived"], description: "pages = Liste der Seiten & Hefte (optional query zum Filtern); page = Inhalt der Seiten/Hefte in 'titles' (inkl. OCR-Text & Seitenzahl bei Heften)" },
-			titles: { type: "array", items: { type: "string" }, description: "Seitentitel für kind=page" },
-			query: { type: "string" }, deck: { type: "string" }, limit: { type: "number" },
-			semantic: { type: "boolean", description: "Semantische statt Stichwortsuche" },
-		}, ["kind"]),
-		t("change", "Führt mehrere Änderungen in einer atomaren, vollständig rückgängig machbaren Aktion aus. Reihenfolge der operations wird beachtet.", {
-			operations: { type: "array", items: { type: "object", properties: {
-				op: { type: "string", enum: ["page.create", "page.append", "page.replace", "page.patch", "page.rename", "page.move", "page.trash", "page.archive", "page.unarchive", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend", "card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"] },
-				title: { type: "string" }, parent: { type: "string" }, content: { type: "string" }, text: { type: "string" }, search: { type: "string" }, replace: { type: "string" }, page: { type: "number" },
-				front: { type: "string" }, fronts: { type: "array", items: { type: "string" } }, back: { type: "string" }, new_front: { type: "string" }, new_back: { type: "string" },
-				cards: { type: "array", description: "Für card.create." + CARD_RULES, items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] } },
-				deck: { type: "string" }, to: { type: "string" }, query: { type: "string" }, suspended: { type: "boolean" }, limit: { type: "number" },
-			}, required: ["op"] }, minItems: 1 },
-		}, ["operations"]),
-		t("view_heft_page", "Lädt eine Handschrift-Heftseite als Bild für die visuelle Analyse.", {
-			title: { type: "string" }, page: { type: "number" },
-		}, []),
-		t("ask_choice", "Stellt nur bei echter Mehrdeutigkeit eine kurze anklickbare Rückfrage.", {
-			question: { type: "string" }, options: { type: "array", items: { type: "string" } },
-		}, ["question", "options"]),
-		t("calculate", "Berechnet einen math.js-Ausdruck exakt; integrate(\"f(x)\",\"x\",a,b) numerisch.", {
-			expression: { type: "string" },
-		}, ["expression"]),
-		t("send_to_notebooklm", "Übergibt Seiten als Quellen an Gemini Notebook.", {
-			page_titles: { type: "array", items: { type: "string" } },
-		}, []),
-	];
+	// Kleine, aufgabenorientierte Oberfläche für das Modell (Definitionen im Rust-Kern,
+	// core/impala-ai/src/tool_defs.json). Die historisch gewachsenen Einzel-Handler bleiben intern
+	// erhalten; dadurch bleiben Datenformat und Sync kompatibel.
+	const defs = CORE.aiToolDefs();
 
 	const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
 	function splitTopLevelArgs(source) {

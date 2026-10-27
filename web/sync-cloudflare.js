@@ -437,26 +437,10 @@ export const CLOUDFLARE_SYNC = (() => {
 		return CORE.generateSyncKey();
 	}
 
-	// Die KI braucht nur die Anmeldung (User-ID, Token), nicht den Sync und kein PBKDF2.
-	async function aiRequest(payload, options = {}) {
-		const target = String(options.base || state.url || DEFAULT_WORKER_URL).trim().replace(/\/+$/, "");
-		if (!target || !state.syncKey) throw new Error("Cloudflare Sync ist nicht eingerichtet.");
-		const { userId: user, authToken } = CORE.syncAuth(state.syncKey);
-		return fetch(`${target}/api/ai?user=${encodeURIComponent(user)}`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${authToken}`,
-				"X-User-Id": user,
-				[CLOUD_SYNC_PROTOCOL_HEADER]: String(CLOUD_SYNC_PROTOCOL),
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(Array.isArray(payload) ? { messages: payload } : payload || {}), signal: options.signal,
-		});
-	}
 
 	return {
 		init, configure, disconnect, syncNow: () => requestSync(false), purgeCloudData, compactCloud,
-		generateSyncKey, status: () => ({ ...state }), aiRequest,
+		generateSyncKey, status: () => ({ ...state }),
 		isConfigured: () => !!(state.url && (core || state.syncKey)),
 		migrateLocalV4,
 	};

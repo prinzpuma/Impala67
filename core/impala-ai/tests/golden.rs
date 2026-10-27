@@ -1,4 +1,4 @@
-//! Vergleich mit dem JS-Original (Golden-Files aus core/tools/gen-golden-ai.mjs).
+//! Vergleich mit dem letzten JS-Stand (eingefrorene Golden-Files; die PWA fragt seit dem Umbau nur noch über Rust an).
 //! Netz: eine Attrappe spielt die aufgezeichneten Antworten in denselben Byte-Stücken ab.
 
 use std::collections::VecDeque;
@@ -79,7 +79,7 @@ impl HttpClient for Fake {
 
 /// Werkzeug-IDs ohne Vorgabe sind in JS zufällig – für den Vergleich vereinheitlichen.
 fn norm_ids(v: &Value) -> Value {
-    let re = regex::Regex::new(r"call_(\d+)_[0-9a-z]{8}").unwrap();
+    let re = regex::Regex::new(r"call_([0-9]+)_[0-9a-z]{8}").unwrap();
     serde_json::from_str(&re.replace_all(&v.to_string(), "call_${1}_ID")).unwrap()
 }
 

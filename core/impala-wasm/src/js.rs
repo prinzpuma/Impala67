@@ -67,31 +67,71 @@ pub struct JsHttp(pub(crate) JsValue);
 
 impl HttpClient for JsHttp {
     async fn send(&self, req: &Request) -> Result<Response, NetError> {
-        let r = Object::new();
-        set(&r, "method", req.method.as_str());
-        set(&r, "url", req.url.as_str());
-        let headers: Array = req.headers.iter().map(|(k, v)| Array::of2(&k.into(), &v.into())).collect();
-        set(&r, "headers", headers);
-        if !req.body.is_empty() {
-            set(&r, "body", Uint8Array::from(req.body.as_slice()));
-        }
-        let res = call(&self.0, "send", &[r.into()]).await.map_err(|m| {
-            if m.contains("Zeitüberschreitung") || m.to_lowercase().contains("timeout") {
-                NetError::Timeout
-            } else if m.to_lowercase().contains("abort") {
-                NetError::Aborted
-            } else {
-                NetError::Connect(m)
+        let res = call(&self.0, "send", &[request_js(req).into()]).await.map_err(net_error)?;
+        Ok(response_of(&res, bytes(&get(&res, "body"))))
+    }
+
+    /// Stückweise: `http.open(req)` → `{ status, headers, read() → Promise<Uint8Array|null>, cancel() }`.
+    async fn send_streaming(
+        &self,
+        req: &Request,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<Response, NetError> {
+        let res = call(&self.0, "open", &[request_js(req).into()]).await.map_err(net_error)?;
+        let head = response_of(&res, Vec::new());
+        if !head.is_success() {
+            // Fehlertext am Stück (für die Meldung an den Nutzer).
+            let mut body = Vec::new();
+            while let Some(chunk) = read_chunk(&res).await? {
+                body.extend(chunk);
             }
-        })?;
-        let status = get(&res, "status").as_f64().unwrap_or(0.0) as u16;
-        let headers = Array::from(&get(&res, "headers"))
-            .iter()
-            .filter_map(|pair| {
-                let pair = Array::from(&pair);
-                Some((pair.get(0).as_string()?, pair.get(1).as_string()?))
-            })
-            .collect();
-        Ok(Response { status, headers, body: bytes(&get(&res, "body")) })
+            return Ok(Response { body, ..head });
+        }
+        while let Some(chunk) = read_chunk(&res).await? {
+            if !on_chunk(&chunk) {
+                let _ = call_sync(&res, "cancel", &[]);
+                return Err(NetError::Aborted);
+            }
+        }
+        Ok(head)
+    }
+}
+
+async fn read_chunk(res: &JsValue) -> Result<Option<Vec<u8>>, NetError> {
+    let v = call(res, "read", &[]).await.map_err(net_error)?;
+    Ok(if v.is_null() || v.is_undefined() { None } else { Some(bytes(&v)) })
+}
+
+fn request_js(req: &Request) -> Object {
+    let r = Object::new();
+    set(&r, "method", req.method.as_str());
+    set(&r, "url", req.url.as_str());
+    let headers: Array = req.headers.iter().map(|(k, v)| Array::of2(&k.into(), &v.into())).collect();
+    set(&r, "headers", headers);
+    if !req.body.is_empty() {
+        set(&r, "body", Uint8Array::from(req.body.as_slice()));
+    }
+    r
+}
+
+fn response_of(res: &JsValue, body: Vec<u8>) -> Response {
+    let status = get(res, "status").as_f64().unwrap_or(0.0) as u16;
+    let headers = Array::from(&get(res, "headers"))
+        .iter()
+        .filter_map(|pair| {
+            let pair = Array::from(&pair);
+            Some((pair.get(0).as_string()?, pair.get(1).as_string()?))
+        })
+        .collect();
+    Response { status, headers, body }
+}
+
+fn net_error(m: String) -> NetError {
+    if m.contains("Zeitüberschreitung") || m.to_lowercase().contains("timeout") {
+        NetError::Timeout
+    } else if m.to_lowercase().contains("abort") {
+        NetError::Aborted
+    } else {
+        NetError::Connect(m)
     }
 }

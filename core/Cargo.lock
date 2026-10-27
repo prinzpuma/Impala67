@@ -868,6 +868,7 @@ dependencies = [
 name = "impala-wasm"
 version = "0.1.0"
 dependencies = [
+ "impala-ai",
  "impala-crypto",
  "impala-drive",
  "impala-heft",
