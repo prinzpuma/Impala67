@@ -80,17 +80,19 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [x] Drive-Backup Rust only (`DriveCore` in `core/impala-wasm/src/drive.rs`, `web/drive.js` nur noch Anmeldung, Timer, Ein-/Ausgabe).
   - [x] Drive und Sync: Dateien wieder parallel (Drive 6 herunter/3 hoch, Sync 3), über `impala_net::join_all`.
   - [ ] Drive: Login/Upload großer Dateien (resumable, `Location`-Header) mit echtem Google-Konto prüfen.
-  - [ ] Nächste Bereiche Rust only: Suche/RAG, Handschrift-Dekodierung, lokale Kompaktierung, KI, Datenmodell/Start.
+  - [x] Rust only in der PWA: FSRS, Markdown, Suche/RAG, Handschrift, Heft-Logik, KI, Kompaktierung.
+  - [ ] Datenmodell/Reducer (`state.js`) über `impala-model` – Ansatz offen (siehe NATIV-PLAN 3f).
   - [ ] Sync: WASM-Größe senken.
   - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
-  - [ ] PWA: RAG-Index als WASM im Worker (463 → 48 ms je Anfrage), JS als Rückfall; `opt-level` für WASM entscheiden.
+  - [x] PWA: RAG-Index als WASM im Worker.
+  - [ ] WASM-Größe (1,75 MB): `opt-level`, `regex` in impala-ai ersetzen.
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
   - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.
   - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
   - [x] Drive: 60-s-Aufschub greift nie (in `drive.js` behoben), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync (beides mit dem Rust-Kern behoben).
-  - [ ] Handschrift: Skizzen-Striche fehlen in der Strich-Bilanz (`handwriting-worker.js`, `console.error` je Seite).
+  - [x] Handschrift: Skizzen-Striche zählen in der Strich-Bilanz (Rust-Ablauf).
   - [ ] Start-Absturz bei Patch, der kein Objekt ist (`event-order.js:16`); Heft: Kreis-Bounds NaN, `s-` ohne Liste bricht Event ab.
   - [ ] FSRS: Obergrenze der Stabilität nach Vergessen fehlt; Anzeige „60 Min“/„1 Jahre“.
   - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.

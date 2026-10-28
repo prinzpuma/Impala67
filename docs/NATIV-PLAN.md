@@ -81,8 +81,14 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    Anfragen (im Browser laufen die `fetch`-Aufrufe gleichzeitig, mit `block_on` nacheinander). Sync überträgt Dateien zu
    dritt, Drive lädt Snapshot/Deltas/Dateien zu sechst, lädt Dateien zu dritt hoch und löscht zu sechst – wie die
    frühere JS-Fassung. Große Dateien gehen häppchenweise, im Speicher liegen höchstens so viele wie gleichzeitig laufen.
-3e. **Nächste Bereiche Rust only**: Suche/RAG im Worker, Handschrift-Dekodierung,
-   lokale Kompaktierung (`compact-events.js`), KI-Anbieter (`impala-ai`), dann Datenmodell/Start (`impala-model`).
+3e. ✅ **PWA nutzt den Kern für alles außer dem Datenmodell** (28. Oktober 2026): Der Kern lädt beim Start
+   (`web/rust-core.js`, top-level await) und wird synchron genutzt. Nur noch in Rust: FSRS, Markdown samt
+   Text-Helfern, Seitensuche/Tippfehler-Suche/RAG-Ranking (Index im RAG-Worker), Handschrift-Ablauf (Inferenz bleibt
+   ONNX Runtime Web), Heft-Logik (Gesten über ein Binärformat, `packStrokes`), KI samt Agent-Schleife
+   (`AiRun`), Log-Kompaktierung. WASM 1,75 MB (≈ 740 KB gzip).
+3f. **Offen: Datenmodell** (`impala-model`, Reducer in `web/state.js`): Die ganze Oberfläche liest `S` synchron, und
+   der Heft-Editor bearbeitet `S.heftDocs` an Ort und Stelle. Ein Rust-Reducer bräuchte entweder einen gespiegelten
+   Zustand (Hefte doppelt im Speicher, Editor auf Kopien umbauen) oder Lesezugriffe über die Grenze. Entscheidung offen.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
