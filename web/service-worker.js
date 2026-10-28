@@ -109,7 +109,7 @@ const APP_FILES = [
 	"./experimente.js",
 	"./graph.js",
 	"./graph-worker.js",
-	"./analyse.js",
+	"./lernmuster.js",
 	"./controller.js",
 	"./editor.js",
 	"./editor-inline.js",

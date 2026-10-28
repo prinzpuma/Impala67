@@ -149,7 +149,9 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 	// Nach erfolgreichem Start ist #bootSplashMsg entfernt — dann passiert hier nichts.
 	setTimeout(function () {
 		var m = document.getElementById("bootSplashMsg");
-		if (m) m.innerHTML = "Der Start dauert ungewöhnlich lange … <button onclick=\"location.reload()\" style=\"font:inherit;margin-left:8px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#2a2a2e;color:inherit\">Neu laden</button>";
+		// Phase (von boot.js gesetzt) stehen lassen: zeigt, WO der Start hängt.
+		var phase = m ? m.textContent.replace(/…$/, "") : "";
+		if (m) m.innerHTML = "Der Start dauert ungewöhnlich lange (" + phase + ") … <button onclick=\"location.reload()\" style=\"font:inherit;margin-left:8px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#2a2a2e;color:inherit\">Neu laden</button>";
 	}, 12000);
 </script>
 

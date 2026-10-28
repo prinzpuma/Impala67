@@ -22,7 +22,7 @@ import { BUS } from "./event-bus.js";
 //
 // Telemetrie (21. Juli 2026): Jede Nutzung wird als expEvent geloggt; Karten-
 // Features markieren sich zusätzlich per TELE.mark → exp-Array im review-Event.
-// So kann analyse.js „Experimente × Erfolg“ auswerten (siehe track/trackCard).
+// So kann lernmuster.js „Experimente × Erfolg“ auswerten (siehe track/trackCard).
 
 export const EXP = (() => {
 	// ---------- Katalog (Reihenfolge = Anzeige in den Einstellungen) ----------

@@ -6,7 +6,7 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { icon, lead } from "./icons.js";
 import { BUS } from "./event-bus.js";
-import { ANALYSE } from "./analyse.js";
+import { ANALYSE } from "./lernmuster.js";
 import { TELE } from "./telemetrie.js";
 import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
 import { PERF_PROFILER } from "./performance-profiler.js";

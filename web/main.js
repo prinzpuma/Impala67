@@ -32,7 +32,7 @@ import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { EXP } from "./experimente.js";
 import { GRAPH } from "./graph.js";
-import { ANALYSE } from "./analyse.js";
+import { ANALYSE } from "./lernmuster.js";
 import { CONTROLLER } from "./controller.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { SYNC_MAINTENANCE } from "./sync-maintenance.js";

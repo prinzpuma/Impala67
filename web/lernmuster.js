@@ -8,7 +8,7 @@ import { TELE } from "./telemetrie.js";
 import { ankiSec } from "./anki-stats.js";
 import { lead } from "./icons.js";
 
-// analyse.js — 📈 Lern-Analyse
+// lernmuster.js — 📈 Lern-Analyse
 // Wertet die gesammelte Telemetrie (telemetrie.js) aus und zeigt die Ergebnisse im Statistik-Tab.
 // 1. Beobachtungen mit Vorsicht interpretieren (Confounder wie Tageszeit/Fach nicht normiert).
 // 2. Ehrliche Mindestdatenmengen verlangen, bevor Trends dargestellt werden.

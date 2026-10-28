@@ -1446,7 +1446,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 	.graph-stage { scroll-behavior: auto }
 	.graph-skill, .graph-inspector { transition: none }
 }
-/* ---------- 📈 Lern-Analyse (analyse.js) ---------- */
+/* ---------- 📈 Lern-Analyse (lernmuster.js) ---------- */
 .card-face.tappable { cursor: pointer }
 /* ★ Modell-Favoriten im Modell-Dropdown (18. Juli) */
 .model-row { display: flex; align-items: stretch; gap: 2px }

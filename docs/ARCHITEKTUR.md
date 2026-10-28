@@ -126,7 +126,7 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `rag.js`, `rag-ranking.js`, `rag-worker.js`, `embedding*.js` | ~840 | Semantische Suche |
 | `srs.js` | 224 | Wiederholungs-Algorithmus (FSRS) |
 | `extras.js` | 711 | Lückentext, CSV/Anki-Import/Export, Seiten-PDF, Multi-Tab |
-| `lernzeit.js`, `telemetrie.js`, `analyse.js`, `fach.js` | ~2150 | Lernzeit, Statistik, Fächer-Erkennung |
+| `lernzeit.js`, `telemetrie.js`, `lernmuster.js`, `fach.js` | ~2150 | Lernzeit, Statistik, Fächer-Erkennung |
 | `schulnoten.js`, `notebooklm.js`, `voice.js` | | Noten, NotebookLM-Panel, Sprache |
 | `experimente.js` | 652 | experimentelle Lernmodi (standardmäßig aus) |
 | `graph.js` + `graph-worker.js` | 662 | Wissensgraph (Knopf unten links; verdrahtet sich beim Import selbst an `#btnGraph`) |
