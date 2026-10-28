@@ -230,8 +230,26 @@ export const STATE = (() => {
 			const ordered = applied.map(({ i, touched }) => { afterApply(list[i], touched, REMOTE); return list[i]; });
 			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: ordered.length } });
 			emitRemoteApplied(new Set(ordered.map((ev) => ev?.type).filter((t) => typeof t === "string")), ordered);
+			if (!M.replayOrdered()) reloadSorted(ordered);
 			return ordered;
 		}, { eventCount: list.length }, 16);
+	}
+	// Ein verspätetes Fremd-Event (z.B. eine ältere Änderung eines anderen Geräts an einer Seite, die hier
+	// schon neuer bearbeitet war) überschrieb den neueren Stand bis zum nächsten Start. Dann einmal sortiert
+	// aus dem Log neu laden – in der dispatch-Kette, damit keine eigene Änderung dazwischen geschrieben wird.
+	let _reorder = null;
+	function reloadSorted(events) {
+		if (_reorder) { _reorder.events.push(...events); return; }
+		_reorder = { events: [...events] };
+		const run = _dispatchChain.then(async () => {
+			const { events: changed } = _reorder;
+			_reorder = null;
+			await load();
+			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: changed.length, reordered: true } });
+			emitRemoteApplied(new Set(changed.map((ev) => ev?.type).filter((t) => typeof t === "string")), changed);
+		});
+		_dispatchChain = run.then(() => undefined, () => undefined);
+		run.catch((err) => { _reorder = null; console.warn("[state] Sortiertes Neuladen fehlgeschlagen:", err); });
 	}
 	const applyRemoteEvents = (events) => applyRemoteNow(events);
 	// Früher spielte JS Event für Event mit Pausen ab; der Kern wendet auch große Pakete am Stück an.
@@ -322,6 +340,8 @@ export const STATE = (() => {
 			// Nur den ungültigen Kernzustand verwerfen: Heft-Bilder sind inhaltsadressiert und bleiben gültig.
 			if (report.clearCheckpoint) DB.clearStateCheckpoint({ keepHeftBlobs: true }).catch(() => {});
 			if (report.maxTime) U.observeTime(report.maxTime);
+			// Der neue Kernzustand kennt den offenen Chat nicht (sortiertes Neuladen im laufenden Betrieb).
+			M.setCurrentChatId(_currentChatId == null ? undefined : String(_currentChatId));
 			VIEWS.reset();
 			_pageRev++; _cardRev++; _stateRevision++;
 			_memo.clear(); _heftMeta.clear();

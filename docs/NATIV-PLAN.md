@@ -109,8 +109,9 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    wie `importAll`, Rückrufe `SyncListener` (Fortschritt, „Sync nötig“ nach lokalen Änderungen); WebSocket und Timer
    hält die App. Geprüft mit zwei Geräten gegen einen nachgebauten Worker.
    **Gefundener Modell-Fehler (auch in der PWA)**: Kommt ein älteres Fremd-Event nach einem neueren eigenen
-   derselben Seite an, überschreibt es den neueren Stand im laufenden Zustand bis zum nächsten Start. `impala-ffi`
-   lädt dann sofort sortiert neu (`replay_ordered`); die PWA (`web/state.js` `applyRemoteNow`) noch nicht.
+   derselben Seite an, überschrieb es den neueren Stand im laufenden Zustand bis zum nächsten Start. Behoben:
+   `impala-ffi` lädt dann sofort sortiert neu (`replay_ordered`), die PWA ebenso (`ModelCore.replayOrdered`,
+   `reloadSorted` in `web/state.js`, in der dispatch-Kette).
    Randfall: Gleicher Millisekunden-Zeitstempel auf zwei Geräten entscheidet der Replay per lokaler `seq`.
    Bindings: `cargo run -p impala-ffi --bin uniffi-bindgen -- generate --library <lib> --language kotlin|swift`.
    Offen: Drive-Backup, KI, Handschrift-Erkennung, Bilder/Textfelder im Heft bearbeiten, Archiv;

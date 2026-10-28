@@ -298,6 +298,13 @@ impl ModelCore {
         self.m.current_chat_id = id;
     }
 
+    /// `false`, sobald ein verspätetes Fremd-Event mit neueren Events kollidiert ist: Der laufende
+    /// Zustand weicht dann vom sortierten Log ab, bis JS neu lädt.
+    #[wasm_bindgen(js_name = replayOrdered)]
+    pub fn replay_ordered(&self) -> bool {
+        self.m.replay_ordered()
+    }
+
     #[wasm_bindgen(js_name = loadedTime)]
     pub fn loaded_time(&self) -> String {
         self.m.loaded_time().to_owned()
