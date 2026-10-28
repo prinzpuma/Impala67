@@ -4,9 +4,11 @@
 //! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
 
 mod cards;
+mod changes;
 mod clock;
 mod heft;
 mod markdown;
+mod pages;
 mod sync;
 
 use std::fmt;
@@ -18,6 +20,7 @@ use impala_model::{CheckpointSave, Model, Page};
 use impala_storage::{ExportOptions, ImportOptions, SqliteStorage, Storage, StorageExt};
 use serde_json::{Value, json};
 
+use crate::changes::{ChangeListener, Changes};
 use crate::clock::Clock;
 
 uniffi::setup_scaffolding!();
@@ -155,6 +158,9 @@ struct Inner {
     load: LoadInfo,
     /// Verbundener Sync (ID, Befehlskanal): erfährt jedes lokale Event.
     sync_tx: Option<(u64, Sender<sync::Cmd>)>,
+    listener: Option<Arc<dyn ChangeListener>>,
+    /// Noch nicht gemeldete Änderungen ([`changes::notify`]).
+    pending: Changes,
 }
 
 /// Zustand, den [`ImpalaCore`] und ein [`sync::CloudSync`] teilen.
@@ -179,6 +185,8 @@ impl Inner {
             clock: Clock::default(),
             load,
             sync_tx: None,
+            listener: None,
+            pending: Changes::default(),
         };
         inner.reload()?;
         Ok(inner)
@@ -209,6 +217,7 @@ impl Inner {
             checkpoint_used: report.checkpoint_used,
             checkpoint_reject: report.reject_reason.map(str::to_owned),
         };
+        self.note_everything(false);
         Ok(())
     }
 
@@ -216,6 +225,7 @@ impl Inner {
         let id = uuid::Uuid::new_v4().to_string();
         let now = self.clock.now();
         let ev = self.model.dispatch(&mut self.storage, kind, payload, &id, &now)?;
+        self.note(&ev, false);
         if let Some((_, tx)) = &self.sync_tx {
             let _ = tx.send(sync::Cmd::Local(Value::Object(ev.to_object())));
         }
@@ -230,13 +240,41 @@ pub struct ImpalaCore {
     inner: Shared,
 }
 
+/// Sperre auf den Zustand; meldet beim Freigeben gesammelte Änderungen ([`changes::notify`]).
+struct CoreGuard<'a> {
+    guard: Option<MutexGuard<'a, Inner>>,
+    shared: &'a Shared,
+}
+
+impl std::ops::Deref for CoreGuard<'_> {
+    type Target = Inner;
+    fn deref(&self) -> &Inner {
+        self.guard.as_ref().expect("Sperre")
+    }
+}
+
+impl std::ops::DerefMut for CoreGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Inner {
+        self.guard.as_mut().expect("Sperre")
+    }
+}
+
+impl Drop for CoreGuard<'_> {
+    fn drop(&mut self) {
+        let pending = self.guard.take().is_some_and(|g| !g.pending.is_empty());
+        if pending {
+            changes::notify(self.shared);
+        }
+    }
+}
+
 impl ImpalaCore {
     fn new(inner: Inner) -> Arc<Self> {
         Arc::new(ImpalaCore { inner: Arc::new(Mutex::new(inner)) })
     }
 
-    fn lock(&self) -> MutexGuard<'_, Inner> {
-        lock(&self.inner)
+    fn lock(&self) -> CoreGuard<'_> {
+        CoreGuard { guard: Some(lock(&self.inner)), shared: &self.inner }
     }
 
     fn shared(&self) -> Shared {

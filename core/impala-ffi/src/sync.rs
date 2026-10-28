@@ -204,9 +204,10 @@ impl Inner {
             )
         };
         let imported = storage.commit_import(prepared)?.imported;
-        model.apply_remote(imported.iter().filter_map(LogEvent::from_object).collect());
-        if !model.replay_ordered() {
+        self.apply_remote(imported.iter().filter_map(LogEvent::from_object).collect());
+        if !self.model.replay_ordered() {
             self.reload()?;
+            self.note_everything(true);
         }
         Ok(found.conflicts.len())
     }
@@ -284,9 +285,9 @@ impl SyncStore for NativeStore {
     }
 
     async fn import_remote(&mut self, events: Vec<Value>, unsynced_after_seq: u64) -> Result<(), StoreError> {
-        let found =
-            crate::lock(&self.core).import_remote(events, unsynced_after_seq, "cloudflare").map_err(store_err)?;
-        self.conflicts += found;
+        let found = crate::lock(&self.core).import_remote(events, unsynced_after_seq, "cloudflare");
+        crate::changes::notify(&self.core);
+        self.conflicts += found.map_err(store_err)?;
         Ok(())
     }
 
