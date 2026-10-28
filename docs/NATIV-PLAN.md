@@ -114,8 +114,27 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    `reloadSorted` in `web/state.js`, in der dispatch-Kette).
    Randfall: Gleicher Millisekunden-Zeitstempel auf zwei Geräten entscheidet der Replay per lokaler `seq`.
    Bindings: `cargo run -p impala-ffi --bin uniffi-bindgen -- generate --library <lib> --language kotlin|swift`.
-   Offen: Drive-Backup, KI, Handschrift-Erkennung, Bilder/Textfelder im Heft bearbeiten, Archiv;
-   Android-Build (NDK, `cargo-ndk`) noch nicht geprüft.
+3h. ✅ **`impala-ffi` vollständig** (28. Oktober 2026): Alles, was die PWA kann, außer Handschrift-Erkennung
+   (die bleibt plattformnativ; nur der erkannte Text wird gespeichert). 71 Tests.
+   - **Änderungs-Rückruf** `ChangeListener` (`changes.rs`): nach jeder eigenen Änderung und jedem Sync-/Drive-Import
+     ein `Changes`-Record (Seiten, Karten, Chats, Hefte, Heft-Bilder, zu schließende Seiten …), außerhalb der Sperre.
+   - **Seiten** (`pages.rs`): verschieben (Position, Workspace), Archiv, Papierkorb, endgültig löschen, Rückverweise,
+     Wiki-Links, Verlauf, Workspaces, Einstellungen (`settings_json`/`update_settings`).
+   - **Hefte** (`heft*.rs`): eine Geste = ein `heftOps`-Event (`heft_apply`), Rückgängig über vom Kern berechnete
+     Umkehr-Operationen, Bilder als `heftBlob`, Textfelder, Formen, Lasso, Seiten, SVG/PDF-Export (Plattform rendert
+     JPEGs), Regal-Ordner.
+   - **Lernen** (`card_ops.rs`, `decks.rs`, `cloze.rs`, `study_records.rs`): Karten-/Stapel-Verwaltung, Bewertung
+     rückgängig, Stapel-Optionen, Lückentext-Karten, Noten, Lernzeit, Tagesartikel.
+   - **Konflikte** (`conflicts.rs`): Liste (Meta `pendingConflicts`), Diff-Zeilen, Auflösen, merge3.
+   - **Drive-Backup** (`drive.rs`): `DriveSync` auf eigenem Thread; Token liefert die App (natives Google-SDK) über
+     `DriveTokens`. Zustand in Meta `drive:*`. Import wie Cloudflare über `Inner::import_remote`.
+   - **KI** (`ai.rs`, `ai_tools.rs`, `chats.rs`, `rag.rs`): `AiAssistant` mit Agent-Schleife, Werkzeuge
+     (`inspect`, `change` samt Rückgängig) in Rust, Chats; `SemanticSearch` mit Embeddings der Plattform
+     (`TextEmbedder`) oder Cloud, Vektoren in SQLite.
+   Offen: Android-/iOS-Build (NDK, `cargo-ndk`, Bindings im App-Projekt) – richtet Gemini ein; Test mit echtem
+   Google-Konto, echtem KI-Anbieter und echtem Embedding-Modell; Cloze-Regeln liegen doppelt (Rust in
+   `impala-ffi/src/cloze.rs`, JS in `web/extras.js`) bis die PWA sie über den WASM-Kern nutzt; KI-Chats werden erst
+   am Lauf-Ende gespeichert.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.

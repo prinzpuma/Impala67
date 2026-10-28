@@ -204,12 +204,22 @@ export const TOOLS = (() => {
 		Object.defineProperty(result, "_undo", { value: undo, enumerable: false });
 		return result;
 	}
+	// Vergleich vor dem Rückgängigmachen ohne Felder, die jedes Rückgängig selbst neu setzt
+	// (`updated` einer Seite, `rev`/`v` eines Hefts) — sonst ließe sich nach dem Rückgängig der
+	// letzten KI-Aktion eine frühere an derselben Seite nie mehr zurücknehmen.
+	const VOLATILE = { pages: ["updated"], heftDocs: ["rev", "v"] };
+	function sameForUndo(key, a, b) {
+		const skip = VOLATILE[key];
+		if (!skip || !a || !b || typeof a !== "object" || typeof b !== "object") return same(a, b);
+		const strip = (o) => { const c = { ...o }; for (const k of skip) delete c[k]; return c; };
+		return same(strip(a), strip(b));
+	}
 	async function undo(changeSet) {
 		if (!changeSet) throw new Error("Undo-Daten fehlen.");
 		for (const key of ["pages", "cards", "decks", "heftDocs"]) {
 			for (const x of changeSet[key] || []) {
 				const now = key === "heftDocs" ? STATE.heftDoc(x.id) : S[key]?.[x.id];
-				if (!same(now ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
+				if (!sameForUndo(key, now ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
 			}
 		}
 		// Alte Stapel zuerst zurückbringen, damit Karten nie auf nicht vorhandene Ziele zeigen.
