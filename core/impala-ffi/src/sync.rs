@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use impala_crypto::{OsRandom, StorageUsage, SyncCredentials, SyncKey, format_storage_usage};
 use impala_model::LogEvent;
-use impala_model::conflict::{self, ImportContext};
+use impala_model::conflict::{self, Conflict, ImportContext, Merged};
 use impala_net::{HttpClient, UreqClient, block_on};
 use impala_storage::{Blob, ImportOptions, Storage, StorageExt, Write};
 use impala_sync::api::{ServerMessage, WS_PING_INTERVAL_MS, WS_PING_MESSAGE, parse_server_message};
@@ -153,27 +153,40 @@ fn status(state: &SyncState, usage: &StorageUsage) -> SyncStatus {
 // Fremd-Events übernehmen (gemeinsam für alle Transporte)
 
 /// `settings.syncSecrets !== false`.
-fn allow_secrets(inner: &Inner) -> bool {
+pub(crate) fn allow_secrets(inner: &Inner) -> bool {
     inner.model.state().settings.get("syncSecrets") != Some(Value::Bool(false))
 }
 
+/// Ergebnis von [`Inner::import_remote`].
+#[derive(Debug, Default)]
+pub(crate) struct RemoteImport {
+    /// Neu geschriebene Events (ohne `seq`).
+    pub imported: Vec<Value>,
+    pub conflicts: Vec<Conflict>,
+    pub merged: Vec<Merged>,
+}
+
 impl Inner {
-    /// Wie `DB.importAll` mit Konflikt-Prüfung, danach `applyRemoteEvents`. Liefert die Zahl der Konflikte.
+    /// Wie `DB.importAll` mit Konflikt-Prüfung, danach `applyRemoteEvents`. `payload` hat das
+    /// `exportAll`-Format (`events`, optional `blobs`); `allow_secrets` aus der Einstellung
+    /// `syncSecrets`. Gemeinsam für alle Transporte (Cloudflare, Drive).
     ///
     /// Abweichung von der PWA: Kollidiert ein verspätetes Fremd-Event mit neueren Events (z. B. eine
     /// ältere fremde Änderung derselben Seite nach einer neueren eigenen), überschrieb es dort den
     /// neueren Stand bis zum nächsten Start. Hier wird der Zustand dann gleich sortiert neu geladen.
     pub(crate) fn import_remote(
         &mut self,
-        events: Vec<Value>,
+        payload: &Value,
         unsynced_after_seq: u64,
         source: &str,
-    ) -> Result<usize, crate::CoreError> {
-        let opts = ImportOptions { remote: Some(source.to_owned()), deny_secrets: !allow_secrets(self) };
+        allow_secrets: bool,
+    ) -> Result<RemoteImport, crate::CoreError> {
+        let opts = ImportOptions { remote: Some(source.to_owned()), deny_secrets: !allow_secrets };
         let Inner { storage, model, clock, .. } = self;
-        let mut prepared = storage.prepare_import(&json!({ "app": "impala67", "events": events }), &opts)?;
-        if prepared.fresh.is_empty() {
-            return Ok(0);
+        let mut prepared = storage.prepare_import(payload, &opts)?;
+        let has_blobs = payload.get("blobs").and_then(Value::as_object).is_some_and(|b| !b.is_empty());
+        if prepared.fresh.is_empty() && !has_blobs {
+            return Ok(RemoteImport::default());
         }
         // Uhr vor den abgeleiteten Events nachziehen (Merge/Konfliktkopien müssen später datiert sein).
         for t in prepared.fresh.iter().filter_map(|ev| ev.get("t").and_then(Value::as_str)) {
@@ -208,7 +221,11 @@ impl Inner {
         if !model.replay_ordered() {
             self.reload()?;
         }
-        Ok(found.conflicts.len())
+        Ok(RemoteImport {
+            imported: imported.into_iter().map(Value::Object).collect(),
+            conflicts: found.conflicts,
+            merged: found.merged,
+        })
     }
 }
 
@@ -284,9 +301,11 @@ impl SyncStore for NativeStore {
     }
 
     async fn import_remote(&mut self, events: Vec<Value>, unsynced_after_seq: u64) -> Result<(), StoreError> {
-        let found =
-            crate::lock(&self.core).import_remote(events, unsynced_after_seq, "cloudflare").map_err(store_err)?;
-        self.conflicts += found;
+        let payload = json!({ "app": "impala67", "events": events });
+        let mut inner = crate::lock(&self.core);
+        let allow = allow_secrets(&inner);
+        let found = inner.import_remote(&payload, unsynced_after_seq, "cloudflare", allow).map_err(store_err)?;
+        self.conflicts += found.conflicts.len();
         Ok(())
     }
 

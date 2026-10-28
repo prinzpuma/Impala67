@@ -5,6 +5,7 @@
 
 mod cards;
 mod clock;
+mod drive;
 mod heft;
 mod markdown;
 mod sync;
