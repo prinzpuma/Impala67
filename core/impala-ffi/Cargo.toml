@@ -20,6 +20,7 @@ name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
+base64 = "0.22"
 impala-crypto = { path = "../impala-crypto" }
 impala-drive = { path = "../impala-drive" }
 impala-heft = { path = "../impala-heft" }

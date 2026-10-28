@@ -5,9 +5,10 @@
 //! Koordinaten sind Seitenkoordinaten (Breite [`PAGE_W`], Höhe [`PAGE_H`]). Punkte wandern als flache
 //! Liste `[x, y, druck, x, y, druck, …]`, damit große Seiten schnell über die Grenze kommen.
 
-use impala_heft::{HeftDoc, HeftOp, HeftPage, Item, ItemKind, PAGE_H, PAGE_W, Paper, Point, Stroke, Tool};
+use impala_heft::{HeftDoc, HeftOp, HeftPage, Image, Item, ItemKind, PAGE_H, PAGE_W, Paper, Shape, Stroke, Tool};
 use serde_json::{Value, json};
 
+use crate::heft_items::build_stroke;
 use crate::{CoreError, ImpalaCore, Inner, invalid};
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -18,19 +19,103 @@ pub struct HeftStroke {
     /// CSS-Farbe, z. B. `#1f2937`.
     pub color: String,
     pub size: f64,
-    /// `[x, y, druck, …]`; bei Formen der Umriss (Druck 1).
+    /// `[x, y, druck, …]`; bei Formen der Umriss (Druck 1). Beim Schreiben zählen bei Formen nur
+    /// erster und letzter Punkt (wie in der PWA); ohne Punkte leitet der Kern sie aus der Form ab.
     pub points: Vec<f32>,
+    /// Erkannte oder gezeichnete Form; dann ist `tool` immer `shape`.
+    pub shape: Option<HeftShape>,
+}
+
+/// Geometrie einer Form (Seitenkoordinaten), wie sie im Strich gespeichert wird.
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum HeftShape {
+    Line {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+    },
+    Rect {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+    },
+    Triangle {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        x3: f64,
+        y3: f64,
+    },
+    /// Schaft (x1,y1)-(x2,y2); h1 und h2 sind die Enden der Pfeilspitze.
+    Arrow {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        h1x: f64,
+        h1y: f64,
+        h2x: f64,
+        h2y: f64,
+    },
+    Ellipse {
+        cx: f64,
+        cy: f64,
+        rx: f64,
+        ry: f64,
+    },
+    /// Nur Altbestände; neue Kreise sind Ellipsen.
+    Circle {
+        cx: f64,
+        cy: f64,
+        r: f64,
+    },
+}
+
+impl HeftShape {
+    /// `None` für Formen, die diese Version nicht kennt (sie bleiben im Heft erhalten und werden über die Punkte gezeigt).
+    pub(crate) fn from_core(s: &Shape) -> Option<Self> {
+        Some(match *s {
+            Shape::Line { x1, y1, x2, y2 } => HeftShape::Line { x1, y1, x2, y2 },
+            Shape::Rect { x1, y1, x2, y2 } => HeftShape::Rect { x1, y1, x2, y2 },
+            Shape::Triangle { x1, y1, x2, y2, x3, y3 } => HeftShape::Triangle { x1, y1, x2, y2, x3, y3 },
+            Shape::Arrow { x1, y1, x2, y2, h1x, h1y, h2x, h2y } => {
+                HeftShape::Arrow { x1, y1, x2, y2, h1x, h1y, h2x, h2y }
+            }
+            Shape::Ellipse { cx, cy, rx, ry } => HeftShape::Ellipse { cx, cy, rx, ry },
+            Shape::Circle { cx, cy, r } => HeftShape::Circle { cx, cy, r },
+            Shape::Other(_) => return None,
+        })
+    }
+
+    pub(crate) fn to_core(&self) -> Shape {
+        match *self {
+            HeftShape::Line { x1, y1, x2, y2 } => Shape::Line { x1, y1, x2, y2 },
+            HeftShape::Rect { x1, y1, x2, y2 } => Shape::Rect { x1, y1, x2, y2 },
+            HeftShape::Triangle { x1, y1, x2, y2, x3, y3 } => Shape::Triangle { x1, y1, x2, y2, x3, y3 },
+            HeftShape::Arrow { x1, y1, x2, y2, h1x, h1y, h2x, h2y } => {
+                Shape::Arrow { x1, y1, x2, y2, h1x, h1y, h2x, h2y }
+            }
+            HeftShape::Ellipse { cx, cy, rx, ry } => Shape::Ellipse { cx, cy, rx, ry },
+            HeftShape::Circle { cx, cy, r } => Shape::Circle { cx, cy, r },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct HeftImage {
     pub id: String,
-    /// Gespeichertes Bild (`ImpalaCore::file`), falls vorhanden.
-    pub file_id: Option<String>,
+    /// Inhalts-Hash der Bilddaten (`heftBlob`, nicht `ImpalaCore::file`); `None` bei Altbildern, die
+    /// die Daten noch im Bild tragen. Die Bytes liefert `heft_image_data`.
+    pub blob_id: Option<String>,
     pub x: f64,
     pub y: f64,
     pub w: f64,
     pub h: f64,
+    /// Erkannter Text eines Scans (von der Plattform geliefert).
+    pub ocr: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -59,11 +144,11 @@ pub struct HeftPageData {
     pub ocr_text: String,
 }
 
-fn paper_name(p: &Paper) -> String {
+pub(crate) fn paper_name(p: &Paper) -> String {
     serde_json::to_value(p).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_else(|| "lined".into())
 }
 
-fn stroke_data(s: &Stroke) -> HeftStroke {
+pub(crate) fn stroke_data(s: &Stroke) -> HeftStroke {
     let points = match s.shape.as_ref().and_then(impala_heft::geometry::shape_outline) {
         Some(outline) => outline.iter().flat_map(|[x, y]| [*x as f32, *y as f32, 1.0]).collect(),
         None => s
@@ -78,28 +163,30 @@ fn stroke_data(s: &Stroke) -> HeftStroke {
         color: s.color.clone().unwrap_or_else(|| "#1f2937".into()),
         size: s.size.filter(|s| *s > 0.0).unwrap_or(3.0),
         points,
+        shape: s.shape.as_ref().and_then(HeftShape::from_core),
     }
 }
 
-fn page_data(pg: &HeftPage) -> HeftPageData {
+pub(crate) fn image_data(i: &Image) -> HeftImage {
+    HeftImage {
+        id: i.id.clone(),
+        blob_id: i.r#ref.clone().filter(|r| !r.is_empty()),
+        x: i.x.unwrap_or(0.0),
+        y: i.y.unwrap_or(0.0),
+        w: i.w.unwrap_or(0.0),
+        h: i.h.unwrap_or(0.0),
+        ocr: i.ocr.clone().filter(|o| !o.is_empty()),
+    }
+}
+
+pub(crate) fn page_data(pg: &HeftPage) -> HeftPageData {
     HeftPageData {
         id: pg.id.clone(),
         paper: paper_name(&pg.paper),
         width: PAGE_W,
         height: PAGE_H,
         strokes: pg.strokes.iter().map(stroke_data).collect(),
-        images: pg
-            .images
-            .iter()
-            .map(|i| HeftImage {
-                id: i.id.clone(),
-                file_id: i.r#ref.clone().filter(|r| !r.is_empty()),
-                x: i.x.unwrap_or(0.0),
-                y: i.y.unwrap_or(0.0),
-                w: i.w.unwrap_or(0.0),
-                h: i.h.unwrap_or(0.0),
-            })
-            .collect(),
+        images: pg.images.iter().map(image_data).collect(),
         texts: pg
             .texts
             .iter()
@@ -119,11 +206,11 @@ fn page_data(pg: &HeftPage) -> HeftPageData {
 }
 
 impl Inner {
-    fn heft(&self, page_id: &str) -> Result<&HeftDoc, CoreError> {
+    pub(crate) fn heft(&self, page_id: &str) -> Result<&HeftDoc, CoreError> {
         self.model.state().hefte.get(page_id).ok_or_else(|| invalid(format!("Kein Heft {page_id}")))
     }
 
-    fn heft_page(&self, page_id: &str, heft_page_id: &str) -> Result<&HeftPage, CoreError> {
+    pub(crate) fn heft_page(&self, page_id: &str, heft_page_id: &str) -> Result<&HeftPage, CoreError> {
         self.heft(page_id)?
             .pages
             .iter()
@@ -131,17 +218,25 @@ impl Inner {
             .ok_or_else(|| invalid(format!("Keine Heftseite {heft_page_id}")))
     }
 
-    fn heft_ops(&mut self, page_id: &str, ops: Vec<HeftOp>) -> Result<(), CoreError> {
+    pub(crate) fn heft_ops(&mut self, page_id: &str, ops: Vec<HeftOp>) -> Result<(), CoreError> {
         let ops = serde_json::to_value(&ops).map_err(|e| invalid(e.to_string()))?;
         self.dispatch("heftOps", json!({ "pageId": page_id, "ops": ops }))?;
         Ok(())
     }
 }
 
-fn new_page_op(at: Option<u32>, paper: Option<String>) -> (String, HeftOp) {
+/// Papiername der PWA (`lined`, `grid`, `dots`, `blank`); anderes lehnt der Kern ab.
+pub(crate) fn parse_paper(name: &str) -> Result<Paper, CoreError> {
+    match name {
+        "lined" | "grid" | "dots" | "blank" => Ok(Paper::parse(Some(&Value::from(name)))),
+        other => Err(invalid(format!("Unbekanntes Papier {other}"))),
+    }
+}
+
+fn new_page_op(at: Option<u32>, paper: Option<String>) -> Result<(String, HeftOp), CoreError> {
     let id = uuid::Uuid::new_v4().to_string();
-    let paper = Some(Paper::parse(Some(&Value::from(paper.unwrap_or_else(|| "lined".into())))));
-    (id.clone(), HeftOp::PageAdd { at: at.map(f64::from), page: id, paper })
+    let paper = Some(parse_paper(paper.as_deref().unwrap_or("lined"))?);
+    Ok((id.clone(), HeftOp::PageAdd { at: at.map(f64::from), page: id, paper }))
 }
 
 #[uniffi::export]
@@ -154,7 +249,7 @@ impl ImpalaCore {
         workspace_id: Option<String>,
     ) -> Result<String, CoreError> {
         let id = self.create_page_of_kind(title, String::new(), parent_id, workspace_id, Some("heft"))?;
-        let (_, op) = new_page_op(Some(0), None);
+        let (_, op) = new_page_op(Some(0), None)?;
         self.lock().heft_ops(&id, vec![op])?;
         Ok(id)
     }
@@ -174,14 +269,18 @@ impl ImpalaCore {
     pub fn heft_add_page(&self, page_id: String, at: Option<u32>, paper: Option<String>) -> Result<String, CoreError> {
         let mut inner = self.lock();
         inner.heft(&page_id)?;
-        let (id, op) = new_page_op(at, paper);
+        let (id, op) = new_page_op(at, paper)?;
         inner.heft_ops(&page_id, vec![op])?;
         Ok(id)
     }
 
+    /// Seite löschen; die letzte Seite bleibt (ein Heft ohne Seiten ließe sich nicht öffnen).
     pub fn heft_remove_page(&self, page_id: String, heft_page_id: String) -> Result<(), CoreError> {
         let mut inner = self.lock();
         inner.heft_page(&page_id, &heft_page_id)?;
+        if !impala_heft::pages::can_delete_pages(inner.heft(&page_id)?.pages.len(), 1) {
+            return Err(invalid("Die letzte Seite eines Hefts lässt sich nicht löschen"));
+        }
         inner.heft_ops(&page_id, vec![HeftOp::PageRemove { page: heft_page_id }])
     }
 
@@ -195,28 +294,12 @@ impl ImpalaCore {
         size: f64,
         points: Vec<f32>,
     ) -> Result<String, CoreError> {
-        if points.len() < 3 || !points.len().is_multiple_of(3) {
-            return Err(invalid("Punkte als [x, y, druck, …]"));
-        }
+        let data = HeftStroke { id: uuid::Uuid::new_v4().to_string(), tool, color, size, points, shape: None };
+        let stroke = build_stroke(None, &data)?;
         let mut inner = self.lock();
         inner.heft_page(&page_id, &heft_page_id)?;
-        let mut stroke = Stroke {
-            id: uuid::Uuid::new_v4().to_string(),
-            tool: Some(Tool::parse(&tool)),
-            color: Some(color),
-            size: Some(size),
-            pts: points
-                .as_chunks::<3>()
-                .0
-                .iter()
-                .map(|&[x, y, p]| Point::new(f64::from(x), f64::from(y), f64::from(p)))
-                .collect(),
-            ..Default::default()
-        };
-        stroke.refresh_bounds();
-        let id = stroke.id.clone();
         inner.heft_ops(&page_id, vec![HeftOp::Add { page: heft_page_id, item: Item::Stroke(stroke) }])?;
-        Ok(id)
+        Ok(data.id)
     }
 
     /// Striche entfernen (Radierer, Rückgängig).

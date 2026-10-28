@@ -944,6 +944,7 @@ dependencies = [
 name = "impala-ffi"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "impala-crypto",
  "impala-drive",
  "impala-heft",
