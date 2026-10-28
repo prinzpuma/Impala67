@@ -3,13 +3,17 @@
 //! vergibt Event-IDs und Zeitstempel und schreibt jede Änderung, bevor sie angewandt wird.
 //! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
 
+mod card_ops;
 mod cards;
 mod changes;
 mod clock;
+mod conflicts;
+mod decks;
 mod drive;
 mod heft;
 mod markdown;
 mod pages;
+mod study_records;
 mod sync;
 
 use std::fmt;

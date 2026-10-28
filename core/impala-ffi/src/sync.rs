@@ -222,6 +222,9 @@ impl Inner {
             self.reload()?;
             self.note_everything(true);
         }
+        // Die Events sind übernommen; scheitert nur das Vormerken, findet `conflicts()` die
+        // Konfliktkopien trotzdem (als gerettete Alt-Kopien).
+        let _ = self.remember_conflicts(found.conflicts.clone());
         Ok(RemoteImport {
             imported: imported.into_iter().map(Value::Object).collect(),
             conflicts: found.conflicts,

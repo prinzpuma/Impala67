@@ -53,7 +53,7 @@ export async function handleDeckMenuClick(e) {
 				openPromptDialog("Stapel umbenennen", async (newName) => {
 					const trimmed = newName.trim();
 					if (trimmed && trimmed !== name) {
-						await STATE.dispatch("deckRename", { oldName: name, newName: trimmed });
+						await STATE.dispatch("deckRename", { from: name, to: trimmed });
 					}
 				}, name);
 				return true;
