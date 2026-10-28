@@ -101,10 +101,20 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
 3g. **UniFFI-Hülle `impala-ffi`** (28. Oktober 2026, erster Stand): Anders als die WASM-Hülle hält sie Speicher
    (SQLite), Zustand, Suchindex und die hybride Uhr selbst – die native App reicht nur noch den Datenbankpfad herein.
    `ImpalaCore`: `open`, Seiten anlegen/ändern/in den Papierkorb, beliebige Events (`dispatch` mit JSON), Seitenbaum,
-   Brotkrumen, zuletzt geänderte Seiten, Workspaces, Volltextsuche, Checkpoint, Export/Import im PWA-Format.
+   Brotkrumen, zuletzt geänderte Seiten, Workspaces, Volltextsuche, Checkpoint, Export/Import im PWA-Format,
+   Bilder/Dateien (`add_file` → `img:…`/`file:…`), Karteikarten (Stapel, Lernwarteschlange, FSRS-Bewertung als
+   `cardReview` wie die PWA), Hefte (Seiten lesen, Striche als `[x, y, druck, …]` hinzufügen/radieren, Seiten).
+   Freie Funktionen: Markdown ↔ Blöcke (`markdown_to_blocks`, `blocks_to_markdown`).
+   `CloudSync` (`sync.rs`): ganzer Cloudflare-Ablauf auf einem eigenen Thread (ureq + `block_on`), Konflikt-Prüfung
+   wie `importAll`, Rückrufe `SyncListener` (Fortschritt, „Sync nötig“ nach lokalen Änderungen); WebSocket und Timer
+   hält die App. Geprüft mit zwei Geräten gegen einen nachgebauten Worker.
+   **Gefundener Modell-Fehler (auch in der PWA)**: Kommt ein älteres Fremd-Event nach einem neueren eigenen
+   derselben Seite an, überschreibt es den neueren Stand im laufenden Zustand bis zum nächsten Start. `impala-ffi`
+   lädt dann sofort sortiert neu (`replay_ordered`); die PWA (`web/state.js` `applyRemoteNow`) noch nicht.
+   Randfall: Gleicher Millisekunden-Zeitstempel auf zwei Geräten entscheidet der Replay per lokaler `seq`.
    Bindings: `cargo run -p impala-ffi --bin uniffi-bindgen -- generate --library <lib> --language kotlin|swift`.
-   Offen: Sync (nativer `SyncStore` über `Storage` + Modell, ureq mit `block_on` im Hintergrund-Thread),
-   Hefte, Karteikarten, Import-Konflikte (`importConflicts`) beim Einspielen eines Exports.
+   Offen: Drive-Backup, KI, Handschrift-Erkennung, Bilder/Textfelder im Heft bearbeiten, Archiv;
+   Android-Build (NDK, `cargo-ndk`) noch nicht geprüft.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.

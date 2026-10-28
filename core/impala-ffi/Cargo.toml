@@ -21,6 +21,8 @@ path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
 impala-crypto = { path = "../impala-crypto" }
+impala-heft = { path = "../impala-heft" }
+impala-markdown = { path = "../impala-markdown" }
 impala-model = { path = "../impala-model" }
 impala-net = { path = "../impala-net" }
 impala-sync = { path = "../impala-sync" }

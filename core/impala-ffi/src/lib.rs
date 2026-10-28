@@ -3,7 +3,10 @@
 //! vergibt Event-IDs und Zeitstempel und schreibt jede Änderung, bevor sie angewandt wird.
 //! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
 
+mod cards;
 mod clock;
+mod heft;
+mod markdown;
 mod sync;
 
 use std::fmt;
@@ -111,6 +114,14 @@ pub enum CheckpointResult {
     OutOfOrder,
     /// Im Log liegen noch nicht angewandte Events: später erneut versuchen.
     Stale,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct FileData {
+    pub bytes: Vec<u8>,
+    /// MIME-Typ, leer wenn unbekannt.
+    pub mime: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -231,6 +242,39 @@ impl ImpalaCore {
     fn shared(&self) -> Shared {
         self.inner.clone()
     }
+
+    /// `pageCreate`; `kind`: `Some("heft")` für ein Heft. Ohne `workspace_id` gilt der der
+    /// Elternseite, sonst `default`.
+    fn create_page_of_kind(
+        &self,
+        title: String,
+        content: String,
+        parent_id: Option<String>,
+        workspace_id: Option<String>,
+        kind: Option<&str>,
+    ) -> Result<String, CoreError> {
+        let mut inner = self.lock();
+        let parent = parent_id.filter(|p| !p.is_empty());
+        if let Some(p) = &parent
+            && !inner.model.state().pages.contains_key(p)
+        {
+            return Err(invalid(format!("Unbekannte Elternseite {p}")));
+        }
+        let workspace = workspace_id
+            .filter(|w| !w.is_empty())
+            .or_else(|| {
+                parent.as_ref().and_then(|p| inner.model.state().pages.get(p)).map(|p| p.workspace().to_owned())
+            })
+            .unwrap_or_else(|| "default".to_owned());
+        let id = uuid::Uuid::new_v4().to_string();
+        let mut payload =
+            json!({ "id": id, "title": title, "content": content, "parentId": parent, "workspaceId": workspace });
+        if let Some(kind) = kind {
+            payload["kind"] = Value::from(kind);
+        }
+        inner.dispatch("pageCreate", payload)?;
+        Ok(id)
+    }
 }
 
 #[uniffi::export]
@@ -274,24 +318,7 @@ impl ImpalaCore {
         parent_id: Option<String>,
         workspace_id: Option<String>,
     ) -> Result<String, CoreError> {
-        let mut inner = self.lock();
-        let parent = parent_id.filter(|p| !p.is_empty());
-        if let Some(p) = &parent
-            && !inner.model.state().pages.contains_key(p)
-        {
-            return Err(invalid(format!("Unbekannte Elternseite {p}")));
-        }
-        let workspace = workspace_id
-            .filter(|w| !w.is_empty())
-            .or_else(|| {
-                parent.as_ref().and_then(|p| inner.model.state().pages.get(p)).map(|p| p.workspace().to_owned())
-            })
-            .unwrap_or_else(|| "default".to_owned());
-        let id = uuid::Uuid::new_v4().to_string();
-        let payload =
-            json!({ "id": id, "title": title, "content": content, "parentId": parent, "workspaceId": workspace });
-        inner.dispatch("pageCreate", payload)?;
-        Ok(id)
+        self.create_page_of_kind(title, content, parent_id, workspace_id, None)
     }
 
     /// Titel und/oder Inhalt einer Seite ändern (`None` = unverändert).
@@ -395,6 +422,27 @@ impl ImpalaCore {
         })
     }
 
+    /// Bild oder Datei speichern; liefert die ID für den Seiteninhalt (`img:…` für Bilder, sonst
+    /// `file:…`, wie im Editor der PWA). Der Sync überträgt sie mit der nächsten Seitenänderung.
+    pub fn add_file(&self, bytes: Vec<u8>, mime: String, name: String) -> Result<String, CoreError> {
+        let prefix = if mime.starts_with("image/") { "img:" } else { "file:" };
+        let id = format!("{prefix}{}", uuid::Uuid::new_v4());
+        let meta = json!({ "name": name, "size": bytes.len(), "type": mime });
+        let blob = impala_storage::Blob { bytes, meta: Some(meta) };
+        self.lock().storage.apply(vec![impala_storage::Write::PutBlob(id.clone(), blob)])?;
+        Ok(id)
+    }
+
+    /// Gespeichertes Bild bzw. Datei (`img:…`, `file:…`); `None`, solange es noch nicht geladen ist.
+    pub fn file(&self, id: String) -> Result<Option<FileData>, CoreError> {
+        let blob = self.lock().storage.blob(&id)?;
+        Ok(blob.map(|b| {
+            let mime = b.mime().to_owned();
+            let name = b.meta.as_ref().and_then(|m| m.get("name")).and_then(Value::as_str).unwrap_or("").to_owned();
+            FileData { bytes: b.bytes, mime, name }
+        }))
+    }
+
     /// Export im Format der PWA (`exportAll`), Geheimnisse entfernt.
     pub fn export_json(&self, include_blobs: bool) -> Result<String, CoreError> {
         let mut inner = self.lock();
@@ -445,6 +493,17 @@ mod tests {
         core.trash_page(child.clone()).unwrap();
         assert!(core.children_of(Some(root), None).is_empty());
         assert_eq!(core.trashed_pages()[0].id, child);
+    }
+
+    #[test]
+    fn bilder_und_dateien() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        let img = core.add_file(vec![1, 2, 3], "image/png".into(), "a.png".into()).unwrap();
+        let pdf = core.add_file(vec![4], "application/pdf".into(), "b.pdf".into()).unwrap();
+        assert!(img.starts_with("img:") && pdf.starts_with("file:"));
+        let f = core.file(img).unwrap().unwrap();
+        assert_eq!((f.bytes, f.mime.as_str(), f.name.as_str()), (vec![1, 2, 3], "image/png", "a.png"));
+        assert!(core.file("img:fehlt".into()).unwrap().is_none());
     }
 
     #[test]

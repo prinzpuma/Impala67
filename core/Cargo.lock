@@ -945,6 +945,8 @@ name = "impala-ffi"
 version = "0.1.0"
 dependencies = [
  "impala-crypto",
+ "impala-heft",
+ "impala-markdown",
  "impala-model",
  "impala-net",
  "impala-search",
