@@ -1,5 +1,9 @@
 package org.impala67.app.ui.editor
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
@@ -11,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +25,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,36 +35,55 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.NavigateNext
 import androidx.compose.material.icons.automirrored.rounded.Note
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FormatListNumbered
+import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.HorizontalRule
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PostAdd
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,13 +96,13 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,6 +111,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -105,6 +132,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -114,11 +142,14 @@ import org.impala67.app.data.ImpalaRepository
 import org.impala67.app.ui.theme.Accent
 import org.impala67.app.ui.theme.AccentBorder
 import org.impala67.app.ui.theme.AccentSoft
+import org.impala67.app.ui.theme.BgBubble
 import org.impala67.app.ui.theme.BgDeep
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.BgSidebar
 import org.impala67.app.ui.theme.Danger
 import org.impala67.app.ui.theme.Edge
+import org.impala67.app.ui.theme.EdgeSoft
+import org.impala67.app.ui.theme.ImpalaPillShape
 import org.impala67.app.ui.theme.Success
 import org.impala67.app.ui.theme.SurfaceActive
 import org.impala67.app.ui.theme.SurfaceSubtle
@@ -126,6 +157,8 @@ import org.impala67.app.ui.theme.TextMuted
 import org.impala67.app.ui.theme.TextPrimary
 import org.impala67.app.ui.theme.TextSecondary
 import org.impala67.app.ui.theme.Warn
+import org.json.JSONObject
+import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
 import uniffi.impala_ffi.MdHeadingLevel
@@ -133,74 +166,211 @@ import uniffi.impala_ffi.MdListStyle
 import uniffi.impala_ffi.PageDetail
 import uniffi.impala_ffi.PageSummary
 import uniffi.impala_ffi.PageVersion
+import uniffi.impala_ffi.WorkspaceInfo
 import uniffi.impala_ffi.blocksToMarkdown
 import uniffi.impala_ffi.markdownToBlocks
 import java.util.UUID
 
+private data class EditorSnapshot(
+    val title: String,
+    val blocks: List<MdBlock>
+)
+
+private val PAGE_EMOJIS = listOf(
+    "📝", "📚", "💡", "🎯", "🚀", "🔬", "🧠", "📐",
+    "💻", "🎨", "🏛️", "🌍", "⚡", "🔥", "🌱", "📊",
+    "🎵", "🧪", "📖", "🗂️", "✅", "⭐", "🧩", "🎓"
+)
+
+private data class CoverOption(val id: String, val label: String)
+
+private val PAGE_COVERS = listOf(
+    CoverOption("", "Kein Cover"),
+    CoverOption("sunset", "Sunset"),
+    CoverOption("ocean", "Ocean"),
+    CoverOption("forest", "Forest"),
+    CoverOption("grape", "Grape"),
+    CoverOption("aurora", "Aurora"),
+    CoverOption("mono", "Mono"),
+    CoverOption("karo", "Karo"),
+    CoverOption("linien", "Linien"),
+    CoverOption("punkte", "Punkte")
+)
+
 /**
- * Vollwertiger nativer Notiz- & Markdown-Editor für Impala67.
- * Bietet Block-basiertes Bearbeiten, Live-Synchronisation, Versionsverlauf und Diktat.
+ * Rückwärtskompatibler Überladungs-Einstiegspunkt für Aufrufer mit ImpalaRepository.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NoteEditorScreen(
     pageId: String,
     repository: ImpalaRepository,
     onNavigateToPage: (String) -> Unit,
     onBack: () -> Unit,
+    onOpenAiForPage: (String) -> Unit = {},
+    isTabletUi: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val uiPrefs = remember(context) {
+        context.getSharedPreferences("impala_ui_prefs", Context.MODE_PRIVATE)
+    }
+    var isFav by remember(pageId) {
+        mutableStateOf(uiPrefs.getBoolean("fav_$pageId", false))
+    }
+
+    // Reagiere auf externe Änderungen im Repository
+    var externalReloadTick by remember { mutableStateOf(0) }
+    LaunchedEffect(pageId) {
+        repository.changesFlow.collect { changes ->
+            if (changes.closedPages.contains(pageId)) {
+                onBack()
+                return@collect
+            }
+            if (changes.pages.contains(pageId) || changes.pagesAll || changes.everything) {
+                externalReloadTick++
+            }
+        }
+    }
+
+    NoteEditorScreen(
+        core = repository.core,
+        pageId = "$pageId#$externalReloadTick".substringBefore("#"),
+        onNavigateBack = onBack,
+        onOpenAiForPage = onOpenAiForPage,
+        onMutation = { repository.refreshAll() },
+        isTabletUi = isTabletUi,
+        isFavorite = isFav,
+        onToggleFavorite = {
+            isFav = !isFav
+            uiPrefs.edit().putBoolean("fav_$pageId", isFav).apply()
+        },
+        onOpenPage = onNavigateToPage,
+        modifier = modifier
+    )
+}
+
+/**
+ * Vollwertiger nativer Notiz- & Markdown-Editor für Impala67 nach Vorbild der PWA (`web/render.js` & `web/editor.js`).
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun NoteEditorScreen(
+    core: ImpalaCore,
+    pageId: String,
+    onNavigateBack: () -> Unit,
+    onOpenAiForPage: (String) -> Unit = {},
+    onMutation: () -> Unit = {},
+    isTabletUi: Boolean = false,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
+    onOpenPage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val metaPrefs = remember(context) {
+        context.getSharedPreferences("impala_page_meta", Context.MODE_PRIVATE)
+    }
 
-    // Seiteninhalte
+    // Seiteninhalte & Metadaten
+    var pageDetail by remember { mutableStateOf<PageDetail?>(null) }
     var pageTitle by remember { mutableStateOf("") }
+    var pageIcon by remember(pageId) { mutableStateOf(metaPrefs.getString("icon_$pageId", "") ?: "") }
+    var pageCover by remember(pageId) { mutableStateOf(metaPrefs.getString("cover_$pageId", "") ?: "") }
     var blocks by remember { mutableStateOf<List<MdBlock>>(emptyList()) }
     var ancestors by remember { mutableStateOf<List<PageSummary>>(emptyList()) }
     var subpages by remember { mutableStateOf<List<PageSummary>>(emptyList()) }
     var backlinks by remember { mutableStateOf<List<PageSummary>>(emptyList()) }
+    var workspaces by remember { mutableStateOf<List<WorkspaceInfo>>(emptyList()) }
     var isDirty by remember { mutableStateOf(false) }
+
+    // Undo / Redo Stack
+    val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
+    val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
 
     // Fokus und Formatierungsleiste
     var activeBlockId by remember { mutableStateOf<String?>(null) }
     var activeBlockSelection by remember { mutableStateOf(TextRange.Zero) }
 
-    // Dialoge und Sheets
+    // Menüs, Dialoge und Sheets
+    var showShareMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showIconDialog by remember { mutableStateOf(false) }
+    var showCoverDialog by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
     var showHistoryDialog by remember { mutableStateOf(false) }
     var showInsertSheet by remember { mutableStateOf(false) }
     var insertTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var backlinksExpanded by remember { mutableStateOf(false) }
 
     // Debounce-Timer für Speicherung
     var saveJob by remember { mutableStateOf<Job?>(null) }
 
-    // Hilfsfunktion: Sofortiges Speichern
+    fun pushUndoSnapshot() {
+        val snap = EditorSnapshot(pageTitle, blocks)
+        if (undoStack.lastOrNull() != snap) {
+            undoStack.add(snap)
+            if (undoStack.size > 40) undoStack.removeAt(0)
+            redoStack.clear()
+        }
+    }
+
     fun persistNow(titleToSave: String, blocksToSave: List<MdBlock>) {
         try {
             val markdown = blocksToMarkdown(blocksToSave)
-            repository.core.updatePage(pageId, titleToSave, markdown)
+            core.updatePage(pageId, titleToSave, markdown)
             isDirty = false
+            onMutation()
         } catch (e: Exception) {
             Log.e("NoteEditorScreen", "Fehler beim Speichern von Seite $pageId", e)
         }
     }
 
-    // Hilfsfunktion: Debounced Speichern
     fun scheduleSave(newTitle: String = pageTitle, newBlocks: List<MdBlock> = blocks) {
         isDirty = true
         saveJob?.cancel()
         saveJob = coroutineScope.launch {
-            delay(400)
+            delay(380)
             withContext(Dispatchers.IO) {
                 persistNow(newTitle, newBlocks)
             }
         }
     }
 
-    // Hilfsfunktion: Neuen Block an der Zielposition einfügen
+    fun updateIcon(newIcon: String) {
+        pageIcon = newIcon
+        metaPrefs.edit().putString("icon_$pageId", newIcon).apply()
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                val payload = JSONObject().apply {
+                    put("id", pageId)
+                    put("patch", JSONObject().apply { put("icon", newIcon) })
+                }.toString()
+                core.dispatch("pageUpdate", payload)
+                onMutation()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun updateCover(newCover: String) {
+        pageCover = newCover
+        metaPrefs.edit().putString("cover_$pageId", newCover).apply()
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                val payload = JSONObject().apply {
+                    put("id", pageId)
+                    put("patch", JSONObject().apply { put("cover", newCover) })
+                }.toString()
+                core.dispatch("pageUpdate", payload)
+                onMutation()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun insertNewBlock(kind: MdBlockKind) {
+        pushUndoSnapshot()
         val newBlock = MdBlock(
             id = UUID.randomUUID().toString(),
             kind = kind,
@@ -217,22 +387,23 @@ fun NoteEditorScreen(
         showInsertSheet = false
     }
 
-    // Seite & Metadaten laden
     fun reloadPage(forceReloadContent: Boolean = false) {
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                val detail: PageDetail? = repository.core.page(pageId)
-                val ancs = repository.core.ancestorsOf(pageId)
-                val subs = repository.core.childrenOf(pageId, null)
-                val backs = repository.core.backlinks(pageId)
+                val detail: PageDetail? = core.page(pageId)
+                val ancs = core.ancestorsOf(pageId)
+                val subs = core.childrenOf(pageId, null)
+                val backs = core.backlinks(pageId)
+                val wsList = core.workspaces()
 
                 withContext(Dispatchers.Main) {
+                    pageDetail = detail
                     ancestors = ancs
                     subpages = subs
                     backlinks = backs
+                    workspaces = wsList
 
                     if (detail != null) {
-                        // Bei Initial-Load oder Fern-Änderung: Markdown neu parsen
                         if (forceReloadContent || (!isDirty && blocks.isEmpty())) {
                             pageTitle = detail.summary.title
                             blocks = markdownToBlocks(detail.content)
@@ -245,12 +416,10 @@ fun NoteEditorScreen(
         }
     }
 
-    // Initiales Laden
     LaunchedEffect(pageId) {
         reloadPage(forceReloadContent = true)
     }
 
-    // Sofortiges Speichern beim Verlassen der Ansicht
     DisposableEffect(pageId) {
         onDispose {
             saveJob?.cancel()
@@ -260,27 +429,10 @@ fun NoteEditorScreen(
         }
     }
 
-    // Reagieren auf repository.changesFlow
-    LaunchedEffect(pageId) {
-        repository.changesFlow.collect { changes ->
-            if (changes.closedPages.contains(pageId)) {
-                onBack()
-                return@collect
-            }
-            if (changes.pages.contains(pageId) || changes.pagesAll || changes.everything) {
-                // Bei Remote-Änderungen aktualisieren wir nahtlos
-                if (changes.remote && !isDirty) {
-                    reloadPage(forceReloadContent = true)
-                } else {
-                    reloadPage(forceReloadContent = false)
-                }
-            }
-        }
-    }
-
     // Spracherkennung für direktes Diktat
     val (speechState, toggleSpeech) = rememberNativeSpeechRecognizer(
         onSpeechResult = { recognizedText ->
+            pushUndoSnapshot()
             val blockId = activeBlockId ?: blocks.firstOrNull()?.id
             if (blockId != null) {
                 val updated = blocks.map { b ->
@@ -293,6 +445,16 @@ fun NoteEditorScreen(
                 }
                 blocks = updated
                 scheduleSave(newBlocks = updated)
+            } else {
+                val newBlock = MdBlock(
+                    id = UUID.randomUUID().toString(),
+                    kind = MdBlockKind.Paragraph(recognizedText),
+                    textColor = null,
+                    bgColor = null
+                )
+                blocks = listOf(newBlock)
+                activeBlockId = newBlock.id
+                scheduleSave(newBlocks = blocks)
             }
         }
     )
@@ -307,7 +469,7 @@ fun NoteEditorScreen(
                     val inputStream = context.contentResolver.openInputStream(uri)
                     val bytes = inputStream?.use { it.readBytes() } ?: return@launch
                     val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-                    val fileId = repository.core.addFile(bytes, mime, "bild_${System.currentTimeMillis()}.jpg")
+                    val fileId = core.addFile(bytes, mime, "bild_${System.currentTimeMillis()}.jpg")
 
                     val imageBlock = MdBlock(
                         id = UUID.randomUUID().toString(),
@@ -317,6 +479,7 @@ fun NoteEditorScreen(
                     )
 
                     withContext(Dispatchers.Main) {
+                        pushUndoSnapshot()
                         val target = insertTargetIndex ?: blocks.size
                         val updated = blocks.toMutableList().apply {
                             add(target.coerceIn(0, size), imageBlock)
@@ -332,189 +495,465 @@ fun NoteEditorScreen(
         }
     }
 
-    // Aktiver Block ermitteln
     val activeBlock = blocks.firstOrNull { it.id == activeBlockId }
+
+    // Statistiken für das Mehr-Menü
+    val fullMarkdownText = remember(blocks) {
+        blocks.joinToString("\n") { getBlockText(it.kind) }
+    }
+    val wordCount = remember(fullMarkdownText) {
+        val trimmed = fullMarkdownText.trim()
+        if (trimmed.isEmpty()) 0 else trimmed.split(Regex("\\s+")).size
+    }
+    val charCount = fullMarkdownText.length
+    val currentWorkspaceName = remember(workspaces, pageDetail) {
+        val wsId = pageDetail?.summary?.workspaceId
+        workspaces.firstOrNull { it.id == wsId }?.name?.ifBlank { "Workspace" } ?: "Workspace"
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = BgDeep,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        // Brotkrumen
-                        if (ancestors.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ancestors.forEachIndexed { idx, anc ->
-                                    Text(
-                                        text = anc.title.ifEmpty { "Ohne Titel" },
-                                        color = TextMuted,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        modifier = Modifier.clickable { onNavigateToPage(anc.id) }
-                                    )
-                                    if (idx < ancestors.size - 1) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
-                                            contentDescription = null,
-                                            tint = TextMuted,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        // Titel der Seite
-                        BasicTextField(
-                            value = pageTitle,
-                            onValueChange = {
-                                pageTitle = it
-                                scheduleSave(newTitle = it)
-                            },
-                            textStyle = TextStyle(
-                                color = TextPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            cursorBrush = SolidColor(Accent),
-                            singleLine = true,
-                            decorationBox = { innerTextField ->
-                                if (pageTitle.isEmpty()) {
-                                    Text("Titel der Notiz…", color = TextMuted, fontSize = 18.sp)
-                                }
-                                innerTextField()
-                            }
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Zurück",
-                            tint = TextPrimary
-                        )
-                    }
-                },
-                actions = {
-                    // Block hinzufügen
-                    IconButton(onClick = {
-                        insertTargetIndex = blocks.size
-                        showInsertSheet = true
-                    }) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "Block einfügen",
-                            tint = TextPrimary
-                        )
-                    }
-
-                    // Aktionen-Menü
-                    Box {
-                        IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = "Optionen",
-                                tint = TextPrimary
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showMoreMenu,
-                            onDismissRequest = { showMoreMenu = false },
-                            modifier = Modifier
-                                .background(BgPanel)
-                                .border(1.dp, Edge, RoundedCornerShape(12.dp))
+            // PWA `.page-chrome` Kopfbereich
+            Surface(
+                color = BgDeep.copy(alpha = 0.95f),
+                border = BorderStroke(0.5.dp, EdgeSoft),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Links: Zurück-Button (auf Handy Hochkant) + Klickbarer Breadcrumb-Pfad
+                    if (!isTabletUi) {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Unterseite anlegen", color = TextPrimary) },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.PostAdd, contentDescription = null, tint = TextSecondary)
-                                },
-                                onClick = {
-                                    showMoreMenu = false
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val newId = repository.core.createPage("Neue Unterseite", "", pageId, null)
-                                            withContext(Dispatchers.Main) {
-                                                onNavigateToPage(newId)
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e("NoteEditorScreen", "Unterseite anlegen fehlgeschlagen", e)
-                                        }
-                                    }
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = { Text("Lernkarten synchronisieren", color = TextPrimary) },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.School, contentDescription = null, tint = Accent)
-                                },
-                                onClick = {
-                                    showMoreMenu = false
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val count = repository.core.cardsFromHighlights(pageId, null)
-                                            snackbarHostState.showSnackbar(
-                                                if (count > 0u) "$count Karteikarten synchronisiert"
-                                                else "Keine neuen Markierungen (==...==) gefunden"
-                                            )
-                                        } catch (e: Exception) {
-                                            Log.e("NoteEditorScreen", "Karten synchronisieren fehlgeschlagen", e)
-                                        }
-                                    }
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = { Text("Versionsverlauf", color = TextPrimary) },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.History, contentDescription = null, tint = TextSecondary)
-                                },
-                                onClick = {
-                                    showMoreMenu = false
-                                    showHistoryDialog = true
-                                }
-                            )
-
-                            HorizontalDivider(color = Edge, modifier = Modifier.padding(vertical = 4.dp))
-
-                            DropdownMenuItem(
-                                text = { Text("In Papierkorb verschieben", color = Danger) },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Delete, contentDescription = null, tint = Danger)
-                                },
-                                onClick = {
-                                    showMoreMenu = false
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            repository.core.trashPage(pageId)
-                                            withContext(Dispatchers.Main) {
-                                                onBack()
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e("NoteEditorScreen", "Papierkorb fehlgeschlagen", e)
-                                        }
-                                    }
-                                }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Zurück",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgDeep,
-                    navigationIconContentColor = TextPrimary,
-                    titleContentColor = TextPrimary,
-                    actionIconContentColor = TextPrimary
-                )
-            )
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = currentWorkspaceName,
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+
+                        ancestors.forEach { anc ->
+                            Text(
+                                text = anc.title.ifEmpty { "Ohne Titel" },
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onOpenPage(anc.id) }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        if (pageIcon.isNotEmpty()) {
+                            Text(
+                                text = "$pageIcon ",
+                                fontSize = 12.sp
+                            )
+                        }
+                        Text(
+                            text = pageTitle.ifEmpty { "Ohne Titel" },
+                            color = TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Rechts (`.page-actions`): Teilen, Favorit, KI-Coach, +, Mehr-Menü
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        // Teilen-Menü
+                        Box {
+                            IconButton(
+                                onClick = { showShareMenu = true },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Share,
+                                    contentDescription = "Teilen",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showShareMenu,
+                                onDismissRequest = { showShareMenu = false },
+                                modifier = Modifier
+                                    .background(BgPanel)
+                                    .border(1.dp, Edge, RoundedCornerShape(12.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Als Markdown-Text teilen", color = TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Rounded.Share, null, tint = Accent) },
+                                    onClick = {
+                                        showShareMenu = false
+                                        val md = "# $pageTitle\n\n${blocksToMarkdown(blocks)}"
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/markdown"
+                                            putExtra(Intent.EXTRA_SUBJECT, pageTitle)
+                                            putExtra(Intent.EXTRA_TEXT, md)
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Notiz teilen"))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Markdown in Zwischenablage", color = TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = TextSecondary) },
+                                    onClick = {
+                                        showShareMenu = false
+                                        val md = "# $pageTitle\n\n${blocksToMarkdown(blocks)}"
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText(pageTitle, md))
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Markdown in Zwischenablage kopiert")
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Wiki-Link [[Titel]] kopieren", color = TextPrimary) },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Note, null, tint = TextSecondary) },
+                                    onClick = {
+                                        showShareMenu = false
+                                        val link = "[[${pageTitle.ifEmpty { pageId }}]]"
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText("Wiki-Link", link))
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Link $link kopiert")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        // ★ / ☆ Favoriten-Stern
+                        IconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                contentDescription = "Favorit",
+                                tint = if (isFavorite) Warn else TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // ✦ KI-Coach für diese Seite öffnen
+                        IconButton(
+                            onClick = { onOpenAiForPage(pageId) },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AutoAwesome,
+                                contentDescription = "KI-Coach",
+                                tint = Accent,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+
+                        // + Block einfügen
+                        IconButton(
+                            onClick = {
+                                insertTargetIndex = blocks.size
+                                showInsertSheet = true
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "Block einfügen",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // ⋯ Mehr-Menü (exakt wie in der PWA)
+                        Box {
+                            IconButton(
+                                onClick = { showMoreMenu = true },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreHoriz,
+                                    contentDescription = "Mehr Optionen",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false },
+                                modifier = Modifier
+                                    .background(BgPanel)
+                                    .border(1.dp, Edge, RoundedCornerShape(14.dp))
+                                    .widthIn(min = 260.dp)
+                            ) {
+                                // ↶ Rückgängig / ↷ Wiederholen
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = BgSidebar,
+                                        border = BorderStroke(1.dp, EdgeSoft),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable(enabled = undoStack.isNotEmpty()) {
+                                                val prev = undoStack.removeLastOrNull()
+                                                if (prev != null) {
+                                                    redoStack.add(EditorSnapshot(pageTitle, blocks))
+                                                    pageTitle = prev.title
+                                                    blocks = prev.blocks
+                                                    scheduleSave(prev.title, prev.blocks)
+                                                }
+                                                showMoreMenu = false
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.AutoMirrored.Rounded.Undo,
+                                                contentDescription = null,
+                                                tint = if (undoStack.isNotEmpty()) TextPrimary else TextMuted,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                "Rückgängig",
+                                                color = if (undoStack.isNotEmpty()) TextPrimary else TextMuted,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = BgSidebar,
+                                        border = BorderStroke(1.dp, EdgeSoft),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable(enabled = redoStack.isNotEmpty()) {
+                                                val next = redoStack.removeLastOrNull()
+                                                if (next != null) {
+                                                    undoStack.add(EditorSnapshot(pageTitle, blocks))
+                                                    pageTitle = next.title
+                                                    blocks = next.blocks
+                                                    scheduleSave(next.title, next.blocks)
+                                                }
+                                                showMoreMenu = false
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.AutoMirrored.Rounded.Redo,
+                                                contentDescription = null,
+                                                tint = if (redoStack.isNotEmpty()) TextPrimary else TextMuted,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                "Wiederholen",
+                                                color = if (redoStack.isNotEmpty()) TextPrimary else TextMuted,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider(color = EdgeSoft, modifier = Modifier.padding(vertical = 4.dp))
+
+                                DropdownMenuItem(
+                                    text = { Text("🎨 Icon ändern", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showIconDialog = true
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("🖼️ Cover ändern", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showCoverDialog = true
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("🃏 Karten aus Seite / Lückentexten", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                persistNow(pageTitle, blocks)
+                                                val count = core.cardsFromHighlights(pageId, null)
+                                                snackbarHostState.showSnackbar(
+                                                    if (count > 0u) "$count Karteikarten aus Seite erstellt"
+                                                    else "Keine neuen Markierungen (==...==) oder Lücken ({{c1::...}}) gefunden"
+                                                )
+                                            } catch (e: Exception) {
+                                                Log.e("NoteEditorScreen", "Karten erstellen fehlgeschlagen", e)
+                                            }
+                                        }
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("📋 Seite duplizieren", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val md = blocksToMarkdown(blocks)
+                                                val copyId = core.createPage(
+                                                    "${pageTitle.ifEmpty { "Notiz" }} (Kopie)",
+                                                    md,
+                                                    pageDetail?.summary?.parentId,
+                                                    pageDetail?.summary?.workspaceId
+                                                )
+                                                onMutation()
+                                                withContext(Dispatchers.Main) {
+                                                    onOpenPage(copyId)
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("NoteEditorScreen", "Duplizieren fehlgeschlagen", e)
+                                            }
+                                        }
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("📁 Verschieben nach…", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showMoveDialog = true
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("🕓 Versionsverlauf", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showHistoryDialog = true
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("📦 Archivieren", color = TextPrimary, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                core.archivePage(pageId)
+                                                onMutation()
+                                                withContext(Dispatchers.Main) {
+                                                    snackbarHostState.showSnackbar("Seite archiviert")
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("NoteEditorScreen", "Archivieren fehlgeschlagen", e)
+                                            }
+                                        }
+                                    }
+                                )
+
+                                HorizontalDivider(color = EdgeSoft, modifier = Modifier.padding(vertical = 4.dp))
+
+                                DropdownMenuItem(
+                                    text = { Text("🗑️ In Papierkorb verschieben", color = Danger, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                core.trashPage(pageId)
+                                                onMutation()
+                                                withContext(Dispatchers.Main) {
+                                                    onNavigateBack()
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("NoteEditorScreen", "Papierkorb fehlgeschlagen", e)
+                                            }
+                                        }
+                                    }
+                                )
+
+                                HorizontalDivider(color = EdgeSoft, modifier = Modifier.padding(vertical = 4.dp))
+
+                                // Info-Fußzeile im Menü
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "$wordCount Wörter · $charCount Zeichen · ${blocks.size} Blöcke",
+                                        color = TextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                    val updatedStr = pageDetail?.summary?.updated?.take(16)?.replace('T', ' ') ?: "Gerade eben"
+                                    Text(
+                                        text = "Zuletzt bearbeitet: $updatedStr",
+                                        color = TextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     ) { innerPadding ->
         Box(
@@ -524,19 +963,180 @@ fun NoteEditorScreen(
         ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Leere Seite: Initialer Absatz
+                // 1. Optionales Page Cover Banner
+                if (pageCover.isNotEmpty()) {
+                    item(key = "page_cover_banner") {
+                        PageCoverBanner(
+                            coverId = pageCover,
+                            onChangeCover = { showCoverDialog = true }
+                        )
+                    }
+                }
+
+                // 2. Seiten-Header (Icon + Hover-Buttons + Großer Titel + Rückverweise-Chip)
+                item(key = "page_header_section") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                    ) {
+                        // Dezenz-Buttons für + Icon / + Cover
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            if (pageIcon.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = SurfaceSubtle,
+                                    border = BorderStroke(1.dp, EdgeSoft),
+                                    modifier = Modifier.clickable { showIconDialog = true }
+                                ) {
+                                    Text(
+                                        text = pageIcon,
+                                        fontSize = 36.sp,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            } else {
+                                Surface(
+                                    shape = ImpalaPillShape,
+                                    color = SurfaceSubtle,
+                                    modifier = Modifier
+                                        .clip(ImpalaPillShape)
+                                        .clickable { showIconDialog = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Rounded.EmojiEmotions, null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("+ Icon", color = TextMuted, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+
+                            if (pageCover.isEmpty()) {
+                                Surface(
+                                    shape = ImpalaPillShape,
+                                    color = SurfaceSubtle,
+                                    modifier = Modifier
+                                        .clip(ImpalaPillShape)
+                                        .clickable { showCoverDialog = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Rounded.Wallpaper, null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("+ Cover", color = TextMuted, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Großer, mehrzeiliger Seitentitel
+                        BasicTextField(
+                            value = pageTitle,
+                            onValueChange = {
+                                pushUndoSnapshot()
+                                pageTitle = it
+                                scheduleSave(newTitle = it)
+                            },
+                            textStyle = TextStyle(
+                                color = TextPrimary,
+                                fontSize = 28.sp,
+                                lineHeight = 34.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            cursorBrush = SolidColor(Accent),
+                            modifier = Modifier.fillMaxWidth(),
+                            decorationBox = { innerTextField ->
+                                if (pageTitle.isEmpty()) {
+                                    Text(
+                                        text = "Ohne Titel",
+                                        color = TextMuted,
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+
+                        // Rückverweise-Chip (`↙ N Rückverweise`)
+                        if (backlinks.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = ImpalaPillShape,
+                                color = AccentSoft,
+                                border = BorderStroke(1.dp, AccentBorder),
+                                modifier = Modifier
+                                    .clip(ImpalaPillShape)
+                                    .clickable { backlinksExpanded = !backlinksExpanded }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "↙ ${backlinks.size} ${if (backlinks.size == 1) "Rückverweis" else "Rückverweise"}",
+                                        color = Accent,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = if (backlinksExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                        contentDescription = null,
+                                        tint = Accent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = backlinksExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    backlinks.forEach { linkPage ->
+                                        PageSummaryCard(
+                                            page = linkPage,
+                                            onClick = { onOpenPage(linkPage.id) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(
+                            color = EdgeSoft,
+                            modifier = Modifier.padding(top = 14.dp)
+                        )
+                    }
+                }
+
+                // 3. Leere Seite: Initialer Absatz
                 if (blocks.isEmpty()) {
                     item(key = "empty_placeholder") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 24.dp)
+                                .padding(horizontal = 20.dp, vertical = 16.dp)
                                 .clickable {
                                     val newBlock = MdBlock(
                                         id = UUID.randomUUID().toString(),
@@ -550,7 +1150,7 @@ fun NoteEditorScreen(
                                 }
                         ) {
                             Text(
-                                text = "Tippe hier oder auf '+' um Notizen zu verfassen…",
+                                text = "Tippe hier oder schreibe '/' für Befehle…",
                                 color = TextMuted,
                                 fontSize = 16.sp
                             )
@@ -558,124 +1158,190 @@ fun NoteEditorScreen(
                     }
                 }
 
-                // Blöcke rendern
+                // 4. Blöcke rendern
                 itemsIndexed(
                     items = blocks,
                     key = { _, block -> block.id }
                 ) { index, block ->
-                    BlockItemRenderer(
-                        block = block,
-                        isActive = activeBlockId == block.id,
-                        repository = repository,
-                        onNavigateToPage = onNavigateToPage,
-                        onFocus = { activeBlockId = block.id },
-                        onSelectionChanged = { activeBlockSelection = it },
-                        onContentChange = { updatedKind ->
-                            val updated = blocks.toMutableList().apply {
-                                set(index, block.copy(kind = updatedKind))
-                            }
-                            blocks = updated
-                            scheduleSave(newBlocks = updated)
-                        },
-                        onEnter = {
-                            // Neuer Absatz nach aktuellem Block
-                            val newBlock = MdBlock(
-                                id = UUID.randomUUID().toString(),
-                                kind = MdBlockKind.Paragraph(""),
-                                textColor = null,
-                                bgColor = null
-                            )
-                            val updated = blocks.toMutableList().apply {
-                                add(index + 1, newBlock)
-                            }
-                            blocks = updated
-                            activeBlockId = newBlock.id
-                            scheduleSave(newBlocks = updated)
-                        },
-                        onBackspaceAtStart = {
-                            // Block löschen bzw. mit vorherigem verschmelzen
-                            if (blocks.size > 1) {
-                                val prevIndex = (index - 1).coerceAtLeast(0)
-                                val prevBlock = blocks[prevIndex]
-                                val currentText = getBlockText(block.kind)
-                                val prevText = getBlockText(prevBlock.kind)
-
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        BlockItemRenderer(
+                            block = block,
+                            isActive = activeBlockId == block.id,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < blocks.size - 1,
+                            core = core,
+                            onNavigateToPage = onOpenPage,
+                            onFocus = { activeBlockId = block.id },
+                            onSelectionChanged = { activeBlockSelection = it },
+                            onContentChange = { updatedKind ->
                                 val updated = blocks.toMutableList().apply {
-                                    removeAt(index)
-                                    if (currentText.isNotEmpty()) {
-                                        set(prevIndex, prevBlock.copy(kind = updateBlockText(prevBlock.kind, prevText + currentText)))
-                                    }
+                                    set(index, block.copy(kind = updatedKind))
                                 }
                                 blocks = updated
-                                activeBlockId = prevBlock.id
                                 scheduleSave(newBlocks = updated)
+                            },
+                            onMoveBlock = { delta ->
+                                val targetIdx = (index + delta).coerceIn(0, blocks.size - 1)
+                                if (targetIdx != index) {
+                                    pushUndoSnapshot()
+                                    val updated = blocks.toMutableList().apply {
+                                        val item = removeAt(index)
+                                        add(targetIdx, item)
+                                    }
+                                    blocks = updated
+                                    scheduleSave(newBlocks = updated)
+                                }
+                            },
+                            onDeleteBlock = {
+                                pushUndoSnapshot()
+                                val updated = blocks.toMutableList().apply {
+                                    removeAt(index)
+                                }
+                                blocks = updated
+                                scheduleSave(newBlocks = updated)
+                            },
+                            onEnter = {
+                                pushUndoSnapshot()
+                                val nextKind = when (val k = block.kind) {
+                                    is MdBlockKind.List -> {
+                                        val style = when (k.style) {
+                                            is MdListStyle.Todo -> MdListStyle.Todo(checked = false)
+                                            else -> k.style
+                                        }
+                                        MdBlockKind.List(style, k.indent, "")
+                                    }
+                                    else -> MdBlockKind.Paragraph("")
+                                }
+                                val newBlock = MdBlock(
+                                    id = UUID.randomUUID().toString(),
+                                    kind = nextKind,
+                                    textColor = null,
+                                    bgColor = null
+                                )
+                                val updated = blocks.toMutableList().apply {
+                                    add(index + 1, newBlock)
+                                }
+                                blocks = updated
+                                activeBlockId = newBlock.id
+                                scheduleSave(newBlocks = updated)
+                            },
+                            onBackspaceAtStart = {
+                                if (block.kind !is MdBlockKind.Paragraph) {
+                                    pushUndoSnapshot()
+                                    val plain = getBlockText(block.kind)
+                                    val updated = blocks.toMutableList().apply {
+                                        set(index, block.copy(kind = MdBlockKind.Paragraph(plain)))
+                                    }
+                                    blocks = updated
+                                    scheduleSave(newBlocks = updated)
+                                } else if (blocks.size > 1) {
+                                    pushUndoSnapshot()
+                                    val prevIndex = (index - 1).coerceAtLeast(0)
+                                    val prevBlock = blocks[prevIndex]
+                                    val currentText = getBlockText(block.kind)
+                                    val prevText = getBlockText(prevBlock.kind)
+
+                                    val updated = blocks.toMutableList().apply {
+                                        removeAt(index)
+                                        if (currentText.isNotEmpty()) {
+                                            set(prevIndex, prevBlock.copy(kind = updateBlockText(prevBlock.kind, prevText + currentText)))
+                                        }
+                                    }
+                                    blocks = updated
+                                    activeBlockId = prevBlock.id
+                                    scheduleSave(newBlocks = updated)
+                                }
+                            },
+                            onOpenSlashMenu = {
+                                insertTargetIndex = index + 1
+                                showInsertSheet = true
                             }
-                        },
-                        onOpenSlashMenu = {
-                            insertTargetIndex = index + 1
-                            showInsertSheet = true
+                        )
+                    }
+                }
+
+                // 5. Am Ende der Seite: Verwandte Seiten / Unterseiten + Button `+ Unterseite anlegen`
+                item(key = "section_subpages_footer") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        HorizontalDivider(color = EdgeSoft, modifier = Modifier.padding(bottom = 8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "UNTERSEITEN (${subpages.size})",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+
+                            Surface(
+                                shape = ImpalaPillShape,
+                                color = AccentSoft,
+                                border = BorderStroke(1.dp, AccentBorder),
+                                modifier = Modifier
+                                    .clip(ImpalaPillShape)
+                                    .clickable {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val newId = core.createPage(
+                                                    "Neue Unterseite",
+                                                    "",
+                                                    pageId,
+                                                    pageDetail?.summary?.workspaceId
+                                                )
+                                                onMutation()
+                                                withContext(Dispatchers.Main) {
+                                                    onOpenPage(newId)
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("NoteEditorScreen", "Unterseite anlegen fehlgeschlagen", e)
+                                            }
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Rounded.Add, null, tint = Accent, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Unterseite anlegen",
+                                        color = Accent,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
-                    )
-                }
 
-                // Unterseiten-Sektion
-                if (subpages.isNotEmpty()) {
-                    item(key = "section_subpages") {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "UNTERSEITEN (${subpages.size})",
-                            color = TextMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    itemsIndexed(
-                        items = subpages,
-                        key = { _, p -> "sub_${p.id}" }
-                    ) { _, page ->
-                        PageSummaryCard(
-                            page = page,
-                            onClick = { onNavigateToPage(page.id) }
-                        )
-                    }
-                }
-
-                // Rückverweise (Backlinks)
-                if (backlinks.isNotEmpty()) {
-                    item(key = "section_backlinks") {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "VERWEISE AUF DIESE SEITE (${backlinks.size})",
-                            color = TextMuted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    itemsIndexed(
-                        items = backlinks,
-                        key = { _, p -> "back_${p.id}" }
-                    ) { _, page ->
-                        PageSummaryCard(
-                            page = page,
-                            onClick = { onNavigateToPage(page.id) }
-                        )
+                        subpages.forEach { sub ->
+                            PageSummaryCard(
+                                page = sub,
+                                onClick = { onOpenPage(sub.id) }
+                            )
+                        }
                     }
                 }
             }
 
-            // Schwebende Formatierungsleiste über der Tastatur
+            // Schwebende Formatierungsleiste über der Tastatur und Systemleiste
             ExpressiveFloatingToolbar(
                 activeBlock = activeBlock,
                 isSpeechListening = speechState.isListening,
                 onToggleSpeech = toggleSpeech,
                 onWrapSelection = { prefix, suffix ->
                     if (activeBlock != null) {
+                        pushUndoSnapshot()
                         val currentText = getBlockText(activeBlock.kind)
                         val start = activeBlockSelection.start.coerceIn(0, currentText.length)
                         val end = activeBlockSelection.end.coerceIn(0, currentText.length)
@@ -697,6 +1363,7 @@ fun NoteEditorScreen(
                 },
                 onChangeBlockKind = { newKind ->
                     if (activeBlock != null) {
+                        pushUndoSnapshot()
                         val updated = blocks.map { b ->
                             if (b.id == activeBlock.id) b.copy(kind = newKind) else b
                         }
@@ -706,6 +1373,7 @@ fun NoteEditorScreen(
                 },
                 onIndentChange = { delta ->
                     if (activeBlock?.kind is MdBlockKind.List) {
+                        pushUndoSnapshot()
                         val listKind = activeBlock.kind as MdBlockKind.List
                         val newIndent = (listKind.indent.toInt() + delta).coerceIn(0, 8).toUInt()
                         val updated = blocks.map { b ->
@@ -717,6 +1385,7 @@ fun NoteEditorScreen(
                 },
                 onColorChange = { textColor, bgColor ->
                     if (activeBlock != null) {
+                        pushUndoSnapshot()
                         val updated = blocks.map { b ->
                             if (b.id == activeBlock.id) b.copy(textColor = textColor, bgColor = bgColor) else b
                         }
@@ -729,7 +1398,7 @@ fun NoteEditorScreen(
         }
     }
 
-    // Modal Bottom Sheet: Block einfügen
+    // Modal Bottom Sheet: Block einfügen (Slash-Menü)
     if (showInsertSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -764,8 +1433,20 @@ fun NoteEditorScreen(
                 InsertBlockOption(Icons.Rounded.Title, "Überschrift 2 (H2)") {
                     insertNewBlock(MdBlockKind.Heading(MdHeadingLevel.H2, ""))
                 }
+                InsertBlockOption(Icons.Rounded.Title, "Überschrift 3 (H3)") {
+                    insertNewBlock(MdBlockKind.Heading(MdHeadingLevel.H3, ""))
+                }
                 InsertBlockOption(Icons.Rounded.CheckBox, "Aufgabe (Todo-Checkbox)") {
                     insertNewBlock(MdBlockKind.List(MdListStyle.Todo(checked = false), 0u, ""))
+                }
+                InsertBlockOption(Icons.AutoMirrored.Rounded.FormatListBulleted, "Aufzählungsliste") {
+                    insertNewBlock(MdBlockKind.List(MdListStyle.Bullet, 0u, ""))
+                }
+                InsertBlockOption(Icons.Rounded.FormatListNumbered, "Nummerierte Liste") {
+                    insertNewBlock(MdBlockKind.List(MdListStyle.Number, 0u, ""))
+                }
+                InsertBlockOption(Icons.Rounded.FormatQuote, "Zitatblock") {
+                    insertNewBlock(MdBlockKind.Quote(""))
                 }
                 InsertBlockOption(Icons.Rounded.Code, "Codeblock") {
                     insertNewBlock(MdBlockKind.Code("kotlin", ""))
@@ -773,6 +1454,9 @@ fun NoteEditorScreen(
                 InsertBlockOption(Icons.Rounded.Info, "Callout-Hinweisbox") {
                     val child = MdBlock(UUID.randomUUID().toString(), MdBlockKind.Paragraph(""), null, null)
                     insertNewBlock(MdBlockKind.Callout("blue", listOf(child)))
+                }
+                InsertBlockOption(Icons.Rounded.HorizontalRule, "Trennlinie") {
+                    insertNewBlock(MdBlockKind.Divider)
                 }
                 InsertBlockOption(Icons.Rounded.TableChart, "Tabelle (2x2)") {
                     insertNewBlock(MdBlockKind.Table(listOf(listOf("Kopf 1", "Kopf 2"), listOf("Zelle 1", "Zelle 2"))))
@@ -783,7 +1467,7 @@ fun NoteEditorScreen(
                 InsertBlockOption(Icons.Rounded.School, "Lückentext-Karten synchronisieren") {
                     showInsertSheet = false
                     coroutineScope.launch(Dispatchers.IO) {
-                        val count = repository.core.cardsFromHighlights(pageId, null)
+                        val count = core.cardsFromHighlights(pageId, null)
                         snackbarHostState.showSnackbar(
                             if (count > 0u) "$count Karteikarten synchronisiert"
                             else "Keine neuen Lücken (==...==) gefunden"
@@ -796,13 +1480,200 @@ fun NoteEditorScreen(
         }
     }
 
+    // Dialog: Emoji-Icon wählen
+    if (showIconDialog) {
+        Dialog(onDismissRequest = { showIconDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = BgPanel,
+                border = BorderStroke(1.dp, Edge),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Seiten-Icon wählen", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        if (pageIcon.isNotEmpty()) {
+                            TextButton(onClick = {
+                                updateIcon("")
+                                showIconDialog = false
+                            }) {
+                                Text("Entfernen", color = Danger, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PAGE_EMOJIS.forEach { emoji ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (pageIcon == emoji) AccentSoft else BgSidebar,
+                                border = BorderStroke(1.dp, if (pageIcon == emoji) Accent else EdgeSoft),
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clickable {
+                                        updateIcon(emoji)
+                                        showIconDialog = false
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = emoji, fontSize = 22.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog: Seiten-Cover wählen
+    if (showCoverDialog) {
+        Dialog(onDismissRequest = { showCoverDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = BgPanel,
+                border = BorderStroke(1.dp, Edge),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("Seiten-Cover ändern", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PAGE_COVERS.forEach { option ->
+                            val isSelected = pageCover == option.id
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) AccentSoft else BgSidebar,
+                                border = BorderStroke(1.dp, if (isSelected) Accent else EdgeSoft),
+                                modifier = Modifier.clickable {
+                                    updateCover(option.id)
+                                    showCoverDialog = false
+                                }
+                            ) {
+                                Text(
+                                    text = option.label,
+                                    color = if (isSelected) Accent else TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog: Seite verschieben nach Workspace / Elternseite
+    if (showMoveDialog) {
+        var allPages by remember { mutableStateOf<List<PageSummary>>(emptyList()) }
+        LaunchedEffect(Unit) {
+            withContext(Dispatchers.IO) {
+                allPages = core.recentPages(40u).filter { it.id != pageId }
+            }
+        }
+
+        Dialog(onDismissRequest = { showMoveDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = BgPanel,
+                border = BorderStroke(1.dp, Edge),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("Seite verschieben nach…", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (workspaces.isNotEmpty()) {
+                        Text("Workspaces (als Hauptseite)", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        workspaces.forEach { ws ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BgSidebar,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .clickable {
+                                        showMoveDialog = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                core.movePageToWorkspace(pageId, ws.id)
+                                                onMutation()
+                                                reloadPage()
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Rounded.DriveFileMove, null, tint = Accent, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(ws.name.ifBlank { "Standard-Workspace" }, color = TextPrimary, fontSize = 14.sp)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    Text("Untergeordnet unter Seite", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                        itemsIndexed(allPages) { _, targetPage ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BgSidebar,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .clickable {
+                                        showMoveDialog = false
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                core.movePage(pageId, targetPage.id, null)
+                                                onMutation()
+                                                reloadPage()
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                            ) {
+                                Text(
+                                    text = targetPage.title.ifEmpty { "Ohne Titel" },
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Dialog: Versionsverlauf
     if (showHistoryDialog) {
         PageHistoryDialog(
             pageId = pageId,
-            repository = repository,
+            core = core,
             onDismiss = { showHistoryDialog = false },
             onRestoreVersion = { version ->
+                pushUndoSnapshot()
                 pageTitle = version.title
                 blocks = markdownToBlocks(version.content)
                 persistNow(version.title, blocks)
@@ -816,8 +1687,87 @@ fun NoteEditorScreen(
 }
 
 /**
- * Hilfsfunktion zum Aktualisieren des Blocktextes bei Format- oder Inhaltstransformationen.
+ * Zeichnet das optionale Seiten-Cover-Banner (Farbverläufe & Muster wie in der PWA).
  */
+@Composable
+private fun PageCoverBanner(
+    coverId: String,
+    onChangeCover: () -> Unit
+) {
+    val gradientColors = when (coverId) {
+        "sunset" -> listOf(Color(0xFFF97316), Color(0xFFEC4899), Color(0xFF8B5CF6))
+        "ocean" -> listOf(Color(0xFF0EA5E9), Color(0xFF2563EB), Color(0xFF1E3A8A))
+        "forest" -> listOf(Color(0xFF10B981), Color(0xFF059669), Color(0xFF064E3B))
+        "grape" -> listOf(Color(0xFFA855F7), Color(0xFF6366F1), Color(0xFF312E81))
+        "aurora" -> listOf(Color(0xFF2DD4BF), Color(0xFF3B82F6), Color(0xFF9333EA))
+        "mono" -> listOf(Color(0xFF374151), Color(0xFF1F2937), Color(0xFF111827))
+        else -> listOf(BgSidebar, BgPanel)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(128.dp)
+            .background(Brush.linearGradient(gradientColors))
+            .clickable { onChangeCover() }
+    ) {
+        if (coverId == "karo" || coverId == "linien" || coverId == "punkte") {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val step = 24.dp.toPx()
+                val lineColor = Color.White.copy(alpha = 0.12f)
+                when (coverId) {
+                    "karo" -> {
+                        var x = 0f
+                        while (x < size.width) {
+                            drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                            x += step
+                        }
+                        var y = 0f
+                        while (y < size.height) {
+                            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                            y += step
+                        }
+                    }
+                    "linien" -> {
+                        var y = step
+                        while (y < size.height) {
+                            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.2f)
+                            y += step
+                        }
+                    }
+                    "punkte" -> {
+                        var x = step / 2
+                        while (x < size.width) {
+                            var y = step / 2
+                            while (y < size.height) {
+                                drawCircle(lineColor, radius = 2f, center = Offset(x, y))
+                                y += step
+                            }
+                            x += step
+                        }
+                    }
+                }
+            }
+        }
+
+        Surface(
+            shape = ImpalaPillShape,
+            color = BgDeep.copy(alpha = 0.65f),
+            border = BorderStroke(1.dp, EdgeSoft),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(10.dp)
+        ) {
+            Text(
+                text = "Cover ändern",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
 private fun updateBlockText(kind: MdBlockKind, newText: String): MdBlockKind {
     return when (kind) {
         is MdBlockKind.Paragraph -> kind.copy(text = newText)
@@ -839,11 +1789,15 @@ private fun updateBlockText(kind: MdBlockKind, newText: String): MdBlockKind {
 private fun BlockItemRenderer(
     block: MdBlock,
     isActive: Boolean,
-    repository: ImpalaRepository,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    core: ImpalaCore,
     onNavigateToPage: (String) -> Unit,
     onFocus: () -> Unit,
     onSelectionChanged: (TextRange) -> Unit,
     onContentChange: (MdBlockKind) -> Unit,
+    onMoveBlock: (Int) -> Unit,
+    onDeleteBlock: () -> Unit,
     onEnter: () -> Unit,
     onBackspaceAtStart: () -> Unit,
     onOpenSlashMenu: () -> Unit
@@ -864,7 +1818,7 @@ private fun BlockItemRenderer(
         else -> TextPrimary
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .then(bgModifier)
@@ -877,7 +1831,7 @@ private fun BlockItemRenderer(
                     style = TextStyle(color = textCustomColor, fontSize = 16.sp, lineHeight = 24.sp),
                     placeholder = "Absatz schreiben oder '/' für Befehle…",
                     onValueChange = { newText ->
-                        if (newText.startsWith("/")) {
+                        if (newText == "/") {
                             onOpenSlashMenu()
                         } else {
                             onContentChange(kind.copy(text = newText))
@@ -940,7 +1894,7 @@ private fun BlockItemRenderer(
                                 contentDescription = "Todo Checkbox",
                                 tint = if (style.checked) Success else TextSecondary,
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(22.dp)
                                     .padding(end = 4.dp, top = 2.dp)
                                     .clickable {
                                         onContentChange(kind.copy(style = MdListStyle.Todo(checked = !style.checked)))
@@ -1000,7 +1954,10 @@ private fun BlockItemRenderer(
                 HorizontalDivider(
                     color = Edge,
                     thickness = 1.dp,
-                    modifier = Modifier.padding(vertical = 12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onFocus() }
+                        .padding(vertical = 12.dp)
                 )
             }
 
@@ -1012,19 +1969,13 @@ private fun BlockItemRenderer(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = kind.language.ifEmpty { "code" },
-                                color = Accent,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = kind.language.ifEmpty { "code" },
+                            color = Accent,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
                         EditableTextField(
                             text = kind.text,
@@ -1228,7 +2179,6 @@ private fun BlockItemRenderer(
                                 }
                             }
                         }
-                        // Knöpfe: Zeile und Spalte hinzufügen
                         Row(modifier = Modifier.padding(top = 6.dp)) {
                             Text(
                                 text = "+ Zeile",
@@ -1266,7 +2216,7 @@ private fun BlockItemRenderer(
                 LaunchedEffect(kind.src) {
                     withContext(Dispatchers.IO) {
                         try {
-                            val fileData = repository.core.file(kind.src)
+                            val fileData = core.file(kind.src)
                             bitmapBytes = fileData?.bytes
                         } catch (e: Exception) {
                             Log.e("NoteEditorScreen", "Bild laden fehlgeschlagen: ${kind.src}", e)
@@ -1308,7 +2258,7 @@ private fun BlockItemRenderer(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Bild wird geladen… (${kind.alt})",
+                                    text = "Bild (${kind.alt})",
                                     color = TextMuted,
                                     fontSize = 13.sp
                                 )
@@ -1422,12 +2372,51 @@ private fun BlockItemRenderer(
                 )
             }
         }
+
+        // Dezente Block-Aktionsleiste beim Fokussieren (Verschieben / Löschen)
+        AnimatedVisibility(visible = isActive) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (canMoveUp) {
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowUp,
+                        contentDescription = "Block nach oben",
+                        tint = TextMuted,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { onMoveBlock(-1) }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                if (canMoveDown) {
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowDown,
+                        contentDescription = "Block nach unten",
+                        tint = TextMuted,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { onMoveBlock(1) }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Icon(
+                    imageVector = Icons.Rounded.Delete,
+                    contentDescription = "Block löschen",
+                    tint = Danger.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clickable { onDeleteBlock() }
+                )
+            }
+        }
     }
 }
 
-/**
- * Universelles editierbares Textfeld mit Tastatur-Ereignissen für Enter und Backspace.
- */
 @Composable
 private fun EditableTextField(
     text: String,
@@ -1481,9 +2470,6 @@ private fun EditableTextField(
     )
 }
 
-/**
- * Unterseiten- und Rückverweis-Kachel.
- */
 @Composable
 private fun PageSummaryCard(
     page: PageSummary,
@@ -1520,9 +2506,6 @@ private fun PageSummaryCard(
     }
 }
 
-/**
- * Option im Insert-Sheet.
- */
 @Composable
 private fun InsertBlockOption(
     icon: ImageVector,
@@ -1534,14 +2517,14 @@ private fun InsertBlockOption(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Accent,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(21.dp)
         )
         Spacer(modifier = Modifier.width(14.dp))
         Text(
@@ -1553,13 +2536,10 @@ private fun InsertBlockOption(
     }
 }
 
-/**
- * Dialog zur Anzeige und Wiederherstellung des Versionsverlaufs.
- */
 @Composable
 private fun PageHistoryDialog(
     pageId: String,
-    repository: ImpalaRepository,
+    core: ImpalaCore,
     onDismiss: () -> Unit,
     onRestoreVersion: (PageVersion) -> Unit
 ) {
@@ -1569,8 +2549,8 @@ private fun PageHistoryDialog(
     LaunchedEffect(pageId) {
         withContext(Dispatchers.IO) {
             try {
-                val versions = repository.core.pageHistory(pageId)
-                history = versions.reversed() // Neueste zuerst
+                val versions = core.pageHistory(pageId)
+                history = versions.reversed()
             } catch (e: Exception) {
                 Log.e("NoteEditorScreen", "Versionsverlauf laden fehlgeschlagen", e)
             } finally {
@@ -1579,14 +2559,14 @@ private fun PageHistoryDialog(
         }
     }
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = BgPanel,
             border = BorderStroke(1.dp, Edge),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(8.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -1598,67 +2578,43 @@ private fun PageHistoryDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Verlauf wird geladen…", color = TextMuted)
-                    }
+                    Text("Lade Verlauf…", color = TextMuted, fontSize = 14.sp)
                 } else if (history.isEmpty()) {
-                    Text(
-                        text = "Keine früheren Versionen gespeichert.",
-                        color = TextMuted,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
+                    Text("Keine älteren Versionen vorhanden.", color = TextMuted, fontSize = 14.sp)
                 } else {
                     LazyColumn(
-                        modifier = Modifier.heightIn(max = 350.dp),
+                        modifier = Modifier.heightIn(max = 320.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         itemsIndexed(history) { _, version ->
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = BgSidebar,
-                                border = BorderStroke(1.dp, Edge),
-                                modifier = Modifier.fillMaxWidth()
+                                border = BorderStroke(1.dp, EdgeSoft),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onRestoreVersion(version) }
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = version.time.take(19).replace('T', ' '),
+                                        color = Accent,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = version.title.ifEmpty { "Ohne Titel" },
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (version.content.isNotEmpty()) {
                                         Text(
-                                            text = version.time.take(19).replace("T", " "),
-                                            color = Accent,
+                                            text = version.content.take(90),
+                                            color = TextSecondary,
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = version.title.ifEmpty { "Ohne Titel" },
-                                            color = TextPrimary,
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = AccentSoft,
-                                        modifier = Modifier.clickable { onRestoreVersion(version) }
-                                    ) {
-                                        Text(
-                                            text = "Wiederherstellen",
-                                            color = Accent,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
                                 }
@@ -1667,20 +2623,11 @@ private fun PageHistoryDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Text(
-                        text = "Schließen",
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier
-                            .clickable(onClick = onDismiss)
-                            .padding(8.dp)
-                    )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Schließen", color = TextSecondary)
+                    }
                 }
             }
         }

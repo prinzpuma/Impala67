@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,11 +28,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Undo
@@ -67,25 +72,36 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.ui.theme.Accent
+import org.impala67.app.ui.theme.AccentBlue
+import org.impala67.app.ui.theme.AccentBlueSoft
 import org.impala67.app.ui.theme.AccentSoft
 import org.impala67.app.ui.theme.BgBubble
+import org.impala67.app.ui.theme.BgCard
 import org.impala67.app.ui.theme.BgDeep
+import org.impala67.app.ui.theme.BgElevated
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.BgSidebar
+import org.impala67.app.ui.theme.BorderHairline
+import org.impala67.app.ui.theme.BorderStrong
 import org.impala67.app.ui.theme.Danger
+import org.impala67.app.ui.theme.DangerRed
 import org.impala67.app.ui.theme.DangerSoft
 import org.impala67.app.ui.theme.Edge
 import org.impala67.app.ui.theme.EdgeSoft
 import org.impala67.app.ui.theme.ImpalaPillShape
 import org.impala67.app.ui.theme.Success
+import org.impala67.app.ui.theme.SuccessGreen
 import org.impala67.app.ui.theme.SurfaceActive
 import org.impala67.app.ui.theme.SurfaceHover
 import org.impala67.app.ui.theme.SurfaceSubtle
+import org.impala67.app.ui.theme.TextLight
+import org.impala67.app.ui.theme.TextMain
 import org.impala67.app.ui.theme.TextMuted
 import org.impala67.app.ui.theme.TextPrimary
 import org.impala67.app.ui.theme.TextSecondary
 import org.impala67.app.ui.theme.Warn
 import org.impala67.app.ui.theme.WarnSoft
+import org.impala67.app.ui.theme.WarningAmber
 import uniffi.impala_ffi.AiAssistant
 import uniffi.impala_ffi.AiListener
 import uniffi.impala_ffi.AiOptions
@@ -94,29 +110,41 @@ import uniffi.impala_ffi.AiRunRequest
 import uniffi.impala_ffi.ChatData
 import uniffi.impala_ffi.ChatInfo
 import uniffi.impala_ffi.ChatMessage
+import uniffi.impala_ffi.ChatSummary
 import uniffi.impala_ffi.ImpalaCore
 import java.util.TimeZone
 
 /**
- * KI-Assistent Chat Sheet / Panel mit Live-Streaming, Denkprozess-Anzeige und Rückgängig für Werkzeuge
+ * KI-Assistent & Coach Panel/Sheet (nach PWA `#panel` in `web/index.html` & `web/ai.js`)
+ * mit Live-Streaming, Verlauf-Umschalter, Seiten-Kontext-Pill, Denkprozess-Box und Tool-Rückgängig.
  */
 @Composable
 fun AiChatSheet(
     core: ImpalaCore,
-    activePageId: String?,
-    onClose: () -> Unit,
+    currentPageId: String? = null,
+    onDismiss: () -> Unit = {},
+    onMutation: () -> Unit = {},
+    isSidePanel: Boolean = false,
+    initialChatId: String? = null,
+    initialPrompt: String? = null,
+    onExpandToFullTab: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var currentChatId by remember { mutableStateOf("") }
+    var currentChatId by remember { mutableStateOf(initialChatId ?: "") }
     val messages = remember { mutableStateListOf<ChatMessage>() }
-    var inputText by remember { mutableStateOf("") }
+    var inputText by remember { mutableStateOf(initialPrompt ?: "") }
     var isRunning by remember { mutableStateOf(false) }
     var currentDraft by remember { mutableStateOf("") }
     var currentThinking by remember { mutableStateOf("") }
     var currentTool by remember { mutableStateOf<String?>(null) }
-    var activeModel by remember { mutableStateOf("Impala AI") }
+    var activeModel by remember { mutableStateOf("Gemini 2.5 Flash") }
     var isModelMenuOpen by remember { mutableStateOf(false) }
+    var isHistoryMenuOpen by remember { mutableStateOf(false) }
+    var savedChats by remember { mutableStateOf<List<ChatSummary>>(emptyList()) }
+
+    var attachedPageId by remember { mutableStateOf<String?>(currentPageId) }
+    var attachedPageTitle by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
 
@@ -125,8 +153,37 @@ fun AiChatSheet(
         tz.getOffset(System.currentTimeMillis()) / (1000 * 60)
     }
 
-    // Lädt aktuellen Chat
+    // Lädt Seitentitel für den Kontext
+    LaunchedEffect(attachedPageId) {
+        val pId = attachedPageId
+        if (pId != null) {
+            withContext(Dispatchers.IO) {
+                val detail = try { core.page(pId) } catch (_: Exception) { null }
+                withContext(Dispatchers.Main) {
+                    attachedPageTitle = detail?.summary?.title?.ifBlank { "Aktuelle Seite" } ?: "Notiz"
+                }
+            }
+        } else {
+            attachedPageTitle = null
+        }
+    }
+
+    // Lädt Chats-Historie
+    fun loadChatList() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val list = try { core.chats() } catch (_: Exception) { emptyList() }
+            withContext(Dispatchers.Main) {
+                savedChats = list
+                if (currentChatId.isBlank() && list.isNotEmpty()) {
+                    currentChatId = list.first().id
+                }
+            }
+        }
+    }
+
+    // Lädt gewählten Chat
     fun loadChat(chatId: String) {
+        if (chatId.isBlank()) return
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val data = core.chat(chatId)
@@ -139,9 +196,20 @@ fun AiChatSheet(
                     currentThinking = ""
                     currentTool = null
                 }
-            } catch (e: Exception) {
-                // Fehler abfangen
-            }
+            } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadChatList()
+        if (currentChatId.isNotBlank()) {
+            loadChat(currentChatId)
+        }
+    }
+
+    LaunchedEffect(currentChatId) {
+        if (currentChatId.isNotBlank()) {
+            loadChat(currentChatId)
         }
     }
 
@@ -167,9 +235,7 @@ fun AiChatSheet(
                     assistant.cancel()
                 }
                 assistant.destroy()
-            } catch (e: Exception) {
-                // Ignorieren
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -183,114 +249,70 @@ fun AiChatSheet(
         currentThinking = ""
         currentTool = null
 
-        // Lokale Nutzernachricht einfügen
-        val userMsg = ChatMessage(
-            mid = null,
-            role = "user",
-            content = text,
-            model = null,
-            reasoning = null,
-            name = null,
-            detail = null,
-            error = null,
-            summary = null,
-            undone = null,
-            question = null,
-            options = null,
-            answered = null,
-            answer = null,
-            image = null,
-            extraJson = "{}"
-        )
-        messages.add(userMsg)
-
-        val request = AiRunRequest(
-            chatId = currentChatId,
-            text = text,
-            image = null,
-            textFile = null,
-            pdfFile = null,
-            activePageId = activePageId,
-            heftPageIndex = null,
-            sendPageContext = !activePageId.isNullOrEmpty(),
-            anki = null,
-            useRag = false,
-            utcOffsetMinutes = utcOffsetMinutes
-        )
-
-        val listener = object : AiListener {
-            override fun onDraft(text: String) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    currentDraft = text
-                }
-            }
-
-            override fun onThinking(text: String) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    currentThinking = text
-                }
-            }
-
-            override fun onToolStarted(name: String) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    currentTool = name
-                }
-            }
-
-            override fun onMessage(message: ChatMessage) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    messages.add(message)
-                }
-            }
-
-            override fun onFinished(outcome: AiOutcome) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    currentChatId = outcome.chatId
-                    isRunning = false
-                    currentDraft = ""
-                    currentThinking = ""
-                    currentTool = null
-                    loadChat(outcome.chatId)
-                }
-            }
-
-            override fun onFailed(message: String, aborted: Boolean) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    isRunning = false
-                    currentDraft = ""
-                    currentThinking = ""
-                    currentTool = null
-                    val errorMsg = ChatMessage(
-                        mid = null,
-                        role = "assistant",
-                        content = if (aborted) "Lauf abgebrochen." else "Fehler: $message",
-                        model = null,
-                        reasoning = null,
-                        name = null,
-                        detail = null,
-                        error = true,
-                        summary = null,
-                        undone = null,
-                        question = null,
-                        options = null,
-                        answered = null,
-                        answer = null,
-                        image = null,
-                        extraJson = "{}"
-                    )
-                    messages.add(errorMsg)
-                }
-            }
-        }
-
         coroutineScope.launch(Dispatchers.IO) {
-            try {
-                assistant.runAsync(request, listener)
-            } catch (e: Exception) {
+            if (currentChatId.isBlank()) {
+                val firstWord = text.take(24)
+                val newId = try { core.createChat(firstWord) } catch (_: Exception) { "" }
                 withContext(Dispatchers.Main) {
-                    isRunning = false
+                    currentChatId = newId
+                    loadChatList()
                 }
             }
+
+            val request = AiRunRequest(
+                chatId = currentChatId,
+                userPrompt = text,
+                pageId = attachedPageId,
+                clientUtcOffsetMinutes = utcOffsetMinutes,
+                imageUrls = emptyList(),
+                imageFiles = emptyList()
+            )
+
+            assistant.runAsync(request, object : AiListener {
+                override fun onDelta(text: String) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        currentDraft += text
+                    }
+                }
+
+                override fun onThought(text: String) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        currentThinking += text
+                    }
+                }
+
+                override fun onToolCall(name: String, argsJson: String) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        currentTool = "Führe aus: $name..."
+                    }
+                }
+
+                override fun onToolResult(name: String, resultJson: String) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        currentTool = "Fertig: $name"
+                        onMutation()
+                    }
+                }
+
+                override fun onDone(outcome: AiOutcome) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        isRunning = false
+                        currentTool = null
+                        currentDraft = ""
+                        currentThinking = ""
+                        loadChat(currentChatId)
+                        onMutation()
+                    }
+                }
+
+                override fun onError(error: String) {
+                    coroutineScope.launch(Dispatchers.Main) {
+                        isRunning = false
+                        currentTool = null
+                        currentDraft += "\n[Fehler: $error]"
+                    }
+                }
+            })
         }
     }
 
@@ -303,125 +325,251 @@ fun AiChatSheet(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(BgSidebar)
+            .background(if (isSidePanel) BgPanel else BgSidebar)
+            .then(if (!isSidePanel) Modifier.statusBarsPadding() else Modifier)
+            .border(
+                width = if (isSidePanel) 1.dp else 0.dp,
+                color = if (isSidePanel) BorderHairline else Color.Transparent
+            )
             .imePadding()
             .navigationBarsPadding()
     ) {
-        // Kopfzeile: KI-Logo, Modellwahl, Schließen
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // ====================================================================
+        // PWA `.panel-head` Kopfzeile
+        // ====================================================================
+        Surface(
+            color = BgSidebar,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = Accent,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Impala KI-Assistent",
-                    color = TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Modell-Dropdown
-                Box {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = BgBubble,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Status-Dot
+                    Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isModelMenuOpen = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = activeModel, color = TextSecondary, fontSize = 12.sp)
-                            Icon(
-                                imageVector = Icons.Rounded.ExpandMore,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isRunning) AccentBlue else SuccessGreen)
+                    )
 
-                    DropdownMenu(
-                        expanded = isModelMenuOpen,
-                        onDismissRequest = { isModelMenuOpen = false },
-                        modifier = Modifier.background(BgSidebar)
-                    ) {
-                        val models = listOf("Impala AI", "GPT-4o", "Claude 3.5 Sonnet", "Gemini 1.5 Pro")
-                        for (m in models) {
-                            DropdownMenuItem(
-                                text = { Text(m, color = if (activeModel == m) Accent else TextPrimary) },
-                                onClick = {
-                                    activeModel = m
-                                    isModelMenuOpen = false
-                                }
-                            )
+                    Text(
+                        text = "KI-Coach",
+                        color = TextMain,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Modell-Auswahl Chip
+                    Box {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = BgBubble,
+                            modifier = Modifier.clickable { isModelMenuOpen = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(text = activeModel, color = TextSecondary, fontSize = 11.sp)
+                                Icon(
+                                    imageVector = Icons.Rounded.ExpandMore,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = isModelMenuOpen,
+                            onDismissRequest = { isModelMenuOpen = false }
+                        ) {
+                            listOf("Gemini 2.5 Flash", "Gemini 2.5 Pro", "Claude 3.5 Sonnet", "GPT-4o").forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m, color = if (activeModel == m) AccentBlue else TextMain) },
+                                    onClick = {
+                                        activeModel = m
+                                        isModelMenuOpen = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Schließen",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Verlauf
+                    Box {
+                        IconButton(
+                            onClick = {
+                                loadChatList()
+                                isHistoryMenuOpen = true
+                            },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.History,
+                                contentDescription = "Verlauf",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = isHistoryMenuOpen,
+                            onDismissRequest = { isHistoryMenuOpen = false }
+                        ) {
+                            if (savedChats.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("Keine gespeicherten Chats", color = TextMuted) },
+                                    onClick = {}
+                                )
+                            } else {
+                                savedChats.take(10).forEach { chat ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = chat.title.ifBlank { "Ohne Titel" },
+                                                color = if (chat.id == currentChatId) AccentBlue else TextMain,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        onClick = {
+                                            isHistoryMenuOpen = false
+                                            currentChatId = chat.id
+                                            loadChat(chat.id)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Neuer Chat
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                val newId = try { core.createChat("Neuer Chat") } catch (_: Exception) { "" }
+                                withContext(Dispatchers.Main) {
+                                    currentChatId = newId
+                                    messages.clear()
+                                    currentDraft = ""
+                                    currentThinking = ""
+                                    loadChatList()
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Neuer Chat",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    // Expand to full tab (falls unterstützt)
+                    if (onExpandToFullTab != null && isSidePanel) {
+                        IconButton(
+                            onClick = onExpandToFullTab,
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.OpenInNew,
+                                contentDescription = "In großem Tab öffnen",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Schließen / Einklappen
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Schließen",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
             }
+            HorizontalDivider(color = BorderHairline, thickness = 1.dp)
         }
 
-        HorizontalDivider(color = EdgeSoft)
-
-        // Chat-Nachrichten
+        // ====================================================================
+        // Chat-Log (#chatLog)
+        // ====================================================================
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty() && currentDraft.isEmpty()) {
                 item {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 40.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = null,
-                                tint = Accent.copy(alpha = 0.5f),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Wie kann ich dir bei deinen Notizen helfen?",
-                                color = TextSecondary,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                text = "Frage stellen, zusammenfassen oder Karteikarten generieren",
-                                color = TextMuted,
-                                fontSize = 12.sp
-                            )
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = AccentBlue.copy(alpha = 0.6f),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "Wie kann ich dir helfen?",
+                            color = TextMain,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        // Schnelle Aktions-Chips
+                        listOf(
+                            "✨ Diese Seite zusammenfassen",
+                            "🃏 Karteikarten aus der Notiz erstellen",
+                            "🧠 Erkläre mir das Thema nach Feynman",
+                            "❓ Prüfungsfragen zu meinen Notizen"
+                        ).forEach { prompt ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = BgBubble,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .clickable {
+                                        inputText = prompt
+                                        sendMessage()
+                                    }
+                            ) {
+                                Text(
+                                    text = prompt,
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -436,50 +584,50 @@ fun AiChatSheet(
                             try {
                                 core.undoAiChange(currentChatId, mid)
                                 loadChat(currentChatId)
-                            } catch (e: Exception) {
-                                // Ignorieren
-                            }
+                                onMutation()
+                            } catch (_: Exception) {}
                         }
                     }
                 )
             }
 
-            // Live-Denkprozess
+            // Live-Denkprozess Box
             if (currentThinking.isNotEmpty()) {
                 item {
                     ThinkingBox(thinkingText = currentThinking)
                 }
             }
 
-            // Live-Werkzeugstatus
+            // Werkzeug-Ausführung
             if (currentTool != null) {
                 item {
                     Surface(
-                        shape = ImpalaPillShape,
+                        shape = RoundedCornerShape(8.dp),
                         color = BgBubble,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentBlueSoft),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                color = Accent,
-                                strokeWidth = 1.5.dp
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentBlue
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Werkzeug läuft: $currentTool",
-                                color = TextSecondary,
-                                fontSize = 11.sp
+                                text = currentTool ?: "",
+                                color = AccentBlue,
+                                fontSize = 12.sp
                             )
                         }
                     }
                 }
             }
 
-            // Live-Antwortentwurf
+            // Streaming-Antwort
             if (currentDraft.isNotEmpty()) {
                 item {
                     DraftBubble(draft = currentDraft)
@@ -487,77 +635,135 @@ fun AiChatSheet(
             }
         }
 
-        // Eingabeleiste unten
-        HorizontalDivider(color = EdgeSoft)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // ====================================================================
+        // Unten: PWA Composer (#chatForm) mit Kontext-Pill
+        // ====================================================================
+        Surface(
+            color = BgSidebar,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            BasicTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                cursorBrush = SolidColor(Accent),
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .background(BgBubble, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                decorationBox = { innerTextField ->
-                    if (inputText.isEmpty()) {
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Aktiver Notiz-Kontext Chip
+                if (attachedPageTitle != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AccentBlueSoft)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
                         Text(
-                            text = if (activePageId != null) "Frage zu dieser Seite stellen…" else "Nachricht eingeben…",
-                            color = TextMuted,
-                            fontSize = 14.sp
+                            text = "📄 $attachedPageTitle",
+                            color = AccentBlue,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Kontext entfernen",
+                            tint = AccentBlue,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clickable {
+                                    attachedPageId = null
+                                    attachedPageTitle = null
+                                }
                         )
                     }
-                    innerTextField()
                 }
-            )
 
-            Spacer(modifier = Modifier.width(8.dp))
+                // Textfeld & Senden-Zeile
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BasicTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(BgBubble)
+                                    .border(1.dp, BorderHairline, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                if (inputText.isEmpty()) {
+                                    Text(
+                                        text = "Frag den KI-Coach…",
+                                        color = TextMuted,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
 
-            if (isRunning) {
-                IconButton(
-                    onClick = {
-                        try {
-                            assistant.cancel()
-                        } catch (e: Exception) {
-                            // Ignorieren
+                    // Senden / Stop Button
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isRunning) DangerRed else AccentBlue,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable {
+                                if (isRunning) {
+                                    assistant.cancel()
+                                    isRunning = false
+                                } else {
+                                    sendMessage()
+                                }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isRunning) Icons.Rounded.Stop else Icons.AutoMirrored.rounded.Send,
+                                contentDescription = if (isRunning) "Stopp" else "Senden",
+                                tint = Color(0xFF081018),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                    },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(DangerSoft)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Stop,
-                        contentDescription = "Abbrechen",
-                        tint = Danger,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else {
-                IconButton(
-                    onClick = { sendMessage() },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (inputText.isNotBlank()) Accent else SurfaceSubtle)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.Send,
-                        contentDescription = "Senden",
-                        tint = if (inputText.isNotBlank()) Color(0xFF081018) else TextMuted,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    }
                 }
             }
         }
     }
 }
+
+/**
+ * Rückwärtskompatible Überladung für `AiChatSheet(core, activePageId, onClose, modifier)`
+ */
+@Composable
+fun AiChatSheet(
+    core: ImpalaCore,
+    activePageId: String?,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AiChatSheet(
+        core = core,
+        currentPageId = activePageId,
+        onDismiss = onClose,
+        modifier = modifier
+    )
+}
+
+// ============================================================================
+// Message Bubbles & Thinking Box
+// ============================================================================
 
 @Composable
 private fun MessageBubble(
@@ -565,104 +771,32 @@ private fun MessageBubble(
     onUndoEdit: () -> Unit
 ) {
     val isUser = message.role == "user"
-    val isEdit = message.role == "edit"
-    val isTool = message.role == "tool"
 
-    if (isEdit) {
-        // Änderungs-Karte mit Rückgängig
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
         Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = BgBubble,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Edge),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(
+                topStart = 14.dp,
+                topEnd = 14.dp,
+                bottomStart = if (isUser) 14.dp else 4.dp,
+                bottomEnd = if (isUser) 4.dp else 14.dp
+            ),
+            color = if (isUser) AccentBlueSoft else BgCard,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (isUser) AccentBlue.copy(alpha = 0.3f) else BorderHairline
+            ),
+            modifier = Modifier.fillMaxWidth(0.85f)
         ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Build,
-                            contentDescription = null,
-                            tint = Accent,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "KI-Änderung",
-                            color = Accent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = message.summary ?: message.content ?: "Inhalt geändert",
-                        color = TextPrimary,
-                        fontSize = 13.sp
-                    )
-                }
-
-                if (message.undone == true) {
-                    Text(
-                        text = "Rückgängig gemacht",
-                        color = TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = BgSidebar,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = onUndoEdit)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Undo,
-                                contentDescription = null,
-                                tint = Accent,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Rückgängig", color = Accent, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        // Normale Chat-Bubble
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
-        ) {
-            Surface(
-                shape = RoundedCornerShape(
-                    topStart = 14.dp,
-                    topEnd = 14.dp,
-                    bottomStart = if (isUser) 14.dp else 4.dp,
-                    bottomEnd = if (isUser) 4.dp else 14.dp
-                ),
-                color = if (isUser) AccentSoft else BgBubble,
-                border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Accent.copy(alpha = 0.3f) else EdgeSoft),
-                modifier = Modifier.widthIn(max = 300.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = message.content ?: "",
-                        color = TextPrimary,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                }
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = message.content ?: "",
+                    color = TextMain,
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp
+                )
             }
         }
     }
@@ -675,7 +809,7 @@ private fun ThinkingBox(thinkingText: String) {
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = BgBubble.copy(alpha = 0.6f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
@@ -690,7 +824,7 @@ private fun ThinkingBox(thinkingText: String) {
                     Icon(
                         imageVector = Icons.Rounded.Psychology,
                         contentDescription = null,
-                        tint = Accent,
+                        tint = AccentBlue,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -732,22 +866,18 @@ private fun DraftBubble(draft: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = BgBubble,
-            border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-            modifier = Modifier.widthIn(max = 300.dp)
+            color = BgCard,
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+            modifier = Modifier.fillMaxWidth(0.85f)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     text = draft,
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
+                    color = TextMain,
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp
                 )
             }
         }
     }
-}
-
-private fun Modifier.widthIn(max: androidx.compose.ui.unit.Dp): Modifier {
-    return this.fillMaxWidth(0.85f)
 }

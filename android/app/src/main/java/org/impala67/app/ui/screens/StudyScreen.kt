@@ -1,21 +1,29 @@
 package org.impala67.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,12 +32,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Flip
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Undo
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,11 +54,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,33 +82,768 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.ui.theme.Accent
+import org.impala67.app.ui.theme.AccentBlue
+import org.impala67.app.ui.theme.AccentBlueSoft
+import org.impala67.app.ui.theme.AccentBorder
+import org.impala67.app.ui.theme.AccentGreen
+import org.impala67.app.ui.theme.AccentOrange
 import org.impala67.app.ui.theme.AccentSoft
+import org.impala67.app.ui.theme.AccentViolet
 import org.impala67.app.ui.theme.BgBubble
+import org.impala67.app.ui.theme.BgCard
 import org.impala67.app.ui.theme.BgDeep
+import org.impala67.app.ui.theme.BgElevated
+import org.impala67.app.ui.theme.BgHover
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.BgSidebar
+import org.impala67.app.ui.theme.BorderHairline
+import org.impala67.app.ui.theme.BorderStrong
 import org.impala67.app.ui.theme.Danger
+import org.impala67.app.ui.theme.DangerRed
 import org.impala67.app.ui.theme.DangerSoft
 import org.impala67.app.ui.theme.Edge
 import org.impala67.app.ui.theme.EdgeSoft
 import org.impala67.app.ui.theme.ImpalaBouncySpringFloat
 import org.impala67.app.ui.theme.ImpalaPillShape
 import org.impala67.app.ui.theme.Success
+import org.impala67.app.ui.theme.SuccessGreen
 import org.impala67.app.ui.theme.SuccessSoft
 import org.impala67.app.ui.theme.SurfaceSubtle
+import org.impala67.app.ui.theme.TextLight
+import org.impala67.app.ui.theme.TextMain
 import org.impala67.app.ui.theme.TextMuted
 import org.impala67.app.ui.theme.TextPrimary
 import org.impala67.app.ui.theme.TextSecondary
 import org.impala67.app.ui.theme.Warn
 import org.impala67.app.ui.theme.WarnSoft
+import org.impala67.app.ui.theme.WarningAmber
 import uniffi.impala_ffi.CardInfo
+import uniffi.impala_ffi.DeckConfig
+import uniffi.impala_ffi.DeckInfo
 import uniffi.impala_ffi.DeckOverview
 import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.StudyQueue
 import java.util.TimeZone
 
 /**
- * Karteikarten- & FSRS-5-Lernansicht mit Karten-Flip-Animation, Intervall-Vorschau und Stapel-Verwaltung
+ * PWA-getreue Karteikarten- & FSRS-5 Lernansicht nach `web/render-anki.js`
+ * mit den 4 Modi: Stapel, Browser, Statistik, Archiv + Deck-Optionen & Lückentexten.
+ */
+@Composable
+fun StudyScreen(
+    core: ImpalaCore,
+    decks: List<DeckOverview> = emptyList(),
+    studyStats: Any? = null,
+    onRefresh: () -> Unit = {},
+    initialDeckId: String? = null,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+
+    var activeViewTab by remember { mutableStateOf("decks") } // "decks", "browser", "stats", "archive"
+    var activeStudyDeck by remember { mutableStateOf<String?>(initialDeckId) }
+    var isStudying by remember { mutableStateOf(initialDeckId != null) }
+
+    var feynmanMode by remember { mutableStateOf(false) }
+    var mixMode by remember { mutableStateOf(false) }
+
+    // Dialoge
+    var showNewCardDialog by remember { mutableStateOf(false) }
+    var showClozeDialog by remember { mutableStateOf(false) }
+    var showNewDeckDialog by remember { mutableStateOf(false) }
+    var showDeckConfigDialog by remember { mutableStateOf(false) }
+    var configDeckName by remember { mutableStateOf<String?>(null) }
+    var showNewMenu by remember { mutableStateOf(false) }
+
+    // Ladedaten
+    var loadedDecks by remember { mutableStateOf<List<DeckOverview>>(decks) }
+    var archivedDecksList by remember { mutableStateOf<List<DeckInfo>>(emptyList()) }
+    var studyQueue by remember { mutableStateOf<StudyQueue?>(null) }
+    var currentCardIndex by remember { mutableIntStateOf(0) }
+    var isFlipped by remember { mutableStateOf(false) }
+    var reviewIntervals by remember { mutableStateOf<List<String>>(emptyList()) }
+    var feynmanExplanation by remember { mutableStateOf("") }
+    var canUndo by remember { mutableStateOf(false) }
+
+    val utcOffsetMinutes = remember {
+        val tz = TimeZone.getDefault()
+        tz.getOffset(System.currentTimeMillis()) / (1000 * 60)
+    }
+
+    fun reloadData() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val d = try {
+                core.deckOverview(utcOffsetMinutes, mixMode)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val a = try {
+                core.archivedDecks()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            withContext(Dispatchers.Main) {
+                loadedDecks = d
+                archivedDecksList = a
+            }
+        }
+    }
+
+    fun startStudy(deckName: String?) {
+        activeStudyDeck = deckName
+        isStudying = true
+        isFlipped = false
+        feynmanExplanation = ""
+        coroutineScope.launch(Dispatchers.IO) {
+            val q = try {
+                core.studyQueue(deckName, utcOffsetMinutes, mixMode)
+            } catch (_: Exception) {
+                null
+            }
+            val cUndo = try {
+                core.canUndoReview()
+            } catch (_: Exception) {
+                false
+            }
+            withContext(Dispatchers.Main) {
+                studyQueue = q
+                canUndo = cUndo
+                val firstCard = q?.dueNow?.firstOrNull()
+                if (firstCard != null) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        val intervals = try {
+                            core.reviewPreview(firstCard.id)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                        withContext(Dispatchers.Main) {
+                            reviewIntervals = intervals
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        reloadData()
+        if (initialDeckId != null) {
+            startStudy(initialDeckId)
+        }
+    }
+
+    LaunchedEffect(isStudying, activeStudyDeck) {
+        if (isStudying) {
+            startStudy(activeStudyDeck)
+        }
+    }
+
+    val currentCard = studyQueue?.dueNow?.firstOrNull()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(BgPanel)
+    ) {
+        // ====================================================================
+        // Top Header (#ankiHeader)
+        // ====================================================================
+        Surface(
+            color = BgSidebar,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isStudying) {
+                        IconButton(
+                            onClick = {
+                                isStudying = false
+                                reloadData()
+                                onRefresh()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.rounded.ArrowBack,
+                                contentDescription = "Zurück",
+                                tint = TextMain,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = if (isStudying) (activeStudyDeck ?: "Gemischt lernen") else "🃏 Karteikarten",
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (!isStudying) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // 4 PWA Tabs: Stapel, Browser, Statistik, Archiv
+                        listOf(
+                            "decks" to "Stapel",
+                            "browser" to "Browser",
+                            "stats" to "Statistik",
+                            "archive" to "Archiv"
+                        ).forEach { (id, label) ->
+                            val isSel = activeViewTab == id
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSel) AccentBlueSoft else Color.Transparent)
+                                    .clickable { activeViewTab = id }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSel) AccentBlue else TextSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // + Neu Dropdown
+                        Box {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AccentBlue,
+                                modifier = Modifier
+                                    .clickable { showNewMenu = true }
+                                    .height(30.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Add,
+                                        contentDescription = null,
+                                        tint = Color(0xFF081018),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Neu ▾",
+                                        color = Color(0xFF081018),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showNewMenu,
+                                onDismissRequest = { showNewMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("🃏 Neue Karteikarte", color = TextMain) },
+                                    onClick = {
+                                        showNewMenu = false
+                                        showNewCardDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("🧩 Lückentext-Karte (Cloze)", color = TextMain) },
+                                    onClick = {
+                                        showNewMenu = false
+                                        showClozeDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("🗂️ Neuer Stapel", color = TextMain) },
+                                    onClick = {
+                                        showNewMenu = false
+                                        showNewDeckDialog = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Study Mode Controls (Undo & Options)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (canUndo) {
+                            TextButton(
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        try {
+                                            core.undoReview()
+                                            startStudy(activeStudyDeck)
+                                        } catch (_: Exception) {}
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Undo,
+                                    contentDescription = "Rückgängig",
+                                    tint = WarningAmber,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Rückgängig", color = WarningAmber, fontSize = 12.sp)
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                configDeckName = activeStudyDeck
+                                showDeckConfigDialog = true
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Deck-Optionen",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(color = BorderHairline, thickness = 1.dp)
+        }
+
+        // ====================================================================
+        // Body Content
+        // ====================================================================
+        if (isStudying) {
+            // Aktiver Lern-Modus
+            StudyActiveSession(
+                queue = studyQueue,
+                currentCard = currentCard,
+                isFlipped = isFlipped,
+                onFlip = { isFlipped = true },
+                reviewIntervals = reviewIntervals,
+                feynmanMode = feynmanMode,
+                feynmanExplanation = feynmanExplanation,
+                onFeynmanChange = { feynmanExplanation = it },
+                onGrade = { rating ->
+                    val cardId = currentCard?.id ?: return@StudyActiveSession
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            core.reviewCard(cardId, rating.toUByte())
+                        } catch (_: Exception) {}
+                        withContext(Dispatchers.Main) {
+                            isFlipped = false
+                            feynmanExplanation = ""
+                            startStudy(activeStudyDeck)
+                        }
+                    }
+                },
+                onFinished = {
+                    isStudying = false
+                    reloadData()
+                    onRefresh()
+                },
+                modifier = Modifier.weight(1f)
+            )
+        } else {
+            // Dashboard nach gewähltem Tab
+            when (activeViewTab) {
+                "decks" -> {
+                    DecksOverviewTab(
+                        decks = loadedDecks,
+                        feynmanMode = feynmanMode,
+                        onToggleFeynman = { feynmanMode = it },
+                        mixMode = mixMode,
+                        onToggleMix = {
+                            mixMode = it
+                            reloadData()
+                        },
+                        onStudyDeck = { deckName -> startStudy(deckName) },
+                        onConfigureDeck = { deckName ->
+                            configDeckName = deckName
+                            showDeckConfigDialog = true
+                        },
+                        onArchiveDeck = { deckName ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.archiveDeck(deckName)
+                                    reloadData()
+                                    onRefresh()
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        onDeleteDeck = { deckName ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.deleteDeck(deckName)
+                                    reloadData()
+                                    onRefresh()
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                "browser" -> {
+                    CardBrowserTab(
+                        core = core,
+                        decks = loadedDecks,
+                        onMutation = {
+                            reloadData()
+                            onRefresh()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                "stats" -> {
+                    StudyStatsTab(
+                        core = core,
+                        decks = loadedDecks,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                "archive" -> {
+                    ArchivedDecksTab(
+                        archivedDecks = archivedDecksList,
+                        onRestore = { name ->
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.unarchiveDeck(name)
+                                    reloadData()
+                                    onRefresh()
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+
+    // ========================================================================
+    // Dialoge: Neue Karte, Lückentext, Neuer Stapel, Deck-Optionen
+    // ========================================================================
+    if (showNewCardDialog) {
+        var front by remember { mutableStateOf("") }
+        var back by remember { mutableStateOf("") }
+        var targetDeck by remember { mutableStateOf(activeStudyDeck ?: loadedDecks.firstOrNull()?.name ?: "Standard") }
+
+        AlertDialog(
+            onDismissRequest = { showNewCardDialog = false },
+            title = { Text("🃏 Neue Karteikarte", color = TextMain, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Stapel:", color = TextSecondary, fontSize = 12.sp)
+                    BasicTextField(
+                        value = targetDeck,
+                        onValueChange = { targetDeck = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+
+                    Text("Vorderseite (Frage):", color = TextSecondary, fontSize = 12.sp)
+                    BasicTextField(
+                        value = front,
+                        onValueChange = { front = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+
+                    Text("Rückseite (Antwort):", color = TextSecondary, fontSize = 12.sp)
+                    BasicTextField(
+                        value = back,
+                        onValueChange = { back = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (front.isNotBlank() && back.isNotBlank()) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.createCard(front.trim(), back.trim(), targetDeck.trim(), null)
+                                    withContext(Dispatchers.Main) {
+                                        showNewCardDialog = false
+                                        reloadData()
+                                        onRefresh()
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                ) {
+                    Text("Karte anlegen", color = AccentBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewCardDialog = false }) {
+                    Text("Abbrechen", color = TextMuted)
+                }
+            },
+            containerColor = BgElevated
+        )
+    }
+
+    if (showClozeDialog) {
+        var clozeText by remember { mutableStateOf("Berlin ist die Hauptstadt von {{c1::Deutschland}}.") }
+        var targetDeck by remember { mutableStateOf(activeStudyDeck ?: loadedDecks.firstOrNull()?.name ?: "Standard") }
+
+        AlertDialog(
+            onDismissRequest = { showClozeDialog = false },
+            title = { Text("🧩 Lückentext-Karte (Cloze)", color = TextMain, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Umschließe Wörter mit {{c1::Begriff}}, um Lücken zu erzeugen.",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+
+                    BasicTextField(
+                        value = clozeText,
+                        onValueChange = { clozeText = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (clozeText.isNotBlank()) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.createClozeCards(clozeText.trim(), targetDeck.trim(), null)
+                                    withContext(Dispatchers.Main) {
+                                        showClozeDialog = false
+                                        reloadData()
+                                        onRefresh()
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                ) {
+                    Text("Lückentext erstellen", color = AccentBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClozeDialog = false }) {
+                    Text("Abbrechen", color = TextMuted)
+                }
+            },
+            containerColor = BgElevated
+        )
+    }
+
+    if (showNewDeckDialog) {
+        var deckName by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showNewDeckDialog = false },
+            title = { Text("🗂️ Neuer Stapel", color = TextMain, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Tipp: Nutze Doppel-Doppelpunkte für Unterstapel (z.B. Biologie::Genetik)",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                    BasicTextField(
+                        value = deckName,
+                        onValueChange = { deckName = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 15.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (deckName.isNotBlank()) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    core.createDeck(deckName.trim())
+                                    withContext(Dispatchers.Main) {
+                                        showNewDeckDialog = false
+                                        reloadData()
+                                        onRefresh()
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                ) {
+                    Text("Stapel anlegen", color = AccentBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewDeckDialog = false }) {
+                    Text("Abbrechen", color = TextMuted)
+                }
+            },
+            containerColor = BgElevated
+        )
+    }
+
+    if (showDeckConfigDialog) {
+        var currentConf by remember { mutableStateOf<DeckConfig?>(null) }
+        var newPerDay by remember { mutableStateOf("20") }
+        var revPerDay by remember { mutableStateOf("200") }
+
+        LaunchedEffect(configDeckName) {
+            withContext(Dispatchers.IO) {
+                val conf = try {
+                    core.deckConfig(configDeckName)
+                } catch (_: Exception) {
+                    null
+                }
+                withContext(Dispatchers.Main) {
+                    currentConf = conf
+                    if (conf != null) {
+                        newPerDay = conf.newPerDay.toString()
+                        revPerDay = conf.maxReviewsPerDay.toString()
+                    }
+                }
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showDeckConfigDialog = false },
+            title = {
+                Text(
+                    text = "⚙️ Optionen für ${configDeckName ?: "Alle Stapel"}",
+                    color = TextMain,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Neue Karten pro Tag:", color = TextSecondary, fontSize = 13.sp)
+                    BasicTextField(
+                        value = newPerDay,
+                        onValueChange = { newPerDay = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+
+                    Text("Max. Wiederholungen pro Tag:", color = TextSecondary, fontSize = 13.sp)
+                    BasicTextField(
+                        value = revPerDay,
+                        onValueChange = { revPerDay = it },
+                        textStyle = TextStyle(color = TextMain, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AccentBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val n = newPerDay.toUIntOrNull() ?: 20u
+                        val r = revPerDay.toUIntOrNull() ?: 200u
+                        val base = currentConf ?: DeckConfig(
+                            newPerDay = n,
+                            maxReviewsPerDay = r,
+                            requestRetention = 0.9,
+                            leechThreshold = 8u,
+                            leechAction = "tag",
+                            mixMode = false
+                        )
+                        val updated = base.copy(newPerDay = n, maxReviewsPerDay = r)
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                core.setDeckConfig(configDeckName, updated)
+                                withContext(Dispatchers.Main) {
+                                    showDeckConfigDialog = false
+                                    reloadData()
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                ) {
+                    Text("Speichern", color = AccentBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeckConfigDialog = false }) {
+                    Text("Abbrechen", color = TextMuted)
+                }
+            },
+            containerColor = BgElevated
+        )
+    }
+}
+
+/**
+ * Rückwärtskompatible Überladung für `StudyScreen(core, initialDeck, onBack, modifier)`
  */
 @Composable
 fun StudyScreen(
@@ -99,76 +852,375 @@ fun StudyScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var selectedDeck by remember { mutableStateOf<String?>(initialDeck) }
-    var decks by remember { mutableStateOf<List<DeckOverview>>(emptyList()) }
-    var queue by remember { mutableStateOf<StudyQueue?>(null) }
-    var isFlipped by remember { mutableStateOf(false) }
-    var reviewIntervals by remember { mutableStateOf<List<String>>(emptyList()) }
-    var canUndo by remember { mutableStateOf(false) }
-    var isDeckDropdownOpen by remember { mutableStateOf(false) }
-    var showNewCardDialog by remember { mutableStateOf(false) }
-    var showNewDeckDialog by remember { mutableStateOf(false) }
+    StudyScreen(
+        core = core,
+        initialDeckId = initialDeck,
+        onRefresh = onBack,
+        modifier = modifier
+    )
+}
 
-    val utcOffsetMinutes = remember {
-        val tz = TimeZone.getDefault()
-        tz.getOffset(System.currentTimeMillis()) / (1000 * 60)
-    }
+// ============================================================================
+// 1. STAPEL-TAB: Hierarchische Stapelliste & FSRS-Zusammenfassung
+// ============================================================================
 
-    val currentCard = queue?.dueNow?.firstOrNull()
+@Composable
+private fun DecksOverviewTab(
+    decks: List<DeckOverview>,
+    feynmanMode: Boolean,
+    onToggleFeynman: (Boolean) -> Unit,
+    mixMode: Boolean,
+    onToggleMix: (Boolean) -> Unit,
+    onStudyDeck: (String?) -> Unit,
+    onConfigureDeck: (String) -> Unit,
+    onArchiveDeck: (String) -> Unit,
+    onDeleteDeck: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val totalDue = decks.sumOf { it.dueCount.toInt() }
+    val totalNew = decks.sumOf { it.newCount.toInt() }
+    val totalCards = decks.sumOf { it.totalCards.toInt() }
 
-    fun loadStudyData() {
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val allDecks = core.deckOverview(utcOffsetMinutes, mix = false)
-                val q = core.studyQueue(selectedDeck, utcOffsetMinutes, mix = false)
-                val undoPossible = core.canUndoReview()
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Lead-Zeile
+        item {
+            Surface(
+                color = BgCard,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, BorderHairline),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (totalDue > 0) "$totalDue Karten warten auf dich — etwa ${(totalDue * 0.8).toInt()} Minuten."
+                        else "Für heute ist alles erledigt. Gute Arbeit!",
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
 
-                val intervals = q.dueNow.firstOrNull()?.let { card ->
-                    core.reviewPreview(card.id)
-                } ?: emptyList()
+                    // Modus-Pills: Feynman & Gemischt
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (feynmanMode) AccentViolet.copy(alpha = 0.2f) else BgBubble,
+                            border = BorderStroke(1.dp, if (feynmanMode) AccentViolet else BorderHairline),
+                            modifier = Modifier.clickable { onToggleFeynman(!feynmanMode) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("🧠 Feynman-Modus", color = if (feynmanMode) AccentViolet else TextSecondary, fontSize = 12.sp)
+                                if (feynmanMode) {
+                                    Icon(Icons.Rounded.Check, contentDescription = null, tint = AccentViolet, modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
 
-                withContext(Dispatchers.Main) {
-                    decks = allDecks
-                    queue = q
-                    reviewIntervals = intervals
-                    canUndo = undoPossible
-                    isFlipped = false
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (mixMode) AccentBlueSoft else BgBubble,
+                            border = BorderStroke(1.dp, if (mixMode) AccentBlue else BorderHairline),
+                            modifier = Modifier.clickable { onToggleMix(!mixMode) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("🔀 Gemischt lernen", color = if (mixMode) AccentBlue else TextSecondary, fontSize = 12.sp)
+                                if (mixMode) {
+                                    Icon(Icons.Rounded.Check, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                // Fehler abfangen
             }
         }
-    }
 
-    LaunchedEffect(selectedDeck) {
-        loadStudyData()
-    }
+        // 2 Stat-Karten: Heute fällig & Neue Karten
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    color = if (totalDue > 0) AccentBlueSoft else BgCard,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, if (totalDue > 0) AccentBorder else BorderHairline),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onStudyDeck(null) }
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text("Heute fällig", color = TextSecondary, fontSize = 12.sp)
+                        Text(
+                            text = "$totalDue",
+                            color = if (totalDue > 0) AccentBlue else SuccessGreen,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (totalDue > 0) "Jetzt lernen →" else "Alles wiederholt ✓",
+                            color = if (totalDue > 0) AccentBlue else TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
 
-    fun submitRating(grade: UByte) {
-        val cardId = currentCard?.id ?: return
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                core.reviewCard(cardId, grade)
-                loadStudyData()
-            } catch (e: Exception) {
-                // Fehler ignorieren
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text("Neue Karten", color = TextSecondary, fontSize = 12.sp)
+                        Text(
+                            text = "$totalNew",
+                            color = TextMain,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "von $totalCards gesamt",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
             }
         }
-    }
 
-    fun undoReview() {
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                core.undoReview()
-                loadStudyData()
-            } catch (e: Exception) {
-                // Fehler ignorieren
+        // Hierarchische Stapelliste
+        item {
+            Text(
+                text = "Deine Stapel",
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+            )
+        }
+
+        if (decks.isEmpty()) {
+            item {
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Noch keine Stapel vorhanden. Klicke oben auf „+ Neu ▾“!",
+                            color = TextMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+        } else {
+            items(decks, key = { it.name }) { deck ->
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = deck.name,
+                                color = TextMain,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                if (deck.dueCount > 0u) {
+                                    Text(
+                                        text = "${deck.dueCount} fällig",
+                                        color = AccentBlue,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (deck.newCount > 0u) {
+                                    Text(
+                                        text = "${deck.newCount} neu",
+                                        color = SuccessGreen,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Text(
+                                    text = "${deck.totalCards} gesamt",
+                                    color = TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (deck.dueCount > 0u) AccentBlue else BgBubble,
+                                modifier = Modifier
+                                    .clickable { onStudyDeck(deck.name) }
+                                    .height(30.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    Text(
+                                        text = if (deck.dueCount > 0u) "Lernen" else "Üben",
+                                        color = if (deck.dueCount > 0u) Color(0xFF081018) else TextMain,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Box {
+                                IconButton(
+                                    onClick = { menuExpanded = true },
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Settings,
+                                        contentDescription = "Optionen",
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("⚙️ Deck-Optionen", color = TextMain) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onConfigureDeck(deck.name)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("📦 Archivieren", color = TextSecondary) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onArchiveDeck(deck.name)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🗑️ In Papierkorb", color = DangerRed) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onDeleteDeck(deck.name)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+
+        item {
+            Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
+        }
+    }
+}
+
+// ============================================================================
+// 2. AKTIVER LERN-MODUS (Card Flip + Feynman + FSRS Rating Buttons)
+// ============================================================================
+
+@Composable
+private fun StudyActiveSession(
+    queue: StudyQueue?,
+    currentCard: CardInfo?,
+    isFlipped: Boolean,
+    onFlip: () -> Unit,
+    reviewIntervals: List<String>,
+    feynmanMode: Boolean,
+    feynmanExplanation: String,
+    onFeynmanChange: (String) -> Unit,
+    onGrade: (Int) -> Unit,
+    onFinished: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (currentCard == null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("🎉", fontSize = 48.sp)
+                Text(
+                    text = "Glückwunsch! Alle fälligen Karten erledigt.",
+                    color = TextMain,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Komm später wieder oder lerne neue Karten.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = AccentBlue,
+                    modifier = Modifier.clickable { onFinished() }
+                ) {
+                    Text(
+                        text = "Zurück zur Übersicht",
+                        color = Color(0xFF081018),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
+            }
+        }
+        return
     }
 
-    // 3D-Karten-Flip-Animation
     val rotation by animateFloatAsState(
         targetValue = if (isFlipped) 180f else 0f,
         animationSpec = ImpalaBouncySpringFloat,
@@ -178,551 +1230,492 @@ fun StudyScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(BgPanel)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Kopfzeile: Zurück, Stapel-Wahl, Rückgängig, Neue Karte
+        // Fortschritt & Zähler
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Zurück",
-                        tint = TextPrimary
-                    )
-                }
-
-                // Stapel-Auswahl
-                Box {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = BgSidebar,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isDeckDropdownOpen = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = selectedDeck ?: "Alle Stapel",
-                                color = TextPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Rounded.ExpandMore,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = isDeckDropdownOpen,
-                        onDismissRequest = { isDeckDropdownOpen = false },
-                        modifier = Modifier.background(BgSidebar)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Alle Stapel", color = if (selectedDeck == null) Accent else TextPrimary) },
-                            onClick = {
-                                selectedDeck = null
-                                isDeckDropdownOpen = false
-                            }
-                        )
-                        HorizontalDivider(color = EdgeSoft)
-                        for (d in decks) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(d.name, color = if (selectedDeck == d.name) Accent else TextPrimary)
-                                        val deckDue = d.new + d.learn + d.review
-                                        Text(
-                                            "$deckDue fällig",
-                                            color = if (deckDue > 0u) Warn else TextMuted,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    selectedDeck = d.name
-                                    isDeckDropdownOpen = false
-                                }
-                            )
-                        }
-                        HorizontalDivider(color = EdgeSoft)
-                        DropdownMenuItem(
-                            text = { Text("+ Neuer Stapel", color = Accent) },
-                            onClick = {
-                                isDeckDropdownOpen = false
-                                showNewDeckDialog = true
-                            }
-                        )
-                    }
-                }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (canUndo) {
-                    IconButton(onClick = { undoReview() }) {
-                        Icon(
-                            imageVector = Icons.Rounded.Undo,
-                            contentDescription = "Bewertung rückgängig",
-                            tint = Accent
-                        )
-                    }
-                }
-                IconButton(onClick = { showNewCardDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "Neue Karte",
-                        tint = TextPrimary
-                    )
-                }
-            }
+            Text(
+                text = "Deck: ${currentCard.deck ?: "Standard"}",
+                color = TextSecondary,
+                fontSize = 12.sp
+            )
+            Text(
+                text = "Verbleibend: ${queue?.dueNow?.size ?: 1}",
+                color = AccentBlue,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // FSRS Zähler-Balken (Neu, Lernen, Wiederholen)
-        val q = queue
-        if (q != null) {
-            Row(
+        // Die Karteikarte
+        Surface(
+            color = BgCard,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, BorderHairline),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(vertical = 14.dp)
+                .clickable { if (!isFlipped) onFlip() }
+        ) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .fillMaxSize()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                CountChip(label = "Neu", count = q.new.toString(), color = Accent)
-                CountChip(label = "Lernen", count = q.learn.toString(), color = Danger)
-                CountChip(label = "Wiederholen", count = q.review.toString(), color = Success)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Hauptbereich: Karte oder Fertig-Meldung
-        if (currentCard == null) {
-            // Stapel ist fertig gelernt
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = Success,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                // Vorderseite (mit Cloze-Unterstützung)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("FRAGE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    val frontDisplay = renderClozeFront(currentCard.front)
                     Text(
-                        text = "Für heute alles gelernt!",
-                        color = TextPrimary,
+                        text = frontDisplay,
+                        color = TextMain,
                         fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Medium
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Großartige Leistung. Dein Gedächtnis festigt nun die gelernten Inhalte nach dem FSRS-Algorithmus.",
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = BgSidebar,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Edge),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { loadStudyData() }
-                    ) {
-                        Text(
-                            text = "Aktualisieren",
-                            color = Accent,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                        )
-                    }
                 }
-            }
-        } else {
-            // Karte anzeigen (mit 3D-Flip)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = BgSidebar),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Edge),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            rotationY = rotation
-                            cameraDistance = 14f * density
-                        }
-                        .clickable {
-                            if (!isFlipped) isFlipped = true
-                        }
-                ) {
+
+                // Feynman Eingabe (falls aktiviert & noch nicht aufgedeckt)
+                if (feynmanMode && !isFlipped) {
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.SpaceBetween
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp)
                     ) {
-                        if (rotation <= 90f) {
-                            // Vorderseite
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Surface(
-                                        shape = ImpalaPillShape,
-                                        color = AccentSoft
-                                    ) {
-                                        Text(
-                                            text = currentCard.deck,
-                                            color = Accent,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
+                        Text(
+                            text = "🧠 Erkläre es kurz in eigenen Worten:",
+                            color = AccentViolet,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        BasicTextField(
+                            value = feynmanExplanation,
+                            onValueChange = onFeynmanChange,
+                            textStyle = TextStyle(color = TextMain, fontSize = 13.sp),
+                            cursorBrush = SolidColor(AccentViolet),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 60.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(BgBubble)
+                                .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        )
+                    }
+                }
 
-                                    if (currentCard.leech) {
-                                        Surface(
-                                            shape = ImpalaPillShape,
-                                            color = DangerSoft
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Warning,
-                                                    contentDescription = "Leech",
-                                                    tint = Danger,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                Text("Leech", color = Danger, fontSize = 10.sp)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                Text(
-                                    text = currentCard.front,
-                                    color = TextPrimary,
-                                    fontSize = 18.sp,
-                                    lineHeight = 26.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-
-                            Text(
-                                text = "Tippen, um Antwort aufzudecken",
-                                color = TextMuted,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 16.dp)
-                            )
-                        } else {
-                            // Rückseite (Spiegelung korrigieren per graphicsLayer)
-                            Column(modifier = Modifier.graphicsLayer { rotationY = 180f }) {
-                                Text(
-                                    text = currentCard.front,
-                                    color = TextSecondary,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp
-                                )
-
-                                HorizontalDivider(
-                                    color = EdgeSoft,
-                                    modifier = Modifier.padding(vertical = 16.dp)
-                                )
-
-                                Text(
-                                    text = currentCard.back,
-                                    color = TextPrimary,
-                                    fontSize = 18.sp,
-                                    lineHeight = 26.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
+                // Rückseite (nach dem Aufdecken)
+                if (isFlipped) {
+                    HorizontalDivider(color = BorderHairline, modifier = Modifier.padding(vertical = 12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("ANTWORT", color = AccentBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        val backDisplay = renderClozeBack(currentCard.back.ifBlank { currentCard.front })
+                        Text(
+                            text = backDisplay,
+                            color = TextMain,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Antippen zum Aufdecken", color = TextMuted, fontSize = 12.sp)
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bewertungs-Aktionen unten
+        // Unten: Buttons (Antwort aufdecken ODER die 4 FSRS-Bewertungs-Buttons)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             if (!isFlipped) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Accent,
+                    color = AccentBlue,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { isFlipped = true }
+                        .height(48.dp)
+                        .clickable { onFlip() }
                 ) {
-                    Text(
-                        text = "Antwort anzeigen",
-                        color = Color(0xFF081018),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 14.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Antwort zeigen",
+                            color = Color(0xFF081018),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             } else {
-                // 4 FSRS-Knöpfe: Nochmal, Schwer, Gut, Einfach
+                // 4 FSRS-Buttons mit echten Intervallen aus core.reviewPreview
+                val againLabel = reviewIntervals.getOrNull(0) ?: "10m"
+                val hardLabel = reviewIntervals.getOrNull(1) ?: "1d"
+                val goodLabel = reviewIntervals.getOrNull(2) ?: "3d"
+                val easyLabel = reviewIntervals.getOrNull(3) ?: "7d"
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val intervals = reviewIntervals
-                    RatingButton(
-                        label = "Nochmal",
-                        sub = intervals.getOrNull(0) ?: "10m",
-                        color = Danger,
-                        modifier = Modifier.weight(1f),
-                        onClick = { submitRating(1u) }
+                    FsrsRatingButton(
+                        label = "1 Nochmal",
+                        interval = againLabel,
+                        color = DangerRed,
+                        onClick = { onGrade(1) },
+                        modifier = Modifier.weight(1f)
                     )
-                    RatingButton(
-                        label = "Schwer",
-                        sub = intervals.getOrNull(1) ?: "1d",
-                        color = Warn,
-                        modifier = Modifier.weight(1f),
-                        onClick = { submitRating(2u) }
+                    FsrsRatingButton(
+                        label = "2 Schwer",
+                        interval = hardLabel,
+                        color = WarningAmber,
+                        onClick = { onGrade(2) },
+                        modifier = Modifier.weight(1f)
                     )
-                    RatingButton(
-                        label = "Gut",
-                        sub = intervals.getOrNull(2) ?: "3d",
-                        color = Accent,
-                        modifier = Modifier.weight(1f),
-                        onClick = { submitRating(3u) }
+                    FsrsRatingButton(
+                        label = "3 Gut",
+                        interval = goodLabel,
+                        color = AccentBlue,
+                        onClick = { onGrade(3) },
+                        modifier = Modifier.weight(1f)
                     )
-                    RatingButton(
-                        label = "Einfach",
-                        sub = intervals.getOrNull(3) ?: "7d",
-                        color = Success,
-                        modifier = Modifier.weight(1f),
-                        onClick = { submitRating(4u) }
+                    FsrsRatingButton(
+                        label = "4 Leicht",
+                        interval = easyLabel,
+                        color = SuccessGreen,
+                        onClick = { onGrade(4) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
     }
-
-    // Dialog: Neue Karte anlegen
-    if (showNewCardDialog) {
-        var frontText by remember { mutableStateOf("") }
-        var backText by remember { mutableStateOf("") }
-        var targetDeck by remember { mutableStateOf(selectedDeck ?: "Standard") }
-
-        AlertDialog(
-            onDismissRequest = { showNewCardDialog = false },
-            title = { Text("Neue Karteikarte", color = TextPrimary) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Vorderseite (Frage):", color = TextSecondary, fontSize = 12.sp)
-                    BasicTextField(
-                        value = frontText,
-                        onValueChange = { frontText = it },
-                        textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                        cursorBrush = SolidColor(Accent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 60.dp)
-                            .background(BgBubble, RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    )
-                    Text("Rückseite (Antwort):", color = TextSecondary, fontSize = 12.sp)
-                    BasicTextField(
-                        value = backText,
-                        onValueChange = { backText = it },
-                        textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                        cursorBrush = SolidColor(Accent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 60.dp)
-                            .background(BgBubble, RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val f = frontText.trim()
-                        val b = backText.trim()
-                        if (f.isNotEmpty() && b.isNotEmpty()) {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    core.createCard(f, b, targetDeck, null)
-                                    loadStudyData()
-                                } catch (e: Exception) {
-                                    // Ignorieren
-                                }
-                            }
-                        }
-                        showNewCardDialog = false
-                    }
-                ) {
-                    Text("Speichern", color = Accent)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNewCardDialog = false }) {
-                    Text("Abbrechen", color = TextSecondary)
-                }
-            },
-            containerColor = BgSidebar
-        )
-    }
-
-    // Dialog: Neuer Stapel
-    if (showNewDeckDialog) {
-        var deckName by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showNewDeckDialog = false },
-            title = { Text("Neuer Stapel", color = TextPrimary) },
-            text = {
-                BasicTextField(
-                    value = deckName,
-                    onValueChange = { deckName = it },
-                    textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                    cursorBrush = SolidColor(Accent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(BgBubble, RoundedCornerShape(8.dp))
-                        .padding(12.dp)
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val name = deckName.trim()
-                        if (name.isNotEmpty()) {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    val cleaned = core.createDeck(name)
-                                    withContext(Dispatchers.Main) {
-                                        selectedDeck = cleaned
-                                        loadStudyData()
-                                    }
-                                } catch (e: Exception) {
-                                    // Ignorieren
-                                }
-                            }
-                        }
-                        showNewDeckDialog = false
-                    }
-                ) {
-                    Text("Anlegen", color = Accent)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNewDeckDialog = false }) {
-                    Text("Abbrechen", color = TextSecondary)
-                }
-            },
-            containerColor = BgSidebar
-        )
-    }
 }
 
 @Composable
-private fun CountChip(label: String, count: String, color: Color) {
-    Surface(
-        shape = ImpalaPillShape,
-        color = BgSidebar,
-        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(text = "$label: $count", color = TextSecondary, fontSize = 11.sp)
-        }
-    }
-}
-
-@Composable
-private fun RatingButton(
+private fun FsrsRatingButton(
     label: String,
-    sub: String,
+    interval: String,
     color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = BgSidebar,
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(10.dp),
+        color = BgBubble,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .height(52.dp)
+            .clickable { onClick() }
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = label,
-                color = color,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = sub,
-                color = TextSecondary,
-                fontSize = 11.sp,
-                maxLines = 1
+            Text(text = label, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(text = interval, color = TextMuted, fontSize = 11.sp)
+        }
+    }
+}
+
+// ============================================================================
+// 3. KARTEN-BROWSER TAB
+// ============================================================================
+
+@Composable
+private fun CardBrowserTab(
+    core: ImpalaCore,
+    decks: List<DeckOverview>,
+    onMutation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedDeckFilter by remember { mutableStateOf<String?>(null) }
+    var loadedCards by remember { mutableStateOf<List<CardInfo>>(emptyList()) }
+
+    fun refreshCards() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val deckName = selectedDeckFilter ?: decks.firstOrNull()?.name ?: "Standard"
+            val cards = try {
+                core.cardsInDeckTree(deckName, false)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            withContext(Dispatchers.Main) {
+                loadedCards = cards
+            }
+        }
+    }
+
+    LaunchedEffect(selectedDeckFilter, decks) {
+        refreshCards()
+    }
+
+    val filteredCards = remember(loadedCards, searchQuery) {
+        if (searchQuery.isBlank()) loadedCards
+        else loadedCards.filter {
+            it.front.contains(searchQuery, ignoreCase = true) ||
+            it.back.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Suchfeld & Deck-Auswahl
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                textStyle = TextStyle(color = TextMain, fontSize = 13.sp),
+                cursorBrush = SolidColor(AccentBlue),
+                decorationBox = { innerTextField ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgBubble)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp)
+                    ) {
+                        Icon(Icons.Rounded.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        if (searchQuery.isEmpty()) {
+                            Text("Karten durchsuchen...", color = TextMuted, fontSize = 13.sp)
+                        } else {
+                            innerTextField()
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f)
             )
         }
+
+        // Kartenliste
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (filteredCards.isEmpty()) {
+                item {
+                    Text(
+                        text = "Keine Karten gefunden.",
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
+            } else {
+                items(filteredCards, key = { it.id }) { card ->
+                    Surface(
+                        color = BgCard,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, BorderHairline),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = card.front,
+                                    color = TextMain,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = card.back,
+                                    color = TextMuted,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        try {
+                                            core.deleteCard(card.id)
+                                            refreshCards()
+                                            onMutation()
+                                        } catch (_: Exception) {}
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "Löschen",
+                                    tint = DangerRed.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 4. STATISTIK TAB
+// ============================================================================
+
+@Composable
+private fun StudyStatsTab(
+    core: ImpalaCore,
+    decks: List<DeckOverview>,
+    modifier: Modifier = Modifier
+) {
+    val totalDue = decks.sumOf { it.dueCount.toInt() }
+    val totalNew = decks.sumOf { it.newCount.toInt() }
+    val totalCards = decks.sumOf { it.totalCards.toInt() }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("FSRS-5 Lernstatistik", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
+        Surface(
+            color = BgCard,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, BorderHairline),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Übersicht", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Gesamtzahl Karten:", color = TextMuted, fontSize = 13.sp)
+                    Text("$totalCards", color = TextMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Heute fällig:", color = TextMuted, fontSize = 13.sp)
+                    Text("$totalDue", color = AccentBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Noch nie gelernt (neu):", color = TextMuted, fontSize = 13.sp)
+                    Text("$totalNew", color = SuccessGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
+    }
+}
+
+// ============================================================================
+// 5. ARCHIV TAB
+// ============================================================================
+
+@Composable
+private fun ArchivedDecksTab(
+    archivedDecks: List<DeckInfo>,
+    onRestore: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Text("Archivierte Stapel", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        if (archivedDecks.isEmpty()) {
+            item {
+                Text("Keine archivierten Stapel vorhanden.", color = TextMuted, fontSize = 13.sp)
+            }
+        } else {
+            items(archivedDecks, key = { it.name }) { deck ->
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(deck.name, color = TextMain, fontSize = 14.sp)
+                        TextButton(onClick = { onRestore(deck.name) }) {
+                            Text("Wiederherstellen", color = AccentBlue, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
+        }
+    }
+}
+
+// ============================================================================
+// Cloze Hilfsfunktionen
+// ============================================================================
+
+private val CLOZE_REGEX = Regex("""\{\{c\d+::(.*?)\}\}""")
+
+private fun renderClozeFront(text: String): String {
+    return CLOZE_REGEX.replace(text) { "[...]" }
+}
+
+private fun renderClozeBack(text: String): String {
+    return CLOZE_REGEX.replace(text) { matchResult ->
+        matchResult.groupValues.getOrNull(1) ?: matchResult.value
     }
 }

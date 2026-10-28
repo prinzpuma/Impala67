@@ -7,21 +7,28 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.impala67.app.data.ImpalaRepository
 import org.impala67.app.ui.navigation.ImpalaAppShell
 import org.impala67.app.ui.navigation.NavTarget
 import org.impala67.app.ui.theme.ImpalaTheme
+import org.impala67.app.ui.theme.isImpalaLightMode
+import org.impala67.app.ui.theme.syncThemeFromPrefs
 
 /**
  * Haupteinstiegspunkt für die Benutzeroberfläche von Impala67.
- * Initialisiert SplashScreen, Edge-to-Edge Darstellung und verarbeitet
- * System-Shortcuts sowie Intents zum Teilen von Texten und Dateien.
+ * Initialisiert SplashScreen, Edge-to-Edge Darstellung mit korrekten Status-/Navigationsleisten-Farben
+ * und verarbeitet System-Shortcuts sowie Intents zum Teilen von Texten und Dateien.
  */
 class MainActivity : ComponentActivity() {
 
@@ -41,18 +48,25 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // 2. Vollflächiges Edge-to-Edge Design aktivieren
-        enableEdgeToEdge()
+        // 2. Theme-Einstellungen initialisieren und Systemleisten passend konfigurieren
+        syncThemeFromPrefs(this)
+        applySystemBarAppearance()
 
         // 3. Eingehenden Intent (Shortcuts oder Teilen) analysieren
         val initialTarget = handleIncomingIntent(intent)
 
         // 4. Compose UI aufsetzen
         setContent {
-            ImpalaTheme {
+            var themeTrigger by remember { mutableIntStateOf(0) }
+            ImpalaTheme(themeTrigger = themeTrigger) {
                 ImpalaAppShell(
                     repository = repository,
                     initialTarget = initialTarget,
+                    onThemeChanged = {
+                        syncThemeFromPrefs(this@MainActivity)
+                        applySystemBarAppearance()
+                        themeTrigger++
+                    },
                     onScanDocumentRequested = {
                         // Bei Bedarf externen Scanner-Intent oder Heft-Scan starten
                     }
@@ -67,13 +81,44 @@ class MainActivity : ComponentActivity() {
         val target = handleIncomingIntent(intent)
         if (target != null) {
             setContent {
-                ImpalaTheme {
+                var themeTrigger by remember { mutableIntStateOf(0) }
+                ImpalaTheme(themeTrigger = themeTrigger) {
                     ImpalaAppShell(
                         repository = repository,
-                        initialTarget = target
+                        initialTarget = target,
+                        onThemeChanged = {
+                            syncThemeFromPrefs(this@MainActivity)
+                            applySystemBarAppearance()
+                            themeTrigger++
+                        }
                     )
                 }
             }
+        }
+    }
+
+    private fun applySystemBarAppearance() {
+        val light = isImpalaLightMode
+        if (light) {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                ),
+                navigationBarStyle = SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                )
+            )
+        } else {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            )
+        }
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
         }
     }
 
@@ -88,7 +133,6 @@ class MainActivity : ComponentActivity() {
         return try {
             when (action) {
                 ACTION_NEW_NOTE -> {
-                    // Shortcut: Neue Notiz erstellen
                     val newId = runBlocking(Dispatchers.IO) {
                         repository.core.createPage("Neue Notiz", "", null, null)
                     }
@@ -96,7 +140,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 ACTION_NEW_HEFT -> {
-                    // Shortcut: Neues Heft anlegen
                     val newId = runBlocking(Dispatchers.IO) {
                         repository.core.createHeft("Neues Heft", null, null)
                     }
@@ -104,14 +147,12 @@ class MainActivity : ComponentActivity() {
                 }
 
                 ACTION_STUDY_CARDS -> {
-                    // Shortcut: Karteikarten lernen
                     NavTarget.Study(null)
                 }
 
                 Intent.ACTION_SEND -> {
                     val mimeType = intent.type ?: ""
                     if (mimeType.startsWith("text/")) {
-                        // Text geteilt
                         val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
                         if (sharedText.isNotBlank()) {
                             val title = sharedText.lineSequence().firstOrNull()?.take(40)?.trim()
@@ -122,7 +163,6 @@ class MainActivity : ComponentActivity() {
                             NavTarget.NoteEditor(newId)
                         } else null
                     } else {
-                        // Bild oder Datei geteilt
                         val streamUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
                         } else {

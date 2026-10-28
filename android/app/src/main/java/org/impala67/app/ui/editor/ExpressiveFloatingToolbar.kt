@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +42,9 @@ import androidx.compose.material.icons.rounded.FormatBold
 import androidx.compose.material.icons.rounded.FormatItalic
 import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.FormatStrikethrough
 import androidx.compose.material.icons.rounded.Highlight
+import androidx.compose.material.icons.rounded.HorizontalRule
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Palette
@@ -49,9 +53,6 @@ import androidx.compose.material.icons.rounded.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,13 +70,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.impala67.app.ui.theme.Accent
-import org.impala67.app.ui.theme.AccentBorder
 import org.impala67.app.ui.theme.AccentSoft
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.Danger
 import org.impala67.app.ui.theme.DangerSoft
 import org.impala67.app.ui.theme.Edge
-import org.impala67.app.ui.theme.SurfaceHover
 import org.impala67.app.ui.theme.TextMuted
 import org.impala67.app.ui.theme.TextPrimary
 import org.impala67.app.ui.theme.TextSecondary
@@ -83,10 +82,12 @@ import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
 import uniffi.impala_ffi.MdHeadingLevel
 import uniffi.impala_ffi.MdListStyle
+import java.util.UUID
 
 /**
  * Schwebende, animierte Material 3 Expressive Formatierungsleiste über der Bildschirmtastatur.
- * Passt sich dank `imePadding()` nahtlos an die Tastaturhöhe an.
+ * Nutzt `.navigationBarsPadding().imePadding()`, damit die Leiste niemals hinter der
+ * Android-Navigationsleiste/Taskleiste oder der Tastatur verschwindet.
  */
 @Composable
 fun ExpressiveFloatingToolbar(
@@ -118,21 +119,22 @@ fun ExpressiveFloatingToolbar(
         enter = slideInVertically { it / 2 } + fadeIn(),
         exit = slideOutVertically { it / 2 } + fadeOut(),
         modifier = modifier
+            .navigationBarsPadding()
+            .imePadding()
     ) {
         Surface(
             modifier = Modifier
-                .imePadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
-            color = BgPanel.copy(alpha = 0.94f),
-            shadowElevation = 8.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Edge)
+            color = BgPanel.copy(alpha = 0.96f),
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, Edge)
         ) {
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -161,7 +163,7 @@ fun ExpressiveFloatingToolbar(
 
                 ToolbarDivider()
 
-                // --- Inline-Formatierungen (Fett, Kursiv, Textmarker, Cloze) ---
+                // --- Inline-Formatierungen (Fett, Kursiv, Durchgestrichen, Markierung, Cloze) ---
                 ToolbarIconButton(
                     icon = Icons.Rounded.FormatBold,
                     description = "Fett (**)",
@@ -172,6 +174,12 @@ fun ExpressiveFloatingToolbar(
                     icon = Icons.Rounded.FormatItalic,
                     description = "Kursiv (*)",
                     onClick = { onWrapSelection("*", "*") }
+                )
+
+                ToolbarIconButton(
+                    icon = Icons.Rounded.FormatStrikethrough,
+                    description = "Durchgestrichen (~~)",
+                    onClick = { onWrapSelection("~~", "~~") }
                 )
 
                 ToolbarIconButton(
@@ -274,7 +282,7 @@ fun ExpressiveFloatingToolbar(
                     }
                 )
 
-                // --- Zitat, Code, Callout ---
+                // --- Zitat, Code, Callout, Trennlinie ---
                 ToolbarIconButton(
                     icon = Icons.Rounded.FormatQuote,
                     description = "Zitat",
@@ -302,12 +310,21 @@ fun ExpressiveFloatingToolbar(
                     onClick = {
                         val currentText = getBlockText(activeBlock?.kind)
                         val child = MdBlock(
-                            id = java.util.UUID.randomUUID().toString(),
+                            id = UUID.randomUUID().toString(),
                             kind = MdBlockKind.Paragraph(currentText),
                             textColor = null,
                             bgColor = null
                         )
                         onChangeBlockKind(MdBlockKind.Callout("blue", listOf(child)))
+                    }
+                )
+
+                ToolbarIconButton(
+                    icon = Icons.Rounded.HorizontalRule,
+                    description = "Trennlinie",
+                    isActive = activeBlock?.kind is MdBlockKind.Divider,
+                    onClick = {
+                        onChangeBlockKind(MdBlockKind.Divider)
                     }
                 )
 
@@ -357,23 +374,23 @@ fun ExpressiveFloatingToolbar(
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            ColorSwatch(color = Color.Transparent, label = "Standard") {
+                            ColorSwatch(color = Color.Transparent) {
                                 onColorChange(activeBlock?.textColor, null)
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0x336B8CAE), label = "Blau") {
+                            ColorSwatch(color = Color(0x336B8CAE)) {
                                 onColorChange(activeBlock?.textColor, "blue")
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0x3372BC8F), label = "Grün") {
+                            ColorSwatch(color = Color(0x3372BC8F)) {
                                 onColorChange(activeBlock?.textColor, "green")
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0x33E8C65A), label = "Gelb") {
+                            ColorSwatch(color = Color(0x33E8C65A)) {
                                 onColorChange(activeBlock?.textColor, "yellow")
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0x33E97366), label = "Rot") {
+                            ColorSwatch(color = Color(0x33E97366)) {
                                 onColorChange(activeBlock?.textColor, "red")
                                 showColorMenu = false
                             }
@@ -392,23 +409,23 @@ fun ExpressiveFloatingToolbar(
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            ColorSwatch(color = TextPrimary, label = "Standard") {
+                            ColorSwatch(color = TextPrimary) {
                                 onColorChange(null, activeBlock?.bgColor)
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Accent, label = "Blau") {
+                            ColorSwatch(color = Accent) {
                                 onColorChange("blue", activeBlock?.bgColor)
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0xFF72BC8F), label = "Grün") {
+                            ColorSwatch(color = Color(0xFF72BC8F)) {
                                 onColorChange("green", activeBlock?.bgColor)
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Color(0xFFE8C65A), label = "Gelb") {
+                            ColorSwatch(color = Color(0xFFE8C65A)) {
                                 onColorChange("yellow", activeBlock?.bgColor)
                                 showColorMenu = false
                             }
-                            ColorSwatch(color = Danger, label = "Rot") {
+                            ColorSwatch(color = Danger) {
                                 onColorChange("red", activeBlock?.bgColor)
                                 showColorMenu = false
                             }
@@ -461,7 +478,6 @@ private fun ToolbarDivider() {
 @Composable
 private fun ColorSwatch(
     color: Color,
-    label: String,
     onClick: () -> Unit
 ) {
     Box(

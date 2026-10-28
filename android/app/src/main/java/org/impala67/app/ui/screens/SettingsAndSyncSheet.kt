@@ -1,10 +1,13 @@
 package org.impala67.app.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,15 +20,16 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cloud
@@ -36,6 +40,8 @@ import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Visibility
@@ -48,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -79,24 +86,43 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.data.SyncUiModel
 import org.impala67.app.ui.theme.Accent
+import org.impala67.app.ui.theme.AccentBlue
+import org.impala67.app.ui.theme.AccentGreen
+import org.impala67.app.ui.theme.AccentOrange
 import org.impala67.app.ui.theme.AccentSoft
+import org.impala67.app.ui.theme.AccentViolet
 import org.impala67.app.ui.theme.BgBubble
+import org.impala67.app.ui.theme.BgCard
 import org.impala67.app.ui.theme.BgDeep
+import org.impala67.app.ui.theme.BgElevated
+import org.impala67.app.ui.theme.BgHover
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.BgSidebar
+import org.impala67.app.ui.theme.BorderHairline
+import org.impala67.app.ui.theme.BorderStrong
 import org.impala67.app.ui.theme.Danger
+import org.impala67.app.ui.theme.DangerRed
 import org.impala67.app.ui.theme.DangerSoft
 import org.impala67.app.ui.theme.Edge
 import org.impala67.app.ui.theme.EdgeSoft
+import org.impala67.app.ui.theme.IMPALA_UI_PREFS
 import org.impala67.app.ui.theme.ImpalaPillShape
+import org.impala67.app.ui.theme.PREF_ACCENT_COLOR
+import org.impala67.app.ui.theme.PREF_THEME_MODE
+import org.impala67.app.ui.theme.PREF_UI_MODE_OVERRIDE
 import org.impala67.app.ui.theme.Success
+import org.impala67.app.ui.theme.SuccessGreen
 import org.impala67.app.ui.theme.SuccessSoft
 import org.impala67.app.ui.theme.SurfaceSubtle
+import org.impala67.app.ui.theme.TextLight
+import org.impala67.app.ui.theme.TextMain
 import org.impala67.app.ui.theme.TextMuted
 import org.impala67.app.ui.theme.TextPrimary
 import org.impala67.app.ui.theme.TextSecondary
 import org.impala67.app.ui.theme.Warn
 import org.impala67.app.ui.theme.WarnSoft
+import org.impala67.app.ui.theme.WarningAmber
+import org.impala67.app.ui.theme.syncThemeFromPrefs
 import uniffi.impala_ffi.ConflictInfo
 import uniffi.impala_ffi.ConflictResolution
 import uniffi.impala_ffi.DiffRow
@@ -105,22 +131,26 @@ import uniffi.impala_ffi.conflictDiffRows
 import uniffi.impala_ffi.generateSyncKey
 
 /**
- * Einstellungen, Cloudflare Live-Sync, Google Drive Backup & Konflikt-Auflösung
+ * Einstellungen, Darstellung, KI-Modelle, Cloudflare Live-Sync, Google Drive Backup & Konflikte
+ * (nach Vorbild von `web/settings.js`)
  */
 @Composable
 fun SettingsAndSyncSheet(
     core: ImpalaCore,
-    syncUiModel: SyncUiModel?,
-    onTriggerSync: () -> Unit,
-    onTriggerDriveBackup: () -> Unit,
-    onCompactCloud: () -> Unit,
-    onSaveSyncKey: (String) -> Unit,
+    syncUiModel: SyncUiModel? = null,
+    onTriggerSync: () -> Unit = {},
+    onTriggerDriveBackup: () -> Unit = {},
+    onCompactCloud: () -> Unit = {},
+    onSaveSyncKey: (String) -> Unit = {},
     onClose: () -> Unit,
+    onMutation: () -> Unit = {},
+    onThemeChanged: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Sync & Backup, 1: Konflikte, 2: Daten
+    // 5 Tabs: 0: Darstellung, 1: KI, 2: Sync & Backup, 3: Konflikte, 4: Daten
+    var selectedTab by remember { mutableIntStateOf(0) }
     var conflicts by remember { mutableStateOf<List<ConflictInfo>>(emptyList()) }
     var selectedConflictForDiff by remember { mutableStateOf<ConflictInfo?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -132,9 +162,7 @@ fun SettingsAndSyncSheet(
                 withContext(Dispatchers.Main) {
                     conflicts = list
                 }
-            } catch (e: Exception) {
-                // Fehler abfangen
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -146,6 +174,7 @@ fun SettingsAndSyncSheet(
         modifier = modifier
             .fillMaxSize()
             .background(BgPanel)
+            .statusBarsPadding()
             .imePadding()
             .navigationBarsPadding()
     ) {
@@ -153,69 +182,61 @@ fun SettingsAndSyncSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onClose) {
+            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Zurück",
-                    tint = TextPrimary
+                    tint = TextMain,
+                    modifier = Modifier.size(20.dp)
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Einstellungen & Synchronisation",
-                color = TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold
+                text = "Einstellungen",
+                color = TextMain,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        // Tabs
-        TabRow(
+        // 5 PWA-Tabs
+        val tabs = listOf("Darstellung", "KI-Modelle", "Sync & Drive", "Konflikte", "Daten & Export")
+        ScrollableTabRow(
             selectedTabIndex = selectedTab,
             containerColor = BgSidebar,
-            contentColor = Accent,
-            divider = { HorizontalDivider(color = EdgeSoft) }
+            contentColor = AccentBlue,
+            edgePadding = 12.dp,
+            divider = { HorizontalDivider(color = BorderHairline) }
         ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Sync & Drive", fontSize = 13.sp) }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = {
-                    selectedTab = 1
-                    reloadConflicts()
-                },
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Konflikte", fontSize = 13.sp)
-                        if (conflicts.isNotEmpty()) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Surface(
-                                shape = ImpalaPillShape,
-                                color = Danger
-                            ) {
-                                Text(
-                                    text = conflicts.size.toString(),
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                                )
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = {
+                        selectedTab = index
+                        if (index == 3) reloadConflicts()
+                    },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(title, fontSize = 13.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium)
+                            if (index == 3 && conflicts.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(shape = ImpalaPillShape, color = DangerRed) {
+                                    Text(
+                                        text = conflicts.size.toString(),
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
                     }
-                }
-            )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = { Text("Daten & Export", fontSize = 13.sp) }
-            )
+                )
+            }
         }
 
         // Statusmeldung
@@ -225,7 +246,7 @@ fun SettingsAndSyncSheet(
                 color = AccentSoft,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(14.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
@@ -233,7 +254,7 @@ fun SettingsAndSyncSheet(
                 ) {
                     Text(
                         text = statusMessage ?: "",
-                        color = Accent,
+                        color = AccentBlue,
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f)
                     )
@@ -241,7 +262,7 @@ fun SettingsAndSyncSheet(
                         onClick = { statusMessage = null },
                         modifier = Modifier.size(20.dp)
                     ) {
-                        Icon(Icons.Rounded.Check, null, tint = Accent, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Check, null, tint = AccentBlue, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -249,7 +270,17 @@ fun SettingsAndSyncSheet(
 
         // Tab-Inhalte
         when (selectedTab) {
-            0 -> SyncAndDriveTab(
+            0 -> AppearanceTab(
+                context = context,
+                core = core,
+                onThemeChanged = onThemeChanged
+            )
+            1 -> AiModelsTab(
+                context = context,
+                core = core,
+                onMessage = { statusMessage = it }
+            )
+            2 -> SyncAndDriveTab(
                 syncUiModel = syncUiModel,
                 onTriggerSync = onTriggerSync,
                 onTriggerDriveBackup = onTriggerDriveBackup,
@@ -257,14 +288,14 @@ fun SettingsAndSyncSheet(
                 onSaveSyncKey = onSaveSyncKey,
                 onMessage = { statusMessage = it }
             )
-            1 -> ConflictsTab(
+            3 -> ConflictsTab(
                 core = core,
                 conflicts = conflicts,
                 onSelectConflict = { selectedConflictForDiff = it },
                 onRefresh = { reloadConflicts() },
                 onMessage = { statusMessage = it }
             )
-            2 -> DataExportTab(
+            4 -> DataExportTab(
                 core = core,
                 onMessage = { statusMessage = it }
             )
@@ -284,11 +315,12 @@ fun SettingsAndSyncSheet(
                         withContext(Dispatchers.Main) {
                             selectedConflictForDiff = null
                             reloadConflicts()
-                            statusMessage = "Konflikt aufgelöst."
+                            onMutation()
+                            statusMessage = "Konflikt erfolgreich gelöst."
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            statusMessage = "Fehler: ${e.message}"
+                            statusMessage = "Fehler beim Lösen: ${e.message}"
                         }
                     }
                 }
@@ -298,8 +330,308 @@ fun SettingsAndSyncSheet(
 }
 
 /**
- * Tab 1: Cloudflare Live-Sync & Google Drive Backup
+ * Rückwärtskompatible Überladung für Aufrufer mit `ImpalaRepository`
  */
+@Composable
+fun SettingsAndSyncSheet(
+    repository: org.impala67.app.data.ImpalaRepository,
+    core: ImpalaCore,
+    syncController: Any? = null,
+    syncState: Any? = null,
+    onDismiss: () -> Unit,
+    onMutation: () -> Unit = {},
+    onThemeChanged: () -> Unit = {}
+) {
+    SettingsAndSyncSheet(
+        core = core,
+        syncUiModel = null,
+        onTriggerSync = { repository.syncManager.triggerLiveSync() },
+        onTriggerDriveBackup = { repository.syncManager.triggerDriveBackup() },
+        onCompactCloud = { repository.syncManager.compactCloud() },
+        onSaveSyncKey = { key -> repository.syncManager.setSyncKey(key) },
+        onClose = onDismiss,
+        onMutation = onMutation,
+        onThemeChanged = onThemeChanged
+    )
+}
+
+// ============================================================================
+// 1. DARSTELLUNG & DESIGN TAB
+// ============================================================================
+
+@Composable
+private fun AppearanceTab(
+    context: Context,
+    core: ImpalaCore,
+    onThemeChanged: () -> Unit
+) {
+    val prefs = remember { context.getSharedPreferences(IMPALA_UI_PREFS, Context.MODE_PRIVATE) }
+    var currentTheme by remember { mutableStateOf(prefs.getString(PREF_THEME_MODE, "dark") ?: "dark") }
+    var currentAccent by remember { mutableStateOf(prefs.getString(PREF_ACCENT_COLOR, "blue") ?: "blue") }
+    var currentLayoutMode by remember { mutableStateOf(prefs.getString(PREF_UI_MODE_OVERRIDE, "auto") ?: "auto") }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    fun updateTheme(newTheme: String) {
+        currentTheme = newTheme
+        prefs.edit().putString(PREF_THEME_MODE, newTheme).apply()
+        coroutineScope.launch(Dispatchers.IO) {
+            try { core.setSetting("theme", "\"$newTheme\"") } catch (_: Exception) {}
+        }
+        syncThemeFromPrefs(context)
+        onThemeChanged()
+    }
+
+    fun updateAccent(newAccent: String) {
+        currentAccent = newAccent
+        prefs.edit().putString(PREF_ACCENT_COLOR, newAccent).apply()
+        coroutineScope.launch(Dispatchers.IO) {
+            try { core.setSetting("accentColor", "\"$newAccent\"") } catch (_: Exception) {}
+        }
+        syncThemeFromPrefs(context)
+        onThemeChanged()
+    }
+
+    fun updateLayout(newMode: String) {
+        currentLayoutMode = newMode
+        prefs.edit().putString(PREF_UI_MODE_OVERRIDE, newMode).apply()
+        onThemeChanged()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        // Farbschema
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Farbschema", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("dark" to "Dunkel (PWA)", "light" to "Hell", "system" to "System").forEach { (id, label) ->
+                        val isSel = currentTheme == id
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) AccentBlueSoft else BgBubble,
+                            border = BorderStroke(1.dp, if (isSel) AccentBlue else BorderHairline),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { updateTheme(id) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                                Text(
+                                    text = label,
+                                    color = if (isSel) AccentBlue else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Akzentfarbe (4 PWA-Akzentfarben)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Akzentfarbe", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val colors = listOf(
+                        "blue" to (AccentBlue to "Blau"),
+                        "violet" to (AccentViolet to "Violett"),
+                        "green" to (AccentGreen to "Grün"),
+                        "orange" to (AccentOrange to "Orange")
+                    )
+                    colors.forEach { (id, pair) ->
+                        val (col, label) = pair
+                        val isSel = currentAccent == id
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = BgBubble,
+                            border = BorderStroke(if (isSel) 2.dp else 1.dp, if (isSel) col else BorderHairline),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { updateAccent(id) }
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(col)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = label,
+                                    color = if (isSel) col else TextMuted,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Layout-Modus Weiche (Hochkant vs Querformat)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Layout-Modus", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Standardmäßig: Hochkant am Handy = Mobile UI, Querformat am Handy & Tablets = echte 3-Spalten PWA UI.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "auto" to "Automatisch",
+                        "tablet" to "Immer Tablet/PWA",
+                        "mobile" to "Immer Handy"
+                    ).forEach { (id, label) ->
+                        val isSel = currentLayoutMode == id
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) AccentBlueSoft else BgBubble,
+                            border = BorderStroke(1.dp, if (isSel) AccentBlue else BorderHairline),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { updateLayout(id) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = label,
+                                    color = if (isSel) AccentBlue else TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 2. KI-MODELLE TAB
+// ============================================================================
+
+@Composable
+private fun AiModelsTab(
+    context: Context,
+    core: ImpalaCore,
+    onMessage: (String) -> Unit
+) {
+    val aiPrefs = remember { context.getSharedPreferences("impala_ai_prefs", Context.MODE_PRIVATE) }
+    var geminiKey by remember { mutableStateOf(aiPrefs.getString("gemini_key", "") ?: "") }
+    var openaiKey by remember { mutableStateOf(aiPrefs.getString("openai_key", "") ?: "") }
+    var anthropicKey by remember { mutableStateOf(aiPrefs.getString("anthropic_key", "") ?: "") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("API-Schlüssel (bleiben nur lokal auf deinem Gerät)", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+                Text("Google Gemini API-Key:", color = TextSecondary, fontSize = 12.sp)
+                BasicTextField(
+                    value = geminiKey,
+                    onValueChange = { geminiKey = it },
+                    textStyle = TextStyle(color = TextMain, fontSize = 13.sp),
+                    cursorBrush = SolidColor(AccentBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgBubble)
+                        .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                )
+
+                Text("OpenAI API-Key:", color = TextSecondary, fontSize = 12.sp)
+                BasicTextField(
+                    value = openaiKey,
+                    onValueChange = { openaiKey = it },
+                    textStyle = TextStyle(color = TextMain, fontSize = 13.sp),
+                    cursorBrush = SolidColor(AccentBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgBubble)
+                        .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                )
+
+                Text("Anthropic Claude API-Key:", color = TextSecondary, fontSize = 12.sp)
+                BasicTextField(
+                    value = anthropicKey,
+                    onValueChange = { anthropicKey = it },
+                    textStyle = TextStyle(color = TextMain, fontSize = 13.sp),
+                    cursorBrush = SolidColor(AccentBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgBubble)
+                        .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = AccentBlue,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            aiPrefs.edit()
+                                .putString("gemini_key", geminiKey.trim())
+                                .putString("openai_key", openaiKey.trim())
+                                .putString("anthropic_key", anthropicKey.trim())
+                                .apply()
+                            onMessage("KI-Schlüssel erfolgreich gespeichert.")
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                        Text("Schlüssel speichern", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 3. SYNC & DRIVE TAB
+// ============================================================================
+
 @Composable
 private fun SyncAndDriveTab(
     syncUiModel: SyncUiModel?,
@@ -309,236 +641,132 @@ private fun SyncAndDriveTab(
     onSaveSyncKey: (String) -> Unit,
     onMessage: (String) -> Unit
 ) {
-    var syncKeyInput by remember { mutableStateOf("") }
+    var syncKeyInput by remember { mutableStateOf(syncUiModel?.syncKey ?: "") }
     var isKeyVisible by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Cloudflare Live-Sync Karte
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BgSidebar),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.CloudDone,
-                                contentDescription = null,
-                                tint = Accent,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Cloudflare Live-Sync (E2EE)",
-                                color = TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        IconButton(onClick = onTriggerSync) {
-                            Icon(
-                                imageVector = Icons.Rounded.Refresh,
-                                contentDescription = "Jetzt synchronisieren",
-                                tint = Accent
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Ende-zu-Ende-verschlüsselte Echtzeit-Synchronisation zwischen all deinen Geräten ohne laufende Serverkosten.",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
+        // Status Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (syncUiModel?.isOnline == true) Icons.Rounded.CloudDone else Icons.Rounded.Cloud,
+                        contentDescription = null,
+                        tint = if (syncUiModel?.isOnline == true) SuccessGreen else TextMuted,
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (syncUiModel?.isOnline == true) "Cloudflare Live-Sync Aktiv" else "Sync Getrennt / Offline",
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "Ende-zu-Ende verschlüsselte Echtzeit-Synchronisation (E2EE Protokoll v4).",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
 
-                    // Sync-Statuszeile
-                    val usageText = (syncUiModel as? SyncUiModel.Synced)?.status?.usageText
-                    if (!usageText.isNullOrEmpty()) {
-                        Text(
-                            text = "Cloud-Speicher: $usageText",
-                            color = TextMuted,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    } else if (syncUiModel is SyncUiModel.Syncing) {
-                        Text(
-                            text = "Fortschritt: ${syncUiModel.label}",
-                            color = Accent,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    } else if (syncUiModel is SyncUiModel.Error) {
-                        Text(
-                            text = "Fehler: ${syncUiModel.message}",
-                            color = Danger,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    // Sync-Schlüssel Eingabe
-                    Text(text = "Sync-Schlüssel:", color = TextSecondary, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = AccentBlue,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(BgBubble, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BasicTextField(
-                            value = syncKeyInput,
-                            onValueChange = { syncKeyInput = it },
-                            textStyle = TextStyle(
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace
-                            ),
-                            cursorBrush = SolidColor(Accent),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            decorationBox = { inner ->
-                                if (syncKeyInput.isEmpty()) {
-                                    Text("Schlüssel eingeben…", color = TextMuted, fontSize = 13.sp)
-                                }
-                                inner()
+                            .weight(1f)
+                            .clickable {
+                                onTriggerSync()
+                                onMessage("Synchronisation gestartet...")
                             }
-                        )
-                        IconButton(
-                            onClick = {
-                                try {
-                                    val generated = generateSyncKey()
-                                    syncKeyInput = generated
-                                    onMessage("Neuer E2EE-Schlüssel generiert!")
-                                } catch (e: Exception) {
-                                    onMessage("Fehler: ${e.message}")
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Rounded.Key, "Generieren", tint = Accent, modifier = Modifier.size(16.dp))
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                            Text("Jetzt synchronisieren", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (syncKeyInput.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Accent,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        onSaveSyncKey(syncKeyInput)
-                                        onMessage("Sync-Schlüssel gespeichert!")
-                                    }
-                            ) {
-                                Text(
-                                    text = "Schlüssel anwenden",
-                                    color = Color(0xFF081018),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                                )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = BgBubble,
+                        border = BorderStroke(1.dp, BorderHairline),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                onCompactCloud()
+                                onMessage("Cloud-Kompaktierung angestoßen.")
                             }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BgBubble,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable(onClick = onCompactCloud)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Rounded.Compress, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Cloud kompaktieren", color = TextSecondary, fontSize = 12.sp)
-                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                            Text("Kompaktieren", color = TextMain, fontSize = 12.sp)
                         }
                     }
                 }
             }
         }
 
-        // Google Drive Backup Karte
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BgSidebar),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.CloudUpload,
-                                contentDescription = null,
-                                tint = Warn,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Google Drive Notfall-Backup",
-                                color = TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+        // Sync-Key Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("E2EE Sync-Schlüssel", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Nutze denselben Schlüssel auf deinen anderen Geräten, um Notizen zu synchronisieren.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+
+                BasicTextField(
+                    value = syncKeyInput,
+                    onValueChange = { syncKeyInput = it },
+                    textStyle = TextStyle(color = TextMain, fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(AccentBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgBubble)
+                        .border(1.dp, BorderHairline, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = BgBubble,
+                        border = BorderStroke(1.dp, BorderHairline),
+                        modifier = Modifier.clickable {
+                            val generated = generateSyncKey()
+                            syncKeyInput = generated
                         }
+                    ) {
+                        Text("Neuen Schlüssel generieren", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Automatisches oder manuelles Backup deiner Datenbank auf deinem persönlichen Google Drive.",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = WarnSoft,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Warn),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = onTriggerDriveBackup)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.CloudUpload, null, tint = Warn, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Jetzt auf Drive sichern", color = Warn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        color = AccentBlue,
+                        modifier = Modifier.clickable {
+                            onSaveSyncKey(syncKeyInput.trim())
+                            onMessage("Sync-Schlüssel gespeichert.")
                         }
+                    ) {
+                        Text("Speichern", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                     }
                 }
             }
@@ -546,9 +774,10 @@ private fun SyncAndDriveTab(
     }
 }
 
-/**
- * Tab 2: Konflikt-Auflösung
- */
+// ============================================================================
+// 4. KONFLIKTE TAB
+// ============================================================================
+
 @Composable
 private fun ConflictsTab(
     core: ImpalaCore,
@@ -557,145 +786,51 @@ private fun ConflictsTab(
     onRefresh: () -> Unit,
     onMessage: (String) -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        item {
+            Text("Sync-Konflikte lösen", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text(
-                text = "${conflicts.size} offene Konflikte",
-                color = if (conflicts.isNotEmpty()) Danger else TextSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
+                text = "Wenn dieselbe Seite auf zwei Geräten offline geändert wurde, kannst du hier die Unterschiede vergleichen und zusammenführen.",
+                color = TextMuted,
+                fontSize = 12.sp
             )
-
-            if (conflicts.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Accent,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    val result = core.resolveConflictsRecommended()
-                                    withContext(Dispatchers.Main) {
-                                        onRefresh()
-                                        onMessage("${result.resolved} Konflikte automatisch gelöst.")
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        onMessage("Fehler: ${e.message}")
-                                    }
-                                }
-                            }
-                        }
-                ) {
-                    Text(
-                        text = "Alle mit Empfehlung lösen",
-                        color = Color(0xFF081018),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
         if (conflicts.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = Success,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Keine Konflikte vorhanden",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Alle Änderungen sind synchron und sauber zusammengeführt.",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
+            item {
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                ) {
+                    Box(modifier = Modifier.padding(20.dp), contentAlignment = Alignment.Center) {
+                        Text("Keine Konflikte vorhanden. Alles synchron!", color = SuccessGreen, fontSize = 13.sp)
+                    }
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(conflicts, key = { it.key }) { conflict ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BgSidebar,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onSelectConflict(conflict) }
+            items(conflicts, key = { it.key }) { conf ->
+                Surface(
+                    color = BgCard,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth().clickable { onSelectConflict(conf) }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = conflict.title,
-                                    color = TextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Surface(
-                                    shape = ImpalaPillShape,
-                                    color = DangerSoft
-                                ) {
-                                    Text(
-                                        text = conflict.kind.name,
-                                        color = Danger,
-                                        fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            val reason = conflict.reason
-                            if (!reason.isNullOrEmpty()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = reason,
-                                    color = TextSecondary,
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Tippen für Zeilen-Diff & Entscheidung",
-                                color = Accent,
-                                fontSize = 11.sp
-                            )
+                        Column {
+                            Text(conf.key, color = TextMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Tippen zum Vergleichen & Lösen", color = AccentBlue, fontSize = 11.sp)
                         }
+                        Icon(Icons.Rounded.WarningAmber, null, tint = WarningAmber, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -703,325 +838,122 @@ private fun ConflictsTab(
     }
 }
 
-/**
- * Tab 3: Lokaler JSON-Export & Import
- */
+// ============================================================================
+// 5. DATEN & EXPORT TAB
+// ============================================================================
+
 @Composable
 private fun DataExportTab(
     core: ImpalaCore,
     onMessage: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var importJsonText by remember { mutableStateOf("") }
-    var isExporting by remember { mutableStateOf(false) }
+    var exportStatsText by remember { mutableStateOf<String?>(null) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Export
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BgSidebar),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Daten exportieren",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Erstellt ein vollständiges JSON-Backup (kompatibel mit der Impala67 PWA).",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Backup & Daten-Export", color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Exportiere deinen gesamten Datenbestand als portable JSON-Datei inklusive aller Notizen, Hefte und Karteikarten.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
 
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Accent,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                isExporting = true
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    try {
-                                        val json = core.exportJson(includeBlobs = true)
-                                        withContext(Dispatchers.Main) {
-                                            isExporting = false
-                                            val sendIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, json)
-                                                type = "application/json"
-                                            }
-                                            context.startActivity(Intent.createChooser(sendIntent, "Impala67 Backup teilen"))
-                                        }
-                                    } catch (e: Exception) {
-                                        withContext(Dispatchers.Main) {
-                                            isExporting = false
-                                            onMessage("Export-Fehler: ${e.message}")
-                                        }
-                                    }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = AccentBlue,
+                    modifier = Modifier.clickable {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                val json = core.exportJson(false)
+                                withContext(Dispatchers.Main) {
+                                    exportStatsText = "Export bereit: ${(json.length / 1024)} KB"
+                                    onMessage("Export-Datei erfolgreich generiert.")
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    onMessage("Fehler: ${e.message}")
                                 }
                             }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isExporting) {
-                                CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color(0xFF081018), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Rounded.Share, null, tint = Color(0xFF081018), modifier = Modifier.size(16.dp))
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Exportieren & Teilen", color = Color(0xFF081018), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
+                ) {
+                    Text("Vollständigen Export erstellen (JSON)", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                 }
-            }
-        }
 
-        // Import
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BgSidebar),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Backup importieren",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Füge ein JSON-Backup aus der PWA oder einer anderen App-Instanz ein:",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    BasicTextField(
-                        value = importJsonText,
-                        onValueChange = { importJsonText = it },
-                        textStyle = TextStyle(color = TextPrimary, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                        cursorBrush = SolidColor(Accent),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .background(BgBubble, RoundedCornerShape(8.dp))
-                            .padding(10.dp),
-                        decorationBox = { inner ->
-                            if (importJsonText.isEmpty()) {
-                                Text("{ \"pages\": [ ... ] }", color = TextMuted, fontSize = 12.sp)
-                            }
-                            inner()
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = BgBubble,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Edge),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                val text = importJsonText.trim()
-                                if (text.isNotEmpty()) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val summary = core.importJson(text)
-                                            withContext(Dispatchers.Main) {
-                                                importJsonText = ""
-                                                onMessage("Import erfolgreich: ${summary.added} Einträge hinzugefügt.")
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                onMessage("Import-Fehler: ${e.message}")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.Download, null, tint = Accent, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import ausführen", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                if (exportStatsText != null) {
+                    Text(exportStatsText ?: "", color = SuccessGreen, fontSize = 12.sp)
                 }
             }
         }
     }
 }
 
-/**
- * Side-by-Side / Zeilen-Diff Dialog mit Entscheidungs-Knöpfen
- */
+// ============================================================================
+// Konflikt-Diff Dialog
+// ============================================================================
+
 @Composable
 private fun ConflictDiffDialog(
     conflict: ConflictInfo,
     onDismiss: () -> Unit,
     onResolve: (ConflictResolution) -> Unit
 ) {
-    val local = conflict.localContent ?: ""
-    val remote = conflict.remoteContent ?: ""
-    val diffRows = remember(local, remote) {
-        conflictDiffRows(local, remote) ?: emptyList()
+    val diffRows = remember(conflict) {
+        try {
+            conflictDiffRows(conflict.winnerContent, conflict.loserContent) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = BgSidebar,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Edge),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
+            color = BgElevated,
+            border = BorderStroke(1.dp, BorderStrong),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Konflikt: ${conflict.title}",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Konflikt lösen: ${conflict.key}", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
 
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = conflict.reason ?: "Unterschiedliche Stände auf zwei Geräten.",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Diff-Liste
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .height(240.dp)
-                        .background(BgDeep, RoundedCornerShape(8.dp))
-                        .padding(8.dp)
-                ) {
+                LazyColumn(modifier = Modifier.weight(1f)) {
                     items(diffRows) { row ->
                         when (row) {
-                            is DiffRow.Line -> {
-                                val bg = if (row.changed) Color(0x33E97366) else Color.Transparent
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(bg)
-                                        .padding(vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = row.left ?: "",
-                                        color = if (row.changed) Danger else TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = row.right ?: "",
-                                        color = if (row.changed) Success else TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
-                            is DiffRow.Gap -> {
-                                Text(
-                                    text = "… ${row.count} unveränderte Zeilen eingeklappt …",
-                                    color = TextMuted,
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
+                            is DiffRow.Equal -> Text(row.line, color = TextMuted, fontSize = 12.sp)
+                            is DiffRow.LeftOnly -> Text("+ ${row.line}", color = SuccessGreen, fontSize = 12.sp)
+                            is DiffRow.RightOnly -> Text("- ${row.line}", color = DangerRed, fontSize = 12.sp)
+                            is DiffRow.Gap -> Text("... eingeklappt ...", color = TextLight, fontSize = 10.sp)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Aktionen: Gewinner behalten, Verlierer nutzen, Beide behalten
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Accent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onResolve(ConflictResolution.KEEP_WINNER) }
+                        color = AccentBlue,
+                        modifier = Modifier.weight(1f).clickable { onResolve(ConflictResolution.KEEP_WINNER) }
                     ) {
-                        Text(
-                            text = "Neueren Stand behalten (Gewinner)",
-                            color = Color(0xFF081018),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
+                        Text("Lokalen Stand behalten", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(vertical = 8.dp))
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = BgBubble,
+                        border = BorderStroke(1.dp, BorderHairline),
+                        modifier = Modifier.weight(1f).clickable { onResolve(ConflictResolution.USE_LOSER) }
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BgBubble,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onResolve(ConflictResolution.USE_LOSER) }
-                        ) {
-                            Text(
-                                text = "Anderen Stand",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BgBubble,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, EdgeSoft),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onResolve(ConflictResolution.KEEP_BOTH) }
-                        ) {
-                            Text(
-                                text = "Beide behalten",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
+                        Text("Cloud-Stand", color = TextMain, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(vertical = 8.dp))
                     }
                 }
             }
