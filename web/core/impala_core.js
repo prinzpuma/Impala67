@@ -1957,98 +1957,6 @@ export class ModelCore {
 if (Symbol.dispose) ModelCore.prototype[Symbol.dispose] = ModelCore.prototype.free;
 
 /**
- * Volltextsuche über Seiten (`STATE.searchNotes`): exakte Treffer, aufgefüllt mit
- * Tippfehler-Treffern. Seiten werden nur bei Änderung neu übergeben.
- */
-export class NoteIndex {
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        NoteIndexFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_noteindex_free(ptr, 0);
-    }
-    constructor() {
-        const ret = wasm.noteindex_new();
-        this.__wbg_ptr = ret;
-        NoteIndexFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * @param {string} id
-     */
-    removePage(id) {
-        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.noteindex_removePage(this.__wbg_ptr, ptr0, len0);
-    }
-    /**
-     * Höchstens 8 Treffer als JSON-Array `[{ id, score, terms, snippet }]`.
-     * @param {string} query
-     * @param {boolean} include_archived
-     * @returns {string}
-     */
-    search(query, include_archived) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.noteindex_search(retptr, this.__wbg_ptr, ptr0, len0, include_archived);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred2_0 = r0;
-            deferred2_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
-     * Nur Archiv-Angaben ändern; `false`, wenn die Seite unbekannt ist.
-     * @param {string} id
-     * @param {boolean} archived
-     * @param {boolean} in_archive
-     * @returns {boolean}
-     */
-    setFlags(id, archived, in_archive) {
-        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.noteindex_setFlags(this.__wbg_ptr, ptr0, len0, archived, in_archive);
-        return ret !== 0;
-    }
-    /**
-     * Seite aufnehmen oder ersetzen. `in_archive`: archiviert oder unter einer archivierten Seite.
-     * @param {string} id
-     * @param {string} title
-     * @param {string} content
-     * @param {string} ocr
-     * @param {string} updated
-     * @param {boolean} archived
-     * @param {boolean} in_archive
-     */
-    setPage(id, title, content, ocr, updated, archived, in_archive) {
-        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        const ptr1 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len1 = WASM_VECTOR_LEN;
-        const ptr2 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len2 = WASM_VECTOR_LEN;
-        const ptr3 = passStringToWasm0(ocr, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len3 = WASM_VECTOR_LEN;
-        const ptr4 = passStringToWasm0(updated, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len4 = WASM_VECTOR_LEN;
-        wasm.noteindex_setPage(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, archived, in_archive);
-    }
-}
-if (Symbol.dispose) NoteIndex.prototype[Symbol.dispose] = NoteIndex.prototype.free;
-
-/**
  * Hybrid-Suchindex (`rankRag`): Chunk-Vektoren, -Texte und Seitenangaben bleiben im Kern.
  */
 export class RagIndex {
@@ -4077,7 +3985,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4619(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4607(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4123,7 +4031,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4619(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4607(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4216,7 +4124,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 188, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4563);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4551);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -4243,14 +4151,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4619(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4619(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4607(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4607(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4563(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4551(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4563(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4551(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4285,9 +4193,6 @@ const InkEngineFinalization = (typeof FinalizationRegistry === 'undefined')
 const ModelCoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_modelcore_free(ptr, 1));
-const NoteIndexFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_noteindex_free(ptr, 1));
 const RagIndexFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_ragindex_free(ptr, 1));

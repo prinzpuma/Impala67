@@ -1,5 +1,6 @@
-//! Vergleich mit der PWA (web/state.js, event-order.js, db.js, conflict-ui.js). Golden-Files
-//! erzeugte das frühere `core/tools/gen-golden-model.mjs` aus dem JS-Datenmodell (eingefroren, seit das Modell nur noch in Rust läuft). Zustände werden über kanonisches JSON verglichen
+//! Vergleich mit dem früheren JS-Datenmodell der PWA (state.js, event-order.js, db.js, conflict-ui.js).
+//! Die Golden-Files erzeugte `core/tools/gen-golden-model.mjs`; seit das Modell nur noch in Rust läuft,
+//! sind sie eingefroren (alte Daten müssen lesbar bleiben). Zustände werden über kanonisches JSON verglichen
 //! (Schlüssel sortiert, Zahlen wie `JSON.stringify`) – strukturgleich, unabhängig von Reihenfolgen.
 
 use std::collections::{HashMap, HashSet};

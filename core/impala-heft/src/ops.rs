@@ -5,6 +5,7 @@
 //! idempotent (gleiche ID = einmal), Entfernen ebenso (fehlt schon = nichts zu tun),
 //! Ersetzen ist Last-Write-Wins über die Log-Reihenfolge.
 
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 
 use serde::de::{Deserialize, Deserializer};
@@ -421,22 +422,119 @@ impl HeftEvent {
     }
 }
 
+/// Ein Heft im Speicher: gelesen oder – nach dem Start aus einem Checkpoint – noch als gespeicherter
+/// JSON-Text, der erst beim ersten Zugriff gelesen wird. Ein großes Heft kostet so beim Start
+/// fast nichts, und solange es unverändert bleibt, schreibt der nächste Checkpoint es nicht neu.
+#[derive(Debug, Clone, Default)]
+struct Slot {
+    doc: OnceCell<HeftDoc>,
+    /// Gespeicherter Text, bis er gelesen wird (danach freigegeben).
+    json: RefCell<Option<String>>,
+    /// Inhalts-Hash des gespeicherten Stands, solange das Heft seitdem unverändert ist.
+    hash: Option<String>,
+}
+
+impl Slot {
+    fn doc(&self) -> &HeftDoc {
+        self.doc.get_or_init(|| {
+            // Der Text wurde beim Start geprüft; lesbares JSON ergibt immer ein Heft.
+            let json = self.json.borrow_mut().take();
+            json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default()
+        })
+    }
+
+    fn doc_mut(&mut self) -> &mut HeftDoc {
+        self.doc();
+        self.hash = None;
+        self.doc.get_mut().expect("gerade gelesen")
+    }
+}
+
 /// Alle Hefte und ihre Bilddaten (`S.heftDocs`, `S.heftBlobs`).
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default)]
 pub struct Hefte {
-    pub docs: BTreeMap<String, HeftDoc>,
+    docs: BTreeMap<String, Slot>,
     /// Hash → dataURL; der erste Eintrag eines Hashes gewinnt (gleicher Hash = gleicher Inhalt).
     pub blobs: BTreeMap<String, String>,
 }
 
+impl PartialEq for Hefte {
+    fn eq(&self, o: &Self) -> bool {
+        self.blobs == o.blobs && self.docs.len() == o.docs.len() && self.iter().eq(o.iter())
+    }
+}
+
 impl Hefte {
+    /// Ein Heft (liest es beim ersten Zugriff).
+    pub fn get(&self, page_id: &str) -> Option<&HeftDoc> {
+        self.docs.get(page_id).map(Slot::doc)
+    }
+
+    /// Ein Heft zum Ändern; es gilt danach nicht mehr als gespeichert.
+    pub fn get_mut(&mut self, page_id: &str) -> Option<&mut HeftDoc> {
+        self.docs.get_mut(page_id).map(Slot::doc_mut)
+    }
+
+    pub fn insert(&mut self, page_id: String, doc: HeftDoc) {
+        self.docs.insert(page_id, Slot { doc: OnceCell::from(doc), ..Slot::default() });
+    }
+
+    /// Ein gespeichertes Heft (JSON-Text samt Inhalts-Hash) übernehmen, ohne es schon zu lesen.
+    /// Der Aufrufer prüft vorher, dass der Text gültiges JSON ist.
+    pub fn insert_stored(&mut self, page_id: String, json: String, hash: String) {
+        self.docs.insert(page_id, Slot { doc: OnceCell::new(), json: RefCell::new(Some(json)), hash: Some(hash) });
+    }
+
+    pub fn remove(&mut self, page_id: &str) -> bool {
+        self.docs.remove(page_id).is_some()
+    }
+
+    pub fn contains(&self, page_id: &str) -> bool {
+        self.docs.contains_key(page_id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.docs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.docs.is_empty()
+    }
+
+    /// Seiten-IDs aller Hefte (ohne sie zu lesen).
+    pub fn ids(&self) -> impl Iterator<Item = &String> {
+        self.docs.keys()
+    }
+
+    /// Alle Hefte (liest jedes beim ersten Zugriff).
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &HeftDoc)> {
+        self.docs.iter().map(|(k, s)| (k, s.doc()))
+    }
+
+    /// Inhalts-Hash des gespeicherten Stands, solange das Heft unverändert ist.
+    pub fn stored_hash(&self, page_id: &str) -> Option<&str> {
+        self.docs.get(page_id)?.hash.as_deref()
+    }
+
+    /// Nach dem Speichern: Das Heft liegt unter `hash` vor (bis zur nächsten Änderung).
+    pub fn set_stored_hash(&mut self, page_id: &str, hash: String) {
+        if let Some(slot) = self.docs.get_mut(page_id) {
+            slot.hash = Some(hash);
+        }
+    }
+
+    /// Ist das Heft schon gelesen?
+    pub fn is_loaded(&self, page_id: &str) -> bool {
+        self.docs.get(page_id).is_some_and(|s| s.doc.get().is_some())
+    }
+
     /// Wendet ein Event an. `true`, wenn sich ein Heft geändert hat bzw. Bilddaten neu sind.
     pub fn apply(&mut self, ev: HeftEvent) -> bool {
         match ev {
-            HeftEvent::Ops { page_id, ops } => self.docs.entry(page_id).or_default().apply_ops(ops),
+            HeftEvent::Ops { page_id, ops } => self.docs.entry(page_id).or_default().doc_mut().apply_ops(ops),
             HeftEvent::Snap { page_id, mut doc } => {
                 doc.rev = 1; // rev 0, danach zählt das Event wie jedes andere
-                self.docs.insert(page_id, doc);
+                self.insert(page_id, doc);
                 true
             }
             HeftEvent::Blob { hash, data } => {
@@ -452,9 +550,8 @@ impl Hefte {
     /// Bildreferenzen aller Hefte (für Aufräumen und Sync).
     pub fn referenced_blobs(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self
-            .docs
-            .values()
-            .flat_map(|d| d.pages.iter())
+            .iter()
+            .flat_map(|(_, d)| d.pages.iter())
             .flat_map(|p| p.images.iter())
             .filter_map(|i| i.r#ref.as_deref())
             .filter(|r| !r.is_empty())

@@ -41,17 +41,19 @@ Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln st
 
 1. `index.html`: Fehler-Fänger, Darstellung vorab (Theme), CDN-Bibliotheken (DOMPurify, marked), Service-Worker-Registrierung.
 2. `main.js`: importiert **alle** Module und hängt sie zusätzlich an `window` (Übergangslösung, siehe Baustelle B2).
-3. `boot.js:initApp`: `DB.open` → `STATE.load` (Checkpoint laden + Rest-Events nachspielen) → Migrationen → `TABS.restoreSession` → `APP.wireEvents` → erstes `render()`.
+3. `boot.js:initApp`: `DB.open` → `STATE.load` (JS liest Checkpoint + Rest-Events aus IndexedDB, der Rust-Kern spielt ab) → Migrationen → `TABS.restoreSession` → `APP.wireEvents` → erstes `render()`.
 4. Danach im Hintergrund: Cloudflare-Sync, Drive-Auto-Sync, MCP-Bridge, Update-Watcher, Heft-OCR-Indexer, Prefetch optionaler Module.
 
 ---
 
 ## 3. Daten
 
-### `S` und `STATE` (`state.js`)
-- **`S`** = der komplette Speicherstand als einfaches Objekt: `pages`, `cards`, `decks`, `heftDocs`, `heftBlobs`, `settings` … plus flüchtiger UI-Zustand (`view`, `tabs`, `navHistory`, `aiBusy` …). Nur ein Teil wird gespeichert (`INITIAL_PERSISTED_STATE`).
-- **`STATE`** = Logik: `dispatch`, `reduce` (großer `switch` mit ~60 Event-Typen, `state.js:469–980`), `load`, Checkpoints, Abfragen (`activePages`, `dueCards`, `searchNotes`, `backlinksOf` …).
-- Regel: `S` wird nur über `dispatch` → `reduce` verändert. (Ausnahme: flüchtiger UI-Zustand.)
+### `S` und `STATE` (`state.js`, Datenmodell im Rust-Kern)
+- Der gespeicherte Zustand liegt **im Rust-Kern** (`core/impala-model`, in der PWA `ModelCore` aus `core/impala-wasm/src/model.rs`): Reducer, Laden aus Checkpoint und Log, Event-Reihenfolge, Checkpoints, Merge/Konflikte, Abfragen, Lernwarteschlange. Es gibt keine JS-Fassung mehr.
+- **`S`** = flüchtiger UI-Zustand (`view`, `tabs`, `navHistory`, `aiBusy` …) plus **nur lesbare Ansichten** auf den Kern (`state-views.js`): `pages`, `cards`, `decks`, `settings`, `reviews` … Geholt wird beim Lesen und nur, was sich laut Kern geändert hat. `pg.content` kommt erst beim Zugriff aus dem Kern. Zuweisungen werfen.
+- **Hefte und Heft-Bilder** gibt es nur über Abfragen: `STATE.heftDoc(id)`, `heftPage(id, i)`, `heftPageById`, `heftMeta(id)`, `heftBlob(hash)`, `heftIndexSummary()`. Der Heft-Editor arbeitet auf einer eigenen Arbeitskopie (`heft.js`), schickt Unterschiede als `heftOps` und übernimmt Fremdänderungen über `STATE.heftPreview` (Kern legt Ungespeichertes auf seinen neuen Stand).
+- **`STATE`** = `dispatch` (speichert in IndexedDB, dann wendet der Kern an), `applyRemoteEvents`, `load`, Checkpoints, Abfragen (`activePages`, `dueCards`, `searchNotes`, `backlinksOf` …) – alles Aufrufe an den Kern.
+- Regel: Der gespeicherte Zustand ändert sich nur über Events (`STATE.dispatch`). Flüchtiger UI-Zustand (auch `S.tabs` als Arbeitsstand der Tab-Leiste, gespeichert per `uiTabsSet`) bleibt in JS.
 
 ### IndexedDB (`db.js`)
 | Store | Inhalt |
@@ -60,14 +62,14 @@ Diese Datei beschreibt, **wie die App gebaut ist** und **wo es hakt**. Regeln st
 | `blobs` | Bilder, PDFs, Heft-Versionen (`heftver:*`), Checkpoints |
 | `vecs` | Embeddings für die KI-Suche |
 
-**Checkpoints** (`state-checkpoint.js`, `checkpoint-scheduler.js`): Schnappschuss von `S` mit Event-Nummer. Beim Start wird nur der Rest des Logs nachgespielt → schneller Start.
+**Checkpoints** (im Kern: `impala-storage` checkpoint.rs, Zeitplan `checkpoint-scheduler.js`): Schnappschuss des Zustands mit Event-Nummer. Beim Start wird nur der Rest des Logs nachgespielt → schneller Start. Hefte liegen als eigene, inhaltsadressierte Teile; der Kern liest sie erst beim ersten Zugriff und schreibt unveränderte nicht neu.
 - **Regel:** Ein Checkpoint entspricht immer dem nach Zeit sortierten Replay seiner Events. Wendet die Laufzeit ein verspätetes Fremd-Event an, das mit neueren Events kollidiert, wird kein Checkpoint davon gespeichert (der nächste Start sortiert es richtig ein).
-- **Verspätete Fremd-Events** (`event-order.js`): Der Checkpoint merkt sich je Sache (Seite, Heft, Karte, Chat …) den spätesten Event-Zeitpunkt (`orderTimes`). Ein älteres Event im Rest wird einfach angehängt, wenn es nichts Neueres berührt; nur echte Überschneidungen erzwingen den Voll-Replay. Neue Event-Typen ohne Eintrag in `orderKeysOf` gelten als „wirkt auf vieles“ – das ist sicher, kostet aber Startzeit.
+- **Verspätete Fremd-Events** (`impala-model` order.rs): Der Checkpoint merkt sich je Sache (Seite, Heft, Karte, Chat …) den spätesten Event-Zeitpunkt (`orderTimes`). Ein älteres Event im Rest wird einfach angehängt, wenn es nichts Neueres berührt; nur echte Überschneidungen erzwingen den Voll-Replay. Neue Event-Typen ohne Eintrag in `order_keys` gelten als „wirkt auf vieles“ – das ist sicher, kostet aber Startzeit.
 
 ### Heft-Daten
-- `S.heftDocs[pageId] = { v:2, rev, pages:[{ id, paper, strokes, images, texts, ocrText }] }`
+- `STATE.heftDoc(pageId) = { v:2, rev, pages:[{ id, paper, strokes, images, texts, ocrText }] }` (Kopie aus dem Kern)
 - Stroke: `{ id, tool, color, size, pts:[[x,y,p]], shape?, bbox? }`
-- Bilder liegen inhaltsadressiert in `S.heftBlobs[hash]`, das Heft verweist per `ref`.
+- Bilder liegen inhaltsadressiert im Kern (`STATE.heftBlob(hash)`, bei Bedarf aus dem Checkpoint nachgeladen), das Heft verweist per `ref`.
 - Änderungen laufen als **`heftOps`**-Events (`pg+`, `s+`, `i+`, `x+`, `ocr` …), erzeugt per Diff (`heft-document-core.js`).
 - `s=`/`i=`/`x=` ersetzen den **Inhalt** des vorhandenen Objekts, nicht das Objekt: Undo-Einträge, laufende Gesten und der Text-Editor halten Verweise darauf. Ansichtszustand (z. B. „wird gerade bearbeitet“) gehört nie ins Dokument – er würde mitgespeichert und synchronisiert.
 - Die Handschrift-Erkennung wird beim Speichern für jede Seite mit geänderten Strichen angestoßen (`persistDoc` → `heft:schedule-page`).
@@ -163,7 +165,6 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 | Was | Wo |
 |---|---|
 | Heft-Ops erzeugen | `sync-core.js:106` (`heftBaselineOps`) vs. `heft-document-core.js` (`diffDocument`); `heftDiffOps` (sync-core.js:119) ungenutzt |
-| neue Heft-Seite | `heft.js:159` vs. `state.js:364` |
 | Handschrift-OCR | `heft.js:110–155` und `heft-indexer.js:37–86` |
 | Vektor-Norm/Cosine | `rag-ranking.js`, `rag.js:252`, `fach.js:374`, `graph.js:300`, `graph-worker.js:10` |
 | `esc`/`$`/`blurActive`/Overlay-Wrapper | in 5+ Dateien |
@@ -175,7 +176,7 @@ Die Zyklen werden mit „Lazy-Aliasen“ (`const render = (...a) => RENDER.rende
 - Viele Module bieten mehr nach außen an, als genutzt wird (nur intern gebrauchte Funktionen im Rückgabe-Objekt).
 
 ### B6 – Altlasten mit Kompatibilitätspflicht (nicht einfach löschen!)
-Migrationen alter Datenformate: `db.js:59–75` (alte DB „notion“), `state-checkpoint.js` Format 1, `state.js:332–349` (alte Secrets), `heft.js:233–300` (Heft aus localStorage), `core/impala-drive/src/format.rs` (v1-Snapshots, Drive-Zustand aus `localStorage`), `sync-cloudflare.js:648` (`migrateLocalV4`). Entfernen nur mit festgelegter Mindestversion, ab der alte Daten nicht mehr vorkommen.
+Migrationen alter Datenformate: `db.js:59–75` (alte DB „notion“), Checkpoint-Formate 1–2 (`impala-storage` checkpoint.rs), alte Secrets (`impala-model` migrate.rs), `heft.js:233–300` (Heft aus localStorage), `core/impala-drive/src/format.rs` (v1-Snapshots, Drive-Zustand aus `localStorage`), `sync-cloudflare.js:648` (`migrateLocalV4`). Entfernen nur mit festgelegter Mindestversion, ab der alte Daten nicht mehr vorkommen.
 
 ---
 

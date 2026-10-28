@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use impala_heft::HeftDoc;
+use impala_storage::checkpoint::HeftPart;
 use impala_storage::checkpoint::{self, HeftJson, LoadedRaw, Reject};
 use impala_storage::{Error, PartKind, Storage, StorageExt};
 use serde_json::Value;
@@ -16,7 +17,7 @@ use crate::event::LogEvent;
 use crate::js::{self, Object};
 use crate::order::{self, OrderTimes};
 use crate::reduce::{Effects, Live};
-use crate::types::{State, WithoutBlobs};
+use crate::types::{CoreOnly, State};
 
 /// Ergebnis von [`Model::load`] (für Diagnose und Uhr).
 #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +215,7 @@ impl Model {
         let mut info = storage.log_info()?;
         let (loaded, had_checkpoint) = match checkpoint::load_raw(storage, order::reorder_safe_object) {
             Ok(LoadedRaw::Rejected(r)) => (Err(r.as_str()), r != Reject::Missing),
-            // Hefte direkt typisiert lesen; ein kaputtes Heft verwirft den Checkpoint.
+            // Hefte bleiben Text, bis sie gebraucht werden; ein kaputtes verwirft den Checkpoint.
             Ok(LoadedRaw::Usable { checkpoint, state, hefte, tail }) => match read_hefte(hefte) {
                 Some(docs) => (Ok((checkpoint, state, docs, tail)), true),
                 None => (Err(Reject::HeftDocs.as_str()), true),
@@ -226,8 +227,18 @@ impl Model {
                 let format = cp.get("format").and_then(Value::as_u64).unwrap_or(0);
                 let partitioned = format == checkpoint::FORMAT || format == checkpoint::HEFT_JSON_FORMAT;
                 m.state = State::restore(saved, now);
-                if let Some(docs) = docs {
-                    m.state.hefte.docs = docs;
+                match docs {
+                    Some(StoredHefte::Text(parts)) => {
+                        for (page, hash, json) in parts {
+                            m.state.hefte.insert_stored(page, json, hash);
+                        }
+                    }
+                    Some(StoredHefte::Docs(docs)) => {
+                        for (page, doc) in docs {
+                            m.state.hefte.insert(page, doc);
+                        }
+                    }
+                    None => {}
                 }
                 m.blob_sizes = if partitioned {
                     cp.get("heftBlobSizes")
@@ -379,7 +390,7 @@ impl Model {
 
     /// Heft mit noch nicht gespeicherten Operationen (Vorschau, ändert nichts).
     pub fn heft_preview(&self, page_id: &str, ops: Value) -> Option<impala_heft::HeftDoc> {
-        let mut doc = self.state.hefte.docs.get(page_id)?.clone();
+        let mut doc = self.state.hefte.get(page_id)?.clone();
         doc.apply_ops(impala_heft::parse_ops(ops));
         Some(doc)
     }
@@ -418,12 +429,30 @@ impl Model {
             .iter()
             .filter_map(|h| self.state.hefte.blobs.get(h).map(|d| (h.clone(), d.clone())))
             .collect();
-        let state = match serde_json::to_value(WithoutBlobs(&self.state)) {
+        let state = match serde_json::to_value(CoreOnly(&self.state)) {
             Ok(Value::Object(o)) => o,
             _ => return Err(Error::Json("Zustand nicht serialisierbar".into())),
         };
+        // Unveränderte Hefte, die schon gespeichert liegen, behalten ihren Teil (kein Neuschreiben,
+        // kein Lesen); nur geänderte werden serialisiert.
+        let existing: HashSet<String> = storage.part_hashes(PartKind::HeftDoc)?.into_iter().collect();
+        let hefte: Vec<HeftPart> = self
+            .state
+            .hefte
+            .ids()
+            .map(|id| match self.state.hefte.stored_hash(id) {
+                Some(h) if existing.contains(h) => {
+                    HeftPart { page_id: id.clone(), hash: h.to_owned(), json: String::new() }
+                }
+                _ => checkpoint::heft_part(id, self.state.hefte.get(id).expect("Heft vorhanden")),
+            })
+            .collect();
         let times = self.order_complete.then(|| order::times_to_object(&self.order));
-        let written = storage.save_checkpoint(&state, &self.loaded_time, Some(&sizes), &dirty, times.as_ref())?;
+        let written =
+            storage.save_checkpoint_parts(&state, &self.loaded_time, Some(&sizes), &dirty, times.as_ref(), &hefte)?;
+        for part in hefte {
+            self.state.hefte.set_stored_hash(&part.page_id, part.hash);
+        }
         for (h, _) in &dirty {
             self.dirty_blobs.remove(h);
         }
@@ -546,7 +575,7 @@ impl Model {
 
     /// Kennzahlen eines Hefts (`S.heftMeta[pageId]`).
     pub fn heft_meta(&self, page_id: &str) -> Option<HeftMeta> {
-        let doc = self.state.hefte.docs.get(page_id)?;
+        let doc = self.state.hefte.get(page_id)?;
         let ocr_text =
             doc.pages.iter().map(|p| p.ocr_text.as_str()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join("\n");
         let updated = self
@@ -580,23 +609,31 @@ impl Model {
     }
 }
 
-/// Hefte eines Checkpoints lesen (`None`: eins ist kaputt). Ohne Text (Format 1) bleiben die Hefte
+/// Hefte aus einem Checkpoint: als geprüfter, noch ungelesener Text (Format 3) oder gelesen (Format 2).
+enum StoredHefte {
+    Text(Vec<(String, String, String)>),
+    Docs(Vec<(String, HeftDoc)>),
+}
+
+/// Hefte eines Checkpoints prüfen (`None`: eins ist kaputt). Ohne Text (Format 1) bleiben die Hefte
 /// im Zustand: `Some(None)`.
 #[allow(clippy::option_option)]
-fn read_hefte(hefte: Option<HeftJson>) -> Option<Option<BTreeMap<String, HeftDoc>>> {
+fn read_hefte(hefte: Option<HeftJson>) -> Option<Option<StoredHefte>> {
     Some(match hefte {
         None => None,
         Some(HeftJson::Parts(parts)) => {
-            let mut docs = BTreeMap::new();
-            for (page, json) in parts {
-                docs.insert(page, serde_json::from_str::<HeftDoc>(&json).ok()?);
+            // Nur prüfen, ob es gültiges JSON ist (ohne etwas anzulegen); gelesen wird beim ersten Zugriff.
+            for (_, _, json) in &parts {
+                serde_json::from_str::<serde::de::IgnoredAny>(json).ok()?;
             }
-            Some(docs)
+            Some(StoredHefte::Text(parts))
         }
         Some(HeftJson::All(json)) => match serde_json::from_str::<Value>(&json).ok()? {
-            Value::Object(o) => Some(o.into_iter().map(|(k, d)| (k, HeftDoc::from_value(d))).collect()),
+            Value::Object(o) => {
+                Some(StoredHefte::Docs(o.into_iter().map(|(k, d)| (k, HeftDoc::from_value(d))).collect()))
+            }
             // Kein Objekt: wie bisher keine Hefte (`State::from_object` übergeht es).
-            _ => Some(BTreeMap::new()),
+            _ => Some(StoredHefte::Docs(Vec::new())),
         },
     })
 }

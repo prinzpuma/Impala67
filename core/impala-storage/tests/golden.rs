@@ -1,5 +1,6 @@
-//! Vergleich mit der PWA (web/db.js, web/state-checkpoint.js). Golden-Files erzeugt
-//! das frühere `core/tools/gen-golden-storage.mjs` (eingefroren: Checkpoints schreibt nur noch der Kern). Jeder Fall läuft gegen MemoryStorage und SqliteStorage.
+//! Vergleich mit der PWA (web/db.js, früher web/state-checkpoint.js). Die Golden-Files erzeugte
+//! `core/tools/gen-golden-storage.mjs`; eingefroren, seit Checkpoints nur noch der Kern schreibt.
+//! Jeder Fall läuft gegen MemoryStorage und SqliteStorage.
 
 use base64::Engine;
 use impala_storage::checkpoint::{self, HeftPart, Reject};

@@ -207,7 +207,7 @@ fn hefte_und_altbestaende() {
     assert!(!h.apply(HeftEvent::Blob { hash: "B".into(), data: "data:2".into() }));
     assert_eq!(h.blobs["B"], "data:1");
     assert_eq!(h.referenced_blobs(), ["B"]);
-    assert_eq!(h.docs["h"].byte_estimate(|r| h.blobs.get(r).map_or(0, |d| d.len())), 66);
+    assert_eq!(h.get("h").unwrap().byte_estimate(|r| h.blobs.get(r).map_or(0, |d| d.len())), 66);
 
     let mut n = 0;
     let mut id = || {

@@ -9,10 +9,15 @@ use serde_json::Value;
 /// `JSON.stringify(value)` – Bytes wie JS (Zahlenformat!), damit Inhalts-Hashes
 /// (Checkpoint-Hefte) auf beiden Seiten gleich sind. Schlüsselreihenfolge = Einfügereihenfolge.
 pub fn stringify(value: &Value) -> String {
+    stringify_with(value)
+}
+
+/// Wie [`stringify`] für jeden serialisierbaren Wert (z. B. ein Heft ohne Umweg über `Value`).
+pub fn stringify_with<T: serde::Serialize + ?Sized>(value: &T) -> String {
     let mut out = Vec::with_capacity(128);
     let mut ser = serde_json::Serializer::with_formatter(&mut out, JsFormatter);
-    // Schreiben in einen Vec scheitert nicht; Value ist immer serialisierbar.
-    if serde::Serialize::serialize(value, &mut ser).is_err() {
+    // Schreiben in einen Vec scheitert nicht; die Werte hier sind immer serialisierbar.
+    if value.serialize(&mut ser).is_err() {
         return String::from("null");
     }
     String::from_utf8(out).unwrap_or_default()
@@ -22,11 +27,27 @@ struct JsFormatter;
 
 impl serde_json::ser::Formatter for JsFormatter {
     fn write_f64<W: ?Sized + io::Write>(&mut self, w: &mut W, value: f64) -> io::Result<()> {
+        // Häufigster Fall (Stiftpunkte): ganze Zahl bzw. kurze Dezimalzahl ohne Exponent – die
+        // kürzeste Darstellung von ryu ist dann schon die von JS, ohne Umweg über `number()`.
+        if value.is_finite() && value != 0.0 && value.abs() < 1e15 && value.abs() >= 1e-6 {
+            if value.fract() == 0.0 {
+                return w.write_all(itoa(value as i64).as_bytes());
+            }
+            let mut buf = ryu::Buffer::new();
+            let raw = buf.format_finite(value);
+            if !raw.contains('e') {
+                return w.write_all(raw.as_bytes());
+            }
+        }
         w.write_all(number(value).as_bytes())
     }
     fn write_f32<W: ?Sized + io::Write>(&mut self, w: &mut W, value: f32) -> io::Result<()> {
         w.write_all(number(f64::from(value)).as_bytes())
     }
+}
+
+fn itoa(n: i64) -> String {
+    n.to_string()
 }
 
 /// `String(x)` für Zahlen (ECMAScript Number::toString, kürzeste Darstellung).
@@ -163,6 +184,21 @@ pub fn seq_of(v: Option<&Value>) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schnellweg_wie_number() {
+        // Schreibweg für Stiftpunkte & Co. muss exakt `number()` entsprechen.
+        let mut x = 0.123_456_789_f64;
+        let mut samples = vec![1e-6, 9.99e-7, 1e15 - 0.5, 1e15, 123.0, -45.25, 0.1 + 0.2, 1.0 / 3.0, 5e-5, 0.000123];
+        for _ in 0..20_000 {
+            x = (x * 1_103.515_245 + 12.345).fract();
+            samples.push((x - 0.5) * 10f64.powi((x * 30.0) as i32 - 10));
+            samples.push((x * 2000.0 * 10.0).round() / 10.0);
+        }
+        for v in samples {
+            assert_eq!(stringify_with(&v), number(v), "{v:e}");
+        }
+    }
 
     #[test]
     fn numbers_like_js() {

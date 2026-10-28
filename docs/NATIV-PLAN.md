@@ -86,9 +86,18 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    Text-Helfern, Seitensuche/Tippfehler-Suche/RAG-Ranking (Index im RAG-Worker), Handschrift-Ablauf (Inferenz bleibt
    ONNX Runtime Web), Heft-Logik (Gesten über ein Binärformat, `packStrokes`), KI samt Agent-Schleife
    (`AiRun`), Log-Kompaktierung. WASM 1,75 MB (≈ 740 KB gzip).
-3f. **Offen: Datenmodell** (`impala-model`, Reducer in `web/state.js`): Die ganze Oberfläche liest `S` synchron, und
-   der Heft-Editor bearbeitet `S.heftDocs` an Ort und Stelle. Ein Rust-Reducer bräuchte entweder einen gespiegelten
-   Zustand (Hefte doppelt im Speicher, Editor auf Kopien umbauen) oder Lesezugriffe über die Grenze. Entscheidung offen.
+3f. ✅ **Datenmodell nur noch in Rust** (28. Oktober 2026): `ModelCore` (`core/impala-wasm/src/model.rs`) hält den
+   Zustand; Reducer, Laden aus Checkpoint/Log, Reihenfolge, Checkpoints, Import-Konflikte/merge3, Konflikt-Dialog-Logik,
+   Migration alter Zugangsdaten und alle Abfragen laufen im Kern. JS liest IndexedDB vorab (asynchron) und schreibt,
+   was der Kern zurückmeldet. Die Oberfläche liest über schreibgeschützte Ansichten (`web/state-views.js`: nur, was
+   sich laut Kern geändert hat; Seiteninhalte beim Zugriff) und gezielte Abfragen; Hefte nur einzeln
+   (`heftDoc`/`heftPage`). Der Heft-Editor arbeitet auf einer Arbeitskopie, Fremdänderungen legt der Kern als Vorschau
+   über noch Ungespeichertes (`heftPreview`). Hefte aus dem Checkpoint liest der Kern erst beim ersten Zugriff
+   (geprüfter Text), unveränderte schreibt der nächste Checkpoint nicht neu. Alte Checkpoints und Logs laden
+   bytegenau wie vorher (Browser-Vergleich alt/neu, 2000 Striche; 500 Seiten/2000 Karten/20 000 Striche).
+   Messung (Chromium, gleiche Daten): Start vom Checkpoint 500 Seiten/2000 Karten/10 Hefte ≈ 330–390 ms (JS 290 ms),
+   Heft mit 2000 Strichen öffnen ≈ 360–520 ms (JS ≈ 350 ms), Fremdstrich im offenen Heft ≈ 55 ms (JS 170 ms),
+   100 000 Events abspielen 2,0 s (JS 2,0 s), 10 000 Fremd-Events 270 ms (JS 320 ms). WASM 2,29 MB.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.

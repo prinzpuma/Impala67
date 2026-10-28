@@ -24,8 +24,8 @@
 - **Editor & Notizen**: `web/editor.js`, `web/render.js`
 - **Handschrift & Zeichnen (Heft)**: `web/heft.js`
 - **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
-- **Daten & Sync**: `web/db.js`, `web/state.js`, `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
-- **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`
+- **Daten & Sync**: `web/db.js`, `web/state.js` (Ein-/Ausgabe und Abfragen für das Rust-Datenmodell `ModelCore`), `web/state-views.js` (nur lesbare Ansichten in `S`), `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
+- **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
 - **Veröffentlichung**: `.github/workflows/release.yml`, `.github/scripts/set-version.mjs`
@@ -37,6 +37,7 @@
 - **Dateigrößen**: Neue, in sich geschlossene Logik in kleine, testbare Module auslagern. Große Dateien, die nicht endlos wachsen sollen: `web/heft.js`, `web/editor.js`, `web/app.js`, `web/render.js`, `web/state.js`, `web/settings.js`, `web/ai.js`.
 - **Sicherheit & Geheimnisse**: Keine API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben nur lokal im Browser.
 - **Rückwärtskompatibilität**: Lokale IndexedDB-Daten dürfen durch Updates nie verloren gehen oder ungefragt inkompatibel werden.
+- **Zustand nur über Events**: Gespeicherte Daten (`S.pages`, `S.cards`, … und Hefte) liegen im Rust-Kern und ändern sich nur über `STATE.dispatch`. Die Ansichten in `S` sind schreibgeschützt; Hefte nur über `STATE.heftDoc`/`heftPage` lesen, nie alle auf einmal.
 - **Offline-Cache**: Jeder Push auf `main` bekommt automatisch eine eigene Cache-Version (Zwischenstand `x.y.z-dev.N`, Release `x.y.z`, siehe `.github/workflows/deploy-pwa.yml`). Neue App-Dateien müssen nur in `APP_FILES` im Service Worker stehen.
 
 ## 5. Arbeitsweise

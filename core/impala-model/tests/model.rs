@@ -51,6 +51,48 @@ fn dispatch_checkpoint_und_heftbilder() {
 }
 
 #[test]
+fn hefte_bleiben_text_bis_gebraucht() {
+    let mut s = MemoryStorage::new();
+    let (mut m, _) = Model::load(&mut s, &t(0)).unwrap();
+    for (i, id) in ["a", "b"].iter().enumerate() {
+        m.dispatch(
+            &mut s,
+            "heftOps",
+            json!({ "pageId": id, "ops": [{ "t": "pg+", "page": { "id": "p" } }, { "t": "s+", "p": "p", "o": { "id": "s", "pts": [[1.5, 2, 0.5]] } }] }),
+            &format!("e{i}"),
+            &t(i as u32 + 1),
+        )
+        .unwrap();
+    }
+    assert_eq!(m.save_checkpoint(&mut s).unwrap(), CheckpointSave::Written);
+    let before = m.state().hefte.get("a").unwrap().clone();
+
+    let (mut again, report) = Model::load(&mut s, &t(9)).unwrap();
+    assert!(report.checkpoint_used);
+    assert!(!again.state().hefte.is_loaded("a"), "Heft erst beim ersten Zugriff lesen");
+    assert_eq!(again.state().hefte.get("a").unwrap(), &before);
+    assert!(again.state().hefte.is_loaded("a") && !again.state().hefte.is_loaded("b"));
+    // Unverändert: der nächste Checkpoint liest und schreibt kein Heft neu.
+    again.dispatch(&mut s, "teleEvent", json!({ "kind": "k" }), "e8", &t(10)).unwrap();
+    assert_eq!(again.save_checkpoint(&mut s).unwrap(), CheckpointSave::Written);
+    assert!(!again.state().hefte.is_loaded("b"));
+    // Geändert: neu geschrieben, und ein Start danach sieht die Änderung.
+    again
+        .dispatch(
+            &mut s,
+            "heftOps",
+            json!({ "pageId": "b", "ops": [{ "t": "s-", "p": "p", "ids": ["s"] }] }),
+            "e9",
+            &t(11),
+        )
+        .unwrap();
+    assert_eq!(again.save_checkpoint(&mut s).unwrap(), CheckpointSave::Written);
+    let (third, _) = Model::load(&mut s, &t(12)).unwrap();
+    assert!(third.state().hefte.get("b").unwrap().pages[0].strokes.is_empty());
+    assert_eq!(third.state().hefte.get("a").unwrap(), &before);
+}
+
+#[test]
 fn verspaetetes_fremdes_event_sperrt_checkpoint() {
     let mut s = MemoryStorage::new();
     let (mut m, _) = Model::load(&mut s, &t(0)).unwrap();

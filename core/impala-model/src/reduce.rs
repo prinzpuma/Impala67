@@ -211,7 +211,7 @@ impl State {
                         pg.set("parentId", Value::Null);
                     }
                 }
-                self.hefte.docs.remove(&key);
+                self.hefte.remove(&key);
                 self.pages.remove(&key);
             }
             Event::PageTrash { id: Some(id) } => {

@@ -496,8 +496,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 
 		// Verify strokes on both sides
-		const strokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
-		const strokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
+		const strokesA = await pageA.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
+		const strokesB = await pageB.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
 
 		assert.ok(strokesA?.includes("stroke-e-a-1"), "Device A should have stroke-e-a-1");
 		assert.ok(strokesA?.includes("stroke-e-b-1"), "Device A should have stroke-e-b-1");
@@ -512,8 +512,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		await pageB.reload({ waitUntil: "domcontentloaded" });
 		await waitReady(pageB);
 
-		const reloadedStrokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
-		const reloadedStrokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
+		const reloadedStrokesA = await pageA.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
+		const reloadedStrokesB = await pageB.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.map((s) => s.id), HEFT_ID);
 		assert.equal(reloadedStrokesA?.length, 2);
 		assert.equal(reloadedStrokesB?.length, 2);
 	});
@@ -563,8 +563,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		await new Promise((r) => setTimeout(r, 150));
 
 		// Check before going online: A has 10 strokes, B has 10 strokes
-		const preStrokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
-		const preStrokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const preStrokesA = await pageA.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const preStrokesB = await pageB.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
 		assert.equal(preStrokesA, 10);
 		assert.equal(preStrokesB, 10);
 
@@ -576,8 +576,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		await pageB.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 		await pageA.evaluate(async () => { await window.CLOUDFLARE_SYNC.syncNow(); });
 
-		const strokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
-		const strokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const strokesA = await pageA.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const strokesB = await pageB.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
 
 		assert.equal(strokesA, 20);
 		assert.equal(strokesB, 20);
@@ -588,8 +588,8 @@ describe("Impala67 Sync v4 Browser E2E Test Suite", { concurrency: false }, () =
 		await pageB.reload({ waitUntil: "domcontentloaded" });
 		await waitReady(pageB);
 
-		const reloadedStrokesA = await pageA.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
-		const reloadedStrokesB = await pageB.evaluate((id) => window.S.heftDocs[id]?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const reloadedStrokesA = await pageA.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
+		const reloadedStrokesB = await pageB.evaluate((id) => window.STATE.heftDoc(id)?.pages?.[0]?.strokes?.length, HEFT_ID);
 		assert.equal(reloadedStrokesA, 20);
 		assert.equal(reloadedStrokesB, 20);
 	});

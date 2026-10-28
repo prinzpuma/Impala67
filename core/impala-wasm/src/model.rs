@@ -495,38 +495,38 @@ impl ModelCore {
     /// Seiten-IDs aller Hefte mit Inhalt.
     #[wasm_bindgen(js_name = heftIds)]
     pub fn heft_ids(&self) -> String {
-        text(&self.m.state().hefte.docs.keys().collect::<Vec<_>>())
+        text(&self.m.state().hefte.ids().collect::<Vec<_>>())
     }
 
     /// Ein ganzes Heft (`{ v, rev, pages }`).
     #[wasm_bindgen(js_name = heftDoc)]
     pub fn heft_doc(&self, page_id: &str) -> Option<String> {
-        self.m.state().hefte.docs.get(page_id).map(text)
+        self.m.state().hefte.get(page_id).map(text)
     }
 
     /// Eine Heftseite nach Position.
     #[wasm_bindgen(js_name = heftPage)]
     pub fn heft_page(&self, page_id: &str, index: usize) -> Option<String> {
-        self.m.state().hefte.docs.get(page_id)?.pages.get(index).map(text)
+        self.m.state().hefte.get(page_id)?.pages.get(index).map(text)
     }
 
     /// Schatten des gespeicherten Hefts (Diff-Basis des Editors), direkt aus dem Kern.
     #[wasm_bindgen(js_name = heftShadow)]
     pub fn heft_shadow(&self, page_id: &str) -> Option<crate::heft::HeftShadow> {
-        let doc = self.m.state().hefte.docs.get(page_id)?;
+        let doc = self.m.state().hefte.get(page_id)?;
         Some(crate::heft::HeftShadow(impala_heft::Shadow::of(doc)))
     }
 
     /// Eine Heftseite nach ihrer ID.
     #[wasm_bindgen(js_name = heftPageById)]
     pub fn heft_page_by_id(&self, page_id: &str, key: &str) -> Option<String> {
-        self.m.state().hefte.docs.get(page_id)?.page(key).map(text)
+        self.m.state().hefte.get(page_id)?.page(key).map(text)
     }
 
     /// IDs der Heftseiten in Reihenfolge (`null` ohne Heft).
     #[wasm_bindgen(js_name = heftPageIds)]
     pub fn heft_page_ids(&self, page_id: &str) -> Option<String> {
-        let doc = self.m.state().hefte.docs.get(page_id)?;
+        let doc = self.m.state().hefte.get(page_id)?;
         Some(text(&doc.pages.iter().map(|p| p.id.as_str()).collect::<Vec<_>>()))
     }
 
@@ -544,7 +544,6 @@ impl ModelCore {
             .m
             .state()
             .hefte
-            .docs
             .get(page_id)
             .into_iter()
             .flat_map(|d| d.pages.iter())
@@ -564,7 +563,6 @@ impl ModelCore {
             .m
             .state()
             .hefte
-            .docs
             .iter()
             .map(|(id, doc)| {
                 let pages: Vec<Value> = doc

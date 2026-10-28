@@ -183,8 +183,8 @@ pub fn read<S: Storage + ?Sized>(storage: &S) -> Result<Option<Object>, Error> {
 /// über `Value` (bei Tausenden Strichen der größte Teil des Starts).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeftJson {
-    /// Format 3: je Heft ein Teil (Seiten-ID, JSON-Text).
-    Parts(Vec<(String, String)>),
+    /// Format 3: je Heft ein Teil (Seiten-ID, Inhalts-Hash, JSON-Text).
+    Parts(Vec<(String, String, String)>),
     /// Format 2: alle Hefte als ein JSON-Objekt.
     All(String),
 }
@@ -208,9 +208,9 @@ fn hefte_raw<S: Storage + ?Sized>(storage: &S, cp: &Object) -> Result<Result<Opt
                 Some(h) => storage.part(PartKind::HeftDoc, h)?,
                 None => None,
             };
-            match json {
-                Some(j) => parts.push((page.clone(), j)),
-                None => return Ok(Err(Reject::HeftDocs)),
+            match (json, hash.as_str()) {
+                (Some(j), Some(h)) => parts.push((page.clone(), h.to_owned(), j)),
+                _ => return Ok(Err(Reject::HeftDocs)),
             }
         }
         return Ok(Ok(Some(HeftJson::Parts(parts))));
@@ -231,7 +231,7 @@ pub fn saved_state<S: Storage + ?Sized>(storage: &S, cp: &Object) -> Result<Resu
     match hefte {
         Some(HeftJson::Parts(parts)) => {
             let mut docs = Object::new();
-            for (page, json) in parts {
+            for (page, _, json) in parts {
                 match serde_json::from_str(&json) {
                     Ok(doc) => docs.insert(page, doc),
                     Err(_) => return Ok(Err(Reject::HeftDocs)),
@@ -262,6 +262,7 @@ pub fn heft_blob_sizes(state: &Object, known: Option<&Object>) -> Object {
 }
 
 /// Ein Heft als JSON-Text samt Inhalts-Hash: unveränderte Hefte behalten ihren Schlüssel.
+/// Leerer `json`: liegt schon unter `hash` im Speicher (wird nicht neu geschrieben).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeftPart {
     pub page_id: String,
@@ -271,13 +272,13 @@ pub struct HeftPart {
 
 /// `serializeHeftDocs` + `hashHeftDocs`: Bytes wie `JSON.stringify`, Hash = SHA-256 (hex) davon.
 pub fn heft_parts(heft_docs: &Object) -> Vec<HeftPart> {
-    heft_docs
-        .iter()
-        .map(|(page_id, doc)| {
-            let json = js::stringify(doc);
-            HeftPart { page_id: page_id.clone(), hash: sha256_hex(&json), json }
-        })
-        .collect()
+    heft_docs.iter().map(|(page_id, doc)| heft_part(page_id, doc)).collect()
+}
+
+/// Ein Heft als Teil, direkt aus seinem Typ serialisiert.
+pub fn heft_part<T: serde::Serialize + ?Sized>(page_id: &str, doc: &T) -> HeftPart {
+    let json = js::stringify_with(doc);
+    HeftPart { page_id: page_id.to_owned(), hash: sha256_hex(&json), json }
 }
 
 fn sha256_hex(s: &str) -> String {
@@ -342,7 +343,7 @@ pub fn write<S: Storage + ?Sized>(
     let mut partition = |kind: PartKind, entries: Vec<(&str, &str)>, known: Option<&HashSet<String>>| {
         let existing: HashSet<String> = storage.part_hashes(kind)?.into_iter().collect();
         for (hash, data) in entries {
-            if !hash.is_empty() && !existing.contains(hash) {
+            if !hash.is_empty() && !data.is_empty() && !existing.contains(hash) {
                 writes.push(Write::PutPart(kind, hash.to_owned(), data.to_owned()));
             }
         }

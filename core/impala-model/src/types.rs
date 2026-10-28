@@ -453,7 +453,9 @@ impl State {
             s.telemetry = list_of(v);
         }
         if let Some(Value::Object(docs)) = take("heftDocs") {
-            s.hefte.docs = docs.into_iter().map(|(k, d)| (k, HeftDoc::from_value(d))).collect();
+            for (k, d) in docs {
+                s.hefte.insert(k, HeftDoc::from_value(d));
+            }
         }
         if let Some(Value::Object(blobs)) = take("heftBlobs") {
             s.hefte.blobs = blobs.into_iter().filter_map(|(k, d)| d.as_str().map(|d| (k, d.to_owned()))).collect();
@@ -474,11 +476,21 @@ impl State {
     }
 }
 
-/// Serialisiert ohne `heftBlobs` (Checkpoint-Kern ab Format 2: die Bilder liegen als eigene Teile).
-pub struct WithoutBlobs<'a>(pub &'a State);
+/// Serialisiert ohne Hefte und ohne `heftBlobs` (Checkpoint-Kern ab Format 3: Hefte und Bilder
+/// liegen als eigene Teile).
+pub struct CoreOnly<'a>(pub &'a State);
+
+/// Alle Hefte als `{ Seiten-ID: Heft }`.
+struct HefteMap<'a>(&'a Hefte);
+
+impl Serialize for HefteMap<'_> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_map(self.0.iter())
+    }
+}
 
 impl State {
-    fn write<S: Serializer>(&self, s: S, blobs: bool) -> Result<S::Ok, S::Error> {
+    fn write<S: Serializer>(&self, s: S, hefte: bool) -> Result<S::Ok, S::Error> {
         let mut m = s.serialize_map(Some(17))?;
         m.serialize_entry("pages", &self.pages)?;
         m.serialize_entry("cards", &self.cards)?;
@@ -495,8 +507,8 @@ impl State {
         m.serialize_entry("activeTabId", &self.active_tab_id)?;
         m.serialize_entry("reviews", &self.reviews)?;
         m.serialize_entry("telemetry", &self.telemetry)?;
-        m.serialize_entry("heftDocs", &self.hefte.docs)?;
-        if blobs {
+        if hefte {
+            m.serialize_entry("heftDocs", &HefteMap(&self.hefte))?;
             m.serialize_entry("heftBlobs", &self.hefte.blobs)?;
         }
         m.end()
@@ -509,7 +521,7 @@ impl Serialize for State {
     }
 }
 
-impl Serialize for WithoutBlobs<'_> {
+impl Serialize for CoreOnly<'_> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         self.0.write(s, false)
     }

@@ -83,7 +83,7 @@ fn reducer_wie_state_js() {
             if want == "-" {
                 continue;
             }
-            let got = hefte.docs.get(page_id).map_or(Value::Null, to_value);
+            let got = hefte.get(page_id).map_or(Value::Null, to_value);
             assert_eq!(got, *want, "{name}: Heft nach Event {i}");
             checked += 1;
         }

@@ -182,12 +182,26 @@ pub trait StorageExt: Storage {
         dirty_blobs: &[(String, String)],
         order_times: Option<&Object>,
     ) -> Result<LogInfo, Error> {
-        let info = self.log_info()?;
         let empty = Object::new();
         let docs = state.get("heftDocs").and_then(Value::as_object).unwrap_or(&empty);
         let hefte: Vec<HeftPart> = checkpoint::heft_parts(docs);
-        let cp = checkpoint::make(state, &info, max_time, known_blob_sizes, &hefte, order_times);
-        checkpoint::write(self, cp, dirty_blobs, &hefte)?;
+        self.save_checkpoint_parts(state, max_time, known_blob_sizes, dirty_blobs, order_times, &hefte)
+    }
+
+    /// Wie [`save_checkpoint`](Self::save_checkpoint), die Hefte aber schon als Teile (`state` ohne
+    /// `heftDocs`). Teile mit leerem Text liegen bereits im Speicher.
+    fn save_checkpoint_parts(
+        &mut self,
+        state: &Object,
+        max_time: &str,
+        known_blob_sizes: Option<&Object>,
+        dirty_blobs: &[(String, String)],
+        order_times: Option<&Object>,
+        hefte: &[HeftPart],
+    ) -> Result<LogInfo, Error> {
+        let info = self.log_info()?;
+        let cp = checkpoint::make(state, &info, max_time, known_blob_sizes, hefte, order_times);
+        checkpoint::write(self, cp, dirty_blobs, hefte)?;
         Ok(info)
     }
 
