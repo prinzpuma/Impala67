@@ -62,7 +62,11 @@ fun DrawScope.drawInkStrokes(strokes: List<Stroke>, k: Float) {
     if (strokes.isEmpty()) return
     val matrix = android.graphics.Matrix().apply { setScale(k, k) }
     drawIntoCanvas { canvas ->
+        // Der Renderer nutzt die Matrix nur für die Detailstufe; zeichnen muss der Canvas selbst skaliert.
         val native = canvas.nativeCanvas
+        val saved = native.save()
+        native.concat(matrix)
         for (stroke in strokes) HeftInk.renderer.draw(native, stroke, matrix)
+        native.restoreToCount(saved)
     }
 }

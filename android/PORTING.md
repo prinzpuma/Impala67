@@ -138,27 +138,27 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `home-article.js` | Anzeige/Gelesen/Verlauf; Schreiben über Rust-KI | `home/HomeArticle.kt` | 🟡 |
 | `lernzeit.js`, `lernzeit-context.js` | Auswertung in Kotlin; Erfassung offen | `study/LearningTime.kt` | 🟡 |
 | `lernanalyse.js`, `lernmuster.js`, `anki-stats.js` | Compose-Diagramme (Canvas) | `study/` | ⬜ |
-| `mobile*.js`, `mobile*.css`, `layout.css`, `tabs.js`, `nav-history.js`, `app-sidebar-events.js`, `collapse.js` | `NavigationSuiteScaffold`, Navigation 3, List-Detail | `ui/shell/*` | 🟡 |
-| `popovers.js`, `app-dialogs.js`, `mobile-sheet.js` | `DropdownMenu`, `AlertDialog`, `ModalBottomSheet` | je Bereich | ⬜ |
+| `mobile*.js`, `mobile*.css`, `layout.css`, `tabs.js`, `nav-history.js`, `app-sidebar-events.js`, `collapse.js` | `NavigationSuiteScaffold`, Navigation 3, List-Detail | `ui/shell/*` (Ziele: `Destinations.kt`) | ✅ |
+| `popovers.js`, `app-dialogs.js`, `mobile-sheet.js` | `DropdownMenu`, `AlertDialog`, `ModalBottomSheet` | je Bereich | ✅ |
 | `app-click-*.js`, `controller.js`, `shortcuts.js` | Callbacks/ViewModels; Tastatur über `onKeyEvent` | je Bereich | ➖ |
-| `render.js` (Seitenbaum, Seiten) | `LazyColumn`, List-Detail | `notes/` | ⬜ |
-| `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | ⬜ |
-| `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/` | ⬜ |
-| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftAddStroke` …) | `heft/` | ⬜ |
-| `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | ⬜ |
-| `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/` | ⬜ |
+| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Verschieben, Duplizieren, Vorlagen offen) |
+| `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü, Markdown-Kürzel wie „- “, Icon/Cover, Formeln offen) |
+| `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/MarkdownView.kt` | ✅ |
+| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht, Bilder/Text offen) |
+| `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer ✅, Lasso offen) |
+| `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/HeftToolbar.kt` | ✅ |
 | `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | ⬜ |
 | `handschrift.js`, `handwriting-worker.js`, `heft-label.js`, `heft-indexer.js` | ML Kit Digital Ink (bzw. Kern-Index) | `heft/ink/` | ⬜ |
 | `heft-import.js`, `heft-export.js`, `export-media.js` | Storage Access Framework, `heft_export` (FFI) | `heft/` | ⬜ |
-| `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | ⬜ |
+| `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | 🟡 (Import/Export, Karten-Papierkorb offen) |
 | `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
 | `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | ⬜ |
 | `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`) | `ai/` | ⬜ |
 | `voice.js` | `SpeechRecognizer` | `ai/` | ⬜ |
-| `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ⬜ |
-| `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), WorkManager | `sync/` | ⬜ |
+| `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
+| `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), WorkManager | `sync/` | 🟡 (Konflikte ✅, Sync offen) |
 | `drive*.js` | Rust-Drive (`drive.rs`) + Credential Manager / Google-Anmeldung | `sync/` | ⬜ |
-| `settings*.js` | Compose-Listen, `settingsJson`/`updateSettings` + `DevicePrefs` | `settings/` | ⬜ |
+| `settings*.js` | Compose-Listen, `settingsJson`/`updateSettings` + `DevicePrefs` | `settings/` | 🟡 (Sync/KI/Speicher-Abschnitte offen) |
 | `library.js`, `notebooklm.js`, `extras.js` | Compose-Listen | `library/` | ⬜ |
 | `pdfs.js`, `pdfpaste.js` | `androidx.pdf` (pdf-viewer) | `library/` | ⬜ |
 | `graph.js`, `graph-worker.js`, `diagram.js` | Compose `Canvas` | `graph/` | ⬜ |

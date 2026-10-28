@@ -9,6 +9,8 @@ import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ModalBottomSheet
 import org.impala67.app.ui.theme.Space
 import androidx.compose.material3.Text
@@ -65,10 +67,12 @@ fun NewMenu(onNote: () -> Unit, onHeft: () -> Unit) {
 fun NewSheet(onNote: () -> Unit, onHeft: () -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { Icon(painterResource(R.drawable.ic_i_note), null) },
             modifier = Modifier.clickable { onDismiss(); onNote() },
         ) { Text("Neue Notiz") }
         ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             supportingContent = { Text("Handschrift mit dem Stift") },
             leadingContent = { Icon(painterResource(R.drawable.ic_i_notebook), null) },
             modifier = Modifier.clickable { onDismiss(); onHeft() }.padding(bottom = Space.s4),
@@ -86,6 +90,6 @@ fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
             DisposableEffect(id) { nav.immersive = true; onDispose { nav.immersive = false } }
             HeftScreen(store, id, onBack = nav::back)
         }
-        PageKind.NOTE -> EditorScreen(store, id, onOpenPage = { nav.open(PageRoute(it)) }, onBack = nav::back)
+        PageKind.NOTE -> EditorScreen(store, id, onOpenPage = { nav.open(PageRoute(it)) })
     }
 }

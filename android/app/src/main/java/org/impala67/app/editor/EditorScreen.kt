@@ -40,7 +40,7 @@ import org.impala67.app.ui.theme.Impala
  * darunter die Blöcke aus dem Kern. Ein Tipp auf einen Textblock macht ihn zum Eingabefeld; die
  * Werkzeugleiste erscheint über der Tastatur. Gespeichert wird nach ~600 ms Ruhe über `updatePage`.
  *
- * Navigation nur über Rückrufe: [onOpenPage] (Brotkrumen, Rückverweise, Links), [onBack].
+ * Navigation nur über Rückrufe: [onOpenPage] (Brotkrumen, Rückverweise, Links).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -48,7 +48,6 @@ fun EditorScreen(
     store: ImpalaStore,
     pageId: String,
     onOpenPage: (String) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
@@ -81,7 +80,7 @@ fun EditorScreen(
                 ) {
                     item(key = "head") {
                         Column {
-                            Breadcrumbs(head, vm.title, onOpenPage, onBack)
+                            Breadcrumbs(head, vm.title, onOpenPage)
                             PageTitleBlock(head, vm.title, vm::onTitle, vm::focusFirst, onOpenPage)
                         }
                     }

@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.ui.theme.Impala
@@ -42,9 +41,6 @@ fun HeftThumbnail(store: ImpalaStore, pageId: String, modifier: Modifier = Modif
 
     Canvas(modifier) {
         val k = size.width / HeftPage.WIDTH
-        clipRect {
-            drawPaper(Paper.of(data?.paper.orEmpty()), ink, k)
-            drawInkStrokes(strokes, k)
-        }
-    }
+        drawPaper(Paper.of(data?.paper.orEmpty()), ink, k)
+        drawInkStrokes(strokes, k)    }
 }

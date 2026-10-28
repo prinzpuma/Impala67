@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import org.impala67.app.R
 import org.impala67.app.ui.components.TintButton
 import org.impala67.app.ui.theme.Impala
+import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.Radius
 import uniffi.impala_ffi.PageSummary
 
@@ -45,14 +46,11 @@ internal fun Breadcrumbs(
     head: PageHeaderData?,
     title: String,
     onOpenPage: (String) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Impala.colors
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) {
-            Icon(painterResource(R.drawable.ic_i_chevron_left), "Zurück", Modifier.size(22.dp), tint = c.text)
-        }
+    // Zurück übernimmt die obere Leiste der Shell.
+    Row(modifier.fillMaxWidth().padding(start = Space.s4), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             if (head != null) {
                 Crumb(head.workspace)
