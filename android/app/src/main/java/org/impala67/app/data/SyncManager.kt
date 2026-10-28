@@ -333,6 +333,29 @@ class SyncManager(
         }
     }
 
+    /**
+     * Alias-Methoden zur einheitlichen Bedienung.
+     */
+    fun triggerLiveSync() = triggerSyncNow()
+    fun triggerDriveBackup() = triggerDriveSyncNow()
+    fun setSyncKey(key: String, workerUrl: String? = null) = configureCloudSync(key, workerUrl)
+
+    /**
+     * Beendet und trennt die aktive Google Drive Sync-Instanz (z. B. nach Abmeldung).
+     */
+    fun disconnectDriveSync() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                driveSync?.stop()
+                driveSync?.close()
+                driveSync = null
+                _driveState.value = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Fehler beim Beenden von DriveSync", e)
+            }
+        }
+    }
+
     // --- Hintergrund-Pass (WorkManager) ---
 
     /**

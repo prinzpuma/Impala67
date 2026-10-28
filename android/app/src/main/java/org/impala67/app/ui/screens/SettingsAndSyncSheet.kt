@@ -1,7 +1,10 @@
 package org.impala67.app.ui.screens
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -83,6 +86,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -141,6 +147,7 @@ import uniffi.impala_ffi.generateSyncKey
 fun SettingsAndSyncSheet(
     core: ImpalaCore,
     syncUiModel: SyncUiModel? = null,
+    repository: org.impala67.app.data.ImpalaRepository? = null,
     onTriggerSync: () -> Unit = {},
     onTriggerDriveBackup: () -> Unit = {},
     onCompactCloud: () -> Unit = {},
@@ -285,6 +292,7 @@ fun SettingsAndSyncSheet(
             )
             2 -> SyncAndDriveTab(
                 syncUiModel = syncUiModel,
+                repository = repository,
                 onTriggerSync = onTriggerSync,
                 onTriggerDriveBackup = onTriggerDriveBackup,
                 onCompactCloud = onCompactCloud,
@@ -348,10 +356,11 @@ fun SettingsAndSyncSheet(
     SettingsAndSyncSheet(
         core = core,
         syncUiModel = null,
-        onTriggerSync = { repository.syncManager.triggerLiveSync() },
-        onTriggerDriveBackup = { repository.syncManager.triggerDriveBackup() },
+        repository = repository,
+        onTriggerSync = { repository.syncManager.triggerSyncNow() },
+        onTriggerDriveBackup = { repository.syncManager.triggerDriveSyncNow() },
         onCompactCloud = { repository.syncManager.compactCloud() },
-        onSaveSyncKey = { key -> repository.syncManager.setSyncKey(key) },
+        onSaveSyncKey = { key -> repository.syncManager.configureCloudSync(key, null) },
         onClose = onDismiss,
         onMutation = onMutation,
         onThemeChanged = onThemeChanged
@@ -638,6 +647,7 @@ private fun AiModelsTab(
 @Composable
 private fun SyncAndDriveTab(
     syncUiModel: SyncUiModel?,
+    repository: org.impala67.app.data.ImpalaRepository?,
     onTriggerSync: () -> Unit,
     onTriggerDriveBackup: () -> Unit,
     onCompactCloud: () -> Unit,
@@ -647,6 +657,66 @@ private fun SyncAndDriveTab(
     var syncKeyInput by remember { mutableStateOf("") }
     var isKeyVisible by remember { mutableStateOf(false) }
     val isOnline = syncUiModel is SyncUiModel.Synced || syncUiModel is SyncUiModel.Syncing || syncUiModel is SyncUiModel.Idle
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val driveAuthManager = repository?.driveAuthManager
+    val syncManager = repository?.syncManager
+    val driveState by syncManager?.driveState?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
+    var driveEmail by remember(driveAuthManager) { mutableStateOf(driveAuthManager?.currentEmail()) }
+    val isDriveConnected = !driveEmail.isNullOrBlank()
+
+    // Dialog für Google-Einverständnis falls GoogleAuthUtil einen Intent liefert
+    val recoverableLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { recResult ->
+        if (recResult.resultCode == Activity.RESULT_OK) {
+            coroutineScope.launch {
+                val token = driveAuthManager?.accessToken()
+                if (token != null && syncManager != null && driveAuthManager != null) {
+                    syncManager.configureDriveSync(driveAuthManager)
+                    syncManager.triggerDriveSyncNow()
+                    driveEmail = driveAuthManager.currentEmail()
+                    onMessage("Google Drive Zugriff erfolgreich autorisiert.")
+                }
+            }
+        }
+    }
+
+    // Google Sign-In Intent Launcher
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            coroutineScope.launch {
+                val ok = driveAuthManager?.onSignedIn(account) ?: false
+                if (ok && syncManager != null && driveAuthManager != null) {
+                    syncManager.configureDriveSync(driveAuthManager)
+                    syncManager.triggerDriveSyncNow()
+                    driveEmail = driveAuthManager.currentEmail()
+                    onMessage("Google Drive erfolgreich verbunden.")
+                } else {
+                    val recIntent = driveAuthManager?.lastRecoverableIntent
+                    if (recIntent != null) {
+                        recoverableLauncher.launch(recIntent)
+                    } else {
+                        onMessage("Zugriffstoken konnte nicht bezogen werden. Bitte Internetverbindung prüfen.")
+                    }
+                }
+            }
+        } catch (e: ApiException) {
+            val errorMsg = when (e.statusCode) {
+                10 -> "Entwicklerfehler (Status 10): Bitte SHA-1 Fingerprint & Paketname (org.impala67.app) in der Google Cloud Console hinterlegen."
+                12500 -> "Anmeldung fehlgeschlagen (Status 12500): Bitte OAuth-Zustimmungsbildschirm prüfen und Testnutzer eintragen."
+                7 -> "Netzwerkfehler (Status 7): Keine Internetverbindung."
+                12501 -> "Anmeldung abgebrochen."
+                else -> "Google-Anmeldung fehlgeschlagen (${e.statusCode}): ${e.message}"
+            }
+            onMessage(errorMsg)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -771,6 +841,127 @@ private fun SyncAndDriveTab(
                         }
                     ) {
                         Text("Speichern", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                    }
+                }
+            }
+        }
+
+        // Google Drive Backup Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BgCard),
+            border = BorderStroke(1.dp, BorderHairline),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.CloudUpload,
+                        contentDescription = null,
+                        tint = if (isDriveConnected) AccentBlue else TextMuted,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Google Drive Notfall-Backup",
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "Unabhängiges Backup im privaten Google Drive App-Ordner (appDataFolder). Nur Impala67-Dateien werden gesichert.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+
+                if (isDriveConnected) {
+                    val emailDisplay = driveEmail ?: "Verbunden"
+                    val lastOkText = driveState?.lastOk?.let { " • Zuletzt gesichert: $it" } ?: ""
+                    Text(
+                        text = "Verbunden als $emailDisplay$lastOkText",
+                        color = SuccessGreen,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    if (driveState?.running == true) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentBlue
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = driveState?.progress?.ifBlank { "Sicherung läuft..." } ?: "Sicherung läuft...",
+                                color = AccentBlue,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = AccentBlue,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    onTriggerDriveBackup()
+                                    onMessage("Drive-Backup gestartet...")
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                                Text("Jetzt sichern", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = BgBubble,
+                            border = BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.clickable {
+                                driveAuthManager?.signOut {
+                                    syncManager?.disconnectDriveSync()
+                                    driveEmail = null
+                                    onMessage("Google Drive abgemeldet.")
+                                }
+                            }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text("Abmelden", color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Nicht verbunden. Melde dich an, um automatische Drive-Backups zu aktivieren.",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = AccentBlue,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .clickable {
+                                if (driveAuthManager != null) {
+                                    val client = GoogleSignIn.getClient(context, driveAuthManager.getSignInOptions())
+                                    signInLauncher.launch(client.signInIntent)
+                                } else {
+                                    onMessage("Drive-Authentifizierung nicht initialisiert.")
+                                }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                            Text("Mit Google anmelden", color = Color(0xFF081018), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }

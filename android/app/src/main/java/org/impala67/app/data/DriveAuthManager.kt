@@ -2,8 +2,11 @@ package org.impala67.app.data
 
 import android.accounts.Account
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import com.google.android.gms.auth.GoogleAuthException
 import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -13,7 +16,7 @@ import kotlinx.coroutines.withContext
 import uniffi.impala_ffi.DriveTokens
 
 /**
- * Verwaltet Google Sign-In und OAuth2-Zugriffstokens für Google Drive (AppData & File Scopes).
+ * Verwaltet Google Sign-In und OAuth2-Zugriffstokens für Google Drive (AppData Scope).
  * Implementiert die UniFFI-Schnittstelle DriveTokens für den Rust-Sync-Kern.
  */
 class DriveAuthManager(
@@ -24,9 +27,15 @@ class DriveAuthManager(
     companion object {
         private const val TAG = "DriveAuthManager"
         const val SCOPE_DRIVE_APPDATA = "https://www.googleapis.com/auth/drive.appdata"
-        const val SCOPE_DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
-        private const val OAUTH_SCOPE_STRING = "oauth2:$SCOPE_DRIVE_APPDATA $SCOPE_DRIVE_FILE"
+        private const val OAUTH_SCOPE_STRING = "oauth2:$SCOPE_DRIVE_APPDATA"
     }
+
+    /**
+     * Falls GoogleAuthUtil eine Benutzerinteraktion (z.B. Einverständnis) verlangt,
+     * wird hier der Intent zwischengespeichert, damit die UI ihn starten kann.
+     */
+    var lastRecoverableIntent: Intent? = null
+        private set
 
     /**
      * Gültiges Zugriffstoken oder null (wird synchron vom Drive-Thread aufgerufen).
@@ -64,14 +73,14 @@ class DriveAuthManager(
      * Prüft, ob ein Google-Konto für Drive-Backup hinterlegt ist.
      */
     fun isConfigured(): Boolean {
-        return !securePrefs.driveAccountEmail.isNullOrBlank() || GoogleSignIn.getLastSignedInAccount(context) != null
+        return !securePrefs.driveAccountEmail.isNullOrBlank()
     }
 
     /**
      * Liefert die E-Mail des angemeldeten Drive-Kontos.
      */
     fun currentEmail(): String? {
-        return securePrefs.driveAccountEmail ?: GoogleSignIn.getLastSignedInAccount(context)?.email
+        return securePrefs.driveAccountEmail
     }
 
     /**
@@ -80,7 +89,7 @@ class DriveAuthManager(
     fun getSignInOptions(): GoogleSignInOptions {
         return GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(SCOPE_DRIVE_APPDATA), Scope(SCOPE_DRIVE_FILE))
+            .requestScopes(Scope(SCOPE_DRIVE_APPDATA))
             .build()
     }
 
@@ -98,8 +107,18 @@ class DriveAuthManager(
     /**
      * Meldet das Drive-Konto lokal ab.
      */
-    fun signOut() {
+    fun signOut(onComplete: () -> Unit = {}) {
         securePrefs.clearDriveTokens()
+        lastRecoverableIntent = null
+        try {
+            val client = GoogleSignIn.getClient(context, getSignInOptions())
+            client.signOut().addOnCompleteListener {
+                onComplete()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Fehler beim Google Sign-Out", e)
+            onComplete()
+        }
     }
 
     /**
@@ -110,6 +129,7 @@ class DriveAuthManager(
             ?: GoogleSignIn.getLastSignedInAccount(context)?.email
             ?: return null
 
+        lastRecoverableIntent = null
         return try {
             val account = Account(email, "com.google")
             val token = GoogleAuthUtil.getToken(context, account, OAUTH_SCOPE_STRING)
@@ -118,6 +138,10 @@ class DriveAuthManager(
                 securePrefs.driveAccountEmail = email
             }
             token
+        } catch (e: UserRecoverableAuthException) {
+            Log.w(TAG, "UserRecoverableAuthException: Zustimmung für Google Drive erforderlich", e)
+            lastRecoverableIntent = e.intent
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Fehler beim Beziehen des Google Drive Access Tokens", e)
             null
