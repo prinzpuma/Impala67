@@ -17,7 +17,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
@@ -47,6 +47,8 @@ import org.impala67.app.home.HomeActions
 import org.impala67.app.home.HomeScreen
 import org.impala67.app.home.HomeViewModel
 import org.impala67.app.settings.DevicePrefs
+import org.impala67.app.settings.SettingsSection
+import org.impala67.app.settings.SettingsSections
 import org.impala67.app.ui.theme.Impala
 import java.util.TimeZone
 
@@ -76,13 +78,14 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
         if (top != TopLevel.Home) backStack.add(top.route)
     }
     fun open(key: NavKey) { backStack.add(key) }
+    val toast: (String) -> Unit = { scope.launch { snackbar.showSnackbar(it) } }
     fun create(heft: Boolean) = scope.launch {
         val id = store.write { if (heft) it.createHeft("", null, null) else it.createPage("", "", null, null) }
         open(PageRoute(id))
     }
 
     // Telefon: „+“ als mittlerer Eintrag der Leiste (wie das Dock der PWA); Tablet: FAB-Menü in der Schiene.
-    val suiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(currentWindowAdaptiveInfo())
+    val suiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(currentWindowAdaptiveInfoV2())
     val bar = suiteType == NavigationSuiteType.NavigationBar || suiteType == NavigationSuiteType.ShortNavigationBarCompact ||
         suiteType == NavigationSuiteType.ShortNavigationBarMedium
     var newSheet by rememberSaveable { mutableStateOf(false) }
@@ -147,9 +150,9 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
                                 openPage = { open(PageRoute(it)) },
                                 newPage = { create(heft = false) },
                                 study = { go(TopLevel.Study) },
-                                settings = { open(SettingsRoute("home")) },
+                                settings = { open(SettingsRoute); open(SettingsSectionRoute("home")) },
                                 conflicts = { open(ConflictsRoute) },
-                                toast = { scope.launch { snackbar.showSnackbar(it) } },
+                                toast = toast,
                             ),
                         )
                     }
@@ -161,7 +164,10 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
                     entry<MoreRoute> { Placeholder("Mehr", "Bibliothek, Graph, Archiv, Papierkorb, Einstellungen folgen.") }
                     entry<SearchRoute> { Placeholder("Suche", "Volltextsuche folgt (search.js → ImpalaCore.search).") }
                     entry<AiRoute> { Placeholder("KI-Assistent", "Chat folgt (ai.js → Rust-KI im Kern).") }
-                    entry<SettingsRoute> { Placeholder("Einstellungen", "Folgt (settings.js).") }
+                    entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
+                        SettingsSection("overview", store, prefs, toast)
+                    })) { SettingsSections(onOpen = { open(SettingsSectionRoute(it)) }) }
+                    entry<SettingsSectionRoute>(metadata = ListDetailSceneStrategy.detailPane()) { SettingsSection(it.section, store, prefs, toast) }
                     entry<ConflictsRoute> { Placeholder("Sync-Konflikte", "Konfliktlöser folgt (ImpalaCore.conflicts).") }
                 },
             )

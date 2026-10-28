@@ -13,7 +13,8 @@ import org.impala67.app.R
 @Serializable data object MoreRoute : NavKey
 @Serializable data object SearchRoute : NavKey
 @Serializable data object AiRoute : NavKey
-@Serializable data class SettingsRoute(val section: String? = null) : NavKey
+@Serializable data object SettingsRoute : NavKey
+@Serializable data class SettingsSectionRoute(val section: String) : NavKey
 @Serializable data object ConflictsRoute : NavKey
 
 /** Hauptbereiche wie das Mobil-Dock der PWA (mobile-view.js): Start, Notizen, Lernen, Mehr. */
@@ -28,6 +29,6 @@ enum class TopLevel(val route: NavKey, val label: String, @DrawableRes val icon:
 fun NavKey.topLevel(): TopLevel = when (this) {
     NotesRoute, is PageRoute -> TopLevel.Notes
     StudyRoute -> TopLevel.Study
-    MoreRoute, is SettingsRoute, ConflictsRoute -> TopLevel.More
+    MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute -> TopLevel.More
     else -> TopLevel.Home
 }

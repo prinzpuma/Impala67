@@ -61,16 +61,14 @@ fun NewMenu(onNote: () -> Unit, onHeft: () -> Unit) {
 fun NewSheet(onNote: () -> Unit, onHeft: () -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         ListItem(
-            headlineContent = { Text("Neue Notiz") },
             leadingContent = { Icon(painterResource(R.drawable.ic_i_note), null) },
             modifier = Modifier.clickable { onDismiss(); onNote() },
-        )
+        ) { Text("Neue Notiz") }
         ListItem(
-            headlineContent = { Text("Neues Heft") },
             supportingContent = { Text("Handschrift mit dem Stift") },
             leadingContent = { Icon(painterResource(R.drawable.ic_i_notebook), null) },
             modifier = Modifier.clickable { onDismiss(); onHeft() }.padding(bottom = Space.s4),
-        )
+        ) { Text("Neues Heft") }
     }
 }
 
