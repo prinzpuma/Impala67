@@ -6,6 +6,10 @@
 mod cards;
 mod clock;
 mod heft;
+mod heft_export;
+mod heft_items;
+mod heft_library;
+mod heft_undo;
 mod markdown;
 mod sync;
 
