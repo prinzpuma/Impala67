@@ -1,6 +1,7 @@
 # Rust-Kern von Impala67 (Plan: docs/NATIV-PLAN.md).
 # impala-core: Fassade über alle Fach-Crates (impala-*), später per UniFFI für Swift/Kotlin.
 # impala-wasm: dünne wasm-bindgen-Hülle für die PWA (Build: npm run build:core).
+# impala-ffi: UniFFI-Hülle für native Apps; hält Speicher (SQLite), Zustand und Uhr selbst.
 [workspace]
 resolver = "3"
 members = [
@@ -8,6 +9,7 @@ members = [
     "impala-ai",
     "impala-crypto",
     "impala-drive",
+    "impala-ffi",
     "impala-heft",
     "impala-ink",
     "impala-markdown",

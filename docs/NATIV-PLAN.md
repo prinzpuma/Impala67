@@ -98,6 +98,13 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    Messung (Chromium, gleiche Daten): Start vom Checkpoint 500 Seiten/2000 Karten/10 Hefte ≈ 330–390 ms (JS 290 ms),
    Heft mit 2000 Strichen öffnen ≈ 360–520 ms (JS ≈ 350 ms), Fremdstrich im offenen Heft ≈ 55 ms (JS 170 ms),
    100 000 Events abspielen 2,0 s (JS 2,0 s), 10 000 Fremd-Events 270 ms (JS 320 ms). WASM 2,29 MB.
+3g. **UniFFI-Hülle `impala-ffi`** (28. Oktober 2026, erster Stand): Anders als die WASM-Hülle hält sie Speicher
+   (SQLite), Zustand, Suchindex und die hybride Uhr selbst – die native App reicht nur noch den Datenbankpfad herein.
+   `ImpalaCore`: `open`, Seiten anlegen/ändern/in den Papierkorb, beliebige Events (`dispatch` mit JSON), Seitenbaum,
+   Brotkrumen, zuletzt geänderte Seiten, Workspaces, Volltextsuche, Checkpoint, Export/Import im PWA-Format.
+   Bindings: `cargo run -p impala-ffi --bin uniffi-bindgen -- generate --library <lib> --language kotlin|swift`.
+   Offen: Sync (nativer `SyncStore` über `Storage` + Modell, ureq mit `block_on` im Hintergrund-Thread),
+   Hefte, Karteikarten, Import-Konflikte (`importConflicts`) beim Einspielen eines Exports.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
