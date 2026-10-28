@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.heft.HeftThumbnail
 import org.impala67.app.home.HomeActions
 import org.impala67.app.home.HomeScreen
 import org.impala67.app.home.HomeViewModel
@@ -35,6 +36,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
                 settings = { nav.open(SettingsRoute); nav.open(SettingsSectionRoute("home")) },
                 conflicts = { nav.open(ConflictsRoute) },
                 toast = nav::toast,
+                heftThumbnail = { id, m -> HeftThumbnail(store, id, m) },
             ),
         )
     }

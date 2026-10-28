@@ -1,6 +1,9 @@
 package org.impala67.app.ui.shell
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.CoroutineScope
@@ -14,6 +17,9 @@ class ShellNav(
     private val store: ImpalaStore,
     private val snackbar: SnackbarHostState,
 ) {
+    /** Vollbild ohne Leisten der Shell (Heft bringt eigene Kopfzeile und Werkzeuge mit). */
+    var immersive by mutableStateOf(false)
+
     fun open(key: NavKey) { backStack.add(key) }
 
     fun back() { backStack.removeLastOrNull() }

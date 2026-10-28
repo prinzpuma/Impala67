@@ -1,5 +1,6 @@
 package org.impala67.app.study
 
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -204,7 +205,7 @@ private fun Stats(d: DeckData, hasDecks: Boolean, onStudy: () -> Unit, modifier:
                 Small("Heute fällig")
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                     Icon(painterResource(R.drawable.ic_i_check), null, Modifier.size(18.dp), tint = c.success)
-                    Text("Alles gelernt", style = big, color = c.success)
+                    Text("Alles gelernt", style = big, color = c.success, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = big.fontSize))
                 }
                 Text("Morgen geht's weiter", fontSize = TextSize.sm, color = c.text2)
             }

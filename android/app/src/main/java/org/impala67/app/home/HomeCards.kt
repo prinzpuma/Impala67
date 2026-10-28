@@ -53,12 +53,15 @@ import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 
+/** Heft-Vorschaubild (kommt aus dem Heft-Modul). */
+typealias HeftThumb = @Composable (pageId: String, modifier: Modifier) -> Unit
+
 /** Breite der Startseite (Container-Queries in home.css): schmal < 520, breit ≥ 760. */
 enum class HomeWidth { Narrow, Medium, Wide }
 
 /** „Weitermachen“ (`.hv-continue`): Vorschau als Bild, daneben bzw. (breit) darunter der Titel. */
 @Composable
-fun ContinueCard(item: ContinueItem?, width: HomeWidth, onOpen: (String) -> Unit, onNewPage: () -> Unit) {
+fun ContinueCard(item: ContinueItem?, width: HomeWidth, onOpen: (String) -> Unit, onNewPage: () -> Unit, heftThumbnail: HeftThumb) {
     val wide = width == HomeWidth.Wide
     PanelCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp), onClick = { item?.let { onOpen(it.page.id) } ?: onNewPage() }) {
         val copy: @Composable () -> Unit = {
@@ -74,12 +77,12 @@ fun ContinueCard(item: ContinueItem?, width: HomeWidth, onOpen: (String) -> Unit
         }
         if (wide) {
             Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-                Preview(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f), large = true)
+                Preview(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f), large = true, heftThumbnail)
                 copy()
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s6), verticalAlignment = Alignment.CenterVertically) {
-                Preview(item, Modifier.width(if (width == HomeWidth.Narrow) 120.dp else 200.dp).aspectRatio(4f / 3f), large = false)
+                Preview(item, Modifier.width(if (width == HomeWidth.Narrow) 120.dp else 200.dp).aspectRatio(4f / 3f), large = false, heftThumbnail)
                 copy()
             }
         }
@@ -88,14 +91,14 @@ fun ContinueCard(item: ContinueItem?, width: HomeWidth, onOpen: (String) -> Unit
 
 /** `.hv-prev`: Heft auf Papier, Notiz als ausgeblendete erste Zeilen, leer als „+“. */
 @Composable
-private fun Preview(item: ContinueItem?, modifier: Modifier, large: Boolean) {
+private fun Preview(item: ContinueItem?, modifier: Modifier, large: Boolean, heftThumbnail: HeftThumb) {
     val c = Impala.colors
     val shape = RoundedCornerShape(Radius.lg)
     val frame = if (item == null) modifier.clip(shape).border(1.dp, c.edge, shape)
     else modifier.shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f)).clip(shape).border(1.dp, c.edgeSoft, shape)
     when {
         item == null -> Box(frame, contentAlignment = Alignment.Center) { Text("+", fontSize = 28.sp, color = c.text2) }
-        item.page.kind == PageKind.HEFT -> Box(frame.background(c.paper)) // Seitenbild folgt mit dem Heft-Modul
+        item.page.kind == PageKind.HEFT -> Box(frame.background(c.paper)) { heftThumbnail(item.page.id, Modifier.matchParentSize()) }
         else -> Column(
             frame.background(c.previewBg)
                 .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)

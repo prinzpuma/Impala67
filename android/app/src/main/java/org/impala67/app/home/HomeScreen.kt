@@ -60,6 +60,7 @@ data class HomeActions(
     val settings: () -> Unit,
     val conflicts: () -> Unit,
     val toast: (String) -> Unit,
+    val heftThumbnail: HeftThumb = { _, _ -> },
 )
 
 /**
@@ -162,7 +163,7 @@ private fun Lead(s: HomeState, narrow: Boolean, onStudy: () -> Unit, modifier: M
 private fun Grid(s: HomeState, width: HomeWidth, actions: HomeActions, vm: HomeViewModel, modifier: Modifier) {
     val main: @Composable (Modifier) -> Unit = { m ->
         Column(m, verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-            ContinueCard(s.last, width, actions.openPage, actions.newPage)
+            ContinueCard(s.last, width, actions.openPage, actions.newPage, actions.heftThumbnail)
             Pins(s.pins, actions.openPage)
             s.recall?.let { RecallCard(it) }
         }

@@ -69,7 +69,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     var newSheet by rememberSaveable { mutableStateOf(false) }
 
     NavigationSuiteScaffold(
-        navigationSuiteType = suiteType,
+        navigationSuiteType = if (nav.immersive) NavigationSuiteType.None else suiteType,
         navigationItems = {
             TopLevel.entries.forEach { top ->
                 if (bar && top == TopLevel.Study) {
@@ -95,7 +95,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
+                if (!nav.immersive) TopAppBar(
                     title = { Text(current.title()) },
                     navigationIcon = {
                         if (backStack.size > 1 && current != current.topLevel().route) {
