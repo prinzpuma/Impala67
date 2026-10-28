@@ -16,6 +16,8 @@ import org.impala67.app.R
 @Serializable data object SettingsRoute : NavKey
 @Serializable data class SettingsSectionRoute(val section: String) : NavKey
 @Serializable data object ConflictsRoute : NavKey
+@Serializable data object TrashRoute : NavKey
+@Serializable data object ArchiveRoute : NavKey
 
 /** Hauptbereiche wie das Mobil-Dock der PWA (mobile-view.js): Start, Notizen, Lernen, Mehr. */
 enum class TopLevel(val route: NavKey, val label: String, @DrawableRes val icon: Int) {
@@ -29,6 +31,17 @@ enum class TopLevel(val route: NavKey, val label: String, @DrawableRes val icon:
 fun NavKey.topLevel(): TopLevel = when (this) {
     NotesRoute, is PageRoute -> TopLevel.Notes
     StudyRoute -> TopLevel.Study
-    MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute -> TopLevel.More
+    MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute, TrashRoute, ArchiveRoute -> TopLevel.More
     else -> TopLevel.Home
+}
+
+/** Titel in der oberen Leiste. */
+fun NavKey.title(): String = when (this) {
+    SearchRoute -> "Suche"
+    AiRoute -> "KI-Assistent"
+    SettingsRoute, is SettingsSectionRoute -> "Einstellungen"
+    ConflictsRoute -> "Sync-Konflikte"
+    TrashRoute -> "Papierkorb"
+    ArchiveRoute -> "Archiv"
+    else -> topLevel().label
 }
