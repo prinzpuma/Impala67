@@ -246,7 +246,7 @@ fun DualDocumentScannerSheet(
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertCenter
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.DocumentScanner,
@@ -292,7 +292,7 @@ fun DualDocumentScannerSheet(
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertCenter
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
@@ -327,7 +327,7 @@ fun DualDocumentScannerSheet(
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertCenter
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhotoLibrary,
@@ -468,7 +468,7 @@ fun ManualScanEditorDialog(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertCenter
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Abbrechen", tint = Color.White)

@@ -81,6 +81,7 @@ import org.impala67.app.data.SyncUiModel
 import org.impala67.app.ui.theme.Accent
 import org.impala67.app.ui.theme.AccentSoft
 import org.impala67.app.ui.theme.BgBubble
+import org.impala67.app.ui.theme.BgDeep
 import org.impala67.app.ui.theme.BgPanel
 import org.impala67.app.ui.theme.BgSidebar
 import org.impala67.app.ui.theme.Danger

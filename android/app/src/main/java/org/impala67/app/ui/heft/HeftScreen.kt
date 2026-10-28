@@ -183,7 +183,7 @@ fun HeftScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertCenter) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = if (pageIds.isNotEmpty()) "Seite ${currentPageIndex + 1} / ${pageIds.size}" else "Heft",
                             fontSize = 17.sp,
@@ -422,7 +422,7 @@ fun HeftScreen(
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertCenter,
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
@@ -497,7 +497,7 @@ fun HeftScreen(
                             val colors = if (selectedTool == HeftTool.MARKER) HeftMarkerColors else HeftPenColors
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertCenter
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 colors.forEach { hex ->
                                     val c = Color(android.graphics.Color.parseColor(hex))
@@ -525,7 +525,7 @@ fun HeftScreen(
                             // Strichstärken
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertCenter
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 HeftSizes.forEach { sz ->
                                     Box(
@@ -551,7 +551,7 @@ fun HeftScreen(
                     // Werkzeug-Buttons
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertCenter
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Stift
                         ToolIconButton(

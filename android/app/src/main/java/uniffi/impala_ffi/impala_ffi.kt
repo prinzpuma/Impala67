@@ -13961,43 +13961,25 @@ sealed class AiFailure: kotlin.Exception() {
     }
     
     class Timeout(
-        
-        val `message`: kotlin.String
-        ) : AiFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : AiFailure()
     
     class Network(
-        
-        val `message`: kotlin.String
-        ) : AiFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : AiFailure()
     
     class Http(
-        
         val `status`: kotlin.UShort, 
-        
-        val `message`: kotlin.String, 
-        
+        override val `message`: kotlin.String, 
         val `retryAfterMs`: kotlin.ULong
-        ) : AiFailure() {
-        override val message
-            get() = "status=${ `status` }, message=${ `message` }, retryAfterMs=${ `retryAfterMs` }"
-    }
+    ) : AiFailure()
     
     /**
      * Fehlende Einrichtung, unbrauchbare Antwort, Speicherfehler.
      */
     class Other(
-        
-        val `message`: kotlin.String
-        ) : AiFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : AiFailure()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AiFailure> {
@@ -14303,23 +14285,15 @@ sealed class CoreException: kotlin.Exception() {
      * Lesen/Schreiben der Datenbank ist fehlgeschlagen (auch: Schema einer neueren App-Version).
      */
     class Storage(
-        
-        val `message`: kotlin.String
-        ) : CoreException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : CoreException()
     
     /**
      * UngÃ¼ltige Eingabe der Plattform (kaputtes JSON, unbekannte Seite â€¦).
      */
     class Invalid(
-        
-        val `message`: kotlin.String
-        ) : CoreException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : CoreException()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<CoreException> {
@@ -14734,16 +14708,10 @@ sealed class DriveFailure: kotlin.Exception() {
      * `offline`: keine Verbindung bzw. Zeitüberschreitung; `status`: HTTP-Status von Drive.
      */
     class Failed(
-        
-        val `message`: kotlin.String, 
-        
+        override val `message`: kotlin.String, 
         val `status`: kotlin.UShort?, 
-        
         val `offline`: kotlin.Boolean
-        ) : DriveFailure() {
-        override val message
-            get() = "message=${ `message` }, status=${ `status` }, offline=${ `offline` }"
-    }
+    ) : DriveFailure()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<DriveFailure> {
@@ -14974,12 +14942,8 @@ public object FfiConverterTypeDriveUiState: FfiConverterRustBuffer<DriveUiState>
 sealed class EmbedFailure: kotlin.Exception() {
     
     class Failed(
-        
-        val `message`: kotlin.String
-        ) : EmbedFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : EmbedFailure()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<EmbedFailure> {
@@ -15762,25 +15726,25 @@ sealed class MdBlockKind {
     }
     
     data class Table(
-        val `rows`: List<List<kotlin.String>>) : MdBlockKind() {
+        val `rows`: kotlin.collections.List<kotlin.collections.List<kotlin.String>>) : MdBlockKind() {
         companion object
     }
     
     data class Callout(
         val `color`: kotlin.String, 
-        val `children`: List<MdBlock>) : MdBlockKind() {
+        val `children`: kotlin.collections.List<MdBlock>) : MdBlockKind() {
         companion object
     }
     
     data class Toggle(
         val `summary`: kotlin.String, 
         val `open`: kotlin.Boolean, 
-        val `children`: List<MdBlock>) : MdBlockKind() {
+        val `children`: kotlin.collections.List<MdBlock>) : MdBlockKind() {
         companion object
     }
     
     data class Columns(
-        val `columns`: List<List<MdBlock>>) : MdBlockKind() {
+        val `columns`: kotlin.collections.List<kotlin.collections.List<MdBlock>>) : MdBlockKind() {
         companion object
     }
     
@@ -16228,20 +16192,12 @@ sealed class SearchFailure: kotlin.Exception() {
      * Das Einbetten ist gescheitert (Modell, Netz, unvollständige Antwort).
      */
     class Embedding(
-        
-        val `message`: kotlin.String
-        ) : SearchFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : SearchFailure()
     
     class Storage(
-        
-        val `message`: kotlin.String
-        ) : SearchFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : SearchFailure()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<SearchFailure> {
@@ -16401,12 +16357,8 @@ sealed class SyncFailure: kotlin.Exception() {
      * Ungültiger Sync-Schlüssel.
      */
     class InvalidKey(
-        
-        val `message`: kotlin.String
-        ) : SyncFailure() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+    ) : SyncFailure()
     
     /**
      * Mit `stop()` abgebrochen.
@@ -16421,18 +16373,11 @@ sealed class SyncFailure: kotlin.Exception() {
      * `retryable`: nach `sync_retry_delay_ms` erneut versuchen; `quota`: Cloud-Speicher voll.
      */
     class Failed(
-        
-        val `message`: kotlin.String, 
-        
+        override val `message`: kotlin.String, 
         val `status`: kotlin.UShort?, 
-        
         val `retryable`: kotlin.Boolean, 
-        
         val `quota`: kotlin.Boolean
-        ) : SyncFailure() {
-        override val message
-            get() = "message=${ `message` }, status=${ `status` }, retryable=${ `retryable` }, quota=${ `quota` }"
-    }
+    ) : SyncFailure()
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<SyncFailure> {

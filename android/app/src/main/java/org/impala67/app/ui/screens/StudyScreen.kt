@@ -247,9 +247,10 @@ fun StudyScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(d.name, color = if (selectedDeck == d.name) Accent else TextPrimary)
+                                        val deckDue = d.new + d.learn + d.review
                                         Text(
-                                            "${d.due} fällig",
-                                            color = if (d.due > 0u) Warn else TextMuted,
+                                            "$deckDue fällig",
+                                            color = if (deckDue > 0u) Warn else TextMuted,
                                             fontSize = 11.sp
                                         )
                                     }

@@ -139,8 +139,8 @@ fun HomeScreen(
     }
 
     // Berechnung fälliger Karten gesamt
-    val totalDue = decks.sumOf { it.due.toInt() }
-    val totalNew = decks.sumOf { it.newCards.toInt() }
+    val totalDue = decks.sumOf { (it.learn + it.review).toInt() }
+    val totalNew = decks.sumOf { it.new.toInt() }
 
     LazyColumn(
         modifier = modifier
@@ -646,10 +646,10 @@ private fun ArticleCard(
                 }
             }
 
-            if (!article.content.isNullOrEmpty()) {
+            if (article.body.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = article.content ?: "",
+                    text = article.body,
                     color = TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 3,

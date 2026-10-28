@@ -242,7 +242,7 @@ fun ExpressiveFloatingToolbar(
 
                 // --- Listen: Bullet, Number, Todo ---
                 ToolbarIconButton(
-                    icon = Icons.AutoMirrored.rounded.FormatListBulleted,
+                    icon = Icons.AutoMirrored.Rounded.FormatListBulleted,
                     description = "Aufzählungsliste",
                     isActive = (activeBlock?.kind as? MdBlockKind.List)?.style is MdListStyle.Bullet,
                     onClick = {
@@ -315,13 +315,13 @@ fun ExpressiveFloatingToolbar(
 
                 // --- Einrückung vergrößern / verkleinern ---
                 ToolbarIconButton(
-                    icon = Icons.AutoMirrored.rounded.FormatIndentDecrease,
+                    icon = Icons.AutoMirrored.Rounded.FormatIndentDecrease,
                     description = "Ausrücken",
                     onClick = { onIndentChange(-1) }
                 )
 
                 ToolbarIconButton(
-                    icon = Icons.AutoMirrored.rounded.FormatIndentIncrease,
+                    icon = Icons.AutoMirrored.Rounded.FormatIndentIncrease,
                     description = "Einrücken",
                     onClick = { onIndentChange(1) }
                 )

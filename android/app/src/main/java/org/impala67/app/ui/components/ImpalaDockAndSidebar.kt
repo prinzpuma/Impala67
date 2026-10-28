@@ -940,19 +940,19 @@ fun QuickSearchDialog(
                             .fillMaxWidth()
                             .height((results.size.coerceAtMost(6) * 64).dp)
                     ) {
-                        items(results, key = { it.id }) { hit ->
+                        items(results, key = { it.pageId }) { hit ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
-                                        onSelectPage(hit.id)
+                                        onSelectPage(hit.pageId)
                                         onDismiss()
                                     }
                                     .padding(vertical = 8.dp, horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val hitIcon = if (hit.kind == PageKind.HEFT) Icons.Rounded.AutoStories else Icons.Rounded.Description
+                                val hitIcon = Icons.Rounded.Description
                                 Icon(
                                     imageVector = hitIcon,
                                     contentDescription = null,

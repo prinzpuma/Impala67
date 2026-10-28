@@ -361,7 +361,7 @@ fun NoteEditorScreen(
                                     )
                                     if (idx < ancestors.size - 1) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.rounded.NavigateNext,
+                                            imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
                                             contentDescription = null,
                                             tint = TextMuted,
                                             modifier = Modifier.size(14.dp)
@@ -396,7 +396,7 @@ fun NoteEditorScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.rounded.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Zurück",
                             tint = TextPrimary
                         )
@@ -1340,7 +1340,7 @@ private fun BlockItemRenderer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.rounded.MenuBook,
+                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                             contentDescription = "Heft",
                             tint = Accent,
                             modifier = Modifier.size(28.dp)
@@ -1502,7 +1502,7 @@ private fun PageSummaryCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.rounded.Note,
+                imageVector = Icons.AutoMirrored.Rounded.Note,
                 contentDescription = null,
                 tint = Accent,
                 modifier = Modifier.size(18.dp)
