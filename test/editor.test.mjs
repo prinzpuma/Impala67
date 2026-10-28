@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { inlineHtml } from "../web/editor-inline.js";
 import {
 	parse,
 	serialize,
@@ -89,6 +90,16 @@ test("Editor Markdown: Struktur-Elemente (Callouts, Toggles, Tabellen, Embeds)",
 	assert.equal(toggles[0].children[0].summary, "Unter-Thema");
 	assert.equal(serialize(toggles), toggleMd);
 
+	// Tabelle mit Zeilenumbrüchen (<br>)
+	const brTableMd = "| Thema | Details |\n| --- | --- |\n| DGLs 1. Ordnung | Skript: Kap. 2<br>Folien: Kap. 2 |";
+	const brTables = parse(brTableMd);
+	assert.equal(brTables.length, 1);
+	assert.deepEqual(brTables[0].rows, [
+		["Thema", "Details"],
+		["DGLs 1. Ordnung", "Skript: Kap. 2<br>Folien: Kap. 2"],
+	]);
+	assert.equal(serialize(brTables), brTableMd);
+
 	// Tabelle
 	const tableMd = "| Fach | Note |\n| --- | --- |\n| Mathe | 1 |\n| Physik | 2 |";
 	const tables = parse(tableMd);
@@ -111,6 +122,13 @@ test("Editor Markdown: Struktur-Elemente (Callouts, Toggles, Tabellen, Embeds)",
 	assert.equal(embeds[1].src, "file:blob-pdf");
 	assert.equal(embeds[1].name, "mein-skript.pdf");
 	assert.equal(serialize(embeds), embedMd);
+});
+
+test("Editor Inline: <br>-Tags und HTML-Zeilenumbrüche werden gerendert", () => {
+	assert.equal(inlineHtml("Zeile 1<br>Zeile 2"), "Zeile 1<br>Zeile 2");
+	assert.equal(inlineHtml("Zeile 1<br/>Zeile 2"), "Zeile 1<br>Zeile 2");
+	assert.equal(inlineHtml("Zeile 1<br />Zeile 2"), "Zeile 1<br>Zeile 2");
+	assert.equal(inlineHtml("Thema<br>• Skript: *Kap. 01*"), "Thema<br>• Skript: <em>Kap. 01</em>");
 });
 
 test("Editor Markdown: Farb-Metadaten und Randfälle", () => {

@@ -63,6 +63,7 @@ export function inlineHtml(text) {
 		.replace(/\*\*([^*]+)\*\*/g, (_, v) => tag("strong", v))
 		.replace(/~~([^~]+)~~/g, (_, v) => tag("s", v))
 		.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/gi, (_, v) => tag("u", v))
+		.replace(/&lt;br\s*\/?&gt;/gi, LT + "br>")
 		.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, pre, v) => pre + tag("em", v))
 		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (md, label, href) => (isSafeHref(href) ? tag("a", label, ' href="' + href + '"') : md))
 		.replace(/\n/g, LT + "br>"));

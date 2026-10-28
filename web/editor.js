@@ -983,7 +983,7 @@ export const EDITOR = (() => {
 		if (field.dataset.bcell) {
 			const [bid, ri, ci] = field.dataset.bcell.split(":");
 			const b = findBlock(bid);
-			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = md;
+			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = md.replace(/\n/g, "<br>");
 			return bid;
 		}
 		if (field.dataset.bsummary) {
@@ -1141,7 +1141,7 @@ export const EDITOR = (() => {
 		if (caret.kind === "cell") {
 			const [bid, ri, ci] = caret.cell.split(":");
 			const b = findBlock(bid);
-			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = next;
+			if (b && b.rows && b.rows[+ri]) b.rows[+ri][+ci] = next.replace(/\n/g, "<br>");
 		} else if (caret.kind === "summary") {
 			const b = findBlock(caret.bid); if (b) b.summary = next;
 		} else {
