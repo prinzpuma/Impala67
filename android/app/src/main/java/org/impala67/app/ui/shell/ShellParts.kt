@@ -26,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.editor.EditorScreen
+import uniffi.impala_ffi.PageKind
 
 /** „+“ (Mobil-Dock der PWA, App-Shortcuts): Expressive-FAB-Menü für neue Notiz bzw. neues Heft. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -72,9 +74,13 @@ fun NewSheet(onNote: () -> Unit, onHeft: () -> Unit, onDismiss: () -> Unit) {
     }
 }
 
-/** Seite öffnen, bis Editor und Heft portiert sind: zeigt den Titel. */
+/** Seite öffnen: Notizen im Editor, Hefte im Heft (folgt). Die Art liest der Kern im Hintergrund. */
 @Composable
-fun PagePlaceholder(store: ImpalaStore, id: String) {
-    val title by produceState("", id) { value = withContext(Dispatchers.IO) { store.core.page(id)?.summary?.title.orEmpty() } }
-    Placeholder(title.ifEmpty { "Ohne Titel" }, "Editor (editor.js) bzw. Heft (heft.js) folgen.")
+fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
+    val kind by produceState<PageKind?>(null, id) { value = withContext(Dispatchers.IO) { store.core.page(id)?.summary?.kind } }
+    when (kind) {
+        null -> {}
+        PageKind.HEFT -> Placeholder("Heft", "Heft-Ansicht folgt (heft.js).")
+        PageKind.NOTE -> EditorScreen(store, id, onOpenPage = { nav.open(PageRoute(it)) }, onBack = nav::back)
+    }
 }

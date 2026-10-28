@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.impala67.app.editor.MarkdownView
 import org.impala67.app.ui.components.PanelCard
 import org.impala67.app.ui.components.TintButton
 import org.impala67.app.ui.components.TintLabel
@@ -38,7 +39,6 @@ import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.HomeArticleInfo
-import uniffi.impala_ffi.markdownPlainText
 
 /**
  * Tagesartikel (home-article.js): aufklappbar mit Anriss, Quellen und „Gelesen“; gelesen nur ein Hinweis.
@@ -71,7 +71,7 @@ fun ArticleCard(a: ArticleState, width: HomeWidth, onOpenPage: (String) -> Unit,
         AnimatedVisibility(open, enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec())) {
             Column(Modifier.padding(top = Space.s3)) {
                 HorizontalDivider(color = c.edgeSoft)
-                Body(a.bodyText, Modifier.padding(top = Space.s3))
+                MarkdownView(a.article.body, Modifier.padding(top = Space.s3).widthIn(max = 640.dp), onOpenPage = onOpenPage)
                 Sources(a.article, onOpenPage)
                 Row(Modifier.padding(top = Space.s5), horizontalArrangement = Arrangement.spacedBy(Space.s4), verticalAlignment = Alignment.CenterVertically) {
                     TintButton(onRead) { TintLabel("Gelesen") }
@@ -81,10 +81,6 @@ fun ArticleCard(a: ArticleState, width: HomeWidth, onOpenPage: (String) -> Unit,
         }
     }
 }
-
-@Composable
-private fun Body(text: String, modifier: Modifier = Modifier) =
-    Text(text, fontSize = TextSize.md, lineHeight = TextSize.md * 1.6f, color = Impala.colors.text, modifier = modifier.widthIn(max = 640.dp))
 
 /** „Aus deinen Notizen“ (`.hv-article-src`). */
 @OptIn(ExperimentalLayoutApi::class)
@@ -116,7 +112,7 @@ fun ArticleHistorySheet(articles: List<HomeArticleInfo>, onOpenPage: (String) ->
                         }
                     }
                     if (open) {
-                        Body(markdownPlainText(a.body), Modifier.padding(top = Space.s3))
+                        MarkdownView(a.body, Modifier.padding(top = Space.s3), onOpenPage = { onOpenPage(it); onDismiss() })
                         Sources(a) { onOpenPage(it); onDismiss() }
                     }
                 }

@@ -41,6 +41,7 @@ class ShellNav(
         "archive" -> open(ArchiveRoute)
         "newpage" -> { create(heft = false); Unit }
         "cards" -> go(TopLevel.Study)
+        "cards-manage" -> { go(TopLevel.Study); open(CardBrowserRoute()) }
         else -> toast("Folgt mit einem der nächsten Module.")
     }
 }

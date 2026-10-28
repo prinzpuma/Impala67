@@ -13,9 +13,14 @@ import org.impala67.app.more.MoreScreen
 import org.impala67.app.notes.ArchiveScreen
 import org.impala67.app.notes.NotesScreen
 import org.impala67.app.notes.TrashScreen
+import org.impala67.app.search.SearchScreen
 import org.impala67.app.settings.DevicePrefs
 import org.impala67.app.settings.SettingsSection
 import org.impala67.app.settings.SettingsSections
+import org.impala67.app.study.CardBrowserScreen
+import org.impala67.app.sync.ConflictsScreen
+import org.impala67.app.study.ReviewScreen
+import org.impala67.app.study.StudyScreen
 
 /** Alle Ziele der App: welche Route welchen Bildschirm zeigt und in welchem Bereich (Liste/Detail). */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -38,16 +43,27 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     })) {
         NotesScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onNewPage = { nav.create(heft = false, parentId = it) })
     }
-    entry<PageRoute>(metadata = ListDetailSceneStrategy.detailPane()) { PagePlaceholder(store, it.id) }
-    entry<StudyRoute> { Placeholder("Lernen", "Stapel und Lernmodus folgen (render-anki.js).") }
+    entry<PageRoute>(metadata = ListDetailSceneStrategy.detailPane()) { PageEntry(store, it.id, nav) }
+    entry<StudyRoute> {
+        StudyScreen(
+            store,
+            onStudyDeck = { nav.open(ReviewRoute(it)) },
+            onBrowse = { nav.open(CardBrowserRoute(it)) },
+            onStudyMixed = { nav.open(ReviewRoute(mix = true)) },
+        )
+    }
+    entry<ReviewRoute> { ReviewScreen(store, it.deck, onExit = nav::back, mix = it.mix) }
+    entry<CardBrowserRoute> { CardBrowserScreen(store, it.deck, onBack = nav::back) }
     entry<MoreRoute> { MoreScreen(onAction = nav::action) }
     entry<TrashRoute> { TrashScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
     entry<ArchiveRoute> { ArchiveScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
-    entry<SearchRoute> { Placeholder("Suche", "Volltextsuche folgt (search.js → ImpalaCore.search).") }
+    entry<SearchRoute> {
+        SearchScreen(store, onOpenPage = { nav.back(); nav.open(PageRoute(it)) }, onAction = { nav.back(); nav.action(it) }, onClose = nav::back)
+    }
     entry<AiRoute> { Placeholder("KI-Assistent", "Chat folgt (ai.js → Rust-KI im Kern).") }
     entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
         SettingsSection("overview", store, prefs, nav::toast)
     })) { SettingsSections(onOpen = { nav.open(SettingsSectionRoute(it)) }) }
     entry<SettingsSectionRoute>(metadata = ListDetailSceneStrategy.detailPane()) { SettingsSection(it.section, store, prefs, nav::toast) }
-    entry<ConflictsRoute> { Placeholder("Sync-Konflikte", "Konfliktlöser folgt (ImpalaCore.conflicts).") }
+    entry<ConflictsRoute> { ConflictsScreen(store, onDone = nav::back) }
 }
