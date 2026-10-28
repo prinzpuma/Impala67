@@ -58,13 +58,13 @@ fs.writeFileSync(modelVersionPath, modelVersion);
 console.log(`Handschrift-Modellversion gesetzt: ${modelHash}.`);
 
 // Android-APKs gibt es nur zu Releases; versionCode kennt keine Zwischenstände.
-const gradlePath = "./android/app/build.gradle";
+const gradlePath = "./android/app/build.gradle.kts";
 if (fs.existsSync(gradlePath) && /^\d+\.\d+\.\d+$/.test(version)) {
   let gradle = fs.readFileSync(gradlePath, "utf8");
   const [major, minor, patch] = version.split(".").map(Number);
   const versionCode = major * 100000 + minor * 1000 + patch;
-  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
-  gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
+  gradle = gradle.replace(/versionCode\s*=\s*\d+/, `versionCode = ${versionCode}`);
+  gradle = gradle.replace(/versionName\s*=\s*"[^"]+"/, `versionName = "${version}"`);
   fs.writeFileSync(gradlePath, gradle);
   console.log(`Android build.gradle gesetzt: versionCode ${versionCode}, versionName "${version}".`);
 }

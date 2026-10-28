@@ -25,12 +25,12 @@ let worker = fs.readFileSync(workerPath, "utf8");
 worker = worker.replace(/const CACHE = "impala67-v[^"]+"/, `const CACHE = "impala67-v${newVersion}"`);
 fs.writeFileSync(workerPath, worker);
 
-const gradlePath = "./android/app/build.gradle";
+const gradlePath = "./android/app/build.gradle.kts";
 if (fs.existsSync(gradlePath)) {
   let gradle = fs.readFileSync(gradlePath, "utf8");
   const versionCode = major * 100000 + minor * 1000 + (patch + 1);
-  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
-  gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${newVersion}"`);
+  gradle = gradle.replace(/versionCode\s*=\s*\d+/, `versionCode = ${versionCode}`);
+  gradle = gradle.replace(/versionName\s*=\s*"[^"]+"/, `versionName = "${newVersion}"`);
   fs.writeFileSync(gradlePath, gradle);
 }
 

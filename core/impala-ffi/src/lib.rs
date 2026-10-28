@@ -42,15 +42,15 @@ uniffi::setup_scaffolding!();
 #[derive(Debug, uniffi::Error)]
 pub enum CoreError {
     /// Lesen/Schreiben der Datenbank ist fehlgeschlagen (auch: Schema einer neueren App-Version).
-    Storage { message: String },
+    Storage { reason: String },
     /// UngÃ¼ltige Eingabe der Plattform (kaputtes JSON, unbekannte Seite â€¦).
-    Invalid { message: String },
+    Invalid { reason: String },
 }
 
 impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CoreError::Storage { message } | CoreError::Invalid { message } => f.write_str(message),
+            CoreError::Storage { reason: message } | CoreError::Invalid { reason: message } => f.write_str(message),
         }
     }
 }
@@ -59,12 +59,12 @@ impl std::error::Error for CoreError {}
 
 impl From<impala_storage::Error> for CoreError {
     fn from(e: impala_storage::Error) -> Self {
-        CoreError::Storage { message: e.to_string() }
+        CoreError::Storage { reason: e.to_string() }
     }
 }
 
 fn invalid(message: impl Into<String>) -> CoreError {
-    CoreError::Invalid { message: message.into() }
+    CoreError::Invalid { reason: message.into() }
 }
 
 /// Wie der Start verlief (Diagnose).
@@ -95,6 +95,10 @@ pub struct PageSummary {
     pub parent_id: Option<String>,
     pub workspace_id: String,
     pub kind: PageKind,
+    /// Emoji vor dem Titel, leer ohne.
+    pub icon: String,
+    /// Angeheftet (Startseite, Seitenleiste).
+    pub favorite: bool,
     pub created: String,
     pub updated: String,
 }
@@ -155,6 +159,8 @@ fn summary(pg: &Page) -> PageSummary {
         parent_id: pg.parent().map(str::to_owned),
         workspace_id: pg.workspace().to_owned(),
         kind: if pg.is_heft() { PageKind::Heft } else { PageKind::Note },
+        icon: pg.extra.get("icon").and_then(Value::as_str).unwrap_or("").to_owned(),
+        favorite: pg.extra.get("favorite").is_some_and(|v| v.as_bool().unwrap_or(false)),
         created: pg.created_at().to_owned(),
         updated: pg.updated().to_owned(),
     }

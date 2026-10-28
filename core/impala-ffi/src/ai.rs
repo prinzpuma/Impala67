@@ -192,19 +192,19 @@ pub enum AiFailure {
     /// Mit `cancel` (oder durch Abbruch einer Rückfrage) beendet.
     Aborted,
     Timeout {
-        message: String,
+        reason: String,
     },
     Network {
-        message: String,
+        reason: String,
     },
     Http {
         status: u16,
-        message: String,
+        reason: String,
         retry_after_ms: u64,
     },
     /// Fehlende Einrichtung, unbrauchbare Antwort, Speicherfehler.
     Other {
-        message: String,
+        reason: String,
     },
 }
 
@@ -213,10 +213,10 @@ impl std::fmt::Display for AiFailure {
         match self {
             AiFailure::Busy => f.write_str("Es läuft bereits eine KI-Anfrage."),
             AiFailure::Aborted => f.write_str("Abgebrochen."),
-            AiFailure::Timeout { message }
-            | AiFailure::Network { message }
-            | AiFailure::Http { message, .. }
-            | AiFailure::Other { message } => f.write_str(message),
+            AiFailure::Timeout { reason: message }
+            | AiFailure::Network { reason: message }
+            | AiFailure::Http { reason: message, .. }
+            | AiFailure::Other { reason: message } => f.write_str(message),
         }
     }
 }
@@ -228,10 +228,10 @@ impl From<AiError> for AiFailure {
         let message = e.to_string();
         match e {
             AiError::Aborted => AiFailure::Aborted,
-            AiError::Timeout { .. } => AiFailure::Timeout { message },
-            AiError::Network(_) => AiFailure::Network { message },
-            AiError::Http { status, retry_after_ms, .. } => AiFailure::Http { status, message, retry_after_ms },
-            AiError::Other(_) => AiFailure::Other { message },
+            AiError::Timeout { .. } => AiFailure::Timeout { reason: message },
+            AiError::Network(_) => AiFailure::Network { reason: message },
+            AiError::Http { status, retry_after_ms, .. } => AiFailure::Http { status, reason: message, retry_after_ms },
+            AiError::Other(_) => AiFailure::Other { reason: message },
         }
     }
 }
@@ -498,7 +498,7 @@ impl AiAssistant {
         *self.cancel.lock().unwrap_or_else(|e| e.into_inner()) = cancel.clone();
         let text = req.text.trim().to_owned();
         if text.is_empty() && req.image.is_none() && req.text_file.is_none() && req.pdf_file.is_none() {
-            return Err(AiFailure::Other { message: "Leere Nachricht.".into() });
+            return Err(AiFailure::Other { reason: "Leere Nachricht.".into() });
         }
         let mut prep = self.prepare(&req, &text)?;
         let config = ChatConfig::resolve(&prep.resolved.settings);
@@ -581,7 +581,7 @@ impl AiAssistant {
         let saved = lock(&self.core).save_chat_raw(&prep.chat_id, &prep.title, &prep.created, transcript.into_inner());
         self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(prep.chat_id.clone(), session);
         let out = result.map_err(AiFailure::from)?;
-        saved.map_err(|e| AiFailure::Other { message: e.to_string() })?;
+        saved.map_err(|e| AiFailure::Other { reason: e.to_string() })?;
         Ok(AiOutcome {
             chat_id: prep.chat_id,
             text: out.text,
@@ -799,7 +799,7 @@ mod tests {
     fn fehler_abbruch_und_async() {
         let core = ImpalaCore::open_in_memory().unwrap();
         let ai = AiAssistant::start(&core, Provider::default(), options(), None, None);
-        assert_eq!(ai.run(AiRunRequest::default(), None), Err(AiFailure::Other { message: "Leere Nachricht.".into() }));
+        assert_eq!(ai.run(AiRunRequest::default(), None), Err(AiFailure::Other { reason: "Leere Nachricht.".into() }));
 
         // Fehlende Einrichtung: Fehler, aber die Nutzernachricht ist gesichert.
         let bad = AiAssistant::start(

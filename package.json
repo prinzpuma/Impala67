@@ -17,6 +17,8 @@
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run",
     "build:core": "node core/tools/build.mjs",
+    "build:android-core": "node tools/android-core.mjs",
+    "android:icons": "node tools/android-icons.mjs",
     "check:core": "node .github/scripts/check-core-build.mjs",
     "capacitor:copy:before": "node -e \"import('node:fs').then(fs=>fs.mkdirSync('.capacitor-disabled-stub',{recursive:true}))\"",
     "capacitor:sync:after": "node .github/scripts/build-android-rust.mjs"

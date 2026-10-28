@@ -30,17 +30,17 @@ use crate::{ImpalaCore, Inner, Shared, lock};
 pub enum SearchFailure {
     /// Das Einbetten ist gescheitert (Modell, Netz, unvollständige Antwort).
     Embedding {
-        message: String,
+        reason: String,
     },
     Storage {
-        message: String,
+        reason: String,
     },
 }
 
 impl std::fmt::Display for SearchFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SearchFailure::Embedding { message } | SearchFailure::Storage { message } => f.write_str(message),
+            SearchFailure::Embedding { reason: message } | SearchFailure::Storage { reason: message } => f.write_str(message),
         }
     }
 }
@@ -48,22 +48,22 @@ impl std::fmt::Display for SearchFailure {
 impl std::error::Error for SearchFailure {}
 
 fn storage_err(e: impl std::fmt::Display) -> SearchFailure {
-    SearchFailure::Storage { message: e.to_string() }
+    SearchFailure::Storage { reason: e.to_string() }
 }
 
 fn embed_err(e: impl std::fmt::Display) -> SearchFailure {
-    SearchFailure::Embedding { message: e.to_string() }
+    SearchFailure::Embedding { reason: e.to_string() }
 }
 
 /// Fehler im Rückruf der Plattform.
 #[derive(Debug, uniffi::Error)]
 pub enum EmbedFailure {
-    Failed { message: String },
+    Failed { reason: String },
 }
 
 impl std::fmt::Display for EmbedFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let EmbedFailure::Failed { message } = self;
+        let EmbedFailure::Failed { reason: message } = self;
         f.write_str(message)
     }
 }
@@ -72,7 +72,7 @@ impl std::error::Error for EmbedFailure {}
 
 impl From<uniffi::UnexpectedUniFFICallbackError> for EmbedFailure {
     fn from(e: uniffi::UnexpectedUniFFICallbackError) -> Self {
-        EmbedFailure::Failed { message: e.reason }
+        EmbedFailure::Failed { reason: e.reason }
     }
 }
 

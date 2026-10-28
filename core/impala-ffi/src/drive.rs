@@ -58,7 +58,7 @@ pub enum DriveFailure {
     /// Mit `stop()` abgebrochen.
     Stopped,
     /// `offline`: keine Verbindung bzw. Zeitüberschreitung; `status`: HTTP-Status von Drive.
-    Failed { message: String, status: Option<u16>, offline: bool },
+    Failed { reason: String, status: Option<u16>, offline: bool },
 }
 
 impl std::fmt::Display for DriveFailure {
@@ -66,7 +66,7 @@ impl std::fmt::Display for DriveFailure {
         match self {
             DriveFailure::SessionExpired => f.write_str(&DriveError::SessionExpired.to_string()),
             DriveFailure::Stopped => f.write_str("Drive-Sync abgebrochen."),
-            DriveFailure::Failed { message, .. } => f.write_str(message),
+            DriveFailure::Failed { reason: message, .. } => f.write_str(message),
         }
     }
 }
@@ -78,14 +78,14 @@ impl From<DriveError> for DriveFailure {
         match e {
             DriveError::SessionExpired => DriveFailure::SessionExpired,
             DriveError::Net(NetError::Aborted) => DriveFailure::Stopped,
-            DriveError::Net(_) => DriveFailure::Failed { message: e.to_string(), status: None, offline: true },
-            other => DriveFailure::Failed { message: other.to_string(), status: other.status(), offline: false },
+            DriveError::Net(_) => DriveFailure::Failed { reason: e.to_string(), status: None, offline: true },
+            other => DriveFailure::Failed { reason: other.to_string(), status: other.status(), offline: false },
         }
     }
 }
 
 fn gone() -> DriveFailure {
-    DriveFailure::Failed { message: "Drive-Thread beendet.".into(), status: None, offline: false }
+    DriveFailure::Failed { reason: "Drive-Thread beendet.".into(), status: None, offline: false }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -458,7 +458,7 @@ impl DriveSync {
     /// Google-Kontos aufrufen, sonst gälte alles als schon hochgeladen. Die Daten bleiben.
     pub fn reset_state(&self) -> Result<(), CoreError> {
         write_state(&mut crate::lock(&self.core), &DriveState::default())
-            .map_err(|e| CoreError::Storage { message: e.0 })
+            .map_err(|e| CoreError::Storage { reason: e.0 })
     }
 }
 

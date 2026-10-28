@@ -1400,6 +1400,12 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1461,7 +1467,13 @@ fun uniffi_impala_ffi_checksum_func_heft_new_id(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_shape_outline(
 ): Short
+fun uniffi_impala_ffi_checksum_func_markdown_card_text(
+): Short
+fun uniffi_impala_ffi_checksum_func_markdown_excerpt(
+): Short
 fun uniffi_impala_ffi_checksum_func_markdown_plain_text(
+): Short
+fun uniffi_impala_ffi_checksum_func_markdown_teaser(
 ): Short
 fun uniffi_impala_ffi_checksum_func_markdown_to_blocks(
 ): Short
@@ -2411,7 +2423,13 @@ fun uniffi_impala_ffi_fn_func_heft_new_id(uniffi_out_err: UniffiRustCallStatus,
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_shape_outline(`shape`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_markdown_card_text(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_markdown_excerpt(`title`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_plain_text(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_markdown_teaser(`body`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_to_blocks(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2620,7 +2638,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_heft_shape_outline() != 55129.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_markdown_card_text() != 58620.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_markdown_excerpt() != 59002.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_markdown_plain_text() != 3176.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_markdown_teaser() != 27142.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_markdown_to_blocks() != 43341.toShort()) {
@@ -13433,6 +13460,14 @@ data class PageSummary (
     var `parentId`: kotlin.String?, 
     var `workspaceId`: kotlin.String, 
     var `kind`: PageKind, 
+    /**
+     * Emoji vor dem Titel, leer ohne.
+     */
+    var `icon`: kotlin.String, 
+    /**
+     * Angeheftet (Startseite, Seitenleiste).
+     */
+    var `favorite`: kotlin.Boolean, 
     var `created`: kotlin.String, 
     var `updated`: kotlin.String
 ) {
@@ -13452,6 +13487,8 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.read(buf),
             FfiConverterTypePageKind.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
     }
@@ -13462,6 +13499,8 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterOptionalString.allocationSize(value.`parentId`) +
             FfiConverterString.allocationSize(value.`workspaceId`) +
             FfiConverterTypePageKind.allocationSize(value.`kind`) +
+            FfiConverterString.allocationSize(value.`icon`) +
+            FfiConverterBoolean.allocationSize(value.`favorite`) +
             FfiConverterString.allocationSize(value.`created`) +
             FfiConverterString.allocationSize(value.`updated`)
     )
@@ -13472,6 +13511,8 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterOptionalString.write(value.`parentId`, buf)
             FfiConverterString.write(value.`workspaceId`, buf)
             FfiConverterTypePageKind.write(value.`kind`, buf)
+            FfiConverterString.write(value.`icon`, buf)
+            FfiConverterBoolean.write(value.`favorite`, buf)
             FfiConverterString.write(value.`created`, buf)
             FfiConverterString.write(value.`updated`, buf)
     }
@@ -13961,25 +14002,43 @@ sealed class AiFailure: kotlin.Exception() {
     }
     
     class Timeout(
-        override val `message`: kotlin.String
-    ) : AiFailure()
+        
+        val `reason`: kotlin.String
+        ) : AiFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
     class Network(
-        override val `message`: kotlin.String
-    ) : AiFailure()
+        
+        val `reason`: kotlin.String
+        ) : AiFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
     class Http(
+        
         val `status`: kotlin.UShort, 
-        override val `message`: kotlin.String, 
+        
+        val `reason`: kotlin.String, 
+        
         val `retryAfterMs`: kotlin.ULong
-    ) : AiFailure()
+        ) : AiFailure() {
+        override val message
+            get() = "status=${ `status` }, reason=${ `reason` }, retryAfterMs=${ `retryAfterMs` }"
+    }
     
     /**
      * Fehlende Einrichtung, unbrauchbare Antwort, Speicherfehler.
      */
     class Other(
-        override val `message`: kotlin.String
-    ) : AiFailure()
+        
+        val `reason`: kotlin.String
+        ) : AiFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AiFailure> {
@@ -14030,24 +14089,24 @@ public object FfiConverterTypeAiFailure : FfiConverterRustBuffer<AiFailure> {
             is AiFailure.Timeout -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AiFailure.Network -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AiFailure.Http -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
                 + FfiConverterUShort.allocationSize(value.`status`)
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
                 + FfiConverterULong.allocationSize(value.`retryAfterMs`)
             )
             is AiFailure.Other -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
         }
     }
@@ -14064,24 +14123,24 @@ public object FfiConverterTypeAiFailure : FfiConverterRustBuffer<AiFailure> {
             }
             is AiFailure.Timeout -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is AiFailure.Network -> {
                 buf.putInt(4)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is AiFailure.Http -> {
                 buf.putInt(5)
                 FfiConverterUShort.write(value.`status`, buf)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 FfiConverterULong.write(value.`retryAfterMs`, buf)
                 Unit
             }
             is AiFailure.Other -> {
                 buf.putInt(6)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -14285,15 +14344,23 @@ sealed class CoreException: kotlin.Exception() {
      * Lesen/Schreiben der Datenbank ist fehlgeschlagen (auch: Schema einer neueren App-Version).
      */
     class Storage(
-        override val `message`: kotlin.String
-    ) : CoreException()
+        
+        val `reason`: kotlin.String
+        ) : CoreException() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
     /**
      * UngÃ¼ltige Eingabe der Plattform (kaputtes JSON, unbekannte Seite â€¦).
      */
     class Invalid(
-        override val `message`: kotlin.String
-    ) : CoreException()
+        
+        val `reason`: kotlin.String
+        ) : CoreException() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<CoreException> {
@@ -14326,12 +14393,12 @@ public object FfiConverterTypeCoreError : FfiConverterRustBuffer<CoreException> 
             is CoreException.Storage -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is CoreException.Invalid -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
         }
     }
@@ -14340,12 +14407,12 @@ public object FfiConverterTypeCoreError : FfiConverterRustBuffer<CoreException> 
         when(value) {
             is CoreException.Storage -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is CoreException.Invalid -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -14708,10 +14775,16 @@ sealed class DriveFailure: kotlin.Exception() {
      * `offline`: keine Verbindung bzw. Zeitüberschreitung; `status`: HTTP-Status von Drive.
      */
     class Failed(
-        override val `message`: kotlin.String, 
+        
+        val `reason`: kotlin.String, 
+        
         val `status`: kotlin.UShort?, 
+        
         val `offline`: kotlin.Boolean
-    ) : DriveFailure()
+        ) : DriveFailure() {
+        override val message
+            get() = "reason=${ `reason` }, status=${ `status` }, offline=${ `offline` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<DriveFailure> {
@@ -14753,7 +14826,7 @@ public object FfiConverterTypeDriveFailure : FfiConverterRustBuffer<DriveFailure
             is DriveFailure.Failed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
                 + FfiConverterOptionalUShort.allocationSize(value.`status`)
                 + FfiConverterBoolean.allocationSize(value.`offline`)
             )
@@ -14772,7 +14845,7 @@ public object FfiConverterTypeDriveFailure : FfiConverterRustBuffer<DriveFailure
             }
             is DriveFailure.Failed -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 FfiConverterOptionalUShort.write(value.`status`, buf)
                 FfiConverterBoolean.write(value.`offline`, buf)
                 Unit
@@ -14942,8 +15015,12 @@ public object FfiConverterTypeDriveUiState: FfiConverterRustBuffer<DriveUiState>
 sealed class EmbedFailure: kotlin.Exception() {
     
     class Failed(
-        override val `message`: kotlin.String
-    ) : EmbedFailure()
+        
+        val `reason`: kotlin.String
+        ) : EmbedFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<EmbedFailure> {
@@ -14973,7 +15050,7 @@ public object FfiConverterTypeEmbedFailure : FfiConverterRustBuffer<EmbedFailure
             is EmbedFailure.Failed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
         }
     }
@@ -14982,7 +15059,7 @@ public object FfiConverterTypeEmbedFailure : FfiConverterRustBuffer<EmbedFailure
         when(value) {
             is EmbedFailure.Failed -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -15676,7 +15753,7 @@ sealed class MdBlockKind {
         companion object
     }
     
-    data class List(
+    data class ListItem(
         val `style`: MdListStyle, 
         val `indent`: kotlin.UInt, 
         val `text`: kotlin.String) : MdBlockKind() {
@@ -15726,25 +15803,25 @@ sealed class MdBlockKind {
     }
     
     data class Table(
-        val `rows`: kotlin.collections.List<kotlin.collections.List<kotlin.String>>) : MdBlockKind() {
+        val `rows`: List<List<kotlin.String>>) : MdBlockKind() {
         companion object
     }
     
     data class Callout(
         val `color`: kotlin.String, 
-        val `children`: kotlin.collections.List<MdBlock>) : MdBlockKind() {
+        val `children`: List<MdBlock>) : MdBlockKind() {
         companion object
     }
     
     data class Toggle(
         val `summary`: kotlin.String, 
         val `open`: kotlin.Boolean, 
-        val `children`: kotlin.collections.List<MdBlock>) : MdBlockKind() {
+        val `children`: List<MdBlock>) : MdBlockKind() {
         companion object
     }
     
     data class Columns(
-        val `columns`: kotlin.collections.List<kotlin.collections.List<MdBlock>>) : MdBlockKind() {
+        val `columns`: List<List<MdBlock>>) : MdBlockKind() {
         companion object
     }
     
@@ -15775,7 +15852,7 @@ public object FfiConverterTypeMdBlockKind : FfiConverterRustBuffer<MdBlockKind>{
                 FfiConverterTypeMdHeadingLevel.read(buf),
                 FfiConverterString.read(buf),
                 )
-            3 -> MdBlockKind.List(
+            3 -> MdBlockKind.ListItem(
                 FfiConverterTypeMdListStyle.read(buf),
                 FfiConverterUInt.read(buf),
                 FfiConverterString.read(buf),
@@ -15841,7 +15918,7 @@ public object FfiConverterTypeMdBlockKind : FfiConverterRustBuffer<MdBlockKind>{
                 + FfiConverterString.allocationSize(value.`text`)
             )
         }
-        is MdBlockKind.List -> {
+        is MdBlockKind.ListItem -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
                 4UL
@@ -15955,7 +16032,7 @@ public object FfiConverterTypeMdBlockKind : FfiConverterRustBuffer<MdBlockKind>{
                 FfiConverterString.write(value.`text`, buf)
                 Unit
             }
-            is MdBlockKind.List -> {
+            is MdBlockKind.ListItem -> {
                 buf.putInt(3)
                 FfiConverterTypeMdListStyle.write(value.`style`, buf)
                 FfiConverterUInt.write(value.`indent`, buf)
@@ -16192,12 +16269,20 @@ sealed class SearchFailure: kotlin.Exception() {
      * Das Einbetten ist gescheitert (Modell, Netz, unvollständige Antwort).
      */
     class Embedding(
-        override val `message`: kotlin.String
-    ) : SearchFailure()
+        
+        val `reason`: kotlin.String
+        ) : SearchFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
     class Storage(
-        override val `message`: kotlin.String
-    ) : SearchFailure()
+        
+        val `reason`: kotlin.String
+        ) : SearchFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<SearchFailure> {
@@ -16230,12 +16315,12 @@ public object FfiConverterTypeSearchFailure : FfiConverterRustBuffer<SearchFailu
             is SearchFailure.Embedding -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is SearchFailure.Storage -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
         }
     }
@@ -16244,12 +16329,12 @@ public object FfiConverterTypeSearchFailure : FfiConverterRustBuffer<SearchFailu
         when(value) {
             is SearchFailure.Embedding -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is SearchFailure.Storage -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -16357,8 +16442,12 @@ sealed class SyncFailure: kotlin.Exception() {
      * Ungültiger Sync-Schlüssel.
      */
     class InvalidKey(
-        override val `message`: kotlin.String
-    ) : SyncFailure()
+        
+        val `reason`: kotlin.String
+        ) : SyncFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
     
     /**
      * Mit `stop()` abgebrochen.
@@ -16373,11 +16462,18 @@ sealed class SyncFailure: kotlin.Exception() {
      * `retryable`: nach `sync_retry_delay_ms` erneut versuchen; `quota`: Cloud-Speicher voll.
      */
     class Failed(
-        override val `message`: kotlin.String, 
+        
+        val `reason`: kotlin.String, 
+        
         val `status`: kotlin.UShort?, 
+        
         val `retryable`: kotlin.Boolean, 
+        
         val `quota`: kotlin.Boolean
-    ) : SyncFailure()
+        ) : SyncFailure() {
+        override val message
+            get() = "reason=${ `reason` }, status=${ `status` }, retryable=${ `retryable` }, quota=${ `quota` }"
+    }
     
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<SyncFailure> {
@@ -16414,7 +16510,7 @@ public object FfiConverterTypeSyncFailure : FfiConverterRustBuffer<SyncFailure> 
             is SyncFailure.InvalidKey -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is SyncFailure.Stopped -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
@@ -16423,7 +16519,7 @@ public object FfiConverterTypeSyncFailure : FfiConverterRustBuffer<SyncFailure> 
             is SyncFailure.Failed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`reason`)
                 + FfiConverterOptionalUShort.allocationSize(value.`status`)
                 + FfiConverterBoolean.allocationSize(value.`retryable`)
                 + FfiConverterBoolean.allocationSize(value.`quota`)
@@ -16435,7 +16531,7 @@ public object FfiConverterTypeSyncFailure : FfiConverterRustBuffer<SyncFailure> 
         when(value) {
             is SyncFailure.InvalidKey -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is SyncFailure.Stopped -> {
@@ -16444,7 +16540,7 @@ public object FfiConverterTypeSyncFailure : FfiConverterRustBuffer<SyncFailure> 
             }
             is SyncFailure.Failed -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 FfiConverterOptionalUShort.write(value.`status`, buf)
                 FfiConverterBoolean.write(value.`retryable`, buf)
                 FfiConverterBoolean.write(value.`quota`, buf)
@@ -18624,12 +18720,48 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
     
 
         /**
+         * Klartext einer Karte (Bilder/HTML raus, Formeln als „…“).
+         */ fun `markdownCardText`(`markdown`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_markdown_card_text(
+        FfiConverterString.lower(`markdown`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Bis zu 7 Vorschauzeilen einer Seite (Startseite „Weitermachen“).
+         */ fun `markdownExcerpt`(`title`: kotlin.String, `content`: kotlin.String): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_markdown_excerpt(
+        FfiConverterString.lower(`title`),FfiConverterString.lower(`content`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Klartext des Markdowns: die Klartexte der Blöcke, zeilenweise getrennt.
          */ fun `markdownPlainText`(`markdown`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_markdown_plain_text(
         FfiConverterString.lower(`markdown`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Erster Fließtext-Absatz, höchstens 180 Zeichen (Tagesartikel).
+         */ fun `markdownTeaser`(`body`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_markdown_teaser(
+        FfiConverterString.lower(`body`),_status)
 }
     )
     }

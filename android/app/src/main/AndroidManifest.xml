@@ -22,11 +22,9 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale|fontWeightAdjustment|layoutDirection|touchscreen|colorMode|mcc|mnc|grammaticalGender"
             android:exported="true"
-            android:label="@string/title_activity_main"
             android:launchMode="singleTask"
-            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:theme="@style/AppTheme.Launch"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>

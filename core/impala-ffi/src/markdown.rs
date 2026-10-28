@@ -23,7 +23,7 @@ pub enum MdBlockKind {
         level: MdHeadingLevel,
         text: String,
     },
-    List {
+    ListItem {
         style: MdListStyle,
         indent: u32,
         text: String,
@@ -141,7 +141,7 @@ impl From<Block> for MdBlock {
         let kind = match b.kind {
             BlockKind::Paragraph { text } => MdBlockKind::Paragraph { text },
             BlockKind::Heading { level, text } => MdBlockKind::Heading { level: level.into(), text },
-            BlockKind::List { style, indent, text } => MdBlockKind::List { style: style.into(), indent, text },
+            BlockKind::List { style, indent, text } => MdBlockKind::ListItem { style: style.into(), indent, text },
             BlockKind::Quote { text } => MdBlockKind::Quote { text },
             BlockKind::Divider => MdBlockKind::Divider,
             BlockKind::Image { alt, src } => MdBlockKind::Image { alt, src },
@@ -168,7 +168,7 @@ impl From<MdBlock> for Block {
         let kind = match b.kind {
             MdBlockKind::Paragraph { text } => BlockKind::Paragraph { text },
             MdBlockKind::Heading { level, text } => BlockKind::Heading { level: level.into(), text },
-            MdBlockKind::List { style, indent, text } => BlockKind::List { style: style.into(), indent, text },
+            MdBlockKind::ListItem { style, indent, text } => BlockKind::List { style: style.into(), indent, text },
             MdBlockKind::Quote { text } => BlockKind::Quote { text },
             MdBlockKind::Divider => BlockKind::Divider,
             MdBlockKind::Image { alt, src } => BlockKind::Image { alt, src },
@@ -216,6 +216,24 @@ pub fn markdown_plain_text(markdown: String) -> String {
         .join("\n")
 }
 
+/// Bis zu 7 Vorschauzeilen einer Seite (Startseite „Weitermachen“).
+#[uniffi::export]
+pub fn markdown_excerpt(title: String, content: String) -> Vec<String> {
+    impala_markdown::excerpt(&title, &content)
+}
+
+/// Klartext einer Karte (Bilder/HTML raus, Formeln als „…“).
+#[uniffi::export]
+pub fn markdown_card_text(markdown: String) -> String {
+    impala_markdown::card_text(&markdown)
+}
+
+/// Erster Fließtext-Absatz, höchstens 180 Zeichen (Tagesartikel).
+#[uniffi::export]
+pub fn markdown_teaser(body: String) -> String {
+    impala_markdown::teaser(&body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,9 +277,9 @@ Versteckt\n\
         let blocks = markdown_to_blocks("- [x] erledigt\n- [ ] offen".to_owned());
         assert!(matches!(
             &blocks[0].kind,
-            MdBlockKind::List { style: MdListStyle::Todo { checked: true }, text, .. } if text == "erledigt"
+            MdBlockKind::ListItem { style: MdListStyle::Todo { checked: true }, text, .. } if text == "erledigt"
         ));
-        assert!(matches!(&blocks[1].kind, MdBlockKind::List { style: MdListStyle::Todo { checked: false }, .. }));
+        assert!(matches!(&blocks[1].kind, MdBlockKind::ListItem { style: MdListStyle::Todo { checked: false }, .. }));
     }
 
     #[test]

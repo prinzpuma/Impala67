@@ -40,17 +40,17 @@ pub trait SyncListener: Send + Sync {
 #[derive(Debug, uniffi::Error)]
 pub enum SyncFailure {
     /// Ungültiger Sync-Schlüssel.
-    InvalidKey { message: String },
+    InvalidKey { reason: String },
     /// Mit `stop()` abgebrochen.
     Stopped,
     /// `retryable`: nach `sync_retry_delay_ms` erneut versuchen; `quota`: Cloud-Speicher voll.
-    Failed { message: String, status: Option<u16>, retryable: bool, quota: bool },
+    Failed { reason: String, status: Option<u16>, retryable: bool, quota: bool },
 }
 
 impl std::fmt::Display for SyncFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SyncFailure::InvalidKey { message } | SyncFailure::Failed { message, .. } => f.write_str(message),
+            SyncFailure::InvalidKey { reason: message } | SyncFailure::Failed { reason: message, .. } => f.write_str(message),
             SyncFailure::Stopped => f.write_str("Sync abgebrochen."),
         }
     }
@@ -64,7 +64,7 @@ impl From<SyncError> for SyncFailure {
             return SyncFailure::Stopped;
         }
         SyncFailure::Failed {
-            message: e.to_string(),
+            reason: e.to_string(),
             status: e.status(),
             retryable: e.is_retryable(),
             quota: e.is_quota(),
@@ -73,7 +73,7 @@ impl From<SyncError> for SyncFailure {
 }
 
 fn gone() -> SyncFailure {
-    SyncFailure::Failed { message: "Sync-Thread beendet.".into(), status: None, retryable: false, quota: false }
+    SyncFailure::Failed { reason: "Sync-Thread beendet.".into(), status: None, retryable: false, quota: false }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -517,7 +517,7 @@ impl CloudSync {
         worker_url: Option<String>,
         listener: Option<Arc<dyn SyncListener>>,
     ) -> Result<Arc<Self>, SyncFailure> {
-        let key = SyncKey::parse(&sync_key).map_err(|e| SyncFailure::InvalidKey { message: e.to_string() })?;
+        let key = SyncKey::parse(&sync_key).map_err(|e| SyncFailure::InvalidKey { reason: e.to_string() })?;
         let url = worker_url.filter(|u| !u.trim().is_empty()).unwrap_or_else(|| DEFAULT_WORKER_URL.to_owned());
         Ok(CloudSync::start(&core, UreqClient::default(), key.derive(), &url, listener))
     }
@@ -582,7 +582,7 @@ impl CloudSync {
 pub fn generate_sync_key() -> Result<String, SyncFailure> {
     SyncKey::generate(&OsRandom)
         .map(|k| k.as_str().to_owned())
-        .map_err(|e| SyncFailure::InvalidKey { message: e.to_string() })
+        .map_err(|e| SyncFailure::InvalidKey { reason: e.to_string() })
 }
 
 /// Wartezeit vor dem n-ten Wiederholversuch nach einem `retryable`-Fehler.
