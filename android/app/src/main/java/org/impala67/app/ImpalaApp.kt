@@ -23,7 +23,8 @@ class ImpalaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         store = scope.async(Dispatchers.IO) {
-            val db = File(filesDir, "impala67.sqlite")
+            // Derselbe Dateiname wie in der vorigen App-Version, damit vorhandene Daten erhalten bleiben.
+            val db = File(filesDir, "impala67.db")
             ImpalaStore(ImpalaCore.open(db.absolutePath), scope)
         }
     }
