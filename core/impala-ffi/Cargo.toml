@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "UniFFI-Hülle des Kerns für native Apps (Kotlin, Swift, C#)"
+description = "UniFFI-HÃ¼lle des Kerns fÃ¼r native Apps (Kotlin, Swift, C#)"
 
 [lints]
 workspace = true
@@ -21,6 +21,7 @@ path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
 base64 = "0.22"
+impala-ai = { path = "../impala-ai" }
 impala-crypto = { path = "../impala-crypto" }
 impala-drive = { path = "../impala-drive" }
 impala-heft = { path = "../impala-heft" }
@@ -31,6 +32,7 @@ impala-sync = { path = "../impala-sync" }
 impala-search = { path = "../impala-search", default-features = false }
 impala-srs = { path = "../impala-srs" }
 impala-storage = { path = "../impala-storage" }
+serde = "1"
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 uniffi = { version = "0.29", features = ["cli"] }
 uuid = { version = "1", features = ["v4"] }

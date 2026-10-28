@@ -1,11 +1,14 @@
-//! UniFFI-Hülle des Kerns für native Apps (Kotlin, Swift, C#). Anders als die WASM-Hülle hält sie
-//! Speicher und Zustand selbst: [`ImpalaCore`] öffnet eine SQLite-Datei, lädt das Modell daraus,
-//! vergibt Event-IDs und Zeitstempel und schreibt jede Änderung, bevor sie angewandt wird.
-//! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
+//! UniFFI-HÃ¼lle des Kerns fÃ¼r native Apps (Kotlin, Swift, C#). Anders als die WASM-HÃ¼lle hÃ¤lt sie
+//! Speicher und Zustand selbst: [`ImpalaCore`] Ã¶ffnet eine SQLite-Datei, lÃ¤dt das Modell daraus,
+//! vergibt Event-IDs und Zeitstempel und schreibt jede Ã„nderung, bevor sie angewandt wird.
+//! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache DatensÃ¤tze.
 
+mod ai;
+mod ai_tools;
 mod card_ops;
 mod cards;
 mod changes;
+mod chats;
 mod clock;
 mod cloze;
 mod conflicts;
@@ -18,6 +21,7 @@ mod heft_library;
 mod heft_undo;
 mod markdown;
 mod pages;
+mod rag;
 mod study_records;
 mod sync;
 
@@ -39,7 +43,7 @@ uniffi::setup_scaffolding!();
 pub enum CoreError {
     /// Lesen/Schreiben der Datenbank ist fehlgeschlagen (auch: Schema einer neueren App-Version).
     Storage { message: String },
-    /// Ungültige Eingabe der Plattform (kaputtes JSON, unbekannte Seite …).
+    /// UngÃ¼ltige Eingabe der Plattform (kaputtes JSON, unbekannte Seite â€¦).
     Invalid { message: String },
 }
 
@@ -71,7 +75,7 @@ pub struct LoadInfo {
     /// Nach dem Checkpoint (oder voll) abgespielte Events.
     pub replayed: u64,
     pub checkpoint_used: bool,
-    /// Warum der Checkpoint nicht taugte (`missing`, `older-tail` …).
+    /// Warum der Checkpoint nicht taugte (`missing`, `older-tail` â€¦).
     pub checkpoint_reject: Option<String>,
 }
 
@@ -123,9 +127,9 @@ pub enum CheckpointResult {
     Written,
     /// Nichts Neues seit dem letzten Checkpoint.
     Unchanged,
-    /// Fremd-Events kamen außer Reihenfolge: erst der nächste Start schreibt wieder.
+    /// Fremd-Events kamen auÃŸer Reihenfolge: erst der nÃ¤chste Start schreibt wieder.
     OutOfOrder,
-    /// Im Log liegen noch nicht angewandte Events: später erneut versuchen.
+    /// Im Log liegen noch nicht angewandte Events: spÃ¤ter erneut versuchen.
     Stale,
 }
 
@@ -166,10 +170,10 @@ struct Inner {
     search: NoteSearch,
     clock: Clock,
     load: LoadInfo,
-    /// Verbundener Sync (ID, Befehlskanal): erfährt jedes lokale Event.
+    /// Verbundener Sync (ID, Befehlskanal): erfÃ¤hrt jedes lokale Event.
     sync_tx: Option<(u64, Sender<sync::Cmd>)>,
     listener: Option<Arc<dyn ChangeListener>>,
-    /// Noch nicht gemeldete Änderungen ([`changes::notify`]).
+    /// Noch nicht gemeldete Ã„nderungen ([`changes::notify`]).
     pending: Changes,
 }
 
@@ -177,11 +181,11 @@ struct Inner {
 type Shared = Arc<Mutex<Inner>>;
 
 fn lock(shared: &Shared) -> MutexGuard<'_, Inner> {
-    // Ein Panic in einem früheren Aufruf lässt den Zustand stehen; weiterarbeiten statt abstürzen.
+    // Ein Panic in einem frÃ¼heren Aufruf lÃ¤sst den Zustand stehen; weiterarbeiten statt abstÃ¼rzen.
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Meta-Schlüssel der Geräte-ID (Sync-Client-ID, unterdrückt das eigene Echo).
+/// Meta-SchlÃ¼ssel der GerÃ¤te-ID (Sync-Client-ID, unterdrÃ¼ckt das eigene Echo).
 const DEVICE_ID_KEY: &str = "deviceId";
 
 impl Inner {
@@ -202,13 +206,13 @@ impl Inner {
         Ok(inner)
     }
 
-    /// Dauerhafte Geräte-ID; beim ersten Aufruf angelegt.
+    /// Dauerhafte GerÃ¤te-ID; beim ersten Aufruf angelegt.
     fn device_id(&mut self) -> String {
         if let Ok(Some(id)) = self.storage.meta(DEVICE_ID_KEY) {
             return id;
         }
         let id = uuid::Uuid::new_v4().to_string();
-        // Scheitert das Speichern, gilt die ID nur bis zum nächsten Start (Echo-Unterdrückung leidet kurz).
+        // Scheitert das Speichern, gilt die ID nur bis zum nÃ¤chsten Start (Echo-UnterdrÃ¼ckung leidet kurz).
         let _ = self.storage.apply(vec![impala_storage::Write::SetMeta(DEVICE_ID_KEY.into(), Some(id.clone()))]);
         id
     }
@@ -244,13 +248,13 @@ impl Inner {
 }
 
 /// Der Kern einer nativen App: eine Datenbank, ein Zustand. Alle Methoden sind threadsicher
-/// (intern serialisiert); lange Aufrufe (Öffnen, Import, Export) gehören in einen Hintergrund-Thread.
+/// (intern serialisiert); lange Aufrufe (Ã–ffnen, Import, Export) gehÃ¶ren in einen Hintergrund-Thread.
 #[derive(uniffi::Object)]
 pub struct ImpalaCore {
     inner: Shared,
 }
 
-/// Sperre auf den Zustand; meldet beim Freigeben gesammelte Änderungen ([`changes::notify`]).
+/// Sperre auf den Zustand; meldet beim Freigeben gesammelte Ã„nderungen ([`changes::notify`]).
 struct CoreGuard<'a> {
     guard: Option<MutexGuard<'a, Inner>>,
     shared: &'a Shared,
@@ -291,7 +295,7 @@ impl ImpalaCore {
         self.inner.clone()
     }
 
-    /// `pageCreate`; `kind`: `Some("heft")` für ein Heft. Ohne `workspace_id` gilt der der
+    /// `pageCreate`; `kind`: `Some("heft")` fÃ¼r ein Heft. Ohne `workspace_id` gilt der der
     /// Elternseite, sonst `default`.
     fn create_page_of_kind(
         &self,
@@ -327,7 +331,7 @@ impl ImpalaCore {
 
 #[uniffi::export]
 impl ImpalaCore {
-    /// Öffnet (oder legt an) die Datenbank unter `db_path` und lädt den Zustand.
+    /// Ã–ffnet (oder legt an) die Datenbank unter `db_path` und lÃ¤dt den Zustand.
     #[uniffi::constructor]
     pub fn open(db_path: String) -> Result<Arc<Self>, CoreError> {
         Ok(ImpalaCore::new(Inner::open(SqliteStorage::open(&db_path)?)?))
@@ -343,7 +347,7 @@ impl ImpalaCore {
         self.lock().load.clone()
     }
 
-    /// Versatz der Geräteuhr gegen einen Server in ms (positiv = Gerät geht vor).
+    /// Versatz der GerÃ¤teuhr gegen einen Server in ms (positiv = GerÃ¤t geht vor).
     pub fn set_clock_offset(&self, ms: i64) {
         self.lock().clock.set_offset(ms);
     }
@@ -369,7 +373,7 @@ impl ImpalaCore {
         self.create_page_of_kind(title, content, parent_id, workspace_id, None)
     }
 
-    /// Titel und/oder Inhalt einer Seite ändern (`None` = unverändert).
+    /// Titel und/oder Inhalt einer Seite Ã¤ndern (`None` = unverÃ¤ndert).
     pub fn update_page(&self, id: String, title: Option<String>, content: Option<String>) -> Result<(), CoreError> {
         let mut inner = self.lock();
         if !inner.model.state().pages.contains_key(&id) {
@@ -413,12 +417,12 @@ impl ImpalaCore {
         summaries(inner.model.state().children_of(parent_id.as_deref(), workspace_id.as_deref(), None))
     }
 
-    /// Elternkette (Wurzel zuerst) für Brotkrumen.
+    /// Elternkette (Wurzel zuerst) fÃ¼r Brotkrumen.
     pub fn ancestors_of(&self, id: String) -> Vec<PageSummary> {
         summaries(self.lock().model.state().ancestors_of(&id))
     }
 
-    /// Alle Seiten außerhalb von Papierkorb und Archiv, zuletzt geänderte zuerst.
+    /// Alle Seiten auÃŸerhalb von Papierkorb und Archiv, zuletzt geÃ¤nderte zuerst.
     pub fn recent_pages(&self, limit: u32) -> Vec<PageSummary> {
         let inner = self.lock();
         let mut pages = inner.model.state().active_pages();
@@ -442,7 +446,7 @@ impl ImpalaCore {
             .collect()
     }
 
-    /// Volltextsuche über Titel, Inhalt und Handschrift-Text.
+    /// Volltextsuche Ã¼ber Titel, Inhalt und Handschrift-Text.
     pub fn search(&self, query: String, include_archived: bool) -> Vec<SearchHit> {
         let mut guard = self.lock();
         let inner = &mut *guard;
@@ -458,7 +462,7 @@ impl ImpalaCore {
             .collect()
     }
 
-    /// Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Änderungen).
+    /// Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
     pub fn save_checkpoint(&self) -> Result<CheckpointResult, CoreError> {
         let mut guard = self.lock();
         let inner = &mut *guard;
@@ -470,8 +474,8 @@ impl ImpalaCore {
         })
     }
 
-    /// Bild oder Datei speichern; liefert die ID für den Seiteninhalt (`img:…` für Bilder, sonst
-    /// `file:…`, wie im Editor der PWA). Der Sync überträgt sie mit der nächsten Seitenänderung.
+    /// Bild oder Datei speichern; liefert die ID fÃ¼r den Seiteninhalt (`img:â€¦` fÃ¼r Bilder, sonst
+    /// `file:â€¦`, wie im Editor der PWA). Der Sync Ã¼bertrÃ¤gt sie mit der nÃ¤chsten SeitenÃ¤nderung.
     pub fn add_file(&self, bytes: Vec<u8>, mime: String, name: String) -> Result<String, CoreError> {
         let prefix = if mime.starts_with("image/") { "img:" } else { "file:" };
         let id = format!("{prefix}{}", uuid::Uuid::new_v4());
@@ -481,7 +485,7 @@ impl ImpalaCore {
         Ok(id)
     }
 
-    /// Gespeichertes Bild bzw. Datei (`img:…`, `file:…`); `None`, solange es noch nicht geladen ist.
+    /// Gespeichertes Bild bzw. Datei (`img:â€¦`, `file:â€¦`); `None`, solange es noch nicht geladen ist.
     pub fn file(&self, id: String) -> Result<Option<FileData>, CoreError> {
         let blob = self.lock().storage.blob(&id)?;
         Ok(blob.map(|b| {
@@ -498,7 +502,7 @@ impl ImpalaCore {
         Ok(inner.storage.export_all(&opts)?)
     }
 
-    /// Export der PWA (oder eines anderen Geräts) einspielen; danach ist der Zustand neu geladen.
+    /// Export der PWA (oder eines anderen GerÃ¤ts) einspielen; danach ist der Zustand neu geladen.
     pub fn import_json(&self, json: String) -> Result<ImportSummary, CoreError> {
         let mut inner = self.lock();
         let report = inner.storage.import_all(&json, &ImportOptions::default())?;
@@ -507,7 +511,7 @@ impl ImpalaCore {
                 inner.clock.observe(t);
             }
         }
-        // Neu laden statt einzeln anwenden: Importierte Events können älter sein als vorhandene.
+        // Neu laden statt einzeln anwenden: Importierte Events kÃ¶nnen Ã¤lter sein als vorhandene.
         inner.reload()?;
         Ok(ImportSummary {
             added: report.added as u64,
