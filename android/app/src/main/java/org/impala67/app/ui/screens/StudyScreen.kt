@@ -121,6 +121,7 @@ import uniffi.impala_ffi.CardInfo
 import uniffi.impala_ffi.DeckConfig
 import uniffi.impala_ffi.DeckInfo
 import uniffi.impala_ffi.DeckOverview
+import uniffi.impala_ffi.LeechAction
 import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.StudyQueue
 import java.util.TimeZone
@@ -274,7 +275,7 @@ fun StudyScreen(
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.rounded.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = "Zurück",
                                 tint = TextMain,
                                 modifier = Modifier.size(18.dp)
@@ -758,7 +759,7 @@ fun StudyScreen(
                     currentConf = conf
                     if (conf != null) {
                         newPerDay = conf.newPerDay.toString()
-                        revPerDay = conf.maxReviewsPerDay.toString()
+                        revPerDay = conf.revPerDay.toString()
                     }
                 }
             }
@@ -877,9 +878,9 @@ private fun DecksOverviewTab(
     onDeleteDeck: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val totalDue = decks.sumOf { it.dueCount.toInt() }
-    val totalNew = decks.sumOf { it.newCount.toInt() }
-    val totalCards = decks.sumOf { it.totalCards.toInt() }
+    val totalDue = decks.sumOf { (it.review + it.learn).toInt() }
+    val totalNew = decks.sumOf { it.new.toInt() }
+    val totalCards = decks.sumOf { it.total.toInt() }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1061,23 +1062,23 @@ private fun DecksOverviewTab(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(top = 2.dp)
                             ) {
-                                if (deck.dueCount > 0u) {
+                                if ((deck.review + deck.learn) > 0u) {
                                     Text(
-                                        text = "${deck.dueCount} fällig",
+                                        text = "${(deck.review + deck.learn)} fällig",
                                         color = AccentBlue,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                if (deck.newCount > 0u) {
+                                if (deck.new > 0u) {
                                     Text(
-                                        text = "${deck.newCount} neu",
+                                        text = "${deck.new} neu",
                                         color = SuccessGreen,
                                         fontSize = 11.sp
                                     )
                                 }
                                 Text(
-                                    text = "${deck.totalCards} gesamt",
+                                    text = "${deck.total} gesamt",
                                     color = TextMuted,
                                     fontSize = 11.sp
                                 )
@@ -1090,7 +1091,7 @@ private fun DecksOverviewTab(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (deck.dueCount > 0u) AccentBlue else BgBubble,
+                                color = if ((deck.review + deck.learn) > 0u) AccentBlue else BgBubble,
                                 modifier = Modifier
                                     .clickable { onStudyDeck(deck.name) }
                                     .height(30.dp)
@@ -1100,8 +1101,8 @@ private fun DecksOverviewTab(
                                     modifier = Modifier.padding(horizontal = 12.dp)
                                 ) {
                                     Text(
-                                        text = if (deck.dueCount > 0u) "Lernen" else "Üben",
-                                        color = if (deck.dueCount > 0u) Color(0xFF081018) else TextMain,
+                                        text = if ((deck.review + deck.learn) > 0u) "Lernen" else "Üben",
+                                        color = if ((deck.review + deck.learn) > 0u) Color(0xFF081018) else TextMain,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -1599,9 +1600,9 @@ private fun StudyStatsTab(
     decks: List<DeckOverview>,
     modifier: Modifier = Modifier
 ) {
-    val totalDue = decks.sumOf { it.dueCount.toInt() }
-    val totalNew = decks.sumOf { it.newCount.toInt() }
-    val totalCards = decks.sumOf { it.totalCards.toInt() }
+    val totalDue = decks.sumOf { (it.review + it.learn).toInt() }
+    val totalNew = decks.sumOf { it.new.toInt() }
+    val totalCards = decks.sumOf { it.total.toInt() }
 
     Column(
         modifier = modifier

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -931,10 +932,15 @@ private fun ConflictDiffDialog(
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(diffRows) { row ->
                         when (row) {
-                            is DiffRow.Equal -> Text(row.line, color = TextMuted, fontSize = 12.sp)
-                            is DiffRow.LeftOnly -> Text("+ ${row.line}", color = SuccessGreen, fontSize = 12.sp)
-                            is DiffRow.RightOnly -> Text("- ${row.line}", color = DangerRed, fontSize = 12.sp)
-                            is DiffRow.Gap -> Text("... eingeklappt ...", color = TextLight, fontSize = 10.sp)
+                            is DiffRow.Line -> {
+                                if (row.changed) {
+                                    if (row.left != null) Text("+ ${row.left}", color = SuccessGreen, fontSize = 12.sp)
+                                    if (row.right != null) Text("- ${row.right}", color = DangerRed, fontSize = 12.sp)
+                                } else {
+                                    Text(row.left ?: row.right ?: "", color = TextMuted, fontSize = 12.sp)
+                                }
+                            }
+                            is DiffRow.Gap -> Text("... ${row.count} Zeilen eingeklappt ...", color = TextLight, fontSize = 10.sp)
                         }
                     }
                 }

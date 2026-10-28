@@ -672,11 +672,8 @@ fun MobileAppShell(
                                         }
                                     }
                                 },
-                                onOpenStudy = { deck ->
-                                    onSelectStudyDeck(deck)
-                                    onSelectPrimaryTab(MobilePrimaryTab.STUDY)
-                                },
-                                onOpenAiChat = { prompt -> onOpenAiForPage(null, prompt) },
+                                onOpenStudy = { onSelectStudyDeck(null); onSelectPrimaryTab(MobilePrimaryTab.STUDY) },
+                                onOpenAiChat = { onOpenAiForPage(null, null) },
                                 onOpenSettings = onOpenSettings,
                                 onOpenSearch = onOpenSearch,
                                 onOpenLibrary = { onSetSubRoute(MobileSubRoute.Library("hefte")) },

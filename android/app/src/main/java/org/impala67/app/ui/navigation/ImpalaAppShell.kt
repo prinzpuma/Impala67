@@ -221,9 +221,9 @@ fun ImpalaAppShell(
         coroutineScope.launch(Dispatchers.IO) {
             val pages = try { repository.core.recentPages(500u) } catch (_: Exception) { emptyList() }
             val decks = try { repository.core.deckOverview(utcOffsetMinutes, false) } catch (_: Exception) { emptyList() }
-            val totalDue = decks.sumOf { it.dueCount.toInt() }
-            val totalNew = decks.sumOf { it.newCount.toInt() }
-            val totalCards = decks.sumOf { it.totalCards.toInt() }
+            val totalDue = decks.sumOf { (it.review + it.learn).toInt() }
+            val totalNew = decks.sumOf { it.new.toInt() }
+            val totalCards = decks.sumOf { it.total.toInt() }
             val stats = StudyStatsSummary(
                 dueToday = totalDue,
                 newToday = totalNew,
@@ -452,7 +452,7 @@ fun ImpalaAppShell(
                                 modifier = Modifier.size(26.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.rounded.NavigateBefore,
+                                    imageVector = Icons.AutoMirrored.Rounded.NavigateBefore,
                                     contentDescription = "Zurück",
                                     tint = if (activeTabIndex > 0) TextMain else TextLight,
                                     modifier = Modifier.size(18.dp)
@@ -467,7 +467,7 @@ fun ImpalaAppShell(
                                 modifier = Modifier.size(26.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.rounded.NavigateNext,
+                                    imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
                                     contentDescription = "Vorwärts",
                                     tint = if (activeTabIndex < openTabs.lastIndex) TextMain else TextLight,
                                     modifier = Modifier.size(18.dp)
@@ -570,7 +570,7 @@ fun ImpalaAppShell(
                                     pages = pagesList,
                                     decks = decksList,
                                     studyStats = studyStats,
-                                    syncState = repository.syncController.state.collectAsStateWithLifecycle().value,
+                                    syncState = syncUiModel,
                                     favoritePageIds = favoritePageIds.toSet(),
                                     onOpenPage = { id -> openPageInTab(id) },
                                     onCreatePage = { isHeft ->

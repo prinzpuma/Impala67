@@ -110,7 +110,6 @@ import uniffi.impala_ffi.AiRunRequest
 import uniffi.impala_ffi.ChatData
 import uniffi.impala_ffi.ChatInfo
 import uniffi.impala_ffi.ChatMessage
-import uniffi.impala_ffi.ChatSummary
 import uniffi.impala_ffi.ImpalaCore
 import java.util.TimeZone
 
@@ -141,7 +140,7 @@ fun AiChatSheet(
     var activeModel by remember { mutableStateOf("Gemini 2.5 Flash") }
     var isModelMenuOpen by remember { mutableStateOf(false) }
     var isHistoryMenuOpen by remember { mutableStateOf(false) }
-    var savedChats by remember { mutableStateOf<List<ChatSummary>>(emptyList()) }
+    var savedChats by remember { mutableStateOf<List<ChatInfo>>(emptyList()) }
 
     var attachedPageId by remember { mutableStateOf<String?>(currentPageId) }
     var attachedPageTitle by remember { mutableStateOf<String?>(null) }
@@ -300,9 +299,14 @@ fun AiChatSheet(
                         currentTool = null
                         currentDraft = ""
                         currentThinking = ""
+                        if (currentChatId.isBlank()) {
+                            currentChatId = outcome.chatId
+                            loadChatList()
+                        }
                         loadChat(currentChatId)
                         onMutation()
                     }
+                }
                 }
 
                 override fun onError(error: String) {
@@ -462,16 +466,11 @@ fun AiChatSheet(
                     // Neuer Chat
                     IconButton(
                         onClick = {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                val newId = try { core.createChat("Neuer Chat") } catch (_: Exception) { "" }
-                                withContext(Dispatchers.Main) {
-                                    currentChatId = newId
-                                    messages.clear()
-                                    currentDraft = ""
-                                    currentThinking = ""
-                                    loadChatList()
-                                }
-                            }
+                            currentChatId = ""
+                            messages.clear()
+                            currentDraft = ""
+                            currentThinking = ""
+                            loadChatList()
                         },
                         modifier = Modifier.size(30.dp)
                     ) {
@@ -730,7 +729,7 @@ fun AiChatSheet(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = if (isRunning) Icons.Rounded.Stop else Icons.AutoMirrored.rounded.Send,
+                                imageVector = if (isRunning) Icons.Rounded.Stop else Icons.AutoMirrored.Rounded.Send,
                                 contentDescription = if (isRunning) "Stopp" else "Senden",
                                 tint = Color(0xFF081018),
                                 modifier = Modifier.size(18.dp)
