@@ -249,51 +249,47 @@ fun AiChatSheet(
         currentTool = null
 
         coroutineScope.launch(Dispatchers.IO) {
-            if (currentChatId.isBlank()) {
-                val firstWord = text.take(24)
-                val newId = try { core.createChat(firstWord) } catch (_: Exception) { "" }
-                withContext(Dispatchers.Main) {
-                    currentChatId = newId
-                    loadChatList()
-                }
-            }
-
             val request = AiRunRequest(
                 chatId = currentChatId,
-                userPrompt = text,
-                pageId = attachedPageId,
-                clientUtcOffsetMinutes = utcOffsetMinutes,
-                imageUrls = emptyList(),
-                imageFiles = emptyList()
+                text = text,
+                image = null,
+                textFile = null,
+                pdfFile = null,
+                activePageId = attachedPageId,
+                heftPageIndex = null,
+                sendPageContext = !attachedPageId.isNullOrBlank(),
+                anki = null,
+                useRag = true,
+                utcOffsetMinutes = utcOffsetMinutes
             )
 
             assistant.runAsync(request, object : AiListener {
-                override fun onDelta(text: String) {
+                override fun onDraft(text: String) {
                     coroutineScope.launch(Dispatchers.Main) {
-                        currentDraft += text
+                        currentDraft = text
                     }
                 }
 
-                override fun onThought(text: String) {
+                override fun onThinking(text: String) {
                     coroutineScope.launch(Dispatchers.Main) {
-                        currentThinking += text
+                        currentThinking = text
                     }
                 }
 
-                override fun onToolCall(name: String, argsJson: String) {
+                override fun onToolStarted(name: String) {
                     coroutineScope.launch(Dispatchers.Main) {
                         currentTool = "Führe aus: $name..."
                     }
                 }
 
-                override fun onToolResult(name: String, resultJson: String) {
+                override fun onMessage(message: ChatMessage) {
                     coroutineScope.launch(Dispatchers.Main) {
-                        currentTool = "Fertig: $name"
+                        messages.add(message)
                         onMutation()
                     }
                 }
 
-                override fun onDone(outcome: AiOutcome) {
+                override fun onFinished(outcome: AiOutcome) {
                     coroutineScope.launch(Dispatchers.Main) {
                         isRunning = false
                         currentTool = null
@@ -307,13 +303,12 @@ fun AiChatSheet(
                         onMutation()
                     }
                 }
-                }
 
-                override fun onError(error: String) {
+                override fun onFailed(message: String, aborted: Boolean) {
                     coroutineScope.launch(Dispatchers.Main) {
                         isRunning = false
                         currentTool = null
-                        currentDraft += "\n[Fehler: $error]"
+                        currentDraft += "\n[Fehler: $message]"
                     }
                 }
             })

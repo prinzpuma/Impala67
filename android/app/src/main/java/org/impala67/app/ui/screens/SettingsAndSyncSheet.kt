@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,6 +89,7 @@ import kotlinx.coroutines.withContext
 import org.impala67.app.data.SyncUiModel
 import org.impala67.app.ui.theme.Accent
 import org.impala67.app.ui.theme.AccentBlue
+import org.impala67.app.ui.theme.AccentBlueSoft
 import org.impala67.app.ui.theme.AccentGreen
 import org.impala67.app.ui.theme.AccentOrange
 import org.impala67.app.ui.theme.AccentSoft
@@ -377,7 +379,7 @@ private fun AppearanceTab(
         currentTheme = newTheme
         prefs.edit().putString(PREF_THEME_MODE, newTheme).apply()
         coroutineScope.launch(Dispatchers.IO) {
-            try { core.setSetting("theme", "\"$newTheme\"") } catch (_: Exception) {}
+            try { core.updateSettings("""{"theme": "$newTheme"}""") } catch (_: Exception) {}
         }
         syncThemeFromPrefs(context)
         onThemeChanged()
@@ -387,7 +389,7 @@ private fun AppearanceTab(
         currentAccent = newAccent
         prefs.edit().putString(PREF_ACCENT_COLOR, newAccent).apply()
         coroutineScope.launch(Dispatchers.IO) {
-            try { core.setSetting("accentColor", "\"$newAccent\"") } catch (_: Exception) {}
+            try { core.updateSettings("""{"accentColor": "$newAccent"}""") } catch (_: Exception) {}
         }
         syncThemeFromPrefs(context)
         onThemeChanged()
@@ -642,8 +644,9 @@ private fun SyncAndDriveTab(
     onSaveSyncKey: (String) -> Unit,
     onMessage: (String) -> Unit
 ) {
-    var syncKeyInput by remember { mutableStateOf(syncUiModel?.syncKey ?: "") }
+    var syncKeyInput by remember { mutableStateOf("") }
     var isKeyVisible by remember { mutableStateOf(false) }
+    val isOnline = syncUiModel is SyncUiModel.Synced || syncUiModel is SyncUiModel.Syncing || syncUiModel is SyncUiModel.Idle
 
     Column(
         modifier = Modifier
@@ -661,14 +664,14 @@ private fun SyncAndDriveTab(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = if (syncUiModel?.isOnline == true) Icons.Rounded.CloudDone else Icons.Rounded.Cloud,
+                        imageVector = if (isOnline) Icons.Rounded.CloudDone else Icons.Rounded.Cloud,
                         contentDescription = null,
-                        tint = if (syncUiModel?.isOnline == true) SuccessGreen else TextMuted,
+                        tint = if (isOnline) SuccessGreen else TextMuted,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (syncUiModel?.isOnline == true) "Cloudflare Live-Sync Aktiv" else "Sync Getrennt / Offline",
+                        text = if (isOnline) "Cloudflare Live-Sync Aktiv" else "Sync Getrennt / Offline",
                         color = TextMain,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
@@ -913,7 +916,9 @@ private fun ConflictDiffDialog(
 ) {
     val diffRows = remember(conflict) {
         try {
-            conflictDiffRows(conflict.winnerContent, conflict.loserContent) ?: emptyList()
+            val left = conflict.localContent ?: ""
+            val right = conflict.remoteContent ?: ""
+            conflictDiffRows(left, right) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }

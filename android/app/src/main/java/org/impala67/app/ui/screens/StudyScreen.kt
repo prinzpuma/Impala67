@@ -810,15 +810,12 @@ fun StudyScreen(
                     onClick = {
                         val n = newPerDay.toUIntOrNull() ?: 20u
                         val r = revPerDay.toUIntOrNull() ?: 200u
-                        val base = currentConf ?: DeckConfig(
+                        val updated = currentConf?.copy(newPerDay = n, revPerDay = r) ?: DeckConfig(
                             newPerDay = n,
-                            maxReviewsPerDay = r,
-                            requestRetention = 0.9,
+                            revPerDay = r,
                             leechThreshold = 8u,
-                            leechAction = "tag",
-                            mixMode = false
+                            leechAction = LeechAction.MARK
                         )
-                        val updated = base.copy(newPerDay = n, maxReviewsPerDay = r)
                         coroutineScope.launch(Dispatchers.IO) {
                             try {
                                 core.setDeckConfig(configDeckName, updated)
