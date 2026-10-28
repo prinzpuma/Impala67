@@ -6,6 +6,7 @@ mod heft;
 mod ink;
 mod js;
 mod markdown;
+mod model;
 mod search;
 mod srs;
 mod sync;

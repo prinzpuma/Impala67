@@ -182,10 +182,11 @@ test("Sync-Kern: Schlüssel, deterministische Anmeldung, Validierung", async () 
 test("Sync: Drei-Wege-Merge, Blob-Lebenszyklus", () => {
 	assert.equal(CLOUD_SYNC_PROTOCOL, 4);
 
-	const merged = DB.merge3("a\nb\nc", "A\nb\nc", "a\nb\nC");
+	const merge3 = (...args) => JSON.parse(CORE.merge3(...args));
+	const merged = merge3("a\nb\nc", "A\nb\nc", "a\nb\nC");
 	assert.equal(merged.ok, true);
 	assert.equal(merged.text, "A\nb\nC");
-	assert.equal(DB.merge3("a\nb\nc", "A\nb\nc", "B\nb\nc").ok, false);
+	assert.equal(merge3("a\nb\nc", "A\nb\nc", "B\nb\nc").ok, false);
 
 	const pages = { pageA: { id: "pageA", coverImg: "cover:c1", content: "![Bild](img:i1)\n:::file file:f1 Datei" } };
 	assert.equal(isBlobAlive("cover:c1", pages), true);

@@ -1,5 +1,5 @@
 "use strict";
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { EMBEDDINGS, isValidVector, vectorModelKey } from "./embedding.js";
 import { buildRagIndex, rankRag, relatedPages } from "./rag-ranking.js";
@@ -102,9 +102,9 @@ export const RAG = (() => {
 				if (t !== undefined) inlinePdfs.push(t);
 			} catch (e) { console.warn("Inline-PDF-Volltext für RAG fehlgeschlagen:", e); }
 		}
-		const hdoc = (S.heftDocs && S.heftDocs[pageId]) || null;
+		const hdoc = STATE.heftDoc(pageId);
 		const heftPages = hdoc && Array.isArray(hdoc.pages) ? hdoc.pages.map((hp) => ({ texts: Array.isArray(hp?.texts) ? hp.texts : [], ocrText: hp?.ocrText ? String(hp.ocrText) : undefined })) : [];
-		const metaOcr = S.heftMeta?.[pageId]?.ocrText;
+		const metaOcr = STATE.heftMeta(pageId)?.ocrText;
 		const text = CORE.ragIndexText(String(pg.title || ""), String(pg.content || ""), pagePdf, inlinePdfs,
 			JSON.stringify(heftPages), metaOcr ? String(metaOcr) : undefined);
 		const chunks = chunk(text);

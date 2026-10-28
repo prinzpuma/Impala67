@@ -69,9 +69,9 @@ import { PLATFORM } from "./platform.js";
 //
 // Jetzt gilt für Hefte dasselbe wie für Seiten und Karten: der Inhalt IST das Log.
 // Jede Änderung wird als "heftOps"-Event gespeichert (Strich hinzu, Striche weg,
-// Seite hinzu, …), state.js spielt sie zu S.heftDocs ab. Hier drin wird auf dem
-// abgespielten Dokument gezeichnet und beim Speichern nur noch der Unterschied
-// zum zuletzt veröffentlichten Stand als Operationsliste abgeschickt.
+// Seite hinzu, …), der Rust-Kern spielt sie ab und hält alle Hefte. Der Editor holt das
+// geöffnete Heft als eigene Arbeitskopie, zeichnet darauf und schickt beim Speichern nur
+// den Unterschied zum zuletzt veröffentlichten Stand als Operationsliste ab.
 //
 // Folge: keine Heft-Dateien in Drive, kein Müllsammler, keine Hash-Abgleiche, keine
 // Konflikt-Kopien — und zwei Geräte, die gleichzeitig im selben Heft zeichnen,
@@ -179,84 +179,120 @@ export const HEFT = (() => {
 	// gezeichnete, noch nicht gespeicherte Striche galten dann als veröffentlicht und
 	// landeten nie im Log (nach dem Neuladen waren sie weg).
 	const published = {};
-	BUS.on("state:heft-changed", ({ pageId, event }) => {
-		if (!pageId || !published[pageId] || !event) return;
-		if (event.type === "heftOps") applyOpsToShadow(published[pageId], event.payload?.ops);
-		else if (event.type === "heftSnap" && S.heftDocs[pageId]) published[pageId] = documentShadow(S.heftDocs[pageId]);
+	// Events, die die Arbeitskopie selbst erzeugt hat (Speichern, Wiederherstellen, Anlegen): Die
+	// Kopie hat sie schon, nur der Schatten rückt vor. Alles andere am geöffneten Heft (anderes
+	// Gerät, zweiter Tab, Handschrift-Index, KI) ist fremd und wird in die Kopie übernommen.
+	const EDITOR = "heft-editor";
+	let foreignQueue = [];
+	BUS.on("state:heft-changed", ({ pageId, event, origin }) => {
+		if (!pageId || !event) return;
+		if (origin === EDITOR) { if (published[pageId]) advanceShadow(pageId, event); return; }
+		if (pageId !== pid) {
+			// Nicht geöffnetes Heft: Kopie und Schatten verwerfen, der nächste load() holt den neuen Stand.
+			delete docs[pageId]; delete published[pageId]; dropThumbs(pageId);
+			return;
+		}
+		if (!published[pageId]) return;
+		foreignQueue.push(event);
+		scheduleAdopt();
 	});
+	function advanceShadow(pageId, event) {
+		if (event.type === "heftOps") applyOpsToShadow(published[pageId], event.payload?.ops);
+		else if (event.type === "heftSnap") { const shadow = STATE.heftShadow(pageId); if (shadow) published[pageId] = shadow; }
+	}
+	// Fremde Events übernehmen: Was hier noch nicht gespeichert ist (Unterschied Kopie ↔ Schatten
+	// VOR den fremden Events), legt der Kern als Vorschau auf seinen neuen Stand – mit denselben
+	// Regeln wie der Reducer. Fremde Striche gelten so nie als eigene Neuerung (kein Echo-Upload),
+	// eigene, noch nicht gespeicherte bleiben Änderung für den nächsten Save. Während einer Geste
+	// wartet die Übernahme, damit der laufende Strich nicht an einer verworfenen Kopie hängt.
+	let adoptT = 0;
+	function scheduleAdopt() {
+		if (adoptT) return;
+		adoptT = setTimeout(() => { adoptT = 0; adoptForeign(); }, 0);
+	}
+	function adoptForeign() {
+		if (!foreignQueue.length) return;
+		if (drawing) { adoptT = setTimeout(() => { adoptT = 0; adoptForeign(); }, 120); return; }
+		const events = foreignQueue; foreignQueue = [];
+		if (!pid || !doc || !published[pid]) return;
+		PERF_PROFILER.measure("heft.remote-apply", () => {
+			if (unsaved || saving) {
+				const pending = diffDocument(published[pid], doc).ops;
+				for (const event of events) if (event?.payload?.pageId === pid) advanceShadow(pid, event);
+				const d = STATE.heftPreview(pid, pending);
+				if (d) showDoc(d);
+				return;
+			}
+			// Nichts Ungespeichertes: Die Kopie entspricht dem Log. Bleiben die Seiten dieselben, nur die
+			// berührten Seiten neu holen (ein Strich vom anderen Gerät kostet dann eine Seite, nicht das Heft).
+			for (const event of events) if (event?.payload?.pageId === pid) advanceShadow(pid, event);
+			const ids = STATE.heftPageIds(pid);
+			const sameLayout = !!ids && ids.length === doc.pages.length && ids.every((id, i) => id === doc.pages[i].id);
+			if (sameLayout && events.every((event) => event?.type === "heftOps")) {
+				const hit = new Set(events.flatMap((event) => (event.payload?.ops || []).map((op) => op?.p)).filter(Boolean));
+				const pages = doc.pages.map((pg) => (hit.has(pg.id) ? STATE.heftPageById(pid, pg.id) || pg : pg));
+				showDoc({ ...doc, pages }, hit);
+				return;
+			}
+			const d = STATE.heftDoc(pid);
+			if (d) showDoc(d);
+		}, { events: events.length }, 16);
+	}
 
 	const page = () => (doc ? doc.pages[idx] : null);
 	const imagesOf = (pg) => (pg.images || (pg.images = []));
 
-	// Das Dokument kommt jetzt aus dem abgespielten Log. docs[p] IST S.heftDocs[p] —
-	// dieselbe Objektreferenz. Trifft während des Zeichnens ein Fremd-Event ein,
-	// fügt der Reducer die Striche direkt in die Arrays ein, auf denen hier gezeichnet
-	// wird. Der alte Cache-Invalidierungs-Tanz über meta.rev entfällt ersatzlos.
-	// create: false für reine Vorschauen (Startseite, Export, Seitenbild für die KI). Nur wer das
-	// Heft öffnet oder beschreibt, legt bei einem noch leeren Heft die erste Seite an.
+	// Das Dokument kommt aus dem Kern: eine Arbeitskopie je geladenem Heft (docs[p]), samt Schatten
+	// des Log-Stands (published[p]). Kopien anderer als des geöffneten Hefts verfallen beim nächsten
+	// Heft-Event (siehe oben) bzw. beim Öffnen eines anderen Hefts.
+	// create: false für reine Vorschauen (Export, Seitenbild für die KI). Nur wer das Heft öffnet oder
+	// beschreibt, legt bei einem noch leeren Heft die erste Seite an.
 	async function load(p, { create = true } = {}) {
-		const docHashes = [];
-		const docPages = S.heftDocs?.[p]?.pages;
-		if (Array.isArray(docPages)) {
-			for (const pg of docPages) {
-				if (Array.isArray(pg?.images)) {
-					for (const im of pg.images) if (im?.ref) docHashes.push(im.ref);
-				}
-			}
+		if (p === pid && doc) return doc;
+		if (docs[p]) return docs[p];
+		// Ein bekanntes Heft ohne Bilder braucht keine Bilddaten — nur ein noch unbekanntes lädt alle.
+		const meta = STATE.heftMeta(p);
+		const refs = meta ? STATE.heftImageRefs(p) : [];
+		if (refs.length || !meta) {
+			await PERF_PROFILER.run("heft.hydrate-images", () => STATE.hydrateHeftBlobs(refs.length ? refs : null), { images: refs.length }, 16);
 		}
-		// Ein bekanntes Heft ohne Bilder braucht keine Bilddaten — vorher lud es die
-		// Bilder ALLER Hefte (mehrere MB). Nur ein noch unbekanntes Heft lädt alles.
-		if (docHashes.length || !Array.isArray(docPages)) {
-			await PERF_PROFILER.run("heft.hydrate-images", () => STATE.hydrateHeftBlobs(docHashes.length ? docHashes : null), { images: docHashes.length }, 16);
-		}
-		let d = S.heftDocs[p];
+		let d = PERF_PROFILER.measure("heft.fetch", () => STATE.heftDoc(p), { pages: meta?.pages }, 16);
 		if (!d || !d.pages.length) {
 			const legacy = await readLegacyDoc(p);
-			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy).ops });
+			if (legacy) await STATE.dispatch("heftOps", { pageId: p, ops: diffDocument(null, legacy).ops }, { origin: EDITOR });
 			// FIX: Eine Vorschau schrieb hier bisher selbst eine leere erste Seite ins Log. Kam ein
 			// Heft per Sync an, bevor seine Seiten da waren (oder wurde es woanders gerade angelegt),
 			// hatte es danach eine überzählige leere Seite VOR den echten — auf allen Geräten.
 			else if (!create) return null;
-			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] });
-			d = S.heftDocs[p];
+			else await STATE.dispatch("heftOps", { pageId: p, ops: [{ t: "pg+", at: 0, page: { id: U.uid(), paper: "lined" } }] }, { origin: EDITOR });
+			d = STATE.heftDoc(p);
 			// Der Alt-Blob hat seine Schuldigkeit getan — der Inhalt steht jetzt im Log.
 			if (legacy) DB.delBlob(KEY(p)).catch(() => {});
 		}
 		try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
+		if (!d) return null;
 		docs[p] = d;
-		if (!published[p]) published[p] = PERF_PROFILER.measure("heft.shadow", () => documentShadow(d), { pages: d?.pages?.length }, 16);
+		// Schatten des Log-Stands direkt im Kern (die frisch geholte Kopie ist genau dieser Stand).
+		published[p] = PERF_PROFILER.measure("heft.shadow", () => STATE.heftShadow(p) || documentShadow(d), { pages: d?.pages?.length }, 16);
 		return d;
 	}
 
-	// Fremdänderungen sind eingetroffen (Cloudflare, Drive oder ein zweiter Tab). Der Schatten
-	// steht über state:heft-changed schon auf dem Log-Stand; hier wird nur noch die Ansicht
-	// nachgezogen. Fremde Striche gelten so nie als eigene Neuerung (kein Echo-Upload), und
-	// eigene, noch nicht gespeicherte bleiben als Änderung für den nächsten Save erkennbar.
+	// Neue Bilddaten (heftBlob) oder ein gelöschtes Heft: Ansicht nachziehen. Neue Striche kommen
+	// über state:heft-changed und adoptForeign() in die Arbeitskopie.
 	// Nur Heft-Events (und gelöschte Seiten) betreffen Hefte. Vorher zeichnete jede Fremd-
 	// änderung – auch an einer getippten Notiz – das offene Heft neu und hob die Auswahl auf.
-	const REMOTE_HEFT_TYPES = new Set(["heftOps", "heftSnap", "heftBlob", "pageDelete"]);
-	function onRemoteApplied(types, events) {
-		if (!types || ![...types].some((type) => REMOTE_HEFT_TYPES.has(type))) return;
-		const changed = new Set((events || []).map((ev) => ev?.payload?.pageId).filter(Boolean));
-		PERF_PROFILER.measure("heft.remote-apply", () => applyRemoteToOpenDocs(changed, types.has("heftBlob")), { docs: Object.keys(published).length }, 16);
+	function onRemoteApplied(types) {
+		if (!types || !types.has("heftBlob")) return;
+		for (const key of Object.keys(thumbs)) delete thumbs[key];
+		if (pid && host && doc && !foreignQueue.length) showDoc(doc);
 	}
-	function applyRemoteToOpenDocs(changed, newBlobs) {
-		for (const key of Object.keys(published)) {
-			const d = S.heftDocs[key];
-			// Der Schatten ist über state:heft-changed bereits auf dem Log-Stand.
-			if (!d) { delete published[key]; continue; }
-			docs[key] = d;
-			// Vorschauen zeigten sonst den Stand vor dem Import (neue Bilddaten: alle).
-			if (newBlobs || changed.has(key)) dropThumbs(key);
-		}
-		if (!pid || !host || !(newBlobs || changed.has(pid))) return;
-		const d = S.heftDocs[pid];
-		if (!d || !d.pages.length) return;
+	// Ein (neues) Dokument anzeigen: Auswahl und Lasso per ID auf die neuen Objekte umhängen,
+	// sichtbare Seiten neu zeichnen. Undo-Einträge lösen ihre Seiten und Striche über IDs auf.
+	// changed: IDs der neu geholten Seiten (sonst alle sichtbaren neu zeichnen).
+	function showDoc(d, changed = null) {
+		if (!d || !d.pages.length || !host) return;
 		dropThumbs(pid);
-		const structural = doc !== d || d.pages.length !== canvases.length;
-		// Dokument komplett ersetzt (Snapshot-Import): Undo-Einträge zeigen auf Objekte des
-		// verworfenen Dokuments -> verwerfen statt blind anwenden.
-		if (doc && doc !== d) { undoStack = []; redoStack = []; }
+		const structural = !doc || d.pages.length !== canvases.length || d.pages.some((pg, i) => pg.id !== doc.pages[i]?.id);
 		doc = d; docs[pid] = d;
 		idx = Math.max(0, Math.min(idx, d.pages.length - 1));
 		// Auswahl nur aufheben, wenn ihr Bild/Textfeld weg ist (sie hält nur IDs).
@@ -267,13 +303,10 @@ export const HEFT = (() => {
 		if (structural) rebuildScroll();
 		else {
 			// FIX (25. Juli, "Striche erscheinen erst nach dem Neuladen"): renderVisiblePages()
-			// zeichnet eine Seite nur dann neu, wenn sich die CANVAS-GRÖSSE geändert hat — das
-			// ist beim Scrollen und Zoomen richtig, nach einem Import aber genau falsch: die
-			// Größe bleibt gleich, der INHALT ist neu. Die fremden Striche standen dadurch zwar
-			// im Dokument, wurden aber nie auf den Bildschirm gebracht. Jetzt werden alle
-			// sichtbaren Seiten nach einem Import ausdrücklich neu gezeichnet.
+			// zeichnet eine Seite nur dann neu, wenn sich die CANVAS-GRÖSSE geändert hat. Nach einer
+			// Übernahme bleibt die Größe gleich, der INHALT ist neu: alle sichtbaren Seiten neu zeichnen.
 			renderVisiblePages(true);
-			visiblePageIndices().forEach(redrawPage);
+			visiblePageIndices().filter((i) => !changed || changed.has(d.pages[i]?.id)).forEach(redrawPage);
 		}
 		updateChrome();
 	}
@@ -295,7 +328,11 @@ export const HEFT = (() => {
 			drawing.strokes = drawing.strokes.map((s) => live.get(s.id) || s);
 		}
 	}
-	function scheduleSave() { clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
+	// unsaved: die Arbeitskopie hat Änderungen, die noch nicht im Log stehen (jede Bearbeitung plant
+	// ein Speichern ein); saving: ein Speichern läuft gerade. Beides entscheidet, wie Fremdänderungen
+	// übernommen werden (adoptForeign).
+	let unsaved = false, saving = false, editSeq = 0;
+	function scheduleSave() { unsaved = true; editSeq++; clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
 	const refresh = (i) => { scheduleSave(); redrawPage(i); renderThumb(i); updateChrome(); };
 
 	// Speichern = Unterschied ermitteln und als Operationsliste ins Log schicken.
@@ -309,7 +346,7 @@ export const HEFT = (() => {
 		await PERF_PROFILER.run("heft.save-blobs", () => persistReferencedBlobs(saveDoc), {}, 16);
 		dropThumbs(savePid);
 		// Der Reducer meldet das Event über state:heft-changed — damit rückt auch der Schatten vor.
-		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }), { ops: ops.length }, 16);
+		await PERF_PROFILER.run("heft.save-dispatch", () => STATE.dispatch("heftOps", { pageId: savePid, ops }, { origin: EDITOR }), { ops: ops.length }, 16);
 		if (savePid === pid && saveDoc === doc) relinkLasso(doc);
 		// Handschrift neu lesen, wo sich Striche geändert haben – EINE Stelle für Schreiben,
 		// Radieren, Rückgängig und Lasso. Vorher nur nach Stiftstrichen: Wegradiertes blieb
@@ -323,9 +360,13 @@ export const HEFT = (() => {
 		clearTimeout(saveT);
 		if (!pid || !doc) return;
 
-		const savePid = pid, saveDoc = doc;
-		try { await PERF_PROFILER.run("heft.save", () => persistDoc(savePid, saveDoc), { pages: saveDoc.pages?.length }, 30); }
-		catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
+		const savePid = pid, saveDoc = doc, seq = editSeq;
+		saving = true;
+		try {
+			await PERF_PROFILER.run("heft.save", () => persistDoc(savePid, saveDoc), { pages: saveDoc.pages?.length }, 30);
+			if (savePid === pid && seq === editSeq) unsaved = false;
+		} catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
+		finally { saving = false; }
 	}
 
 	if (typeof document !== "undefined") {
@@ -353,12 +394,12 @@ export const HEFT = (() => {
 		// Strich blieb im Log und tauchte nach dem Neuladen wieder auf.
 		if (pid === p) await saveNow();
 		const target = { v: 2, rev: 0, pages: JSON.parse(JSON.stringify(restored?.pages || [])) };
-		const current = S.heftDocs[p] || { v: 2, rev: 0, pages: [] };
+		const current = STATE.heftDoc(p) || { v: 2, rev: 0, pages: [] };
 		const { ops } = diffDocument(documentShadow(current), target);
-		if (ops.length) await STATE.dispatch("heftOps", { pageId: p, ops });
-		const d = S.heftDocs[p];
+		if (ops.length) await STATE.dispatch("heftOps", { pageId: p, ops }, { origin: EDITOR });
+		const d = STATE.heftDoc(p) || target;
 		docs[p] = d;
-		published[p] = documentShadow(d);
+		published[p] = STATE.heftShadow(p) || documentShadow(d);
 		if (pid === p) {
 			doc = d; idx = Math.min(idx, d.pages.length - 1); sel = null; lassoSel = null; undoStack = []; redoStack = [];
 			rebuildScroll(); updateChrome();
@@ -416,11 +457,8 @@ export const HEFT = (() => {
 		}
 		return { ok: true, pageIndex: pi, addedPage };
 	}
-	// v8: das abgespielte Dokument ist die einzige Wahrheit. S.heftMeta war der
-	// abgeleitete Rest aus der Blob-Ära und konnte nach einem Import veraltete
-	// Seitenzahlen liefern (oder gar nicht mehr existieren).
-	const docOf = (p) => S.heftDocs[p] || docs[p] || null;
-	const pagesOf = (p) => { const d = docOf(p); return d && d.pages && d.pages.length ? d.pages.length : 1; };
+	// Seitenzahl: offenes Heft aus der Arbeitskopie (auch Ungespeichertes), sonst aus dem Kern.
+	const pagesOf = (p) => (p === pid && doc ? doc.pages.length : STATE.heftMeta(p)?.pages) || 1;
 
 	function paintPaper(x, w, h, kind) {
 		x.fillStyle = "#fbfaf7";
@@ -1641,6 +1679,9 @@ export const HEFT = (() => {
 			pid = pageId;
 			if (getComputedStyle(host).position === "static") host.style.position = "relative";
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
+			// Arbeitskopien anderer Hefte freigeben: nur das geöffnete bleibt im Speicher.
+			for (const key of Object.keys(docs)) if (key !== pageId) { delete docs[key]; delete published[key]; }
+			foreignQueue = []; unsaved = false;
 			doc = await PERF_PROFILER.run("heft.load", () => load(pageId), { pageId }, 30);
 			if (token !== mountToken || pid !== pageId) return;
 			// Speicher: Bilder zuvor geöffneter Hefte freigeben (Scans sind schnell Hunderte MB).
@@ -1729,8 +1770,7 @@ export const HEFT = (() => {
 
 		if (thumbJobs[key]) return thumbJobs[key];
 		const job = (async () => {
-			const d = await load(pageId, { create: false });
-			const pg = d && d.pages[i];
+			const pg = await previewPage(pageId, i);
 			if (!pg) return null;
 			const imgOf = imagesFor(pageId);
 			await decodeImages([pg], imgOf);
@@ -1765,10 +1805,20 @@ export const HEFT = (() => {
 		}
 	}
 
+	// Eine Seite für Vorschau, Miniatur oder Seitenbild: aus der offenen Arbeitskopie (zeigt auch
+	// Ungespeichertes), sonst nur diese eine Seite aus dem Kern samt ihrer Bilddaten.
+	async function previewPage(pageId, pageIdx) {
+		const i = Math.max(0, pageIdx | 0);
+		if (pageId === pid && doc) return doc.pages[i] || null;
+		const pg = STATE.heftPage(pageId, i);
+		const refs = (pg?.images || []).map((im) => im.ref).filter(Boolean);
+		if (refs.length) await STATE.hydrateHeftBlobs(refs);
+		return pg;
+	}
+
 	async function pageAsDataUrl(pageId, pageIdx, w = 1200) {
 		if (!pageId) return null;
-		const d = pageId === pid && doc ? doc : await load(pageId, { create: false });
-		const pg = d && d.pages && d.pages[pageIdx || 0];
+		const pg = await previewPage(pageId, pageIdx || 0);
 		if (!pg) return null;
 		const imgOf = imagesFor(pageId);
 		await decodeImages([pg], imgOf);
@@ -1777,6 +1827,8 @@ export const HEFT = (() => {
 
 
 	return {
+		// Arbeitskopie des geöffneten Hefts (sonst null): zeigt auch noch nicht Gespeichertes.
+		openDoc: (p) => (p && p === pid && doc ? doc : null),
 		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, pageAsDataUrl, pdfBlob, exportPdf, openImportDialog,
 		// Nur für test/heft.test.mjs nach außen gereicht:
 		renderPageTo, pageRectForTile, strokeGeometry, scaleStrokeFrom, lassoTouchAction,

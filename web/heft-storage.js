@@ -22,6 +22,8 @@ export const INK_LEGACY = (p) => "impala67.ink." + p;
 // sich nur noch den Inhalts-Hash ({ id, ref, x, y, w, h }, ca. 80 Byte). Verschieben
 // kostet damit ein paar Byte statt ein paar Megabyte, und zwei Geräte, die dasselbe
 // Bild einfügen, teilen sich automatisch einen Eintrag (gleicher Inhalt = gleicher Hash).
+// Bilddaten, die der Kern noch nicht geladen hat (eben eingefügt und noch nicht gespeichert, oder
+// nur im Checkpoint): sofort zeichnen können, ohne auf das Event bzw. das Nachladen zu warten.
 const pendingBlobData = new Map();
 const blobWrites = new Map();
 
@@ -38,15 +40,13 @@ export function ensureBlobPersisted(hash, dataUrl) {
 
 export function blobRef(dataUrl) {
 	const hash = blobId(dataUrl);
-	if (typeof S.heftBlobs[hash] !== "string") {
+	if (!pendingBlobData.has(hash) && !STATE.heftBlob(hash)) {
+		pendingBlobData.set(hash, dataUrl);
 		// hasHeftBlob kennt auch gespeicherte, nur nicht geladene Bilder — die brauchen kein
-		// zweites, mehrere MB großes heftBlob-Event im Log.
-		const stored = STATE.hasHeftBlob(hash);
-		// Sofort im Speicher hinterlegen, damit das Bild ohne Wartezeit gezeichnet werden
-		// kann; das Event ist nur die Persistenz (der Reducer überschreibt nichts).
-		S.heftBlobs[hash] = dataUrl;
-		if (!stored) {
-			pendingBlobData.set(hash, dataUrl);
+		// zweites, mehrere MB großes heftBlob-Event im Log, nur das Nachladen.
+		if (STATE.hasHeftBlob(hash)) {
+			STATE.hydrateHeftBlobs([hash]).finally(() => pendingBlobData.delete(hash));
+		} else {
 			void ensureBlobPersisted(hash, dataUrl).catch((e) => console.warn("Heft: Bilddaten speichern fehlgeschlagen", e));
 		}
 	}
@@ -62,7 +62,7 @@ export async function persistReferencedBlobs(saveDoc) {
 }
 
 // Bildquelle auflösen: neue Bilder tragen ref, Alt-Bestände noch src.
-export const imgSrc = (im) => (im && im.ref ? (S.heftBlobs[im.ref] || "") : (im && im.src) || "");
+export const imgSrc = (im) => (im && im.ref ? (pendingBlobData.get(im.ref) || STATE.heftBlob(im.ref) || "") : (im && im.src) || "");
 
 // Alt-Bild (dataURL inline) beim ersten Anfassen in eine Referenz umschreiben.
 export function toRefImage(im) {

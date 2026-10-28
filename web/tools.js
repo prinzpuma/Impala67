@@ -180,7 +180,8 @@ export const TOOLS = (() => {
 			const page = STATE.findPage(op.title);
 			if (!page) continue;
 			heftTargets.add(page.id);
-			if (S.heftDocs[page.id]) heftDocs[page.id] = clone(S.heftDocs[page.id]);
+			const doc = STATE.heftDoc(page.id);
+			if (doc) heftDocs[page.id] = doc;
 		}
 		return { pages: clone(S.pages), cards: clone(S.cards), decks: clone(S.decks), heftDocs, heftTargets };
 	}
@@ -193,7 +194,7 @@ export const TOOLS = (() => {
 	}
 	function undoSet(before) {
 		const heftAfter = {};
-		for (const id of before.heftTargets) if (S.heftDocs[id]) heftAfter[id] = S.heftDocs[id];
+		for (const id of before.heftTargets) { const doc = STATE.heftDoc(id); if (doc) heftAfter[id] = doc; }
 		return {
 			pages: changedRecords(before.pages, S.pages), cards: changedRecords(before.cards, S.cards),
 			decks: changedRecords(before.decks, S.decks), heftDocs: changedRecords(before.heftDocs, heftAfter),
@@ -207,7 +208,8 @@ export const TOOLS = (() => {
 		if (!changeSet) throw new Error("Undo-Daten fehlen.");
 		for (const key of ["pages", "cards", "decks", "heftDocs"]) {
 			for (const x of changeSet[key] || []) {
-				if (!same(S[key]?.[x.id] ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
+				const now = key === "heftDocs" ? STATE.heftDoc(x.id) : S[key]?.[x.id];
+				if (!same(now ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
 			}
 		}
 		// Alte Stapel zuerst zurückbringen, damit Karten nie auf nicht vorhandene Ziele zeigen.
@@ -592,7 +594,7 @@ export const TOOLS = (() => {
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
 				if (pg.kind === "heft") {
 					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
-					const meta = (S.heftMeta && S.heftMeta[pg.id]) || {};
+					const meta = STATE.heftMeta(pg.id) || {};
 					return {
 						title: pg.title,
 						heft: true,

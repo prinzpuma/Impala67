@@ -7,7 +7,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use impala_storage::checkpoint::{self, Loaded};
+use impala_heft::HeftDoc;
+use impala_storage::checkpoint::{self, HeftJson, LoadedRaw, Reject};
 use impala_storage::{Error, PartKind, Storage, StorageExt};
 use serde_json::Value;
 
@@ -211,16 +212,23 @@ impl Model {
     pub fn load<S: Storage + ?Sized>(storage: &mut S, now: &str) -> Result<(Model, LoadReport), Error> {
         let mut m = Model::default();
         let mut info = storage.log_info()?;
-        let (loaded, had_checkpoint) = match storage.load_checkpoint(order::reorder_safe_object) {
-            Ok(Loaded::Rejected(r)) => (Err(r.as_str()), r != checkpoint::Reject::Missing),
-            Ok(usable) => (Ok(usable), true),
+        let (loaded, had_checkpoint) = match checkpoint::load_raw(storage, order::reorder_safe_object) {
+            Ok(LoadedRaw::Rejected(r)) => (Err(r.as_str()), r != Reject::Missing),
+            // Hefte direkt typisiert lesen; ein kaputtes Heft verwirft den Checkpoint.
+            Ok(LoadedRaw::Usable { checkpoint, state, hefte, tail }) => match read_hefte(hefte) {
+                Some(docs) => (Ok((checkpoint, state, docs, tail)), true),
+                None => (Err(Reject::HeftDocs.as_str()), true),
+            },
             Err(_) => (Err("read-error"), false),
         };
         let (replayed, reject) = match loaded {
-            Ok(Loaded::Usable { checkpoint: cp, state: saved, tail }) => {
+            Ok((cp, saved, docs, tail)) => {
                 let format = cp.get("format").and_then(Value::as_u64).unwrap_or(0);
                 let partitioned = format == checkpoint::FORMAT || format == checkpoint::HEFT_JSON_FORMAT;
                 m.state = State::restore(saved, now);
+                if let Some(docs) = docs {
+                    m.state.hefte.docs = docs;
+                }
                 m.blob_sizes = if partitioned {
                     cp.get("heftBlobSizes")
                         .and_then(Value::as_object)
@@ -308,37 +316,72 @@ impl Model {
         order::sort_events(&mut events);
         let mut ids = Vec::with_capacity(events.len());
         for ev in events {
-            if !ev.id.is_empty() {
-                self.applied_after_load.insert(ev.id.clone());
-            }
             ids.push(ev.id.clone());
-            self.reduce(ev, false);
+            self.apply_remote_one(ev);
         }
         ids
     }
 
-    /// Eine eigene Änderung (`dispatch`): erst persistieren, dann anwenden. `id` und `now` kommen
-    /// vom Aufrufer (UUID, hybride Uhr). Neue Seiten bekommen `created`, wenn es fehlt.
-    pub fn dispatch<S: Storage + ?Sized>(
-        &mut self,
-        storage: &mut S,
-        kind: &str,
-        mut payload: Value,
-        id: &str,
-        now: &str,
-    ) -> Result<LogEvent, Error> {
+    /// Ein bereits gespeichertes Fremd-Event anwenden; der Aufrufer hält die Zeitreihenfolge ein.
+    pub fn apply_remote_one(&mut self, ev: LogEvent) -> Effects {
+        if !ev.id.is_empty() {
+            self.applied_after_load.insert(ev.id.clone());
+        }
+        self.reduce(ev, false)
+    }
+
+    /// Eine eigene Änderung als Event (`dispatch` vor dem Speichern): `id` und `now` kommen vom
+    /// Aufrufer (UUID, hybride Uhr). Neue Seiten bekommen `created`, wenn es fehlt.
+    pub fn local_event(kind: &str, mut payload: Value, id: &str, now: &str) -> LogEvent {
         if kind == "pageCreate"
             && let Some(o) = payload.as_object_mut()
             && !o.get("created").is_some_and(js::truthy)
         {
             o.insert("created".into(), Value::from(now));
         }
-        let mut ev = LogEvent::new(id, now, kind, payload);
+        LogEvent::new(id, now, kind, payload)
+    }
+
+    /// Eine eigene, schon gespeicherte Änderung anwenden.
+    pub fn apply_local(&mut self, ev: LogEvent) -> Effects {
+        self.applied_after_load.insert(ev.id.clone());
+        self.reduce(ev, false)
+    }
+
+    /// Eine eigene Änderung (`dispatch`): erst persistieren, dann anwenden.
+    pub fn dispatch<S: Storage + ?Sized>(
+        &mut self,
+        storage: &mut S,
+        kind: &str,
+        payload: Value,
+        id: &str,
+        now: &str,
+    ) -> Result<LogEvent, Error> {
+        let mut ev = Self::local_event(kind, payload, id, now);
         let seqs = storage.add_events(vec![ev.to_object()])?;
         ev.seq = seqs.first().copied().unwrap_or(0);
-        self.reduce(ev.clone(), false);
-        self.applied_after_load.insert(ev.id.clone());
+        self.apply_local(ev.clone());
         Ok(ev)
+    }
+
+    /// Folgenummer, bis zu der der letzte Checkpoint (oder der Start) reicht.
+    pub fn base_seq(&self) -> u64 {
+        self.base_seq
+    }
+
+    /// Der Speicher hat einen nach [`Model::save_checkpoint`] gemeldeten Checkpoint doch nicht
+    /// geschrieben (zweistufige Plattformen wie IndexedDB): Bilder bleiben ungesichert, der
+    /// nächste Versuch schreibt neu.
+    pub fn checkpoint_not_written(&mut self, dirty_blobs: &[String]) {
+        self.checkpoint_info = None;
+        self.dirty_blobs.extend(dirty_blobs.iter().cloned());
+    }
+
+    /// Heft mit noch nicht gespeicherten Operationen (Vorschau, ändert nichts).
+    pub fn heft_preview(&self, page_id: &str, ops: Value) -> Option<impala_heft::HeftDoc> {
+        let mut doc = self.state.hefte.docs.get(page_id)?.clone();
+        doc.apply_ops(impala_heft::parse_ops(ops));
+        Some(doc)
     }
 
     /// Checkpoint speichern (`persistCheckpoint`).
@@ -414,6 +457,19 @@ impl Model {
             self.payload_loaded = false;
         }
         released
+    }
+
+    /// Welche Bilder [`Model::hydrate_heft_blobs`] aus dem Speicher holen müsste (bekannt, nicht geladen).
+    pub fn blobs_to_hydrate(&self, targets: Option<&[String]>) -> Vec<String> {
+        if self.blob_sizes.is_empty() || (self.payload_loaded && targets.is_none()) {
+            return Vec::new();
+        }
+        let mut seen = HashSet::new();
+        let requested: Vec<&String> = match targets {
+            Some(t) => t.iter().filter(|h| self.blob_sizes.contains_key(*h) && seen.insert(*h)).collect(),
+            None => self.blob_sizes.keys().collect(),
+        };
+        requested.into_iter().filter(|h| !self.state.hefte.blobs.contains_key(*h)).cloned().collect()
     }
 
     /// Bilder aus dem Checkpoint nachladen (`hydrateHeftBlobs`): bestimmte oder alle. Fehlt ein
@@ -522,6 +578,27 @@ impl Model {
         }
         Some(HeftMeta { rev: doc.rev, pages: doc.pages.len(), ocr_text, updated, bytes })
     }
+}
+
+/// Hefte eines Checkpoints lesen (`None`: eins ist kaputt). Ohne Text (Format 1) bleiben die Hefte
+/// im Zustand: `Some(None)`.
+#[allow(clippy::option_option)]
+fn read_hefte(hefte: Option<HeftJson>) -> Option<Option<BTreeMap<String, HeftDoc>>> {
+    Some(match hefte {
+        None => None,
+        Some(HeftJson::Parts(parts)) => {
+            let mut docs = BTreeMap::new();
+            for (page, json) in parts {
+                docs.insert(page, serde_json::from_str::<HeftDoc>(&json).ok()?);
+            }
+            Some(docs)
+        }
+        Some(HeftJson::All(json)) => match serde_json::from_str::<Value>(&json).ok()? {
+            Value::Object(o) => Some(o.into_iter().map(|(k, d)| (k, HeftDoc::from_value(d))).collect()),
+            // Kein Objekt: wie bisher keine Hefte (`State::from_object` übergeht es).
+            _ => Some(BTreeMap::new()),
+        },
+    })
 }
 
 /// `eventLogInfoOf` über das sortierte Log: Event mit der höchsten `seq` (bei Gleichstand das letzte).

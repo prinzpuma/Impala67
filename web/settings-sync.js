@@ -24,25 +24,6 @@ export const SETTINGS_SYNC = (() => {
 			.filter(Boolean);
 	}
 
-	// Ein Patch ohne Token-Felder darf lokale Tokens nicht löschen. Das ist
-	// entscheidend, wenn ein Drive-Event absichtlich redigiert wurde.
-	function mergePatch(current, patch) {
-		const next = { ...(patch || {}) };
-		if (Array.isArray(next.aiProviders)) {
-			const oldById = new Map((current?.aiProviders || []).map((provider) => [provider.id, provider]));
-			next.aiProviders = next.aiProviders.map((provider) => {
-				// key: null = in den Einstellungen ausdrücklich geleert. Leer oder fehlend heißt
-				// dagegen „unverändert“ — so löscht ein Gerät ohne Schlüssel nie den eines anderen.
-				if (provider?.key === null) return { ...provider, key: "" };
-				const hasNewKey = typeof provider?.key === "string" && provider.key.trim().length > 0;
-				if (hasNewKey) return provider;
-				const old = oldById.get(provider.id);
-				return old && typeof old.key === "string" && old.key.trim().length > 0 ? { ...provider, key: old.key } : provider;
-			});
-		}
-		return next;
-	}
-
 	function secretSnapshot(settings) {
 		return {
 			notionToken: settings?.notionToken || "",
@@ -51,5 +32,5 @@ export const SETTINGS_SYNC = (() => {
 		};
 	}
 
-	return { allowsSecrets, sanitizeEvent, sanitizeEvents, mergePatch, secretSnapshot };
+	return { allowsSecrets, sanitizeEvent, sanitizeEvents, secretSnapshot };
 })();

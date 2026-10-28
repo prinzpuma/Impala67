@@ -4,7 +4,10 @@
 //! Gelesen wird nachsichtig: Fehlende Felder bekommen die Vorgaben des Reducers, Felder mit
 //! fremdem Typ und unbekannte Felder bleiben unverändert erhalten und werden mitgeschrieben.
 
-use serde::de::{Deserialize, Deserializer};
+use std::fmt;
+
+use serde::de::value::{MapAccessDeserializer, SeqAccessDeserializer};
+use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde_json::{Map, Value};
 
@@ -688,11 +691,351 @@ macro_rules! deserialize_via_value {
 }
 
 deserialize_via_value! {
-    Stroke => Stroke::from_value,
     Image => Image::from_value,
     TextBox => TextBox::from_value,
-    HeftPage => |v| Some(HeftPage::from_value(v)),
-    HeftDoc => |v| Some(HeftDoc::from_value(v)),
+}
+
+// ---- Schnelles Einlesen ohne Zwischenwert ----------------------------------------------------
+// Ein Heft mit Tausenden Strichen besteht fast nur aus Punkten. Über `Value` kostete jeder Punkt
+// eine Liste und je Zahl einen Wert. Hier werden Dokument, Seiten und Striche direkt gelesen; die
+// Punkte und Strich-Listen typisiert, alle übrigen Felder weiter als `Value` – mit genau denselben
+// Regeln wie `from_value` (Test `typisiert_wie_from_value`).
+
+/// Eine Zahl im Punkt; alles andere (auch `null`) wird `NaN`, wie `as_f64().unwrap_or(NaN)`.
+struct Coord(f64);
+
+impl<'de> Deserialize<'de> for Coord {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Coord;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Koordinate")
+            }
+            fn visit_f64<E>(self, v: f64) -> Result<Coord, E> {
+                Ok(Coord(v))
+            }
+            fn visit_i64<E>(self, v: i64) -> Result<Coord, E> {
+                Ok(Coord(v as f64))
+            }
+            fn visit_u64<E>(self, v: u64) -> Result<Coord, E> {
+                Ok(Coord(v as f64))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Coord, E> {
+                Ok(Coord(f64::NAN))
+            }
+            fn visit_str<E>(self, _: &str) -> Result<Coord, E> {
+                Ok(Coord(f64::NAN))
+            }
+            fn visit_unit<E>(self) -> Result<Coord, E> {
+                Ok(Coord(f64::NAN))
+            }
+            fn visit_none<E>(self) -> Result<Coord, E> {
+                Ok(Coord(f64::NAN))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Coord, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(Coord(f64::NAN))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Coord, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(Coord(f64::NAN))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+/// Ein Element der Punktliste: Liste → Punkt, sonst übersprungen (`filter_map(Point::from_value)`).
+struct MaybePoint(Option<Point>);
+
+impl<'de> Deserialize<'de> for MaybePoint {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = MaybePoint;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Punkt")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<MaybePoint, A::Error> {
+                let mut at = [None; 4];
+                let mut i = 0;
+                while let Some(Coord(c)) = a.next_element::<Coord>()? {
+                    if i < 4 {
+                        at[i] = Some(c);
+                    }
+                    i += 1;
+                }
+                Ok(MaybePoint(Some(Point {
+                    x: at[0].unwrap_or(f64::NAN),
+                    y: at[1].unwrap_or(f64::NAN),
+                    p: at[2],
+                    t: at[3],
+                })))
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_str<E>(self, _: &str) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_unit<E>(self) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_none<E>(self) -> Result<MaybePoint, E> {
+                Ok(MaybePoint(None))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<MaybePoint, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(MaybePoint(None))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+/// Eine Liste typisierter Einträge – oder, wenn es keine Liste ist, der Wert selbst (bleibt dann
+/// wie bei `take_owned` als Fremdfeld erhalten).
+enum ListOr<T> {
+    List(Vec<T>),
+    Other(Value),
+}
+
+/// Liest Listenelemente `E`; `keep` entscheidet, was davon übernommen wird.
+struct ListVisitor<E, T>(fn(E) -> Option<T>);
+
+impl<'de, E: Deserialize<'de>, T> Visitor<'de> for ListVisitor<E, T> {
+    type Value = ListOr<T>;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Liste")
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<ListOr<T>, A::Error> {
+        let mut out = Vec::with_capacity(a.size_hint().unwrap_or(0));
+        while let Some(e) = a.next_element::<E>()? {
+            if let Some(t) = (self.0)(e) {
+                out.push(t);
+            }
+        }
+        Ok(ListOr::List(out))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<ListOr<T>, A::Error> {
+        Ok(ListOr::Other(Value::deserialize(MapAccessDeserializer::new(a))?))
+    }
+    fn visit_f64<Er>(self, v: f64) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::from(v)))
+    }
+    fn visit_i64<Er>(self, v: i64) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::from(v)))
+    }
+    fn visit_u64<Er>(self, v: u64) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::from(v)))
+    }
+    fn visit_bool<Er>(self, v: bool) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::Bool(v)))
+    }
+    fn visit_str<Er>(self, v: &str) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::from(v)))
+    }
+    fn visit_string<Er>(self, v: String) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::String(v)))
+    }
+    fn visit_unit<Er>(self) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::Null))
+    }
+    fn visit_none<Er>(self) -> Result<ListOr<T>, Er> {
+        Ok(ListOr::Other(Value::Null))
+    }
+}
+
+/// `next_value` einer Liste mit Elementtyp `E`.
+struct ListSeed<E, T>(fn(E) -> Option<T>);
+
+impl<'de, E: Deserialize<'de>, T> serde::de::DeserializeSeed<'de> for ListSeed<E, T> {
+    type Value = ListOr<T>;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<ListOr<T>, D::Error> {
+        d.deserialize_any(ListVisitor(self.0))
+    }
+}
+
+/// Ein Objekt oder etwas anderes (dann als `Value`, um es wie `from_value` zu behandeln).
+enum ObjOr<T> {
+    Obj(T),
+    Other(Value),
+}
+
+macro_rules! other_kinds {
+    ($t:ty) => {
+        fn visit_seq<A: SeqAccess<'de>>(self, a: A) -> Result<ObjOr<$t>, A::Error> {
+            Ok(ObjOr::Other(Value::deserialize(SeqAccessDeserializer::new(a))?))
+        }
+        fn visit_f64<E>(self, v: f64) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::from(v)))
+        }
+        fn visit_i64<E>(self, v: i64) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::from(v)))
+        }
+        fn visit_u64<E>(self, v: u64) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::from(v)))
+        }
+        fn visit_bool<E>(self, v: bool) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::Bool(v)))
+        }
+        fn visit_str<E>(self, v: &str) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::from(v)))
+        }
+        fn visit_string<E>(self, v: String) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::String(v)))
+        }
+        fn visit_unit<E>(self) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::Null))
+        }
+        fn visit_none<E>(self) -> Result<ObjOr<$t>, E> {
+            Ok(ObjOr::Other(Value::Null))
+        }
+    };
+}
+
+/// Übrige Felder eines Objekts und sein typisiert gelesenes Listenfeld (falls es eine Liste war).
+type WithList<T> = (Map<String, Value>, Option<Vec<T>>);
+
+/// Liest ein Objekt Feld für Feld; das Listenfeld `list` typisiert über `seed`, alle anderen als
+/// `Value`. Ist das Listenfeld keine Liste, bleibt es als gewöhnliches Feld im Objekt.
+fn read_with_list<'de, A, E, T>(mut a: A, list: &str, keep: fn(E) -> Option<T>) -> Result<WithList<T>, A::Error>
+where
+    A: MapAccess<'de>,
+    E: Deserialize<'de>,
+{
+    let mut m = Map::new();
+    let mut items = None;
+    while let Some(k) = a.next_key::<String>()? {
+        if k == list {
+            match a.next_value_seed(ListSeed::<E, T>(keep))? {
+                // Platzhalter an derselben Stelle: `from_value` entfernt ihn wie die echte Liste, die
+                // übrigen Felder landen dadurch in derselben Reihenfolge.
+                ListOr::List(l) => {
+                    items = Some(l);
+                    m.insert(k, Value::Array(Vec::new()));
+                }
+                ListOr::Other(v) => {
+                    m.insert(k, v);
+                }
+            }
+        } else {
+            let v: Value = a.next_value()?;
+            m.insert(k, v);
+        }
+    }
+    Ok((m, items))
+}
+
+impl<'de> Deserialize<'de> for ObjOr<Stroke> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = ObjOr<Stroke>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Strich")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<ObjOr<Stroke>, A::Error> {
+                let (m, pts) = read_with_list::<A, MaybePoint, Point>(a, "pts", |p| p.0)?;
+                let mut s = Stroke::from_value(Value::Object(m)).unwrap_or_default();
+                if let Some(pts) = pts {
+                    s.pts = pts;
+                }
+                Ok(ObjOr::Obj(s))
+            }
+            other_kinds!(Stroke);
+        }
+        d.deserialize_any(V)
+    }
+}
+
+impl<'de> Deserialize<'de> for ObjOr<HeftPage> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = ObjOr<HeftPage>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Heftseite")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<ObjOr<HeftPage>, A::Error> {
+                let (m, strokes) = read_with_list::<A, ObjOr<Stroke>, Stroke>(a, "strokes", |s| match s {
+                    ObjOr::Obj(s) => Some(s),
+                    ObjOr::Other(_) => None,
+                })?;
+                let mut p = HeftPage::from_value(Value::Object(m));
+                if let Some(strokes) = strokes {
+                    p.strokes = strokes;
+                }
+                Ok(ObjOr::Obj(p))
+            }
+            other_kinds!(HeftPage);
+        }
+        d.deserialize_any(V)
+    }
+}
+
+impl<'de> Deserialize<'de> for ObjOr<HeftDoc> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = ObjOr<HeftDoc>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Heft")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<ObjOr<HeftDoc>, A::Error> {
+                let (m, pages) = read_with_list::<A, ObjOr<HeftPage>, HeftPage>(a, "pages", |p| {
+                    Some(match p {
+                        ObjOr::Obj(p) => p,
+                        ObjOr::Other(v) => HeftPage::from_value(v),
+                    })
+                })?;
+                let mut doc = HeftDoc::from_value(Value::Object(m));
+                if let Some(pages) = pages {
+                    doc.pages = pages;
+                }
+                Ok(ObjOr::Obj(doc))
+            }
+            other_kinds!(HeftDoc);
+        }
+        d.deserialize_any(V)
+    }
+}
+
+impl<'de> Deserialize<'de> for Stroke {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        match ObjOr::<Stroke>::deserialize(d)? {
+            ObjOr::Obj(s) => Ok(s),
+            ObjOr::Other(_) => Err(serde::de::Error::custom("Stroke: kein Objekt")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HeftPage {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match ObjOr::<HeftPage>::deserialize(d)? {
+            ObjOr::Obj(p) => p,
+            ObjOr::Other(v) => HeftPage::from_value(v),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for HeftDoc {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match ObjOr::<HeftDoc>::deserialize(d)? {
+            ObjOr::Obj(doc) => doc,
+            ObjOr::Other(v) => HeftDoc::from_value(v),
+        })
+    }
 }
 
 /// Durchsuchbarer Seitentext (`composePageText`): erst die Handschrift-Erkennung, danach

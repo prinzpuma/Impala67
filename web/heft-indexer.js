@@ -30,7 +30,8 @@ export const HEFT_INDEXER = (() => {
 	// In dieser Sitzung schon geprüfte Aufgaben. Neue Striche ändern den Schlüssel,
 	// dann wird die Seite erneut geprüft.
 	const checked = new Set();
-	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${pg.strokes.length}`;
+	// pg: Heftseite oder Eintrag der Index-Übersicht (dort ist strokes die Anzahl).
+	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${Array.isArray(pg.strokes) ? pg.strokes.length : pg.strokes}`;
 	const scanKey = (pageId, pg, im) => `${pageId}:${pg.id}:img:${im.id}`;
 
 	// Priorisierte Aufgaben: Seiten, auf denen der Nutzer gerade gezeichnet hat
@@ -114,23 +115,23 @@ export const HEFT_INDEXER = (() => {
 		if (!im || !im.ref || im.ocr !== undefined) return false;
 		if (im.scan === true) return true;
 		// Ältere Scans ohne Flag: einziges Bild einer strichlosen Seite, das die Seite ausfüllt.
-		return !(pg.strokes && pg.strokes.length) && pg.images.length === 1 && fillsPage(im);
+		return !(Array.isArray(pg.strokes) ? pg.strokes.length : pg.strokes) && pg.images.length === 1 && fillsPage(im);
 	}
 
 	// Findet alle offenen Aufgaben: Stricherkennung (nach Modellwechsel: alle) und Scan-Bilder
 	// Nebenbei: Fortschritt (Seiten mit Strichen gesamt / davon erledigt) und alle aktuellen Seiten-Schlüssel
+	// Übersicht aller Hefte aus dem Kern ohne Strichpunkte (heftIndexSummary); Aufgaben merken sich
+	// nur Heft, Seiten-ID und Index, die Seite selbst holt die Erkennung frisch (pageOf).
 	function findUnindexedPages() {
 		const jobs = [];
-		const heftDocs = S.heftDocs || {};
 		let total = 0;
 		let doneCount = 0;
 		const present = new Set();
-		for (const [pageId, doc] of Object.entries(heftDocs)) {
-			if (!doc || !Array.isArray(doc.pages)) continue;
-			for (let idx = 0; idx < doc.pages.length; idx++) {
-				const pg = doc.pages[idx];
+		for (const { pageId, pages } of STATE.heftIndexSummary()) {
+			for (let idx = 0; idx < pages.length; idx++) {
+				const pg = pages[idx];
 				if (!pg) continue;
-				if (Array.isArray(pg.strokes) && pg.strokes.length) {
+				if (pg.strokes) {
 					const key = checkKey(pageId, pg);
 					const hasText = !!String(pg.ocrText || "").trim();
 					total++;
@@ -138,13 +139,13 @@ export const HEFT_INDEXER = (() => {
 					// Fehlgeschlagene Seiten (checked, aber nicht done) zählen nicht als erledigt
 					if (done.has(key) || (!reindexAll && hasText)) doneCount++;
 					if (!checked.has(key) && !done.has(key) && !crashedTooOften(key) && (reindexAll || !hasText)) {
-						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, page: pg });
+						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, pageKey: pg.id });
 					}
 				}
 				for (const im of pg.images || []) {
 					const key = scanKey(pageId, pg, im);
 					if (!checked.has(key) && !crashedTooOften(key) && isPendingScan(pg, im)) {
-						jobs.push({ kind: "scan", key, pageId, pageIdx: idx, page: pg, image: im });
+						jobs.push({ kind: "scan", key, pageId, pageIdx: idx, pageKey: pg.id, imageId: im.id });
 					}
 				}
 			}
@@ -155,11 +156,22 @@ export const HEFT_INDEXER = (() => {
 	}
 	let lastPresent = new Set();
 
-	// true = Seite ist erkannt (auch ohne Text, z. B. reine Skizze); false = später erneut versuchen
+	// Aktuelle Fassung einer Heftseite: aus dem offenen Heft (auch Ungespeichertes), sonst aus dem Kern.
+	function pageOf(job) {
+		const open = HEFT.openDoc && HEFT.openDoc(job.pageId);
+		if (open) return open.pages.find((pg) => pg.id === job.pageKey) || null;
+		const pg = STATE.heftPage(job.pageId, job.pageIdx);
+		return pg && pg.id === job.pageKey ? pg : (STATE.heftDoc(job.pageId)?.pages || []).find((p) => p.id === job.pageKey) || null;
+	}
+
+	// true = Seite ist erkannt (auch ohne Text, z. B. reine Skizze); false = später erneut versuchen.
+	// Der Text geht nur als Event in den Kern; das offene Heft übernimmt ihn von dort.
 	async function indexStrokes(job) {
+		const page = pageOf(job);
+		if (!page) return;
 		let text = null;
 		try {
-			text = await HANDSCHRIFT.recognizeStrokes(job.page.strokes, {}, "indexer");
+			text = await HANDSCHRIFT.recognizeStrokes(page.strokes, {}, "indexer");
 		} catch (err) {
 			hadFailure = true;
 			console.info("[heft-indexer] Stricherkennung Fehler:", err);
@@ -168,25 +180,27 @@ export const HEFT_INDEXER = (() => {
 		done.add(job.key);
 		saveDone();
 		// Ein leeres Ergebnis ersetzt keinen vorhandenen Text: sicherer bei reinen Skizzen mit Beschriftung.
-		const composed = composePageText(text, job.page);
-		if (!composed || composed === String(job.page.ocrText || "").trim()) return;
-		job.page.ocrText = composed;
+		const composed = composePageText(text, page);
+		if (!composed || composed === String(page.ocrText || "").trim()) return;
 		await STATE.dispatch("heftOps", {
 			pageId: job.pageId,
-			ops: [{ t: "ocr", p: job.page.id, text: composed }],
+			ops: [{ t: "ocr", p: page.id, text: composed }],
 		});
 		ragPending.add(job.pageId);
 	}
 
 	async function blobData(ref) {
-		if (typeof S.heftBlobs[ref] !== "string") await STATE.hydrateHeftBlobs([ref]);
-		return typeof S.heftBlobs[ref] === "string" ? S.heftBlobs[ref] : "";
+		if (!STATE.heftBlob(ref)) await STATE.hydrateHeftBlobs([ref]);
+		return STATE.heftBlob(ref) || "";
 	}
 
 	// Ein Scan-Bild: Striche der Seite zuerst (ihr Text fließt in den Seitentext), dann das Bild.
 	// Fehler (offline, CDN nicht erreichbar) lassen das Bild offen: nächster Start versucht es erneut.
 	async function indexScanImage(job) {
-		const { pageId, page: pg, image: im } = job;
+		const { pageId } = job;
+		const pg = pageOf(job);
+		const im = (pg?.images || []).find((x) => x.id === job.imageId);
+		if (!pg || !im) return;
 		try {
 			let strokeText = "";
 			if (pg.strokes && pg.strokes.length) strokeText = await HANDSCHRIFT.recognizeStrokes(pg.strokes, {}, "indexer-scan");
@@ -194,13 +208,11 @@ export const HEFT_INDEXER = (() => {
 			if (!src) return;
 			const { text } = await SCAN_OCR.recognize(src);
 			const previous = String(pg.ocrText || "").trim();
-			im.ocr = text;
-			const composed = composePageText(strokeText, pg);
-			const ops = [{ t: "i=", p: pg.id, o: im }];
-			if (composed && composed !== previous) {
-				pg.ocrText = composed;
-				ops.push({ t: "ocr", p: pg.id, text: composed });
-			}
+			// Neue Fassung nur als Kopie: Seite und Bild gehören dem Kern bzw. dem Heft-Editor.
+			const image = { ...im, ocr: text };
+			const composed = composePageText(strokeText, { ...pg, images: pg.images.map((x) => (x.id === im.id ? image : x)) });
+			const ops = [{ t: "i=", p: pg.id, o: image }];
+			if (composed && composed !== previous) ops.push({ t: "ocr", p: pg.id, text: composed });
 			await STATE.dispatch("heftOps", { pageId, ops });
 			ragPending.add(pageId);
 		} catch (err) {
@@ -214,7 +226,6 @@ export const HEFT_INDEXER = (() => {
 	function clearStrokeText(pageId, pg) {
 		const composed = composePageText("", pg);
 		if (composed === String(pg.ocrText || "").trim()) return;
-		pg.ocrText = composed;
 		STATE.dispatch("heftOps", { pageId, ops: [{ t: "ocr", p: pg.id, text: composed }] }).catch((e) => console.warn("[heft-indexer] Text leeren:", e));
 		ragPending.add(pageId);
 	}
@@ -233,7 +244,7 @@ export const HEFT_INDEXER = (() => {
 			kind: "strokes",
 			key,
 			pageId,
-			page: pg,
+			pageKey: pg.id,
 		});
 		clearTimeout(priorityTimer);
 		priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 3500);

@@ -124,7 +124,7 @@ export const CLOUDFLARE_SYNC = (() => {
 				const result = await PERF_PROFILER.run("cloudflare.import", async () => DB.importAll({ app: "impala67", events }, {
 					localEvents: await DB.eventsAfterSeqAll(unsyncedAfterSeq),
 					unsyncedAfterSeq,
-					pageInfo: (pageId) => S.pages[pageId],
+					conflictCheck: STATE.importConflicts,
 					remote: true,
 					remoteSource: "cloudflare",
 					allowSecrets: allowSecrets(),
@@ -261,11 +261,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		const upToSeq = snapshotInfo?.maxSeq ?? snapshotInfo?.seq ?? (typeof STATE.loadedSeq === "function" ? STATE.loadedSeq() : 0);
 		const defaultTime = snapshotInfo?.maxTime || snapshotInfo?.time || (typeof STATE.loadedTime === "function" ? STATE.loadedTime() : "") || U.now();
 		const baselines = [];
-		for (const [pageId, doc] of Object.entries(S.heftDocs || {})) {
+		// Heft für Heft aus dem Kern holen – nie alle auf einmal im Speicher.
+		for (const pageId of STATE.heftIds()) {
+			const doc = STATE.heftDoc(pageId);
 			const ops = heftBaselineOps(doc);
 			if (!ops.length) continue;
 			const hash = await sha256Hex(JSON.stringify(doc?.pages || []));
-			const t = S.heftMeta?.[pageId]?.updated || defaultTime;
+			const t = STATE.heftMeta(pageId)?.updated || defaultTime;
 			baselines.push({ id: `v4-heft-${pageId}-${hash.slice(0, 24)}`, t, type: "heftOps", payload: { pageId, ops } });
 		}
 		await DB.replaceHeftHistory(baselines, upToSeq);

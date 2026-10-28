@@ -15,14 +15,14 @@ const { AI } = await import("../web/ai.js");
 const { EMBEDDINGS } = await import("../web/embedding.js");
 const { TOOLS } = await import("../web/tools.js");
 
-STATE.dispatch = async (type, payload) => STATE.reduce({ id: crypto.randomUUID(), t: new Date().toISOString(), type, payload });
+// Ohne IndexedDB: Events gehen direkt in den Kern (frisch und leer bei jedem Testlauf).
+STATE.dispatch = async (type, payload) => {
+	const ev = { id: crypto.randomUUID(), t: new Date().toISOString(), type, payload: structuredClone(payload) };
+	STATE.applyRemoteEvents([ev]);
+	return ev;
+};
 
 function resetState() {
-	S.pages = {};
-	S.cards = {};
-	S.decks = {};
-	S.heftDocs = {};
-	S.heftMeta = {};
 	S.tabs = [];
 	S.currentPageId = null;
 }

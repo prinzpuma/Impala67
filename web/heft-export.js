@@ -1,5 +1,5 @@
 "use strict";
-import { S } from "./state.js";
+import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { icon } from "./icons.js";
 import { CORE } from "./rust-core.js";
@@ -79,13 +79,14 @@ export async function exportPdf(pageId, indices, { loadDoc, renderCanvas, downlo
 
 // Alle Stift-Striche der App als Rohdaten (Punkte), z. B. als Trainingsdaten für die Handschrift-Erkennung.
 // Nur Seiten mit Strichen; `index` ist die Seitennummer im Heft (ab 0).
-export function allInk(state = S, trainingSamples = []) {
+export function allInk(trainingSamples = []) {
 	const notebooks = [];
-	for (const [pageId, doc] of Object.entries((state && state.heftDocs) || {})) {
+	for (const pageId of STATE.heftIds()) {
+		const doc = STATE.heftDoc(pageId);
 		const pages = ((doc && doc.pages) || [])
 			.map((pg, index) => ({ index, id: pg.id, paper: pg.paper, ocrText: pg.ocrText || "", strokes: pg.strokes || [] }))
 			.filter((pg) => pg.strokes.length);
-		if (pages.length) notebooks.push({ pageId, title: (state.pages && state.pages[pageId] && state.pages[pageId].title) || "Heft", pages });
+		if (pages.length) notebooks.push({ pageId, title: S.pages[pageId]?.title || "Heft", pages });
 	}
 	const strokeCount = notebooks.reduce((n, nb) => n + nb.pages.reduce((m, pg) => m + pg.strokes.length, 0), 0);
 	return { format: "impala67-ink", version: 1, exportedAt: new Date().toISOString(), strokeCount, notebooks, trainingSamples };

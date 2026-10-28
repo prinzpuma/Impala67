@@ -221,3 +221,54 @@ fn hefte_und_altbestaende() {
     assert!(HeftDoc::from_legacy_ink(&json!({ "strokes": [] }), &mut id).is_none());
     assert_eq!(HeftDoc::from_value(Value::Null), HeftDoc::default());
 }
+
+/// Alle Objekte (rekursiv) eines Golden-Files, die wie ein Heft oder eine Heftseite aussehen.
+fn heft_like(v: &Value, out: &mut Vec<Value>) {
+    match v {
+        Value::Object(o) => {
+            if o.contains_key("pages") || o.contains_key("strokes") {
+                out.push(v.clone());
+            }
+            o.values().for_each(|x| heft_like(x, out));
+        }
+        Value::Array(a) => a.iter().for_each(|x| heft_like(x, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn typisiert_wie_from_value() {
+    // Schnelles Einlesen (Checkpoint-Teile) muss dasselbe ergeben wie der Weg über `Value`.
+    let mut cases = vec![
+        json!({ "v": 2, "rev": 3, "pages": [{ "id": "p", "paper": "dots", "ocrText": "x", "extra": 1,
+            "strokes": [
+                { "id": "a", "pts": [[1, 2, 0.5], [3.5, 4], [5, 6, null], [7, 8, 0.1, 99], "kaputt", [], [null, "y"]], "size": 2, "foo": [1] },
+                { "id": 5, "tool": "marker", "pts": "keine Liste", "bbox": { "minX": 1, "minY": 2, "maxX": 3, "maxY": 4 } },
+                { "pts": { "x": 1 } },
+                "kein Strich", 7, null, [1, 2],
+                { "id": "s", "shape": { "type": "line", "x1": 1, "y1": 2, "x2": 3, "y2": 4 }, "pts": [] }
+            ],
+            "images": [{ "id": "i", "ref": "r", "x": 1, "y": 2, "w": 3, "h": 4, "ocr": "" }, "x"],
+            "texts": [{ "id": "t", "text": "Hallo", "x": 1, "y": 2 }] },
+            null, "seite", { "strokes": "nein" }, { "id": "leer" }], "zusatz": { "a": 1 } }),
+        json!({ "pages": "keine Liste" }),
+        json!({}),
+        json!(null),
+        json!([1, 2]),
+    ];
+    for file in ["reducer.json", "diff.json", "render.json", "misc.json", "lasso.json"] {
+        let text = std::fs::read_to_string(format!("{}/tests/golden/{file}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        heft_like(&serde_json::from_str(&text).unwrap(), &mut cases);
+    }
+    assert!(cases.len() > 20);
+    for case in cases {
+        let text = case.to_string();
+        // Debug-Text statt ==: NaN (Punkt mit `null`) ist sich selbst nicht gleich.
+        let fast: HeftDoc = serde_json::from_str(&text).unwrap();
+        assert_eq!(format!("{fast:?}"), format!("{:?}", HeftDoc::from_value(case.clone())), "{text}");
+        let page: HeftPage = serde_json::from_str(&text).unwrap();
+        assert_eq!(format!("{page:?}"), format!("{:?}", HeftPage::from_value(case.clone())), "{text}");
+        // Gleiches JSON beim Zurückschreiben (Reihenfolge der Felder inklusive).
+        assert_eq!(serde_json::to_string(&fast).unwrap(), serde_json::to_string(&HeftDoc::from_value(case)).unwrap());
+    }
+}

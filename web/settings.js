@@ -938,7 +938,7 @@ export async function handleSaveSettings() {
 				id,
 				name: nameEl && nameEl.value.trim() ? nameEl.value.trim() : id,
 				base: baseEl ? cleanBase(baseEl.value) : "",
-				// Geleertes Feld = Schlüssel entfernen (null, siehe SETTINGS_SYNC.mergePatch).
+				// Geleertes Feld = Schlüssel entfernen (null; der Reducer im Kern führt Schlüssel zusammen).
 				key: keyEl ? (keyEl.value.trim() || null) : "",
 			};
 		});
@@ -1163,7 +1163,7 @@ export function handleExportHandwritingSamples() {
 // Alle Handschrift der App (Striche aller Hefte + Abschreib-Beispiele) als eine JSON-Datei.
 export async function handleExportAllInk() {
 	const { allInk, deliverExport } = await import("./heft-export.js");
-	const data = allInk(S, HANDSCHRIFT.getTrainingSamples ? HANDSCHRIFT.getTrainingSamples() : []);
+	const data = allInk(HANDSCHRIFT.getTrainingSamples ? HANDSCHRIFT.getTrainingSamples() : []);
 	if (!data.strokeCount && !data.trainingSamples.length) {
 		U.toast("Noch keine Handschrift vorhanden.");
 		return;

@@ -74,7 +74,7 @@ export function libCardHtml(pg) {
 	const coverBtn = isHeft
 		? '<button class="lib-cover-btn" data-libcover="' + pg.id + '" title="Heftoptionen" aria-label="Heftoptionen">•••</button>'
 		: "";
-	const heftPages = (S.heftMeta && S.heftMeta[pg.id] && S.heftMeta[pg.id].pages) || 1;
+	const heftPages = STATE.heftMeta(pg.id)?.pages || 1;
 	const meta = isHeft
 		? "Heft · " + heftPages + " Seite" + (heftPages === 1 ? "" : "n") + " · " + U.fmtDate(pg.updated)
 		: U.fmtDate(pg.updated) + (pg.pdfId ? " · PDF" : "");

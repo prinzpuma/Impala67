@@ -5,6 +5,7 @@
 //! `conflict-ui.js`): Derselbe Log ergibt in Rust denselben gespeicherten Zustand wie in JS
 //! (Golden-Tests in `tests/`), Checkpoints sind in beide Richtungen austauschbar.
 
+pub mod changes;
 pub mod conflict;
 pub mod event;
 pub mod js;
@@ -21,6 +22,7 @@ pub mod study;
 pub mod tree;
 pub mod types;
 
+pub use changes::{Ids, Touched, touched};
 pub use event::{Event, LogEvent};
 pub use jsmap::JsMap;
 pub use merge::{Merge3, merge3};

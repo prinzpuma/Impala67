@@ -23,7 +23,7 @@ import { HOME_ARTICLE } from "./home-article.js";
 import { FACH } from "./fach.js";
 import { canGoBack, canGoForward } from "./nav-history.js";
 import { BACKUP } from "./backup-status.js";
-import { conflictDialogHtml, conflictTitle, legacyCopyInfo, recommendedAction } from "./conflict-ui.js";
+import { conflictDialogHtml, recommendedAction } from "./conflict-ui.js";
 import { lernanalyseParts } from "./lernanalyse.js";
 import { icon, lead, pageIcon } from "./icons.js";
 import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
@@ -845,22 +845,9 @@ function mergePendingConflicts(details) {
 	for (const c of details || []) map.set(c.conflictPageId || c.pageId, c);
 	savePendingConflicts([...map.values()]);
 }
-// Gerettete Kopien aus früheren Konflikten (ohne gespeicherte Details)
-// Verglichen wird mit der heutigen Seite gleichen Titels (pageId/remoteContent), damit der Dialog
-// zeigen kann, ob in der Kopie überhaupt etwas steht, das sonst fehlt.
-function legacyConflictItems() {
-	const pages = STATE.activePages();
-	return pages.filter(isConflictPage).map((p) => {
-		const { title, nested, original, extraLines } = legacyCopyInfo(p, pages);
-		return {
-			pageId: original?.id || null, originalTitle: original?.title || null, title, nested, extraLines,
-			localContent: p.content || "", remoteContent: original ? original.content || "" : null,
-			localTime: p.updated, remoteTime: original?.updated || null,
-			winner: "remote", loserContent: p.content || "", loserTime: p.updated,
-			conflictPageId: p.id, eventId: null, legacy: true,
-		};
-	});
-}
+// Gerettete Kopien aus früheren Konflikten (ohne gespeicherte Details), verglichen mit der
+// heutigen Seite gleichen Titels (Kern: legacy_conflict_items).
+const legacyConflictItems = () => STATE.conflictLegacyItems(loadResolvedConflictIds());
 // Quelle der offenen Konflikte: Pending-Liste, sonst gerettete Alt-Kopien
 function conflictSource() {
 	const items = loadPendingConflicts();
@@ -871,23 +858,9 @@ function openConflictResolver(index) {
 	const items = conflictSource();
 	if (!items.length) return void U.toast("Keine offenen Konflikte.", "success");
 	const i = Math.max(0, Math.min(Number(index) || 0, items.length - 1));
-	let c = items[i];
 	// Bug-1-Fix: Textfelder können fehlen, wenn localStorage-Quota beim Speichern überschritten wurde.
-	// Rekonstruktion aus dem Live-Zustand: Konfliktkopie (conflictPageId) enthält den Verlierer-Stand,
-	// die Original-Seite (pageId) enthält den Gewinner-Stand.
-	if (!c.conflictType && !c.localContent && !c.remoteContent && c.pageId && c.conflictPageId) {
-		const winnerPg = S.pages[c.pageId];
-		const loserPg = S.pages[c.conflictPageId];
-		if (winnerPg || loserPg) {
-			const winnerContent = (winnerPg || {}).content || "";
-			const loserContent = (loserPg || {}).content || "";
-			c = { ...c,
-				localContent: c.winner === "remote" ? loserContent : winnerContent,
-				remoteContent: c.winner === "remote" ? winnerContent : loserContent,
-				loserContent: c.loserContent || loserContent,
-			};
-		}
-	}
+	// Der Kern ergänzt sie aus dem Zustand: die Kopie hält den unterlegenen, die Seite den gewinnenden Stand.
+	const c = STATE.conflictWithTexts(items[i]);
 	// Das rekonstruierte Objekt MUSS zurück in die Liste: resolveConflict liest S.conflictResolveList[i].
 	items[i] = c;
 	S.conflictResolveIndex = i;
@@ -902,27 +875,11 @@ function openConflictResolver(index) {
 // war (dann ist nichts verändert). loserContent geht nie als undefined an pageUpdate.
 async function applyConflictAction(conf, action) {
 	const copyId = conf.conflictPageId;
-	const copyExists = !!(copyId && S.pages[copyId]);
-	const isDelete = conf.conflictType === "delete-change";
-	if (action === "use-loser") {
-		if (isDelete) {
-			if (!copyExists) { U.toast("Die gerettete Kopie fehlt. Es wurde nichts geändert.", "error"); return false; }
-			// Gerettete Kopie: Titel/Workspace/Elternordner aus dem Payload zurück
-			await STATE.dispatch("pageUpdate", { id: copyId, patch: { title: conf.title, parentId: conf.parentId || null, workspaceId: conf.workspaceId || "default" } });
-		} else {
-			const loser = conf.loserContent ?? (copyExists ? S.pages[copyId].content : undefined);
-			if (!conf.pageId || typeof loser !== "string") { U.toast("Der andere Stand ist nicht mehr vorhanden. Es wurde nichts geändert.", "error"); return false; }
-			await STATE.dispatch("pageUpdate", { id: conf.pageId, patch: { content: loser } });
-		}
-	}
-	// „Beide behalten“: die Kopie wird eine normale Seite — ohne ⚠-Titel, der sie wieder als Konflikt zählen ließe.
-	if (action === "keep-both" && copyExists) {
-		await STATE.dispatch("pageUpdate", { id: copyId, patch: { title: conflictTitle(conf) + " (Kopie)" } });
-	}
-	// keep-winner und use-loser (ohne Löschfall) legen die Kopie in den Papierkorb; keep-both lässt sie stehen
-	if (copyExists && (action === "keep-winner" || (action === "use-loser" && !isDelete))) {
-		await STATE.dispatch("pageTrash", { id: copyId });
-	}
+	// Welche Events die Entscheidung braucht, rechnet der Kern (conflict.rs resolve).
+	const plan = STATE.conflictResolve(conf, action);
+	if (plan.error === "copy-missing") { U.toast("Die gerettete Kopie fehlt. Es wurde nichts geändert.", "error"); return false; }
+	if (plan.error === "loser-missing") { U.toast("Der andere Stand ist nicht mehr vorhanden. Es wurde nichts geändert.", "error"); return false; }
+	for (const [type, payload] of plan.events) await STATE.dispatch(type, payload);
 	// Konflikt quittieren und aus der Pending-Liste nehmen (sonst kommt derselbe Dialog nach dem nächsten Start wieder)
 	markConflictResolved(copyId);
 	const key = copyId || conf.pageId;

@@ -1,6 +1,6 @@
 "use strict";
 
-import { S } from "./state.js";
+import { STATE } from "./state.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { CORE } from "./rust-core.js";
 import { PAGE_W, PAGE_H } from "./heft-document-core.js";
@@ -27,7 +27,7 @@ export const HEFT_LABEL = (() => {
 	const orderLineStrokes = (strokes) => [...CORE.inkOrderLineStrokes(JSON.stringify(strokes))].map((i) => strokes[i]);
 
 	function getPage(pageId, pageIdx) {
-		const doc = S.heftDocs?.[pageId];
+		const doc = STATE.heftDoc(pageId);
 		const pg = doc?.pages?.[pageIdx];
 		if (!pg) throw new Error(`Heftseite nicht gefunden: ${pageId}, Seite ${pageIdx}`);
 		return { doc, pg, strokes: filterInkStrokes(pg.strokes || []) };

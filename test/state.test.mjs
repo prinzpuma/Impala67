@@ -8,7 +8,7 @@ if (typeof window === "undefined") {
 
 import { EventBus } from "../web/event-bus.js";
 import { FACH, KNOWN_SUBJECTS, resolveSubject } from "../web/fach.js";
-import { S } from "../web/state.js";
+import { S, STATE } from "../web/state.js";
 import { SRS } from "../web/srs.js";
 const { cmpSemver } = await import("../web/updater.js");
 
@@ -66,7 +66,13 @@ test("Fach: standardisierte Fächer & Alias-Auflösung", () => {
 });
 
 test("Fach: Ordner vor Titel, Übersicht und festgelegtes Fach", () => {
-	const add = (id, title, parentId = null, extra = {}) => { S.pages[id] = { id, title, parentId, updated: "2026-10-01", content: "", ...extra }; };
+	// Seiten entstehen wie in der App über Events (der Zustand liegt im Rust-Kern).
+	let n = 0;
+	const ev = (type, payload) => ({ id: "fach-" + (++n), t: "2026-10-01T10:00:" + String(n).padStart(2, "0") + ".000Z", type, payload });
+	const add = (id, title, parentId = null, extra = {}) => {
+		STATE.applyRemoteEvents([ev("pageCreate", { id, title, parentId, content: "" })]);
+		if (Object.keys(extra).length) STATE.applyRemoteEvents([ev("pageUpdate", { id, patch: extra })]);
+	};
 	add("f-sem", "📚 Semester 1");
 	add("f-inf", "Informatik 1", "f-sem");
 	add("f-fun", "Funktionen (VL 1-9)", "f-inf");
@@ -79,7 +85,7 @@ test("Fach: Ordner vor Titel, Übersicht und festgelegtes Fach", () => {
 		assert.equal(FACH.page(S.pages["f-kombi"]).name, "Übersicht");
 		assert.deepEqual(FACH.page(S.pages["f-kid"]), { name: "Physik", source: "inherited" });
 	} finally {
-		for (const id of ["f-sem", "f-inf", "f-fun", "f-kombi", "f-man", "f-kid"]) delete S.pages[id];
+		for (const id of ["f-sem", "f-inf", "f-fun", "f-kombi", "f-man", "f-kid"]) STATE.applyRemoteEvents([ev("pageDelete", { id })]);
 	}
 });
 

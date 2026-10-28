@@ -73,12 +73,22 @@ function setupRealDOM() {
 
 setupRealDOM();
 
-const { S, STATE } = await import("../web/state.js");
+const { STATE } = await import("../web/state.js");
 const { DB } = await import("../web/db.js");
 const { HEFT } = await import("../web/heft.js");
 
 // Mock DB.addEvent / STATE.dispatch so background timers don't throw DB.open errors in unit tests
 STATE.dispatch = async () => {};
+
+// Ein Heft wie aus dem Log: Seite + Heftseite als Events direkt in den Kern.
+let seq = 0;
+function seedHeft(id, title, page) {
+	const ev = (type, payload) => ({ id: "seed-" + (++seq), t: "2026-10-01T10:00:" + String(seq).padStart(2, "0") + ".000Z", type, payload });
+	STATE.applyRemoteEvents([
+		ev("pageCreate", { id, title, kind: "heft" }),
+		ev("heftOps", { pageId: id, ops: [{ t: "pg+", at: 0, page: { id: page.id, paper: page.paper } }] }),
+	]);
+}
 
 const touchEvent = (type, touches, changedTouches = touches) => {
 	const event = new window.Event(type, { bubbles: true, cancelable: true });
@@ -90,8 +100,7 @@ const touchEvent = (type, touches, changedTouches = touches) => {
 };
 
 test("Heft-Tests: Pinch endet wieder im scharfen Renderzustand", async () => {
-	S.pages.zoomHeft = { id: "zoomHeft", title: "Zoom-Heft", kind: "heft" };
-	S.heftDocs.zoomHeft = { pages: [{ id: "zoomPage", paper: "blank", strokes: [], images: [], texts: [] }] };
+	seedHeft("zoomHeft", "Zoom-Heft", { id: "zoomPage", paper: "blank" });
 	const stage = document.getElementById("heftStage");
 	await HEFT.mount(stage, "zoomHeft");
 	const scroll = stage.querySelector(".heft-scroll");
@@ -113,11 +122,11 @@ test("Heft-Tests: Pinch endet wieder im scharfen Renderzustand", async () => {
 });
 
 test("Heft wiederholt einen fehlgeschlagenen Persistenzversuch", async () => {
-	S.pages.persistHeft = { id: "persistHeft", title: "Persistenz", kind: "heft" };
-	S.heftDocs.persistHeft = { pages: [{ id: "persistPage", paper: "blank", strokes: [], images: [], texts: [], ocrText: "" }] };
+	seedHeft("persistHeft", "Persistenz", { id: "persistPage", paper: "blank" });
 	const stage = document.getElementById("heftStage");
 	await HEFT.mount(stage, "persistHeft");
-	S.heftDocs.persistHeft.pages[0].ocrText = "muss gespeichert werden";
+	// Änderung in der Arbeitskopie des Editors (noch nicht gespeichert)
+	HEFT.openDoc("persistHeft").pages[0].ocrText = "muss gespeichert werden";
 	let attempts = 0;
 	const oldWarn = console.warn, oldAllBlobKeys = DB.allBlobKeys, oldPutBlob = DB.putBlob, oldDelBlob = DB.delBlob;
 	console.warn = () => {};

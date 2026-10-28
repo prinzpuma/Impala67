@@ -207,8 +207,9 @@ export function initMcpBridge() {
 						} else {
 							let content = page.content || "";
 							let heftPages = null;
-							if (page.kind === "heft" && S.heftDocs && S.heftDocs[page.id]) {
-								const doc = S.heftDocs[page.id];
+							const heftDoc = page.kind === "heft" ? STATE.heftDoc(page.id) : null;
+							if (heftDoc) {
+								const doc = heftDoc;
 								heftPages = doc.pages?.length || 1;
 								const parts = [];
 								for (let i = 0; i < (doc.pages || []).length; i++) {
@@ -281,7 +282,7 @@ export function initMcpBridge() {
 							const newText = args.append_content || args.content;
 							if (page.kind === "heft") {
 								// Striche nie anfassen: Text kommt als neue Textbox auf die erste Heftseite
-								const firstPageId = S.heftDocs?.[page.id]?.pages?.[0]?.id;
+								const firstPageId = STATE.heftPage(page.id, 0)?.id;
 								if (newText && String(newText).trim()) {
 									if (!firstPageId) { result = { error: "Heft hat keine Seite für die Textbox." }; break; }
 									await STATE.dispatch("heftOps", {
@@ -330,8 +331,9 @@ export function initMcpBridge() {
 								if (args.archived === false && p.archived) continue;
 								const title = p.title || "";
 								let content = p.content || "";
-								if (p.kind === "heft" && S.heftDocs && S.heftDocs[p.id]) {
-									const doc = S.heftDocs[p.id];
+								const heftDoc = p.kind === "heft" ? STATE.heftDoc(p.id) : null;
+								if (heftDoc) {
+									const doc = heftDoc;
 									const parts = [];
 									for (const pg of doc.pages || []) {
 										if (pg.ocrText) parts.push(pg.ocrText);
@@ -466,7 +468,7 @@ export function initMcpBridge() {
 								totalPages: Object.keys(S.pages || {}).length,
 								activePages: Object.values(S.pages || {}).filter((p) => !p.trashed).length,
 								totalCards: Object.keys(S.cards || {}).length,
-								totalHeftDocs: Object.keys(S.heftDocs || {}).length,
+								totalHeftDocs: STATE.heftIds().length,
 								sidebarCollapsed: !!S.sidebarCollapsed,
 							},
 							performance: {

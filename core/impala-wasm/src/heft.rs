@@ -357,7 +357,7 @@ pub fn heft_blob_id(data: &str) -> String {
 
 /// Zuletzt veröffentlichter Stand eines Hefts (je Element nur eine Signatur).
 #[wasm_bindgen]
-pub struct HeftShadow(Shadow);
+pub struct HeftShadow(pub(crate) Shadow);
 
 #[wasm_bindgen]
 impl HeftShadow {

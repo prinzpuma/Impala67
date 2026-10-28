@@ -243,7 +243,7 @@ export const DRIVE = (() => {
 		maxSeq: () => DB.maxSeq(),
 		eventsBetween: (after, upTo) => DB.eventsAfterSeqAll(after, upTo),
 		async importAll(payload, unsyncedAfterSeq, allowSecrets) {
-			const r = await DB.importAll(payload, { unsyncedAfterSeq, pageInfo: (id) => S.pages[id], remote: true, allowSecrets });
+			const r = await DB.importAll(payload, { unsyncedAfterSeq, conflictCheck: STATE.importConflicts, remote: true, allowSecrets });
 			// Sofort anwenden: Scheiterte danach ein Datei-Transfer, lägen die Events sonst im Log und
 			// gälten als gelesen, die App zeigte sie aber nie. Offene Hefte brauchen keinen Flush (heft.js).
 			if (r.importedEvents?.length) await STATE.applyRemoteEventsCooperative(r.importedEvents);

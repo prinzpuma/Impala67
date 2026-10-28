@@ -21,6 +21,8 @@ impala-ink = { path = "../impala-ink", default-features = false }
 impala-srs = { path = "../impala-srs" }
 impala-markdown = { path = "../impala-markdown" }
 impala-heft = { path = "../impala-heft" }
+impala-model = { path = "../impala-model" }
+impala-storage = { path = "../impala-storage", default-features = false }
 impala-ai = { path = "../impala-ai", default-features = false }
 serde = "1"
 serde_json = "1"

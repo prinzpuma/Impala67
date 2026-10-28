@@ -301,7 +301,7 @@ export const AI = (() => {
 		const heft = heftId ? S.pages[heftId] : null;
 		if (heft?.kind === "heft") {
 			const idx = HEFT?.activeId === heftId ? HEFT.activeIndex || 0 : 0;
-			const pg = S.heftDocs?.[heftId]?.pages?.[idx];
+			const pg = HEFT?.openDoc?.(heftId)?.pages?.[idx] ?? STATE.heftPage(heftId, idx);
 			let imageUrl;
 			try { if (typeof HEFT?.pageAsDataUrl === "function") imageUrl = await HEFT.pageAsDataUrl(heftId, idx); } catch {}
 			return { kind: "page", title: page.title, context: {
@@ -339,7 +339,7 @@ export const AI = (() => {
 			else throw new Error("Es ist gerade kein Heft geöffnet — bitte page_title angeben.");
 			const index = pageNoArg ? Math.max(0, Math.floor(pageNoArg) - 1) : HEFT.activeId === id ? HEFT.activeIndex || 0 : 0;
 			pageNo = index + 1;
-			const pg = S.heftDocs?.[id]?.pages?.[index];
+			const pg = HEFT?.openDoc?.(id)?.pages?.[index] ?? STATE.heftPage(id, index);
 			return {
 				pageNo,
 				texts: (Array.isArray(pg?.texts) ? pg.texts : []).map((t) => String(t?.text || "")).filter(Boolean),

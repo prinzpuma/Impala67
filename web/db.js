@@ -250,6 +250,14 @@ export const DB = (() => {
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
 		});
 	}
+	// Schon gespeicherte Checkpoint-Teile (Hashes), damit der Kern nur Neues schreiben lässt.
+	function stateCheckpointPartHashes() {
+		ensureOpen();
+		const store = db.transaction("blobs").objectStore("blobs");
+		const keys = (range, prefix) => val(store.getAllKeys(range)).then((list) => (list || []).map((k) => String(k).slice(prefix.length)));
+		return Promise.all([keys(stateCheckpointBlobRange(), STATE_CHECKPOINT_BLOB_PREFIX), keys(stateCheckpointHeftRange(), STATE_CHECKPOINT_HEFT_PREFIX)])
+			.then(([blobs, hefte]) => ({ blobs, hefte }));
+	}
 	// Ein Range-Delete statt eines Requests je Schlüssel: Safari brach die Einzel-Deletes
 	// (276 Stück) mit „without an in-progress transaction“ ab.
 	function clearStateCheckpoint({ keepHeftBlobs = false } = {}) {
@@ -450,131 +458,9 @@ export const DB = (() => {
 		return JSON.stringify({ app: "impala67", version: 1, exportedAt: U.now(), events, blobs });
 	}
 
-	// Jüngstes passendes Event je Ziel per ZEITSTEMPEL — Seq-Reihenfolge lügt nach Imports.
-	const headsOf = (evs, keyOf, extra) => {
-		const heads = {};
-		for (const ev of evs) {
-			const id = keyOf(ev);
-			if (id != null && (!extra || extra(ev)) && (!heads[id] || ev.t > heads[id].t)) heads[id] = ev;
-		}
-		return heads;
-	};
-	// Jüngster Inhalts-Stand je Seite — Kern der Konflikt-Erkennung (pure, test/test-core.mjs testet direkt).
-	const contentHeadsOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageUpdate" && typeof ev.payload?.patch?.content === "string" ? ev.payload.id : null), extra);
-
-	// Letzter bekannter Stand einer Seite rein aus Events (pure, exportiert für Tests). Wichtig beim
-	// Lösch-Konflikt: die Seite ist lokal ggf. schon gelöscht, opts.pageInfo(id) wäre leer.
-	function reconstructPageFromEvents(events, id) {
-		const pg = { title: "Seite", content: "", kind: "notion", parentId: null, workspaceId: "default", heftMeta: null };
-		const apply = (src, isPatch) => {
-			if (isPatch ? src.title !== undefined : src.title) pg.title = src.title;
-			if (src.content !== undefined) pg.content = src.content;
-			if (isPatch ? src.kind !== undefined : src.kind) pg.kind = src.kind;
-			if ("parentId" in src) pg.parentId = src.parentId || null;
-			if (src.workspaceId) pg.workspaceId = src.workspaceId;
-		};
-		const relevant = events
-			.filter((ev) => ev.payload && (ev.payload.id === id || ev.payload.pageId === id))
-			.sort((a, b) => ((a.t || "") < (b.t || "") ? -1 : (a.t || "") > (b.t || "") ? 1 : 0)); // FIX: Zeit- statt Seq-Reihenfolge
-		for (const ev of relevant) {
-			const p = ev.payload;
-			if (ev.type === "pageCreate") apply(p, false);
-			else if (ev.type === "pageUpdate" && p.patch) apply(p.patch, true);
-			else if (ev.type === "pageMove") pg.parentId = p.parentId || null;
-			else if (ev.type === "heftOps" || ev.type === "heftSnap") pg.kind = "heft"; // Inhalt lebt im Log, nicht in Metadaten
-			// Alt-Logs (vor v8) kennen nur heftUpdated als Zeiger auf eine Drive-Binärdatei. Solche
-			// Events liegen auf lange nicht gesyncten Geräten weiterhin im Log — ohne diesen Zweig
-			// galt die Seite dort als normale Notiz und das Heft war unerreichbar.
-			else if (ev.type === "heftUpdated") { pg.kind = "heft"; pg.heftMeta = { rev: p.rev, pages: p.pages, bytes: p.bytes, blobHash: p.blobHash }; }
-		}
-		return pg;
-	}
-
-	// ---- Drei-Wege-Abgleich (diff3) -------------------------------------------------
-	// Bisher entschied bei zwei gleichzeitig geänderten Fassungen DERSELBEN Seite allein der
-	// Zeitstempel: ein Gerät gewann, das andere bekam eine „⚠ Konflikt“-Kopie — auch dann,
-	// wenn die Bearbeitungen völlig verschiedene Absätze betrafen und sich gar nicht
-	// widersprachen. merge3 vergleicht beide Fassungen gegen den letzten GEMEINSAMEN Stand:
-	//   • nur eine Seite hat einen Abschnitt geändert → diese Änderung wird übernommen
-	//   • beide haben ihn identisch geändert          → einmal übernommen
-	//   • beide haben ihn unterschiedlich geändert    → echte Überlappung → ok:false, der
-	//     Aufrufer fällt auf LWW + Konfliktkopie zurück (es geht also nie etwas verloren)
-	// Pure Funktion ohne DB-Zugriff — test/test-sync.mjs prüft sie direkt.
-	const MERGE_MAX_LINES = 1200; // O(n*m)-Matrix: darüber lohnt der Versuch nicht
-	// LCS als Paar-Liste (Index in A, Index in B) — Grundlage beider Zwei-Wege-Diffs.
-	function lcsPairs(A, B) {
-		// Gleiche Anfangs- und Endzeilen gehören immer zur LCS — nur die Mitte braucht
-		// die O(n*m)-Matrix. Bei typischen Konflikten (ein paar Zeilen geändert) ist sie winzig.
-		let pre = 0;
-		while (pre < A.length && pre < B.length && A[pre] === B[pre]) pre++;
-		let suf = 0;
-		while (suf < A.length - pre && suf < B.length - pre && A[A.length - 1 - suf] === B[B.length - 1 - suf]) suf++;
-		const n = A.length - pre - suf, m = B.length - pre - suf;
-		const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
-		for (let i = n - 1; i >= 0; i--) {
-			const row = dp[i], next = dp[i + 1];
-			for (let j = m - 1; j >= 0; j--) {
-				row[j] = A[pre + i] === B[pre + j] ? next[j + 1] + 1 : Math.max(next[j], row[j + 1]);
-			}
-		}
-		const pairs = [];
-		for (let k = 0; k < pre; k++) pairs.push([k, k]);
-		let i = 0, j = 0;
-		while (i < n && j < m) {
-			if (A[pre + i] === B[pre + j]) { pairs.push([pre + i, pre + j]); i++; j++; }
-			else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
-			else j++;
-		}
-		for (let k = 0; k < suf; k++) pairs.push([pre + n + k, pre + m + k]);
-		return pairs;
-	}
-	function merge3(base, mine, theirs) {
-		if (mine === theirs) return { ok: true, text: mine, changed: false };
-		if (mine === base) return { ok: true, text: theirs, changed: true };
-		if (theirs === base) return { ok: true, text: mine, changed: false };
-		// [A3] Ohne belastbare gemeinsame Basis gibt es keinen Drei-Wege-Abgleich. base === "" tritt real
-		// auf (Verlaufsfenster KEEP_CONTENT_VERSIONS abgelaufen, pageCreate ohne content). B ist dann [""]
-		// und der Anker-Lauf unten ankert auf einer LEEREN Zeile, die es in fast jedem Markdown-Dokument
-		// gibt — Ergebnis war ok:true mit einem aus beiden Fassungen zusammengesteckten Text, ohne
-		// Konfliktmeldung und ohne Kopie. Lieber ehrlich Konflikt: der Aufrufer rettet dann beide Stände.
-		if (!String(base ?? "").trim()) return { ok: false };
-		const B = String(base ?? "").split("\n");
-		const M = String(mine ?? "").split("\n");
-		const T = String(theirs ?? "").split("\n");
-		if (B.length > MERGE_MAX_LINES || M.length > MERGE_MAX_LINES || T.length > MERGE_MAX_LINES) return { ok: false };
-		// Stabile Anker: Basiszeilen, die in BEIDEN Fassungen unverändert wiederkehren.
-		const mMap = new Map(lcsPairs(B, M));
-		const tMap = new Map(lcsPairs(B, T));
-		const anchors = [];
-		let lastM = -1, lastT = -1;
-		for (let b = 0; b < B.length; b++) {
-			if (!B[b].trim()) continue; // [A3] Leerzeilen stehen überall — als Anker wertlos und gefährlich
-			const m = mMap.get(b), t = tMap.get(b);
-			if (m === undefined || t === undefined || m <= lastM || t <= lastT) continue;
-			anchors.push([b, m, t]);
-			lastM = m; lastT = t;
-		}
-		anchors.push([B.length, M.length, T.length]); // Abschluss-Anker
-		const out = [];
-		let b0 = 0, m0 = 0, t0 = 0;
-		for (const [b1, m1, t1] of anchors) {
-			const bChunk = B.slice(b0, b1).join("\n");
-			const mChunk = M.slice(m0, m1), tChunk = T.slice(t0, t1);
-			const mStr = mChunk.join("\n"), tStr = tChunk.join("\n");
-			if (mStr === tStr) out.push(...mChunk);        // beide gleich (auch: beide unverändert)
-			else if (mStr === bChunk) out.push(...tChunk); // nur die Gegenseite hat geändert
-			else if (tStr === bChunk) out.push(...mChunk); // nur dieses Gerät hat geändert
-			else return { ok: false };                     // echte Überlappung → Konfliktkopie
-			if (b1 < B.length) out.push(B[b1]);            // der Anker selbst
-			b0 = b1 + 1; m0 = m1 + 1; t0 = t1 + 1;
-		}
-		const text = out.join("\n");
-		return { ok: true, text, changed: text !== mine };
-	}
-
 	// Merge-Import: idempotent — doppelte Events (gleiche id) werden übersprungen.
 	// opts (nur Drive-Sync): unsyncedAfterSeq = Seq des letzten Uploads (Basis der Konflikt-Erkennung),
-	// pageInfo(id) → {title,parentId,workspaceId}, remote = echter Drive-Download.
+	// conflictCheck = STATE.importConflicts (Konflikt-Prüfung im Kern), remote = echter Download.
 	// Rückgabe: { added, conflicts, conflictDetails, importedEvents }.
 	// Importe laufen nacheinander: Dublettenprüfung (seenIds) und Schreiben liegen mehrere awaits
 	// auseinander. Holten Cloudflare und Drive denselben Rückstand gleichzeitig (Start, „online“),
@@ -655,110 +541,23 @@ export const DB = (() => {
 		U.observeTimes(fresh);
 		const conflictDetails = [];
 		const mergedDetails = [];
-		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length) {
-			// _remote = echter Drive-Download. Solche Events bekommen beim Import zwar eine frische
-			// lokale seq (> unsyncedAfterSeq), sind aber NIE eine Änderung DIESES Geräts.
-			// Ohne den !_remote-Filter meldete ein Sync mit Snapshot UND Delta Konflikte gegen sich
-			// selbst: syncRaw importiert erst den Snapshot, dessen Events liegen im zweiten
-			// importAll-Aufruf über dem Wasserstand und galten damit als "meine ungesyncten
-			// Änderungen" — Ergebnis waren "⚠ Konflikt"-Kopien ohne jede lokale Bearbeitung.
-			const localOnly = (ev) => isLocalOnly(ev, opts.unsyncedAfterSeq); // seit letztem Sync, kennt kein anderes Gerät
-			// [A9] Der UI-Zustand (S.pages) kann veraltet sein: der zweite Tab betritt syncRaw mit dem Stand
-			// VOR dem Import des ersten (der Web Lock serialisiert nur, er teilt keinen Speicher). Titel und
-			// Ablageort einer Konfliktkopie waren dadurch falsch. Das Log ist die Wahrheit — also Rückfall.
-			const info = async (id) => {
-				const pi = (opts.pageInfo && opts.pageInfo(id)) || null;
-				if (pi && pi.title) return pi;
-				const pg = reconstructPageFromEvents([...await history(), ...fresh], id);
-				return { title: pg.title, parentId: pg.parentId, workspaceId: pg.workspaceId };
-			};
-
-			// (1) Inhalts-Konflikt: gleiche Seite lokal UND remote geändert. Erst wird ein
-			// Drei-Wege-Abgleich versucht; nur bei echter Überlappung greift LWW + Konfliktkopie.
-			const localHeads = contentHeadsOf(local, localOnly), remoteHeads = contentHeadsOf(fresh);
-			// Letzter GEMEINSAMER Stand = alles, was dieses Gerät schon gesynct hatte bzw. selbst
-			// per Sync bekommen hat. Genau die Basis, von der beide Seiten losgelaufen sind.
-			let commonEvents = null; // erst laden, wenn es wirklich einen Kandidaten gibt
-			for (const [id, remote] of Object.entries(remoteHeads)) {
-				const mine = localHeads[id];
-				if (!mine || mine.payload.patch.content === remote.payload.patch.content) continue;
-				// (1a) Betreffen die beiden Bearbeitungen verschiedene Stellen, gibt es gar keinen
-				// Konflikt — beide werden übernommen. Die Merge-Event-id ist aus beiden Quell-ids
-				// abgeleitet und seitenunabhängig sortiert: beide Geräte erzeugen dieselbe id, der
-				// Merge ist damit idempotent und läuft nach dem Rück-Sync nicht doppelt.
-				const mergeId = "merge3-" + (mine.id < remote.id ? mine.id + "-" + remote.id : remote.id + "-" + mine.id);
-				if (seenIds.has(mergeId)) continue; // schon zusammengeführt — kein Konflikt mehr
-				commonEvents ??= (await history()).filter((ev) => !localOnly(ev));
-				const m3 = merge3(reconstructPageFromEvents(commonEvents, id).content, mine.payload.patch.content, remote.payload.patch.content);
-				if (m3.ok) {
-					mergedDetails.push({ pageId: id, title: (await info(id)).title || "Seite", localTime: mine.t, remoteTime: remote.t });
-					fresh.push({ id: mergeId, t: U.now(), type: "pageUpdate", _derived: true, payload: { id, patch: { content: m3.text } } });
-					continue;
-				}
-				// (1b) Echte Überlappung: der spätere Zeitstempel gewinnt still, der unterlegene
-				// Stand wird als Kopie gerettet. Gleichstand deterministisch per id brechen, damit
-				// BEIDE Geräte denselben Verlierer wählen (sonst legt jede Seite eine Kopie an).
-				const remoteWins = mine.t !== remote.t ? mine.t < remote.t : mine.id < remote.id;
-				const loser = remoteWins ? mine : remote;
-				if (seenIds.has("conflict-" + loser.id)) continue;
-				const pi = await info(id), title = pi.title || "Seite", conflictPageId = "conflictpg-" + loser.id;
-				conflictDetails.push({
-					pageId: id, title,
-					reason: "Dieselbe Seite wurde seit dem letzten Sync sowohl hier als auch auf einem anderen Gerät geändert — und zwar an derselben Stelle, sodass sie sich nicht automatisch zusammenführen ließ. Der neuere Zeitstempel gewinnt; der ältere Stand liegt als Kopie bereit.",
-					localContent: mine.payload.patch.content, remoteContent: remote.payload.patch.content,
-					localTime: mine.t, remoteTime: remote.t,
-					winner: remoteWins ? "remote" : "local",
-					loserContent: loser.payload.patch.content, loserTime: loser.t,
-					conflictPageId, eventId: "conflict-" + loser.id,
-				});
-				fresh.push({
-					id: "conflict-" + loser.id, t: U.now(), type: "pageCreate", _derived: true,
-					payload: {
-						id: conflictPageId,
-						title: "⚠ Konflikt: " + title + " — Stand " + loser.t.slice(0, 16).replace("T", " "),
-						content: loser.payload.patch.content,
-						parentId: pi.parentId || null, workspaceId: pi.workspaceId || "default",
-					},
-				});
-			}
-
-			// (2) Heft-Konflikte gibt es seit v8 nicht mehr. Hefte reisen als Strich-Operationen
-			// (heftOps/heftSnap) im selben Log wie alles andere: zwei Geräte, die gleichzeitig in
-			// dasselbe Heft zeichnen, ergeben die Vereinigung beider Striche. Nichts zu entscheiden,
-			// nichts zu retten — deshalb steht hier bewusst kein Code mehr.
-
-			// (3) Endgültig-gelöscht vs. verschoben/geändert: Löschen gewinnt beim Merge immer — der andere
-			// Stand ginge sonst still verloren und wird als Kopie gerettet.
-			const LIFE = new Set(["pageMove", "pageUpdate", "pageTrash", "pageRestore", "pageArchive", "pageUnarchive"]);
-			const deletesOf = (evs, extra) => headsOf(evs, (ev) => (ev.type === "pageDelete" && ev.payload ? ev.payload.id : null), extra);
-			const lifecycleOf = (evs, extra) => headsOf(evs, (ev) => (LIFE.has(ev.type) && ev.payload ? ev.payload.id : null), extra);
-			const localDel = deletesOf(local, localOnly), remoteDel = deletesOf(fresh);
-			const localLife = lifecycleOf(local, localOnly), remoteLife = lifecycleOf(fresh);
-			const pairs = [
-				...Object.keys(localDel).filter((id) => remoteLife[id]).map((id) => ({ id, del: localDel[id], moved: remoteLife[id], loserSource: "remote" })),
-				...Object.keys(remoteDel).filter((id) => localLife[id]).map((id) => ({ id, del: remoteDel[id], moved: localLife[id], loserSource: "local" })),
-			];
-			for (const { id, del, moved, loserSource } of pairs) {
-				// Papierkorb/Archiv gegen endgültiges Löschen ist kein Konflikt: beide Seiten wollten die
-				// Seite weghaben. Sonst entstand aus einer verworfenen Konfliktkopie die nächste Kopie.
-				if (moved.type === "pageTrash" || moved.type === "pageArchive") continue;
-				if (seenIds.has("lifeconflict-" + moved.id)) continue;
-				const conflictPageId = "conflictpg-" + moved.id;
-				const pg = reconstructPageFromEvents([...await history(), ...fresh], id); // Seite ist lokal ggf. schon weg
-				conflictDetails.push({
-					pageId: id, title: pg.title,
-					reason: "Diese Seite wurde auf einem Gerät endgültig gelöscht, während sie auf einem anderen Gerät seit dem letzten Sync verschoben, wiederhergestellt oder geändert wurde. Das Löschen gewinnt beim Merge; der andere Stand liegt als Kopie bereit.",
-					deletedAt: del.t, changedAt: moved.t, conflictPageId, conflictType: "delete-change",
-					parentId: pg.parentId, workspaceId: pg.workspaceId, eventId: "lifeconflict-" + moved.id,
-					loserSource,
-				});
-				fresh.push({
-					id: "lifeconflict-" + moved.id, t: U.now(), type: "pageCreate", _derived: true,
-					payload: { id: conflictPageId, title: "⚠ Konflikt (gelöscht/verschoben): " + pg.title, content: pg.content, parentId: pg.parentId, workspaceId: pg.workspaceId, kind: pg.kind },
-				});
-				// Heft-Striche werden hier NICHT mitkopiert: sie liegen als heftOps/heftSnap unter der
-				// ursprünglichen Seiten-id im Log und sind damit weiterhin vollständig vorhanden.
-			}
+		if (typeof opts.unsyncedAfterSeq === "number" && fresh.length && typeof opts.conflictCheck === "function") {
+			// Konflikt-Prüfung im Rust-Kern (impala-model conflict.rs): (1) dieselbe Seite lokal UND fremd
+			// geändert → Drei-Wege-Abgleich, sonst LWW + Konfliktkopie; (2) endgültig gelöscht vs.
+			// geändert → Löschen gewinnt, der andere Stand wird Kopie. _remote = echter Download: solche
+			// Events sind nie eine Änderung DIESES Geräts, auch wenn ihre lokale seq über dem Wasserstand liegt.
+			// Der Kern braucht nur die lokalen Events nach dem Wasserstand; das ganze Log nur bei einem
+			// Kandidaten (dann meldet er needHistory).
+			const after = opts.unsyncedAfterSeq;
+			const freshJson = JSON.stringify(fresh);
+			const localJson = JSON.stringify(local.filter((ev) => (Number(ev?.seq) || 0) > after));
+			const known = (id) => seenIds.has(id);
+			const now = () => U.now();
+			let res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, undefined, known, now));
+			if (res.needHistory) res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, JSON.stringify(await history()), known, now));
+			conflictDetails.push(...res.conflicts);
+			mergedDetails.push(...res.merged);
+			fresh.push(...res.added);
 		}
 		fresh.forEach((ev) => {
 			delete ev.seq;
@@ -807,5 +606,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, merge3, replaceHeftHistory, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

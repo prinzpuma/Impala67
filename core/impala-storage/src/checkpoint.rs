@@ -179,29 +179,73 @@ pub fn read<S: Storage + ?Sized>(storage: &S) -> Result<Option<Object>, Error> {
     }
 }
 
-/// Gespeicherter Zustand eines Checkpoints, Hefte wieder als Objekte (`checkpointSavedState`).
-/// Format 3 liest jedes Heft aus seinem Teil; fehlt eins oder ist es kaputt: [`Reject::HeftDocs`].
-pub fn saved_state<S: Storage + ?Sized>(storage: &S, cp: &Object) -> Result<Result<Object, Reject>, Error> {
+/// Hefte eines Checkpoints als JSON-Text, noch ungelesen: Wer sie typisiert liest, spart den Umweg
+/// über `Value` (bei Tausenden Strichen der größte Teil des Starts).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeftJson {
+    /// Format 3: je Heft ein Teil (Seiten-ID, JSON-Text).
+    Parts(Vec<(String, String)>),
+    /// Format 2: alle Hefte als ein JSON-Objekt.
+    All(String),
+}
+
+/// Kernzustand eines Checkpoints und seine Hefte als Text. Format 3 liest jedes Heft aus seinem
+/// Teil; fehlt eins: [`Reject::HeftDocs`]. Format 1 trägt die Hefte im Zustand (dann `None`).
+pub fn saved_state_raw<S: Storage + ?Sized>(
+    storage: &S,
+    cp: &Object,
+) -> Result<Result<(Object, Option<HeftJson>), Reject>, Error> {
     let Some(Value::Object(state)) = cp.get("state") else { return Ok(Err(Reject::NoState)) };
-    let mut state = state.clone();
+    Ok(hefte_raw(storage, cp)?.map(|hefte| (state.clone(), hefte)))
+}
+
+/// Die Hefte eines Checkpoints als Text (siehe [`saved_state_raw`]).
+fn hefte_raw<S: Storage + ?Sized>(storage: &S, cp: &Object) -> Result<Result<Option<HeftJson>, Reject>, Error> {
     if format_of(cp) == Some(FORMAT) {
-        let mut docs = Object::new();
+        let mut parts = Vec::new();
         for (page, hash) in plain_object(cp.get("heftDocHashes")).into_iter().flatten() {
             let json = match hash.as_str() {
                 Some(h) => storage.part(PartKind::HeftDoc, h)?,
                 None => None,
             };
-            match json.and_then(|j| serde_json::from_str(&j).ok()) {
-                Some(doc) => docs.insert(page.clone(), doc),
+            match json {
+                Some(j) => parts.push((page.clone(), j)),
                 None => return Ok(Err(Reject::HeftDocs)),
-            };
+            }
         }
-        state.insert("heftDocs".into(), Value::Object(docs));
-    } else if let Some(Value::String(json)) = cp.get("heftDocsJson") {
-        match serde_json::from_str(json) {
-            Ok(docs) => state.insert("heftDocs".into(), docs),
+        return Ok(Ok(Some(HeftJson::Parts(parts))));
+    }
+    if let Some(Value::String(json)) = cp.get("heftDocsJson") {
+        return Ok(Ok(Some(HeftJson::All(json.clone()))));
+    }
+    Ok(Ok(None))
+}
+
+/// Gespeicherter Zustand eines Checkpoints, Hefte wieder als Objekte (`checkpointSavedState`).
+/// Fehlt ein Heft oder ist es kaputt: [`Reject::HeftDocs`].
+pub fn saved_state<S: Storage + ?Sized>(storage: &S, cp: &Object) -> Result<Result<Object, Reject>, Error> {
+    let (mut state, hefte) = match saved_state_raw(storage, cp)? {
+        Ok(x) => x,
+        Err(r) => return Ok(Err(r)),
+    };
+    match hefte {
+        Some(HeftJson::Parts(parts)) => {
+            let mut docs = Object::new();
+            for (page, json) in parts {
+                match serde_json::from_str(&json) {
+                    Ok(doc) => docs.insert(page, doc),
+                    Err(_) => return Ok(Err(Reject::HeftDocs)),
+                };
+            }
+            state.insert("heftDocs".into(), Value::Object(docs));
+        }
+        Some(HeftJson::All(json)) => match serde_json::from_str(&json) {
+            Ok(docs) => {
+                state.insert("heftDocs".into(), docs);
+            }
             Err(_) => return Ok(Err(Reject::HeftDocs)),
-        };
+        },
+        None => {}
     }
     Ok(Ok(state))
 }
@@ -347,16 +391,58 @@ pub fn load<S: Storage + ?Sized>(
     storage: &S,
     reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
 ) -> Result<Loaded, Error> {
-    let info = storage.log_info()?;
-    let Some(cp) = read(storage)? else { return Ok(Loaded::Rejected(Reject::Missing)) };
-    let max_seq = num(cp.get("maxSeq")) as u64;
-    let boundary = if max_seq > 0 { storage.event_at(max_seq)? } else { None };
-    let tail = storage.events_after(max_seq, Some(info.max_seq), None)?;
-    if let Some(reason) = reject_reason(Some(&cp), &info, boundary.as_ref(), &tail, reorder_safe) {
-        return Ok(Loaded::Rejected(reason));
-    }
+    let (cp, tail) = match checked(storage, reorder_safe)? {
+        Ok(x) => x,
+        Err(r) => return Ok(Loaded::Rejected(r)),
+    };
     Ok(match saved_state(storage, &cp)? {
         Ok(state) => Loaded::Usable { checkpoint: cp, state, tail },
         Err(reason) => Loaded::Rejected(reason),
     })
+}
+
+/// Wie [`load`], die Hefte aber als ungelesener Text ([`HeftJson`]).
+pub fn load_raw<S: Storage + ?Sized>(
+    storage: &S,
+    reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
+) -> Result<LoadedRaw, Error> {
+    let (mut cp, tail) = match checked(storage, reorder_safe)? {
+        Ok(x) => x,
+        Err(r) => return Ok(LoadedRaw::Rejected(r)),
+    };
+    // Den (großen) Zustand herausnehmen statt kopieren; `checkpoint` behält nur die Kennzahlen.
+    let Some(Value::Object(state)) = cp.remove("state") else { return Ok(LoadedRaw::Rejected(Reject::NoState)) };
+    Ok(match hefte_raw(storage, &cp)? {
+        Ok(hefte) => LoadedRaw::Usable { checkpoint: cp, state, hefte, tail },
+        Err(reason) => LoadedRaw::Rejected(reason),
+    })
+}
+
+/// Ergebnis von [`load_raw`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoadedRaw {
+    Usable {
+        checkpoint: Object,
+        /// Kernzustand (ohne Hefte, außer bei Format 1); `checkpoint` ohne `state`.
+        state: Object,
+        hefte: Option<HeftJson>,
+        tail: Vec<Object>,
+    },
+    Rejected(Reject),
+}
+
+/// Checkpoint lesen und prüfen; liefert ihn samt Rest des Logs.
+fn checked<S: Storage + ?Sized>(
+    storage: &S,
+    reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
+) -> Result<Result<(Object, Vec<Object>), Reject>, Error> {
+    let info = storage.log_info()?;
+    let Some(cp) = read(storage)? else { return Ok(Err(Reject::Missing)) };
+    let max_seq = num(cp.get("maxSeq")) as u64;
+    let boundary = if max_seq > 0 { storage.event_at(max_seq)? } else { None };
+    let tail = storage.events_after(max_seq, Some(info.max_seq), None)?;
+    if let Some(reason) = reject_reason(Some(&cp), &info, boundary.as_ref(), &tail, reorder_safe) {
+        return Ok(Err(reason));
+    }
+    Ok(Ok((cp, tail)))
 }
