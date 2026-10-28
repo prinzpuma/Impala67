@@ -57,6 +57,7 @@ jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 
 # später
 androidx-ink-authoring = { module = "androidx.ink:ink-authoring", version.ref = "ink" }
+androidx-ink-authoring-compose = { module = "androidx.ink:ink-authoring-compose", version.ref = "ink" }
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "ink" }
 androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "ink" }
 androidx-ink-rendering = { module = "androidx.ink:ink-rendering", version.ref = "ink" }
@@ -71,6 +72,7 @@ mlkit-barcode = { module = "com.google.mlkit:barcode-scanning", version.ref = "m
 
 [bundles]
 compose = ["compose-ui", "compose-ui-tooling-preview", "compose-foundation", "compose-material3", "compose-material3-navigation-suite", "compose-material3-adaptive", "compose-material3-adaptive-layout", "compose-material3-adaptive-navigation3"]
+ink = ["androidx-ink-authoring", "androidx-ink-authoring-compose", "androidx-ink-brush", "androidx-ink-geometry", "androidx-ink-rendering", "androidx-ink-strokes"]
 navigation3 = ["navigation3-runtime", "navigation3-ui", "androidx-lifecycle-viewmodel-compose", "androidx-lifecycle-viewmodel-navigation3"]
 
 [plugins]

@@ -84,6 +84,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.bundles.navigation3)
+    implementation(libs.bundles.ink)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation("${libs.jna.get()}@aar")
