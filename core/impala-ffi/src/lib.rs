@@ -7,6 +7,7 @@ mod card_ops;
 mod cards;
 mod changes;
 mod clock;
+mod cloze;
 mod conflicts;
 mod decks;
 mod drive;
