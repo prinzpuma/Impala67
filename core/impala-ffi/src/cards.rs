@@ -30,6 +30,11 @@ pub struct CardInfo {
     /// Fällig ab (ISO), leer bei Altkarten ohne Lernstand.
     pub due: String,
     pub suspended: bool,
+    /// Zu oft vergessen (Leech-Markierung).
+    pub leech: bool,
+    /// Einzeln archiviert (nicht: über den Stapel).
+    pub archived: bool,
+    pub trashed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -61,7 +66,7 @@ fn text(c: &Card, key: &str) -> String {
     }
 }
 
-fn info(c: &Card) -> CardInfo {
+pub(crate) fn info(c: &Card) -> CardInfo {
     CardInfo {
         id: c.id().to_owned(),
         front: text(c, "front"),
@@ -76,15 +81,18 @@ fn info(c: &Card) -> CardInfo {
         },
         due: c.srs_due().unwrap_or_default().to_owned(),
         suspended: c.is_suspended(),
+        leech: c.truthy("leech"),
+        archived: c.is_archived(),
+        trashed: c.is_trashed(),
     }
 }
 
-fn wall_now() -> Timestamp {
+pub(crate) fn wall_now() -> Timestamp {
     Timestamp::from_millis(SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64))
 }
 
 /// Lernstand einer Karte; fehlt `due` oder ist er unlesbar (Altdaten), gilt sie ab `now` als fällig.
-fn srs_of(c: &Card, now: Timestamp) -> Result<Srs, CoreError> {
+pub(crate) fn srs_of(c: &Card, now: Timestamp) -> Result<Srs, CoreError> {
     let mut v = c.srs().cloned().unwrap_or(Value::Null);
     let Value::Object(o) = &mut v else { return Ok(Srs::new(now)) };
     if !o.get("due").and_then(Value::as_str).is_some_and(|d| Timestamp::parse_iso(d).is_some()) {
@@ -100,12 +108,12 @@ fn fuzz_sample() -> f64 {
 }
 
 impl Inner {
-    fn card(&self, id: &str) -> Result<&Card, CoreError> {
+    pub(crate) fn card(&self, id: &str) -> Result<&Card, CoreError> {
         self.model.state().cards.get(id).ok_or_else(|| invalid(format!("Unbekannte Karte {id}")))
     }
 
     /// Neuer Stapel-Name wird erst angelegt (wie der Karten-Editor der PWA).
-    fn ensure_deck(&mut self, deck: &str) -> Result<(), CoreError> {
+    pub(crate) fn ensure_deck(&mut self, deck: &str) -> Result<(), CoreError> {
         let state = self.model.state();
         let known =
             deck == "Standard" || state.decks.contains_key(deck) || state.cards.values().any(|c| c.deck_name() == deck);
@@ -187,6 +195,18 @@ impl ImpalaCore {
         let now = wall_now();
         let card = inner.card(&card_id)?;
         let before = srs_of(card, now)?;
+        // Stand vor der Bewertung für „Rückgängig“ (wie `undoStack` in `web/extras.js`).
+        let review_id = uuid::Uuid::new_v4().to_string();
+        let undo = crate::card_ops::ReviewUndo {
+            id: card_id.clone(),
+            review_id: review_id.clone(),
+            srs: card
+                .srs()
+                .filter(|v| !v.is_null())
+                .cloned()
+                .map_or_else(|| serde_json::to_value(&before).map_err(|e| invalid(e.to_string())), Ok)?,
+            was_suspended: card.is_suspended(),
+        };
         let srs = before.rate(Rating::from_grade(f64::from(grade)), now, Fuzz::Sample(fuzz_sample()));
         let stage = info(card).stage;
         let previous = inner
@@ -202,7 +222,7 @@ impl ImpalaCore {
             "id": card_id,
             "srs": serde_json::to_value(&srs).map_err(|e| invalid(e.to_string()))?,
             "grade": grade,
-            "reviewId": uuid::Uuid::new_v4().to_string(),
+            "reviewId": review_id,
             "deck": card.deck_name(),
             "first": stage == CardStage::New,
             "learning": matches!(stage, CardStage::Learning | CardStage::Relearning),
@@ -211,7 +231,7 @@ impl ImpalaCore {
             "intervalDays": interval_days,
         });
         inner.dispatch("cardReview", payload)?;
-        Ok(())
+        inner.push_review_undo(undo)
     }
 
     /// Neue Karte; liefert ihre ID. Ohne `deck`: „Standard“.

@@ -208,7 +208,11 @@ impl Inner {
         if !model.replay_ordered() {
             self.reload()?;
         }
-        Ok(found.conflicts.len())
+        let count = found.conflicts.len();
+        // Die Events sind übernommen; scheitert nur das Vormerken, findet `conflicts()` die
+        // Konfliktkopien trotzdem (als gerettete Alt-Kopien).
+        let _ = self.remember_conflicts(found.conflicts);
+        Ok(count)
     }
 }
 
