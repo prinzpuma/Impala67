@@ -4,13 +4,15 @@
 //! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
 
 mod clock;
+mod sync;
 
 use std::fmt;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use impala_model::search::NoteSearch;
 use impala_model::{CheckpointSave, Model, Page};
-use impala_storage::{ExportOptions, ImportOptions, SqliteStorage, StorageExt};
+use impala_storage::{ExportOptions, ImportOptions, SqliteStorage, Storage, StorageExt};
 use serde_json::{Value, json};
 
 use crate::clock::Clock;
@@ -140,16 +142,46 @@ struct Inner {
     search: NoteSearch,
     clock: Clock,
     load: LoadInfo,
+    /// Verbundener Sync (ID, Befehlskanal): erfährt jedes lokale Event.
+    sync_tx: Option<(u64, Sender<sync::Cmd>)>,
 }
+
+/// Zustand, den [`ImpalaCore`] und ein [`sync::CloudSync`] teilen.
+type Shared = Arc<Mutex<Inner>>;
+
+fn lock(shared: &Shared) -> MutexGuard<'_, Inner> {
+    // Ein Panic in einem früheren Aufruf lässt den Zustand stehen; weiterarbeiten statt abstürzen.
+    shared.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Meta-Schlüssel der Geräte-ID (Sync-Client-ID, unterdrückt das eigene Echo).
+const DEVICE_ID_KEY: &str = "deviceId";
 
 impl Inner {
     fn open(storage: SqliteStorage) -> Result<Inner, CoreError> {
         let load =
             LoadInfo { event_count: 0, max_seq: 0, replayed: 0, checkpoint_used: false, checkpoint_reject: None };
-        let mut inner =
-            Inner { storage, model: Model::new(), search: NoteSearch::new(), clock: Clock::default(), load };
+        let mut inner = Inner {
+            storage,
+            model: Model::new(),
+            search: NoteSearch::new(),
+            clock: Clock::default(),
+            load,
+            sync_tx: None,
+        };
         inner.reload()?;
         Ok(inner)
+    }
+
+    /// Dauerhafte Geräte-ID; beim ersten Aufruf angelegt.
+    fn device_id(&mut self) -> String {
+        if let Ok(Some(id)) = self.storage.meta(DEVICE_ID_KEY) {
+            return id;
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        // Scheitert das Speichern, gilt die ID nur bis zum nächsten Start (Echo-Unterdrückung leidet kurz).
+        let _ = self.storage.apply(vec![impala_storage::Write::SetMeta(DEVICE_ID_KEY.into(), Some(id.clone()))]);
+        id
     }
 
     /// Zustand aus Checkpoint und Log (neu) laden.
@@ -173,6 +205,9 @@ impl Inner {
         let id = uuid::Uuid::new_v4().to_string();
         let now = self.clock.now();
         let ev = self.model.dispatch(&mut self.storage, kind, payload, &id, &now)?;
+        if let Some((_, tx)) = &self.sync_tx {
+            let _ = tx.send(sync::Cmd::Local(Value::Object(ev.to_object())));
+        }
         Ok(ev.id)
     }
 }
@@ -181,13 +216,20 @@ impl Inner {
 /// (intern serialisiert); lange Aufrufe (Öffnen, Import, Export) gehören in einen Hintergrund-Thread.
 #[derive(uniffi::Object)]
 pub struct ImpalaCore {
-    inner: Mutex<Inner>,
+    inner: Shared,
 }
 
 impl ImpalaCore {
+    fn new(inner: Inner) -> Arc<Self> {
+        Arc::new(ImpalaCore { inner: Arc::new(Mutex::new(inner)) })
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        // Ein Panic in einem früheren Aufruf lässt den Zustand stehen; weiterarbeiten statt abstürzen.
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        lock(&self.inner)
+    }
+
+    fn shared(&self) -> Shared {
+        self.inner.clone()
     }
 }
 
@@ -196,15 +238,13 @@ impl ImpalaCore {
     /// Öffnet (oder legt an) die Datenbank unter `db_path` und lädt den Zustand.
     #[uniffi::constructor]
     pub fn open(db_path: String) -> Result<Arc<Self>, CoreError> {
-        let storage = SqliteStorage::open(&db_path)?;
-        Ok(Arc::new(ImpalaCore { inner: Mutex::new(Inner::open(storage)?) }))
+        Ok(ImpalaCore::new(Inner::open(SqliteStorage::open(&db_path)?)?))
     }
 
     /// Nur im Speicher (Tests, Vorschau).
     #[uniffi::constructor]
     pub fn open_in_memory() -> Result<Arc<Self>, CoreError> {
-        let storage = SqliteStorage::open_in_memory()?;
-        Ok(Arc::new(ImpalaCore { inner: Mutex::new(Inner::open(storage)?) }))
+        Ok(ImpalaCore::new(Inner::open(SqliteStorage::open_in_memory()?)?))
     }
 
     pub fn load_info(&self) -> LoadInfo {

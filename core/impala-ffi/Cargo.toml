@@ -20,7 +20,10 @@ name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
+impala-crypto = { path = "../impala-crypto" }
 impala-model = { path = "../impala-model" }
+impala-net = { path = "../impala-net" }
+impala-sync = { path = "../impala-sync" }
 impala-search = { path = "../impala-search", default-features = false }
 impala-srs = { path = "../impala-srs" }
 impala-storage = { path = "../impala-storage" }

@@ -944,10 +944,13 @@ dependencies = [
 name = "impala-ffi"
 version = "0.1.0"
 dependencies = [
+ "impala-crypto",
  "impala-model",
+ "impala-net",
  "impala-search",
  "impala-srs",
  "impala-storage",
+ "impala-sync",
  "serde_json",
  "uniffi",
  "uuid",
