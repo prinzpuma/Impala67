@@ -3,10 +3,14 @@
 //! vergibt Event-IDs und Zeitstempel und schreibt jede Änderung, bevor sie angewandt wird.
 //! Die Plattform zeichnet nur und ruft grobe Funktionen; Daten wandern als einfache Datensätze.
 
+mod ai;
+mod ai_tools;
 mod cards;
+mod chats;
 mod clock;
 mod heft;
 mod markdown;
+mod rag;
 mod sync;
 
 use std::fmt;
