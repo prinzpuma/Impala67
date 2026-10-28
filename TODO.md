@@ -99,8 +99,33 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [ ] FSRS: Obergrenze der Stabilität nach Vergessen fehlt; Anzeige „60 Min“/„1 Jahre“.
   - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.
 
-### Priorität 3: Android & Plattform-Ergänzungen
-- [ ] **Google Drive Login in Android-APK verifizieren**:
-  - OAuth2-Ablauf in der nativen Capacitor-Umgebung testen und absichern (Webclient-ID vs. Android OAuth-Redirect / Chrome Custom Tabs).
+### Priorität 3: Native Android-App (Kotlin + Jetpack Compose + UniFFI Rust-Kern)
+*Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
+
+- [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
+  - Capacitor- und Cordova-Reste aus `android/` entfernen.
+  - Gradle auf Kotlin (`kotlin-android`) und Jetpack Compose (Material 3 Expressive) umstellen.
+  - Rust NDK Cross-Compilation (`cargo-ndk` für arm64-v8a, x86_64) und UniFFI Kotlin-Binding-Generierung einbinden.
+  - JNA-Dependency (`net.java.dev.jna:jna`) einbinden.
+- [x] **Daten- & Schlüssel-Migration**:
+  - Einmaliger Start-Migrator: Liest `impala67_cf_sync_key` und `impala67_cf_server_url` aus den alten WebView-Dateien (`app_webview/.../Local Storage/leveldb/`) aus und sichert sie in `EncryptedSharedPreferences` / Android Keystore.
+  - Daten-Initialisierung: Rust-Kern holt alle Daten automatisch und vollständig über den Cloudflare-Sync (SQLite-Ablage in `impala-storage`).
+- [x] **Plattform-Features & Bibliotheken**:
+  - **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) für latenzfreie Stifteingabe mit Hardware-Prädiktion.
+  - **Handschrifterkennung**: ML Kit Digital Ink Recognition (on-device, direkt aus Strichkoordinaten).
+  - **Dokumentenscanner (Dual-Modus)**: Sowohl der bestehende manuelle Bild-Scanner als auch die Google ML Kit Document Scanner API bleiben als Option wählbar.
+  - **Hintergrund-Sync**: Jetpack WorkManager (akkuschonender Cloudflare- & Drive-Sync).
+  - **Sicherheit**: Android Keystore & EncryptedSharedPreferences (Schlüssel, Drive-Tokens, API-Keys).
+  - **Diktat**: Nativer Android `SpeechRecognizer` (on-device Spracherkennung).
+  - **Systemintegration**: Share Sheet (`ACTION_SEND` für Notizen), App Shortcuts, Predictive Back Wischgesten.
+- [x] **UI-Design-Richtung & Vorgehen (Parallel mit Subagents)**:
+  - *UI-Ansatz*: Start als native Portierung der bewährten Impala67-Oberfläche (dunkle Flächen `#191919`/`#202020`, Icons, Dock, Sheets) mit Jetpack Compose und Material 3 Expressive (Federphysik, flüssige Gesten). *Sollte die UI im Alltagstest nicht voll überzeugen, wird sie bei Bedarf modular neu gestaltet.*
+  - *Subagenten-Aufteilung*:
+    1. Subagent A: NDK/UniFFI-Brücke, Datenfluss, WorkManager Sync-Service.
+    2. Subagent B: Navigation, Adaptive Layouts, Seitenliste & Brotkrumen.
+    3. Subagent C: Notiz- & Markdown-Editor mit Expressive Floating Toolbar.
+    4. Subagent D: Heft-Ansicht (Jetpack Ink) & Dokumenten-Scanner (ML Kit + Manuell).
+- [x] **Android Google Drive OAuth**: Nativer Android Google Sign-In SDK Login für Drive-Backup.
+
 - [ ] **Android Home-Screen Widget (optional)**:
   - Startbildschirm-Widget für einen schnellen Blick auf heute fällige Karteikarten.

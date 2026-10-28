@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_note"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_new_note_short"
+        android:shortcutLongLabel="@string/shortcut_new_note_long">
+        <intent
+            android:action="org.impala67.app.ACTION_NEW_NOTE"
+            android:targetPackage="org.impala67.app"
+            android:targetClass="org.impala67.app.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_heft"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_new_heft_short"
+        android:shortcutLongLabel="@string/shortcut_new_heft_long">
+        <intent
+            android:action="org.impala67.app.ACTION_NEW_HEFT"
+            android:targetPackage="org.impala67.app"
+            android:targetClass="org.impala67.app.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="study_cards"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_study_short"
+        android:shortcutLongLabel="@string/shortcut_study_long">
+        <intent
+            android:action="org.impala67.app.ACTION_STUDY_CARDS"
+            android:targetPackage="org.impala67.app"
+            android:targetClass="org.impala67.app.MainActivity" />
+    </shortcut>
+</shortcuts>

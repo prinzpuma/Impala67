@@ -70,3 +70,6 @@ if (fs.existsSync(gradlePath) && /^\d+\.\d+\.\d+$/.test(version)) {
 }
 
 console.log(`PWA-Version ${version} gesetzt.`);
+
+// Temporäres Capacitor-Stub-Verzeichnis für `npx cap sync android` in release.yml anlegen:
+fs.mkdirSync("./.capacitor-disabled-stub/app", { recursive: true });
