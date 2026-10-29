@@ -12248,7 +12248,11 @@ data class DriveStatus (
     /**
      * Letzte Etappe des laufenden Durchgangs (sonst leer).
      */
-    var `progress`: kotlin.String
+    var `progress`: kotlin.String, 
+    /**
+     * Im laufenden Durchgang bisher empfangene Bytes (Anzeige „12,3 MB geladen“).
+     */
+    var `loadedBytes`: kotlin.ULong
 ) {
     
     companion object
@@ -12265,6 +12269,7 @@ public object FfiConverterTypeDriveStatus: FfiConverterRustBuffer<DriveStatus> {
             FfiConverterULong.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
         )
     }
 
@@ -12273,7 +12278,8 @@ public object FfiConverterTypeDriveStatus: FfiConverterRustBuffer<DriveStatus> {
             FfiConverterULong.allocationSize(value.`uploadedSeq`) +
             FfiConverterULong.allocationSize(value.`syncedSeq`) +
             FfiConverterBoolean.allocationSize(value.`running`) +
-            FfiConverterString.allocationSize(value.`progress`)
+            FfiConverterString.allocationSize(value.`progress`) +
+            FfiConverterULong.allocationSize(value.`loadedBytes`)
     )
 
     override fun write(value: DriveStatus, buf: ByteBuffer) {
@@ -12282,6 +12288,7 @@ public object FfiConverterTypeDriveStatus: FfiConverterRustBuffer<DriveStatus> {
             FfiConverterULong.write(value.`syncedSeq`, buf)
             FfiConverterBoolean.write(value.`running`, buf)
             FfiConverterString.write(value.`progress`, buf)
+            FfiConverterULong.write(value.`loadedBytes`, buf)
     }
 }
 

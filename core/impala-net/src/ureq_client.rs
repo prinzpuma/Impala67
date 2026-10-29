@@ -14,9 +14,20 @@ impl UreqClient {
     /// `timeout` begrenzt Verbindungsaufbau und Warten auf den Antwortkopf, nicht den Körper:
     /// Ein langer KI-Stream darf länger laufen (Leerlauf-Grenzen setzt der Aufrufer).
     pub fn new(timeout: Duration) -> Self {
+        Self::build(timeout, None)
+    }
+
+    /// Wie [`UreqClient::new`], zusätzlich darf das Lesen des Körpers höchstens `body` dauern:
+    /// Ohne Grenze hing ein Download nach einem Verbindungsabriss (Mobilfunk) für immer.
+    pub fn with_body_timeout(timeout: Duration, body: Duration) -> Self {
+        Self::build(timeout, Some(body))
+    }
+
+    fn build(timeout: Duration, body: Option<Duration>) -> Self {
         let config = ureq::Agent::config_builder()
             .timeout_connect(Some(timeout))
             .timeout_recv_response(Some(timeout))
+            .timeout_recv_body(body)
             // Statuscodes ≥ 400 sind normale Antworten, kein Transportfehler.
             .http_status_as_error(false)
             .build();

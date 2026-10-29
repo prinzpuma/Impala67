@@ -5,10 +5,11 @@
 //! Quelle `"drive"`) und sind sofort im Zustand. Der Drive-Zustand liegt in den Meta-Einträgen
 //! der Datenbank (Präfix `drive:`, sonst dieselben Schlüssel wie `localStorage` der PWA).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use impala_drive::policy::{self, ChangeStep, ChangeTimer, Gate, TimerStep};
 use impala_drive::state::DriveState;
@@ -148,6 +149,8 @@ pub struct DriveStatus {
     pub running: bool,
     /// Letzte Etappe des laufenden Durchgangs (sonst leer).
     pub progress: String,
+    /// Im laufenden Durchgang bisher empfangene Bytes (Anzeige „12,3 MB geladen“).
+    pub loaded_bytes: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +286,8 @@ impl TokenSource for Tokens {
 struct Stoppable<H> {
     http: H,
     stop: Arc<AtomicBool>,
+    /// Seit Beginn des Durchgangs empfangene Bytes.
+    loaded: Arc<AtomicU64>,
 }
 
 impl<H: HttpClient> HttpClient for Stoppable<H> {
@@ -290,7 +295,18 @@ impl<H: HttpClient> HttpClient for Stoppable<H> {
         if self.stop.load(Ordering::Relaxed) {
             return Err(NetError::Aborted);
         }
-        self.http.send(req).await
+        // Gestreamt, damit die Anzeige die geladene Menge sieht ([`DriveStatus::loaded_bytes`]).
+        let mut body = Vec::new();
+        let mut res = self
+            .http
+            .send_streaming(req, &mut |chunk| {
+                body.extend_from_slice(chunk);
+                self.loaded.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+                !self.stop.load(Ordering::Relaxed)
+            })
+            .await?;
+        res.body = body;
+        Ok(res)
     }
 }
 
@@ -310,6 +326,7 @@ enum Cmd {
 struct Published {
     running: AtomicBool,
     progress: Mutex<String>,
+    loaded: Arc<AtomicU64>,
 }
 
 type Backup<H> = DriveBackup<Stoppable<H>, Tokens, NativeDriveStore, NativeClock>;
@@ -325,6 +342,7 @@ fn run<H: HttpClient>(
     for cmd in rx {
         // Ein Durchgang zur Zeit; `stop()` gilt nur für den laufenden.
         stop.store(false, Ordering::Relaxed);
+        out.loaded.store(0, Ordering::Relaxed);
         backup.set_options(DriveOptions { allow_secrets: allow_secrets(&crate::lock(&shared)) });
         match cmd {
             Cmd::Sync(listener, reply) => {
@@ -377,7 +395,8 @@ impl DriveSync {
     ) -> Arc<DriveSync> {
         let shared = core.shared();
         let stop = Arc::new(AtomicBool::new(false));
-        let out = Arc::new(Published { running: AtomicBool::new(false), progress: Mutex::new(String::new()) });
+        let loaded = Arc::new(AtomicU64::new(0));
+        let out = Arc::new(Published { running: AtomicBool::new(false), progress: Mutex::new(String::new()), loaded: loaded.clone() });
         let (tx, rx) = mpsc::channel();
         let (thread_shared, thread_stop, thread_out) = (shared.clone(), stop.clone(), out.clone());
         // `DriveBackup` ist nicht `Send` (RefCell): Es entsteht im Thread und bleibt dort.
@@ -385,7 +404,7 @@ impl DriveSync {
             .name("impala-drive".into())
             .spawn(move || {
                 let backup = DriveBackup::new(
-                    Stoppable { http, stop: thread_stop.clone() },
+                    Stoppable { http, stop: thread_stop.clone(), loaded },
                     Tokens(tokens),
                     NativeDriveStore { core: thread_shared.clone() },
                     NativeClock { core: thread_shared.clone() },
@@ -414,7 +433,9 @@ impl DriveSync {
     /// Verbindet `core` mit Google Drive. `tokens` liefert die Anmeldung der App.
     #[uniffi::constructor]
     pub fn new(core: Arc<ImpalaCore>, tokens: Arc<dyn DriveTokens>) -> Arc<Self> {
-        DriveSync::start(&core, UreqClient::default(), tokens)
+        // Große Snapshots dürfen dauern, aber nie endlos hängen (abgerissene Mobilverbindung).
+        let http = UreqClient::with_body_timeout(Duration::from_secs(60), Duration::from_secs(10 * 60));
+        DriveSync::start(&core, http, tokens)
     }
 
     /// Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
@@ -452,6 +473,7 @@ impl DriveSync {
             synced_seq: state.synced_seq.unwrap_or(0),
             running: self.out.running.load(Ordering::Acquire),
             progress: self.out.progress.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+            loaded_bytes: self.out.loaded.load(Ordering::Relaxed),
         }
     }
 

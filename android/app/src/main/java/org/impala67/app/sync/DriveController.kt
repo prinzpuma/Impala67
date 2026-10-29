@@ -44,6 +44,8 @@ data class DriveUi(
     val progress: String = "",
     /** Anteil 0…1 der laufenden Etappe; `null`: unbestimmter Balken. */
     val fraction: Float? = null,
+    /** Im laufenden Durchgang empfangene Bytes. */
+    val loadedBytes: Long = 0,
     val email: String = "",
     /** ISO-Zeit des letzten erfolgreichen Syncs. */
     val lastOk: String? = null,
@@ -170,7 +172,15 @@ class DriveController(
     suspend fun sync() {
         val current = lock.withLock { ensureDrive() } ?: return
         if (_ui.value.running) return
-        _ui.update { it.copy(running = true, progress = "", fraction = null, message = "") }
+        _ui.update { it.copy(running = true, progress = "", fraction = null, loadedBytes = 0, message = "") }
+        // Geladene Menge laufend zeigen: Ein großer Remote-Stand ist ein einziger langer Download.
+        val ticker = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(LOADED_TICK_MS)
+                val bytes = current.status().loadedBytes.toLong()
+                _ui.update { it.copy(loadedBytes = bytes) }
+            }
+        }
         try {
             val report = withContext(Dispatchers.IO) { current.sync(progress) }
             val clock = report.clockWarningMinutes?.let { " · Geräteuhr weicht $it Minuten ab" }.orEmpty()
@@ -182,7 +192,8 @@ class DriveController(
         } catch (e: DriveFailure.Failed) {
             _ui.update { it.copy(message = if (e.offline) "Offline · wartet" else e.reason) }
         } finally {
-            _ui.update { it.copy(running = false, progress = "", fraction = null) }
+            ticker.cancel()
+            _ui.update { it.copy(running = false, progress = "", fraction = null, loadedBytes = 0) }
             refreshStatus()
         }
     }
@@ -281,6 +292,7 @@ class DriveController(
     private companion object {
         const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
         const val ACCOUNT_TYPE = "com.google"
+        const val LOADED_TICK_MS = 1000L
         const val AUTH_TIMEOUT_S = 30L
         /** Google-Tokens gelten eine Stunde; etwas früher still erneuern. */
         const val TOKEN_MAX_AGE_MS = 50 * 60 * 1000L

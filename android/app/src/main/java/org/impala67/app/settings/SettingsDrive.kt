@@ -87,8 +87,10 @@ fun DriveSyncGroup(toast: (String) -> Unit) {
         }
         if (ui.running) {
             Column(Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s2)) {
-                if (ui.progress.isNotBlank()) {
-                    Text(ui.progress, style = MaterialTheme.typography.bodySmall, color = Impala.colors.text2)
+                val loaded = if (ui.loadedBytes > 0) "%.1f MB geladen".format(java.util.Locale.GERMAN, ui.loadedBytes / 1_000_000.0) else ""
+                val line = listOf(ui.progress, loaded).filter { it.isNotBlank() }.joinToString(" · ")
+                if (line.isNotBlank()) {
+                    Text(line, style = MaterialTheme.typography.bodySmall, color = Impala.colors.text2)
                 }
                 val fraction = ui.fraction
                 if (fraction != null) {
