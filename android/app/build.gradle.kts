@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.bundles.navigation3)
     implementation(libs.bundles.ink)
     implementation(libs.mlkit.document.scanner)
+    implementation(libs.mlkit.digital.ink)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation("${libs.jna.get()}@aar")

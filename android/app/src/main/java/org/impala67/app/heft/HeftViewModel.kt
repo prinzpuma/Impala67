@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.heft.ink.HeftIndexer
 import org.impala67.app.heft.scan.ScannedPage
 import org.impala67.app.heft.scan.insertScannedPages
 import uniffi.impala_ffi.Changes
@@ -29,6 +30,9 @@ import uniffi.impala_ffi.heftNewId
  */
 class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewModel() {
     private val touched: (Changes) -> Boolean = { pageId in it.hefte || pageId in it.closedPages }
+
+    /** Erkennt die Handschrift einer Seite nach Strich-Änderungen und macht sie durchsuchbar. */
+    private val indexer = HeftIndexer(store, viewModelScope, pageId)
 
     val title: StateFlow<String?> = store.query(Touches.pages) { it.page(pageId)?.summary?.title }
 
@@ -89,11 +93,21 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
     // ---- Schreiben ----
 
     /** Fertigen Strich speichern; Punkte im Kernformat `[x, y, druck, …]`. */
-    fun addStroke(heftPageId: String, tool: String, color: String, size: Double, points: List<Float>, id: String) =
+    fun addStroke(heftPageId: String, tool: String, color: String, size: Double, points: List<Float>, id: String) {
         edit { HeftChange.AddStroke(heftPageId, HeftStroke(id, tool, color, size, points, null)) }
+        indexer.schedule(heftPageId)
+    }
 
     fun removeStrokes(heftPageId: String, ids: List<String>) {
-        if (ids.isNotEmpty()) edit { HeftChange.RemoveStrokes(heftPageId, ids) }
+        if (ids.isNotEmpty()) {
+            edit { HeftChange.RemoveStrokes(heftPageId, ids) }
+            indexer.schedule(heftPageId)
+        }
+    }
+
+    override fun onCleared() {
+        indexer.close()
+        super.onCleared()
     }
 
     /** Striche unter dem Radierer, oberster zuerst (nur Lesen, schreibt nichts). */

@@ -151,8 +151,8 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht, Bilder/Text offen) |
 | `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer ✅, Lasso offen) |
 | `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/HeftToolbar.kt` | ✅ |
-| `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | ⬜ |
-| `handschrift.js`, `handwriting-worker.js`, `heft-label.js`, `heft-indexer.js` | ML Kit Digital Ink (bzw. Kern-Index) | `heft/ink/` | ⬜ |
+| `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | 🟡 (Scannen ✅; OCR offen) |
+| `handschrift.js`, `handwriting-worker.js`, `heft-label.js`, `heft-indexer.js` | ML Kit Digital Ink (bzw. Kern-Index) | `heft/ink/` | 🟡 (Seitentext für die Suche ✅; Zeilen-Segmentierung über `impala-ink`, Lasso → Text offen) |
 | `heft-import.js`, `heft-export.js`, `export-media.js` | Storage Access Framework, `heft_export` (FFI) | `heft/` | ⬜ |
 | `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | 🟡 (Import/Export, Karten-Papierkorb offen) |
 | `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
