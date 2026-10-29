@@ -64,6 +64,7 @@ object Touches {
     val learning: (Changes) -> Boolean = { it.learningSessions }
     val articles: (Changes) -> Boolean = { it.homeArticles }
     val settings: (Changes) -> Boolean = { it.settings }
+    val chats: (Changes) -> Boolean = { it.chatsAll || it.chats.isNotEmpty() }
 
     fun any(vararg groups: (Changes) -> Boolean): (Changes) -> Boolean = { c -> groups.any { it(c) } }
 }

@@ -145,7 +145,7 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `mobile*.js`, `mobile*.css`, `layout.css`, `tabs.js`, `nav-history.js`, `app-sidebar-events.js`, `collapse.js` | `NavigationSuiteScaffold`, Navigation 3, List-Detail | `ui/shell/*` (Ziele: `Destinations.kt`) | ✅ |
 | `popovers.js`, `app-dialogs.js`, `mobile-sheet.js` | `DropdownMenu`, `AlertDialog`, `ModalBottomSheet` | je Bereich | ✅ |
 | `app-click-*.js`, `controller.js`, `shortcuts.js` | Callbacks/ViewModels; Tastatur über `onKeyEvent` | je Bereich | ➖ |
-| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Verschieben, Duplizieren, Vorlagen offen) |
+| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Vorlagen, eigenes Cover-Bild offen) |
 | `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü, Markdown-Kürzel wie „- “, Icon/Cover, Formeln offen) |
 | `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/MarkdownView.kt` | ✅ |
 | `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht, Bilder/Text offen) |
@@ -156,15 +156,15 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `heft-import.js`, `heft-export.js`, `export-media.js` | Storage Access Framework, `heft_export` (FFI) | `heft/` | ⬜ |
 | `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | 🟡 (Import/Export, Karten-Papierkorb offen) |
 | `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
-| `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | ⬜ |
+| `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | 🟡 (Chat im KI-Panel + Chat-Liste ✅; Anhänge, Modellwahl, RAG, Chat-Tabs, Umbenennen offen) |
 | `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`) | `ai/` | ⬜ |
 | `voice.js` | `SpeechRecognizer` | `ai/` | ⬜ |
 | `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
 | `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), OkHttp-WebSocket | `sync/CloudSyncController.kt` | 🟡 (Sync + Konflikte ✅, nur im Vordergrund; QR-Kopplung, Backup-Hinweis offen) |
 | `drive*.js` | Rust-Drive (`drive.rs`) + Play-Services-Autorisierung (`drive.appdata`) | `sync/DriveController.kt` | 🟡 (Anmeldung, Sync, Intervall ✅; „nach jeder Änderung“ offen; braucht Android-OAuth-Client im Projekt der PWA-Client-ID) |
 | `settings*.js` | Compose-Listen, `settingsJson`/`updateSettings` + `DevicePrefs` | `settings/` | 🟡 (Sync/KI/Speicher-Abschnitte offen) |
-| `library.js`, `notebooklm.js`, `extras.js` | Compose-Listen | `library/` | ⬜ |
-| `pdfs.js`, `pdfpaste.js` | `androidx.pdf` (pdf-viewer) | `library/` | ⬜ |
+| `library.js`, `notebooklm.js`, `extras.js` | Compose-Listen | `library/` | 🟡 (PDF-Liste, Öffnen, Import ✅; Tabs/Filter, NotebookLM offen) |
+| `pdfs.js`, `pdfpaste.js` | externer PDF-Betrachter (FileProvider) | `library/` | 🟡 (Textauszug für die Suche, KI-Zusammenfassung offen) |
 | `graph.js`, `graph-worker.js`, `diagram.js` | Compose `Canvas` | `graph/` | ⬜ |
 | `qrcode.js`, `qr-scanner.js` | ML Kit Barcode (+ CameraX) | `sync/` | ⬜ |
 | `telemetrie.js`, `perf-hint.js`, `performance-profiler*.js` | Android-Profiler / Logcat | – | ➖ |

@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.launch
 import org.impala67.app.R
+import org.impala67.app.ai.AiChatViewModel
+import org.impala67.app.ai.ChatList
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.notes.MovePageDialog
@@ -62,7 +64,7 @@ val SidebarWidth = 260.dp
  * Seitenbaum (Favoriten + Arbeitsbereiche), unten die sekundäre Navigation (`.side-foot`).
  */
 @Composable
-fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, modifier: Modifier = Modifier) {
+fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, ai: AiChatViewModel, modifier: Modifier = Modifier) {
     val c = Impala.colors
     var mode by rememberSaveable { mutableStateOf(SidebarMode.Files) }
     val shownMode = if (mode == SidebarMode.Files && current.topLevel() == TopLevel.Study) SidebarMode.Cards else mode
@@ -79,8 +81,7 @@ fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, modifier: Mo
         Box(Modifier.weight(1f)) {
             when (shownMode) {
                 SidebarMode.Files -> PageTree(store, nav)
-                // TODO(desk): Chat-Verlauf (`chatListHtml`) – folgt mit der Rust-KI.
-                SidebarMode.Chats -> Hint("+ Neuer Chat", "Chats folgen mit dem KI-Modul.")
+                SidebarMode.Chats -> ChatList(ai)
                 SidebarMode.Cards -> DeskDecks(store, nav, current)
             }
         }
@@ -165,13 +166,5 @@ private fun FootButton(icon: Int, label: String, onClick: () -> Unit) {
     ) {
         Icon(painterResource(icon), null, Modifier.size(15.dp), tint = c.text2)
         Text(label, color = c.text2, fontSize = TextSize.sm)
-    }
-}
-
-@Composable
-private fun Hint(title: String, body: String) {
-    Column(Modifier.padding(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-        Text(title, color = Impala.colors.text2, fontSize = TextSize.base)
-        Text(body, color = Impala.colors.text2, fontSize = TextSize.xs)
     }
 }
