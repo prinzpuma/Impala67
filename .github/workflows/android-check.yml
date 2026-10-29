@@ -1,0 +1,24 @@
+name: Android prüfen
+
+# Kompiliert die native App (Debug) auf Arbeitszweigen – für Sitzungen ohne lokales Android-SDK.
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['android/**', '.github/workflows/android-check.yml']
+  workflow_dispatch:
+
+jobs:
+  assemble-debug:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+      - name: Debug-APK bauen
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon --warning-mode=summary
