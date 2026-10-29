@@ -79,8 +79,7 @@ fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, modifier: Mo
                 SidebarMode.Files -> PageTree(store, nav)
                 // TODO(desk): Chat-Verlauf (`chatListHtml`) – folgt mit der Rust-KI.
                 SidebarMode.Chats -> Hint("+ Neuer Chat", "Chats folgen mit dem KI-Modul.")
-                // TODO(desk): Stapelbaum (`deckTreeHtml`) wie in der PWA statt Hinweis.
-                SidebarMode.Cards -> Hint("Karteikarten", "Stapel stehen rechts in der Lernansicht.")
+                SidebarMode.Cards -> DeskDecks(store, nav, current)
             }
         }
         HorizontalDivider(color = c.edgeSoft)
