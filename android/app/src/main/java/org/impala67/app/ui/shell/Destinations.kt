@@ -5,6 +5,8 @@ import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import org.impala67.app.ai.AiChatViewModel
+import org.impala67.app.ai.ChatView
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.heft.HeftThumbnail
 import org.impala67.app.home.HomeActions
@@ -64,7 +66,9 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     entry<SearchRoute> {
         SearchScreen(store, onOpenPage = { nav.back(); nav.open(PageRoute(it)) }, onAction = { nav.back(); nav.action(it) }, onClose = nav::back)
     }
-    entry<AiRoute> { Placeholder("KI-Assistent", "Chat folgt (ai.js → Rust-KI im Kern).") }
+    entry<AiRoute> {
+        ChatView(viewModel { AiChatViewModel(store, prefs) }, activePageId = null, onOpenSettings = { nav.action("settings") })
+    }
     entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
         SettingsSection("overview", store, prefs, nav::toast)
     })) { SettingsSections(onOpen = { nav.open(SettingsSectionRoute(it)) }) }
