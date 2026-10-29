@@ -51,8 +51,8 @@ data class DeskTreeActions(
     val favorite: (PageSummary) -> Unit,
     val archive: (PageSummary) -> Unit,
     val trash: (PageSummary) -> Unit,
-    /** Noch nicht nativ (Duplizieren, Vorlage, Fach, Verschieben): meldet „Folgt …“. */
-    val later: (String) -> Unit,
+    val duplicate: (PageSummary) -> Unit,
+    val move: (PageSummary) -> Unit,
 )
 
 /** Abschnittskopf (`.ws-head`): Einklapp-Pfeil, Name, „+“ für eine neue Seite im Arbeitsbereich. */
@@ -113,9 +113,9 @@ private fun PageMenu(page: PageSummary, actions: DeskTreeActions) {
         DropdownMenu(open, { open = false }, containerColor = Impala.colors.menu) {
             MenuEntry(R.drawable.ic_i_external, "In neuem Tab öffnen") { open = false; actions.openNewTab(page.id) }
             MenuEntry(R.drawable.ic_i_pen, "Umbenennen") { open = false; actions.rename(page) }
-            MenuEntry(R.drawable.ic_i_copy, "Duplizieren") { open = false; actions.later("Duplizieren") }
+            MenuEntry(R.drawable.ic_i_copy, "Duplizieren") { open = false; actions.duplicate(page) }
             MenuEntry(R.drawable.ic_i_star, if (page.favorite) "Favorit entfernen" else "Zu Favoriten") { open = false; actions.favorite(page) }
-            MenuEntry(R.drawable.ic_i_folder_move, "Verschieben nach…") { open = false; actions.later("Verschieben") }
+            MenuEntry(R.drawable.ic_i_folder_move, "Verschieben nach…") { open = false; actions.move(page) }
             MenuEntry(R.drawable.ic_i_archive, "Archivieren") { open = false; actions.archive(page) }
             MenuEntry(R.drawable.ic_i_trash, "Löschen", danger = true) { open = false; actions.trash(page) }
         }

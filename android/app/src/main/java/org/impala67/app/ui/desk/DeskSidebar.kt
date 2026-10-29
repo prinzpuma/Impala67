@@ -38,7 +38,9 @@ import kotlinx.coroutines.launch
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.notes.MovePageDialog
 import org.impala67.app.notes.RenameDialog
+import org.impala67.app.notes.duplicatePage
 import org.impala67.app.ui.shell.PageRoute
 import org.impala67.app.ui.shell.ShellNav
 import org.impala67.app.ui.shell.TopLevel
@@ -98,6 +100,7 @@ private fun PageTree(store: ImpalaStore, nav: ShellNav) {
     val tree by remember(store) { store.query(Touches.pages, ::readDeskTree) }.collectAsStateWithLifecycle()
     var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
     var renaming by remember { mutableStateOf<PageSummary?>(null) }
+    var moving by remember { mutableStateOf<PageSummary?>(null) }
     val scope = rememberCoroutineScope()
     fun toggle(key: String) { collapsed = if (key in collapsed) collapsed - key else collapsed + key }
     fun patch(id: String, patch: Map<String, Any?>) = scope.launch { store.dispatch("pageUpdate", mapOf("id" to id, "patch" to patch)) }
@@ -111,7 +114,8 @@ private fun PageTree(store: ImpalaStore, nav: ShellNav) {
             favorite = { patch(it.id, mapOf("favorite" to !it.favorite)) },
             archive = { p -> scope.launch { store.write { it.archivePage(p.id) } } },
             trash = { p -> nav.closeTab(p.id); scope.launch { store.write { it.trashPage(p.id) } } },
-            later = { nav.toast("$it folgt mit einem der nächsten Module.") },
+            duplicate = { p -> scope.launch { duplicatePage(store, p.id)?.let { nav.open(PageRoute(it)) } } },
+            move = { moving = it },
         )
     }
     val rows = tree?.items(collapsed).orEmpty()
@@ -130,6 +134,7 @@ private fun PageTree(store: ImpalaStore, nav: ShellNav) {
             scope.launch { store.write { it.updatePage(page.id, title, null) } }
         }
     }
+    moving?.let { page -> MovePageDialog(store, page) { moving = null } }
 }
 
 /** Pille der Kopfzeile (`.topbar .tab`), aktiv mit Akzent-Tönung. */
