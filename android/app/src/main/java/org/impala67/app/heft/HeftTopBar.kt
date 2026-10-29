@@ -35,6 +35,7 @@ class HeftPageActions(
     val setPaper: (Paper) -> Unit,
     val remove: () -> Unit,
     val canRemove: Boolean,
+    val scan: () -> Unit,
 )
 
 /** Kopfzeile: Zurück, Titel mit „Seite x von y“, Seite hinzufügen, Papier und Seite löschen. */
@@ -64,6 +65,12 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
                     Paper.entries.forEach { p ->
                         DropdownMenuItem({ Text(p.label) }, { addMenu = false; actions.add(p) })
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        { Text("Dokument scannen") },
+                        { addMenu = false; actions.scan() },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_i_camera), null, Modifier.size(20.dp)) },
+                    )
                 }
             }
             IconButton({ pageMenu = true }, shapes = IconButtonDefaults.shapes()) {

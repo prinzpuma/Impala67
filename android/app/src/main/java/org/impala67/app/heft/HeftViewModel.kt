@@ -13,6 +13,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.heft.scan.ScannedPage
+import org.impala67.app.heft.scan.insertScannedPages
 import uniffi.impala_ffi.Changes
 import uniffi.impala_ffi.HeftChange
 import uniffi.impala_ffi.HeftEdit
@@ -104,6 +106,16 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
         edit { HeftChange.AddPage(at?.toUInt(), id, paper.id) }
         return id
     }
+
+    /** Gescannte Seiten ab Position [at] als Heftseiten einfügen; liefert die erste neue Seiten-ID. */
+    suspend fun addScanned(at: Int, scans: List<ScannedPage>): String? = writes.withLock {
+        runCatching { store.write { it.insertScannedPages(pageId, at, scans) } }
+            .onFailure { _messages.tryEmit(it.message ?: "Scan nicht eingefügt") }
+            .getOrNull()
+    }
+
+    /** Kurze Meldung in der Snackbar. */
+    fun message(text: String) { _messages.tryEmit(text) }
 
     fun removePage(heftPageId: String) = edit { HeftChange.RemovePage(heftPageId) }
 

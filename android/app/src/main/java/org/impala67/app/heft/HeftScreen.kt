@@ -43,7 +43,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.heft.scan.rememberDocumentScan
 import org.impala67.app.ui.theme.Impala
 import kotlin.math.max
 import kotlin.math.min
@@ -81,6 +83,10 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
     }
     LaunchedEffect(current) { HeftLastPage[pageId] = current }
     val currentId = pages.getOrNull(current)
+    val scan = rememberDocumentScan(
+        onScanned = { scans -> scope.launch { focus = vm.addScanned(current + 1, scans) } },
+        onError = vm::message,
+    )
 
     Scaffold(
         modifier,
@@ -95,6 +101,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                     setPaper = { p -> currentId?.let { vm.setPaper(it, p) } },
                     remove = { currentId?.let(vm::removePage) },
                     canRemove = pages.size > 1,
+                    scan = scan,
                 ),
             )
         },
