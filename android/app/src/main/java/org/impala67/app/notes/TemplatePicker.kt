@@ -3,6 +3,8 @@ package org.impala67.app.notes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -18,6 +20,7 @@ import androidx.compose.ui.res.painterResource
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.ui.theme.Space
+import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 
 /**
@@ -55,7 +58,7 @@ fun NewPageDialog(
 /** Die beiden Typen mit den Beschreibungen der PWA, darunter die Vorlagen. */
 @Composable
 private fun NewPageChoices(templates: List<PageSummary>, onPick: (heft: Boolean) -> Unit, onTemplate: (PageSummary) -> Unit) {
-    Column {
+    Column(Modifier.verticalScroll(rememberScrollState())) {
         ListItem(
             headlineContent = { Text("Notion-Seite") },
             supportingContent = { Text("Blöcke · Markdown · Verlinkungen") },
@@ -71,10 +74,21 @@ private fun NewPageChoices(templates: List<PageSummary>, onPick: (heft: Boolean)
         if (templates.isNotEmpty()) Text("Oder aus einer Vorlage:", Modifier.padding(horizontal = Space.s4, vertical = Space.s2))
         templates.forEach { tpl ->
             ListItem(
-                headlineContent = { Text(tpl.icon.let { if (it.isEmpty()) tpl.title else "$it ${tpl.title}" }) },
-                leadingContent = { Icon(painterResource(R.drawable.ic_i_template), null) },
+                headlineContent = { Text(tpl.title) },
+                leadingContent = { TemplateIcon(tpl) },
                 modifier = Modifier.clickable { onTemplate(tpl) },
             )
         }
+    }
+}
+
+/** Symbol wie `pageIcon(p, "template")` in der PWA: eigenes Emoji, sonst Heft- oder Vorlagen-Symbol. */
+@Composable
+private fun TemplateIcon(tpl: PageSummary) {
+    val own = ownEmoji(tpl)
+    if (own != null) {
+        Text(own)
+    } else {
+        Icon(painterResource(if (tpl.kind == PageKind.HEFT) R.drawable.ic_i_notebook else R.drawable.ic_i_template), null)
     }
 }

@@ -166,6 +166,8 @@ fun IconDialog(store: ImpalaStore, pageId: String, onDismiss: () -> Unit) {
     )
 }
 
+// TODO(desk): Eigenes Cover-Bild (PWA: `coverImg` + Blob in `DB.putBlob`, Upload über U.pickImageFile) fehlt:
+// PageSummary hat kein `coverImg`, und die FFI-Hülle bietet keine Blob-Ablage. Erst FFI erweitern (core/impala-ffi).
 /** Cover-Dialog (`openCoverPicker` in web/render.js): Vorlagen wählen oder entfernen; aktuelles Cover markiert. */
 @Composable
 fun CoverDialog(store: ImpalaStore, pageId: String, onDismiss: () -> Unit) {
