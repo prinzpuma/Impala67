@@ -19,7 +19,7 @@ data class MoveTarget(val label: String, val depth: Int, val workspaceId: String
 /**
  * Seite samt Unterseiten duplizieren wie `duplicatePage` in web/app-dialogs.js. Ohne [newParentId]
  * entsteht das Duplikat neben dem Original („(Kopie)“ am Titel); Unterseiten bekommen die neue Seite
- * als Eltern. Cover, Vorschaubild und Tags fehlen: der Kern gibt sie über die FFI nicht heraus.
+ * als Eltern. Leeres Cover wird wie in der PWA `null`; Tags und PDF-Verweis gehen mit.
  *
  * Kandidat für den Rust-Kern (Logik nur in JS, `duplicatePage`).
  */
@@ -38,6 +38,9 @@ suspend fun duplicatePage(store: ImpalaStore, pageId: String, newParentId: Strin
             "content" to detail.content,
             "workspaceId" to wsId,
             "icon" to pg.icon.ifEmpty { null },
+            "cover" to pg.cover.ifEmpty { null },
+            "tags" to pg.tags,
+            "pdfId" to pg.pdfId,
             "kind" to if (pg.kind == PageKind.HEFT) "heft" else "notion",
         ),
     )

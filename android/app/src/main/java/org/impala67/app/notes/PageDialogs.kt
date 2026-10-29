@@ -1,6 +1,7 @@
 package org.impala67.app.notes
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -165,11 +166,12 @@ fun IconDialog(store: ImpalaStore, pageId: String, onDismiss: () -> Unit) {
     )
 }
 
-/** Cover-Dialog (`openCoverPicker` in web/render.js): Vorlagen wählen oder entfernen. */
+/** Cover-Dialog (`openCoverPicker` in web/render.js): Vorlagen wählen oder entfernen; aktuelles Cover markiert. */
 @Composable
 fun CoverDialog(store: ImpalaStore, pageId: String, onDismiss: () -> Unit) {
     val c = Impala.colors
     val scope = rememberCoroutineScope()
+    val current by produceState("", pageId) { value = store.write { it.page(pageId)?.summary?.cover }.orEmpty() }
     fun set(cover: String?) {
         onDismiss()
         scope.launch { store.dispatch("pageUpdate", mapOf("id" to pageId, "patch" to mapOf("cover" to cover, "coverImg" to null))) }
@@ -185,6 +187,7 @@ fun CoverDialog(store: ImpalaStore, pageId: String, onDismiss: () -> Unit) {
                             Box(
                                 Modifier.size(56.dp).clip(RoundedCornerShape(Radius.sm))
                                     .background(Brush.linearGradient(coverColors(name, c)))
+                                    .then(if (name == current) Modifier.border(2.dp, c.accent, RoundedCornerShape(Radius.sm)) else Modifier)
                                     .clickable { set(name) },
                             )
                         }
