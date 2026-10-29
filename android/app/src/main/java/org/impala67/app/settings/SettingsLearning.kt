@@ -40,6 +40,7 @@ fun LearningSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
         SettingsSwitchRow("Pausen-Erinnerung", "Erinnert nach 40 Minuten Lernen an eine kurze Pause", breakReminder) {
             vm.setPref { setBreakReminder(it) }
         }
+        // Das Wochenziel steht in der PWA nicht auf dieser Seite (dort auf der Startseite). Bestand, bitte prüfen.
         WeekGoalRow(weekGoal) { vm.setPref { cycleWeekGoal() } }
     }
     SettingsGroup(
@@ -48,9 +49,11 @@ fun LearningSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     ) {
         SettingsPlaceholderRow("Beta-Lernfunktionen", "Folgt mit dem Lern-Modul (Feynman, Fehlerhinweise, Multiple Choice)")
     }
-    SettingsGroup("Controller") {
-        SettingsPlaceholderRow("Mit Controller lernen", "Gamepad, Tastenhinweise, Vibration und Tastenbelegung folgen mit dem Lern-Modul")
+    // Die PWA zeigt das als Aufklappbereich „Mit Controller lernen“.
+    SettingsGroup("Mit Controller lernen") {
+        SettingsPlaceholderRow("Gamepad, Tastenhinweise, Vibration und Tastenbelegung", "Folgt mit dem Lern-Modul")
     }
+    // TODO(desk): Controller-Zeilen (Gamepad verbinden, Tastenbelegung, Deadzone & HID) folgen mit dem Lern-Modul.
 }
 
 /** Wochenziel wie `cycleGoal` in lernzeit.js: Die Schaltfläche springt zur nächsten Stufe. */

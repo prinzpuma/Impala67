@@ -1,13 +1,17 @@
 package org.impala67.app.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Space
 
 /** Darstellung (settings-renderer.js `renderAppearance`): Design, Lesbarkeit, Oberfläche. */
@@ -48,12 +52,14 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             onSelect = { f -> vm.setPref { setFontScale(f) } },
         )
         SettingsSwitchRow(
-            "Performance-Modus", "Für ältere Geräte: ohne Animationen und Milchglas-Effekte", reduceMotion,
+            "Performance-Modus", "Für ältere Geräte: ohne Animationen, Milchglas-Effekte und Handschrift-Erkennung", reduceMotion,
         ) { on -> vm.setPref { setReduceMotion(on) } }
         SettingsSwitchRow(
             "Haptisches Feedback", "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", haptics,
         ) { on -> vm.setPref { setNativeHaptics(on) } }
     }
+    // Tab-Anordnung entfällt nativ (Navigationsleiste oder Seitenleiste je Gerät). TODO(desk): Vorschläge
+    // „+ Fach“ unter den Themen (aus den aktiven Notizen) fehlen, bis die Fächer-Auswertung nativ ist.
     SettingsGroup("Oberfläche") {
         SettingsTextField(
             label = "Begrüßungsname",
@@ -80,15 +86,23 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     }
 }
 
-/** Akzentfarbe als Kreise (`.settings-accents` der PWA). */
+/** Akzentfarbe als Kreise (`.settings-accents` der PWA), mit Titel und Erläuterung wie `UI.row`. */
 @Composable
 private fun AccentRow(selected: AccentColor, onSelect: (AccentColor) -> Unit) {
-    Row(
+    Column(
         Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s3),
-        horizontalArrangement = Arrangement.spacedBy(Space.s3),
+        verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
-        AccentColor.entries.forEach { color ->
-            AccentSwatch(color, color == selected, ACCENT_LABELS.getValue(color)) { onSelect(color) }
+        Text("Akzentfarbe", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Für Auswahl, Fokus und wichtige Aktionen",
+            style = MaterialTheme.typography.bodySmall,
+            color = Impala.colors.text2,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            AccentColor.entries.forEach { color ->
+                AccentSwatch(color, color == selected, ACCENT_LABELS.getValue(color)) { onSelect(color) }
+            }
         }
     }
 }

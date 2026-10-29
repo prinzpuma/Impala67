@@ -25,15 +25,19 @@ fun AiSettings(vm: SettingsViewModel) {
     val values by vm.values.collectAsStateWithLifecycle()
     val s = values
 
+    // TODO(desk): Modellliste („Neu laden“, Suche) und „Manuelle Modell-ID“ folgen mit dem KI-Modul.
     SettingsGroup("Aktives Modell") {
         SettingsPlaceholderRow("Chat-Modell", "Folgt mit dem KI-Modul")
     }
     SettingsGroup("Quellen", footnote = "Zugangsdaten werden erst mit Speichern übernommen.") {
         SettingsPlaceholderRow("KI-Quellen", "OpenAI, Gemini, LM Studio und eigene Endpunkte folgen mit dem KI-Modul")
     }
-    SettingsGroup("Lokale KI") {
-        SettingsPlaceholderRow("Embedding-Modell", "Modell für semantische Suche folgt mit dem KI-Modul")
-        SettingsPlaceholderRow("Handschrifterkennung", "Folgt mit dem Heft-Modul")
+    SettingsGroup(
+        "Lokale KI",
+        footnote = "Beide Modelle laufen direkt auf dem Gerät; deine Inhalte verlassen dafür das Gerät nicht.",
+    ) {
+        SettingsPlaceholderRow("Semantische Suche (Bekko a8m)", "Modell für semantische Suche folgt mit dem KI-Modul")
+        SettingsPlaceholderRow("Handschrifterkennung (Digital Ink)", "Folgt mit dem Heft-Modul")
     }
     SettingsGroup("Verhalten") {
         SettingsSwitchRow("Tools mitsenden", "Stellt der KI die App-Werkzeuge zur Verfügung", s?.alwaysSendTools ?: true) {
@@ -72,7 +76,13 @@ fun SyncSettings(vm: SettingsViewModel, toast: (String) -> Unit) {
     CloudflareSyncGroup(toast)
     DriveSyncGroup(toast)
     DriveAutomationGroup(vm)
-    SettingsGroup("Backup") {
-        SettingsPlaceholderRow("Backup & Wiederherstellung", "Event-Log und Dateien exportieren oder importieren folgt mit dem Sync-Modul")
+    SettingsGroup("Backup & Wiederherstellung") {
+        SettingsPlaceholderRow(
+            "Vollständiges Backup",
+            "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt",
+        )
     }
+    // TODO(desk): „Vollständiges Backup“ (Export/Import, Storage Access Framework) braucht Export-Logik.
+    // TODO(desk): „Weitere Exporte“ (Lerndaten als JSON, Workspace als Markdown-ZIP) fehlt noch.
+    // „Erweitert“ mit Google Client-ID entfällt nativ (die Client-ID liegt im Projekt).
 }

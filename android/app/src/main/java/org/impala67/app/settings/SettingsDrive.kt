@@ -161,8 +161,8 @@ fun DriveAutomationGroup(vm: SettingsViewModel) {
             "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall",
             s?.driveSyncAfterChange ?: false,
         ) { vm.setDriveSyncAfterChange(it) }
-        // „Tokens über Drive synchronisieren“ fehlt bewusst: Beim Ausschalten bereinigt die PWA auch alte
-        // Drive-Kopien (`impala67_drive_secret_scrub`); das kann die native App noch nicht.
+        // TODO(desk): „Tokens über Drive synchronisieren“ (settingsSet syncSecrets) fehlt bewusst: Beim
+        // Ausschalten bereinigt die PWA auch alte Drive-Kopien (`impala67_drive_secret_scrub`); das fehlt nativ.
     }
 }
 

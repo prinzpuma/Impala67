@@ -3,6 +3,8 @@ package org.impala67.app.settings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -13,6 +15,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun OverviewSettings() {
     val version = appVersion()
+    // TODO(desk): Werte der Kacheln (KI-Modell, Sync- und Drive-Status, letztes Backup, Speicher) folgen
+    // mit ihren Modulen; die Zustände liegen nativ in CloudSyncController und DriveController.
     SettingsGroup("Status") {
         SettingsPlaceholderRow("KI", "Folgt mit dem KI-Modul")
         SettingsPlaceholderRow("Sync", "Folgt mit dem Sync-Modul")
@@ -31,10 +35,16 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     SettingsGroup("Lokaler Speicher") {
         SettingsPlaceholderRow("Verwendeter Speicher", "Anzeige folgt mit dem Speicher-Modul")
     }
-    SettingsGroup("App-Updates", footnote = "Updates werden nur auf Wunsch geprüft.") {
-        SettingsRow("App-Version", "Installiert v$version · Prüfung folgt mit dem Release-Modul")
+    SettingsGroup("App-Updates") {
+        SettingsRow(
+            "App-Version",
+            "Updates werden nur auf Wunsch geprüft",
+            trailing = { Text("Installiert v$version", style = MaterialTheme.typography.bodyMedium) },
+        )
+        // TODO(desk): „Verfügbar“-Wert und Prüfen-Schaltfläche folgen mit dem Release-Modul (APK-Update).
     }
     SettingsGroup("Gerät") {
+        // TODO(desk): Scanner-Auswahl (Google-Scanner oder Impala-Scanner) – nativ gibt es nur den Google-Scanner.
         SettingsPlaceholderRow("Dokumenten-Scanner", "Google-Scanner oder Impala-Scanner folgen mit dem Heft-Modul")
     }
     SettingsGroup(
@@ -50,6 +60,7 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
         SettingsPlaceholderRow("Alle Chats löschen", "Folgt mit dem KI-Modul")
         SettingsPlaceholderRow("Alle Karteikarten löschen", "Folgt mit dem Lern-Modul")
     }
+    // MCP-Live-Bridge entfällt nativ (PORTING § 8); der Profiler folgt über Android-Profiler und Logcat.
     SettingsGroup("Für Entwickler") {
         SettingsPlaceholderRow("Performance-Profiler", "Folgt (Android-Profiler und Logcat)")
     }

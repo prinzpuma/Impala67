@@ -59,6 +59,7 @@ fun CloudflareSyncGroup(toast: (String) -> Unit) {
     var confirmPurge by remember { mutableStateOf(false) }
     val busy = ui.state == CloudSyncState.CONNECTING || ui.state == CloudSyncState.SYNCING
 
+    // TODO(desk): „QR-Code scannen“ und „Gerät koppeln (QR-Code)“ fehlen, bis ML Kit Barcode steht (PORTING § 8).
     SettingsGroup(
         "Cloudflare Live-Sync",
         footnote = "100 % Ende-zu-Ende verschlüsselt (AES-GCM 256-Bit). Der Server sieht niemals Klartext-Notizen.",
