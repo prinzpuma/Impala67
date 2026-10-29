@@ -66,7 +66,7 @@ fun SettingsSection(
             SettingsSectionInfo.APPEARANCE -> AppearanceSettings(vm, prefs)
             SettingsSectionInfo.AI -> AiSettings(vm)
             SettingsSectionInfo.LEARNING -> LearningSettings(vm, prefs)
-            SettingsSectionInfo.SYNC -> SyncSettings()
+            SettingsSectionInfo.SYNC -> SyncSettings(vm, toast)
             SettingsSectionInfo.APP -> AppSettings(vm, prefs)
         }
     }

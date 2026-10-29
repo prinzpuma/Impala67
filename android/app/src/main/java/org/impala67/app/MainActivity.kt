@@ -40,10 +40,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Sichtbar: Live-Sync verbinden und nachholen, was auf anderen Geräten geändert wurde. */
+    override fun onStart() {
+        super.onStart()
+        val app = application as ImpalaApp
+        app.cloudSync.onForeground()
+        app.drive.onForeground()
+    }
+
     /** Start-Schnappschuss beim Wechsel in den Hintergrund: der nächste Start spielt weniger Events ab. */
     override fun onStop() {
         super.onStop()
         val app = application as ImpalaApp
+        app.cloudSync.onBackground()
+        app.drive.onBackground()
         if (app.store.isCompleted) app.scope.launch(Dispatchers.IO) { runCatching { app.store.await().core.saveCheckpoint() } }
     }
 }

@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.okhttp)
+    implementation(libs.play.services.auth)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)

@@ -53,7 +53,20 @@ class DevicePrefs(private val context: Context) {
     /** Wochenziel in Minuten (lernzeit.js `weekGoalMinutes`), mindestens 30, sonst 300. */
     val weekGoalMinutes: Flow<Int> = store.data.map { (it[WEEK_GOAL] ?: 300).coerceAtLeast(30) }
 
+    /**
+     * Schlüssel des aktiven Cloudflare-Syncs (PWA: `LS_KEY` in sync-cloudflare.js). Leer = getrennt;
+     * nur dann verbindet die App beim Start nicht von selbst.
+     */
+    val cfSyncKey: Flow<String> = store.data.map { it[CF_SYNC_KEY].orEmpty() }
+
     suspend fun setThemeMode(mode: ThemeMode) = put(THEME, mode.name)
+    suspend fun setCfSyncKey(key: String) = put(CF_SYNC_KEY, key)
+
+    /** Google Drive auf diesem Gerät angemeldet (PWA: `impala67_drive_session`) und mit welchem Konto. */
+    val driveConnected: Flow<Boolean> = boolFlow(DRIVE_CONNECTED, false)
+    val driveEmail: Flow<String> = store.data.map { it[DRIVE_EMAIL].orEmpty() }
+    suspend fun setDriveConnected(on: Boolean) = put(DRIVE_CONNECTED, on)
+    suspend fun setDriveEmail(email: String) = put(DRIVE_EMAIL, email)
     suspend fun setAccent(accent: AccentColor) = put(ACCENT, accent.name)
     suspend fun setDensity(density: Density) = put(DENSITY, density.name)
     suspend fun setFontScale(scale: FontScale) = put(FONT_SCALE, scale.name)
@@ -100,6 +113,9 @@ class DevicePrefs(private val context: Context) {
         val TELEMETRY = booleanPreferencesKey("telemetry")
         val BREAK_REMINDER = booleanPreferencesKey("breakReminder")
         val WEEK_GOAL = intPreferencesKey("weekGoalMinutes")
+        val CF_SYNC_KEY = stringPreferencesKey("cfSyncKey")
+        val DRIVE_CONNECTED = booleanPreferencesKey("driveConnected")
+        val DRIVE_EMAIL = stringPreferencesKey("driveEmail")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
     }
 }

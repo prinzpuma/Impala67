@@ -66,15 +66,12 @@ private fun CustomInstructionsField(stored: String, onSave: (String) -> Unit) {
     }
 }
 
-/** Sync & Backup (settings-renderer.js `renderSync`): folgt mit dem Sync-Modul. */
+/** Sync & Backup (settings-renderer.js `renderSync`): Cloudflare, Google Drive, Automatik; Backup folgt. */
 @Composable
-fun SyncSettings() {
-    SettingsGroup("Cloudflare Live-Sync") {
-        SettingsPlaceholderRow("Cloudflare Live-Sync", "Echtzeit-Sync mit Ende-zu-Ende-Verschlüsselung folgt mit dem Sync-Modul")
-    }
-    SettingsGroup("Google Drive") {
-        SettingsPlaceholderRow("Google Drive", "Backup und Sync über den privaten App-Speicher folgen mit dem Sync-Modul")
-    }
+fun SyncSettings(vm: SettingsViewModel, toast: (String) -> Unit) {
+    CloudflareSyncGroup(toast)
+    DriveSyncGroup(toast)
+    DriveAutomationGroup(vm)
     SettingsGroup("Backup") {
         SettingsPlaceholderRow("Backup & Wiederherstellung", "Event-Log und Dateien exportieren oder importieren folgt mit dem Sync-Modul")
     }

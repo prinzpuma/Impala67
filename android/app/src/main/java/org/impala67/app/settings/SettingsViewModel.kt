@@ -25,7 +25,8 @@ class SettingsViewModel(private val store: ImpalaStore, private val prefs: Devic
             relatedPages = s.optBoolean("relatedPages", true),
             alwaysSendTools = s.optBoolean("alwaysSendTools", true),
             customInstructions = s.optString("customInstructions"),
-        )
+            driveAutoSyncMinutes = s.optInt("driveAutoSyncMinutes", -1).takeIf { it > 0 },
+            driveSyncAfterChange = s.optBoolean("driveSyncAfterChange", false),        )
     }
 
     /** Rückmeldungen für die Snackbar der Shell (z. B. „Name gespeichert.“). */
@@ -44,6 +45,12 @@ class SettingsViewModel(private val store: ImpalaStore, private val prefs: Devic
     fun setAlwaysSendTools(on: Boolean) = patch(mapOf("alwaysSendTools" to on))
 
     fun saveCustomInstructions(text: String) = patch(mapOf("customInstructions" to text), "Anweisungen gespeichert.")
+
+    /** Auto-Sync-Intervall (Minuten); Meldung wie in der PWA (`handleDriveAutoSyncMinutes`). */
+    fun setDriveAutoSyncMinutes(min: Int) =
+        patch(mapOf("driveAutoSyncMinutes" to min), "Automatischer Sync: alle $min Minuten.")
+
+    fun setDriveSyncAfterChange(on: Boolean) = patch(mapOf("driveSyncAfterChange" to on))
 
     /** Geräteeinstellung schreiben, z. B. `setPref { setThemeMode(ThemeMode.DARK) }`. */
     fun setPref(block: suspend DevicePrefs.() -> Unit) {

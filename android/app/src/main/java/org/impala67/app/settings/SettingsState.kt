@@ -67,4 +67,7 @@ data class SettingsValues(
     val relatedPages: Boolean = true,
     val alwaysSendTools: Boolean = true,
     val customInstructions: String = "",
+    /** Auto-Sync-Intervall in Minuten; `null`, solange nichts gespeichert ist. */
+    val driveAutoSyncMinutes: Int? = null,
+    val driveSyncAfterChange: Boolean = false,
 )

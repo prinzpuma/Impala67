@@ -8,6 +8,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.settings.DevicePrefs
+import org.impala67.app.sync.CloudSyncController
+import org.impala67.app.sync.DriveController
 import uniffi.impala_ffi.ImpalaCore
 import java.io.File
 
@@ -19,6 +21,12 @@ class ImpalaApp : Application() {
         private set
 
     val prefs by lazy { DevicePrefs(this) }
+
+    /** Cloudflare Live-Sync; verbindet erst mit [MainActivity] im Vordergrund. */
+    val cloudSync by lazy { CloudSyncController(store, prefs, scope) }
+
+    /** Google-Drive-Backup; Timer laufen nur, solange die App sichtbar ist. */
+    val drive by lazy { DriveController(this, store, prefs, scope) }
 
     override fun onCreate() {
         super.onCreate()

@@ -156,8 +156,8 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`) | `ai/` | ⬜ |
 | `voice.js` | `SpeechRecognizer` | `ai/` | ⬜ |
 | `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
-| `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), WorkManager | `sync/` | 🟡 (Konflikte ✅, Sync offen) |
-| `drive*.js` | Rust-Drive (`drive.rs`) + Credential Manager / Google-Anmeldung | `sync/` | ⬜ |
+| `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), OkHttp-WebSocket | `sync/CloudSyncController.kt` | 🟡 (Sync + Konflikte ✅, nur im Vordergrund; QR-Kopplung, Backup-Hinweis offen) |
+| `drive*.js` | Rust-Drive (`drive.rs`) + Play-Services-Autorisierung (`drive.appdata`) | `sync/DriveController.kt` | 🟡 (Anmeldung, Sync, Intervall ✅; „nach jeder Änderung“ offen; braucht Android-OAuth-Client im Projekt der PWA-Client-ID) |
 | `settings*.js` | Compose-Listen, `settingsJson`/`updateSettings` + `DevicePrefs` | `settings/` | 🟡 (Sync/KI/Speicher-Abschnitte offen) |
 | `library.js`, `notebooklm.js`, `extras.js` | Compose-Listen | `library/` | ⬜ |
 | `pdfs.js`, `pdfpaste.js` | `androidx.pdf` (pdf-viewer) | `library/` | ⬜ |
