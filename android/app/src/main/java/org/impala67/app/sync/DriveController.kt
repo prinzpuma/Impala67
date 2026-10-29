@@ -1,5 +1,6 @@
 package org.impala67.app.sync
 
+import android.accounts.Account
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -76,7 +77,17 @@ class DriveController(
     private val scope: CoroutineScope,
 ) {
     private val auth: AuthorizationClient = Identity.getAuthorizationClient(context.applicationContext)
-    private val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(DRIVE_SCOPE))).build()
+
+    /**
+     * Mit bekanntem Konto fragt Google nicht erneut nach: Ohne `setAccount` verlangt `authorize()`
+     * bei mehreren Google-Konten auf dem Gerät jedes Mal die Kontowahl – die stille Erneuerung
+     * scheiterte dann nach jedem App-Neustart, und man musste sich neu anmelden.
+     */
+    @Volatile private var accountEmail = ""
+    private fun request(email: String = accountEmail): AuthorizationRequest = AuthorizationRequest.builder()
+        .setRequestedScopes(listOf(Scope(DRIVE_SCOPE)))
+        .apply { if (email.isNotEmpty()) setAccount(Account(email, ACCOUNT_TYPE)) }
+        .build()
 
     private val _ui = MutableStateFlow(DriveUi())
     val ui: StateFlow<DriveUi> = _ui
@@ -91,8 +102,9 @@ class DriveController(
 
     init {
         scope.launch {
+            accountEmail = prefs.driveEmail.first()
             if (prefs.driveConnected.first()) {
-                _ui.update { it.copy(email = prefs.driveEmail.first()) }
+                _ui.update { it.copy(email = accountEmail) }
                 lock.withLock { ensureDrive() }
                 refreshStatus()
             }
@@ -122,7 +134,8 @@ class DriveController(
      * kommt [DriveConnect.NeedsConsent] zurück; sonst wird gleich synchronisiert.
      */
     suspend fun connect(): DriveConnect = try {
-        val result = withContext(Dispatchers.IO) { Tasks.await(auth.authorize(request), AUTH_TIMEOUT_S, TimeUnit.SECONDS) }
+        // Bewusste Anmeldung: Kontowahl zulassen (anderes Konto möglich).
+        val result = withContext(Dispatchers.IO) { Tasks.await(auth.authorize(request(email = "")), AUTH_TIMEOUT_S, TimeUnit.SECONDS) }
         if (result.hasResolution()) DriveConnect.NeedsConsent(result.pendingIntent!!) else finishLogin(result)
     } catch (e: Exception) {
         DriveConnect.Error(e.localizedMessage ?: "Google-Anmeldung fehlgeschlagen.")
@@ -183,6 +196,7 @@ class DriveController(
         val previous = prefs.driveEmail.first()
         if (email.isNotEmpty() && previous.isNotEmpty() && email != previous) withContext(Dispatchers.IO) { current.resetState() }
         prefs.setDriveEmail(email)
+        accountEmail = email
         prefs.setDriveConnected(true)
         _ui.update { it.copy(connected = true, needsLogin = false, email = email) }
         scope.launch { sync(); if (foreground) startInterval() }
@@ -234,7 +248,7 @@ class DriveController(
 
     /** Still (ohne Fenster): gibt es keine bestehende Zustimmung, `null`. Läuft auf dem Drive-Thread. */
     private fun silentToken(): String? = runCatching {
-        val result = Tasks.await(auth.authorize(request), AUTH_TIMEOUT_S, TimeUnit.SECONDS)
+        val result = Tasks.await(auth.authorize(request()), AUTH_TIMEOUT_S, TimeUnit.SECONDS)
         if (result.hasResolution()) null else result.accessToken?.also(::remember)
     }.getOrNull()
 
@@ -264,6 +278,7 @@ class DriveController(
 
     private companion object {
         const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
+        const val ACCOUNT_TYPE = "com.google"
         const val AUTH_TIMEOUT_S = 30L
         /** Google-Tokens gelten eine Stunde; etwas früher still erneuern. */
         const val TOKEN_MAX_AGE_MS = 50 * 60 * 1000L
