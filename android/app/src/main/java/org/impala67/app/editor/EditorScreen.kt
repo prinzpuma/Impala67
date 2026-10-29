@@ -57,6 +57,7 @@ fun EditorScreen(
     BackHandler(enabled = vm.active != null) { vm.clearActive() }
 
     val onLink = rememberLinkHandler(store, onOpenPage)
+    val slash = remember { SlashState() }
     val active = vm.active
     val ctx = remember(store, onLink, onOpenPage, active) {
         ReadContext(
@@ -64,7 +65,7 @@ fun EditorScreen(
             selectedId = active?.takeIf { it.mode == EditMode.Select }?.id,
             editingId = active?.takeIf { it.mode == EditMode.Text }?.id,
             onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo,
-            editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, style, mod) } },
+            editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, slash, style, mod) } },
         )
     }
     val numbers = remember(vm.blocks) { listNumbers(vm.blocks) }

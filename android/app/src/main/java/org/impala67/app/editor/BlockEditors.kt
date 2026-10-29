@@ -50,7 +50,7 @@ import uniffi.impala_ffi.MdBlockKind
  * und Bildschirmtastaturen, die DEL als Taste senden).
  */
 @Composable
-internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, style: TextStyle, modifier: Modifier) {
+internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, slash: SlashState, style: TextStyle, modifier: Modifier) {
     val c = Impala.colors
     val isCode = block.kind is MdBlockKind.Code
     val text = block.text()
@@ -71,41 +71,58 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, styl
         if (isCode) VisualTransformation.None else InlineTransformation(InlineStyler(c, keepMarkers = true))
     }
     val placeholder = placeholderFor(block)
-    BasicTextField(
-        value = value,
-        onValueChange = { v ->
-            if (!isCode && v.text.contains('\n')) {
-                vm.split(block.id, v.text.split('\n'))
-            } else {
-                value = v
-                vm.onCursor(v.selection.start)
-                if (v.text != text) vm.setText(block.id, v.text)
-            }
-        },
-        modifier = modifier.fillMaxWidth().focusRequester(focus)
-            .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) vm.blur(a) }
-            .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    Box(modifier.fillMaxWidth()) {
+        BasicTextField(
+            value = value,
+            onValueChange = { v ->
+                val upto = v.text.substring(0, v.selection.start.coerceIn(0, v.text.length))
+                // Markdown-Kürzel nur direkt nach dem Leerzeichen-Tippen am Absatzanfang (TRANSFORMS in editor.js).
+                val typedSpace = v.selection.collapsed && v.text.length > text.length && upto.endsWith(' ')
+                val shortcut = if (typedSpace && block.kind is MdBlockKind.Paragraph) shortcutType(upto) else null
                 when {
-                    e.key == Key.Backspace && value.selection.collapsed && value.selection.start == 0 -> { vm.backspaceAtStart(block.id); true }
-                    e.key == Key.Tab && block.kind is MdBlockKind.ListItem -> { vm.indent(block.id, if (e.isShiftPressed) -1 else 1); true }
-                    else -> false
+                    !isCode && v.text.contains('\n') -> {
+                        slash.close()
+                        vm.split(block.id, v.text.split('\n'))
+                    }
+                    shortcut != null -> {
+                        slash.close()
+                        vm.retype(block.id, shortcut, v.text.substring(upto.length), 0)
+                    }
+                    else -> {
+                        val sm = if (isCode || !v.selection.collapsed) null else SLASH_TRIGGER.find(upto)
+                        if (sm != null) slash.open(block.id, sm.groupValues[1], upto.length) else slash.close()
+                        value = v
+                        vm.onCursor(v.selection.start)
+                        if (v.text != text) vm.setText(block.id, v.text)
+                    }
                 }
             },
-        textStyle = style,
-        cursorBrush = SolidColor(c.accent),
-        visualTransformation = transformation,
-        keyboardOptions = KeyboardOptions(
-            capitalization = if (isCode) KeyboardCapitalization.None else KeyboardCapitalization.Sentences,
-            autoCorrectEnabled = !isCode,
-        ),
-        decorationBox = { inner ->
-            Box {
-                if (value.text.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = style.copy(color = c.text2.copy(alpha = 0.45f)))
-                inner()
-            }
-        },
-    )
+            modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) { slash.close(); vm.blur(a) } }
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        e.key == Key.Backspace && value.selection.collapsed && value.selection.start == 0 -> { vm.backspaceAtStart(block.id); true }
+                        e.key == Key.Tab && block.kind is MdBlockKind.ListItem -> { vm.indent(block.id, if (e.isShiftPressed) -1 else 1); true }
+                        else -> false
+                    }
+                },
+            textStyle = style,
+            cursorBrush = SolidColor(c.accent),
+            visualTransformation = transformation,
+            keyboardOptions = KeyboardOptions(
+                capitalization = if (isCode) KeyboardCapitalization.None else KeyboardCapitalization.Sentences,
+                autoCorrectEnabled = !isCode,
+            ),
+            decorationBox = { inner ->
+                Box {
+                    if (value.text.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = style.copy(color = c.text2.copy(alpha = 0.45f)))
+                    inner()
+                }
+            },
+        )
+        SlashDropdown(slash, vm, block.id)
+    }
 }
 
 /** Komplexe Blöcke (Tabelle, Callout, Toggle, Spalten, Formel …) als Markdown-Rohtext bearbeiten. */

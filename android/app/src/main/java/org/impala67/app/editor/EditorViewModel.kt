@@ -133,7 +133,7 @@ internal class EditorViewModel(private val store: ImpalaStore, private val pageI
 
     // ---- Verlauf ----
 
-    private fun mutate(structural: Boolean, change: (List<MdBlock>) -> List<MdBlock>) {
+    internal fun mutate(structural: Boolean, change: (List<MdBlock>) -> List<MdBlock>) {
         val old = blocks
         val new = change(old)
         if (new == old) return
@@ -167,7 +167,7 @@ internal class EditorViewModel(private val store: ImpalaStore, private val pageI
 
     // ---- Auswahl und Fokus ----
 
-    private fun activate(id: String, mode: EditMode, at: Int) {
+    internal fun activate(id: String, mode: EditMode, at: Int) {
         cursor = at
         active = Active(id, mode, at, ++nonce)
     }
