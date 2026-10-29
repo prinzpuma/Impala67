@@ -85,9 +85,13 @@ Standard-Komponenten von selbst passen.
 
 ## 5. Plattformanpassungen (bewusst anders als die PWA)
 
-- Top-App-Bar mit Titel, Suche und KI auf allen Größen; Navigationsleiste (Telefon) bzw. -schiene (Tablet)
-  statt Seitenleiste/Dock. „+“ ist auf dem Telefon der mittlere Leisteneintrag (Sheet), auf dem Tablet
-  ein Expressive-FAB-Menü.
+- **Telefon** (< 840 dp): Top-App-Bar mit Titel, Suche und KI; Navigationsleiste unten (wie das Mobil-Dock
+  der PWA), „+“ als mittlerer Leisteneintrag (Sheet).
+- **Tablet** (≥ 840 dp, `ui/desk/`): Layout der PWA am Desktop/iPad – links Seitenleiste (Pillen Home ·
+  Chat · Karten · Suche, Seitenbaum mit Favoriten und Arbeitsbereichen, unten Gemini Notebook,
+  Wissensgraph, Bibliothek, Papierkorb, Einstellungen), in der Mitte Tab-Leiste + Inhalt, rechts das
+  einklappbare KI-Panel (Sparkles-Knopf unten rechts). Keine Navigationsschiene, keine Top-App-Bar.
+  Offene Punkte stehen als `TODO(desk)` im Code.
 - Hover-Zustände entfallen (Touch); Ripple + Formwechsel beim Drücken.
 - Meldungen (`U.toast`) als Snackbar.
 

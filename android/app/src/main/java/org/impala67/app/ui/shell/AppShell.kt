@@ -21,6 +21,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -40,11 +42,15 @@ import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.settings.DevicePrefs
+import org.impala67.app.ui.desk.DeskShell
 import org.impala67.app.ui.theme.Impala
 import java.util.TimeZone
 
+/** Ab dieser Fensterbreite (Material „expanded“) gilt das Tablet-Layout der PWA ([DeskShell]). */
+private const val DESK_MIN_WIDTH_DP = 840
+
 /**
- * Rahmen der App: Navigationsleiste (Telefon) bzw. -schiene (Tablet) aus `NavigationSuiteScaffold`,
+ * Rahmen der App – auf breiten Fenstern (Tablet) das Desktop-Layout der PWA ([DeskShell]), sonst: Navigationsleiste (Telefon) bzw. -schiene (Tablet) aus `NavigationSuiteScaffold`,
  * „+“ als Leisteneintrag (Telefon) bzw. Expressive-FAB-Menü (Tablet), Inhalt über Navigation 3 mit
  * List-Detail auf breiten Bildschirmen (Ziele: [appEntries]). Zurück nimmt das oberste Ziel vom Stapel.
  */
@@ -67,6 +73,23 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val bar = suiteType == NavigationSuiteType.NavigationBar || suiteType == NavigationSuiteType.ShortNavigationBarCompact ||
         suiteType == NavigationSuiteType.ShortNavigationBarMedium
     var newSheet by rememberSaveable { mutableStateOf(false) }
+
+    val content: @Composable (Modifier) -> Unit = { m ->
+        NavDisplay(
+            backStack = backStack,
+            modifier = m,
+            onBack = nav::back,
+            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
+            sceneStrategies = listOf(rememberListDetailSceneStrategy()),
+            entryProvider = entryProvider { appEntries(nav, store, prefs) },
+        )
+    }
+    val desk = LocalConfiguration.current.screenWidthDp >= DESK_MIN_WIDTH_DP
+    SideEffect { nav.desk = desk }
+    if (desk) {
+        DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)
+        return
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteType = if (nav.immersive) NavigationSuiteType.None else suiteType,
@@ -114,14 +137,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
             snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Impala.colors.panel,
         ) { padding ->
-            NavDisplay(
-                backStack = backStack,
-                modifier = Modifier.padding(padding),
-                onBack = nav::back,
-                entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
-                sceneStrategies = listOf(rememberListDetailSceneStrategy()),
-                entryProvider = entryProvider { appEntries(nav, store, prefs) },
-            )
+            content(Modifier.padding(padding))
         }
     }
     if (newSheet) NewSheet(onNote = { nav.create(heft = false) }, onHeft = { nav.create(heft = true) }) { newSheet = false }
