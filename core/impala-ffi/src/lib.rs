@@ -105,6 +105,8 @@ pub struct PageSummary {
     pub tags: Vec<String>,
     /// Blob-ID des PDFs bei PDF-Seiten (Bibliothek).
     pub pdf_id: Option<String>,
+    /// Als Vorlage markiert (Auswahl bei „Neu anlegen“).
+    pub is_template: bool,
     pub created: String,
     pub updated: String,
 }
@@ -171,6 +173,7 @@ fn summary(pg: &Page) -> PageSummary {
         tags: pg.extra.get("tags").and_then(Value::as_array).map_or_else(Vec::new, |t| {
             t.iter().filter_map(Value::as_str).map(str::to_owned).collect()
         }),
+        is_template: pg.extra.get("isTemplate").is_some_and(|v| v.as_bool().unwrap_or(false)),
         pdf_id: pg.extra.get("pdfId").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
         created: pg.created_at().to_owned(),
         updated: pg.updated().to_owned(),

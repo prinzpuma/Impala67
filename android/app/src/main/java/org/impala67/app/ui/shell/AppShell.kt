@@ -23,11 +23,8 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -42,6 +39,7 @@ import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.settings.DevicePrefs
+import org.impala67.app.notes.NewPageDialog
 import org.impala67.app.ui.desk.DeskShell
 import org.impala67.app.ui.theme.Impala
 import java.util.TimeZone
@@ -75,7 +73,6 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val suiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(currentWindowAdaptiveInfoV2())
     val bar = suiteType == NavigationSuiteType.NavigationBar || suiteType == NavigationSuiteType.ShortNavigationBarCompact ||
         suiteType == NavigationSuiteType.ShortNavigationBarMedium
-    var newSheet by rememberSaveable { mutableStateOf(false) }
 
     val content: @Composable (Modifier) -> Unit = { m ->
         NavDisplay(
@@ -91,6 +88,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val landscape = config.screenWidthDp > config.screenHeightDp
     val desk = config.screenWidthDp >= DESK_MIN_WIDTH_DP || (landscape && config.screenWidthDp >= DESK_LANDSCAPE_MIN_WIDTH_DP)
     SideEffect { nav.desk = desk }
+    if (nav.pendingNewPage != null) NewPageDialog(store, desk, onPick = nav::pickNewPage, onTemplate = nav::pickTemplate) { nav.pendingNewPage = null }
     if (desk) {
         DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)
         return
@@ -103,7 +101,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
                 if (bar && top == TopLevel.Study) {
                     NavigationSuiteItem(
                         selected = false,
-                        onClick = { newSheet = true },
+                        onClick = { nav.askNewPage() },
                         icon = { Icon(painterResource(R.drawable.ic_i_plus), "Neu") },
                         label = null,
                     )
@@ -117,7 +115,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
                 )
             }
         },
-        primaryActionContent = { if (!bar) NewMenu(onNote = { nav.create(heft = false) }, onHeft = { nav.create(heft = true) }) },
+        primaryActionContent = { if (!bar) NewButton { nav.askNewPage() } },
         primaryActionContentHorizontalAlignment = Alignment.CenterHorizontally,
         containerColor = Impala.colors.panel,
     ) {
@@ -145,5 +143,4 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
             content(Modifier.padding(padding))
         }
     }
-    if (newSheet) NewSheet(onNote = { nav.create(heft = false) }, onHeft = { nav.create(heft = true) }) { newSheet = false }
 }

@@ -109,10 +109,11 @@ private fun PageTree(store: ImpalaStore, nav: ShellNav) {
         DeskTreeActions(
             open = { if (it != nav.currentPageId) nav.open(PageRoute(it)) },
             openNewTab = nav::openNewTab,
-            addChild = { nav.create(heft = false, parentId = it) },
-            newPage = { ws -> scope.launch { val id = store.write { it.createPage("", "", null, ws) }; nav.open(PageRoute(id)) } },
+            addChild = { nav.askNewPage(parentId = it) },
+            newPage = { ws -> nav.askNewPage(workspaceId = ws) },
             rename = { renaming = it },
             favorite = { patch(it.id, mapOf("favorite" to !it.favorite)) },
+            template = { patch(it.id, mapOf("isTemplate" to !it.isTemplate)) },
             archive = { p -> scope.launch { store.write { it.archivePage(p.id) } } },
             trash = { p -> nav.closeTab(p.id); scope.launch { store.write { it.trashPage(p.id) } } },
             duplicate = { p -> scope.launch { duplicatePage(store, p.id)?.let { nav.open(PageRoute(it)) } } },

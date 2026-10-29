@@ -10,6 +10,8 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import uniffi.impala_ffi.PageKind
+import uniffi.impala_ffi.PageSummary
 
 /** Navigation und App-weite Aktionen, die Bildschirme als Callbacks bekommen. */
 class ShellNav(
@@ -73,10 +75,41 @@ class ShellNav(
 
     fun toast(text: String) { scope.launch { snackbar.showSnackbar(text) } }
 
-    /** Leere Notiz bzw. leeres Heft anlegen und öffnen (Vorlagenwahl folgt). */
-    fun create(heft: Boolean, parentId: String? = null, newTab: Boolean = false) = scope.launch {
-        val id = store.write { if (heft) it.createHeft("", parentId, null) else it.createPage("", "", parentId, null) }
-        if (newTab) openNewTab(id) else open(PageRoute(id))
+    /** Anlege-Auswahl offen (wie `S.pendingNewPage` in der PWA); null = geschlossen. */
+    var pendingNewPage by mutableStateOf<NewPageRequest?>(null)
+
+    /** „Neu anlegen“ öffnen: Seite oder Heft wählen, dann anlegen (wie `newPageFlow` in der PWA). */
+    fun askNewPage(parentId: String? = null, workspaceId: String? = null, newTab: Boolean = false) {
+        pendingNewPage = NewPageRequest(parentId, workspaceId, newTab)
+    }
+
+    /** Typ gewählt: Seite bzw. Heft anlegen und öffnen. */
+    fun pickNewPage(heft: Boolean) {
+        val req = pendingNewPage ?: return
+        pendingNewPage = null
+        scope.launch {
+            val id = store.write {
+                if (heft) it.createHeft("Neues Heft", req.parentId, req.workspaceId) else it.createPage("Neue Seite", "", req.parentId, req.workspaceId)
+            }
+            if (req.newTab) openNewTab(id) else open(PageRoute(id))
+        }
+    }
+
+    /** Vorlage gewählt: Titel, Inhalt, Icon und Schlagwörter übernehmen (wie `data-tpluse` in der PWA). */
+    fun pickTemplate(tpl: PageSummary) {
+        val req = pendingNewPage ?: return
+        pendingNewPage = null
+        scope.launch {
+            val id = store.write {
+                if (tpl.kind == PageKind.HEFT) return@write it.createHeft(tpl.title, req.parentId, req.workspaceId)
+                val content = it.page(tpl.id)?.content.orEmpty()
+                it.createPage(tpl.title, content, req.parentId, req.workspaceId)
+            }
+            if (tpl.icon.isNotEmpty() || tpl.tags.isNotEmpty()) {
+                store.dispatch("pageUpdate", mapOf("id" to id, "patch" to mapOf("icon" to tpl.icon.ifEmpty { null }, "tags" to tpl.tags)))
+            }
+            if (req.newTab) openNewTab(id) else open(PageRoute(id))
+        }
     }
 
     /** Aktionen aus „Mehr“ und Suche (IDs wie in der PWA). */
@@ -86,10 +119,13 @@ class ShellNav(
         "trash" -> open(TrashRoute)
         "archive" -> open(ArchiveRoute)
         "library" -> open(LibraryRoute)
-        "newpage" -> { create(heft = false); Unit }
+        "newpage" -> askNewPage()
         "cards" -> go(TopLevel.Study)
         "cards-manage" -> { go(TopLevel.Study); open(CardBrowserRoute()) }
         "search" -> open(SearchRoute)
         else -> toast("Folgt mit einem der nächsten Module.")
     }
 }
+
+/** Ziel der Anlege-Auswahl: Eltern, Arbeitsbereich und ob die neue Seite in einem neuen Tab öffnet. */
+data class NewPageRequest(val parentId: String?, val workspaceId: String?, val newTab: Boolean)

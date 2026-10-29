@@ -34,7 +34,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
             viewModel { HomeViewModel(store, prefs) },
             HomeActions(
                 openPage = { nav.open(PageRoute(it)) },
-                newPage = { nav.create(heft = false) },
+                newPage = { nav.askNewPage() },
                 study = { nav.go(TopLevel.Study) },
                 settings = { nav.open(SettingsRoute); nav.open(SettingsSectionRoute("home")) },
                 conflicts = { nav.open(ConflictsRoute) },
@@ -46,7 +46,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     entry<NotesRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
         Placeholder("Keine Seite gewählt", "Wähle eine Seite aus der Liste.")
     })) {
-        NotesScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onNewPage = { nav.create(heft = false, parentId = it) })
+        NotesScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onNewPage = { nav.askNewPage(parentId = it) })
     }
     entry<PageRoute>(metadata = ListDetailSceneStrategy.detailPane()) { PageEntry(store, it.id, nav) }
     entry<StudyRoute> {

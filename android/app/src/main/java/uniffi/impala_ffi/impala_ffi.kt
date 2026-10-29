@@ -13480,6 +13480,10 @@ data class PageSummary (
      * Blob-ID des PDFs bei PDF-Seiten (Bibliothek).
      */
     var `pdfId`: kotlin.String?, 
+    /**
+     * Als Vorlage markiert (Auswahl bei „Neu anlegen“).
+     */
+    var `isTemplate`: kotlin.Boolean, 
     var `created`: kotlin.String, 
     var `updated`: kotlin.String
 ) {
@@ -13503,6 +13507,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
@@ -13519,6 +13524,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.allocationSize(value.`cover`) +
             FfiConverterSequenceString.allocationSize(value.`tags`) +
             FfiConverterOptionalString.allocationSize(value.`pdfId`) +
+            FfiConverterBoolean.allocationSize(value.`isTemplate`) +
             FfiConverterString.allocationSize(value.`created`) +
             FfiConverterString.allocationSize(value.`updated`)
     )
@@ -13534,6 +13540,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.write(value.`cover`, buf)
             FfiConverterSequenceString.write(value.`tags`, buf)
             FfiConverterOptionalString.write(value.`pdfId`, buf)
+            FfiConverterBoolean.write(value.`isTemplate`, buf)
             FfiConverterString.write(value.`created`, buf)
             FfiConverterString.write(value.`updated`, buf)
     }

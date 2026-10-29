@@ -67,7 +67,7 @@ fun DeskTabBar(store: ImpalaStore, nav: ShellNav, canGoBack: Boolean, modifier: 
                     TabChip(pages?.get(id)?.let { pageTitle(it) } ?: "Ohne Titel", id == activeId, { nav.open(PageRoute(id)) }, { nav.closeTab(id) })
                 }
             }
-            SmallButton(R.drawable.ic_i_plus, "Neuen Tab öffnen") { nav.create(heft = false, newTab = true) }
+            SmallButton(R.drawable.ic_i_plus, "Neuen Tab öffnen") { nav.askNewPage(newTab = true) }
             if (activeId != null) PageActions(store, nav, activeId, favorite = pages?.get(activeId)?.favorite == true)
         }
         HorizontalDivider(color = c.edgeSoft)
