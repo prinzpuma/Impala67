@@ -89,6 +89,8 @@ dependencies {
     implementation(libs.bundles.ink)
     implementation(libs.mlkit.document.scanner)
     implementation(libs.mlkit.digital.ink)
+    implementation(libs.play.services.code.scanner)
+    implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation("${libs.jna.get()}@aar")

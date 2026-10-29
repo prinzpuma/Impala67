@@ -163,6 +163,22 @@ class CloudSyncController(
     private fun refreshSettings(store: ImpalaStore) {
         val s = runCatching { JSONObject(store.core.settingsJson()) }.getOrDefault(JSONObject())
         _ui.update { it.copy(url = s.optString("cfUrl"), syncKey = s.optString("cfSyncKey")) }
+        autoConnect(s.optString("cfUrl"), s.optString("cfSyncKey"))
+    }
+
+    /**
+     * Neuer Schlüssel in den Einstellungen (z. B. über Drive von einem anderen Gerät), dieses Gerät
+     * ist aber nicht gekoppelt: gleich verbinden. Ein schon bekannter Schlüssel (nach „Trennen“ oder
+     * beim ersten Start nach dem Update) verbindet nicht von selbst.
+     */
+    private fun autoConnect(url: String, key: String) {
+        scope.launch {
+            val seen = prefs.cfSeenKey.first()
+            if (seen == key) return@launch
+            prefs.setCfSeenKey(key)
+            if (seen == null || key.isBlank() || prefs.cfSyncKey.first().isNotBlank()) return@launch
+            configure(url, key)
+        }
     }
 
     /** Leitet den Schlüssel ab (PBKDF2, bis ~1 s), erster Durchgang, dann WebSocket. */

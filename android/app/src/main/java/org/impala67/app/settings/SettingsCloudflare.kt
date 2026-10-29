@@ -57,9 +57,10 @@ fun CloudflareSyncGroup(toast: (String) -> Unit) {
     var url by remember(ui.url) { mutableStateOf(ui.url) }
     var syncKey by remember(ui.syncKey) { mutableStateOf(ui.syncKey) }
     var confirmPurge by remember { mutableStateOf(false) }
+    var showPairing by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val busy = ui.state == CloudSyncState.CONNECTING || ui.state == CloudSyncState.SYNCING
 
-    // TODO(desk): „QR-Code scannen“ und „Gerät koppeln (QR-Code)“ fehlen, bis ML Kit Barcode steht (PORTING § 8).
     SettingsGroup(
         "Cloudflare Live-Sync",
         footnote = "100 % Ende-zu-Ende verschlüsselt (AES-GCM 256-Bit). Der Server sieht niemals Klartext-Notizen.",
@@ -105,6 +106,24 @@ fun CloudflareSyncGroup(toast: (String) -> Unit) {
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s2),
         )
+        // QR-Kopplung wie settings.js (`handleCfScanPairing`, `handleCfPairing`).
+        Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), horizontalArrangement = Arrangement.End) {
+            OutlinedButton(enabled = !busy, onClick = {
+                scope.launch {
+                    val text = scanQrCode(context) ?: return@launch
+                    val pairing = parseCfPairing(text) ?: return@launch toast("Ungültige Verbindungsdaten im QR-Code.")
+                    url = pairing.url
+                    syncKey = pairing.key
+                    toast("Kopplungscode erkannt. Verbinde…")
+                    val error = cloud.configure(pairing.url, pairing.key)
+                    toast(if (error == null) "Cloudflare-Sync erfolgreich gekoppelt!" else "Verbindung fehlgeschlagen. Bitte URL und Schlüssel prüfen.")
+                }
+            }) { Text("QR-Code scannen") }
+            if (url.isNotBlank() && syncKey.isNotBlank()) {
+                Spacer(Modifier.size(Space.s2))
+                OutlinedButton(onClick = { showPairing = true }) { Text("Gerät koppeln (QR-Code)") }
+            }
+        }
         if (syncKey.isBlank()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = {
@@ -141,6 +160,8 @@ fun CloudflareSyncGroup(toast: (String) -> Unit) {
             )
         }
     }
+
+    if (showPairing) CfPairingDialog(url.trim(), syncKey.trim(), toast) { showPairing = false }
 
     if (confirmPurge) {
         AlertDialog(

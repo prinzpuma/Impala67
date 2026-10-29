@@ -62,6 +62,13 @@ class DevicePrefs(private val context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) = put(THEME, mode.name)
     suspend fun setCfSyncKey(key: String) = put(CF_SYNC_KEY, key)
 
+    /**
+     * Zuletzt gesehener Schlüssel aus den Einstellungen (`null`: noch nie). Nur ein neuer Schlüssel
+     * (z. B. über Drive von einem anderen Gerät) verbindet von selbst – nach „Trennen“ nicht erneut.
+     */
+    val cfSeenKey: Flow<String?> = store.data.map { it[CF_SEEN_KEY] }
+    suspend fun setCfSeenKey(key: String) = put(CF_SEEN_KEY, key)
+
     /** Google Drive auf diesem Gerät angemeldet (PWA: `impala67_drive_session`) und mit welchem Konto. */
     val driveConnected: Flow<Boolean> = boolFlow(DRIVE_CONNECTED, false)
     val driveEmail: Flow<String> = store.data.map { it[DRIVE_EMAIL].orEmpty() }
@@ -114,6 +121,7 @@ class DevicePrefs(private val context: Context) {
         val BREAK_REMINDER = booleanPreferencesKey("breakReminder")
         val WEEK_GOAL = intPreferencesKey("weekGoalMinutes")
         val CF_SYNC_KEY = stringPreferencesKey("cfSyncKey")
+        val CF_SEEN_KEY = stringPreferencesKey("cfSeenKey")
         val DRIVE_CONNECTED = booleanPreferencesKey("driveConnected")
         val DRIVE_EMAIL = stringPreferencesKey("driveEmail")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
