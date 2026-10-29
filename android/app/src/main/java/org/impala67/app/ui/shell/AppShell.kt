@@ -49,8 +49,11 @@ import java.util.TimeZone
 /** Ab dieser Fensterbreite (Material „expanded“) gilt das Tablet-Layout der PWA ([DeskShell]). */
 private const val DESK_MIN_WIDTH_DP = 840
 
+/** Telefon im Querformat: ab dieser Breite ebenfalls das Tablet-Layout. */
+private const val DESK_LANDSCAPE_MIN_WIDTH_DP = 600
+
 /**
- * Rahmen der App – auf breiten Fenstern (Tablet) das Desktop-Layout der PWA ([DeskShell]), sonst: Navigationsleiste (Telefon) bzw. -schiene (Tablet) aus `NavigationSuiteScaffold`,
+ * Rahmen der App – auf breiten Fenstern (Tablet, Telefon quer) das Desktop-Layout der PWA ([DeskShell]), sonst: Navigationsleiste (Telefon) bzw. -schiene (Tablet) aus `NavigationSuiteScaffold`,
  * „+“ als Leisteneintrag (Telefon) bzw. Expressive-FAB-Menü (Tablet), Inhalt über Navigation 3 mit
  * List-Detail auf breiten Bildschirmen (Ziele: [appEntries]). Zurück nimmt das oberste Ziel vom Stapel.
  */
@@ -84,7 +87,9 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
             entryProvider = entryProvider { appEntries(nav, store, prefs) },
         )
     }
-    val desk = LocalConfiguration.current.screenWidthDp >= DESK_MIN_WIDTH_DP
+    val config = LocalConfiguration.current
+    val landscape = config.screenWidthDp > config.screenHeightDp
+    val desk = config.screenWidthDp >= DESK_MIN_WIDTH_DP || (landscape && config.screenWidthDp >= DESK_LANDSCAPE_MIN_WIDTH_DP)
     SideEffect { nav.desk = desk }
     if (desk) {
         DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)

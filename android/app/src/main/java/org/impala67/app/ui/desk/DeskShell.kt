@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.navigation3.runtime.NavKey
 import org.impala67.app.R
@@ -30,6 +31,9 @@ import org.impala67.app.core.ImpalaStore
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.shell.ShellNav
+
+/** Ab dieser Breite ist das KI-Panel beim Start offen (Seitenleiste + Inhalt + Panel passen nebeneinander). */
+private const val AI_OPEN_MIN_WIDTH_DP = 1000
 
 /**
  * Tablet-Rahmen wie die PWA am Desktop/iPad (`#app`-Raster in css/layout.css): links die Seitenleiste
@@ -46,7 +50,9 @@ fun DeskShell(
     content: @Composable (Modifier) -> Unit,
 ) {
     val c = Impala.colors
-    var aiOpen by rememberSaveable { mutableStateOf(true) }
+    // Auf schmalen Fenstern (Telefon quer) startet das KI-Panel eingeklappt, damit der Inhalt Platz hat.
+    val roomy = LocalConfiguration.current.screenWidthDp >= AI_OPEN_MIN_WIDTH_DP
+    var aiOpen by rememberSaveable { mutableStateOf(roomy) }
     val chrome = !nav.immersive
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().then(if (chrome) Modifier.safeDrawingPadding() else Modifier)) {
