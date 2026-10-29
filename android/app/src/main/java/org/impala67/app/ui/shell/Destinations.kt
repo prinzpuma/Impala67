@@ -10,6 +10,7 @@ import org.impala67.app.heft.HeftThumbnail
 import org.impala67.app.home.HomeActions
 import org.impala67.app.home.HomeScreen
 import org.impala67.app.home.HomeViewModel
+import org.impala67.app.library.LibraryScreen
 import org.impala67.app.more.MoreScreen
 import org.impala67.app.notes.ArchiveScreen
 import org.impala67.app.notes.NotesScreen
@@ -59,6 +60,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     entry<MoreRoute> { MoreScreen(onAction = nav::action) }
     entry<TrashRoute> { TrashScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
     entry<ArchiveRoute> { ArchiveScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
+    entry<LibraryRoute> { LibraryScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
     entry<SearchRoute> {
         SearchScreen(store, onOpenPage = { nav.back(); nav.open(PageRoute(it)) }, onAction = { nav.back(); nav.action(it) }, onClose = nav::back)
     }

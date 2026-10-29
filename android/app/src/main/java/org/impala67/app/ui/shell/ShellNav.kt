@@ -85,6 +85,7 @@ class ShellNav(
         "sync" -> { open(SettingsRoute); open(SettingsSectionRoute("sync")) }
         "trash" -> open(TrashRoute)
         "archive" -> open(ArchiveRoute)
+        "library" -> open(LibraryRoute)
         "newpage" -> { create(heft = false); Unit }
         "cards" -> go(TopLevel.Study)
         "cards-manage" -> { go(TopLevel.Study); open(CardBrowserRoute()) }
