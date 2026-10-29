@@ -8,11 +8,11 @@ import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModel
 import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModelIdentifier
 import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizer
 import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOptions
-import com.google.mlkit.vision.digitalink.common.Ink
-import kotlinx.coroutines.suspendCancellableCoroutine
-import uniffi.impala_ffi.HeftStroke
+import com.google.mlkit.vision.digitalink.recognition.Ink
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import uniffi.impala_ffi.HeftStroke
 
 /**
  * Handschrift-Erkennung im Heft mit ML Kit Digital Ink (Deutsch). Ersetzt die ONNX-Erkennung der PWA
