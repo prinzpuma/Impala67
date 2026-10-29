@@ -145,10 +145,10 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `mobile*.js`, `mobile*.css`, `layout.css`, `tabs.js`, `nav-history.js`, `app-sidebar-events.js`, `collapse.js` | `NavigationSuiteScaffold`, Navigation 3, List-Detail | `ui/shell/*` (Ziele: `Destinations.kt`) | ✅ |
 | `popovers.js`, `app-dialogs.js`, `mobile-sheet.js` | `DropdownMenu`, `AlertDialog`, `ModalBottomSheet` | je Bereich | ✅ |
 | `app-click-*.js`, `controller.js`, `shortcuts.js` | Callbacks/ViewModels; Tastatur über `onKeyEvent` | je Bereich | ➖ |
-| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Vorlagen, eigenes Cover-Bild offen) |
-| `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü, Markdown-Kürzel wie „- “, Icon/Cover, Formeln offen) |
+| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Vorlagen ✅; eigenes Cover-Bild offen – braucht FFI) |
+| `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü und Markdown-Kürzel ✅; weitere Blockarten im Slash-Menü, Icon/Cover, Formeln offen) |
 | `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/MarkdownView.kt` | ✅ |
-| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht, Bilder/Text offen) |
+| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht ✅; Seiten ziehen, Bilder/Text offen) |
 | `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer ✅, Lasso offen) |
 | `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/HeftToolbar.kt` | ✅ |
 | `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | 🟡 (Scannen ✅; OCR offen) |

@@ -133,6 +133,30 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
 
     fun removePage(heftPageId: String) = edit { HeftChange.RemovePage(heftPageId) }
 
+    /**
+     * Mehrere Seiten nacheinander löschen (je eine Umkehr für Rückgängig). Der Kern prüft „letzte Seite
+     * bleibt“ je Aufruf gegen den aktuellen Stand.
+     * TODO(desk): `heftApply` prüft einen Stapel aus mehreren `RemovePage` gegen den Stand vor dem Stapel;
+     * die Regel im Kern (`change_op`) für Stapel nachziehen, dann in einem Schritt löschen.
+     */
+    fun removePages(heftPageIds: List<String>) {
+        viewModelScope.launch {
+            writes.withLock {
+                for (id in heftPageIds) {
+                    val edit = runCatching { store.write { it.heftApply(pageId, listOf(HeftChange.RemovePage(id))) } }
+                        .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
+                        .getOrNull() ?: break
+                    record(edit)
+                }
+            }
+        }
+    }
+
+    /** Papier der letzten Seite; eine neue Seite am Ende übernimmt es (wie `addPageAtEnd` in der PWA). */
+    suspend fun lastPaper(): Paper = Paper.of(
+        store.write { core -> core.heftPageIds(pageId).lastOrNull()?.let { runCatching { core.heftPage(pageId, it).paper }.getOrNull() } }.orEmpty(),
+    )
+
     fun setPaper(heftPageId: String, paper: Paper) = edit { HeftChange.SetPaper(heftPageId, paper.id) }
 
     fun undo() = replay(undoStack, redoStack)

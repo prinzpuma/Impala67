@@ -67,6 +67,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
     val zoom = remember { HeftZoom() }
     val scope = rememberCoroutineScope()
     var focus by remember { mutableStateOf<String?>(null) }
+    var showPages by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(pages, focus) {
@@ -102,6 +103,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                     remove = { currentId?.let(vm::removePage) },
                     canRemove = pages.size > 1,
                     scan = scan,
+                    overview = { showPages = true },
                 ),
             )
         },
@@ -189,5 +191,15 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                 }
             }
         }
+    }
+
+    if (showPages) {
+        HeftPagesSheet(
+            vm = vm,
+            pages = pages,
+            current = current,
+            onJump = { id -> showPages = false; focus = id },
+            onDismiss = { showPages = false },
+        )
     }
 }

@@ -29,16 +29,17 @@ import org.impala67.app.R
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.TextSize
 
-/** Aktionen der Seitenverwaltung (heft-pages-ui.js, „Seite hinzufügen“-Menü der Werkzeugleiste). */
+/** Aktionen der Seitenverwaltung (heft-pages-ui.js; Seitenübersicht wie das Seiten-Popover der PWA). */
 class HeftPageActions(
     val add: (Paper) -> Unit,
     val setPaper: (Paper) -> Unit,
     val remove: () -> Unit,
     val canRemove: Boolean,
     val scan: () -> Unit,
+    val overview: () -> Unit,
 )
 
-/** Kopfzeile: Zurück, Titel mit „Seite x von y“, Seite hinzufügen, Papier und Seite löschen. */
+/** Kopfzeile: Zurück, Titel mit „Seite x von y“, Seite hinzufügen, Seitenübersicht, Papier und Seite löschen. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: HeftPageActions) {
@@ -73,8 +74,11 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
                     )
                 }
             }
+            IconButton(actions.overview, shapes = IconButtonDefaults.shapes()) {
+                Icon(painterResource(R.drawable.ic_i_pages_stack), "Seiten", Modifier.size(22.dp))
+            }
             IconButton({ pageMenu = true }, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_pages_stack), "Seite", Modifier.size(22.dp))
+                Icon(painterResource(R.drawable.ic_i_dots), "Seite", Modifier.size(22.dp))
                 DropdownMenu(pageMenu, { pageMenu = false }) {
                     Text("Papier dieser Seite", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = Impala.colors.text2, fontSize = TextSize.xs)
                     Paper.entries.forEach { p ->

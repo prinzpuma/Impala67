@@ -9,6 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.ui.theme.Impala
 import uniffi.impala_ffi.Changes
+import uniffi.impala_ffi.HeftPageData
 import java.util.concurrent.ConcurrentHashMap
 
 /** Zuletzt angesehene Heftseite je Heft (in der PWA `HEFT.lastPage`); gilt nur für die laufende Sitzung. */
@@ -34,13 +35,19 @@ fun HeftThumbnail(store: ImpalaStore, pageId: String, modifier: Modifier = Modif
                 ?.let { runCatching { core.heftPage(pageId, it) }.getOrNull() }
         }
     }.collectAsStateWithLifecycle()
+    PageSketch(page, modifier)
+}
+
+/** Papier und gespeicherte Striche einer Seite als Skizze (Startseite und Seitenübersicht). */
+@Composable
+fun PageSketch(data: HeftPageData?, modifier: Modifier = Modifier) {
     val ink = Impala.colors.accent
     val cache = remember { StrokeCache() }
-    val data = page
     val strokes = remember(data) { data?.strokes.orEmpty().mapNotNull(cache::get) }
 
     Canvas(modifier) {
         val k = size.width / HeftPage.WIDTH
         drawPaper(Paper.of(data?.paper.orEmpty()), ink, k)
-        drawInkStrokes(strokes, k)    }
+        drawInkStrokes(strokes, k)
+    }
 }
