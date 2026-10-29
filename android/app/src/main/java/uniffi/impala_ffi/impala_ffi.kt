@@ -13468,6 +13468,18 @@ data class PageSummary (
      * Angeheftet (Startseite, Seitenleiste).
      */
     var `favorite`: kotlin.Boolean, 
+    /**
+     * Cover (Farbe/Verlauf/Muster wie in der PWA), leer ohne.
+     */
+    var `cover`: kotlin.String, 
+    /**
+     * Schlagwörter der Seite.
+     */
+    var `tags`: List<kotlin.String>, 
+    /**
+     * Blob-ID des PDFs bei PDF-Seiten (Bibliothek).
+     */
+    var `pdfId`: kotlin.String?, 
     var `created`: kotlin.String, 
     var `updated`: kotlin.String
 ) {
@@ -13489,6 +13501,9 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
     }
@@ -13501,6 +13516,9 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterTypePageKind.allocationSize(value.`kind`) +
             FfiConverterString.allocationSize(value.`icon`) +
             FfiConverterBoolean.allocationSize(value.`favorite`) +
+            FfiConverterString.allocationSize(value.`cover`) +
+            FfiConverterSequenceString.allocationSize(value.`tags`) +
+            FfiConverterOptionalString.allocationSize(value.`pdfId`) +
             FfiConverterString.allocationSize(value.`created`) +
             FfiConverterString.allocationSize(value.`updated`)
     )
@@ -13513,6 +13531,9 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterTypePageKind.write(value.`kind`, buf)
             FfiConverterString.write(value.`icon`, buf)
             FfiConverterBoolean.write(value.`favorite`, buf)
+            FfiConverterString.write(value.`cover`, buf)
+            FfiConverterSequenceString.write(value.`tags`, buf)
+            FfiConverterOptionalString.write(value.`pdfId`, buf)
             FfiConverterString.write(value.`created`, buf)
             FfiConverterString.write(value.`updated`, buf)
     }

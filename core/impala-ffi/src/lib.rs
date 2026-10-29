@@ -99,6 +99,12 @@ pub struct PageSummary {
     pub icon: String,
     /// Angeheftet (Startseite, Seitenleiste).
     pub favorite: bool,
+    /// Cover (Farbe/Verlauf/Muster wie in der PWA), leer ohne.
+    pub cover: String,
+    /// Schlagwörter der Seite.
+    pub tags: Vec<String>,
+    /// Blob-ID des PDFs bei PDF-Seiten (Bibliothek).
+    pub pdf_id: Option<String>,
     pub created: String,
     pub updated: String,
 }
@@ -161,6 +167,11 @@ fn summary(pg: &Page) -> PageSummary {
         kind: if pg.is_heft() { PageKind::Heft } else { PageKind::Note },
         icon: pg.extra.get("icon").and_then(Value::as_str).unwrap_or("").to_owned(),
         favorite: pg.extra.get("favorite").is_some_and(|v| v.as_bool().unwrap_or(false)),
+        cover: pg.extra.get("cover").and_then(Value::as_str).unwrap_or("").to_owned(),
+        tags: pg.extra.get("tags").and_then(Value::as_array).map_or_else(Vec::new, |t| {
+            t.iter().filter_map(Value::as_str).map(str::to_owned).collect()
+        }),
+        pdf_id: pg.extra.get("pdfId").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
         created: pg.created_at().to_owned(),
         updated: pg.updated().to_owned(),
     }
