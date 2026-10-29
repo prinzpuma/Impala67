@@ -123,7 +123,7 @@ private fun PageMenu(page: PageSummary, actions: DeskTreeActions) {
 }
 
 @Composable
-private fun MenuEntry(icon: Int, label: String, danger: Boolean = false, onClick: () -> Unit) {
+internal fun MenuEntry(icon: Int, label: String, danger: Boolean = false, onClick: () -> Unit) {
     val c = Impala.colors
     DropdownMenuItem(
         text = { Text(label) },
