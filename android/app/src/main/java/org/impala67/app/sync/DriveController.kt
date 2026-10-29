@@ -42,6 +42,8 @@ data class DriveUi(
     val needsLogin: Boolean = false,
     val running: Boolean = false,
     val progress: String = "",
+    /** Anteil 0…1 der laufenden Etappe; `null`: unbestimmter Balken. */
+    val fraction: Float? = null,
     val email: String = "",
     /** ISO-Zeit des letzten erfolgreichen Syncs. */
     val lastOk: String? = null,
@@ -168,7 +170,7 @@ class DriveController(
     suspend fun sync() {
         val current = lock.withLock { ensureDrive() } ?: return
         if (_ui.value.running) return
-        _ui.update { it.copy(running = true, progress = "", message = "") }
+        _ui.update { it.copy(running = true, progress = "", fraction = null, message = "") }
         try {
             val report = withContext(Dispatchers.IO) { current.sync(progress) }
             val clock = report.clockWarningMinutes?.let { " · Geräteuhr weicht $it Minuten ab" }.orEmpty()
@@ -180,7 +182,7 @@ class DriveController(
         } catch (e: DriveFailure.Failed) {
             _ui.update { it.copy(message = if (e.offline) "Offline · wartet" else e.reason) }
         } finally {
-            _ui.update { it.copy(running = false, progress = "") }
+            _ui.update { it.copy(running = false, progress = "", fraction = null) }
             refreshStatus()
         }
     }
@@ -271,8 +273,8 @@ class DriveController(
     }
 
     private val progress = object : DriveProgress {
-        override fun onProgress(label: String) {
-            _ui.update { it.copy(progress = label) }
+        override fun onProgress(label: String, fraction: Double?) {
+            _ui.update { it.copy(progress = label, fraction = fraction?.toFloat()) }
         }
     }
 

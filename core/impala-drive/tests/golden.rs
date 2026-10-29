@@ -375,7 +375,7 @@ fn flows_match_js() {
         let (result, error): (Value, Option<String>) = match s(&case["op"]) {
             "sync" => {
                 let mut statuses = Vec::new();
-                match block_on(backup.sync(&mut |p| statuses.push(p.label()))) {
+                match block_on(backup.sync(&mut |p| if !p.is_tick() { statuses.push(p.label()) })) {
                     Ok(r) => {
                         statuses.push(r.label().to_owned());
                         let v = json!({"imported": r.imported, "uploaded": r.uploaded, "conflicts": r.conflicts.len(),

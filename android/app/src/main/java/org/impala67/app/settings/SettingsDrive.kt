@@ -90,7 +90,12 @@ fun DriveSyncGroup(toast: (String) -> Unit) {
                 if (ui.progress.isNotBlank()) {
                     Text(ui.progress, style = MaterialTheme.typography.bodySmall, color = Impala.colors.text2)
                 }
-                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = Space.s1))
+                val fraction = ui.fraction
+                if (fraction != null) {
+                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(top = Space.s1))
+                } else {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = Space.s1))
+                }
             }
         }
         Row(

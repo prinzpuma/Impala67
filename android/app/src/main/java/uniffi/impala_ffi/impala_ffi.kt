@@ -688,7 +688,7 @@ internal interface UniffiCallbackInterfaceChangeListenerMethod0 : com.sun.jna.Ca
     fun callback(`uniffiHandle`: Long,`changes`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriveProgressMethod0 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`label`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+    fun callback(`uniffiHandle`: Long,`label`: RustBuffer.ByValue,`fraction`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriveTokensMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,)
@@ -2021,7 +2021,7 @@ fun uniffi_impala_ffi_fn_free_driveprogress(`ptr`: Pointer,uniffi_out_err: Uniff
 ): Unit
 fun uniffi_impala_ffi_fn_init_callback_vtable_driveprogress(`vtable`: UniffiVTableCallbackInterfaceDriveProgress,
 ): Unit
-fun uniffi_impala_ffi_fn_method_driveprogress_on_progress(`ptr`: Pointer,`label`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_method_driveprogress_on_progress(`ptr`: Pointer,`label`: RustBuffer.ByValue,`fraction`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_clone_drivesync(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
@@ -2746,7 +2746,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_drivechangetimer_on_timer() != 9500.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_driveprogress_on_progress() != 4131.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_driveprogress_on_progress() != 4513.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_drivesync_account_email() != 2743.toShort()) {
@@ -5935,9 +5935,10 @@ public object FfiConverterTypeDriveChangeTimer: FfiConverter<DriveChangeTimer, P
 public interface DriveProgress {
     
     /**
-     * Etappe als Text, z. B. „3 Änderungspaket(e) laden…“.
+     * Etappe als Text, z. B. „3 Änderungspaket(e) laden…“, und Anteil 0…1 für den
+     * Fortschrittsbalken (`None`: Dauer unbekannt).
      */
-    fun `onProgress`(`label`: kotlin.String)
+    fun `onProgress`(`label`: kotlin.String, `fraction`: kotlin.Double?)
     
     companion object
 }
@@ -6029,13 +6030,14 @@ open class DriveProgressImpl: Disposable, AutoCloseable, DriveProgress
 
     
     /**
-     * Etappe als Text, z. B. „3 Änderungspaket(e) laden…“.
-     */override fun `onProgress`(`label`: kotlin.String)
+     * Etappe als Text, z. B. „3 Änderungspaket(e) laden…“, und Anteil 0…1 für den
+     * Fortschrittsbalken (`None`: Dauer unbekannt).
+     */override fun `onProgress`(`label`: kotlin.String, `fraction`: kotlin.Double?)
         = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_driveprogress_on_progress(
-        it, FfiConverterString.lower(`label`),_status)
+        it, FfiConverterString.lower(`label`),FfiConverterOptionalDouble.lower(`fraction`),_status)
 }
     }
     
@@ -6053,11 +6055,12 @@ open class DriveProgressImpl: Disposable, AutoCloseable, DriveProgress
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceDriveProgress {
     internal object `onProgress`: UniffiCallbackInterfaceDriveProgressMethod0 {
-        override fun callback(`uniffiHandle`: Long,`label`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
+        override fun callback(`uniffiHandle`: Long,`label`: RustBuffer.ByValue,`fraction`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriveProgress.handleMap.get(uniffiHandle)
             val makeCall = { ->
                 uniffiObj.`onProgress`(
                     FfiConverterString.lift(`label`),
+                    FfiConverterOptionalDouble.lift(`fraction`),
                 )
             }
             val writeReturn = { _: Unit -> Unit }

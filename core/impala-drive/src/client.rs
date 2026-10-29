@@ -75,6 +75,11 @@ pub enum Phase {
     UploadDelta,
     Compact,
     LateDeltas(usize),
+    /// Fortschritt innerhalb einer Etappe (nur Anzeige, nicht in den Golden-Abläufen der PWA):
+    /// Remote-Dateien geladen, Import läuft, fehlende Dateien (Blobs) geladen.
+    Fetch { done: usize, total: usize },
+    Import,
+    FetchBlobs { done: usize, total: usize },
 }
 
 impl Phase {
@@ -89,7 +94,25 @@ impl Phase {
             Phase::UploadDelta => "Änderungen hochladen…".into(),
             Phase::Compact => "Sync-Stand optimieren…".into(),
             Phase::LateDeltas(n) => format!("{n} nachträgliche(s) Änderungspaket(e) einlesen…"),
+            Phase::Fetch { done, total } => format!("Remote-Stand laden… {done}/{total}"),
+            Phase::Import => "Remote-Stand einlesen…".into(),
+            Phase::FetchBlobs { done, total } => format!("Dateien laden… {done}/{total}"),
         }
+    }
+
+    /// Anteil 0…1 für einen Fortschrittsbalken; `None`: Dauer unbekannt (unbestimmter Balken).
+    pub fn fraction(&self) -> Option<f64> {
+        match self {
+            Phase::Fetch { done, total } | Phase::FetchBlobs { done, total } if *total > 0 => {
+                Some(*done as f64 / *total as f64)
+            }
+            _ => None,
+        }
+    }
+
+    /// Nur Fortschritt innerhalb einer Etappe (kein eigener Schritt des Ablaufs).
+    pub fn is_tick(&self) -> bool {
+        matches!(self, Phase::Fetch { .. } | Phase::Import | Phase::FetchBlobs { .. })
     }
 }
 
@@ -320,7 +343,12 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
         let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(&deltas).collect();
-        let mut payloads = self.download_all(&wanted).await?.into_iter();
+        let mut downloaded = Vec::with_capacity(wanted.len());
+        for chunk in wanted.chunks(PARALLEL_DOWNLOADS) {
+            on_phase(Phase::Fetch { done: downloaded.len(), total: wanted.len() });
+            downloaded.extend(self.download_all(chunk).await?);
+        }
+        let mut payloads = downloaded.into_iter();
         let snap = if need_snapshot { payloads.next() } else { None };
         let mut events = snap.as_ref().map(payload_events).unwrap_or_default();
         for payload in payloads {
@@ -329,6 +357,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         // v1-Snapshots tragen ihre Blobs im selben Dokument.
         let blobs = snap.as_ref().map(payload_blobs).unwrap_or_default();
         if !events.is_empty() || !blobs.is_empty() {
+            on_phase(Phase::Import);
             self.import(events, blobs, uploaded_seq, report).await?;
         }
         // „Gelesen“ erst nach erfolgreichem Import: sonst würde ein Paket still übersprungen.
@@ -369,7 +398,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             })
             .collect();
         // Häppchenweise: Blobs können groß sein, im Speicher liegen höchstens PARALLEL_DOWNLOADS.
-        for chunk in missing.chunks(PARALLEL_DOWNLOADS) {
+        for (i, chunk) in missing.chunks(PARALLEL_DOWNLOADS).enumerate() {
+            on_phase(Phase::FetchBlobs { done: i * PARALLEL_DOWNLOADS, total: missing.len() });
             for payload in self.download_all(chunk).await? {
                 let Some(blob) = parse_blob_payload(&payload) else {
                     report.skipped_blob_files += 1;

@@ -46,8 +46,9 @@ pub trait DriveTokens: Send + Sync {
 /// Fortschritt eines Durchgangs. Wird vom Drive-Thread aufgerufen: schnell zurückkehren.
 #[uniffi::export(with_foreign)]
 pub trait DriveProgress: Send + Sync {
-    /// Etappe als Text, z. B. „3 Änderungspaket(e) laden…“.
-    fn on_progress(&self, label: String);
+    /// Etappe als Text, z. B. „3 Änderungspaket(e) laden…“, und Anteil 0…1 für den
+    /// Fortschrittsbalken (`None`: Dauer unbekannt).
+    fn on_progress(&self, label: String, fraction: Option<f64>);
 }
 
 #[derive(Debug, uniffi::Error)]
@@ -331,7 +332,7 @@ fn run<H: HttpClient>(
                     let label = p.label();
                     set_progress(&label);
                     if let Some(l) = &listener {
-                        l.on_progress(label);
+                        l.on_progress(label, p.fraction());
                     }
                 };
                 let r = block_on(backup.sync(&mut on_phase));
@@ -1165,7 +1166,7 @@ mod tests {
     struct StopAtStart(Mutex<Option<Arc<DriveSync>>>, Mutex<Vec<String>>);
 
     impl DriveProgress for StopAtStart {
-        fn on_progress(&self, label: String) {
+        fn on_progress(&self, label: String, _fraction: Option<f64>) {
             self.1.lock().unwrap().push(label);
             if let Some(d) = &*self.0.lock().unwrap() {
                 d.stop();
