@@ -277,8 +277,8 @@ impl Model {
                 if !cp.get("reconciledArchive").is_some_and(js::truthy) {
                     let mut all: Vec<LogEvent> = storage
                         .all_events()?
-                        .iter()
-                        .filter_map(LogEvent::from_object)
+                        .into_iter()
+                        .filter_map(LogEvent::from_object_owned)
                         .filter(|e| e.kind == "pageArchive" || e.kind == "pageUnarchive")
                         .collect();
                     order::sort_events(&mut all);
@@ -291,9 +291,10 @@ impl Model {
             other => {
                 let reason = other.err().or(Some("missing"));
                 let raw = storage.all_events()?;
-                let mut events: Vec<LogEvent> = raw.iter().filter_map(LogEvent::from_object).collect();
+                let raw_len = raw.len() as u64;
+                let mut events: Vec<LogEvent> = raw.into_iter().filter_map(LogEvent::from_object_owned).collect();
                 order::sort_events(&mut events);
-                info = log_info_of(&events, raw.len() as u64);
+                info = log_info_of(&events, raw_len);
                 m.state = State::restore(State::default().to_object(), now);
                 m.loaded_time = events.last().map(|e| e.t.clone()).unwrap_or_default();
                 let replayed = events.len();
@@ -304,6 +305,9 @@ impl Model {
                 if had_checkpoint {
                     // Nur den Kernzustand verwerfen: Heft-Bilder sind inhaltsadressiert und bleiben gültig.
                     let _ = storage.clear_checkpoint(true);
+                }
+                if replayed > 0 {
+                    let _ = m.save_checkpoint(storage);
                 }
                 (replayed, reason)
             }

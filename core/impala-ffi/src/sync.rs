@@ -160,8 +160,8 @@ pub(crate) fn allow_secrets(inner: &Inner) -> bool {
 /// Ergebnis von [`Inner::import_remote`].
 #[derive(Debug, Default)]
 pub(crate) struct RemoteImport {
-    /// Neu geschriebene Events (ohne `seq`).
-    pub imported: Vec<Value>,
+    /// Zahl neu geschriebener Events.
+    pub imported_count: usize,
     pub conflicts: Vec<Conflict>,
     pub merged: Vec<Merged>,
 }
@@ -192,7 +192,12 @@ impl Inner {
         for t in prepared.fresh.iter().filter_map(|ev| ev.get("t").and_then(Value::as_str)) {
             clock.observe(t);
         }
-        let local = storage.events_after(unsynced_after_seq, None, None)?;
+        let max_before = storage.log_info()?.max_seq;
+        let local = if max_before <= unsynced_after_seq {
+            Vec::new()
+        } else {
+            storage.events_after(unsynced_after_seq, Some(max_before), None)?
+        };
         let fresh_ids: HashSet<String> =
             prepared.fresh.iter().filter_map(|ev| ev.get("id").and_then(impala_storage::event::id_key)).collect();
         let found = {
@@ -217,7 +222,8 @@ impl Inner {
             )
         };
         let imported = storage.commit_import(prepared)?.imported;
-        self.apply_remote(imported.iter().filter_map(LogEvent::from_object).collect());
+        let imported_count = imported.len();
+        self.apply_remote(imported.into_iter().filter_map(LogEvent::from_object_owned).collect());
         if !self.model.replay_ordered() {
             self.reload()?;
             self.note_everything(true);
@@ -226,7 +232,7 @@ impl Inner {
         // Konfliktkopien trotzdem (als gerettete Alt-Kopien).
         let _ = self.remember_conflicts(found.conflicts.clone());
         Ok(RemoteImport {
-            imported: imported.into_iter().map(Value::Object).collect(),
+            imported_count,
             conflicts: found.conflicts,
             merged: found.merged,
         })

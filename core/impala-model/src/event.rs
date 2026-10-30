@@ -42,6 +42,22 @@ impl LogEvent {
         })
     }
 
+    /// Wie [`from_object`](Self::from_object), übernimmt aber den Besitz und spart das Klonen der Payload.
+    pub fn from_object_owned(mut ev: Object) -> Option<Self> {
+        let kind = match ev.remove("type")? {
+            Value::String(s) => s,
+            _ => return None,
+        };
+        let mut text = |k: &str| ev.remove(k).filter(|v| js::truthy(v)).map(|v| js::to_string(&v)).unwrap_or_default();
+        Some(LogEvent {
+            id: text("id"),
+            t: text("t"),
+            seq: impala_storage::js::seq_of(ev.get("seq")),
+            kind,
+            payload: ev.remove("payload").unwrap_or(Value::Null),
+        })
+    }
+
     /// Als Log-Objekt (`{ id, t, type, payload }`, mit `seq`, wenn bekannt).
     pub fn to_object(&self) -> Object {
         let mut o = Object::new();

@@ -215,7 +215,7 @@ impl DriveStore for NativeDriveStore {
         crate::changes::notify(&self.core);
         let found = found.map_err(store_err)?;
         Ok(ImportOutcome {
-            added: found.imported.len(),
+            added: found.imported_count,
             conflicts: found.conflicts.iter().map(|c| Value::Object(c.to_object())).collect(),
             merged: found.merged.iter().filter_map(|m| serde_json::to_value(m).ok()).collect(),
             imported: Vec::new(),

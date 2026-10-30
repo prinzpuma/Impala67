@@ -191,13 +191,12 @@ impl Storage for SqliteStorage {
             .conn
             .prepare_cached("SELECT seq, body FROM events WHERE seq > ?1 AND seq <= ?2 ORDER BY seq LIMIT ?3")
             .map_err(db)?;
-        let rows = stmt
-            .query_map(params![lower, upper, limit], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
-            .map_err(db)?;
+        let mut rows = stmt.query(params![lower, upper, limit]).map_err(db)?;
         let mut out = Vec::new();
-        for row in rows {
-            let (seq, body) = row.map_err(db)?;
-            out.push(with_seq(parse_object(&body)?, seq as Seq));
+        while let Some(r) = rows.next().map_err(db)? {
+            let seq: i64 = r.get(0).map_err(db)?;
+            let body: &str = r.get_ref(1).map_err(db)?.as_str().map_err(|e| Error::Backend(e.to_string()))?;
+            out.push(with_seq(parse_object(body)?, seq as Seq));
         }
         Ok(out)
     }
