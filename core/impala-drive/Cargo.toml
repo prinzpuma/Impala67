@@ -19,5 +19,8 @@ impala-crypto = { path = "../impala-crypto", default-features = false }
 impala-net = { path = "../impala-net", default-features = false }
 impala-storage = { path = "../impala-storage", default-features = false }
 impala-sync = { path = "../impala-sync" }
+# Große Snapshots entpackt `stream` nebenher statt am Stück.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+serde = "1"
 # preserve_order: Schlüsselreihenfolge wie JSON.stringify (Dateiinhalte byte-gleich mit der PWA).
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }

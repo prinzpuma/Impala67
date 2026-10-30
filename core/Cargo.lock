@@ -933,10 +933,12 @@ dependencies = [
 name = "impala-drive"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "impala-crypto",
  "impala-net",
  "impala-storage",
  "impala-sync",
+ "serde",
  "serde_json",
 ]
 

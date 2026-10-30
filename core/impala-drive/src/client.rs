@@ -1,5 +1,5 @@
 //! Ein Drive-Backup-Durchgang (`syncRaw`, `flushUpload`, `storageInfo` aus `web/drive.js`
-//! ohne Timer, Locks und UI): Ziehen (Snapshot + unbekannte Deltas in EINEM Import) → Blobs
+//! ohne Timer, Locks und UI): Ziehen (Snapshot + unbekannte Deltas, portionsweise importiert) → Blobs
 //! abgleichen → eigenes Delta hochladen → ggf. verdichten → späte Deltas nachlesen.
 //!
 //! Netz über [`HttpClient`], Zugriffstoken über [`TokenSource`], lokale Daten über
@@ -24,10 +24,11 @@ use crate::api::{self, Change, Outcome, Upload};
 use crate::clock::{Clock, ClockSkew, retry_delay_ms};
 use crate::format::{
     BLOB_PREFIX, DriveFile, Encoding, FileKind, SNAPSHOT_NAME, SNAPSHOT_NAMES, blob_hash, blob_name, blob_payload,
-    delta_name, delta_payload, delta_properties, import_payload, parse_blob_payload, payload_blobs, payload_events,
+    delta_name, delta_payload, delta_properties, import_payload, parse_blob_payload,
 };
 use crate::state::{DriveState, FileIndex, UploadHash};
 use crate::store::DriveStore;
+use crate::stream::{BATCH_BYTES, EventReader};
 
 /// Ab so vielen Deltas wird zu einem Snapshot verdichtet.
 pub const COMPACT_AFTER_DELTAS: usize = 50;
@@ -69,7 +70,10 @@ impl Default for DriveOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     Start,
-    Pull { snapshot: bool, deltas: usize },
+    Pull {
+        snapshot: bool,
+        deltas: usize,
+    },
     UploadBlobs(usize),
     Scrub,
     UploadDelta,
@@ -77,9 +81,15 @@ pub enum Phase {
     LateDeltas(usize),
     /// Fortschritt innerhalb einer Etappe (nur Anzeige, nicht in den Golden-Abläufen der PWA):
     /// Remote-Dateien geladen, Import läuft, fehlende Dateien (Blobs) geladen.
-    Fetch { done: usize, total: usize },
+    Fetch {
+        done: usize,
+        total: usize,
+    },
     Import,
-    FetchBlobs { done: usize, total: usize },
+    FetchBlobs {
+        done: usize,
+        total: usize,
+    },
 }
 
 impl Phase {
@@ -124,8 +134,6 @@ pub struct SyncReport {
     pub uploaded: usize,
     pub conflicts: Vec<Value>,
     pub merged: Vec<Value>,
-    /// Für den Live-Replay der Plattform.
-    pub imported_events: Vec<Value>,
     pub blobs_downloaded: usize,
     pub blobs_uploaded: usize,
     /// Blob-Dateien ohne ID oder mit kaputtem Inhalt (übergangen).
@@ -253,13 +261,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         let late = unseen_deltas(&files_after, &st);
         if !late.is_empty() {
             on_phase(Phase::LateDeltas(late.len()));
-            let mut events = Vec::new();
-            for mut payload in self.download_all(&late.iter().collect::<Vec<_>>()).await? {
-                events.extend(payload_events(&mut payload));
-            }
-            if !events.is_empty() {
-                self.import(events, Map::new(), unsynced, &mut report).await?;
-            }
+            self.import_files(&late.iter().collect::<Vec<_>>(), unsynced, &mut report, &mut |_| {}).await?;
             late.iter().for_each(|f| st.add_known_delta(&f.id));
             self.store.save_state(&st).await?;
         }
@@ -322,8 +324,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     // ---- Schritte ------------------------------------------------------------------
 
-    /// [G4] Snapshot + alle unbekannten Deltas in EINEM Import: Ein zweiter Import sähe die eben
-    /// übernommenen Events als eigene ungesyncte Änderungen und meldete Geister-Konflikte.
+    /// Snapshot + alle unbekannten Deltas. Portionsweise Importe erzeugen keine Geister-Konflikte:
+    /// übernommene Events tragen `_remote` und zählen nie als eigene ungesyncte Änderungen.
     async fn pull(
         &mut self,
         st: &mut DriveState,
@@ -343,23 +345,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
         let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(&deltas).collect();
-        // Jede Datei sofort auspacken: Die JSON-Bäume aller Dateien zugleich sprengten auf
-        // Android den Speicher (SIGABRT bei ~400 MB Backup).
-        let (mut events, mut blobs) = (Vec::new(), Map::new());
-        for (i, chunk) in wanted.chunks(PARALLEL_DOWNLOADS).enumerate() {
-            on_phase(Phase::Fetch { done: i * PARALLEL_DOWNLOADS, total: wanted.len() });
-            for (j, mut payload) in self.download_all(chunk).await?.into_iter().enumerate() {
-                events.extend(payload_events(&mut payload));
-                // v1-Snapshots tragen ihre Blobs im selben Dokument.
-                if need_snapshot && i == 0 && j == 0 {
-                    blobs = payload_blobs(&mut payload);
-                }
-            }
-        }
-        if !events.is_empty() || !blobs.is_empty() {
-            on_phase(Phase::Import);
-            self.import(events, blobs, uploaded_seq, report).await?;
-        }
+        self.import_files(&wanted, uploaded_seq, report, on_phase).await?;
         // „Gelesen“ erst nach erfolgreichem Import: sonst würde ein Paket still übersprungen.
         if need_snapshot {
             st.snapshot_stamp = stamp;
@@ -589,7 +575,52 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         report.imported += out.added;
         report.conflicts.extend(out.conflicts);
         report.merged.extend(out.merged);
-        report.imported_events.extend(out.imported);
+        Ok(())
+    }
+
+    /// Lädt `files` ([`PARALLEL_DOWNLOADS`] gleichzeitig) und importiert ihre Events gesammelt –
+    /// große Dateien in Portionen von etwa [`BATCH_BYTES`]. Im Speicher liegen nur die gepackten
+    /// Dateien eines Durchgangs und eine Portion Events.
+    async fn import_files(
+        &mut self,
+        files: &[&DriveFile],
+        unsynced_after_seq: u64,
+        report: &mut SyncReport,
+        on_phase: &mut dyn FnMut(Phase),
+    ) -> Result<(), DriveError> {
+        let (mut events, mut blobs, mut size) = (Vec::new(), Map::new(), 0);
+        for (i, chunk) in files.chunks(PARALLEL_DOWNLOADS).enumerate() {
+            on_phase(Phase::Fetch { done: i * PARALLEL_DOWNLOADS, total: files.len() });
+            let bodies = join_all(chunk.iter().map(|f| self.call(|t| api::download(t, &f.id)))).await;
+            for (file, body) in chunk.iter().zip(bodies) {
+                let body = body?.body;
+                let mut reader = EventReader::new(&body, file.encoding());
+                loop {
+                    let batch = reader.next_batch(BATCH_BYTES - size)?;
+                    size += batch.bytes;
+                    events.extend(batch.events);
+                    blobs.extend(batch.blobs);
+                    if size >= BATCH_BYTES {
+                        on_phase(Phase::Import);
+                        self.import(
+                            std::mem::take(&mut events),
+                            std::mem::take(&mut blobs),
+                            unsynced_after_seq,
+                            report,
+                        )
+                        .await?;
+                        size = 0;
+                    }
+                    if batch.last {
+                        break;
+                    }
+                }
+            }
+        }
+        if !events.is_empty() || !blobs.is_empty() {
+            on_phase(Phase::Import);
+            self.import(events, blobs, unsynced_after_seq, report).await?;
+        }
         Ok(())
     }
 

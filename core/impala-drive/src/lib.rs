@@ -21,6 +21,7 @@ pub mod policy;
 pub mod state;
 pub mod status;
 pub mod store;
+pub mod stream;
 
 pub use client::{
     COMPACT_AFTER_DELTAS, DriveBackup, DriveOptions, Phase, StorageInfo, SyncReport, TokenSource, is_local_only,

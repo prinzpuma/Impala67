@@ -181,23 +181,6 @@ pub fn parse_blob_payload(v: &Value) -> Option<BlobPayload> {
     Some(BlobPayload { id: id.to_owned(), meta, data })
 }
 
-/// Events eines Snapshots oder Pakets (fehlt die Liste: keine).
-pub fn payload_events(v: &mut Value) -> Vec<Value> {
-    match v.get_mut("events").map(Value::take) {
-        Some(Value::Array(events)) => events,
-        _ => Vec::new(),
-    }
-}
-
-/// Blobs eines v1-Snapshots (`{schlüssel: {meta, b64}}`); neuere Dateien haben keine.
-// JS übernahm auch ein Array als „Objekt“ (Schlüssel „0“, „1“ …); hier zählen nur Objekte.
-pub fn payload_blobs(v: &mut Value) -> Map<String, Value> {
-    match v.get_mut("blobs").map(Value::take) {
-        Some(Value::Object(blobs)) => blobs,
-        _ => Map::new(),
-    }
-}
-
 /// Was der Import bekommt: alle gezogenen Events und (v1) Blobs in EINEM Durchgang.
 pub fn import_payload(events: Vec<Value>, blobs: Map<String, Value>, exported_at: &str) -> Value {
     json!({ "app": "impala67", "version": 2, "exportedAt": exported_at, "events": events, "blobs": blobs })
