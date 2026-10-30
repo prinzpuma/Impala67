@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -49,6 +50,7 @@ fun EditorScreen(
     pageId: String,
     onOpenPage: (String) -> Unit,
     modifier: Modifier = Modifier,
+    chromeActions: (@Composable () -> Unit)? = null,
 ) {
     val vm: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
     val head by vm.header.collectAsStateWithLifecycle()
@@ -74,14 +76,21 @@ fun EditorScreen(
         when {
             vm.missing -> Text("Seite nicht gefunden.", Modifier.align(Alignment.Center), color = c.text2)
             !vm.loaded -> LoadingIndicator(Modifier.align(Alignment.Center))
-            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            else -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                // Tablet: Seitenzeile wie `.page-chrome` der PWA – Pfad links, Seiten-Aktionen rechts.
+                if (chromeActions != null) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 38.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Breadcrumbs(head, vm.title, onOpenPage, Modifier.weight(1f))
+                        chromeActions()
+                    }
+                }
                 LazyColumn(
-                    Modifier.widthIn(max = 760.dp).fillMaxSize(), rememberLazyListState(),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 180.dp),
+                    Modifier.widthIn(max = 760.dp).fillMaxWidth().weight(1f), rememberLazyListState(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = if (chromeActions != null) 56.dp else 0.dp, bottom = 180.dp),
                 ) {
                     item(key = "head") {
                         Column {
-                            Breadcrumbs(head, vm.title, onOpenPage)
+                            if (chromeActions == null) Breadcrumbs(head, vm.title, onOpenPage)
                             PageTitleBlock(head, vm.title, vm::onTitle, vm::focusFirst, onOpenPage)
                         }
                     }

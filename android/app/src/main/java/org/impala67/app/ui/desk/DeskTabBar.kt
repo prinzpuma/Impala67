@@ -41,8 +41,8 @@ import org.impala67.app.ui.theme.TextSize
 
 /**
  * Tab-Leiste über dem Inhalt (`#tabbar`, `renderTabs` in render.js): ☰ (Seitenleiste ein-/ausklappen), Zurück, offene Seiten als
- * Chips (170 dp, aktiv getönt, × zum Schließen), „+“ für eine neue Seite im neuen Tab und rechtsbündig
- * Teilen/Stern/⋯ der offenen Seite ([PageActions]).
+ * Chips (170 dp, aktiv getönt, × zum Schließen), „+“ für eine neue Seite im neuen Tab. Teilen/Stern/⋯ sitzen wie in
+ * der PWA in der Seitenzeile über dem Editor ([PageActions]).
  * TODO(desk): Vor-Knopf, Chat-Tabs.
  */
 @Composable
@@ -68,10 +68,9 @@ fun DeskTabBar(store: ImpalaStore, nav: ShellNav, canGoBack: Boolean, onToggleSi
                 nav.tabs.forEach { id ->
                     TabChip(pages?.get(id)?.let { pageTitle(it) } ?: "Ohne Titel", id == activeId, { nav.open(PageRoute(id)) }, { nav.closeTab(id) })
                 }
-                // „+“ sitzt wie `#btnTabNew` direkt hinter dem letzten Tab; Seiten-Aktionen bleiben rechts.
+                // „+“ sitzt wie `#btnTabNew` direkt hinter dem letzten Tab.
                 SmallButton(R.drawable.ic_i_plus, "Neuen Tab öffnen") { nav.askNewPage(newTab = true) }
             }
-            if (activeId != null) PageActions(store, nav, activeId, favorite = pages?.get(activeId)?.favorite == true)
         }
         HorizontalDivider(color = c.edgeSoft)
     }

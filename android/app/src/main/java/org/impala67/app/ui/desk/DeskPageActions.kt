@@ -4,11 +4,18 @@ import android.content.ClipData
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,9 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.impala67.app.R
@@ -37,11 +47,14 @@ import org.impala67.app.notes.printableHtml
 import org.impala67.app.notes.writeText
 import org.impala67.app.ui.shell.ShellNav
 import org.impala67.app.ui.theme.Impala
+import org.impala67.app.ui.theme.Radius
+import org.impala67.app.ui.theme.Space
+import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 
 /**
- * Knöpfe rechts in der Tab-Leiste für die offene Seite (`topbarActionsHtml` in render.js):
+ * Knöpfe rechts in der Seitenzeile über dem Editor (`.page-chrome`, `topbarActionsHtml` in render.js):
  * Teilen (Android-Teilen mit Titel und Markdown), Favoriten-Stern und ⋯. Was es nativ noch nicht
  * gibt, meldet ein Hinweis; Menüpunkte mit gleichem Namen wie in der PWA.
  */
@@ -108,7 +121,7 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
     }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        SmallButton(R.drawable.ic_i_upload, "Teilen") { share() }
+        ShareButton { share() }
         SmallButton(R.drawable.ic_i_star, if (favorite) "Aus Favoriten entfernen" else "Zu Favoriten", active = favorite) { toggleFavorite() }
         Box {
             SmallButton(R.drawable.ic_i_dots, "Weitere Optionen") { menuOpen = true }
@@ -151,3 +164,17 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
 
 /** Dialoge der offenen Seite aus dem ⋯-Menü. */
 private enum class PageDialog { History, Icon, Cover }
+
+/** „Teilen“ mit Beschriftung wie `.page-share` der PWA. */
+@Composable
+private fun ShareButton(onClick: () -> Unit) {
+    val c = Impala.colors
+    Row(
+        Modifier.height(32.dp).clip(RoundedCornerShape(Radius.sm)).clickable(onClick = onClick).padding(horizontal = Space.s2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s1_5),
+    ) {
+        Icon(painterResource(R.drawable.ic_i_upload), null, Modifier.size(15.dp), tint = c.text2)
+        Text("Teilen", color = c.text2, fontSize = TextSize.sm)
+    }
+}

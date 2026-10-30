@@ -6,13 +6,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.res.painterResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.core.Touches
 import org.impala67.app.editor.EditorScreen
 import org.impala67.app.heft.HeftScreen
+import org.impala67.app.ui.desk.PageActions
 import uniffi.impala_ffi.PageKind
 
 /** „+“ der Shell: öffnet „Neu anlegen“ (wie `newPageFlow` in der PWA). */
@@ -31,6 +35,12 @@ fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
             DisposableEffect(id) { nav.immersive = true; onDispose { nav.immersive = false } }
             HeftScreen(store, id, onBack = nav::back, onAi = if (nav.desk) ({ nav.aiPanelOpen = true }) else null)
         }
-        PageKind.NOTE -> EditorScreen(store, id, onOpenPage = { nav.open(PageRoute(it)) })
+        PageKind.NOTE -> EditorScreen(
+            store, id, onOpenPage = { nav.open(PageRoute(it)) },
+            chromeActions = if (nav.desk) ({
+                val favorite by remember(store, id) { store.query(Touches.pages) { it.page(id)?.summary?.favorite == true } }.collectAsStateWithLifecycle()
+                PageActions(store, nav, id, favorite = favorite == true)
+            }) else null,
+        )
     }
 }
