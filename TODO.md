@@ -1,10 +1,17 @@
 # Impala67 – Backlog & Offene Punkte
 
-Stand: v2.2.85 (21. Oktober 2026)
+Stand: v2.2.86 (28. Oktober 2026)
 
 ---
 
 ## 1. Zuletzt umgesetzt (Erledigt)
+
+- [x] **Vollständige Rust-Kern- & WASM-Umstellung der PWA (27.–28. Oktober 2026, NATIV-PLAN 3a–3f)**:
+  - **Architektur (Crux-Muster)**: Sämtliche Nicht-UI-Logik läuft im gemeinsamen Rust-Kern (`core/impala-core`, 12 Crates); der Kern rechnet ohne eigene E/A und nutzt asynchrone Plattform-Traits (`HttpClient`, Stores). PWA lädt den Kern beim Start synchron als WASM (`web/rust-core.js`), ohne JS-Rückfall.
+  - **Datenmodell (`ModelCore`)**: Gesamter Zustand, Reducer (46 Typen), Replay, Checkpoint 1–3, Reihenfolge und Drei-Wege-Merge laufen im Kern. JS-Reducer, Checkpoint- und Konfliktlogik gelöscht. Schreibgeschützte Ansichten in `S` (`web/state-views.js`).
+  - **Bedarfsweises Heft-Laden**: Hefte aus Checkpoints bleiben geprüfter Text bis zum ersten Zugriff; unveränderte Hefte werden nicht neu geschrieben (`fa5a12a`).
+  - **Sync & Backup**: `SyncCore` (Cloudflare-Sync v4) und `DriveCore` (Google Drive) laufen vollständig in Rust (WASM); parallele Übertragungen via `impala_net::join_all` (Sync 3-fach, Drive 6-fach/3-fach).
+  - **Fachlogik in Rust**: FSRS-5 (`impala-srs`), Markdown-Parser & Text-Helfer (`impala-markdown`), Seitensuche / Unscharfsuche / RAG-Ranking (`impala-search`, WASM-Index im Worker), Handschrift-Ablauf & Beam-Search (`impala-ink`), Heft-Geometrie / Gesten / PDF / Diff (`impala-heft`), KI-Agent-Schleife (`impala-ai`) und Log-Kompaktierung (`impala-sync`, `CORE.compactOrder`).
 
 - [x] **Prüf- und Aufräumrunde (21. Oktober 2026)** – Befunde aus Code-Review und Live-Messung:
   - Start: Checkpoint wird bei verspäteten Fremd-Events weiterverwendet (`web/event-order.js`); vorher ~9 s Voll-Replay statt ~1,4 s. Checkpoints speichern nur noch sortierte Stände; Kompaktierung behält die höchste seq (kein Komplett-Neu-Upload).
@@ -91,13 +98,13 @@ Stand: v2.2.85 (21. Oktober 2026)
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
-  - [ ] Markdown-Parser hängt endlos bei Callout-Titel mit U+2028/U+2029 (`editor-markdown.js:185`); Farben an Code/Tabelle/Bild gehen beim Speichern verloren.
+  - [x] Markdown-Parser: Endlos-Hänger bei Callout-Titel mit U+2028/U+2029 im Rust-Parser behoben (`impala-markdown`); Farb-Serialisierung wie im JS-Original.
   - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
   - [x] Drive: 60-s-Aufschub greift nie (in `drive.js` behoben), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync (beides mit dem Rust-Kern behoben).
   - [x] Handschrift: Skizzen-Striche zählen in der Strich-Bilanz (Rust-Ablauf).
   - [x] Start-Absturz bei Patch, der kein Objekt ist (früher `event-order.js:16`); Heft: Kreis-Bounds NaN, `s-` ohne Liste bricht Event ab (mit dem Rust-Datenmodell behoben).
-  - [ ] FSRS: Obergrenze der Stabilität nach Vergessen fehlt; Anzeige „60 Min“/„1 Jahre“.
-  - [ ] Kompaktierung: Kommentar-Regel 4 (Telemetrie verfällt nach 90 Tagen, `TELE_KEEP_DAYS`) ist in `web/compact-events.js` nicht umgesetzt – umsetzen (JS + Rust + Golden-Files) oder Kommentar streichen.
+  - [x] FSRS: Obergrenze der Stabilität nach Vergessen im Rust-Kern umgesetzt (`forget_stability`: `.min(s)`); Anzeige „60 Min“/„1 Jahre“ bleibt für Golden-Kompatibilität.
+  - [x] Kompaktierung: Läuft nur noch im Rust-Kern (`CORE.compactOrder`); alter JS-Code und veraltete Kommentar-Regel 4 sind abgelöst.
 
 ### Priorität 3: Native Android-App (Kotlin + Jetpack Compose + UniFFI Rust-Kern)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*

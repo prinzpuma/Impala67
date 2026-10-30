@@ -254,8 +254,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         if !late.is_empty() {
             on_phase(Phase::LateDeltas(late.len()));
             let mut events = Vec::new();
-            for payload in self.download_all(&late.iter().collect::<Vec<_>>()).await? {
-                events.extend(payload_events(&payload));
+            for mut payload in self.download_all(&late.iter().collect::<Vec<_>>()).await? {
+                events.extend(payload_events(&mut payload));
             }
             if !events.is_empty() {
                 self.import(events, Map::new(), unsynced, &mut report).await?;
@@ -343,19 +343,19 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
         let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(&deltas).collect();
-        let mut downloaded = Vec::with_capacity(wanted.len());
-        for chunk in wanted.chunks(PARALLEL_DOWNLOADS) {
-            on_phase(Phase::Fetch { done: downloaded.len(), total: wanted.len() });
-            downloaded.extend(self.download_all(chunk).await?);
+        // Jede Datei sofort auspacken: Die JSON-Bäume aller Dateien zugleich sprengten auf
+        // Android den Speicher (SIGABRT bei ~400 MB Backup).
+        let (mut events, mut blobs) = (Vec::new(), Map::new());
+        for (i, chunk) in wanted.chunks(PARALLEL_DOWNLOADS).enumerate() {
+            on_phase(Phase::Fetch { done: i * PARALLEL_DOWNLOADS, total: wanted.len() });
+            for (j, mut payload) in self.download_all(chunk).await?.into_iter().enumerate() {
+                events.extend(payload_events(&mut payload));
+                // v1-Snapshots tragen ihre Blobs im selben Dokument.
+                if need_snapshot && i == 0 && j == 0 {
+                    blobs = payload_blobs(&mut payload);
+                }
+            }
         }
-        let mut payloads = downloaded.into_iter();
-        let snap = if need_snapshot { payloads.next() } else { None };
-        let mut events = snap.as_ref().map(payload_events).unwrap_or_default();
-        for payload in payloads {
-            events.extend(payload_events(&payload));
-        }
-        // v1-Snapshots tragen ihre Blobs im selben Dokument.
-        let blobs = snap.as_ref().map(payload_blobs).unwrap_or_default();
         if !events.is_empty() || !blobs.is_empty() {
             on_phase(Phase::Import);
             self.import(events, blobs, uploaded_seq, report).await?;
