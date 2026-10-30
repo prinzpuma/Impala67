@@ -51,13 +51,18 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** Platz über der ersten Seite für die schwebende Werkzeugleiste (Tablet). */
+private val DESK_TOOLBAR_SPACE = 72.dp
+
 /**
  * Heft öffnen (heft.js, heft-viewport.js): Seiten senkrecht scrollbar, Stift schreibt, Finger scrollt
  * und zoomt (Pinch). [pageId] ist die Seiten-ID des Hefts, nicht die einer Heftseite.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier: Modifier = Modifier, onAi: (() -> Unit)? = null) {
+    // Tablet (mit [onAi]): wie die PWA ohne Kopfzeile – Werkzeuge oben mittig, Ecken-Knöpfe links/rechts oben.
+    val desk = onAi != null
     val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId) }
     val ids by vm.pageIds.collectAsStateWithLifecycle()
     val title by vm.title.collectAsStateWithLifecycle()
@@ -89,22 +94,23 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
         onError = vm::message,
     )
 
+    val pageActions = HeftPageActions(
+        add = { focus = vm.addPage(current + 1, it) },
+        setPaper = { p -> currentId?.let { vm.setPaper(it, p) } },
+        remove = { currentId?.let(vm::removePage) },
+        canRemove = pages.size > 1,
+        scan = scan,
+        overview = { showPages = true },
+    )
     Scaffold(
         modifier,
-        containerColor = Impala.colors.bg0,
+        containerColor = if (desk) Impala.colors.panel else Impala.colors.bg0,
         topBar = {
-            HeftTopBar(
+            if (!desk) HeftTopBar(
                 title = title ?: "Heft",
                 pageLabel = if (pages.isEmpty()) "" else "Seite ${current + 1} von ${pages.size}",
                 onBack = onBack,
-                actions = HeftPageActions(
-                    add = { focus = vm.addPage(current + 1, it) },
-                    setPaper = { p -> currentId?.let { vm.setPaper(it, p) } },
-                    remove = { currentId?.let(vm::removePage) },
-                    canRemove = pages.size > 1,
-                    scan = scan,
-                    overview = { showPages = true },
-                ),
+                actions = pageActions,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -167,7 +173,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                             transformOrigin = TransformOrigin((zoom.origin.x + pan) / size.width, zoom.origin.y / size.height)
                         },
                     state = lazy,
-                    contentPadding = PaddingValues(bottom = 96.dp),
+                    contentPadding = PaddingValues(top = if (desk) DESK_TOOLBAR_SPACE else 0.dp, bottom = 96.dp),
                 ) {
                     items(pages, key = { it }) { id ->
                         Box(Modifier.fillMaxWidth().padding(top = 12.dp), Alignment.TopCenter) {
@@ -184,11 +190,21 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                     if (showOptions) HeftOptions(vm, vertical = true)
                     HeftToolbar(vm, vertical = true)
                 }
+            } else if (desk) {
+                Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally) {
+                    HeftToolbar(vm, vertical = false)
+                    if (showOptions) HeftOptions(vm, vertical = false)
+                }
             } else {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally) {
                     if (showOptions) HeftOptions(vm, vertical = false)
                     HeftToolbar(vm, vertical = false)
                 }
+            }
+            if (onAi != null) {
+                val label = if (pages.isEmpty()) "" else "${current + 1}/${pages.size}"
+                HeftCornerPages(label, { showPages = true }, Modifier.align(Alignment.TopStart).padding(12.dp))
+                HeftCornerActions(pageActions, onAi, Modifier.align(Alignment.TopEnd).padding(12.dp))
             }
         }
     }

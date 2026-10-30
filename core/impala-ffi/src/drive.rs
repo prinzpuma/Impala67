@@ -218,7 +218,7 @@ impl DriveStore for NativeDriveStore {
             added: found.imported.len(),
             conflicts: found.conflicts.iter().map(|c| Value::Object(c.to_object())).collect(),
             merged: found.merged.iter().filter_map(|m| serde_json::to_value(m).ok()).collect(),
-            imported: found.imported,
+            imported: Vec::new(),
         })
     }
 

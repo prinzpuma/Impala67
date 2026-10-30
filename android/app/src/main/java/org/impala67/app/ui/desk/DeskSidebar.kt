@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -56,8 +57,8 @@ import uniffi.impala_ffi.PageSummary
 /** Inhalt der Seitenleiste wie die Pillen oben in der PWA (`renderTopbar`): Seiten, Chats oder Karten. */
 enum class SidebarMode { Files, Chats, Cards }
 
-/** Breite der linken Spalte (`--sidebar-w`). */
-val SidebarWidth = 260.dp
+/** Breite der linken Spalte (`--sidebar-w` bei kompakter Dichte, dem PWA-Standard). */
+val SidebarWidth = 236.dp
 
 /**
  * Linke Spalte der PWA (`#sidebar` in index.html): Pillen Home · Chat · Karten · Suche, darunter der
@@ -69,14 +70,15 @@ fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, ai: AiChatVi
     var mode by rememberSaveable { mutableStateOf(SidebarMode.Files) }
     val shownMode = if (mode == SidebarMode.Files && current.topLevel() == TopLevel.Study) SidebarMode.Cards else mode
     Column(
-        modifier.fillMaxHeight().background(c.sidebar).padding(horizontal = 10.dp, vertical = 14.dp),
+        modifier.fillMaxHeight().background(c.sidebar).padding(horizontal = 8.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             Pill(R.drawable.ic_i_home, "Home", shownMode == SidebarMode.Files) { mode = SidebarMode.Files; nav.go(TopLevel.Home) }
             Pill(R.drawable.ic_i_chat, "Chat", shownMode == SidebarMode.Chats) { mode = SidebarMode.Chats }
             Pill(R.drawable.ic_i_cards, "Karten", shownMode == SidebarMode.Cards) { mode = SidebarMode.Files; nav.go(TopLevel.Study) }
-            Pill(R.drawable.ic_i_search, null, false) { nav.action("search") }
+            Spacer(Modifier.weight(1f))
+            Pill(R.drawable.ic_i_search, "Suchen", false) { nav.action("search") }
         }
         Box(Modifier.weight(1f)) {
             when (shownMode) {
@@ -139,9 +141,9 @@ private fun PageTree(store: ImpalaStore, nav: ShellNav) {
     moving?.let { page -> MovePageDialog(store, page) { moving = null } }
 }
 
-/** Pille der Kopfzeile (`.topbar .tab`), aktiv mit Akzent-Tönung. */
+/** Pille der Kopfzeile (`.topbar .tab`), aktiv mit Akzent-Tönung; nur die aktive zeigt ihr Label (`.tab.active .tab-label`). */
 @Composable
-private fun Pill(icon: Int, label: String?, active: Boolean, onClick: () -> Unit) {
+private fun Pill(icon: Int, label: String, active: Boolean, onClick: () -> Unit) {
     val c = Impala.colors
     Row(
         Modifier.heightIn(min = 36.dp).clip(CircleShape)
@@ -150,8 +152,8 @@ private fun Pill(icon: Int, label: String?, active: Boolean, onClick: () -> Unit
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.s1_5),
     ) {
-        Icon(painterResource(icon), label ?: "Suchen", Modifier.size(16.dp), tint = if (active) c.text else c.text2)
-        if (label != null) Text(label, color = if (active) c.text else c.text2, fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+        Icon(painterResource(icon), label, Modifier.size(16.dp), tint = if (active) c.text else c.text2)
+        if (active) Text(label, color = if (active) c.text else c.text2, fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
     }
 }
 

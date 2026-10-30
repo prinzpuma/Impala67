@@ -40,13 +40,13 @@ import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 
 /**
- * Tab-Leiste über dem Inhalt (`#tabbar`, `renderTabs` in render.js): Zurück, offene Seiten als
- * Chips (170 dp, aktiv getönt, × zum Schließen), „+“ für eine neue Seite im neuen Tab und rechts
+ * Tab-Leiste über dem Inhalt (`#tabbar`, `renderTabs` in render.js): ☰ (Seitenleiste ein-/ausklappen), Zurück, offene Seiten als
+ * Chips (170 dp, aktiv getönt, × zum Schließen), „+“ für eine neue Seite im neuen Tab und rechtsbündig
  * Teilen/Stern/⋯ der offenen Seite ([PageActions]).
  * TODO(desk): Vor-Knopf, Chat-Tabs.
  */
 @Composable
-fun DeskTabBar(store: ImpalaStore, nav: ShellNav, canGoBack: Boolean, modifier: Modifier = Modifier) {
+fun DeskTabBar(store: ImpalaStore, nav: ShellNav, canGoBack: Boolean, onToggleSidebar: () -> Unit, modifier: Modifier = Modifier) {
     val c = Impala.colors
     val pages by remember(store) {
         store.query(Touches.pages) { core -> core.recentPages(UInt.MAX_VALUE).associateBy { it.id } }
@@ -58,20 +58,32 @@ fun DeskTabBar(store: ImpalaStore, nav: ShellNav, canGoBack: Boolean, modifier: 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            SidebarToggle(onToggleSidebar)
             SmallButton(R.drawable.ic_i_chevron_left, "Zurück", enabled = canGoBack, onClick = nav::back)
             Row(
-                Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 nav.tabs.forEach { id ->
                     TabChip(pages?.get(id)?.let { pageTitle(it) } ?: "Ohne Titel", id == activeId, { nav.open(PageRoute(id)) }, { nav.closeTab(id) })
                 }
+                // „+“ sitzt wie `#btnTabNew` direkt hinter dem letzten Tab; Seiten-Aktionen bleiben rechts.
+                SmallButton(R.drawable.ic_i_plus, "Neuen Tab öffnen") { nav.askNewPage(newTab = true) }
             }
-            SmallButton(R.drawable.ic_i_plus, "Neuen Tab öffnen") { nav.askNewPage(newTab = true) }
             if (activeId != null) PageActions(store, nav, activeId, favorite = pages?.get(activeId)?.favorite == true)
         }
         HorizontalDivider(color = c.edgeSoft)
     }
+}
+
+/** ☰ wie `#btnSidebarToggle` der PWA (das Icon-Set hat kein Menü-Symbol). */
+@Composable
+private fun SidebarToggle(onClick: () -> Unit) {
+    Box(
+        Modifier.size(32.dp).clip(RoundedCornerShape(Radius.sm)).clickable(onClickLabel = "Linke Spalte ein-/ausklappen", onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text("☰", color = Impala.colors.text2, fontSize = TextSize.base) }
 }
 
 @Composable

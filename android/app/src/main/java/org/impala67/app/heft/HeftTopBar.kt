@@ -95,13 +95,17 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
             }
         },
     )
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Seite löschen?") },
-            text = { Text("Die Seite mit allem, was darauf steht, wird entfernt. Rückgängig geht in dieser Sitzung.") },
-            confirmButton = { TextButton({ confirm = false; actions.remove() }) { Text("Löschen", color = Impala.colors.danger) } },
-            dismissButton = { TextButton({ confirm = false }) { Text("Abbrechen") } },
-        )
-    }
+    if (confirm) DeletePageDialog(onDismiss = { confirm = false }, onConfirm = { confirm = false; actions.remove() })
+}
+
+/** Rückfrage vor „Seite löschen“ (Kopfzeile und Tablet-„+“). */
+@Composable
+fun DeletePageDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Seite löschen?") },
+        text = { Text("Die Seite mit allem, was darauf steht, wird entfernt. Rückgängig geht in dieser Sitzung.") },
+        confirmButton = { TextButton(onConfirm) { Text("Löschen", color = Impala.colors.danger) } },
+        dismissButton = { TextButton(onDismiss) { Text("Abbrechen") } },
+    )
 }

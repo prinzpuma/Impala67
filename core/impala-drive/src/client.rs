@@ -383,23 +383,22 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
                 None => !blob_file_hash(file).is_some_and(|h| cached_hashes.contains(&h)),
             })
             .collect();
-        // Häppchenweise: Blobs können groß sein, im Speicher liegen höchstens PARALLEL_DOWNLOADS.
-        for (i, chunk) in missing.chunks(PARALLEL_DOWNLOADS).enumerate() {
-            on_phase(Phase::FetchBlobs { done: i * PARALLEL_DOWNLOADS, total: missing.len() });
-            for payload in self.download_all(chunk).await? {
-                let Some(blob) = parse_blob_payload(&payload) else {
-                    report.skipped_blob_files += 1;
-                    continue;
-                };
-                // Erneut prüfen: zwei Dateien (Alt-Dateien ohne `blobId`) können denselben Blob tragen.
-                if !wanted(&blob.id, &local) {
-                    continue;
-                }
-                self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data }).await?;
-                local.insert(blob.id.clone());
-                local_order.push(blob.id);
-                report.blobs_downloaded += 1;
+        // Blobs können groß sein: nacheinander laden und sofort speichern, damit nie mehrere im Speicher liegen.
+        for (i, file) in missing.iter().enumerate() {
+            on_phase(Phase::FetchBlobs { done: i, total: missing.len() });
+            let payload = self.download(file).await?;
+            let Some(blob) = parse_blob_payload(&payload) else {
+                report.skipped_blob_files += 1;
+                continue;
+            };
+            // Erneut prüfen: zwei Dateien (Alt-Dateien ohne `blobId`) können denselben Blob tragen.
+            if !wanted(&blob.id, &local) {
+                continue;
             }
+            self.store.put_blob(&blob.id, LocalBlob { meta: blob.meta, data: blob.data }).await?;
+            local.insert(blob.id.clone());
+            local_order.push(blob.id);
+            report.blobs_downloaded += 1;
         }
 
         let mut uploads = Vec::new();
@@ -578,9 +577,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         Ok(())
     }
 
-    /// Lädt `files` ([`PARALLEL_DOWNLOADS`] gleichzeitig) und importiert ihre Events gesammelt –
-    /// große Dateien in Portionen von etwa [`BATCH_BYTES`]. Im Speicher liegen nur die gepackten
-    /// Dateien eines Durchgangs und eine Portion Events.
+    /// Lädt `files` nacheinander und importiert ihre Events gesammelt – große Dateien in Portionen
+    /// von etwa [`BATCH_BYTES`]. Im Speicher liegen nur die gepackten Bytes EINER Datei und eine Portion Events.
     async fn import_files(
         &mut self,
         files: &[&DriveFile],
@@ -589,31 +587,28 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         on_phase: &mut dyn FnMut(Phase),
     ) -> Result<(), DriveError> {
         let (mut events, mut blobs, mut size) = (Vec::new(), Map::new(), 0);
-        for (i, chunk) in files.chunks(PARALLEL_DOWNLOADS).enumerate() {
-            on_phase(Phase::Fetch { done: i * PARALLEL_DOWNLOADS, total: files.len() });
-            let bodies = join_all(chunk.iter().map(|f| self.call(|t| api::download(t, &f.id)))).await;
-            for (file, body) in chunk.iter().zip(bodies) {
-                let body = body?.body;
-                let mut reader = EventReader::new(&body, file.encoding());
-                loop {
-                    let batch = reader.next_batch(BATCH_BYTES - size)?;
-                    size += batch.bytes;
-                    events.extend(batch.events);
-                    blobs.extend(batch.blobs);
-                    if size >= BATCH_BYTES {
-                        on_phase(Phase::Import);
-                        self.import(
-                            std::mem::take(&mut events),
-                            std::mem::take(&mut blobs),
-                            unsynced_after_seq,
-                            report,
-                        )
-                        .await?;
-                        size = 0;
-                    }
-                    if batch.last {
-                        break;
-                    }
+        for (i, file) in files.iter().enumerate() {
+            on_phase(Phase::Fetch { done: i, total: files.len() });
+            let body = self.call(|t| api::download(t, &file.id)).await?.body;
+            let mut reader = EventReader::new(&body, file.encoding());
+            loop {
+                let batch = reader.next_batch(BATCH_BYTES.saturating_sub(size).max(1))?;
+                size += batch.bytes;
+                events.extend(batch.events);
+                blobs.extend(batch.blobs);
+                if size >= BATCH_BYTES {
+                    on_phase(Phase::Import);
+                    self.import(
+                        std::mem::take(&mut events),
+                        std::mem::take(&mut blobs),
+                        unsynced_after_seq,
+                        report,
+                    )
+                    .await?;
+                    size = 0;
+                }
+                if batch.last {
+                    break;
                 }
             }
         }
@@ -692,17 +687,6 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         Ok(decode_json(&res.body, file.encoding())?)
     }
 
-    /// Lädt `files` mit höchstens [`PARALLEL_DOWNLOADS`] gleichzeitigen Anfragen; Ergebnisse in
-    /// Eingabereihenfolge.
-    async fn download_all(&self, files: &[&DriveFile]) -> Result<Vec<Value>, DriveError> {
-        let mut out = Vec::with_capacity(files.len());
-        for chunk in files.chunks(PARALLEL_DOWNLOADS) {
-            for payload in join_all(chunk.iter().map(|f| self.download(f))).await {
-                out.push(payload?);
-            }
-        }
-        Ok(out)
-    }
 
     /// Hochladen und den Index sofort aktuell halten.
     async fn upload(&mut self, st: &mut DriveState, up: &Upload<'_>) -> Result<DriveFile, DriveError> {

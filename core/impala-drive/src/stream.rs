@@ -17,7 +17,7 @@ use crate::DriveError;
 use crate::format::Encoding;
 
 /// Ungefähre JSON-Menge je Portion (als `Value` etwa das Fünffache).
-pub const BATCH_BYTES: u64 = 24 << 20;
+pub const BATCH_BYTES: u64 = 2 << 20;
 
 pub struct Batch {
     pub events: Vec<Value>,

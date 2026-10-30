@@ -20,11 +20,14 @@ class ShellNav(
     private val store: ImpalaStore,
     private val snackbar: SnackbarHostState,
 ) {
-    /** Vollbild ohne Leisten der Shell (Heft bringt eigene Kopfzeile und Werkzeuge mit). */
+    /** Heft offen: Telefon-Shell ohne Leisten (Heft bringt eigene Kopfzeile mit); [desk] behält Leisten, blendet nur den KI-Knopf aus. */
     var immersive by mutableStateOf(false)
 
     /** Tablet-Layout wie die PWA am Desktop/iPad: Seitenleiste, Tab-Leiste, KI-Panel (`ui/desk/`). */
     var desk by mutableStateOf(false)
+
+    /** KI-Panel rechts offen (nur [desk]; in der PWA `body:not(.panel-collapsed)`), startet zu. */
+    var aiPanelOpen by mutableStateOf(false)
 
     /** Offene Seiten-Tabs (nur [desk]; in der PWA `S.tabs`). */
     val tabs = mutableStateListOf<String>()
@@ -64,7 +67,15 @@ class ShellNav(
     /** Aktive Seite (für Tab-Leiste und Seitenleiste). */
     val currentPageId: String? get() = (backStack.lastOrNull() as? PageRoute)?.id
 
-    fun back() { backStack.removeLastOrNull() }
+    /** Zurück; landet man auf einer Seite ohne Tab, übernimmt sie den Tab der verlassenen Seite. */
+    fun back() {
+        val leaving = currentPageId
+        backStack.removeLastOrNull()
+        val now = currentPageId ?: return
+        if (!desk || now in tabs) return
+        val i = leaving?.let(tabs::indexOf) ?: -1
+        if (i >= 0) tabs[i] = now else tabs.add(now)
+    }
 
     /** Hauptbereich wechseln: Start bleibt unten liegen, damit „Zurück“ dorthin führt. */
     fun go(top: TopLevel) {

@@ -31,8 +31,8 @@ import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 
-/** Breite des KI-Panels rechts (`#app`-Raster: 340 px). */
-val AiPanelWidth = 340.dp
+/** Breite des KI-Panels rechts (`#app`-Raster bei kompakter Dichte: 320 px). */
+val AiPanelWidth = 320.dp
 
 /**
  * Rechte Spalte „KI-Coach“ (`#panel` in index.html): Kopf mit Neuer Chat und Einklappen, darunter der
