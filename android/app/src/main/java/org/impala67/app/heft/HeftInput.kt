@@ -6,13 +6,22 @@ import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
+import uniffi.impala_ffi.HeftLassoTouch
+import uniffi.impala_ffi.heftLassoTouchAction
 
-/** Ereignisse einer Seite an ihren Besitzer (Zeichnen, Radieren; Koordinaten in Seiteneinheiten). */
+/** Ereignisse einer Seite an ihren Besitzer (Zeichnen, Radieren, Lasso; Koordinaten in Seiteneinheiten). */
 interface PageInputSink {
     fun strokeFinished(tool: String, color: String, size: Double, points: List<Float>)
     fun eraseMove(x: Float, y: Float)
     fun eraseEnd()
+    val lasso: LassoGesture
+    /** Fingertipp neben die Auswahl: Lasso beenden. */
+    fun lassoDismiss()
 }
+
+/** Handballen-Schutz (heft-input.js `PEN_GRACE_MS`): kurz nach dem Stift zählt ein Finger nicht. */
+private const val PEN_GRACE_MS = 400L
+private var lastPenUpAt = 0L
 
 /**
  * Stifteingabe einer Seite (in der PWA `heft-input.js`). Der Stift schreibt über `InProgressStrokesView`
@@ -31,7 +40,11 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     private val identity = Matrix()
     private var current: InProgressStrokeId? = null
     private var pointerId = -1
-    private var erasing = false
+    private var mode = Mode.INK
+
+    private enum class Mode { INK, ERASE, LASSO }
+
+    private fun penRecently() = android.os.SystemClock.uptimeMillis() - lastPenUpAt < PEN_GRACE_MS
 
     init {
         view.eagerInit()
@@ -58,29 +71,64 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (pointerId != -1) return true
                 val i = ev.actionIndex
-                if (!accepts(ev.getToolType(i))) return false
+                val type = ev.getToolType(i)
+                val finger = type == MotionEvent.TOOL_TYPE_FINGER
+                val lasso = tools.tool == HeftTool.LASSO && type != MotionEvent.TOOL_TYPE_ERASER
+                if (lasso) {
+                    // Finger im Lasso-Modus (lassoTouchAction): auf der Auswahl greifen, daneben beenden.
+                    val x = ev.getX(i) / k
+                    val y = ev.getY(i) / k
+                    when (heftLassoTouchAction(finger, true, sink.lasso.onSelection(x, y))) {
+                        HeftLassoTouch.DISMISS -> { if (!penRecently()) sink.lassoDismiss(); return false }
+                        HeftLassoTouch.INTERACT, HeftLassoTouch.NONE -> Unit
+                    }
+                } else if (!accepts(type)) {
+                    return false
+                }
                 pointerId = ev.getPointerId(i)
                 view.parent?.requestDisallowInterceptTouchEvent(true)
-                erasing = tools.tool == HeftTool.ERASER || ev.getToolType(i) == MotionEvent.TOOL_TYPE_ERASER
-                if (erasing) erase(ev, i, history = false) else begin(ev)
+                mode = when {
+                    lasso -> Mode.LASSO
+                    tools.tool == HeftTool.ERASER || type == MotionEvent.TOOL_TYPE_ERASER -> Mode.ERASE
+                    else -> Mode.INK
+                }
+                when (mode) {
+                    Mode.ERASE -> erase(ev, i, history = false)
+                    Mode.LASSO -> sink.lasso.down(ev.getX(i) / k, ev.getY(i) / k, finger)
+                    Mode.INK -> begin(ev)
+                }
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 val i = ev.findPointerIndex(pointerId)
                 if (i < 0) return pointerId != -1
-                if (erasing) erase(ev, i, history = true) else current?.let { view.addToStroke(ev, pointerId, it) }
+                when (mode) {
+                    Mode.ERASE -> erase(ev, i, history = true)
+                    Mode.LASSO -> sink.lasso.move(ev.getX(i) / k, ev.getY(i) / k)
+                    Mode.INK -> current?.let { view.addToStroke(ev, pointerId, it) }
+                }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 if (ev.getPointerId(ev.actionIndex) != pointerId) return pointerId != -1
-                if (erasing) sink.eraseEnd() else current?.let { view.finishStroke(ev, pointerId, it) }
+                when (mode) {
+                    Mode.ERASE -> sink.eraseEnd()
+                    Mode.LASSO -> sink.lasso.up()
+                    Mode.INK -> current?.let { view.finishStroke(ev, pointerId, it) }
+                }
+                if (ev.getToolType(ev.actionIndex) != MotionEvent.TOOL_TYPE_FINGER) lastPenUpAt = android.os.SystemClock.uptimeMillis()
                 reset()
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
-                if (erasing) sink.eraseEnd() else current?.let { view.cancelStroke(it, ev) }
+                if (pointerId == -1) return false
+                when (mode) {
+                    Mode.ERASE -> sink.eraseEnd()
+                    Mode.LASSO -> sink.lasso.cancel()
+                    Mode.INK -> current?.let { view.cancelStroke(it, ev) }
+                }
                 reset()
-                return pointerId != -1
+                return true
             }
         }
         return pointerId != -1
@@ -105,6 +153,6 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     private fun reset() {
         current = null
         pointerId = -1
-        erasing = false
+        mode = Mode.INK
     }
 }

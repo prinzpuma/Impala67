@@ -33,7 +33,7 @@ import org.impala67.app.ui.theme.Impala
 
 /**
  * Werkzeugleiste (heft-toolbar-ui.js): Expressive Floating Toolbar mit drei Stiften, Marker,
- * Radierer und Rückgängig/Wiederholen. Waagerecht unten auf breiten Bildschirmen, sonst senkrecht
+ * Radierer, Lasso und Rückgängig/Wiederholen. Waagerecht unten auf breiten Bildschirmen, sonst senkrecht
  * am Rand. Ein zweiter Tipp auf das aktive Werkzeug öffnet die Optionen ([HeftOptions]).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -57,6 +57,9 @@ fun HeftToolbar(vm: HeftViewModel, vertical: Boolean, modifier: Modifier = Modif
         }
         ToolToggle(t.tool == HeftTool.ERASER, "Radierer", { vm.selectTool(HeftTool.ERASER) }) {
             Icon(painterResource(R.drawable.ic_i_eraser), null, Modifier.size(22.dp))
+        }
+        ToolToggle(t.tool == HeftTool.LASSO, "Lasso — Striche auswählen", { vm.selectTool(HeftTool.LASSO) }) {
+            Icon(painterResource(R.drawable.ic_i_lasso), null, Modifier.size(22.dp))
         }
         ToolButton(R.drawable.ic_i_undo, "Rückgängig", vm.canUndo, vm::undo)
         ToolButton(R.drawable.ic_i_redo, "Wiederholen", vm.canRedo, vm::redo)

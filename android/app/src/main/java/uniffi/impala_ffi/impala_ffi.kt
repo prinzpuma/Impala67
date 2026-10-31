@@ -1406,6 +1406,18 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1462,6 +1474,18 @@ fun uniffi_impala_ffi_checksum_func_heft_export_file_name(
 fun uniffi_impala_ffi_checksum_func_heft_export_size(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_fit_shape(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_lasso_handles(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_lasso_resize_factor(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_lasso_touch_action(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_new_id(
 ): Short
@@ -2419,6 +2443,18 @@ fun uniffi_impala_ffi_fn_func_heft_export_size(`width`: RustBuffer.ByValue,uniff
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_fit_shape(`points`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_heft_hit_lasso_handle(`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,`hitRadius`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_heft_is_lasso_body_hit(`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,`tolerance`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_impala_ffi_fn_func_heft_lasso_handles(`bounds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_heft_lasso_resize_factor(`anchorX`: Double,`anchorY`: Double,`startX`: Double,`startY`: Double,`startDist`: Double,`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Double
+fun uniffi_impala_ffi_fn_func_heft_lasso_resize_start_dist(`anchorX`: Double,`anchorY`: Double,`startX`: Double,`startY`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): Double
+fun uniffi_impala_ffi_fn_func_heft_lasso_touch_action(`isTouch`: Byte,`lassoTool`: Byte,`onLasso`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_new_id(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_shape_outline(`shape`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2630,6 +2666,24 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_fit_shape() != 48585.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle() != 3312.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit() != 37787.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_handles() != 29308.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_resize_factor() != 62162.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist() != 25306.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_touch_action() != 36480.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_new_id() != 27318.toShort()) {
@@ -12661,6 +12715,56 @@ public object FfiConverterTypeHeftImageData: FfiConverterRustBuffer<HeftImageDat
 
 
 
+/**
+ * Eckgriff des Auswahlrahmens mit gegenüberliegendem Anker (Fixpunkt beim Skalieren).
+ */
+data class HeftLassoHandle (
+    /**
+     * `tl`, `tr`, `bl` oder `br`.
+     */
+    var `corner`: kotlin.String, 
+    var `x`: kotlin.Double, 
+    var `y`: kotlin.Double, 
+    var `anchorX`: kotlin.Double, 
+    var `anchorY`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftLassoHandle: FfiConverterRustBuffer<HeftLassoHandle> {
+    override fun read(buf: ByteBuffer): HeftLassoHandle {
+        return HeftLassoHandle(
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftLassoHandle) = (
+            FfiConverterString.allocationSize(value.`corner`) +
+            FfiConverterDouble.allocationSize(value.`x`) +
+            FfiConverterDouble.allocationSize(value.`y`) +
+            FfiConverterDouble.allocationSize(value.`anchorX`) +
+            FfiConverterDouble.allocationSize(value.`anchorY`)
+    )
+
+    override fun write(value: HeftLassoHandle, buf: ByteBuffer) {
+            FfiConverterString.write(value.`corner`, buf)
+            FfiConverterDouble.write(value.`x`, buf)
+            FfiConverterDouble.write(value.`y`, buf)
+            FfiConverterDouble.write(value.`anchorX`, buf)
+            FfiConverterDouble.write(value.`anchorY`, buf)
+    }
+}
+
+
+
 data class HeftPageData (
     var `id`: kotlin.String, 
     /**
@@ -15489,6 +15593,49 @@ public object FfiConverterTypeHeftChange : FfiConverterRustBuffer<HeftChange>{
 
 
 /**
+ * Was ein Fingertipp im Lasso-Modus bewirkt.
+ */
+
+enum class HeftLassoTouch {
+    
+    /**
+     * Auf der Auswahl: verschieben/skalieren, auch wenn nur der Stift zeichnet.
+     */
+    INTERACT,
+    /**
+     * Daneben: Auswahl und Lasso beenden, zurück zum Stift.
+     */
+    DISMISS,
+    /**
+     * Kein Finger oder kein Lasso: normale Behandlung.
+     */
+    NONE;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftLassoTouch: FfiConverterRustBuffer<HeftLassoTouch> {
+    override fun read(buf: ByteBuffer) = try {
+        HeftLassoTouch.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: HeftLassoTouch) = 4UL
+
+    override fun write(value: HeftLassoTouch, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Geometrie einer Form (Seitenkoordinaten), wie sie im Strich gespeichert wird.
  */
 sealed class HeftShape {
@@ -17235,6 +17382,38 @@ public object FfiConverterOptionalTypeHeftImageData: FfiConverterRustBuffer<Heft
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeHeftLassoHandle: FfiConverterRustBuffer<HeftLassoHandle?> {
+    override fun read(buf: ByteBuffer): HeftLassoHandle? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeHeftLassoHandle.read(buf)
+    }
+
+    override fun allocationSize(value: HeftLassoHandle?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeHeftLassoHandle.allocationSize(value)
+        }
+    }
+
+    override fun write(value: HeftLassoHandle?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeHeftLassoHandle.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeHeftRect: FfiConverterRustBuffer<HeftRect?> {
     override fun read(buf: ByteBuffer): HeftRect? {
         if (buf.get().toInt() == 0) {
@@ -17937,6 +18116,34 @@ public object FfiConverterSequenceTypeHeftImage: FfiConverterRustBuffer<List<Hef
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeHeftImage.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeHeftLassoHandle: FfiConverterRustBuffer<List<HeftLassoHandle>> {
+    override fun read(buf: ByteBuffer): List<HeftLassoHandle> {
+        val len = buf.getInt()
+        return List<HeftLassoHandle>(len) {
+            FfiConverterTypeHeftLassoHandle.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HeftLassoHandle>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHeftLassoHandle.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HeftLassoHandle>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHeftLassoHandle.write(it, buf)
         }
     }
 }
@@ -18728,6 +18935,78 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_fit_shape(
         FfiConverterSequenceFloat.lower(`points`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Getroffener Eckgriff oder `None` (`hitLassoHandle`; Finger 22, Stift 18 Einheiten).
+         */ fun `heftHitLassoHandle`(`x`: kotlin.Double, `y`: kotlin.Double, `bounds`: HeftRect, `hitRadius`: kotlin.Double): HeftLassoHandle? {
+            return FfiConverterOptionalTypeHeftLassoHandle.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_hit_lasso_handle(
+        FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterTypeHeftRect.lower(`bounds`),FfiConverterDouble.lower(`hitRadius`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Liegt der Punkt im um `tolerance` erweiterten Auswahlrahmen (`isLassoBodyHit`)?
+         */ fun `heftIsLassoBodyHit`(`x`: kotlin.Double, `y`: kotlin.Double, `bounds`: HeftRect, `tolerance`: kotlin.Double): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_is_lasso_body_hit(
+        FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterTypeHeftRect.lower(`bounds`),FfiConverterDouble.lower(`tolerance`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Die vier Eckgriffe (tl, tr, bl, br) zum Zeichnen.
+         */ fun `heftLassoHandles`(`bounds`: HeftRect): List<HeftLassoHandle> {
+            return FfiConverterSequenceTypeHeftLassoHandle.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_handles(
+        FfiConverterTypeHeftRect.lower(`bounds`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Skalierfaktor beim Ziehen am Griff: 0,15…6 und so, dass die Auswahl auf der Seite bleibt.
+         */ fun `heftLassoResizeFactor`(`anchorX`: kotlin.Double, `anchorY`: kotlin.Double, `startX`: kotlin.Double, `startY`: kotlin.Double, `startDist`: kotlin.Double, `x`: kotlin.Double, `y`: kotlin.Double, `bounds`: HeftRect): kotlin.Double {
+            return FfiConverterDouble.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_resize_factor(
+        FfiConverterDouble.lower(`anchorX`),FfiConverterDouble.lower(`anchorY`),FfiConverterDouble.lower(`startX`),FfiConverterDouble.lower(`startY`),FfiConverterDouble.lower(`startDist`),FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterTypeHeftRect.lower(`bounds`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Startabstand beim Griff (`max(12, Abstand Anker–Start)`).
+         */ fun `heftLassoResizeStartDist`(`anchorX`: kotlin.Double, `anchorY`: kotlin.Double, `startX`: kotlin.Double, `startY`: kotlin.Double): kotlin.Double {
+            return FfiConverterDouble.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_resize_start_dist(
+        FfiConverterDouble.lower(`anchorX`),FfiConverterDouble.lower(`anchorY`),FfiConverterDouble.lower(`startX`),FfiConverterDouble.lower(`startY`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Fingertipp im Lasso-Modus (`lassoTouchAction`).
+         */ fun `heftLassoTouchAction`(`isTouch`: kotlin.Boolean, `lassoTool`: kotlin.Boolean, `onLasso`: kotlin.Boolean): HeftLassoTouch {
+            return FfiConverterTypeHeftLassoTouch.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_touch_action(
+        FfiConverterBoolean.lower(`isTouch`),FfiConverterBoolean.lower(`lassoTool`),FfiConverterBoolean.lower(`onLasso`),_status)
 }
     )
     }

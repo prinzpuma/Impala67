@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
@@ -52,9 +53,16 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         erased = erased.filterTo(HashSet()) { it in ids }
         cache.retain(ids + pending.map { it.id })
     }
-    val strokes = remember(saved, pending.size, erased) {
-        (saved.filter { it.id !in erased } + pending).mapNotNull(cache::get)
+    val visible = remember(saved, pending.size, erased) { saved.filter { it.id !in erased } + pending }
+    // Lasso-Vorschau: Striche, die noch an der alten Stelle liegen, zeichnet die Seite verschoben.
+    val sel = vm.lasso?.takeIf { it.heftPageId == heftPageId }
+    val drag = sel?.drag
+    val moving = remember(visible, drag?.marks) {
+        drag?.marks?.let { marks -> visible.filter { marks[it.id] == it.mark() }.mapTo(HashSet()) { it.id } }.orEmpty()
     }
+    val strokes = remember(visible, moving) { visible.filter { it.id !in moving }.mapNotNull(cache::get) }
+    val moved = remember(visible, moving) { visible.filter { it.id in moving }.mapNotNull(cache::get) }
+    val gesture = remember { LassoGesture(vm, heftPageId) }
 
     val tracker = remember {
         EraseTracker(
@@ -76,6 +84,15 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         Canvas(Modifier.fillMaxSize()) {
             drawPaper(paper, ink, k)
             drawInkStrokes(strokes, k)
+            if (drag != null && moved.isNotEmpty()) {
+                withTransform({
+                    scale(k, k, Offset.Zero)
+                    translate(drag.dx, drag.dy)
+                    scale(drag.factor, drag.factor, Offset(drag.ax, drag.ay))
+                }) { drawInkStrokes(moved, 1f) }
+            }
+            drawLassoPath(gesture.path, k)
+            sel?.let { drawLassoSelection(it.shown, k) }
             ring?.let { drawCircle(ink, eraserPx, it * k, style = DrawStroke(1.5.dp.toPx())) }
         }
 
@@ -88,6 +105,8 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                 }
                 override fun eraseMove(x: Float, y: Float) { ring = Offset(x, y); tracker.move(x, y) }
                 override fun eraseEnd() = tracker.end()
+                override val lasso = gesture
+                override fun lassoDismiss() = vm.dismissLasso()
             }
         }
         val context = LocalContext.current

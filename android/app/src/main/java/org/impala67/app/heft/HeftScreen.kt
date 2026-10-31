@@ -214,6 +214,11 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                     HeftToolbar(vm, vertical = false)
                 }
             }
+            if (vm.lasso != null) {
+                // Über der Werkzeugleiste, wenn sie unten liegt (PWA: bottom 74px).
+                val bottom = if (!vertical && !desk) 96.dp else 24.dp
+                HeftLassoBar(vm, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom))
+            }
             if (onAi != null) {
                 val label = if (pages.isEmpty()) "" else "${current + 1}/${pages.size}"
                 HeftCornerPages(label, { showPages = true }, Modifier.align(Alignment.TopStart).padding(12.dp))

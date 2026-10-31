@@ -148,8 +148,8 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Vorlagen ✅; eigenes Cover-Bild offen – braucht FFI) |
 | `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü und Markdown-Kürzel ✅; weitere Blockarten im Slash-Menü, Icon/Cover, Formeln offen) |
 | `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/MarkdownView.kt` | ✅ |
-| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht ✅; Seiten ziehen, Bilder/Text offen) |
-| `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer ✅, Lasso offen) |
+| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht und Seiten ziehen ✅; Bilder/Text offen) |
+| `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer und Lasso ✅ – Auswählen, Verschieben, Skalieren, Duplizieren, Löschen, In Text; Laser und Lasso-Trainingsbeispiel offen) |
 | `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/HeftToolbar.kt` | ✅ |
 | `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | 🟡 (Scannen ✅; OCR offen) |
 | `handschrift.js`, `handwriting-worker.js`, `heft-label.js`, `heft-indexer.js` | ML Kit Digital Ink (bzw. Kern-Index) | `heft/ink/` | 🟡 (Seitentext für die Suche ✅; Zeilen-Segmentierung über `impala-ink`, Lasso → Text offen) |

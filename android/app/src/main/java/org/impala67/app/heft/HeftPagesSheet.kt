@@ -94,6 +94,7 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, onJump:
             picking = picking,
             onTap = { id -> if (picking) toggle(id) else onJump(id) },
             onAdd = { scope.launch { onJump(vm.addPage(null, vm.lastPaper())) } },
+            onMove = vm::movePage,
             modifier = Modifier.weight(1f),
         )
 

@@ -10,8 +10,8 @@ object HeftPage {
     const val RATIO = WIDTH / HEIGHT
 }
 
-/** Werkzeuge der Werkzeugleiste (Lasso, Bilder und Laser folgen später). */
-enum class HeftTool { PEN, MARKER, ERASER }
+/** Werkzeuge der Werkzeugleiste (Bilder und Laser folgen später). */
+enum class HeftTool { PEN, MARKER, ERASER, LASSO }
 
 /** Papiertypen des Kerns mit ihren Namen aus `heft-tools.js` (`PAPERS`). */
 enum class Paper(val id: String, val label: String) {

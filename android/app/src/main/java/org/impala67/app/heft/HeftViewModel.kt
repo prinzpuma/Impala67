@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.heft.ink.HandwritingRecognizer
 import org.impala67.app.heft.ink.HeftIndexer
 import org.impala67.app.heft.scan.ScannedPage
 import org.impala67.app.heft.scan.insertScannedPages
@@ -21,6 +22,7 @@ import uniffi.impala_ffi.HeftChange
 import uniffi.impala_ffi.HeftEdit
 import uniffi.impala_ffi.HeftPageData
 import uniffi.impala_ffi.HeftStroke
+import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.heftNewId
 
 /**
@@ -68,7 +70,10 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
     /** Zweiter Tipp auf das aktive Werkzeug klappt die Optionen auf bzw. zu. */
     fun selectTool(tool: HeftTool, slot: Int = tools.penSlot) {
         val same = tools.tool == tool && (tool != HeftTool.PEN || tools.penSlot == slot)
-        tools = tools.copy(tool = tool, penSlot = slot, expanded = if (same) !tools.expanded else true)
+        // Das Lasso hat keine Optionen; ein anderes Werkzeug hebt die Auswahl auf (heft.js `dropLasso`).
+        val expanded = tool != HeftTool.LASSO && (if (same) !tools.expanded else true)
+        tools = tools.copy(tool = tool, penSlot = slot, expanded = expanded)
+        if (tool != HeftTool.LASSO) lasso = null
     }
 
     fun collapseOptions() { tools = tools.copy(expanded = false) }
@@ -82,6 +87,7 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
             HeftTool.MARKER -> tools.copy(markerSize = size)
             HeftTool.ERASER -> tools.copy(eraserSize = size)
             HeftTool.PEN -> tools.withPen { it.copy(size = size) }
+            HeftTool.LASSO -> tools
         }
     }
 
@@ -107,6 +113,7 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
 
     override fun onCleared() {
         indexer.close()
+        lassoText.close()
         super.onCleared()
     }
 
@@ -159,15 +166,108 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
 
     fun setPaper(heftPageId: String, paper: Paper) = edit { HeftChange.SetPaper(heftPageId, paper.id) }
 
-    fun undo() = replay(undoStack, redoStack)
+    /** Seite an Position [to] schieben (Seitenübersicht, Griff ⠿). */
+    fun movePage(heftPageId: String, to: Int) {
+        lasso = null
+        write { it.heftMovePage(pageId, heftPageId, to.toUInt()) }
+    }
 
-    fun redo() = replay(redoStack, undoStack)
+    // ---- Lasso (heft-lasso.js; Geometrie im Kern) ----
 
-    private fun edit(change: () -> HeftChange) {
+    /** Aktuelle Lasso-Auswahl (höchstens eine, auf einer Seite). */
+    var lasso by mutableStateOf<LassoSel?>(null)
+        private set
+
+    private val lassoText = HandwritingRecognizer()
+
+    fun clearLasso() { lasso = null }
+
+    /** Fingertipp neben die Auswahl: Lasso beenden, zurück zum Stift mit offenen Optionen. */
+    fun dismissLasso() {
+        lasso = null
+        tools = tools.copy(tool = HeftTool.PEN, expanded = true)
+    }
+
+    /** Striche im Lasso-Polygon (`[x, y, …]`) auswählen. */
+    fun lassoSelect(heftPageId: String, polygon: List<Float>) {
+        viewModelScope.launch {
+            val ids = store.write { runCatching { it.heftSelectByLasso(pageId, heftPageId, polygon) }.getOrDefault(emptyList()) }
+            lasso = selection(heftPageId, ids)
+        }
+    }
+
+    /** Beginn einer Geste auf der Auswahl: merkt sich die Striche, die die Vorschau verschiebt. */
+    fun lassoGrab() {
+        val sel = lasso ?: return
+        val want = sel.ids.toHashSet()
+        val marks = page(sel.heftPageId).value?.strokes.orEmpty().filter { it.id in want }.associate { it.id to it.mark() }
+        lasso = sel.copy(drag = LassoDrag(sel.bounds, marks))
+    }
+
+    /** Vorschau während der Geste (nur Anzeige, schreibt nichts). */
+    fun lassoPreview(change: (LassoDrag) -> LassoDrag) {
+        val sel = lasso ?: return
+        val drag = sel.drag ?: return
+        lasso = sel.copy(drag = change(drag))
+    }
+
+    /** Geste fertig: ein Event (Verschieben oder Skalieren), ein Rückgängig-Schritt. */
+    fun lassoRelease() {
+        val sel = lasso ?: return
+        val drag = sel.drag ?: return
+        if (drag.isIdentity) { lasso = sel.copy(drag = null); return }
+        write(after = { refreshLasso(sel.heftPageId, sel.ids, drag) }) { core ->
+            if (drag.factor != 1f) core.heftScaleStrokes(pageId, sel.heftPageId, sel.ids, drag.ax.toDouble(), drag.ay.toDouble(), drag.factor.toDouble())
+            else core.heftMoveStrokes(pageId, sel.heftPageId, sel.ids, drag.dx.toDouble(), drag.dy.toDouble())
+        }
+        indexer.schedule(sel.heftPageId)
+    }
+
+    /** Kopien 28 Einheiten versetzt; die Auswahl wandert auf die Kopien. */
+    fun lassoDuplicate() {
+        val sel = lasso ?: return
+        write(after = { lasso = selection(sel.heftPageId, it.ids) }) { it.heftDuplicateStrokes(pageId, sel.heftPageId, sel.ids) }
+        indexer.schedule(sel.heftPageId)
+    }
+
+    fun lassoDelete() {
+        val sel = lasso ?: return
+        lasso = null
+        removeStrokes(sel.heftPageId, sel.ids)
+    }
+
+    /** Handschrift der Auswahl erkennen (ML Kit); `null`, wenn kein Text erkannt wurde. */
+    suspend fun lassoRecognize(): String? {
+        val sel = lasso ?: return null
+        val want = sel.ids.toHashSet()
+        val strokes = page(sel.heftPageId).value?.strokes.orEmpty().filter { it.id in want }
+        return lassoText.recognize(strokes)
+    }
+
+    private suspend fun selection(heftPageId: String, ids: List<String>): LassoSel? {
+        if (ids.isEmpty()) return null
+        val bounds = store.write { runCatching { it.heftStrokesBounds(pageId, heftPageId, ids) }.getOrNull() } ?: return null
+        return LassoSel(heftPageId, ids, bounds)
+    }
+
+    /** Neue Grenzen aus dem Kern; die Vorschau bleibt, bis die Seite die neue Fassung zeigt. */
+    private suspend fun refreshLasso(heftPageId: String, ids: List<String>, drag: LassoDrag) {
+        val fresh = selection(heftPageId, ids) ?: return
+        if (lasso?.ids == ids) lasso = fresh.copy(drag = drag.copy(live = false))
+    }
+
+    fun undo() { lasso = null; replay(undoStack, redoStack) }
+
+    fun redo() { lasso = null; replay(redoStack, undoStack) }
+
+    private fun edit(change: () -> HeftChange) = write { it.heftApply(pageId, listOf(change())) }
+
+    /** Eine Änderung schreiben und ihre Umkehr merken; [after] läuft nach Erfolg mit dem Ergebnis. */
+    private fun write(after: suspend (HeftEdit) -> Unit = {}, block: (ImpalaCore) -> HeftEdit) {
         viewModelScope.launch {
             writes.withLock {
-                runCatching { store.write { it.heftApply(pageId, listOf(change())) } }
-                    .onSuccess { record(it) }
+                runCatching { store.write(block) }
+                    .onSuccess { record(it); after(it) }
                     .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
             }
         }
