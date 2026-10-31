@@ -45,12 +45,11 @@ import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.TextSize
 
-/** Links oben im Tablet-Heft (`.heft-corner-l`): Seitenübersicht mit „x/y“. */
+/** Links oben im Tablet-Heft (`.heft-corner-l`): Seitenübersicht. */
 @Composable
-fun HeftCornerPages(pageLabel: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun HeftCornerPages(onClick: () -> Unit, modifier: Modifier = Modifier) {
     CornerButton("Seiten", onClick, modifier) {
-        Icon(painterResource(R.drawable.ic_i_pages_stack), null, Modifier.size(16.dp))
-        if (pageLabel.isNotEmpty()) Text(pageLabel, fontSize = TextSize.xs, fontWeight = FontWeight.Bold)
+        Icon(painterResource(R.drawable.ic_i_pages_stack), null, Modifier.size(18.dp))
     }
 }
 
@@ -64,7 +63,7 @@ fun HeftCornerActions(actions: HeftPageActions, onAi: () -> Unit, modifier: Modi
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        CornerButton("KI-Chat", onAi) { Icon(painterResource(R.drawable.ic_i_sparkles), null, Modifier.size(16.dp)) }
+        CornerButton("KI-Chat", onAi) { Icon(painterResource(R.drawable.ic_i_sparkles), null, Modifier.size(18.dp)) }
         Box {
             CornerButton("Seite hinzufügen", { menu = true }, active = menu) { Icon(painterResource(R.drawable.ic_i_plus), null, Modifier.size(18.dp)) }
             DropdownMenu(
@@ -213,18 +212,16 @@ private fun MenuHead(text: String) {
     )
 }
 
-/** `.heft-chrome .heft-corner`: kleine Kapsel mit Menü-Hintergrund und Rahmen. */
+/** `.heft-corner`: 36-dp-Kreis in Menüfarbe mit feinem Ring und Schatten, Icon 18 dp; offen mit Akzent-Tönung. */
 @Composable
 private fun CornerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, active: Boolean = false, content: @Composable RowScope.() -> Unit) {
     val c = Impala.colors
-    val shape = RoundedCornerShape(Radius.md)
     Row(
-        modifier.height(36.dp).widthIn(min = 36.dp).clip(shape)
-            .background(if (active) c.accent.copy(alpha = 0.14f) else c.menu)
-            .border(1.dp, if (active) Color.Transparent else c.edge, shape)
-            .clickable(onClickLabel = label, onClick = onClick).padding(horizontal = 9.dp),
+        modifier.size(36.dp).heftFloat(border = false)
+            .then(if (active) Modifier.background(c.accent.copy(alpha = 0.16f)) else Modifier)
+            .clickable(onClickLabel = label, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.Center,
     ) {
         CompositionLocalProvider(LocalContentColor provides if (active) c.accent else c.text) { content() }
     }

@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
@@ -82,6 +83,8 @@ fun HeftPagesGrid(
     onAdd: () -> Unit,
     onMove: (id: String, to: Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** Feste Spaltenzahl (Tablet-Popover: 3 × 160 dp); sonst so viele, wie hineinpassen. */
+    columns: Int? = null,
 ) {
     val grid = rememberLazyGridState()
     val tiles = remember { HashMap<String, Rect>() }
@@ -109,12 +112,13 @@ fun HeftPagesGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 110.dp),
+        columns = columns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(minSize = 110.dp),
         state = grid,
         modifier = modifier.onGloballyPositioned { area = it.boundsInRoot() },
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        // `.heft-pop-grid`: 16 / 22 / 30 px Innenabstand, 26 × 18 px Lücken (Nummer steht in der Lücke).
+        contentPadding = PaddingValues(start = 22.dp, top = 16.dp, end = 22.dp, bottom = 30.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         itemsIndexed(pages, key = { _, id -> id }) { i, id ->
             val d = drag
@@ -209,23 +213,36 @@ private fun PageTile(
                     )
                 },
         ) {
+            // `.heft-pop-thumb canvas`: feiner dunkler Ring und weicher Schatten; aktiv mit Akzentrahmen 3 px außen.
             PageSketch(
                 data,
-                Modifier.fillMaxSize().shadow(if (lift != null) 8.dp else 2.dp, TileShape).clip(TileShape)
-                    .then(if (highlighted) Modifier.border(2.dp, c.accent, TileShape) else Modifier),
+                Modifier.fillMaxSize()
+                    .drawBehind {
+                        if (!highlighted) return@drawBehind
+                        val out = 3.dp.toPx() + 1.dp.toPx()
+                        drawRoundRect(
+                            c.accent,
+                            topLeft = Offset(-out, -out),
+                            size = Size(size.width + 2 * out, size.height + 2 * out),
+                            cornerRadius = CornerRadius(Radius.xs.toPx() + out),
+                            style = Stroke(2.dp.toPx()),
+                        )
+                    }
+                    .shadow(if (lift != null) 12.dp else 6.dp, TileShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.7f))
+                    .clip(TileShape).border(1.dp, Color.Black.copy(alpha = 0.14f), TileShape),
             )
             if (!picking) {
                 var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                // .heft-page-drag: dunkles Feld oben rechts mit ⠿.
+                // `.heft-page-drag`: runder, halbtransparenter Griff oben rechts (auf Touch-Geräten 70 %).
                 Box(
-                    Modifier.align(Alignment.TopEnd).padding(8.dp).size(28.dp).clip(RoundedCornerShape(Radius.sm))
-                        .background(Color(0x8C141414))
+                    Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).alpha(0.7f).clip(CircleShape)
+                        .background(Color(0x73141414))
                         .onGloballyPositioned { coords = it }
                         .then(grip { coords })
                         .semantics { contentDescription = "Seite verschieben" },
                     Alignment.Center,
                 ) {
-                    Text("⠿", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                    Text("⠿", color = Color.White, fontSize = 13.sp)
                 }
             }
             if (picking && checked) {
@@ -237,11 +254,14 @@ private fun PageTile(
                 }
             }
         }
+        // Seitenzahl als Kapsel; aktiv getönt.
         Text(
             "${index + 1}",
-            modifier = Modifier.padding(top = 6.dp),
-            color = if (highlighted) c.accent else c.text2,
-            fontSize = TextSize.xs,
+            modifier = Modifier.padding(top = 6.dp).clip(CircleShape)
+                .background(if (highlighted && !picking) c.tint2 else Color.Transparent)
+                .padding(horizontal = 8.dp, vertical = 1.dp),
+            color = if (highlighted && !picking) c.text else c.text2,
+            fontSize = TextSize.xs2,
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -250,19 +270,17 @@ private fun PageTile(
 @Composable
 private fun AddTile(onClick: () -> Unit) {
     val c = Impala.colors
-    Column(
-        Modifier.clickable(role = Role.Button, onClickLabel = "Neue Seite", onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // `.heft-pop-add`: getönte Fläche im Seitenformat, „+“ im Kreis, darunter „Neue Seite“.
+    Box(
+        Modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO).clip(TileShape).background(c.tint)
+            .clickable(role = Role.Button, onClickLabel = "Neue Seite", onClick = onClick),
+        Alignment.Center,
     ) {
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO).clip(TileShape)
-                .background(c.tint).border(1.dp, c.accentBorder, TileShape),
-            Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(painterResource(R.drawable.ic_i_plus), null, Modifier.size(22.dp), c.accent)
-                Text("Neue Seite", color = c.accent, fontSize = TextSize.xs, fontWeight = FontWeight.SemiBold)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.tint2), Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_i_plus), null, Modifier.size(20.dp), c.text2)
             }
+            Text("Neue Seite", color = c.text2, fontSize = TextSize.xs, fontWeight = FontWeight.SemiBold)
         }
     }
 }

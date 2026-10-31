@@ -16,6 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -75,7 +77,9 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
 
     BoxWithConstraints(
         modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO)
-            .shadow(3.dp, PageShape).clip(PageShape),
+            // `.heft-canvas`: weicher Schatten (--elev-3) und feiner heller Ring.
+            .shadow(10.dp, PageShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.6f))
+            .clip(PageShape).border(1.dp, Color.White.copy(alpha = 0.06f), PageShape),
     ) {
         val k = constraints.maxWidth / HeftPage.WIDTH
         val paper = Paper.of(data?.paper.orEmpty())

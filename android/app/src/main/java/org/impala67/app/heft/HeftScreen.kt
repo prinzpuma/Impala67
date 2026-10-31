@@ -1,6 +1,5 @@
 package org.impala67.app.heft
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -13,15 +12,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -48,12 +49,16 @@ import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.heft.scan.rememberDocumentScan
 import org.impala67.app.ui.theme.Impala
+import org.impala67.app.ui.theme.TextSize
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Platz über der ersten Seite für die schwebende Werkzeugleiste (Tablet). */
-private val DESK_TOOLBAR_SPACE = 72.dp
+/** Oberkante der ersten Seite auf dem Tablet: knapp unter der Leiste, die leicht übersteht (PWA). */
+private val DESK_TOP = 48.dp
+
+/** Lücke unter jeder Seite (PWA 24 px), darin „Seite N“. */
+private val PAGE_GAP = 24.dp
 
 /**
  * Heft öffnen (heft.js, heft-viewport.js): Seiten senkrecht scrollbar, Stift schreibt, Finger scrollt
@@ -121,15 +126,13 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
             val viewW = constraints.maxWidth.toFloat()
             val viewH = constraints.maxHeight.toFloat()
             val margin = with(density) { 16.dp.toPx() }
-            val gap = with(density) { 16.dp.toPx() }
-            // Passbreite: Auf dem Tablet (desk) großzügig wie in der PWA (--content-width: 920px),
-            // damit das Blatt den Arbeitsbereich harmonisch ausfüllt statt als Briefmarke zu hängen.
-            val maxPageW = with(density) { 920.dp.toPx() }
-            val baseW = if (desk) {
-                min(viewW - 2 * margin, maxPageW)
-            } else {
-                min(viewW - 2 * margin, viewH * HeftPage.RATIO)
-            }
+            // Abstand unter jeder Seite (PWA: 24 px), darin steht „Seite N“.
+            val gap = with(density) { PAGE_GAP.toPx() }
+            // Passbreite wie fitScale in heft-viewport.js: die ganze Seite sichtbar, oben Platz für die
+            // schwebende Leiste, unten für die Seitenzahl.
+            val top = if (desk) DESK_TOP else 12.dp
+            val fitH = viewH - with(density) { (top + 56.dp).toPx() }
+            val baseW = min(viewW - 2 * margin, fitH * HeftPage.RATIO)
             val pageW = baseW * zoom.zoom
             val contentW = max(viewW, pageW + 2 * margin)
             val maxPan by rememberUpdatedState(contentW - viewW)
@@ -151,24 +154,21 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                 val left = (contentW - pageW) / 2
                 val newLeft = (newContentW - newPageW) / 2
                 zoom.panX = (newLeft + (zoom.panX + c.x - left) * ratio - c.x).coerceIn(0f, max(0f, newContentW - viewW))
-                // Fixpunkt senkrecht: Lücke (gap) bleibt, die Seite wächst.
-                val itemH = gap + pageW / HeftPage.RATIO
-                val newItemH = gap + newPageW / HeftPage.RATIO
+                // Fixpunkt senkrecht: die Seite wächst, die Lücke darunter (gap) bleibt.
+                val pageH = pageW / HeftPage.RATIO
+                val newPageH = newPageW / HeftPage.RATIO
+                val itemH = pageH + gap
+                val newItemH = newPageH + gap
                 val u = lazy.firstVisibleItemIndex * itemH + lazy.firstVisibleItemScrollOffset + c.y
                 val index = (u / itemH).toInt()
                 val r = u - index * itemH
-                val pos = max(0f, index * newItemH + (if (r <= gap) r else gap + (r - gap) * ratio) - c.y)
+                val pos = max(0f, index * newItemH + (if (r <= pageH) r * ratio else newPageH + (r - pageH)) - c.y)
                 lazy.requestScrollToItem((pos / newItemH).toInt(), (pos % newItemH).roundToInt())
                 zoom.zoom = new
                 zoom.live = 1f
             }
 
             val showOptions = vm.tools.expanded
-            // Ausreichend Platz oben für schwebende Leisten, damit keine Werkzeuge über dem Seitenanfang liegen.
-            val toolbarSpace by animateDpAsState(
-                targetValue = if (desk) (if (showOptions) 136.dp else 76.dp) else 0.dp,
-                label = "deskToolbarSpace",
-            )
 
             Box(
                 Modifier.fillMaxSize()
@@ -187,11 +187,15 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                             transformOrigin = TransformOrigin((zoom.origin.x + pan) / size.width, zoom.origin.y / size.height)
                         },
                     state = lazy,
-                    contentPadding = PaddingValues(top = toolbarSpace, bottom = 96.dp),
+                    contentPadding = PaddingValues(top = top, bottom = 72.dp),
                 ) {
-                    items(pages, key = { it }) { id ->
-                        Box(Modifier.fillMaxWidth().padding(top = 12.dp), Alignment.TopCenter) {
+                    itemsIndexed(pages, key = { _, id -> id }) { i, id ->
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             HeftPageView(vm, id, Modifier.width(with(density) { pageW.toDp() }))
+                            // `.heft-page-label`
+                            Box(Modifier.height(PAGE_GAP), Alignment.TopCenter) {
+                                Text("Seite ${i + 1}", Modifier.padding(top = 3.dp), color = Impala.colors.text2, fontSize = TextSize.xs2)
+                            }
                         }
                     }
                 }
@@ -204,7 +208,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                     HeftToolbar(vm, vertical = true)
                 }
             } else if (desk) {
-                Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally) {
+                Column(Modifier.align(Alignment.TopCenter).padding(top = 13.dp), Arrangement.spacedBy(2.dp), Alignment.CenterHorizontally) {
                     HeftToolbar(vm, vertical = false)
                     if (showOptions) HeftOptions(vm, vertical = false)
                 }
@@ -216,13 +220,12 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
             }
             if (vm.lasso != null) {
                 // Über der Werkzeugleiste, wenn sie unten liegt (PWA: bottom 74px).
-                val bottom = if (!vertical && !desk) 96.dp else 24.dp
+                val bottom = if (!vertical && !desk) 96.dp else 74.dp
                 HeftLassoBar(vm, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom))
             }
             if (onAi != null) {
-                val label = if (pages.isEmpty()) "" else "${current + 1}/${pages.size}"
-                HeftCornerPages(label, { showPages = true }, Modifier.align(Alignment.TopStart).padding(12.dp))
-                HeftCornerActions(pageActions, onAi, Modifier.align(Alignment.TopEnd).padding(12.dp))
+                HeftCornerPages({ showPages = true }, Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 18.dp))
+                HeftCornerActions(pageActions, onAi, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 18.dp))
             }
         }
     }
@@ -232,6 +235,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
             vm = vm,
             pages = pages,
             current = current,
+            desk = desk,
             onJump = { id -> showPages = false; focus = id },
             onDismiss = { showPages = false },
         )

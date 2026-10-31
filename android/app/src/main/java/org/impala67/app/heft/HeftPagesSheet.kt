@@ -1,5 +1,18 @@
 package org.impala67.app.heft
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,11 +54,12 @@ internal fun seitenZahl(n: Int) = "$n " + if (n == 1) "Seite" else "Seiten"
 /**
  * Seitenübersicht des Hefts (heft.js „Seiten“-Popover, Raster): Kopf mit Schließen, Raster aller Seiten,
  * Fußleiste. Antippen springt zur Seite ([onJump]); „Auswählen“ markiert Seiten zum Löschen; „Neue Seite“
- * hängt eine Seite mit dem Papier der letzten Seite an.
+ * hängt eine Seite mit dem Papier der letzten Seite an. Auf dem Tablet ([desk]) ein mittiges Popover
+ * (560 dp, Radius 22) wie in der PWA, sonst ein Bottom Sheet.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, onJump: (String) -> Unit, onDismiss: () -> Unit) {
+fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, desk: Boolean, onJump: (String) -> Unit, onDismiss: () -> Unit) {
     val c = Impala.colors
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
@@ -62,27 +73,27 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, onJump:
     fun endPicking() { picking = false; selected = emptySet() }
     fun toggle(id: String) { selected = if (id in selected) selected - id else selected + id }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.panel,
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    val content: @Composable ColumnScope.() -> Unit = {
+        // `.heft-pages-manager-head`: links frei (bzw. Alle/Keine), Titel mittig, ✕ rechts.
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(88.dp)) {
                 if (picking) {
                     val all = n == pages.size
-                    TextButton({ selected = if (all) emptySet() else pages.toSet() }) { Text(if (all) "Keine" else "Alle") }
+                    PagesTextButton(if (all) "Keine" else "Alle") { selected = if (all) emptySet() else pages.toSet() }
                 }
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Seiten", style = MaterialTheme.typography.titleMedium)
+                Text("Seiten", color = c.text, fontSize = TextSize.base, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (picking) "$n ausgewählt" else seitenZahl(pages.size),
-                    color = c.text2, fontSize = TextSize.xs, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = c.text2, fontSize = TextSize.xs2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             Box(Modifier.width(88.dp), contentAlignment = Alignment.CenterEnd) {
-                IconButton(onDismiss) { Icon(painterResource(R.drawable.ic_i_x), "Schließen") }
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Schließen", onClick = onDismiss),
+                    Alignment.Center,
+                ) { Icon(painterResource(R.drawable.ic_i_x), "Schließen", Modifier.size(16.dp), c.text2) }
             }
         }
 
@@ -95,28 +106,51 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, onJump:
             onTap = { id -> if (picking) toggle(id) else onJump(id) },
             onAdd = { scope.launch { onJump(vm.addPage(null, vm.lastPaper())) } },
             onMove = vm::movePage,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = false),
+            columns = if (desk) 3 else null,
         )
 
+        // `.heft-pages-foot`: 58 dp hoch, Textknopf links, Aktion rechts.
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+            Arrangement.spacedBy(6.dp),
             Alignment.CenterVertically,
         ) {
             if (picking) {
-                TextButton({ endPicking() }) { Text("Fertig") }
+                PagesTextButton("Fertig") { endPicking() }
                 Spacer(Modifier.weight(1f))
-                TextButton({ confirm = true }, enabled = deletable) {
-                    Icon(painterResource(R.drawable.ic_i_trash), null, Modifier.size(18.dp), c.danger)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Löschen ($n)", color = c.danger)
+                Row(
+                    Modifier.height(36.dp).clip(CircleShape).background(c.danger.copy(alpha = 0.14f))
+                        .clickable(enabled = deletable, role = Role.Button) { confirm = true }
+                        .alpha(if (deletable) 1f else 0.4f).padding(horizontal = 14.dp),
+                    Arrangement.spacedBy(6.dp),
+                    Alignment.CenterVertically,
+                ) {
+                    Icon(painterResource(R.drawable.ic_i_trash), null, Modifier.size(16.dp), c.danger)
+                    Text("Löschen ($n)", color = c.danger, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold)
                 }
             } else {
-                TextButton({ picking = true }) { Text("Auswählen") }
-                Spacer(Modifier.weight(1f))
+                PagesTextButton("Auswählen") { picking = true }
             }
         }
-        Spacer(Modifier.height(8.dp))
+    }
+
+    if (desk) {
+        Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Column(
+                Modifier.width(560.dp).heightIn(max = 620.dp)
+                    .heftFloat(RoundedCornerShape(22.dp), border = false),
+            ) { content() }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = c.menu,
+        ) {
+            content()
+            Spacer(Modifier.height(8.dp))
+        }
     }
 
     if (confirm) {
@@ -134,4 +168,17 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, onJump:
             dismissButton = { TextButton({ confirm = false }) { Text("Abbrechen") } },
         )
     }
+}
+
+/** `.heft-pages-text`: Akzent-Text in einer Kapsel (13 sp, halbfett). */
+@Composable
+private fun PagesTextButton(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        Modifier.height(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically),
+        color = Impala.colors.accent,
+        fontSize = TextSize.sm,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
