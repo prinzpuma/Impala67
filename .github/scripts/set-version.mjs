@@ -58,11 +58,13 @@ fs.writeFileSync(modelVersionPath, modelVersion);
 console.log(`Handschrift-Modellversion gesetzt: ${modelHash}.`);
 
 // Android-APKs gibt es nur zu Releases; versionCode kennt keine Zwischenstände.
+// Schema ab 2.2.115 (vorher major*100000 + minor*1000 + patch, lokale Builds lagen darüber):
+// Jeder Release liegt so über allen alten Codes; die letzte Ziffer bleibt für lokale Builds frei.
 const gradlePath = "./android/app/build.gradle.kts";
 if (fs.existsSync(gradlePath) && /^\d+\.\d+\.\d+$/.test(version)) {
   let gradle = fs.readFileSync(gradlePath, "utf8");
   const [major, minor, patch] = version.split(".").map(Number);
-  const versionCode = major * 100000 + minor * 1000 + patch;
+  const versionCode = major * 1000000 + minor * 10000 + patch * 10;
   gradle = gradle.replace(/versionCode\s*=\s*\d+/, `versionCode = ${versionCode}`);
   gradle = gradle.replace(/versionName\s*=\s*"[^"]+"/, `versionName = "${version}"`);
   fs.writeFileSync(gradlePath, gradle);

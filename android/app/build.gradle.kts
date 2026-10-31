@@ -15,8 +15,8 @@ android {
         minSdk = 26
         targetSdk = 37
         // Setzt .github/scripts/set-version.mjs beim Release.
-        versionCode = 202087
-        versionName = "2.2.87"
+        versionCode = 2021140
+        versionName = "2.2.114"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
