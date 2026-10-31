@@ -50,7 +50,9 @@ pub enum SyncFailure {
 impl std::fmt::Display for SyncFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SyncFailure::InvalidKey { reason: message } | SyncFailure::Failed { reason: message, .. } => f.write_str(message),
+            SyncFailure::InvalidKey { reason: message } | SyncFailure::Failed { reason: message, .. } => {
+                f.write_str(message)
+            }
             SyncFailure::Stopped => f.write_str("Sync abgebrochen."),
         }
     }
@@ -157,6 +159,32 @@ pub(crate) fn allow_secrets(inner: &Inner) -> bool {
     inner.model.state().settings.get("syncSecrets") != Some(Value::Bool(false))
 }
 
+/// Nach einem Durchgang mit Importen: falls Events außer der Reihe angewandt wurden, den Zustand
+/// sortiert neu laden – einmal je Durchgang, nicht je Portion –, dann einen Checkpoint schreiben.
+/// Sonst spielt der nächste Start (oder das nächste Neuladen) alles Übernommene erneut ab.
+pub(crate) fn settle_remote(shared: &Shared) {
+    let reloaded = {
+        let mut guard = crate::lock(shared);
+        let inner = &mut *guard;
+        if !std::mem::take(&mut inner.remote_imported) {
+            return;
+        }
+        let reload = !inner.model.replay_ordered();
+        if reload && inner.reload().is_err() {
+            return;
+        }
+        // Scheitert nur der Checkpoint, lädt der nächste Start eben aus dem Log.
+        let _ = inner.model.save_checkpoint(&mut inner.storage);
+        if reload {
+            inner.note_everything(true);
+        }
+        reload
+    };
+    if reloaded {
+        crate::changes::notify(shared);
+    }
+}
+
 /// Ergebnis von [`Inner::import_remote`].
 #[derive(Debug, Default)]
 pub(crate) struct RemoteImport {
@@ -192,12 +220,7 @@ impl Inner {
         for t in prepared.fresh.iter().filter_map(|ev| ev.get("t").and_then(Value::as_str)) {
             clock.observe(t);
         }
-        let max_before = storage.log_info()?.max_seq;
-        let local = if max_before <= unsynced_after_seq {
-            Vec::new()
-        } else {
-            storage.events_after(unsynced_after_seq, Some(max_before), None)?
-        };
+        let local = storage.own_events_after(unsynced_after_seq)?;
         let fresh_ids: HashSet<String> =
             prepared.fresh.iter().filter_map(|ev| ev.get("id").and_then(impala_storage::event::id_key)).collect();
         let found = {
@@ -223,19 +246,13 @@ impl Inner {
         };
         let imported = storage.commit_import(prepared)?.imported;
         let imported_count = imported.len();
+        self.remote_imported |= imported_count > 0;
+        // Außer der Reihe angewandt (`replay_ordered`): neu geladen wird erst in `settle_remote`.
         self.apply_remote(imported.into_iter().filter_map(LogEvent::from_object_owned).collect());
-        if !self.model.replay_ordered() {
-            self.reload()?;
-            self.note_everything(true);
-        }
         // Die Events sind übernommen; scheitert nur das Vormerken, findet `conflicts()` die
         // Konfliktkopien trotzdem (als gerettete Alt-Kopien).
         let _ = self.remember_conflicts(found.conflicts.clone());
-        Ok(RemoteImport {
-            imported_count,
-            conflicts: found.conflicts,
-            merged: found.merged,
-        })
+        Ok(RemoteImport { imported_count, conflicts: found.conflicts, merged: found.merged })
     }
 }
 
@@ -379,6 +396,7 @@ fn run<H: HttpClient>(
     // Ein Durchgang zur Zeit; `stop()` gilt nur für den laufenden.
     let stop = client.stop_flag();
     for cmd in rx {
+        let imports = !matches!(cmd, Cmd::Local(_));
         match cmd {
             Cmd::Sync(force_all, reply) => {
                 stop.store(false, Ordering::Relaxed);
@@ -415,6 +433,9 @@ fn run<H: HttpClient>(
                     l.on_sync_needed();
                 }
             }
+        }
+        if imports {
+            settle_remote(&client.store_mut().core);
         }
     }
 }

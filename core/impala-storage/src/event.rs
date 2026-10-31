@@ -43,6 +43,12 @@ pub fn id_key(id: &Value) -> Option<String> {
     }
 }
 
+/// Auf diesem Gerät entstanden: weder übernommen (`_remote`) noch beim Import abgeleitet
+/// (`_derived`). Nur solche Events können ungesyncte eigene Änderungen sein.
+pub fn is_own(ev: &Object) -> bool {
+    !ev.get("_remote").is_some_and(js::truthy) && !ev.get("_derived").is_some_and(js::truthy)
+}
+
 /// Event ohne gerätelokale Marken (`stripLocalFlags`).
 pub fn strip_local_flags(mut ev: Object) -> Object {
     for flag in LOCAL_FLAGS {

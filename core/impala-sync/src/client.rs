@@ -26,6 +26,8 @@ use crate::wire::{Transport, prepare_cloud_events, prune_for_upload, should_uplo
 
 /// Gleichzeitige Datei-Übertragungen (hoch wie herunter), wie früher in JS.
 const PARALLEL_TRANSFERS: usize = 3;
+/// So viele `seq` liest ein Abschnitt beim Durchsuchen des lokalen Logs.
+const SCAN_SEQS: u64 = 500;
 
 /// Dauerhafter Sync-Zustand je Konto (JS: `localStorage`, Schlüssel mit User-ID).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -428,19 +430,26 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         if candidates.is_empty() {
             return Ok(());
         }
-        let unconfirmed = self.store.events_after(self.state.last_uploaded_seq, u64::MAX).await?;
         let server_ids: HashSet<String> = candidates.iter().filter_map(id_key).collect();
         let mut confirmed = self.state.last_uploaded_seq;
-        for ev in &unconfirmed {
-            let seq = count_or(ev.get("seq"), 0);
-            if seq <= confirmed {
-                continue;
+        // In `seq`-Abschnitten: Über dem Cursor kann fast das ganze Log liegen (z. B. nach einem
+        // Drive-Import), gebraucht wird meist nur der Anfang.
+        let max_seq = self.store.max_seq().await?;
+        let mut lo = confirmed;
+        'scan: while lo < max_seq {
+            let hi = max_seq.min(lo.saturating_add(SCAN_SEQS));
+            for ev in &self.store.events_after(lo, hi).await? {
+                let seq = count_or(ev.get("seq"), 0);
+                if seq <= confirmed {
+                    continue;
+                }
+                if !self.is_uploadable(ev) || id_key(ev).is_some_and(|k| server_ids.contains(&k)) {
+                    confirmed = seq;
+                } else {
+                    break 'scan;
+                }
             }
-            if !self.is_uploadable(ev) || id_key(ev).is_some_and(|k| server_ids.contains(&k)) {
-                confirmed = seq;
-            } else {
-                break;
-            }
+            lo = hi;
         }
         if confirmed > self.state.last_uploaded_seq {
             self.state.last_uploaded_seq = confirmed;
@@ -458,9 +467,9 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             uploaded = 0;
         }
         let mut report = PushReport { confirmed: true, ..PushReport::default() };
-        let local = if max_seq <= uploaded { Vec::new() } else { self.store.events_after(uploaded, max_seq).await? };
         let full = uploaded == 0;
         let source = if full {
+            let local = if max_seq == 0 { Vec::new() } else { self.store.events_after(0, max_seq).await? };
             let compacted = match compact_values(&local) {
                 Ok(keep) => pick(local, &keep),
                 Err(e) => {
@@ -474,7 +483,16 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             // liegt schon dort.
             compacted.into_iter().filter(|ev| id_key(ev).is_none_or(|k| !self.received_ids.contains(&k))).collect()
         } else {
-            local.into_iter().filter(|ev| should_upload_to(ev, Transport::Cloudflare)).collect()
+            // In `seq`-Abschnitten: Fremd-Events darüber gehen nicht hoch und sollen nie alle auf einmal im Speicher liegen.
+            let mut out = Vec::new();
+            let mut lo = uploaded;
+            while lo < max_seq {
+                let hi = max_seq.min(lo.saturating_add(SCAN_SEQS));
+                let page = self.store.events_after(lo, hi).await?;
+                out.extend(page.into_iter().filter(|ev| should_upload_to(ev, Transport::Cloudflare)));
+                lo = hi;
+            }
+            out
         };
         let wire: Vec<WireEvent> = self.wire_events(source, full).into_iter().map(WireEvent::new).collect();
         if wire.is_empty() {

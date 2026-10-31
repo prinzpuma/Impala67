@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde_json::Value;
 
 use crate::Error;
-use crate::event::{LogInfo, Object, Seq, id_key};
+use crate::event::{LogInfo, Object, Seq, id_key, is_own};
 use crate::memory::with_seq;
 use crate::storage::{Blob, CheckpointSlot, PartKind, Storage, Write};
 
@@ -32,6 +32,15 @@ const MIGRATIONS: &[&str] = &[
         kind INTEGER NOT NULL, hash TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (kind, hash)
     );
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    // 2: Eigene Events (`event::is_own`) markiert und indiziert: Die Konflikt-Prüfung liest sonst
+    // je Import das ganze Log – nach einer Wiederherstellung sind das fast nur übernommene Events.
+    // Unlesbare Zeilen gelten als fremd (lesen ließen sie sich ohnehin nicht).
+    "ALTER TABLE events ADD COLUMN own INTEGER NOT NULL DEFAULT 0;
+    UPDATE events SET own = CASE WHEN json_valid(body) THEN
+        COALESCE(json_extract(body, '$._remote') IN (0, ''), 1)
+        AND COALESCE(json_extract(body, '$._derived') IN (0, ''), 1)
+    ELSE 0 END;
+    CREATE INDEX events_own ON events(seq) WHERE own = 1;",
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -111,9 +120,10 @@ fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Err
         Write::AddEvent(mut ev) => {
             ev.shift_remove("seq");
             let id = ev.get("id").and_then(id_key);
+            let own = is_own(&ev);
             let body = serde_json::to_string(&ev).map_err(json_err)?;
-            tx.prepare_cached("INSERT INTO events (id, body) VALUES (?1, ?2)")
-                .and_then(|mut s| s.execute(params![id, body]))
+            tx.prepare_cached("INSERT INTO events (id, body, own) VALUES (?1, ?2, ?3)")
+                .and_then(|mut s| s.execute(params![id, body, own]))
                 .map_err(db)?;
             added.push(tx.last_insert_rowid() as Seq);
         }
@@ -179,6 +189,17 @@ fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Err
     Ok(())
 }
 
+/// Zeilen `(seq, body)` als Events mit `seq`.
+fn read_events(mut rows: rusqlite::Rows<'_>) -> Result<Vec<Object>, Error> {
+    let mut out = Vec::new();
+    while let Some(r) = rows.next().map_err(db)? {
+        let seq: i64 = r.get(0).map_err(db)?;
+        let body: &str = r.get_ref(1).map_err(db)?.as_str().map_err(|e| Error::Backend(e.to_string()))?;
+        out.push(with_seq(parse_object(body)?, seq as Seq));
+    }
+    Ok(out)
+}
+
 impl Storage for SqliteStorage {
     fn events_after(&self, after: Seq, up_to: Option<Seq>, limit: Option<usize>) -> Result<Vec<Object>, Error> {
         let upper = up_to.map_or(i64::MAX, to_i64);
@@ -191,14 +212,15 @@ impl Storage for SqliteStorage {
             .conn
             .prepare_cached("SELECT seq, body FROM events WHERE seq > ?1 AND seq <= ?2 ORDER BY seq LIMIT ?3")
             .map_err(db)?;
-        let mut rows = stmt.query(params![lower, upper, limit]).map_err(db)?;
-        let mut out = Vec::new();
-        while let Some(r) = rows.next().map_err(db)? {
-            let seq: i64 = r.get(0).map_err(db)?;
-            let body: &str = r.get_ref(1).map_err(db)?.as_str().map_err(|e| Error::Backend(e.to_string()))?;
-            out.push(with_seq(parse_object(body)?, seq as Seq));
-        }
-        Ok(out)
+        read_events(stmt.query(params![lower, upper, limit]).map_err(db)?)
+    }
+
+    fn own_events_after(&self, after: Seq) -> Result<Vec<Object>, Error> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT seq, body FROM events WHERE own = 1 AND seq > ?1 ORDER BY seq")
+            .map_err(db)?;
+        read_events(stmt.query([to_i64(after)]).map_err(db)?)
     }
 
     fn event_at(&self, seq: Seq) -> Result<Option<Object>, Error> {
@@ -340,5 +362,45 @@ mod tests {
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{suffix}", dir.display()));
         }
+    }
+
+    #[test]
+    fn marks_own_events_also_in_old_databases() {
+        let bodies = [
+            r#"{"id":"a","t":"1","type":"p"}"#,
+            r#"{"id":"b","t":"2","type":"p","_remote":true,"_remoteSource":"drive"}"#,
+            r#"{"id":"c","t":"3","type":"p","_derived":true}"#,
+            r#"{"id":"d","t":"4","type":"p","_remote":false,"_derived":null}"#,
+            "kaputt",
+        ];
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        for b in bodies {
+            conn.execute("INSERT INTO events (id, body) VALUES ('x', ?1)", [b]).unwrap();
+        }
+        migrate(&mut conn).unwrap();
+        let own: Vec<i64> = conn
+            .prepare("SELECT seq FROM events WHERE own = 1")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(own, vec![1, 4]);
+
+        let mut s = SqliteStorage::open_in_memory().unwrap();
+        let ev = |v: serde_json::Value| Write::AddEvent(v.as_object().cloned().unwrap());
+        s.apply(vec![
+            ev(serde_json::json!({"id": "a", "t": "1", "type": "p"})),
+            ev(serde_json::json!({"id": "b", "t": "2", "type": "p", "_remote": true})),
+            ev(serde_json::json!({"id": "c", "t": "3", "type": "p"})),
+        ])
+        .unwrap();
+        let ids = |after| -> Vec<String> {
+            s.own_events_after(after).unwrap().iter().map(|e| e["id"].as_str().unwrap().to_owned()).collect()
+        };
+        assert_eq!(ids(0), ["a", "c"]);
+        assert_eq!(ids(1), ["c"]);
     }
 }

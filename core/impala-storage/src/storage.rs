@@ -76,6 +76,13 @@ pub trait Storage {
     /// Jedes Objekt trägt seine lokale Nummer im Feld `seq` (wie IndexedDB).
     fn events_after(&self, after: Seq, up_to: Option<Seq>, limit: Option<usize>) -> Result<Vec<Object>, Error>;
     fn event_at(&self, seq: Seq) -> Result<Option<Object>, Error>;
+    /// Nur die eigenen Events ([`crate::event::is_own`]) mit `seq > after`, aufsteigend. Grundlage
+    /// der Konflikt-Prüfung beim Import; übernommene Events liest sie nie.
+    fn own_events_after(&self, after: Seq) -> Result<Vec<Object>, Error> {
+        let mut out = self.events_after(after, None, None)?;
+        out.retain(crate::event::is_own);
+        Ok(out)
+    }
     fn log_info(&self) -> Result<LogInfo, Error>;
     /// Welche der Schlüssel ([`crate::event::id_key`]) schon als Event-`id` vorkommen.
     fn known_ids(&self, keys: &[String]) -> Result<HashSet<String>, Error> {

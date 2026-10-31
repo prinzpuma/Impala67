@@ -247,7 +247,9 @@ class DriveController(
         val storage = withContext(Dispatchers.IO) { runCatching { current.storageInfo() }.getOrNull() }
         _ui.update {
             it.copy(
-                lastOk = status.lastOk, running = status.running || it.running,
+                // `running` nicht übernehmen: Der Wert ist beim Schreiben schon veraltet (die
+                // Speicherabfrage wartet hinter einem laufenden Sync) und hielt den Balken sonst fest.
+                lastOk = status.lastOk,
                 appBytes = storage?.appBytes ?: it.appBytes, usedBytes = storage?.usedBytes ?: it.usedBytes,
                 limitBytes = storage?.limitBytes ?: it.limitBytes,
             )

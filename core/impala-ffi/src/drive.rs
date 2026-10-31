@@ -22,7 +22,7 @@ use impala_net::{HttpClient, NetError, Request, Response, UreqClient, block_on};
 use impala_storage::{Blob, ExportOptions, Storage, StorageExt, Write};
 use serde_json::Value;
 
-use crate::sync::allow_secrets;
+use crate::sync::{allow_secrets, settle_remote};
 use crate::{CoreError, ImpalaCore, Inner, Shared};
 
 /// Präfix der Drive-Einträge in den Meta-Einträgen der Datenbank.
@@ -354,23 +354,20 @@ fn run<H: HttpClient>(
                     }
                 };
                 let r = block_on(backup.sync(&mut on_phase));
+                settle_remote(&shared);
                 set_progress("");
-                out.running.store(false, Ordering::Release);
                 let _ = reply.send(r);
             }
             Cmd::Flush(reply) => {
                 let r = block_on(backup.flush_upload());
-                out.running.store(false, Ordering::Release);
                 let _ = reply.send(r);
             }
             Cmd::Storage(reply) => {
                 let r = block_on(backup.storage_info());
-                out.running.store(false, Ordering::Release);
                 let _ = reply.send(r);
             }
             Cmd::Email(reply) => {
                 let r = block_on(backup.account_email());
-                out.running.store(false, Ordering::Release);
                 let _ = reply.send(r);
             }
         }
@@ -396,7 +393,11 @@ impl DriveSync {
         let shared = core.shared();
         let stop = Arc::new(AtomicBool::new(false));
         let loaded = Arc::new(AtomicU64::new(0));
-        let out = Arc::new(Published { running: AtomicBool::new(false), progress: Mutex::new(String::new()), loaded: loaded.clone() });
+        let out = Arc::new(Published {
+            running: AtomicBool::new(false),
+            progress: Mutex::new(String::new()),
+            loaded: loaded.clone(),
+        });
         let (tx, rx) = mpsc::channel();
         let (thread_shared, thread_stop, thread_out) = (shared.clone(), stop.clone(), out.clone());
         // `DriveBackup` ist nicht `Send` (RefCell): Es entsteht im Thread und bleibt dort.
@@ -417,14 +418,9 @@ impl DriveSync {
 
     /// Schickt einen Auftrag und wartet auf die Antwort.
     fn pass<T>(&self, cmd: impl FnOnce(Reply<T>) -> Cmd) -> Result<T, DriveFailure> {
-        self.out.running.store(true, Ordering::Release);
         let (reply, rx) = mpsc::channel();
-        let sent = self.tx.send(cmd(reply)).map_err(|_| gone());
-        let r = sent.and_then(|()| rx.recv().map_err(|_| gone())?.map_err(DriveFailure::from));
-        if r.is_err() {
-            self.out.running.store(false, Ordering::Release);
-        }
-        r
+        self.tx.send(cmd(reply)).map_err(|_| gone())?;
+        rx.recv().map_err(|_| gone())?.map_err(DriveFailure::from)
     }
 }
 
@@ -441,7 +437,11 @@ impl DriveSync {
     /// Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
     /// ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
     pub fn sync(&self, progress: Option<Arc<dyn DriveProgress>>) -> Result<DriveReport, DriveFailure> {
-        Ok(report(&self.pass(|r| Cmd::Sync(progress, r))?))
+        // `running` meint nur Durchgänge – nicht Speicheranzeige oder Konto-Abfrage.
+        self.out.running.store(true, Ordering::Release);
+        let r = self.pass(|r| Cmd::Sync(progress, r));
+        self.out.running.store(false, Ordering::Release);
+        Ok(report(&r?))
     }
 
     /// Kurzweg beim Schließen/Hintergrund: nur das eigene Änderungspaket hochladen (kein Ziehen,

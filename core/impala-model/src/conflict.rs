@@ -207,9 +207,7 @@ fn content_of(ev: &Object) -> &str {
 
 /// `isLocalOnly`: seit dem letzten Sync hier entstanden, kennt kein anderes Gerät.
 pub fn is_local_only(ev: &Object, unsynced_after_seq: u64) -> bool {
-    impala_storage::js::seq_of(ev.get("seq")) > unsynced_after_seq
-        && !ev.get("_remote").is_some_and(js::truthy)
-        && !ev.get("_derived").is_some_and(js::truthy)
+    impala_storage::js::seq_of(ev.get("seq")) > unsynced_after_seq && impala_storage::event::is_own(ev)
 }
 
 fn derived(id: String, t: String, kind: &str, payload: Value) -> Object {

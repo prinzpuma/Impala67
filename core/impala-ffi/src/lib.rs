@@ -195,6 +195,8 @@ struct Inner {
     listener: Option<Arc<dyn ChangeListener>>,
     /// Noch nicht gemeldete Ã„nderungen ([`changes::notify`]).
     pending: Changes,
+    /// Seit dem letzten [`sync::settle_remote`] Fremd-Events übernommen.
+    remote_imported: bool,
 }
 
 /// Zustand, den [`ImpalaCore`] und ein [`sync::CloudSync`] teilen.
@@ -221,6 +223,7 @@ impl Inner {
             sync_tx: None,
             listener: None,
             pending: Changes::default(),
+            remote_imported: false,
         };
         inner.reload()?;
         Ok(inner)

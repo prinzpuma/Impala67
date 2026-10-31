@@ -37,6 +37,8 @@ const MAX_RETRIES: u32 = 3;
 /// Gleichzeitige Downloads und Löschungen bzw. Uploads (wie früher in JS).
 const PARALLEL_DOWNLOADS: usize = 6;
 const PARALLEL_UPLOADS: usize = 3;
+/// So viele `seq` liest `upload_delta` je Abschnitt.
+const UPLOAD_SCAN_SEQS: u64 = 500;
 
 /// Liefert das OAuth-Zugriffstoken. Die Anmeldung selbst (Popup, Kontowahl) ist Plattformsache;
 /// ein Hintergrund-Sync öffnet nie ein Fenster.
@@ -521,19 +523,27 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
     /// nichts übrig blieb (nur Drive-Echos oder UI-Zustand).
     async fn upload_delta(&mut self, st: &mut DriveState, from: u64, to: u64) -> Result<usize, DriveError> {
         let allow = self.options.allow_secrets;
-        let events: Vec<Value> = self
-            .store
-            .events_between(from, to)
-            .await?
-            .into_iter()
-            .filter(|ev| should_upload_to(ev, Transport::Drive))
-            .filter_map(|ev| match ev {
-                Value::Object(o) if allow => Some(o),
-                Value::Object(o) => redact_secrets(o),
-                _ => None,
-            })
-            .map(Value::Object)
-            .collect();
+        // In `seq`-Abschnitten lesen: nach einer Wiederherstellung liegt fast das ganze Log über dem
+        // Wasserstand, hoch geht davon aber nichts (Drive-Echos) – es soll nie auf einmal im Speicher liegen.
+        let mut events: Vec<Value> = Vec::new();
+        let mut lo = from;
+        while lo < to {
+            let hi = to.min(lo.saturating_add(UPLOAD_SCAN_SEQS));
+            events.extend(
+                self.store
+                    .events_between(lo, hi)
+                    .await?
+                    .into_iter()
+                    .filter(|ev| should_upload_to(ev, Transport::Drive))
+                    .filter_map(|ev| match ev {
+                        Value::Object(o) if allow => Some(o),
+                        Value::Object(o) => redact_secrets(o),
+                        _ => None,
+                    })
+                    .map(Value::Object),
+            );
+            lo = hi;
+        }
         // Abweichung von JS: JS lud die gerätelokalen Marken (`seq`, `_remote`, `_remoteSource`,
         // `_derived`) mit hoch. Empfänger ersetzen sie ohnehin; hier fallen sie wie bei Cloudflare weg.
         let events: Vec<Value> = prune_for_upload(events)
@@ -598,13 +608,8 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
                 blobs.extend(batch.blobs);
                 if size >= BATCH_BYTES {
                     on_phase(Phase::Import);
-                    self.import(
-                        std::mem::take(&mut events),
-                        std::mem::take(&mut blobs),
-                        unsynced_after_seq,
-                        report,
-                    )
-                    .await?;
+                    self.import(std::mem::take(&mut events), std::mem::take(&mut blobs), unsynced_after_seq, report)
+                        .await?;
                     size = 0;
                 }
                 if batch.last {
@@ -686,7 +691,6 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         let res = self.call(|t| api::download(t, &file.id)).await?;
         Ok(decode_json(&res.body, file.encoding())?)
     }
-
 
     /// Hochladen und den Index sofort aktuell halten.
     async fn upload(&mut self, st: &mut DriveState, up: &Upload<'_>) -> Result<DriveFile, DriveError> {

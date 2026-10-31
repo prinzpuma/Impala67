@@ -19,6 +19,9 @@ use crate::order::{self, OrderTimes};
 use crate::reduce::{Effects, Live};
 use crate::types::{CoreOnly, State};
 
+/// Events je Lesezugriff, wenn [`Model::save_checkpoint`] die neuen IDs prüft.
+const CHECKPOINT_SCAN: usize = 2000;
+
 /// Ergebnis von [`Model::load`] (für Diagnose und Uhr).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadReport {
@@ -405,13 +408,15 @@ impl Model {
             return Ok(CheckpointSave::OutOfOrder);
         }
         let current = storage.log_info()?;
-        let post = if current.max_seq > self.base_seq {
-            storage.events_after(self.base_seq, Some(current.max_seq), None)?
-        } else {
-            Vec::new()
-        };
-        let post_ids: Vec<String> =
-            post.iter().filter_map(|e| e.get("id")).filter(|v| js::truthy(v)).map(js::to_string).collect();
+        // Nur die IDs, portionsweise gelesen: Nach einem großen Import liegt fast das ganze Log hier.
+        let mut post_ids: Vec<String> = Vec::new();
+        let mut after = self.base_seq;
+        while after < current.max_seq {
+            let page = storage.events_after(after, Some(current.max_seq), Some(CHECKPOINT_SCAN))?;
+            let Some(last) = page.last() else { break };
+            after = impala_storage::js::seq_of(last.get("seq"));
+            post_ids.extend(page.iter().filter_map(|e| e.get("id")).filter(|v| js::truthy(v)).map(js::to_string));
+        }
         if post_ids.iter().any(|id| !self.applied_after_load.contains(id)) {
             return Ok(CheckpointSave::Stale);
         }
