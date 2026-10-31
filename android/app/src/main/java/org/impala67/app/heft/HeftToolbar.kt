@@ -112,7 +112,7 @@ fun HeftOptions(vm: HeftViewModel, vertical: Boolean, modifier: Modifier = Modif
             }
         }
     }
-    Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp) {
+    Surface(modifier, shape = CircleShape, color = c.menu, border = androidx.compose.foundation.BorderStroke(1.dp, c.edge), shadowElevation = 8.dp) {
         if (vertical) {
             Column(Modifier.padding(vertical = 8.dp, horizontal = 4.dp), Arrangement.spacedBy(2.dp), Alignment.CenterHorizontally) { content() }
         } else {

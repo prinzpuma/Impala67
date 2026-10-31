@@ -22,21 +22,32 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import org.impala67.app.R
+
+val Nunito = FontFamily(
+    Font(R.font.nunito, FontWeight.Normal),
+    Font(R.font.nunito, FontWeight.Medium),
+    Font(R.font.nunito, FontWeight.SemiBold),
+    Font(R.font.nunito, FontWeight.Bold),
+)
+
 /** Material-Rollen aus den PWA-Tokens: Die PWA bestimmt das Aussehen, Material liefert die Bausteine. */
 private fun colorScheme(c: ImpalaColors): ColorScheme {
     fun over(top: Color) = top.compositeOver(c.panel)
     val base = if (c.isDark) darkColorScheme() else lightColorScheme()
     return base.copy(
         primary = c.accent,
-        onPrimary = c.onAccent,
+        onPrimary = if (c.isDark) Color.White else c.onAccent,
         primaryContainer = over(c.tint2),
         onPrimaryContainer = c.text,
         secondary = c.accent,
-        onSecondary = c.onAccent,
+        onSecondary = if (c.isDark) Color.White else c.onAccent,
         secondaryContainer = over(c.tint2),
         onSecondaryContainer = c.text,
         tertiary = c.success,
-        onTertiary = c.onAccent,
+        onTertiary = if (c.isDark) Color.White else c.onAccent,
         tertiaryContainer = over(c.success.copy(alpha = 0.15f)),
         onTertiaryContainer = c.text,
         background = c.panel,
@@ -52,14 +63,14 @@ private fun colorScheme(c: ImpalaColors): ColorScheme {
         surfaceContainerLow = over(c.surfaceSubtle),
         surfaceContainer = c.sidebar,
         surfaceContainerHigh = c.menu,
-        surfaceContainerHighest = over(c.surfaceHover),
+        surfaceContainerHighest = c.menu,
         inverseSurface = c.text,
         inverseOnSurface = c.panel,
         inversePrimary = c.accent,
         outline = c.edge,
         outlineVariant = c.edgeSoft,
         error = c.danger,
-        onError = c.onAccent,
+        onError = Color.White,
         errorContainer = over(c.danger.copy(alpha = 0.14f)),
         onErrorContainer = c.text,
         scrim = Color.Black.copy(alpha = if (c.isDark) 0.45f else 0.24f),
@@ -74,15 +85,29 @@ private val Shapes = Shapes(
     extraLarge = RoundedCornerShape(Radius.xl),
 )
 
-private fun style(size: TextUnit, weight: FontWeight = FontWeight.Normal, line: Float = 1.5f, tracking: TextUnit = 0.sp) =
-    TextStyle(fontSize = size, fontWeight = weight, lineHeight = size * line, letterSpacing = tracking)
+private fun style(
+    size: TextUnit,
+    weight: FontWeight = FontWeight.Normal,
+    line: Float = 1.5f,
+    tracking: TextUnit = 0.sp,
+    font: FontFamily = Nunito,
+) = TextStyle(
+    fontFamily = font,
+    fontSize = size,
+    fontWeight = weight,
+    lineHeight = size * line,
+    letterSpacing = tracking,
+)
 
-/** Schriftgrößen der PWA (--text-*); Überschriften mit der engeren Laufweite von --b-display. */
+/** Schriftgrößen der PWA (--text-*); Überschriften mit der Rundschrift von --b-display (Nunito). */
 private val Typography = Typography(
+    displayLarge = style(TextSize.xl * 1.3f, FontWeight.Bold, 1.15f, (-0.03).em),
+    displayMedium = style(TextSize.xl * 1.1f, FontWeight.Bold, 1.2f, (-0.025).em),
     displaySmall = style(TextSize.xl, FontWeight.SemiBold, 1.2f, (-0.02).em),
+    headlineLarge = style(32.sp, FontWeight.Bold, 1.25f, (-0.025).em),
     headlineMedium = style(28.sp, FontWeight.Medium, 1.3f, (-0.02).em),
     headlineSmall = style(24.sp, FontWeight.SemiBold, 1.2f, (-0.015).em),
-    titleLarge = style(TextSize.lg, FontWeight.SemiBold, 1.3f),
+    titleLarge = style(TextSize.lg, FontWeight.SemiBold, 1.3f, (-0.01).em),
     titleMedium = style(TextSize.md, FontWeight.SemiBold),
     titleSmall = style(TextSize.base, FontWeight.SemiBold),
     bodyLarge = style(TextSize.md),

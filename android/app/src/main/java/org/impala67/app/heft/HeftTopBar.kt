@@ -3,6 +3,7 @@ package org.impala67.app.heft
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.impala67.app.R
 import org.impala67.app.ui.theme.Impala
+import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.TextSize
 
 /** Aktionen der Seitenverwaltung (heft-pages-ui.js; Seitenübersicht wie das Seiten-Popover der PWA). */
@@ -61,12 +63,17 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
         actions = {
             IconButton({ addMenu = true }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_i_plus), "Seite hinzufügen", Modifier.size(22.dp))
-                DropdownMenu(addMenu, { addMenu = false }) {
+                DropdownMenu(
+                    addMenu, { addMenu = false },
+                    shape = RoundedCornerShape(Radius.lg),
+                    containerColor = Impala.colors.menu,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Impala.colors.edge),
+                ) {
                     Text("Neue Seite danach", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = Impala.colors.text2, fontSize = TextSize.xs)
                     Paper.entries.forEach { p ->
                         DropdownMenuItem({ Text(p.label) }, { addMenu = false; actions.add(p) })
                     }
-                    HorizontalDivider()
+                    HorizontalDivider(color = Impala.colors.edgeSoft)
                     DropdownMenuItem(
                         { Text("Dokument scannen") },
                         { addMenu = false; actions.scan() },
@@ -79,12 +86,17 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
             }
             IconButton({ pageMenu = true }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_i_dots), "Seite", Modifier.size(22.dp))
-                DropdownMenu(pageMenu, { pageMenu = false }) {
+                DropdownMenu(
+                    pageMenu, { pageMenu = false },
+                    shape = RoundedCornerShape(Radius.lg),
+                    containerColor = Impala.colors.menu,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Impala.colors.edge),
+                ) {
                     Text("Papier dieser Seite", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = Impala.colors.text2, fontSize = TextSize.xs)
                     Paper.entries.forEach { p ->
                         DropdownMenuItem({ Text(p.label) }, { pageMenu = false; actions.setPaper(p) })
                     }
-                    HorizontalDivider()
+                    HorizontalDivider(color = Impala.colors.edgeSoft)
                     DropdownMenuItem(
                         { Text("Seite löschen", color = Impala.colors.danger) },
                         { pageMenu = false; confirm = true },

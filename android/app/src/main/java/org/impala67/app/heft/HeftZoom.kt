@@ -29,6 +29,7 @@ class HeftZoom {
     var origin by mutableStateOf(Offset.Zero)
 
     companion object {
+        const val MIN = 0.5f
         const val MAX = 4f
     }
 }
@@ -48,7 +49,7 @@ fun Modifier.heftPinch(zoom: HeftZoom, onEnd: (scale: Float, centroid: Offset) -
             if (touches.size >= 2 && !penDown) {
                 if (!pinching) zoom.origin = event.calculateCentroid()
                 pinching = true
-                zoom.live = (zoom.live * event.calculateZoom()).coerceIn(1f / zoom.zoom, HeftZoom.MAX / zoom.zoom)
+                zoom.live = (zoom.live * event.calculateZoom()).coerceIn(HeftZoom.MIN / zoom.zoom, HeftZoom.MAX / zoom.zoom)
                 event.changes.forEach { it.consume() }
             }
         } while (event.changes.any { it.pressed })

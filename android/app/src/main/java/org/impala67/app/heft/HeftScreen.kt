@@ -1,5 +1,6 @@
 package org.impala67.app.heft
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -119,10 +120,16 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
             val density = LocalDensity.current
             val viewW = constraints.maxWidth.toFloat()
             val viewH = constraints.maxHeight.toFloat()
-            val margin = with(density) { 12.dp.toPx() }
-            val gap = with(density) { 12.dp.toPx() }
-            // Passbreite wie fitScale in heft-viewport.js: ganze Seite sichtbar, nie breiter als die Ansicht.
-            val baseW = min(viewW - 2 * margin, viewH * HeftPage.RATIO)
+            val margin = with(density) { 16.dp.toPx() }
+            val gap = with(density) { 16.dp.toPx() }
+            // Passbreite: Auf dem Tablet (desk) großzügig wie in der PWA (--content-width: 920px),
+            // damit das Blatt den Arbeitsbereich harmonisch ausfüllt statt als Briefmarke zu hängen.
+            val maxPageW = with(density) { 920.dp.toPx() }
+            val baseW = if (desk) {
+                min(viewW - 2 * margin, maxPageW)
+            } else {
+                min(viewW - 2 * margin, viewH * HeftPage.RATIO)
+            }
             val pageW = baseW * zoom.zoom
             val contentW = max(viewW, pageW + 2 * margin)
             val maxPan by rememberUpdatedState(contentW - viewW)
@@ -136,7 +143,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
 
             fun commit(scale: Float, c: Offset) {
                 val old = zoom.zoom
-                val new = (old * scale).coerceIn(1f, HeftZoom.MAX)
+                val new = (old * scale).coerceIn(HeftZoom.MIN, HeftZoom.MAX)
                 val ratio = new / old
                 val newPageW = baseW * new
                 val newContentW = max(viewW, newPageW + 2 * margin)
@@ -156,6 +163,13 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                 zoom.live = 1f
             }
 
+            val showOptions = vm.tools.expanded
+            // Ausreichend Platz oben für schwebende Leisten, damit keine Werkzeuge über dem Seitenanfang liegen.
+            val toolbarSpace by animateDpAsState(
+                targetValue = if (desk) (if (showOptions) 136.dp else 76.dp) else 0.dp,
+                label = "deskToolbarSpace",
+            )
+
             Box(
                 Modifier.fillMaxSize()
                     .heftPinch(zoom) { s, c -> commit(s, c) }
@@ -173,7 +187,7 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
                             transformOrigin = TransformOrigin((zoom.origin.x + pan) / size.width, zoom.origin.y / size.height)
                         },
                     state = lazy,
-                    contentPadding = PaddingValues(top = if (desk) DESK_TOOLBAR_SPACE else 0.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(top = toolbarSpace, bottom = 96.dp),
                 ) {
                     items(pages, key = { it }) { id ->
                         Box(Modifier.fillMaxWidth().padding(top = 12.dp), Alignment.TopCenter) {
@@ -184,7 +198,6 @@ fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier:
             }
 
             val vertical = maxWidth < 600.dp
-            val showOptions = vm.tools.expanded
             if (vertical) {
                 Row(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp), Arrangement.spacedBy(8.dp), Alignment.CenterVertically) {
                     if (showOptions) HeftOptions(vm, vertical = true)
