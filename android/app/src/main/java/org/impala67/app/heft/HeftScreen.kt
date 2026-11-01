@@ -356,6 +356,7 @@ private fun HeftChrome(vm: HeftViewModel, content: @Composable BoxScope.() -> Un
 @Composable
 private fun PagesPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Impala.colors
+    val motion = MaterialTheme.motionScheme;
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier.height(48.dp).pressScale(interaction, 0.95f).heftFloat()
@@ -368,8 +369,8 @@ private fun PagesPill(label: String, onClick: () -> Unit, modifier: Modifier = M
         AnimatedContent(
             label,
             transitionSpec = {
-                (fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + slideInVertically { it / 2 })
-                    .togetherWith(fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically { -it / 2 })
+                (fadeIn(motion.fastEffectsSpec()) + slideInVertically { it / 2 })
+                    .togetherWith(fadeOut(motion.fastEffectsSpec()) + slideOutVertically { -it / 2 })
             },
             label = "heft-page-count",
         ) { Text(it, color = c.text, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold) }

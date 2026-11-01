@@ -96,13 +96,14 @@ private fun dotDp(size: Double): Dp = (2 + size * 1.6).coerceIn(4.0, 12.0).round
  */
 @Composable
 fun HeftToolbar(vm: HeftViewModel, phone: Boolean, modifier: Modifier = Modifier) {
+    val motion = MaterialTheme.motionScheme
     val t = vm.tools
     Column(modifier, Arrangement.spacedBy(6.dp), Alignment.CenterHorizontally) {
         AnimatedContent(
             targetState = t.collapsed,
             transitionSpec = {
-                (fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + scaleIn(initialScale = 0.9f))
-                    .togetherWith(fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.9f))
+                (fadeIn(motion.defaultEffectsSpec()) + scaleIn(initialScale = 0.9f))
+                    .togetherWith(fadeOut(motion.fastEffectsSpec()) + scaleOut(targetScale = 0.9f))
             },
             contentAlignment = Alignment.TopCenter,
             label = "heft-toolbar",

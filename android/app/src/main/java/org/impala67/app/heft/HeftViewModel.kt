@@ -118,6 +118,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         private set
     private var writingOff: Job? = null
 
+    @JvmName("updateWriting")
     fun setWriting(on: Boolean) {
         writingOff?.cancel()
         if (on) { writing = true; return }

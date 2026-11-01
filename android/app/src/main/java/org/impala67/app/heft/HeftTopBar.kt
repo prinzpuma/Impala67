@@ -43,13 +43,14 @@ fun HeftTopBar(
     onRedo: () -> Unit,
     onAi: (() -> Unit)?,
 ) {
+    val motion = MaterialTheme.motionScheme
     TopAppBar(
         title = {
             Column {
                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                 AnimatedContent(
                     pageLabel,
-                    transitionSpec = { fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) togetherWith fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) },
+                    transitionSpec = { fadeIn(motion.fastEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) },
                     label = "heft-page-label",
                 ) { Text(it, color = Impala.colors.text2, fontSize = TextSize.xs, maxLines = 1) }
             }
