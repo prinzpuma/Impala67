@@ -2,12 +2,12 @@
 
 ## 1. Produkt und Plattformen
 
-- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) mit Android-Hülle (Capacitor). Nutzung:
+- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) und nativer Android-App (Kotlin/Compose über dem Rust-Kern, `android/`). Nutzung:
   - **iPad / Tablet**: Handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht).
   - **Laptop / PC (Linux, Windows, macOS)**: Strukturiertes Tippen (Markdown-Editor).
   - **Smartphone / Android**: Schnelles Lesen und mobile Kurznotizen.
 - **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
-- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Capacitor kopiert nur die fertigen Dateien in die Android-Hülle.
+- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Die native Android-App nutzt `web/` nicht.
 - **Rust-Kern**: Die Logik ohne Oberfläche wird schrittweise nach Rust verlagert (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`). Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall); die PWA lädt den Kern als WASM aus `web/core/` (über `web/rust-core.js`). Nach Änderungen in `core/`: `npm run build:core` und `web/core/` + `core/wasm-build.json` mitcommitten.
 - **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren.
 

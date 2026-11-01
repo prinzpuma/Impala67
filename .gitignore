@@ -8,10 +8,11 @@ web/test-*
 test/verify-home*
 mcp/*.log
 
-# Android / Capacitor
+# Android
 android/.gradle/
 android/build/
 android/app/build/
+android/app/src/main/jniLibs/
 android/.idea/
 android/*.iml
 android/app/*.iml

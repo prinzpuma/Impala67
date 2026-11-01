@@ -2,10 +2,12 @@ package org.impala67.app.core
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -23,7 +25,9 @@ import uniffi.impala_ffi.ImpalaCore
  * Sync – als [Changes]; Abfragen lesen daraufhin neu. Keine Logik, die im Kern liegt, hier nachbauen.
  */
 class ImpalaStore(val core: ImpalaCore, private val scope: CoroutineScope) {
-    private val _changes = MutableSharedFlow<Changes>(extraBufferCapacity = 64)
+    // Unbegrenzt, damit tryEmit nie scheitert: ein fester Puffer verwarf bei einem Sync-Schwall
+    // still Meldungen, und Ansichten blieben veraltet. Die Abnehmer sind schnell ([query] fasst zusammen).
+    private val _changes = MutableSharedFlow<Changes>(extraBufferCapacity = Channel.UNLIMITED)
 
     /** Jede angewandte Änderung. Kommt aus beliebigen Threads an; der Rückruf kehrt sofort zurück. */
     val changes: SharedFlow<Changes> = _changes
@@ -38,13 +42,15 @@ class ImpalaStore(val core: ImpalaCore, private val scope: CoroutineScope) {
 
     /**
      * Wert aus dem Kern, neu gelesen bei jeder Änderung, die [relevant] betrifft (`everything` immer).
-     * Gelesen wird im Hintergrund; `null` bis zum ersten Ergebnis.
+     * Gelesen wird im Hintergrund; `null` bis zum ersten Ergebnis. Kommen während eines Lesens
+     * weitere Änderungen, wird danach genau einmal neu gelesen (nicht einmal je Änderung).
      */
     fun <T> query(relevant: (Changes) -> Boolean, read: (ImpalaCore) -> T): StateFlow<T?> =
         changes
             .filter { it.everything || relevant(it) }
             .map { }
             .onStart { emit(Unit) }
+            .conflate()
             .map { read(core) }
             .flowOn(Dispatchers.IO)
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)

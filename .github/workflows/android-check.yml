@@ -1,10 +1,15 @@
 name: Android prüfen
 
-# Kompiliert die native App (Debug) auf Arbeitszweigen – für Sitzungen ohne lokales Android-SDK.
+# Baut die native App (Debug) samt Rust-Kern auf Arbeitszweigen – für Sitzungen ohne lokales Android-SDK.
+# Schlägt fehl, wenn die committeten Kotlin-Bindings nicht zum Rust-Kern passen.
 on:
   push:
     branches-ignore: [main]
-    paths: ['android/**', '.github/workflows/android-check.yml']
+    paths:
+      - 'android/**'
+      - 'core/**'
+      - 'tools/android-core.mjs'
+      - '.github/workflows/android-check.yml'
   workflow_dispatch:
 
 jobs:
@@ -12,13 +17,20 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'temurin'
       - uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;27.2.12479018'
+      - name: Rust-Kern für Android bauen
+        run: node tools/android-core.mjs
+      - name: Kotlin-Bindings aktuell?
+        run: git diff --exit-code -- android/app/src/main/java/uniffi || { echo "::error::Bindings veraltet – npm run build:android-core ausführen und impala_ffi.kt committen."; exit 1; }
       - name: Debug-APK bauen
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon --warning-mode=summary

@@ -134,7 +134,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;27.2.12479018'
 
       - name: Gradle Wrapper ausführbar machen
         working-directory: android
@@ -164,8 +164,11 @@ jobs:
             echo "Hinweis: Kein Release-Keystore hinterlegt. APK wird mit Debug-Signatur als installierbarer Fallback gebaut."
           fi
 
-      - name: Capacitor Sync
-        run: npx cap sync android
+      - name: Rust-Kern für Android bauen
+        run: npm run build:android-core
+
+      - name: Kotlin-Bindings aktuell?
+        run: git diff --exit-code -- android/app/src/main/java/uniffi || { echo "::error::Bindings veraltet – npm run build:android-core ausführen und impala_ffi.kt committen."; exit 1; }
 
       - name: Release APK bauen
         working-directory: android
