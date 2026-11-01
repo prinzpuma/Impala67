@@ -28,7 +28,8 @@ import org.impala67.app.ui.theme.TextSize
 
 /**
  * Kopfzeile auf dem Telefon (mobile-view.js): Zurück, Titel mit „Seite x von y“, Rückgängig und
- * Wiederholen (stehen auf dem Telefon nicht in der Kapsel, heft-toolbar-ui.js) und der KI-Assistent.
+ * Wiederholen (stehen auf dem Telefon nicht in der Kapsel, heft-toolbar-ui.js), Bearbeiten/Fertig für den
+ * Lesemodus und der KI-Assistent.
  * Seiten und „+“ schweben unten in den Ecken, in Daumennähe.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -41,6 +42,8 @@ fun HeftTopBar(
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
+    reading: Boolean,
+    onReading: (Boolean) -> Unit,
     onAi: (() -> Unit)?,
 ) {
     val motion = MaterialTheme.motionScheme
@@ -61,11 +64,18 @@ fun HeftTopBar(
             }
         },
         actions = {
-            IconButton(onUndo, enabled = canUndo, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_undo), "Rückgängig", Modifier.size(21.dp))
+            if (!reading) {
+                IconButton(onUndo, enabled = canUndo, shapes = IconButtonDefaults.shapes()) {
+                    Icon(painterResource(R.drawable.ic_i_undo), "Rückgängig", Modifier.size(21.dp))
+                }
+                IconButton(onRedo, enabled = canRedo, shapes = IconButtonDefaults.shapes()) {
+                    Icon(painterResource(R.drawable.ic_i_redo), "Wiederholen", Modifier.size(21.dp))
+                }
             }
-            IconButton(onRedo, enabled = canRedo, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_redo), "Wiederholen", Modifier.size(21.dp))
+            // `#mEditToggle`: Stift = Bearbeiten (Lesemodus an), Haken in Akzentfarbe = Fertig.
+            IconButton({ onReading(!reading) }, shapes = IconButtonDefaults.shapes()) {
+                if (reading) Icon(painterResource(R.drawable.ic_i_pen), "Bearbeiten", Modifier.size(21.dp))
+                else Icon(painterResource(R.drawable.ic_i_check), "Fertig", Modifier.size(21.dp), Impala.colors.accent)
             }
             if (onAi != null) {
                 IconButton(onAi, shapes = IconButtonDefaults.shapes()) {

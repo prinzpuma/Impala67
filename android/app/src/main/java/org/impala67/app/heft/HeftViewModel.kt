@@ -120,6 +120,33 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         }
     }
 
+    /** Lesemodus (Telefon, mobile.js `heftReadOnly`): Finger und Stift blättern und zoomen nur. */
+    var reading by mutableStateOf(false)
+        private set
+    private var readDecided = false
+
+    /**
+     * Beim Öffnen auf dem Telefon: lesen, außer das Heft ist leer (dann gleich beschreibbar). Gilt einmal
+     * je geöffnetem Heft; danach entscheidet nur noch der Bearbeiten/Fertig-Knopf.
+     */
+    fun openForReading() {
+        if (readDecided) return
+        readDecided = true
+        reading = true
+        viewModelScope.launch {
+            val empty = store.write { core ->
+                core.heftPageIds(pageId).all { id -> core.heftPage(pageId, id).let { it.strokes.isEmpty() && it.images.isEmpty() && it.texts.isEmpty() } }
+            }
+            if (empty) reading = false
+        }
+    }
+
+    @JvmName("updateReading")
+    fun setReading(on: Boolean) {
+        if (on) { lasso = null; closeText(commit = true); objSel = null }
+        reading = on
+    }
+
     /** Gerade wird geschrieben: die Leisten treten zurück (heft.js `setWriting`, 700 ms Nachlauf). */
     var writing by mutableStateOf(false)
         private set

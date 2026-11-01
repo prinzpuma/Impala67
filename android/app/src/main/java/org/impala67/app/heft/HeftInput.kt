@@ -64,6 +64,9 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     var k = 1f
     var tools = HeftTools()
 
+    /** Lesemodus: keine Eingabe auf der Seite, Finger und Stift scrollen die Liste. */
+    var reading = false
+
     private class Meta(val tool: String, val color: String, val size: Double, val laser: Boolean)
 
     private val running = HashMap<InProgressStrokeId, Meta>()
@@ -112,6 +115,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (pointerId != -1) return true
+                if (reading) return false
                 val i = ev.actionIndex
                 val type = ev.getToolType(i)
                 val finger = type == MotionEvent.TOOL_TYPE_FINGER

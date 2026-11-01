@@ -133,6 +133,8 @@ fun HeftScreen(
     var insertPos by remember { mutableStateOf(InsertPos.AFTER) }
 
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    // Lesemodus nur auf dem Telefon (mobile.js); auf dem Tablet schreibt der Stift immer.
+    LaunchedEffect(desk) { if (desk) vm.setReading(false) else vm.openForReading() }
     LaunchedEffect(pages, focus) {
         val at = pages.indexOf(focus)
         if (at >= 0) { lazy.animateScrollToItem(at); focus = null }
@@ -201,6 +203,8 @@ fun HeftScreen(
                 canRedo = vm.canRedo,
                 onUndo = vm::undo,
                 onRedo = vm::redo,
+                reading = vm.reading,
+                onReading = vm::setReading,
                 onAi = onAi,
             )
         },
@@ -272,9 +276,9 @@ fun HeftScreen(
             val gestures = rememberUpdatedState(HeftGestureCallbacks(
                 pinchEnd = { s, c -> commit(s, c) },
                 doubleTap = { zoomTo(it) },
-                undo = vm::undo,
-                redo = vm::redo,
-                fingerFree = { vm.tools.onlyPen },
+                undo = { if (!vm.reading) vm.undo() },
+                redo = { if (!vm.reading) vm.redo() },
+                fingerFree = { vm.reading || vm.tools.onlyPen },
             ))
 
             Box(
@@ -323,9 +327,9 @@ fun HeftScreen(
                 }
             }
 
-            // Leisten über dem Heft; beim Schreiben treten sie zurück.
+            // Leisten über dem Heft; beim Schreiben treten sie zurück, im Lesemodus fehlen Werkzeuge und „+“.
             HeftChrome(vm) {
-                HeftToolbar(vm, phone = !desk, media = media, modifier = Modifier.align(Alignment.TopCenter).padding(top = if (desk) 10.dp else 8.dp))
+                if (!vm.reading) HeftToolbar(vm, phone = !desk, media = media, modifier = Modifier.align(Alignment.TopCenter).padding(top = if (desk) 10.dp else 8.dp))
 
                 AnimatedVisibility(
                     visible = vm.lasso != null,
@@ -345,7 +349,7 @@ fun HeftScreen(
                         modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 16.dp),
                     )
                     var addMenu by remember { mutableStateOf(false) }
-                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)) {
+                    if (!vm.reading) Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)) {
                         HeftCornerButton("Seite hinzufügen", { addMenu = true }, Modifier.size(48.dp), active = addMenu) {
                             Icon(painterResource(R.drawable.ic_i_plus), null, Modifier.size(22.dp))
                         }

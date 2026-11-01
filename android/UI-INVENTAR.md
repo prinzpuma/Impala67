@@ -840,7 +840,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - ~~**Werkzeugeinstellungen gehen verloren.**~~ ✅ behoben (DevicePrefs `heftTools`). PWA speichert Werkzeug, Stiftfavoriten, Radiergröße und Nur-Stift in localStorage (heft-tools.js:4, 17-39). Kotlin hält sie nur im ViewModel (HeftViewModel.kt:51).
 - ~~**Zoombereich.**~~ ✅ jetzt 0,4–6. Vorher Kotlin 0,5–4 (HeftZoom.kt:32-33), PWA 0,4–6 (heft-viewport.js:23).
 - **Kopfzeile.** Die Kotlin-Kopfzeile (HeftTopBar.kt) gibt es in der PWA-Desktopansicht nicht. Die PWA zeigt dort nur den Fokusmodus (render.js, Zweig `pg.kind === "heft"`, ca. Z. 667-677).
-- **Fehlende Gesten:** ~~Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo~~ ✅; offen: Mausrad mit Strg-Zoom, Lesemodus auf dem Handy.
+- **Fehlende Gesten:** ~~Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo~~ ✅; Lesemodus auf dem Handy ✅; offen: Mausrad mit Strg-Zoom.
 - **Fehlende Werkzeuge:** ~~Formerkennung (Halten), Laser, Radierer-Halten~~ ✅; Bild- und Textwerkzeuge ✅.
 - **Fehlende Export- und Importfunktionen**, Verlauf (Snapshots, TODO in HeftPagesSheet.kt:52-53). Schreib-Rückzug ✅.
 
@@ -896,7 +896,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Vorlage Liniert / Kariert / Punkte / Blanko** – Tipp legt Seite mit Papier an (web/heft-toolbar-ui.js:196-201; web/heft.js:1456; web/heft-tools.js:8) — Kotlin: ✅ HeftCorners.kt:115-171 (Mini-Vorschau), HeftTopBar.kt:73-75 (Menü)
 - [x] **Papier dieser Seite** – Chips zum Umstellen (web/heft-toolbar-ui.js:202-204; web/heft.js:1501-1506) — Kotlin: ✅ HeftCorners.kt:89-97, HeftTopBar.kt:95-98
 - [x] **Bild als Seite** – Bilddatei als eigene Seite mit 40 Rand, Papier der aktuellen Seite, am Ende (web/heft-toolbar-ui.js:206; web/heft.js:1458; web/heft-import.js:79-99, 137-156) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu`, scan/HeftScan.kt `insertImagePage`
-- [ ] **PDF oder Bild importieren** – öffnet Import-Dialog (web/heft-toolbar-ui.js:207; web/heft.js:1459) — Kotlin: 🟡 HeftTransfer.kt `HeftImportDialog` (Position ✅; Ziel ist immer das offene Heft, „Als neue Notiz-Seite“ fehlt)
+- [x] **PDF oder Bild importieren** – öffnet Import-Dialog (web/heft-toolbar-ui.js:207; web/heft.js:1459) — Kotlin: ✅ HeftTransfer.kt `HeftImportDialog` (Ort: beliebiges Heft oder „Als neue Notiz-Seite(n)“, Position)
 - [x] **Dokument scannen** – öffnet Scanner (web/heft-toolbar-ui.js:208; web/heft.js:1460) — Kotlin: ✅ HeftCorners.kt:99-102, HeftTopBar.kt:77-81 (ML Kit, siehe Abschnitt 15)
 
 ### 6. Bilder-Popover („Bilder“)
@@ -973,7 +973,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [ ] **Handballen-Rücknahme: Verschieben der letzten 350 ms wird zurückgesetzt** (web/heft-viewport.js:496-499, 530-533; web/heft.js:87) — Kotlin: ⬜
 - [ ] **Zweiter Finger während Strich bricht Strich ab** (Pinch, web/heft-input.js:95-104) — Kotlin: ⬜ nicht sicher geprüft (Pinch-Zoom wird über heftPinch behandelt, Strich-Abbruch nicht gefunden)
 - [x] **Maus zeichnet** (web/heft-input.js:81) — Kotlin: ✅ HeftInput.kt:64-67 (MOUSE akzeptiert)
-- [ ] **Lesemodus auf dem Handy** – Blättern und Zoomen ohne Striche, bis Stift-Taste oder leeres Heft (web/heft.js:110-113, 1837; web/mobile.js:59-68) — Kotlin: ⬜
+- [x] **Lesemodus auf dem Handy** – Blättern und Zoomen ohne Striche, bis Stift-Taste oder leeres Heft (web/heft.js:110-113, 1837; web/mobile.js:59-68) — Kotlin: ✅ HeftViewModel.kt `openForReading`/`setReading`, HeftInput.kt `reading`
 - [ ] **Stift-Taste (Bearbeiten/Fertig) in der Handy-Kopfzeile** (web/mobile-view.js:26; web/mobile.js:286-290, 376-383) — Kotlin: ⬜
 - [x] **„Seite wird beim Zoomen zentriert“** (web/heft-viewport.js:78-88) — Kotlin: ✅ (fixer Mittelpunkt im Pinch, HeftScreen.kt:147-169)
 - [ ] **Hochziehen am Ende fügt neue Seite hinzu** – Geist-Knopf „＋ Neue Seite“ erscheint, Loslassen ab 70 px (web/heft.js:1626-1656; css/heft.css:452-454) — Kotlin: 🟡 HeftScreen.kt `AddPageGhost` (Knopf „Neue Seite“ steht immer am Ende; Hochziehen fehlt)
@@ -1008,15 +1008,15 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 ### 13. Import
 
-- [ ] **Import-Dialog „In Impala67 importieren“** – Liste der Dateien mit Typ und Größe (web/heft-import.js:254-287) — Kotlin: ⬜
-- [ ] **Ziel: Notiz oder Heft** (Notiz nur für reine PDFs) (web/heft-import.js:270-281) — Kotlin: ⬜
-- [ ] **Einfügen: Nach / Vor der aktuellen Seite, Am Anfang, Am Ende** (web/heft-import.js:281; web/heft-pages-core.js:75) — Kotlin: ⬜
-- [ ] **Importieren-Knopf mit Fortschritt** (web/heft-import.js:302-332) — Kotlin: ⬜
-- [ ] **Abbrechen und ✕** (web/heft-import.js:297-300) — Kotlin: ⬜
-- [ ] **Dateiauswahl (Bild oder PDF, mehrere)** (web/heft-import.js:13-21, 337-346) — Kotlin: ⬜
-- [ ] **PDF-Seiten als Heftseiten, Text übernommen** (web/heft-import.js:158-207) — Kotlin: ⬜
-- [ ] **Bilddateien als Heftseiten** (web/heft-import.js:239-242) — Kotlin: ⬜ (Scans gehen über den Scanner, siehe 15)
-- [ ] **Meldung „Import abgeschlossen“** (web/heft-import.js:326) — Kotlin: ⬜
+- [x] **Import-Dialog „In Impala67 importieren“** – Liste der Dateien mit Typ und Größe (web/heft-import.js:254-287) — Kotlin: ✅ HeftTransfer.kt `HeftImportDialog`
+- [x] **Ziel: Notiz oder Heft** (Notiz nur für reine PDFs) (web/heft-import.js:270-281) — Kotlin: ✅ HeftTransfer.kt (Auswahl „Ort“; Notiz über library/LibraryImport.kt `importPdfPage`)
+- [x] **Einfügen: Nach / Vor der aktuellen Seite, Am Anfang, Am Ende** (web/heft-import.js:281; web/heft-pages-core.js:75) — Kotlin: ✅ HeftTransfer.kt `ImportPos` (anderes Heft: ab der letzten Seite)
+- [x] **Importieren-Knopf mit Fortschritt** (web/heft-import.js:302-332) — Kotlin: ✅ HeftTransfer.kt
+- [x] **Abbrechen und ✕** (web/heft-import.js:297-300) — Kotlin: ✅ HeftTransfer.kt (Abbrechen; ✕ entfällt im Dialog)
+- [x] **Dateiauswahl (Bild oder PDF, mehrere)** (web/heft-import.js:13-21, 337-346) — Kotlin: ✅ HeftTransfer.kt `rememberHeftFilePick`
+- [ ] **PDF-Seiten als Heftseiten, Text übernommen** (web/heft-import.js:158-207) — Kotlin: 🟡 heft/scan/HeftScanImage.kt `importPages` (Seiten als Bild, der PDF-Text wird nicht übernommen)
+- [x] **Bilddateien als Heftseiten** (web/heft-import.js:239-242) — Kotlin: ✅ heft/scan/HeftScanImage.kt `importPages`
+- [x] **Meldung „Import abgeschlossen“** (web/heft-import.js:326) — Kotlin: ✅ HeftTransfer.kt (Snackbar)
 
 ### 14. Export
 
@@ -1815,7 +1815,7 @@ Repo: `/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/`. Pfade im Format `we
 - [ ] **Untertitel „N fällig“ (#mSub)** – nur im Lernen-Tab, wenn Karten fällig sind (web/mobile-view.js:21; web/mobile.js:430-437; web/mobile.css:104-118) — Kotlin: ⬜ ui/shell/AppShell.kt (Lernen-Badge vorhanden, Untertitel fehlt)
 - [x] **Suchen-Knopf** – öffnet die Vollbild-Suche (Befehls-Palette) über `#btnSearchToggle` (web/mobile-view.js:24; web/mobile.js:277-279) — Kotlin: ✅ ui/shell/AppShell.kt (öffnet SearchRoute; Suche in search/ geprüft per PORTING §8 ✅)
 - [x] **KI-Knopf** – öffnet den KI-Assistenten als Vollbild (web/mobile-view.js:25; web/mobile.js:281-285) — Kotlin: ✅ ui/shell/AppShell.kt (öffnet AiRoute; Chat-Inhalt laut PORTING §8 teilweise)
-- [ ] **Bearbeiten/Fertig-Umschalter (#mEditToggle)** – nur bei Heften; schaltet zwischen Lesen (Stift-Symbol „Bearbeiten“) und Schreiben („Fertig“) um. Leere Hefte sind sofort beschreibbar (web/mobile-view.js:26; web/mobile.js:286-291, 378-393; web/mobile.css:140-142) — Kotlin: ⬜ heft/HeftTopBar.kt (kein Lesemodus gefunden; Heft-Eingabe ist immer aktiv)
+- [x] **Bearbeiten/Fertig-Umschalter (#mEditToggle)** – nur bei Heften; schaltet zwischen Lesen (Stift-Symbol „Bearbeiten“) und Schreiben („Fertig“) um. Leere Hefte sind sofort beschreibbar (web/mobile-view.js:26; web/mobile.js:286-291, 378-393; web/mobile.css:140-142) — Kotlin: ✅ heft/HeftTopBar.kt (im Lesemodus ohne Rückgängig/Wiederholen, Werkzeugleiste und „+“)
 - [ ] **Seitenoptionen-Knopf (#mPageMenu, ⋯)** – öffnet bei Seiten ein Bottom-Sheet mit dem Seiten-Menü (web/mobile-view.js:27; web/mobile.js:292-296, 414-415) — Kotlin: ⬜ editor/EditorScreen.kt (auf dem Telefon ist `chromeActions` null, die Seitenaktionen gibt es nur im Desk-Layout ui/desk/DeskPageActions.kt)
 - [x] **Icon-Set** – Icons aus dem Sprite über `MOBILE_VIEW.icon()` mit festem Namens-Mapping (web/mobile-view.js:9-14) — Kotlin: ✅ R.drawable.ic_i_* (ShellParts/AppShell)
 
@@ -1955,7 +1955,7 @@ Dies ist das Seiten-Menü aus render.js:771-791. Es öffnet über ⋯ in der Kop
 
 ### 9. Heft auf dem Telefon (Mobile-Schicht in den Stylesheets)
 
-- [ ] **Lesemodus beim Öffnen** – Finger blättern und zoomen, keine Striche; Stift-Taste schaltet ins Schreiben (web/mobile.js:59-69; web/mobile.css:141-142) — Kotlin: ⬜ heft/ (kein Lesemodus gefunden)
+- [x] **Lesemodus beim Öffnen** – Finger blättern und zoomen, keine Striche; Stift-Taste schaltet ins Schreiben (web/mobile.js:59-69; web/mobile.css:141-142) — Kotlin: ✅ heft/HeftScreen.kt (nur Telefon)
 - [ ] **Eckknöpfe oben** – 44 px, unter der Kopfzeile (web/css/heft.css:634-645; web/mobile-content.css:113-124) — Kotlin: 🟡 heft/HeftTopBar.kt (eigene Leiste; Eckknöpfe nicht geprüft)
 - [x] **Werkzeugleiste unten am Daumen** – schwebend, Ziele 44 px, horizontal wischbar (web/mobile-content.css:126-164; web/css/heft.css:647-665) — Kotlin: ✅ heft/HeftToolbar.kt (Expressive Floating Toolbar, PORTING §8)
 - [x] **Werkzeug-Auswahl** – Farbtupfer 24 px, Stiftgrößen 34 px (web/css/heft.css:657-660) — Kotlin: ✅ heft/HeftToolbar.kt (PORTING §8)
@@ -2120,7 +2120,7 @@ PWA-Reihenfolge in `goBack()` (web/mobile.js:149-160): erst Sheet, dann Dialog/P
 
 1. Seitenmenü (⋯) fehlt auf dem Telefon komplett (Verlauf, Export, Icon, Cover, Duplizieren, Verschieben, Archivieren, Löschen). Die Desk-Variante existiert.
 2. Slash-Menü: 13 von 22 Einträgen fehlen; kein Link-Menü, keine Gleichung.
-3. Lesemodus für Hefte fehlt.
+3. ~~Lesemodus für Hefte fehlt.~~ ✅
 4. Mehr: Wissensgraph, Gemini Notebook und Lernanalyse sind nur Platzhalter.
 5. Notiz-Menü: Duplizieren und Verschieben fehlen; Menü ist Dropdown statt Bottom-Sheet.
 6. Keine Benachrichtigung „Karteikarten fällig“, keine Diktat-Funktion, kein Share-Intent.

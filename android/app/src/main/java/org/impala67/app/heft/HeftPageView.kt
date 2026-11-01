@@ -170,7 +170,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                 }
             },
             modifier = Modifier.fillMaxSize(),
-            update = { input[0]?.let { it.k = k; it.tools = vm.tools } },
+            update = { input[0]?.let { it.k = k; it.tools = vm.tools; it.reading = vm.reading } },
         )
         editing?.let { HeftTextEditor(vm, it, k) }
     }
