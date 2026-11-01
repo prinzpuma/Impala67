@@ -196,12 +196,12 @@ Quelle: web/render.js:759–800 (`topbarActionsHtml`, `shareMenuHtml`, `moreMenu
   - [x] **Als Markdown (.md) speichern** — Kotlin: ✅
   - [x] **Internen Link kopieren** — Kotlin: ✅
   - [x] **Verlauf** (`btnHistory`) — Kotlin: ✅ DeskPageActions.kt → `HistoryDialog`
-  - [ ] **PDF im neuen Tab öffnen** (`btnOpenPdfTab`, nur mit PDF; web/render.js:784) — Kotlin: ⬜
-  - [ ] **PDF herunterladen** (`btnDownloadPdf`, nur mit PDF; web/render.js:785) — Kotlin: ⬜
+  - [x] **PDF im neuen Tab öffnen** (`btnOpenPdfTab`, nur mit PDF; web/render.js:784) — Kotlin: ✅ DeskPageActions.kt (öffnet die PDF-App des Geräts)
+  - [x] **PDF herunterladen** (`btnDownloadPdf`, nur mit PDF; web/render.js:785) — Kotlin: ✅ DeskPageActions.kt (Speichern-Dialog)
   - [x] **Icon ändern** (`data-iconpick`) — Kotlin: ✅ `IconDialog`
   - [x] **Cover ändern** (`data-coverpick`) — Kotlin: ✅ `CoverDialog` (eigenes Bild nicht geprüft)
-  - [ ] **Karten aus Markierungen (n)** (`cardsfromhl`; zählt `==…==` und `{{c1::…}}`; web/render.js:786) — Kotlin: ⬜
-  - [ ] **Duplizieren / Als Vorlage / Als Vorlesungsübersicht** (`dupTplItems`) — Kotlin: 🟡 nur im Baum-Menü; im Seitenkopf fehlen sie
+  - [x] **Karten aus Markierungen (n)** (`cardsfromhl`; zählt `==…==` und `{{c1::…}}`; web/render.js:786) — Kotlin: ✅ DeskPageActions.kt (Kern `cardsFromHighlights`)
+  - [ ] **Duplizieren / Als Vorlage / Als Vorlesungsübersicht** (`dupTplItems`) — Kotlin: 🟡 Duplizieren ✅, Vorlage ✅ (DeskPageActions.kt); Vorlesungsübersicht fehlt (kommt mit der Datenbankansicht)
   - [ ] **Fach…** — Kotlin: ⬜
   - [x] **Verschieben nach…** — Kotlin: ✅ `MovePageDialog`
   - [x] **Archivieren** — Kotlin: ✅ (Tab wird geschlossen)
@@ -495,20 +495,20 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 - [x] **Favorit-Stern** mit aktiv-Zustand (web/render.js:762, title wechselt) — Kotlin: ✅ DeskPageActions.kt (SmallButton star, active)
 
 #### 2c ⋯-Menü (web/render.js:771-792)
-- [ ] **Rückgängig (Strg+Z)** (web/render.js:773, data-editundo, web/app.js:554) — Kotlin: ⬜ DeskPageActions.kt (Eintrag zeigt nur Toast „folgt“)
-- [ ] **Wiederholen (Strg+Y)** (web/render.js:774, data-editredo) — Kotlin: ⬜ DeskPageActions.kt (Toast-Platzhalter)
+- [x] **Rückgängig (Strg+Z)** (web/render.js:773, data-editundo, web/app.js:554) — Kotlin: ✅ DeskPageActions.kt → EditorViewModel.undo (mit Hinweis „Strg+Z“)
+- [x] **Wiederholen (Strg+Y)** (web/render.js:774, data-editredo) — Kotlin: ✅ DeskPageActions.kt → EditorViewModel.redo
 - [x] **Zu Favoriten / Favorit entfernen** (web/render.js:776) — Kotlin: ✅ DeskPageActions.kt (toggleFavorite)
 - [ ] **Als PDF exportieren / drucken** (web/render.js:777, extras.js:569-600) — Kotlin: 🟡 DeskPageActions.kt exportPdf → notes/PageOps.kt:81-89 (nur Absätze als Klartext, ohne Markdown, Formeln, Bilder; Heft-Export „folgt“)
 - [x] **Als Markdown (.md) speichern** (web/render.js:778) — Kotlin: ✅ DeskPageActions.kt
 - [x] **Internen Link kopieren** (web/render.js:779) — Kotlin: ✅ DeskPageActions.kt
 - [x] **Verlauf** (web/render.js:781, btnHistory, web/render.js:1152-1168 Vorschau und „Diese Version wiederherstellen“) — Kotlin: ✅ notes/PageDialogs.kt:86-137 (HistoryDialog, Restore, „Keine Versionen“ fehlt im Text, aber leer ist abgedeckt)
-- [ ] **PDF im neuen Tab öffnen** (web/render.js:784, btnOpenPdfTab, nur bei pdfId) — Kotlin: ⬜ DeskPageActions.kt (PDF-Seiten werden in library/LibraryScreen.kt:86-93 extern geöffnet, nicht aus dem ⋯-Menü der Seite)
-- [ ] **PDF herunterladen** (web/render.js:785, btnDownloadPdf, nur bei pdfId) — Kotlin: ⬜ DeskPageActions.kt
+- [x] **PDF im neuen Tab öffnen** (web/render.js:784, btnOpenPdfTab, nur bei pdfId) — Kotlin: ✅ DeskPageActions.kt `openPdf` (PDF-App des Geräts)
+- [x] **PDF herunterladen** (web/render.js:785, btnDownloadPdf, nur bei pdfId) — Kotlin: ✅ DeskPageActions.kt `downloadPdf`
 - [x] **Icon ändern** (web/render.js:786) — Kotlin: ✅ DeskPageActions.kt → IconDialog
 - [ ] **Cover ändern** (web/render.js:787) — Kotlin: 🟡 DeskPageActions.kt → CoverDialog (ohne eigenes Bild)
-- [ ] **Karten aus Markierungen (n)** (web/render.js:788, data-cardsfromhl, nur bei ==…== oder {{c1::…}}, web/extras.js:678) — Kotlin: ⬜ kein Gegenstück gefunden
-- [ ] **Duplizieren** (web/render.js:570 dupTplItems, data-pageduplicate) — Kotlin: 🟡 Seitenleiste ui/desk/DeskTreeRow.kt:117 vorhanden; im Topbar-⋯-Menü (DeskPageActions.kt) ⬜
-- [ ] **Als Vorlage / Vorlage entfernen** (web/render.js:570, data-pagetemplate, web/app-click-pages.js:29-37) — Kotlin: 🟡 DeskTreeRow.kt:118 (Seitenleiste); im Topbar-⋯-Menü ⬜
+- [x] **Karten aus Markierungen (n)** (web/render.js:788, data-cardsfromhl, nur bei ==…== oder {{c1::…}}, web/extras.js:678) — Kotlin: ✅ DeskPageActions.kt `cardsFromHighlights`
+- [x] **Duplizieren** (web/render.js:570 dupTplItems, data-pageduplicate) — Kotlin: ✅ DeskPageActions.kt und DeskTreeRow.kt
+- [x] **Als Vorlage / Vorlage entfernen** (web/render.js:570, data-pagetemplate, web/app-click-pages.js:29-37) — Kotlin: ✅ DeskPageActions.kt und DeskTreeRow.kt
 - [ ] **Als Vorlesungsübersicht / Übersicht aufheben** (web/render.js:571, data-pagedb, nur keine Heft-Seiten, web/app-click-pages.js:39-46) — Kotlin: ⬜ (kein db-Feld im Seitenmodell)
 - [ ] **Fach: <Name>…** (web/render.js:572, data-pagesubject, web/app-click-pages.js:121-127) — Kotlin: ⬜ (kein Fach-Feld im Seitenmodell)
 - [x] **Verschieben nach…** (web/render.js:573, data-pagemove, web/app-dialogs.js) — Kotlin: ✅ DeskPageActions.kt openMove → notes/PageDialogs.kt:48-80 (MovePageDialog)

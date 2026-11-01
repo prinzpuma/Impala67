@@ -30,9 +30,17 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.core.Touches
+import org.impala67.app.editor.EditorViewModel
+import org.impala67.app.library.cachePdf
+import org.impala67.app.library.openPdfExternally
 import org.impala67.app.notes.CoverDialog
 import org.impala67.app.notes.HistoryDialog
 import org.impala67.app.notes.IconDialog
@@ -45,6 +53,7 @@ import org.impala67.app.notes.pageTitle
 import org.impala67.app.notes.printPage
 import org.impala67.app.notes.printableHtml
 import org.impala67.app.notes.writeText
+import org.impala67.app.ui.shell.PageRoute
 import org.impala67.app.ui.shell.ShellNav
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Radius
@@ -64,15 +73,28 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
+    // Gleiche Instanz wie im Editor darunter (PageActions läuft in dessen `chromeActions`).
+    val editor: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
+    val summary by remember(store, pageId) { store.query(Touches.pages) { it.page(pageId)?.summary } }.collectAsStateWithLifecycle()
+    val marks by remember(store, pageId) { store.query(Touches.pages) { highlightCount(it.page(pageId)?.content.orEmpty()) } }.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<PageDialog?>(null) }
     var moving by remember { mutableStateOf<PageSummary?>(null) }
     var pendingMarkdown by remember { mutableStateOf<String?>(null) }
+    var pendingPdf by remember { mutableStateOf<String?>(null) }
     val later: (String) -> Unit = { nav.toast("$it folgt mit einem der nächsten Module.") }
     val saveMarkdown = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
         val text = pendingMarkdown
         pendingMarkdown = null
         if (uri != null && text != null) scope.launch { writeText(context, uri, text) }
+    }
+    val savePdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        val fileId = pendingPdf
+        pendingPdf = null
+        if (uri != null && fileId != null) scope.launch {
+            val data = store.write { it.file(fileId) } ?: return@launch nav.toast("PDF wird geladen…")
+            withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)?.use { it.write(data.bytes) } }
+        }
     }
 
     fun toggleFavorite() {
@@ -120,14 +142,47 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
         scope.launch { store.write { it.page(pageId) }?.summary?.let { moving = it } }
     }
 
+    /** „PDF im neuen Tab öffnen“: nativ mit der PDF-App des Geräts (wie in der Bibliothek). */
+    fun openPdf(page: PageSummary, fileId: String) {
+        scope.launch {
+            val file = runCatching { cachePdf(context, store, fileId, pageTitle(page)) }.getOrNull()
+            when {
+                file == null -> nav.toast("PDF wird geladen…")
+                !openPdfExternally(context, file) -> nav.toast("Keine App zum Öffnen von PDFs gefunden.")
+            }
+        }
+    }
+
+    fun downloadPdf(page: PageSummary, fileId: String) {
+        pendingPdf = fileId
+        savePdf.launch(pageTitle(page).replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Dokument" } + ".pdf")
+    }
+
+    /** `cardsFromHighlights` (extras.js): Lückenkarten aus `==…==` und `{{c1::…}}`, Doppelte übersprungen. */
+    fun cardsFromHighlights() {
+        scope.launch {
+            val n = runCatching { store.write { it.cardsFromHighlights(pageId, null) } }
+                .getOrElse { return@launch nav.toast("Karten konnten nicht erstellt werden: " + (it.message ?: it)) }
+            nav.toast(if (n > 0u) "$n Karteikarte(n) erstellt." else "Keine neuen Markierungen — für alle gibt es schon Karten.")
+        }
+    }
+
+    fun duplicate() {
+        scope.launch { duplicatePage(store, pageId)?.let { nav.open(PageRoute(it)) } }
+    }
+
+    fun toggleTemplate(page: PageSummary) {
+        scope.launch { store.dispatch("pageUpdate", mapOf("id" to pageId, "patch" to mapOf("isTemplate" to !page.isTemplate))) }
+    }
+
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         ShareButton { share() }
         SmallButton(R.drawable.ic_i_star, if (favorite) "Aus Favoriten entfernen" else "Zu Favoriten", active = favorite) { toggleFavorite() }
         Box {
             SmallButton(R.drawable.ic_i_dots, "Weitere Optionen") { menuOpen = true }
             DropdownMenu(menuOpen, { menuOpen = false }, containerColor = c.menu) {
-                MenuEntry(R.drawable.ic_i_undo, "Rückgängig") { menuOpen = false; later("Rückgängig") }
-                MenuEntry(R.drawable.ic_i_redo, "Wiederholen") { menuOpen = false; later("Wiederholen") }
+                MenuEntry(R.drawable.ic_i_undo, "Rückgängig", hint = "Strg+Z", enabled = editor.canUndo) { menuOpen = false; editor.undo() }
+                MenuEntry(R.drawable.ic_i_redo, "Wiederholen", hint = "Strg+Y", enabled = editor.canRedo) { menuOpen = false; editor.redo() }
                 HorizontalDivider(color = c.edgeSoft)
                 MenuEntry(R.drawable.ic_i_star, if (favorite) "Favorit entfernen" else "Zu Favoriten") { menuOpen = false; toggleFavorite() }
                 MenuEntry(R.drawable.ic_i_printer, "Als PDF exportieren / drucken") { menuOpen = false; exportPdf() }
@@ -135,8 +190,18 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
                 MenuEntry(R.drawable.ic_i_link, "Internen Link kopieren") { menuOpen = false; copyLink() }
                 HorizontalDivider(color = c.edgeSoft)
                 MenuEntry(R.drawable.ic_i_history, "Verlauf") { menuOpen = false; dialog = PageDialog.History }
+                val page = summary
+                val pdfId = page?.pdfId
+                if (page != null && pdfId != null) {
+                    MenuEntry(R.drawable.ic_i_external, "PDF im neuen Tab öffnen") { menuOpen = false; openPdf(page, pdfId) }
+                    MenuEntry(R.drawable.ic_i_download, "PDF herunterladen") { menuOpen = false; downloadPdf(page, pdfId) }
+                }
                 MenuEntry(R.drawable.ic_i_smile, "Icon ändern") { menuOpen = false; dialog = PageDialog.Icon }
                 MenuEntry(R.drawable.ic_i_image, "Cover ändern") { menuOpen = false; dialog = PageDialog.Cover }
+                val n = marks ?: 0
+                if (n > 0) MenuEntry(R.drawable.ic_i_cards, "Karten aus Markierungen ($n)") { menuOpen = false; cardsFromHighlights() }
+                MenuEntry(R.drawable.ic_i_copy, "Duplizieren") { menuOpen = false; duplicate() }
+                if (page != null) MenuEntry(R.drawable.ic_i_template, if (page.isTemplate) "Vorlage entfernen" else "Als Vorlage") { menuOpen = false; toggleTemplate(page) }
                 HorizontalDivider(color = c.edgeSoft)
                 MenuEntry(R.drawable.ic_i_folder_move, "Verschieben nach…") { menuOpen = false; openMove() }
                 MenuEntry(R.drawable.ic_i_archive, "Archivieren") {
@@ -161,6 +226,11 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
     }
     moving?.let { page -> MovePageDialog(store, page) { moving = null } }
 }
+
+/** Zahl für „Karten aus Markierungen (n)“ wie `moreMenuHtml`: `==…==` und `{{cN::`. */
+private val HIGHLIGHT = Regex("==[^=\\n]+==")
+private val CLOZE = Regex("\\{\\{c\\d+::")
+private fun highlightCount(content: String) = HIGHLIGHT.findAll(content).count() + CLOZE.findAll(content).count()
 
 /** Dialoge der offenen Seite aus dem ⋯-Menü. */
 private enum class PageDialog { History, Icon, Cover }

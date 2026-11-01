@@ -125,11 +125,21 @@ private fun PageMenu(page: PageSummary, actions: DeskTreeActions) {
 }
 
 @Composable
-internal fun MenuEntry(icon: Int, label: String, danger: Boolean = false, onClick: () -> Unit) {
+internal fun MenuEntry(
+    icon: Int,
+    label: String,
+    danger: Boolean = false,
+    hint: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val c = Impala.colors
     DropdownMenuItem(
         text = { Text(label) },
         leadingIcon = { Icon(painterResource(icon), null, Modifier.size(16.dp)) },
+        // `.menu-hint` (z. B. „Strg+Z“)
+        trailingIcon = hint?.let { { Text(it, color = c.text2, fontSize = TextSize.xs) } },
+        enabled = enabled,
         onClick = onClick,
         colors = if (danger) MenuDefaults.itemColors(textColor = c.danger, leadingIconColor = c.danger) else MenuDefaults.itemColors(),
     )
