@@ -36,8 +36,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -90,12 +92,12 @@ private fun dotDp(size: Double): Dp = (2 + size * 1.6).coerceIn(4.0, 12.0).round
 
 /**
  * Werkzeugleiste oben mittig (heft-toolbar-ui.js `toolbarHtml`) mit der Optionsleiste direkt darunter:
- * drei Stift-Favoriten und Marker | Radierer (halten = kurz radieren) | Lasso, Laser | Rückgängig,
- * Wiederholen | Einklappen. Auf dem Telefon ([phone]) ohne Laser; Rückgängig/Wiederholen stehen dort
+ * drei Stift-Favoriten und Marker | Radierer (halten = kurz radieren) | Lasso, Laser | Bilder (Menü) |
+ * Rückgängig, Wiederholen | Einklappen. Auf dem Telefon ([phone]) ohne Laser; Rückgängig/Wiederholen stehen dort
  * in der Kopfzeile. Ein zweiter Tipp auf das aktive Werkzeug öffnet die Optionen.
  */
 @Composable
-fun HeftToolbar(vm: HeftViewModel, phone: Boolean, modifier: Modifier = Modifier) {
+fun HeftToolbar(vm: HeftViewModel, phone: Boolean, media: HeftMediaActions, modifier: Modifier = Modifier) {
     val motion = MaterialTheme.motionScheme
     val t = vm.tools
     Column(modifier, Arrangement.spacedBy(6.dp), Alignment.CenterHorizontally) {
@@ -108,7 +110,7 @@ fun HeftToolbar(vm: HeftViewModel, phone: Boolean, modifier: Modifier = Modifier
             contentAlignment = Alignment.TopCenter,
             label = "heft-toolbar",
         ) { collapsed ->
-            if (collapsed) MiniCapsule(vm) else FullCapsule(vm, phone)
+            if (collapsed) MiniCapsule(vm) else FullCapsule(vm, phone, media)
         }
         AnimatedVisibility(
             visible = t.expanded && !t.collapsed && t.tool.hasOptions,
@@ -122,7 +124,7 @@ fun HeftToolbar(vm: HeftViewModel, phone: Boolean, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun FullCapsule(vm: HeftViewModel, phone: Boolean) {
+private fun FullCapsule(vm: HeftViewModel, phone: Boolean, media: HeftMediaActions) {
     val t = vm.tools
     val btn = if (phone) 34.dp else 36.dp
     Row(
@@ -160,6 +162,17 @@ private fun FullCapsule(vm: HeftViewModel, phone: Boolean) {
                 R.drawable.ic_i_laser, "Laserpointer — nicht speichern", btn, active = t.tool == HeftTool.LASER,
                 danger = true, onClick = { vm.selectTool(HeftTool.LASER) },
             )
+        }
+        Sep()
+        var imgMenu by remember { mutableStateOf(false) }
+        Box {
+            ToolButton(
+                R.drawable.ic_i_image, "Bilder einfügen oder bearbeiten", btn,
+                active = imgMenu || t.tool == HeftTool.SELECT, open = imgMenu, onClick = { imgMenu = true },
+            )
+            HeftImageMenu(imgMenu, { imgMenu = false }, vm, media)
+        }
+        if (!phone) {
             Sep()
             ToolButton(R.drawable.ic_i_undo, "Rückgängig", btn, enabled = vm.canUndo, onClick = vm::undo)
             ToolButton(R.drawable.ic_i_redo, "Wiederholen", btn, enabled = vm.canRedo, onClick = vm::redo)
@@ -188,6 +201,7 @@ private fun MiniCapsule(vm: HeftViewModel) {
             HeftTool.ERASER -> R.drawable.ic_i_eraser
             HeftTool.LASSO -> R.drawable.ic_i_lasso
             HeftTool.LASER -> R.drawable.ic_i_laser
+            HeftTool.SELECT -> R.drawable.ic_i_select
             HeftTool.PEN -> R.drawable.ic_i_pen_tool
         }
         Icon(painterResource(icon), null, Modifier.size(18.dp), c.text)

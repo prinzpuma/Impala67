@@ -69,6 +69,11 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     val strokes = remember(visible, moving) { visible.filter { it.id !in moving }.mapNotNull(cache::get) }
     val moved = remember(visible, moving) { visible.filter { it.id in moving }.mapNotNull(cache::get) }
     val gesture = remember { LassoGesture(vm, heftPageId) }
+    val objects = remember { ObjGesture(vm, heftPageId) }
+    // Gewähltes Bild/Textfeld: während der Geste (und bis gespeichert) an der Vorschau-Stelle zeichnen.
+    val obj = vm.objSel?.takeIf { it.heftPageId == heftPageId }
+    val editing = vm.textEdit?.takeIf { it.heftPageId == heftPageId }
+    LaunchedEffect(data) { data?.let(vm::objectSettled) }
 
     val tracker = remember {
         EraseTracker(
@@ -88,8 +93,25 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         val k = constraints.maxWidth / HeftPage.WIDTH
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
-        val images = data?.images.orEmpty()
-        val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, images, maxSide = constraints.maxWidth.coerceIn(512, 4096))
+        val stored = data?.images.orEmpty()
+        val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, stored, maxSide = constraints.maxWidth.coerceIn(512, 4096))
+        val liveImg = obj?.live?.takeIf { obj.kind == ObjKind.IMAGE }
+        val liveTxt = obj?.live?.takeIf { obj.kind == ObjKind.TEXT }
+        val images = if (liveImg == null) stored
+        else stored.map { if (it.id == obj?.id) it.copy(x = liveImg.x, y = liveImg.y, w = liveImg.w, h = liveImg.h) else it }
+        val texts = data?.texts.orEmpty().mapNotNull { t ->
+            when {
+                t.id == editing?.text?.id -> null
+                liveTxt != null && t.id == obj?.id -> t.copy(x = liveTxt.x, y = liveTxt.y, w = liveTxt.w)
+                else -> t
+            }
+        }
+        val selFrame = obj?.takeIf { editing == null }?.let { s ->
+            when (s.kind) {
+                ObjKind.IMAGE -> images.find { it.id == s.id }?.frame()
+                ObjKind.TEXT -> texts.find { it.id == s.id }?.frame()
+            }
+        }
 
         Canvas(Modifier.fillMaxSize()) {
             drawPaper(paper, ink, k)
@@ -102,7 +124,8 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                     scale(drag.factor, drag.factor, Offset(drag.ax, drag.ay))
                 }) { drawInkStrokes(moved, 1f) }
             }
-            drawHeftTexts(data?.texts.orEmpty(), k)
+            drawHeftTexts(texts, k)
+            selFrame?.let { drawObjSelection(it, k) }
             shapeLive?.let { drawShapePreview(it, k) }
             drawLassoPath(gesture.path, k)
             sel?.let { drawLassoSelection(it.shown, k) }
@@ -132,6 +155,8 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                 override fun eraseEnd() = tracker.end()
                 override val lasso = gesture
                 override fun lassoDismiss() = vm.dismissLasso()
+                override val objects = objects
+                override fun touchStart() = vm.closeText(commit = true)
             }
         }
         val context = LocalContext.current
@@ -147,6 +172,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
             modifier = Modifier.fillMaxSize(),
             update = { input[0]?.let { it.k = k; it.tools = vm.tools } },
         )
+        editing?.let { HeftTextEditor(vm, it, k) }
     }
 }
 

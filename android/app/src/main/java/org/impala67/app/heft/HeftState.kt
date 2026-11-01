@@ -12,15 +12,18 @@ object HeftPage {
     const val RATIO = WIDTH / HEIGHT
 }
 
-/** Werkzeuge der Werkzeugleiste (Bilder folgen später). Der Laser zeichnet nur flüchtig, nichts wird gespeichert. */
+/**
+ * Werkzeuge der Werkzeugleiste. Der Laser zeichnet nur flüchtig, nichts wird gespeichert. [SELECT]
+ * greift Bilder und Textfelder (heft.js `tool === "select"`, über das „Bilder“-Menü).
+ */
 enum class HeftTool {
-    PEN, MARKER, ERASER, LASSO, LASER;
+    PEN, MARKER, ERASER, LASSO, LASER, SELECT;
 
     /** Stift und Marker schreiben mit Farbe und Dicke. */
     val writes get() = this == PEN || this == MARKER
 
-    /** Ein zweiter Tipp öffnet Optionen (Lasso und Laser haben keine). */
-    val hasOptions get() = this != LASSO && this != LASER
+    /** Ein zweiter Tipp öffnet Optionen (Lasso, Laser und Auswahl haben keine). */
+    val hasOptions get() = this == PEN || this == MARKER || this == ERASER
 }
 
 /** Wohin „Seite hinzufügen“ die neue Seite legt (heft-toolbar-ui.js `POS`). */

@@ -141,6 +141,47 @@ fun HeftAddMenu(expanded: Boolean, onDismiss: () -> Unit, actions: HeftPageActio
     if (confirm) DeletePageDialog(onDismiss = { confirm = false }, onConfirm = { confirm = false; actions.remove() })
 }
 
+/** Einträge des „Bilder“-Menüs, die die Plattform braucht (Galerie, Kamera) bzw. die aktuelle Seite kennen. */
+class HeftMediaActions(val writeText: () -> Unit, val pickImage: () -> Unit, val takePhoto: () -> Unit)
+
+/**
+ * „Bilder“-Menü (heft-toolbar-ui.js `imgPopHtml`): Auswahl-Werkzeug für Bilder und Texte, Text
+ * schreiben, Bild aus der Galerie oder von der Kamera.
+ */
+@Composable
+fun HeftImageMenu(expanded: Boolean, onDismiss: () -> Unit, vm: HeftViewModel, media: HeftMediaActions) {
+    val c = Impala.colors
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.width(296.dp),
+        shape = RoundedCornerShape(Radius.lg),
+        containerColor = c.menu,
+        border = BorderStroke(1.dp, c.edge),
+        shadowElevation = 12.dp,
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MenuHead("BILDER")
+            PopActionRow("Bilder & Texte auswählen & bearbeiten", R.drawable.ic_i_select) {
+                onDismiss()
+                if (vm.tools.tool != HeftTool.SELECT) vm.selectTool(HeftTool.SELECT)
+            }
+            HorizontalDivider(color = c.edgeSoft)
+            Column {
+                PopActionRow("Text schreiben", R.drawable.ic_i_pen) { onDismiss(); media.writeText() }
+                PopActionRow("Bild hinzufügen", R.drawable.ic_i_image) { onDismiss(); media.pickImage() }
+                PopActionRow("Bild aufnehmen", R.drawable.ic_i_camera) { onDismiss(); media.takePhoto() }
+            }
+            Text(
+                "Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.",
+                Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+                color = c.text2,
+                fontSize = TextSize.xs,
+            )
+        }
+    }
+}
+
 /** `.heft-seg-row`: Segmentwahl in einer Rille; das aktive Segment hebt sich als Fläche ab. */
 @Composable
 private fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {

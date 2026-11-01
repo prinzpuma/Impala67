@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.math.min
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.heft.ink.HandwritingRecognizer
@@ -27,6 +28,7 @@ import uniffi.impala_ffi.HeftEdit
 import uniffi.impala_ffi.HeftPageData
 import uniffi.impala_ffi.HeftShape
 import uniffi.impala_ffi.HeftStroke
+import uniffi.impala_ffi.HeftText
 import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.heftNewId
 
@@ -85,6 +87,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = if (tool == HeftTool.PEN) tools.copy(tool = tool, penSlot = slot, color = tools.pens[slot].color, size = tools.pens[slot].size, expanded = expanded)
         else tools.copy(tool = tool, expanded = expanded)
         if (tool != HeftTool.LASSO) lasso = null
+        if (tool != HeftTool.SELECT) { closeText(commit = true); objSel = null }
         saveTools()
     }
 
@@ -138,7 +141,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = when (tools.tool) {
             HeftTool.ERASER -> tools.copy(eraserSize = size)
             HeftTool.PEN, HeftTool.MARKER -> tools.copy(size = size).syncPen()
-            HeftTool.LASSO, HeftTool.LASER -> tools
+            HeftTool.LASSO, HeftTool.LASER, HeftTool.SELECT -> tools
         }
         saveTools()
     }
@@ -322,19 +325,143 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         if (lasso?.ids == ids) lasso = fresh.copy(drag = drag.copy(live = false))
     }
 
-    fun undo() { lasso = null; replay(undoStack, redoStack) }
+    // ---- Bilder und Textfelder (heft.js `sel`, `openTextEditor`, heft-import.js `insertImageFile`) ----
 
-    fun redo() { lasso = null; replay(redoStack, undoStack) }
+    /** Ausgewähltes Bild oder Textfeld (Werkzeug „Auswahl“). */
+    var objSel by mutableStateOf<ObjSel?>(null)
+        private set
+
+    /** Offenes Textfeld; [textDraft] ist sein Text, solange geschrieben wird. */
+    var textEdit by mutableStateOf<TextEdit?>(null)
+        private set
+    var textDraft by mutableStateOf("")
+        private set
+
+    fun selectObject(heftPageId: String, kind: ObjKind, id: String) { objSel = ObjSel(heftPageId, kind, id) }
+
+    fun clearObject() { objSel = null }
+
+    /** Vorschau des Rahmens während der Geste (nur Anzeige). */
+    fun objectPreview(frame: ObjFrame, dragging: Boolean) { objSel = objSel?.copy(live = frame, dragging = dragging) }
+
+    /** Geste fertig: neuer Rahmen als ein Event; die Vorschau bleibt, bis die Seite ihn zeigt. */
+    fun objectRelease(orig: ObjFrame) {
+        val sel = objSel ?: return
+        val f = sel.live
+        if (f == null || f == orig) { objSel = sel.copy(live = null, dragging = false); return }
+        objSel = sel.copy(dragging = false)
+        val failed = { if (objSel?.id == sel.id) objSel = objSel?.copy(live = null) }
+        when (sel.kind) {
+            ObjKind.IMAGE -> write(failed = failed) { it.heftSetImageFrame(pageId, sel.heftPageId, sel.id, f.x, f.y, f.w, f.h) }
+            ObjKind.TEXT -> {
+                val t = page(sel.heftPageId).value?.texts?.find { it.id == sel.id } ?: return failed()
+                val moved = t.copy(x = f.x, y = f.y, w = f.w)
+                write(failed = failed) { it.heftApply(pageId, listOf(HeftChange.SetText(sel.heftPageId, moved.copy(h = heftTextHeight(moved).toDouble())))) }
+            }
+        }
+    }
+
+    /** Die Seite zeigt den gespeicherten Rahmen: Vorschau weg (kein Zurückspringen dazwischen). */
+    fun objectSettled(data: HeftPageData) {
+        val sel = objSel?.takeIf { it.heftPageId == data.id && !it.dragging } ?: return
+        val f = sel.live ?: return
+        val stored = when (sel.kind) {
+            ObjKind.IMAGE -> data.images.find { it.id == sel.id }?.frame()
+            ObjKind.TEXT -> data.texts.find { it.id == sel.id }?.frame()
+        }
+        if (stored == null) objSel = null
+        else if (stored.x == f.x && stored.y == f.y && stored.w == f.w) objSel = sel.copy(live = null)
+    }
+
+    /** Roter Knopf am ausgewählten Bild bzw. Textfeld. */
+    fun removeObject() {
+        val sel = objSel ?: return
+        objSel = null
+        edit {
+            when (sel.kind) {
+                ObjKind.IMAGE -> HeftChange.RemoveImages(sel.heftPageId, listOf(sel.id))
+                ObjKind.TEXT -> HeftChange.RemoveTexts(sel.heftPageId, listOf(sel.id))
+            }
+        }
+    }
+
+    /** „Text schreiben“: neues Feld unter dem Inhalt der Seite, Werkzeug Auswahl. */
+    fun startText(heftPageId: String) {
+        val pg = page(heftPageId).value
+        val y = min((pg?.let(::contentBottom) ?: 40.0) + 30, HeftPage.HEIGHT - 160.0)
+        newText(heftPageId, 80.0, y)
+    }
+
+    fun newText(heftPageId: String, x: Double, y: Double) = openText(TextEdit(heftPageId, x, y, null))
+
+    fun editText(heftPageId: String, text: HeftText) = openText(TextEdit(heftPageId, text.x, text.y, text))
+
+    private fun openText(edit: TextEdit) {
+        closeText(commit = true)
+        lasso = null
+        tools = tools.copy(tool = HeftTool.SELECT, expanded = false)
+        textDraft = edit.text?.text.orEmpty()
+        textEdit = edit
+    }
+
+    fun updateDraft(text: String) { textDraft = text }
+
+    /**
+     * Textfeld schließen (heft.js `closeTextEditor`): geänderter Text ersetzt, geleerter löscht, neuer
+     * Text wird ein Feld in der aktuellen Farbe und ist danach ausgewählt.
+     */
+    fun closeText(commit: Boolean) {
+        val ed = textEdit ?: return
+        textEdit = null
+        val body = textDraft.trimEnd()
+        textDraft = ""
+        if (!commit) return
+        // Per ID: Ein Sync während des Tippens kann die Seite neu geliefert haben.
+        val cur = ed.text?.let { t -> page(ed.heftPageId).value?.texts?.find { it.id == t.id } }
+        when {
+            cur != null && body.isBlank() -> {
+                if (objSel?.id == cur.id) objSel = null
+                edit { HeftChange.RemoveTexts(ed.heftPageId, listOf(cur.id)) }
+            }
+            cur != null && body != cur.text -> {
+                val t = cur.copy(text = body)
+                edit { HeftChange.SetText(ed.heftPageId, t.copy(h = heftTextHeight(t).toDouble())) }
+            }
+            cur == null && ed.text == null && body.isNotBlank() -> {
+                val t = HeftText(heftNewId(), body, ed.x, ed.y, newTextWidth(ed.x), null, tools.color, 30.0)
+                edit { HeftChange.AddText(ed.heftPageId, t.copy(h = heftTextHeight(t).toDouble())) }
+                objSel = ObjSel(ed.heftPageId, ObjKind.TEXT, t.id)
+            }
+        }
+    }
+
+    /** Bild in die Mitte der Seite, höchstens 70 % groß; danach ausgewählt mit Werkzeug Auswahl. */
+    fun addImage(heftPageId: String, img: ScannedPage) {
+        val k = minOf(HeftPage.WIDTH * 0.7 / img.width, HeftPage.HEIGHT * 0.7 / img.height, 1.0)
+        val w = img.width * k
+        val h = img.height * k
+        write(after = { e ->
+            e.ids.firstOrNull()?.let { id ->
+                lasso = null
+                tools = tools.copy(tool = HeftTool.SELECT, expanded = false)
+                objSel = ObjSel(heftPageId, ObjKind.IMAGE, id)
+            }
+        }) { it.heftAddImage(pageId, heftPageId, img.jpeg, "image/jpeg", (HeftPage.WIDTH - w) / 2, (HeftPage.HEIGHT - h) / 2, w, h) }
+    }
+
+    fun undo() { lasso = null; objSel = null; replay(undoStack, redoStack) }
+
+    fun redo() { lasso = null; objSel = null; replay(redoStack, undoStack) }
 
     private fun edit(change: () -> HeftChange) = write { it.heftApply(pageId, listOf(change())) }
 
-    /** Eine Änderung schreiben und ihre Umkehr merken; [after] läuft nach Erfolg mit dem Ergebnis. */
-    private fun write(after: suspend (HeftEdit) -> Unit = {}, block: (ImpalaCore) -> HeftEdit) {
+    /** Eine Änderung schreiben und ihre Umkehr merken; [after] läuft nach Erfolg mit dem Ergebnis, [failed] sonst. */
+    private fun write(after: suspend (HeftEdit) -> Unit = {}, failed: () -> Unit = {}, block: (ImpalaCore) -> HeftEdit) {
         viewModelScope.launch {
             writes.withLock {
                 runCatching { store.write(block) }
                     .onSuccess { record(it); after(it) }
-                    .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
+                    .onFailure { failed(); _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
             }
         }
     }

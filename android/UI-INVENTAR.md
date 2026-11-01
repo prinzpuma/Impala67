@@ -841,7 +841,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - ~~**Zoombereich.**~~ ✅ jetzt 0,4–6. Vorher Kotlin 0,5–4 (HeftZoom.kt:32-33), PWA 0,4–6 (heft-viewport.js:23).
 - **Kopfzeile.** Die Kotlin-Kopfzeile (HeftTopBar.kt) gibt es in der PWA-Desktopansicht nicht. Die PWA zeigt dort nur den Fokusmodus (render.js, Zweig `pg.kind === "heft"`, ca. Z. 667-677).
 - **Fehlende Gesten:** ~~Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo~~ ✅; offen: Mausrad mit Strg-Zoom, Lesemodus auf dem Handy.
-- **Fehlende Werkzeuge:** ~~Formerkennung (Halten), Laser, Radierer-Halten~~ ✅; offen: Bild- und Textwerkzeuge.
+- **Fehlende Werkzeuge:** ~~Formerkennung (Halten), Laser, Radierer-Halten~~ ✅; Bild- und Textwerkzeuge ✅.
 - **Fehlende Export- und Importfunktionen**, Verlauf (Snapshots, TODO in HeftPagesSheet.kt:52-53). Schreib-Rückzug ✅.
 
 ### 1. Werkzeugkapsel (Haupt-Pille)
@@ -901,11 +901,11 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 ### 6. Bilder-Popover („Bilder“)
 
-- [ ] **Bilder & Texte auswählen & bearbeiten** – Auswahl-Werkzeug mit Verschieben, Skalieren, Löschen (web/heft-toolbar-ui.js:213; web/heft.js:1481-1482) — Kotlin: ⬜
-- [ ] **Text schreiben** – Textfeld am Seitenende, Doppeltipp zum Bearbeiten (web/heft-toolbar-ui.js:215; web/heft.js:1461; web/heft.js:984-1052) — Kotlin: ⬜
-- [ ] **Bild hinzufügen** – Galerie, Bild mit max. 70 % der Seite (web/heft-toolbar-ui.js:216; web/heft.js:1462; web/heft-import.js:101-135) — Kotlin: ⬜
-- [ ] **Bild aufnehmen** – Kamera (web/heft-toolbar-ui.js:217; web/heft.js:1463) — Kotlin: ⬜
-- [ ] **Hinweistext zu Auswahl und Textfeld** (web/heft-toolbar-ui.js:218) — Kotlin: ⬜
+- [x] **Bilder & Texte auswählen & bearbeiten** – Auswahl-Werkzeug mit Verschieben, Skalieren, Löschen (web/heft-toolbar-ui.js:213; web/heft.js:1481-1482) — Kotlin: ✅ HeftCorners.kt `HeftImageMenu`, HeftObjects.kt `ObjGesture`
+- [x] **Text schreiben** – Textfeld am Seitenende, Doppeltipp zum Bearbeiten (web/heft-toolbar-ui.js:215; web/heft.js:1461; web/heft.js:984-1052) — Kotlin: ✅ HeftViewModel.kt `startText`, HeftObjects.kt `HeftTextEditor`
+- [x] **Bild hinzufügen** – Galerie, Bild mit max. 70 % der Seite (web/heft-toolbar-ui.js:216; web/heft.js:1462; web/heft-import.js:101-135) — Kotlin: ✅ HeftImagePick.kt (Photo Picker, längste Kante 1400), HeftViewModel.kt `addImage`
+- [x] **Bild aufnehmen** – Kamera (web/heft-toolbar-ui.js:217; web/heft.js:1463) — Kotlin: ✅ HeftImagePick.kt (`TakePicture`, fragt Kamera-Berechtigung; im Emulator nicht geprüft)
+- [x] **Hinweistext zu Auswahl und Textfeld** (web/heft-toolbar-ui.js:218) — Kotlin: ✅ HeftCorners.kt `HeftImageMenu`
 
 ### 7. Seitenübersicht (Popover „Seiten“)
 
@@ -955,9 +955,9 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Stift-Radierer am Stift-Ende** – Kotlin erkennt TOOL_TYPE_ERASER (HeftInput.kt:76, 92) — Kotlin: ✅ (Zusatz gegenüber PWA)
 - [x] **Formerkennung** – Halten für 550 ms nach dem Strich wandelt in Linie, Ellipse, Dreieck, Pfeil oder Rechteck um (web/heft-input.js:243-263; web/heft.js:494-501; web/heft-geometry.js:24) — Kotlin: ✅ HeftInput.kt `trySnap` (Halten 550 ms → `heftFitShape` im Kern; Linie folgt dem Stift weiter; Vorschau HeftPaint.kt)
 - [x] **Laser** – siehe Abschnitt 1 (web/heft-input.js:166-170) — Kotlin: ✅ HeftInput.kt
-- [ ] **Bild oder Text greifen, verschieben, Ecke skalieren, Löschen über Eckknopf** – Rahmen blau gestrichelt, roter Knopf zum Löschen (web/heft-input.js:171-215, 336-352; web/heft.js:581-598) — Kotlin: ⬜
-- [ ] **Textfeld** – wird auf der Seite gezeichnet, Wortumbruch, Schriftgröße 30 (web/heft.js:525-551, 542-551, 1045) — Kotlin: ⬜ (HeftPageView zeichnet keine Texte)
-- [ ] **Textfeld bearbeiten (Doppeltipp oder Doppeltipp auf leere Stelle)** – Enter speichert, Umschalt+Enter Zeilenumbruch, Esc verwirft (web/heft.js:984-1052; web/heft-input.js:223-229) — Kotlin: ⬜
+- [x] **Bild oder Text greifen, verschieben, Ecke skalieren, Löschen über Eckknopf** – Rahmen blau gestrichelt, roter Knopf zum Löschen (web/heft-input.js:171-215, 336-352; web/heft.js:581-598) — Kotlin: ✅ HeftObjects.kt `ObjGesture`, `drawObjSelection`
+- [x] **Textfeld** – wird auf der Seite gezeichnet, Wortumbruch, Schriftgröße 30 (web/heft.js:525-551, 542-551, 1045) — Kotlin: ✅ HeftMedia.kt `drawHeftTexts`
+- [x] **Textfeld bearbeiten (Doppeltipp oder Doppeltipp auf leere Stelle)** – Enter speichert, Umschalt+Enter Zeilenumbruch, Esc verwirft (web/heft.js:984-1052; web/heft-input.js:223-229) — Kotlin: ✅ HeftObjects.kt `HeftTextEditor` (Seite schrumpft bei offener Tastatur nicht)
 
 ### 10. Gesten und Eingabe (Touch, Stift, Maus)
 

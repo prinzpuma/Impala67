@@ -25,7 +25,7 @@ class ScanFrame(val x: Double, val y: Double, val w: Double, val h: Double)
  * vorab mit `inSampleSize` verkleinert, damit der Speicher bei großen Fotos reicht.
  * Liefert null, wenn die Datei nicht lesbar ist.
  */
-fun decodeScanPage(context: Context, uri: Uri): ScannedPage? {
+fun decodeScanPage(context: Context, uri: Uri, maxEdge: Int = SCAN_MAX_EDGE): ScannedPage? {
     val resolver = context.contentResolver
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
@@ -33,11 +33,11 @@ fun decodeScanPage(context: Context, uri: Uri): ScannedPage? {
     if (longest <= 0) return null
 
     var sample = 1
-    while (longest / (sample * 2) >= SCAN_MAX_EDGE) sample *= 2
+    while (longest / (sample * 2) >= maxEdge) sample *= 2
     val opts = BitmapFactory.Options().apply { inSampleSize = sample }
     val raw = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
 
-    val k = min(1f, SCAN_MAX_EDGE / max(raw.width, raw.height).toFloat())
+    val k = min(1f, maxEdge / max(raw.width, raw.height).toFloat())
     val bitmap = if (k < 1f) {
         Bitmap.createScaledBitmap(raw, (raw.width * k).roundToInt(), (raw.height * k).roundToInt(), true).also { raw.recycle() }
     } else {

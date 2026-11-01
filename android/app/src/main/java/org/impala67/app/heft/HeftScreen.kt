@@ -21,7 +21,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,7 +105,7 @@ private val PAGE_GAP = 24.dp
  * Tablet ([desk]): wie die PWA ohne Kopfzeile – Werkzeuge oben mittig, Ecken-Knöpfe links/rechts oben.
  * Telefon: Kopfzeile, Werkzeuge oben mittig, Seiten und „+“ unten in den Ecken.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun HeftScreen(
     store: ImpalaStore,
@@ -146,6 +150,13 @@ fun HeftScreen(
         onScanned = { scans -> scope.launch { focus = vm.addScanned(current + 1, scans) } },
         onError = vm::message,
     )
+    val target by rememberUpdatedState(currentId)
+    val imagePick = rememberHeftImagePick(onImage = { img -> target?.let { vm.addImage(it, img) } }, onError = vm::message)
+    val media = HeftMediaActions(
+        writeText = { currentId?.let(vm::startText) },
+        pickImage = imagePick.pick,
+        takePhoto = imagePick.photo,
+    )
 
     val pageActions = HeftPageActions(
         add = { paper, pos ->
@@ -186,7 +197,11 @@ fun HeftScreen(
         BoxWithConstraints(Modifier.padding(inner).fillMaxSize().clipToBounds()) {
             val density = LocalDensity.current
             val viewW = constraints.maxWidth.toFloat()
-            val viewH = constraints.maxHeight.toFloat()
+            // Mit offener Tastatur (Textfeld) bleibt die Seite so groß wie vorher, statt auf die Resthöhe zu schrumpfen.
+            val ime = WindowInsets.isImeVisible
+            var steadyH by remember { mutableFloatStateOf(constraints.maxHeight.toFloat()) }
+            if (!ime) steadyH = constraints.maxHeight.toFloat()
+            val viewH = steadyH
             val margin = with(density) { 16.dp.toPx() }
             // Abstand unter jeder Seite (PWA: 24 px), darin steht „Seite N“.
             val gap = with(density) { PAGE_GAP.toPx() }
@@ -298,7 +313,7 @@ fun HeftScreen(
 
             // Leisten über dem Heft; beim Schreiben treten sie zurück.
             HeftChrome(vm) {
-                HeftToolbar(vm, phone = !desk, modifier = Modifier.align(Alignment.TopCenter).padding(top = if (desk) 10.dp else 8.dp))
+                HeftToolbar(vm, phone = !desk, media = media, modifier = Modifier.align(Alignment.TopCenter).padding(top = if (desk) 10.dp else 8.dp))
 
                 AnimatedVisibility(
                     visible = vm.lasso != null,

@@ -104,6 +104,13 @@ fun DrawScope.drawHeftTexts(texts: List<HeftText>, k: Float) {
     }
 }
 
+/** Höhe eines Textfelds in Seiteneinheiten wie `drawTextBox` (`t.h`): Zeilen × Zeilenhöhe + Rand. */
+fun heftTextHeight(t: HeftText): Float {
+    val size = (t.size ?: 30.0).toFloat()
+    textPaint.textSize = size
+    return wrapLines(t.text, maxOf(60f, (t.w ?: 400.0).toFloat() - TEXT_PAD * 2)).size * size * TEXT_LH + TEXT_PAD * 2
+}
+
 private fun wrapLines(text: String, maxW: Float): List<String> {
     val lines = ArrayList<String>()
     for (raw in text.split("\n")) {
