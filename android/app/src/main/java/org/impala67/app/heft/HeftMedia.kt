@@ -41,22 +41,23 @@ private object HeftImageCache : LruCache<String, ImageBitmap>(48 * 1024 * 1024) 
 fun rememberHeftImages(store: ImpalaStore, pageId: String, heftPageId: String?, images: List<HeftImage>, maxSide: Int): Map<String, ImageBitmap> {
     var loaded by remember(heftPageId) { mutableStateOf(emptyMap<String, ImageBitmap>()) }
     LaunchedEffect(heftPageId, images, maxSide) {
-        if (heftPageId == null || images.isEmpty()) {
-            loaded = emptyMap()
-            return@LaunchedEffect
-        }
-        val out = HashMap<String, ImageBitmap>()
-        for (im in images) {
-            val key = (im.blobId ?: im.id) + "@" + maxSide
-            val bmp = HeftImageCache.get(key) ?: withContext(Dispatchers.IO) {
-                val data = runCatching { store.write { it.heftImageData(pageId, heftPageId, im.id) } }.getOrNull()
-                data?.bytes?.let { decodeSampled(it, maxSide) }?.asImageBitmap()?.also { HeftImageCache.put(key, it) }
-            }
-            if (bmp != null) out[im.id] = bmp
-        }
-        loaded = out
+        loaded = if (heftPageId == null) emptyMap() else loadHeftImages(store, pageId, heftPageId, images, maxSide)
     }
     return loaded
+}
+
+/** Bilder einer Heftseite dekodieren (für Anzeige und Export); fehlende Daten bleiben weg. */
+suspend fun loadHeftImages(store: ImpalaStore, pageId: String, heftPageId: String, images: List<HeftImage>, maxSide: Int): Map<String, ImageBitmap> {
+    val out = HashMap<String, ImageBitmap>()
+    for (im in images) {
+        val key = (im.blobId ?: im.id) + "@" + maxSide
+        val bmp = HeftImageCache.get(key) ?: withContext(Dispatchers.IO) {
+            val data = runCatching { store.write { it.heftImageData(pageId, heftPageId, im.id) } }.getOrNull()
+            data?.bytes?.let { decodeSampled(it, maxSide) }?.asImageBitmap()?.also { HeftImageCache.put(key, it) }
+        }
+        if (bmp != null) out[im.id] = bmp
+    }
+    return out
 }
 
 private fun decodeSampled(bytes: ByteArray, maxSide: Int): Bitmap? {

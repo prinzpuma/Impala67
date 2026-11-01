@@ -2,22 +2,13 @@ package org.impala67.app.share
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
-import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.max
-import kotlin.math.roundToInt
 import org.impala67.app.core.ImpalaStore
-import org.impala67.app.heft.scan.SCAN_JPEG_QUALITY
-import org.impala67.app.heft.scan.SCAN_MAX_EDGE
-import org.impala67.app.heft.scan.ScannedPage
-import org.impala67.app.heft.scan.decodeScanPage
+import org.impala67.app.heft.scan.importPages
 import org.impala67.app.heft.scan.insertScannedPages
 
 /** Was die App von außen startet: App-Shortcuts (`res/xml/shortcuts.xml`) und „Teilen mit Impala67“. */
@@ -72,12 +63,7 @@ suspend fun importSharedText(store: ImpalaStore, shared: Incoming.Text): String 
 suspend fun importSharedFiles(context: Context, store: ImpalaStore, uris: List<Uri>): String? {
     val title = withContext(Dispatchers.IO) { displayName(context, uris.first())?.substringBeforeLast('.')?.ifBlank { null } } ?: "Geteilt"
     // Erst lesen (JPEGs sind klein), damit bei unlesbaren Dateien kein leeres Heft entsteht.
-    val pages = withContext(Dispatchers.IO) {
-        uris.flatMap { uri ->
-            if (context.contentResolver.getType(uri) == "application/pdf") pdfPages(context, uri).toList()
-            else listOfNotNull(decodeScanPage(context, uri))
-        }
-    }
+    val pages = withContext(Dispatchers.IO) { uris.flatMap { importPages(context, it) } }
     if (pages.isEmpty()) return null
     return store.write { core ->
         val heftId = core.createHeft(title, null, null)
@@ -94,26 +80,3 @@ private fun displayName(context: Context, uri: Uri): String? = runCatching {
         if (c.moveToFirst()) c.getString(0) else null
     }
 }.getOrNull()
-
-/** PDF-Seiten einzeln als JPEG (längste Kante [SCAN_MAX_EDGE]); es liegt immer nur ein Bitmap im Speicher. */
-private fun pdfPages(context: Context, uri: Uri): Sequence<ScannedPage> = sequence {
-    val fd = context.contentResolver.openFileDescriptor(uri, "r") ?: return@sequence
-    fd.use {
-        val renderer = runCatching { PdfRenderer(fd) }.getOrNull() ?: return@sequence
-        renderer.use {
-            for (i in 0 until renderer.pageCount) {
-                val page = renderer.openPage(i)
-                val k = SCAN_MAX_EDGE / max(page.width, page.height).toFloat()
-                val bmp = Bitmap.createBitmap((page.width * k).roundToInt(), (page.height * k).roundToInt(), Bitmap.Config.ARGB_8888)
-                bmp.eraseColor(Color.WHITE)
-                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
-                val out = ByteArrayOutputStream()
-                bmp.compress(Bitmap.CompressFormat.JPEG, SCAN_JPEG_QUALITY, out)
-                val scanned = ScannedPage(out.toByteArray(), bmp.width, bmp.height)
-                bmp.recycle()
-                yield(scanned)
-            }
-        }
-    }
-}

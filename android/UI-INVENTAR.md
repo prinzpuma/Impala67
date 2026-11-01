@@ -895,8 +895,8 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Position Davor / Danach / Am Ende** – Segment-Auswahl; Standard „Danach“ (web/heft-toolbar-ui.js:194, 200; web/heft.js:1451-1455, 162, 1690; heft.js:1217-1220) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu` (Segmentwahl, Standard „Danach“, gilt für die Sitzung)
 - [x] **Vorlage Liniert / Kariert / Punkte / Blanko** – Tipp legt Seite mit Papier an (web/heft-toolbar-ui.js:196-201; web/heft.js:1456; web/heft-tools.js:8) — Kotlin: ✅ HeftCorners.kt:115-171 (Mini-Vorschau), HeftTopBar.kt:73-75 (Menü)
 - [x] **Papier dieser Seite** – Chips zum Umstellen (web/heft-toolbar-ui.js:202-204; web/heft.js:1501-1506) — Kotlin: ✅ HeftCorners.kt:89-97, HeftTopBar.kt:95-98
-- [ ] **Bild als Seite** – Bilddatei als eigene Seite, seitenfüllend ohne Rand (web/heft-toolbar-ui.js:206; web/heft.js:1458; web/heft-import.js:79-99, 137-156) — Kotlin: ⬜
-- [ ] **PDF oder Bild importieren** – öffnet Import-Dialog (web/heft-toolbar-ui.js:207; web/heft.js:1459) — Kotlin: ⬜
+- [x] **Bild als Seite** – Bilddatei als eigene Seite mit 40 Rand, Papier der aktuellen Seite, am Ende (web/heft-toolbar-ui.js:206; web/heft.js:1458; web/heft-import.js:79-99, 137-156) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu`, scan/HeftScan.kt `insertImagePage`
+- [ ] **PDF oder Bild importieren** – öffnet Import-Dialog (web/heft-toolbar-ui.js:207; web/heft.js:1459) — Kotlin: 🟡 HeftTransfer.kt `HeftImportDialog` (Position ✅; Ziel ist immer das offene Heft, „Als neue Notiz-Seite“ fehlt)
 - [x] **Dokument scannen** – öffnet Scanner (web/heft-toolbar-ui.js:208; web/heft.js:1460) — Kotlin: ✅ HeftCorners.kt:99-102, HeftTopBar.kt:77-81 (ML Kit, siehe Abschnitt 15)
 
 ### 6. Bilder-Popover („Bilder“)
@@ -911,7 +911,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 - [x] **Kopf „Seiten“ mit Untertitel** – „n Seiten“ bzw. „n ausgewählt“ (web/heft-pages-ui.js:12-16, 22) — Kotlin: ✅ HeftPagesSheet.kt:85-90
 - [x] **✕ Schließen** (web/heft-pages-ui.js:16; web/heft.js:1423) — Kotlin: ✅ HeftPagesSheet.kt:92-97
-- [ ] **Umschalter Raster / Verlauf** (web/heft-pages-ui.js:17-19; web/heft.js:1426-1427) — Kotlin: 🟡 (Raster ✅; Verlauf ⬜, TODO HeftPagesSheet.kt:52)
+- [x] **Umschalter Raster / Verlauf** (web/heft-pages-ui.js:17-19; web/heft.js:1426-1427) — Kotlin: ✅ HeftPagesSheet.kt
 - [x] **Rasterminiaturen mit Seitennummer** (web/heft-pages-ui.js:25-37) — Kotlin: ✅ HeftPagesGrid.kt:170-268
 - [x] **Aktive Seite mit Akzent-Rahmen** (web/heft-pages-ui.js:31; css/heft.css:124) — Kotlin: ✅ HeftPagesGrid.kt:130, 215-232
 - [x] **Tipp auf Seite springt dorthin** (web/heft.js:1444-1450) — Kotlin: ✅ HeftPagesSheet.kt:106 (Sprung über Fokus-Mechanik HeftScreen.kt:84-87)
@@ -922,11 +922,12 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Alle / Keine** – Umschalter im Auswahlmodus (web/heft-pages-ui.js:23, 38; web/heft.js:1421) — Kotlin: ✅ HeftPagesSheet.kt:80-83
 - [ ] **Mehrere Seiten durch Wischen auswählen** – Ziehen über Miniaturen schaltet ab dem Startpunkt um (web/heft.js:953-969) — Kotlin: ⬜ (nur Tippen, HeftPagesSheet.kt:106)
 - [x] **Fertig** – beendet Auswahlmodus (web/heft-pages-ui.js:40; web/heft.js:1422) — Kotlin: ✅ HeftPagesSheet.kt:120
-- [ ] **Löschen (n)** – mit Bestätigung, Sicherung im Verlauf vorher, Hinweis „über Verlauf wiederherstellbar“ (web/heft-pages-ui.js:41; web/heft.js:1251-1267, 1424) — Kotlin: 🟡 HeftPagesSheet.kt:121-131, 156-170 (Bestätigung ✅; keine Sicherung im Verlauf, Kern-Rückgängig gilt nur pro Seite, HeftViewModel.kt:149-160)
-- [ ] **Exportieren (n)** – öffnet Export-Dialog für die Auswahl (web/heft-pages-ui.js:42; web/heft.js:1425, 1379-1395) — Kotlin: ⬜ (TODO HeftPagesSheet.kt:53)
-- [ ] **Verlauf (Stände)** – Liste der letzten 24 h mit Miniaturen, Hinweis „höchstens alle 10 Min.“ und max. 20 Stände (web/heft-pages-ui.js:50-60; web/heft.js:409-422; web/heft-storage.js:138) — Kotlin: ⬜ (TODO HeftPagesSheet.kt:52)
-- [ ] **Stand wiederherstellen** – Tipp auf Miniatur, Bestätigung, aktueller Stand wird vorher gesichert (web/heft.js:1428-1441, 391-408) — Kotlin: ⬜
-- [ ] **Hinweistext „Letzte 24 h · antippen zum Wiederherstellen“** (web/heft-pages-ui.js:59) — Kotlin: ⬜
+- [x] **Löschen (n)** – mit Bestätigung, Sicherung im Verlauf vorher, Hinweis „über Verlauf wiederherstellbar“ (web/heft-pages-ui.js:41; web/heft.js:1251-1267, 1424) — Kotlin: ✅ HeftPagesSheet.kt, HeftViewModel.kt `removePages` (sichert vorher)
+- [x] **Exportieren (n)** – öffnet Export-Dialog für die Auswahl (web/heft-pages-ui.js:42; web/heft.js:1425, 1379-1395) — Kotlin: ✅ HeftTransfer.kt `HeftExportDialog` (PDF oder PNG, 300 dpi, Teilen-Menü)
+- [x] **Importieren (Fußleiste)** (web/heft-pages-ui.js:46) — Kotlin: ✅ HeftPagesSheet.kt
+- [x] **Verlauf (Stände)** – Liste der letzten 24 h mit Miniaturen, Hinweis „höchstens alle 10 Min.“ und max. 20 Stände (web/heft-pages-ui.js:50-60; web/heft.js:409-422; web/heft-storage.js:138) — Kotlin: ✅ HeftHistory.kt, HeftHistoryGrid.kt (Kern `heft_snapshot`; Miniaturen ohne Bilder)
+- [x] **Stand wiederherstellen** – Tipp auf Miniatur, Bestätigung, aktueller Stand wird vorher gesichert (web/heft.js:1428-1441, 391-408) — Kotlin: ✅ HeftViewModel.kt `restore` (Kern `heft_restore`, zusätzlich rückgängig machbar)
+- [x] **Hinweistext „Letzte 24 h · antippen zum Wiederherstellen“** (web/heft-pages-ui.js:59) — Kotlin: ✅
 - [ ] **Seite einzeln löschen über Seitenübersicht** – im PWA-Code vorhanden (hedelpage, web/heft.js:1442), aber kein Element rendert es (toter Code) — Kotlin: 🟡 (Löschen über Kopfzeile und Eck-Menü, HeftTopBar.kt:100-106, HeftCorners.kt:103-106)
 - [x] **Seitenübersicht als Popover** – Desk: mittig mit Abdunkelung (web/heft.js:870-877, css/heft.css:101-112) — Kotlin: ✅ HeftPagesSheet.kt:138-144 (560 dp); Telefon: Bottom Sheet ✅ (HeftPagesSheet.kt:145-154)
 

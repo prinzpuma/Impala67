@@ -15,6 +15,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.impala67.app.heft.scan.insertImagePage
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.heft.ink.HandwritingRecognizer
@@ -37,7 +41,7 @@ import uniffi.impala_ffi.heftNewId
  * ausschließlich über `heftApply` des Kerns: jede Geste ein Event, dazu die Umkehr für Rückgängig.
  * Der Kern hält keinen Undo-Stapel (`heft_undo.rs`); er liegt hier und gilt nur für diese Sitzung.
  */
-class HeftViewModel(val store: ImpalaStore, val pageId: String, private val prefs: DevicePrefs) : ViewModel() {
+class HeftViewModel(val store: ImpalaStore, val pageId: String, private val prefs: DevicePrefs, historyDir: File) : ViewModel() {
     private val touched: (Changes) -> Boolean = { pageId in it.hefte || pageId in it.closedPages }
 
     /** Erkennt die Handschrift einer Seite nach Strich-Änderungen und macht sie durchsuchbar. */
@@ -200,8 +204,54 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** Gescannte Seiten ab Position [at] als Heftseiten einfügen; liefert die erste neue Seiten-ID. */
     suspend fun addScanned(at: Int, scans: List<ScannedPage>): String? = writes.withLock {
         runCatching { store.write { it.insertScannedPages(pageId, at, scans) } }
+            .onSuccess { changed() }
             .onFailure { _messages.tryEmit(it.message ?: "Scan nicht eingefügt") }
             .getOrNull()
+    }
+
+    /** „Bild als Seite“: neue Seite am Ende mit dem Papier der aktuellen Seite; liefert ihre ID. */
+    suspend fun addImagePage(paper: Paper, img: ScannedPage): String? = writes.withLock {
+        runCatching { store.write { it.insertImagePage(pageId, null, paper.id, img) } }
+            .onSuccess { changed() }
+            .onFailure { _messages.tryEmit(it.message ?: "Bild-Seite nicht eingefügt") }
+            .getOrNull()
+    }
+
+    // ---- Verlauf (heft-storage.js: lokale Stände, nicht synchronisiert) ----
+
+    private val history = HeftHistory(File(historyDir, pageId))
+
+    /** Nach jeder Änderung: höchstens alle 10 Minuten ein Stand. */
+    fun changed() {
+        viewModelScope.launch {
+            if (!withContext(Dispatchers.IO) { history.due() }) return@launch
+            runCatching { backupNow() }
+        }
+    }
+
+    /** Stände der letzten 24 Stunden, neueste zuerst (räumt Abgelaufenes auf). */
+    suspend fun snapshots(): List<HeftSnap> = withContext(Dispatchers.IO) { history.prune() }
+
+    /** Aktuellen Stand sofort sichern (vor dem Löschen von Seiten und vor dem Wiederherstellen). */
+    private suspend fun backupNow() {
+        val json = store.write { it.heftSnapshot(pageId) }
+        withContext(Dispatchers.IO) { history.write(json); history.prune() }
+    }
+
+    /** Stand wiederherstellen: aktueller Stand kommt vorher in den Verlauf; Rückgängig geht auch. */
+    fun restore(snap: HeftSnap) {
+        lasso = null
+        objSel = null
+        viewModelScope.launch {
+            writes.withLock {
+                runCatching {
+                    val json = withContext(Dispatchers.IO) { snap.file.readText() }
+                    backupNow()
+                    store.write { it.heftRestore(pageId, json) }
+                }.onSuccess { record(it); _messages.tryEmit("Heft-Stand wiederhergestellt") }
+                    .onFailure { _messages.tryEmit("Wiederherstellen fehlgeschlagen: " + (it.message ?: "Stand fehlt oder ist beschädigt")) }
+            }
+        }
     }
 
     /** Kurze Meldung in der Snackbar. */
@@ -218,6 +268,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     fun removePages(heftPageIds: List<String>) {
         viewModelScope.launch {
             writes.withLock {
+                // Wie die PWA vorher sichern: Gelöschtes ist über den Verlauf wiederherstellbar.
+                runCatching { backupNow() }
                 for (id in heftPageIds) {
                     val edit = runCatching { store.write { it.heftApply(pageId, listOf(HeftChange.RemovePage(id))) } }
                         .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
@@ -469,6 +521,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** Neue Änderung: ihre Umkehr kommt auf den Undo-Stapel, Wiederholen verfällt. */
     private fun record(edit: HeftEdit) {
         if (edit.undo == "[]") return
+        changed()
         undoStack.addLast(edit.undo)
         // Wie die PWA höchstens 100 Schritte (heft.js `pushUndo`).
         while (undoStack.size > UNDO_LIMIT) undoStack.removeFirst()

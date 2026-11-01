@@ -58,6 +58,9 @@ class HeftPageActions(
     val remove: () -> Unit,
     val canRemove: Boolean,
     val scan: () -> Unit,
+    /** „Bild als Seite“ und „PDF oder Bild importieren“ (heft-toolbar-ui.js `plusPopHtml`). */
+    val imagePage: () -> Unit,
+    val importFiles: () -> Unit,
     val overview: () -> Unit,
     /** Papier der aktuellen Seite (im Menü markiert). */
     val currentPaper: Paper?,
@@ -127,6 +130,14 @@ fun HeftAddMenu(expanded: Boolean, onDismiss: () -> Unit, actions: HeftPageActio
             }
             HorizontalDivider(color = c.edgeSoft)
             Column {
+                PopActionRow("Bild als Seite", R.drawable.ic_i_image) {
+                    onDismiss()
+                    actions.imagePage()
+                }
+                PopActionRow("PDF oder Bild importieren", R.drawable.ic_i_upload) {
+                    onDismiss()
+                    actions.importFiles()
+                }
                 PopActionRow("Dokument scannen", R.drawable.ic_i_camera) {
                     onDismiss()
                     actions.scan()
@@ -184,7 +195,7 @@ fun HeftImageMenu(expanded: Boolean, onDismiss: () -> Unit, vm: HeftViewModel, m
 
 /** `.heft-seg-row`: Segmentwahl in einer Rille; das aktive Segment hebt sich als Fläche ab. */
 @Composable
-private fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
+internal fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
     val c = Impala.colors
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.md)).background(c.surfaceSubtle).border(1.dp, c.edgeSoft, RoundedCornerShape(Radius.md)).padding(3.dp),

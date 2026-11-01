@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,22 +50,36 @@ import org.impala67.app.ui.theme.TextSize
 /** „1 Seite“ / „3 Seiten“ wie `plural` in heft-pages-ui.js. */
 internal fun seitenZahl(n: Int) = "$n " + if (n == 1) "Seite" else "Seiten"
 
-// TODO(desk): Verlauf-Umschalter (Stände, `writeSnapshot` in heft-storage.js) fehlt – keine Snapshot-FFI.
-// TODO(desk): Export/Import von Seiten (heft-export.js, heft-import.js) fehlt im Popover.
 /**
- * Seitenübersicht des Hefts (heft.js „Seiten“-Popover, Raster): Kopf mit Schließen, Raster aller Seiten,
- * Fußleiste. Antippen springt zur Seite ([onJump]); „Auswählen“ markiert Seiten zum Löschen; „Neue Seite“
- * hängt eine Seite mit dem Papier der letzten Seite an. Auf dem Tablet ([desk]) ein mittiges Popover
- * (560 dp, Radius 22) wie in der PWA, sonst ein Bottom Sheet.
+ * Seitenübersicht des Hefts (heft.js „Seiten“-Popover, heft-pages-ui.js): Kopf mit Schließen, Umschalter
+ * Raster/Verlauf, Inhalt, Fußleiste. Antippen springt zur Seite ([onJump]); „Auswählen“ markiert Seiten
+ * zum Löschen oder Exportieren; „Neue Seite“ hängt eine Seite mit dem Papier der letzten Seite an;
+ * „Importieren“ holt PDFs oder Bilder ([onImport]). Der Verlauf zeigt die lokalen Stände der letzten
+ * 24 Stunden. Auf dem Tablet ([desk]) ein mittiges Popover (560 dp, Radius 22) wie in der PWA, sonst ein
+ * Bottom Sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, desk: Boolean, onJump: (String) -> Unit, onDismiss: () -> Unit) {
+fun HeftPagesSheet(
+    vm: HeftViewModel,
+    pages: List<String>,
+    current: Int,
+    desk: Boolean,
+    title: String,
+    onJump: (String) -> Unit,
+    onImport: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val c = Impala.colors
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var confirm by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    var historyTab by remember { mutableStateOf(false) }
+    var snaps by remember { mutableStateOf<List<HeftSnap>?>(null) }
+    var restoring by remember { mutableStateOf<HeftSnap?>(null) }
+    LaunchedEffect(historyTab) { if (historyTab) snaps = vm.snapshots() }
     val n = selected.size
     // TODO(desk): `canDeletePages` (impala_heft::pages) über die FFI exponieren; hier nur die UI-Sperre.
     // Mindestens eine Seite bleibt.
@@ -97,6 +112,19 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, desk: B
             }
         }
 
+        // `.heft-pages-seg`: Raster | Verlauf (nicht während der Auswahl).
+        if (!picking) {
+            Box(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                Segmented(listOf(false, true), historyTab, { if (it) "Verlauf" else "Raster" }) { historyTab = it }
+            }
+        }
+
+        if (historyTab && !picking) {
+            HeftHistoryGrid(snaps, columns = if (desk) 3 else null, modifier = Modifier.weight(1f, fill = false)) { restoring = it }
+            Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Letzte 24 h · antippen zum Wiederherstellen", color = c.text2, fontSize = TextSize.xs)
+            }
+        } else {
         HeftPagesGrid(
             vm = vm,
             pages = pages,
@@ -129,9 +157,13 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, desk: B
                     Icon(painterResource(R.drawable.ic_i_trash), null, Modifier.size(16.dp), c.danger)
                     Text("Löschen ($n)", color = c.danger, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold)
                 }
+                FootButton("Exportieren ($n)", null, enabled = n > 0) { exporting = true }
             } else {
                 PagesTextButton("Auswählen") { picking = true }
+                Spacer(Modifier.weight(1f))
+                FootButton("Importieren", R.drawable.ic_i_upload, onClick = onImport)
             }
+        }
         }
     }
 
@@ -167,6 +199,36 @@ fun HeftPagesSheet(vm: HeftViewModel, pages: List<String>, current: Int, desk: B
             },
             dismissButton = { TextButton({ confirm = false }) { Text("Abbrechen") } },
         )
+    }
+
+    if (exporting) HeftExportDialog(vm, pages.filter { it in selected }, title, onDismiss = { exporting = false })
+
+    restoring?.let { snap ->
+        AlertDialog(
+            onDismissRequest = { restoring = null },
+            title = { Text("Wiederherstellen") },
+            text = { Text("Diesen Stand wiederherstellen? Der aktuelle Stand wird vorher im Verlauf gesichert.") },
+            confirmButton = {
+                TextButton({ restoring = null; vm.restore(snap); onDismiss() }) { Text("Wiederherstellen") }
+            },
+            dismissButton = { TextButton({ restoring = null }) { Text("Abbrechen") } },
+        )
+    }
+}
+
+/** `.heft-pages-btn`: Kapsel in Flächenfarbe mit optionalem Icon. */
+@Composable
+private fun FootButton(label: String, icon: Int?, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = Impala.colors
+    Row(
+        Modifier.height(36.dp).clip(CircleShape).background(c.surfaceSubtle)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.4f).padding(horizontal = 14.dp),
+        Arrangement.spacedBy(6.dp),
+        Alignment.CenterVertically,
+    ) {
+        icon?.let { Icon(painterResource(it), null, Modifier.size(16.dp), c.text) }
+        Text(label, color = c.text, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold)
     }
 }
 

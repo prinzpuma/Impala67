@@ -32,7 +32,7 @@ class HeftImagePick(val pick: () -> Unit, val photo: () -> Unit)
  * JPEG (längste Kante 1400) an [onImage] geben. Die Kamera fragt vorher nach ihrer Berechtigung.
  */
 @Composable
-fun rememberHeftImagePick(onImage: (ScannedPage) -> Unit, onError: (String) -> Unit): HeftImagePick {
+fun rememberHeftImagePick(onImage: (ScannedPage) -> Unit, onError: (String) -> Unit, maxEdge: Int = IMAGE_MAX_EDGE): HeftImagePick {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val image by rememberUpdatedState(onImage)
@@ -44,7 +44,7 @@ fun rememberHeftImagePick(onImage: (ScannedPage) -> Unit, onError: (String) -> U
 
     fun load(uri: Uri) {
         scope.launch {
-            val img = withContext(Dispatchers.IO) { runCatching { decodeScanPage(context, uri, IMAGE_MAX_EDGE) }.getOrNull() }
+            val img = withContext(Dispatchers.IO) { runCatching { decodeScanPage(context, uri, maxEdge) }.getOrNull() }
             if (img != null) image(img) else error("Bild konnte nicht eingefügt werden")
         }
     }

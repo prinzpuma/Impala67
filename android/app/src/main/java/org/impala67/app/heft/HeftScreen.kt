@@ -79,7 +79,10 @@ import kotlinx.coroutines.launch
 import org.impala67.app.ImpalaApp
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.heft.scan.IMPORT_MAX_EDGE
 import org.impala67.app.heft.scan.rememberDocumentScan
+import android.net.Uri
+import java.io.File
 import org.impala67.app.ui.components.pressScale
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.LocalAppearance
@@ -115,8 +118,8 @@ fun HeftScreen(
     desk: Boolean = false,
     onAi: (() -> Unit)? = null,
 ) {
-    val prefs = (LocalContext.current.applicationContext as ImpalaApp).prefs
-    val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId, prefs) }
+    val app = LocalContext.current.applicationContext as ImpalaApp
+    val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId, app.prefs, File(app.filesDir, "heftver")) }
     val ids by vm.pageIds.collectAsStateWithLifecycle()
     val title by vm.title.collectAsStateWithLifecycle()
     val pages = ids.orEmpty()
@@ -152,6 +155,13 @@ fun HeftScreen(
     )
     val target by rememberUpdatedState(currentId)
     val imagePick = rememberHeftImagePick(onImage = { img -> target?.let { vm.addImage(it, img) } }, onError = vm::message)
+    val pagePick = rememberHeftImagePick(
+        onImage = { img -> scope.launch { focus = vm.addImagePage(currentData?.paper?.let(Paper::of) ?: Paper.BLANK, img) } },
+        onError = vm::message,
+        maxEdge = IMPORT_MAX_EDGE,
+    )
+    var importing by remember { mutableStateOf<List<Uri>?>(null) }
+    val filePick = rememberHeftFilePick { importing = it }
     val media = HeftMediaActions(
         writeText = { currentId?.let(vm::startText) },
         pickImage = imagePick.pick,
@@ -171,6 +181,8 @@ fun HeftScreen(
         remove = { currentId?.let(vm::removePage) },
         canRemove = pages.size > 1,
         scan = scan,
+        imagePage = pagePick.pick,
+        importFiles = filePick,
         overview = { showPages = true },
         currentPaper = currentData?.paper?.let(Paper::of),
         insertPos = insertPos,
@@ -350,9 +362,14 @@ fun HeftScreen(
             pages = pages,
             current = current,
             desk = desk,
+            title = title ?: "Heft",
             onJump = { id -> showPages = false; focus = id },
+            onImport = { showPages = false; filePick() },
             onDismiss = { showPages = false },
         )
+    }
+    importing?.let { uris ->
+        HeftImportDialog(vm, uris, current, onDone = { first -> importing = null; if (first != null) focus = first }, onDismiss = { importing = null })
     }
 }
 

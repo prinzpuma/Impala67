@@ -78,6 +78,14 @@ fun ImpalaCore.insertScannedPages(pageId: String, at: Int, scans: List<ScannedPa
     return first
 }
 
+/** „Bild als Seite“ (heft-import.js `imagePage(im, paper, false)`): neue Seite mit 40 Rand, Papier [paper]. */
+fun ImpalaCore.insertImagePage(pageId: String, at: Int?, paper: String, img: ScannedPage): String {
+    val heftPageId = heftAddPage(pageId, at?.toUInt(), paper)
+    val f = scanFrame(img, pad = 40.0)
+    heftAddImage(pageId, heftPageId, img.jpeg, "image/jpeg", f.x, f.y, f.w, f.h)
+    return heftPageId
+}
+
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()

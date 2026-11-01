@@ -1418,6 +1418,12 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1490,6 +1496,8 @@ fun uniffi_impala_ffi_checksum_func_heft_lasso_touch_action(
 fun uniffi_impala_ffi_checksum_func_heft_new_id(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_shape_outline(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_snapshot_first_page(
 ): Short
 fun uniffi_impala_ffi_checksum_func_markdown_card_text(
 ): Short
@@ -1725,6 +1733,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_remove_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_remove_texts(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_restore(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(
@@ -1740,6 +1750,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_paper(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_text(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_snapshot(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_strokes_at(
 ): Short
@@ -2227,6 +2239,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_strokes(`ptr`: Pointer,`p
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_texts(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_restore(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`snapshot`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`ax`: Double,`ay`: Double,`factor`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`polygon`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2242,6 +2256,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_set_paper(`ptr`: Pointer,`pageId
 fun uniffi_impala_ffi_fn_method_impalacore_heft_set_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_set_text(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_snapshot(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_strokes_at(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`x`: Double,`y`: Double,`radius`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2458,6 +2474,8 @@ fun uniffi_impala_ffi_fn_func_heft_lasso_touch_action(`isTouch`: Byte,`lassoTool
 fun uniffi_impala_ffi_fn_func_heft_new_id(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_shape_outline(`shape`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_heft_snapshot_first_page(`snapshot`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_card_text(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2690,6 +2708,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_shape_outline() != 55129.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_snapshot_first_page() != 65107.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_markdown_card_text() != 58620.toShort()) {
@@ -3043,6 +3064,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_remove_texts() != 43896.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_restore() != 21338.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes() != 16014.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3065,6 +3089,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_text() != 21148.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_snapshot() != 35858.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_strokes_at() != 26703.toShort()) {
@@ -7367,6 +7394,11 @@ public interface ImpalaCoreInterface {
     fun `heftRemoveTexts`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit
     
     /**
+     * Gesicherten Stand wiederherstellen: EIN Event mit dem Unterschied, dazu die Umkehr.
+     */
+    fun `heftRestore`(`pageId`: kotlin.String, `snapshot`: kotlin.String): HeftEdit
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
     fun `heftScaleStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit
@@ -7405,6 +7437,11 @@ public interface ImpalaCoreInterface {
      * Textfeld ersetzen (Text, Position, Breite, Farbe, Schriftgröße).
      */
     fun `heftSetText`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `text`: HeftText): HeftEdit
+    
+    /**
+     * Aktueller Stand eines Hefts als `{ v: 2, pages }` (wie `encodeDoc` der PWA).
+     */
+    fun `heftSnapshot`(`pageId`: kotlin.String): kotlin.String
     
     /**
      * Striche unter dem Radierer (Kreis um `x`/`y`), oberster zuerst.
@@ -8872,6 +8909,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Gesicherten Stand wiederherstellen: EIN Event mit dem Unterschied, dazu die Umkehr.
+     */
+    @Throws(CoreException::class)override fun `heftRestore`(`pageId`: kotlin.String, `snapshot`: kotlin.String): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_restore(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`snapshot`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
     @Throws(CoreException::class)override fun `heftScaleStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit {
@@ -8992,6 +9045,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_set_text(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterTypeHeftText.lower(`text`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aktueller Stand eines Hefts als `{ v: 2, pages }` (wie `encodeDoc` der PWA).
+     */
+    @Throws(CoreException::class)override fun `heftSnapshot`(`pageId`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_snapshot(
+        it, FfiConverterString.lower(`pageId`),_status)
 }
     }
     )
@@ -17414,6 +17483,38 @@ public object FfiConverterOptionalTypeHeftLassoHandle: FfiConverterRustBuffer<He
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeHeftPageData: FfiConverterRustBuffer<HeftPageData?> {
+    override fun read(buf: ByteBuffer): HeftPageData? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeHeftPageData.read(buf)
+    }
+
+    override fun allocationSize(value: HeftPageData?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeHeftPageData.allocationSize(value)
+        }
+    }
+
+    override fun write(value: HeftPageData?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeHeftPageData.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeHeftRect: FfiConverterRustBuffer<HeftRect?> {
     override fun read(buf: ByteBuffer): HeftRect? {
         if (buf.get().toInt() == 0) {
@@ -19031,6 +19132,18 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_shape_outline(
         FfiConverterTypeHeftShape.lower(`shape`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Erste Seite eines gesicherten Stands (Vorschaubild im Verlauf); `None` bei leerem oder kaputtem Stand.
+         */ fun `heftSnapshotFirstPage`(`snapshot`: kotlin.String): HeftPageData? {
+            return FfiConverterOptionalTypeHeftPageData.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_snapshot_first_page(
+        FfiConverterString.lower(`snapshot`),_status)
 }
     )
     }
