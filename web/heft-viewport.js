@@ -524,9 +524,19 @@ export function createHeftViewport(ctx) {
 		if (ctx.drawing() && ctx.drawing().byTouch) return;
 		const fingers = fingersOf(e.touches);
 		if (!fingers.length) return;
+		// Nur Finger behalten, die wirklich noch liegen: Baut sich die Seite mitten in einer
+		// Berührung neu auf, erreicht deren touchend .heft-scroll nicht mehr – der Finger blieb
+		// sonst für immer in der Liste und keine Geste startete mehr frisch.
+		const down = new Set(fingers.map((t) => t.identifier));
+		for (const id of gesture.pts.keys()) if (!down.has(id)) gesture.pts.delete(id);
+		// Neue Geste = vorher lag kein Finger. Vorher galt „genau ein Finger registriert“; setzten
+		// zwei oder drei Finger im selben Ereignis auf, blieben Startzeit, „bewegt“ und Fingerzahl
+		// der vorigen Geste stehen und Tipps (Rückgängig, Wiederholen, Doppeltipp-Zoom) zählten nie.
+		const fresh = gesture.pts.size === 0;
 		for (const t of fingersOf(e.changedTouches)) gesture.pts.set(t.identifier, { x: t.clientX, y: t.clientY });
+		if (fresh) gesture.maxCount = 0;
 		gesture.maxCount = Math.max(gesture.maxCount, fingers.length);
-		if (gesture.pts.size === 1) {
+		if (fresh) {
 			gesture.moved = false; gesture.startedAt = Date.now();
 			// Ansicht VOR der Beruehrung merken (Handballen-Nachsorge in onDown).
 			const before = { x: view.x, y: view.y, k: view.k };
