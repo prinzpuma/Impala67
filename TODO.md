@@ -129,8 +129,8 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [x] **Systemintegration**: Teilen *aus* der App ✅ (nur Tablet); Teilen *an* die App ✅ (Text → neue Seite, Bilder/PDF → neues Heft, `share/Incoming.kt`); App-Shortcuts ✅; Predictive Back ✅.
   - [x] **Lokale Erinnerung „Karteikarten fällig“**: täglich 18 Uhr über WorkManager, Tipp öffnet das Lernen.
 - [ ] **Oberfläche wie die PWA** – Abarbeitung nach `android/UI-INVENTAR.md` (Reihenfolge oben in der Datei):
-  - [ ] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen ✅, Farbpunkte ✅, Marker-Farbe ✅, Werkzeugzustand speichern ✅, Zoom 0,4–6 ✅; offen: Optionsleiste unter der Kapsel (Telefon).
-  - [ ] Heft: fehlende Werkzeuge und Gesten, Import/Export, Verlauf, Lesemodus (Telefon).
+  - [x] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6, Werkzeugleiste oben mittig mit Optionsleiste darunter (auch Telefon), Einklappen, Schreib-Rückzug.
+  - [ ] Heft: Formerkennung ✅, Laser ✅, Radierer halten ✅, Doppeltipp-Zoom ✅, Zwei-/Drei-Finger-Tipp ✅, „Seite hinzufügen“ Davor/Danach/Am Ende ✅; offen: Bild-/Text-Werkzeug, Import/Export, Verlauf, Lesemodus (Telefon).
   - [ ] Seitenmenü (⋯) auf dem Telefon; fehlende Einträge im Tablet-Menü.
   - [ ] Editor: Slash-Menü vollständig, `[[`-Links, Blockmenü, Bilder (`img:`-IDs), Toggle-Zustand speichern, Link-Schema prüfen, KaTeX, Mermaid, Datenbankansicht.
   - [ ] Shell: Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop, Breitengriff, Langdruck-Menüs, Dichte/Schrift/Bewegung.

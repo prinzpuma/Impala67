@@ -1,15 +1,14 @@
 package org.impala67.app.heft
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -17,42 +16,42 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.impala67.app.R
 import org.impala67.app.ui.theme.Impala
-import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.TextSize
 
-/** Aktionen der Seitenverwaltung (heft-pages-ui.js; Seitenübersicht wie das Seiten-Popover der PWA). */
-class HeftPageActions(
-    val add: (Paper) -> Unit,
-    val setPaper: (Paper) -> Unit,
-    val remove: () -> Unit,
-    val canRemove: Boolean,
-    val scan: () -> Unit,
-    val overview: () -> Unit,
-)
-
-/** Kopfzeile: Zurück, Titel mit „Seite x von y“, Seite hinzufügen, Seitenübersicht, Papier und Seite löschen. */
+/**
+ * Kopfzeile auf dem Telefon (mobile-view.js): Zurück, Titel mit „Seite x von y“, Rückgängig und
+ * Wiederholen (stehen auf dem Telefon nicht in der Kapsel, heft-toolbar-ui.js) und der KI-Assistent.
+ * Seiten und „+“ schweben unten in den Ecken, in Daumennähe.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: HeftPageActions) {
-    var addMenu by remember { mutableStateOf(false) }
-    var pageMenu by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
+fun HeftTopBar(
+    title: String,
+    pageLabel: String,
+    onBack: () -> Unit,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onAi: (() -> Unit)?,
+) {
     TopAppBar(
         title = {
             Column {
                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                Text(pageLabel, color = Impala.colors.text2, fontSize = TextSize.xs)
+                AnimatedContent(
+                    pageLabel,
+                    transitionSpec = { fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) togetherWith fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) },
+                    label = "heft-page-label",
+                ) { Text(it, color = Impala.colors.text2, fontSize = TextSize.xs, maxLines = 1) }
             }
         },
         navigationIcon = {
@@ -61,56 +60,23 @@ fun HeftTopBar(title: String, pageLabel: String, onBack: () -> Unit, actions: He
             }
         },
         actions = {
-            IconButton({ addMenu = true }, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_plus), "Seite hinzufügen", Modifier.size(22.dp))
-                DropdownMenu(
-                    addMenu, { addMenu = false },
-                    shape = RoundedCornerShape(Radius.lg),
-                    containerColor = Impala.colors.menu,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Impala.colors.edge),
-                ) {
-                    Text("Neue Seite danach", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = Impala.colors.text2, fontSize = TextSize.xs)
-                    Paper.entries.forEach { p ->
-                        DropdownMenuItem({ Text(p.label) }, { addMenu = false; actions.add(p) })
-                    }
-                    HorizontalDivider(color = Impala.colors.edgeSoft)
-                    DropdownMenuItem(
-                        { Text("Dokument scannen") },
-                        { addMenu = false; actions.scan() },
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_i_camera), null, Modifier.size(20.dp)) },
-                    )
-                }
+            IconButton(onUndo, enabled = canUndo, shapes = IconButtonDefaults.shapes()) {
+                Icon(painterResource(R.drawable.ic_i_undo), "Rückgängig", Modifier.size(21.dp))
             }
-            IconButton(actions.overview, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_pages_stack), "Seiten", Modifier.size(22.dp))
+            IconButton(onRedo, enabled = canRedo, shapes = IconButtonDefaults.shapes()) {
+                Icon(painterResource(R.drawable.ic_i_redo), "Wiederholen", Modifier.size(21.dp))
             }
-            IconButton({ pageMenu = true }, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_i_dots), "Seite", Modifier.size(22.dp))
-                DropdownMenu(
-                    pageMenu, { pageMenu = false },
-                    shape = RoundedCornerShape(Radius.lg),
-                    containerColor = Impala.colors.menu,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Impala.colors.edge),
-                ) {
-                    Text("Papier dieser Seite", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = Impala.colors.text2, fontSize = TextSize.xs)
-                    Paper.entries.forEach { p ->
-                        DropdownMenuItem({ Text(p.label) }, { pageMenu = false; actions.setPaper(p) })
-                    }
-                    HorizontalDivider(color = Impala.colors.edgeSoft)
-                    DropdownMenuItem(
-                        { Text("Seite löschen", color = Impala.colors.danger) },
-                        { pageMenu = false; confirm = true },
-                        enabled = actions.canRemove,
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_i_trash), null, Modifier.size(20.dp), Impala.colors.danger) },
-                    )
+            if (onAi != null) {
+                IconButton(onAi, shapes = IconButtonDefaults.shapes()) {
+                    Icon(painterResource(R.drawable.ic_i_sparkles), "KI-Assistent", Modifier.size(21.dp))
                 }
             }
         },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Impala.colors.bg0),
     )
-    if (confirm) DeletePageDialog(onDismiss = { confirm = false }, onConfirm = { confirm = false; actions.remove() })
 }
 
-/** Rückfrage vor „Seite löschen“ (Kopfzeile und Tablet-„+“). */
+/** Rückfrage vor „Seite löschen“ („+“-Menü). */
 @Composable
 fun DeletePageDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(

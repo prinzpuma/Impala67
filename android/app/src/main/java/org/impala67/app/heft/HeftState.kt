@@ -12,8 +12,19 @@ object HeftPage {
     const val RATIO = WIDTH / HEIGHT
 }
 
-/** Werkzeuge der Werkzeugleiste (Bilder und Laser folgen später). */
-enum class HeftTool { PEN, MARKER, ERASER, LASSO }
+/** Werkzeuge der Werkzeugleiste (Bilder folgen später). Der Laser zeichnet nur flüchtig, nichts wird gespeichert. */
+enum class HeftTool {
+    PEN, MARKER, ERASER, LASSO, LASER;
+
+    /** Stift und Marker schreiben mit Farbe und Dicke. */
+    val writes get() = this == PEN || this == MARKER
+
+    /** Ein zweiter Tipp öffnet Optionen (Lasso und Laser haben keine). */
+    val hasOptions get() = this != LASSO && this != LASER
+}
+
+/** Wohin „Seite hinzufügen“ die neue Seite legt (heft-toolbar-ui.js `POS`). */
+enum class InsertPos(val label: String) { BEFORE("Davor"), AFTER("Danach"), LAST("Am Ende") }
 
 /** Papiertypen des Kerns mit ihren Namen aus `heft-tools.js` (`PAPERS`). */
 enum class Paper(val id: String, val label: String) {
@@ -54,10 +65,12 @@ data class HeftTools(
     val onlyPen: Boolean = true,
     /** Optionsleiste (Farbe/Dicke bzw. Radiergröße) offen. */
     val expanded: Boolean = false,
+    /** Leiste eingeklappt auf eine kleine Kapsel mit Farbpunkt (heft.js `chromeMin`). */
+    val collapsed: Boolean = false,
 ) {
     /** Gespeicherter Teil wie `saveToolPrefs` (heft-tools.js); das Werkzeug selbst startet immer als Stift. */
     fun toJson(): String = JSONObject()
-        .put("color", color).put("size", size).put("onlyPen", onlyPen).put("eraserSize", eraserSize).put("penSlot", penSlot)
+        .put("color", color).put("size", size).put("onlyPen", onlyPen).put("eraserSize", eraserSize).put("penSlot", penSlot).put("collapsed", collapsed)
         .put("pens", JSONArray(pens.map { JSONObject().put("color", it.color).put("size", it.size) }))
         .toString()
 
@@ -78,6 +91,7 @@ data class HeftTools(
                 size = o.optDouble("size").takeUnless { it.isNaN() } ?: pens[slot].size,
                 eraserSize = o.optDouble("eraserSize").takeUnless { it.isNaN() } ?: d.eraserSize,
                 onlyPen = o.optBoolean("onlyPen", true),
+                collapsed = o.optBoolean("collapsed", false),
             )
         }
     }

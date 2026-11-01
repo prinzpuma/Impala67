@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,7 @@ import uniffi.impala_ffi.Changes
 import uniffi.impala_ffi.HeftChange
 import uniffi.impala_ffi.HeftEdit
 import uniffi.impala_ffi.HeftPageData
+import uniffi.impala_ffi.HeftShape
 import uniffi.impala_ffi.HeftStroke
 import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.heftNewId
@@ -77,7 +80,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     fun selectTool(tool: HeftTool, slot: Int = tools.penSlot) {
         val same = tools.tool == tool && (tool != HeftTool.PEN || tools.penSlot == slot)
         // Das Lasso hat keine Optionen; ein anderes Werkzeug hebt die Auswahl auf (heft.js `dropLasso`).
-        val expanded = tool != HeftTool.LASSO && (if (same) !tools.expanded else true)
+        val expanded = tool.hasOptions && (if (same) !tools.expanded else true)
         // Ein Stift-Favorit setzt Farbe und Dicke (heft.js `hepen`); der Marker übernimmt sie.
         tools = if (tool == HeftTool.PEN) tools.copy(tool = tool, penSlot = slot, color = tools.pens[slot].color, size = tools.pens[slot].size, expanded = expanded)
         else tools.copy(tool = tool, expanded = expanded)
@@ -87,9 +90,44 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     fun collapseOptions() { tools = tools.copy(expanded = false) }
 
+    /** Leiste ein- bzw. ausklappen (Chevron; eingeklappt bleibt nur ein Farbpunkt). */
+    fun toggleCollapsed() {
+        tools = tools.copy(collapsed = !tools.collapsed, expanded = false)
+        saveTools()
+    }
+
+    /** Werkzeug vor dem Halten des Radierers (heft.js `holdTool`). */
+    private var heldTool: HeftTool? = null
+
+    /** Radierer-Knopf gehalten: vorübergehend radieren, beim Loslassen zurück zum vorigen Werkzeug. */
+    fun holdEraser(on: Boolean) {
+        if (on) {
+            if (heldTool != null) return
+            heldTool = tools.tool
+            lasso = null
+            tools = tools.copy(tool = HeftTool.ERASER, expanded = false)
+        } else {
+            val back = heldTool ?: return
+            heldTool = null
+            tools = tools.copy(tool = back)
+        }
+    }
+
+    /** Gerade wird geschrieben: die Leisten treten zurück (heft.js `setWriting`, 700 ms Nachlauf). */
+    var writing by mutableStateOf(false)
+        private set
+    private var writingOff: Job? = null
+
+    fun setWriting(on: Boolean) {
+        writingOff?.cancel()
+        if (on) { writing = true; return }
+        if (!writing) return
+        writingOff = viewModelScope.launch { delay(700); writing = false }
+    }
+
     /** heft.js `hecolor`: Radierer/Lasso wechseln dabei zum Stift; der Stift merkt sich die Farbe im Favoriten. */
     fun setColor(css: String) {
-        val t = if (tools.tool == HeftTool.ERASER || tools.tool == HeftTool.LASSO) tools.copy(tool = HeftTool.PEN, expanded = true) else tools
+        val t = if (!tools.tool.writes) tools.copy(tool = HeftTool.PEN, expanded = true) else tools
         if (t.tool == HeftTool.PEN) lasso = null
         tools = t.copy(color = css).syncPen()
         saveTools()
@@ -99,7 +137,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = when (tools.tool) {
             HeftTool.ERASER -> tools.copy(eraserSize = size)
             HeftTool.PEN, HeftTool.MARKER -> tools.copy(size = size).syncPen()
-            HeftTool.LASSO -> tools
+            HeftTool.LASSO, HeftTool.LASER -> tools
         }
         saveTools()
     }
@@ -122,6 +160,12 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** Fertigen Strich speichern; Punkte im Kernformat `[x, y, druck, …]`. */
     fun addStroke(heftPageId: String, tool: String, color: String, size: Double, points: List<Float>, id: String) {
         edit { HeftChange.AddStroke(heftPageId, HeftStroke(id, tool, color, size, points, null)) }
+        indexer.schedule(heftPageId)
+    }
+
+    /** Gehaltene und erkannte Form (Linie, Rechteck, Dreieck, Pfeil, Ellipse) als Strich `shape` speichern. */
+    fun addShape(heftPageId: String, color: String, size: Double, shape: HeftShape, id: String) {
+        edit { HeftChange.AddStroke(heftPageId, HeftStroke(id, "shape", color, size, emptyList(), shape)) }
         indexer.schedule(heftPageId)
     }
 
@@ -298,6 +342,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     private fun record(edit: HeftEdit) {
         if (edit.undo == "[]") return
         undoStack.addLast(edit.undo)
+        // Wie die PWA höchstens 100 Schritte (heft.js `pushUndo`).
+        while (undoStack.size > UNDO_LIMIT) undoStack.removeFirst()
         redoStack.clear()
         refreshStacks()
     }
@@ -308,7 +354,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
             writes.withLock {
                 val ops = from.removeLastOrNull() ?: return@withLock
                 runCatching { store.write { it.heftApplyOps(pageId, ops) } }
-                    .onSuccess { if (it.undo != "[]") to.addLast(it.undo) }
+                    .onSuccess { if (it.undo != "[]") { to.addLast(it.undo); while (to.size > UNDO_LIMIT) to.removeFirst() } }
                     .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
                 refreshStacks()
             }
@@ -318,6 +364,10 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     private fun refreshStacks() {
         canUndo = undoStack.isNotEmpty()
         canRedo = redoStack.isNotEmpty()
+    }
+
+    private companion object {
+        const val UNDO_LIMIT = 100
     }
 }
 

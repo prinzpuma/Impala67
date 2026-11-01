@@ -2,8 +2,11 @@ package org.impala67.app.heft
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -69,4 +72,18 @@ fun DrawScope.drawInkStrokes(strokes: List<Stroke>, k: Float) {
         for (stroke in strokes) HeftInk.renderer.draw(native, stroke, matrix)
         native.restoreToCount(saved)
     }
+}
+
+/** Vorschau einer erkannten Form: Umriss `[x, y, …]` in Seiteneinheiten. */
+class ShapePreview(val outline: List<Float>, val color: Color, val size: Double)
+
+/** Formvorschau beim Halten (wie der fertige Strich `shape`: volle Deckkraft, runde Enden). */
+fun DrawScope.drawShapePreview(shape: ShapePreview, k: Float) {
+    val o = shape.outline
+    if (o.size < 4) return
+    val path = Path().apply {
+        moveTo(o[0] * k, o[1] * k)
+        for (j in 1 until o.size / 2) lineTo(o[j * 2] * k, o[j * 2 + 1] * k)
+    }
+    drawPath(path, shape.color, style = DrawStroke(width = (shape.size * 1.1 * 0.7).toFloat() * k, cap = StrokeCap.Round, join = StrokeJoin.Round))
 }

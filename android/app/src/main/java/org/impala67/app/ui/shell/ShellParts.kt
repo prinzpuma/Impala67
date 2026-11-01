@@ -33,7 +33,10 @@ fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
         null -> {}
         PageKind.HEFT -> {
             DisposableEffect(id) { nav.immersive = true; onDispose { nav.immersive = false } }
-            HeftScreen(store, id, onBack = nav::back, onAi = if (nav.desk) ({ nav.aiPanelOpen = true }) else null)
+            HeftScreen(
+                store, id, onBack = nav::back, desk = nav.desk,
+                onAi = if (nav.desk) ({ nav.aiPanelOpen = true }) else ({ nav.open(AiRoute) }),
+            )
         }
         PageKind.NOTE -> EditorScreen(
             store, id, onOpenPage = { nav.open(PageRoute(it)) },

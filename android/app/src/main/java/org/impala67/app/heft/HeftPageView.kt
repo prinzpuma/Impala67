@@ -29,7 +29,9 @@ import androidx.ink.authoring.InProgressStrokesView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Radius
+import uniffi.impala_ffi.HeftShape
 import uniffi.impala_ffi.HeftStroke
+import uniffi.impala_ffi.heftShapeOutline
 
 /**
  * Eine Heftseite im Hochformat (1000 × 1414 Einheiten): Papier und gespeicherte Striche über ink,
@@ -45,6 +47,8 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     val pending = remember { mutableStateListOf<HeftStroke>() }
     var erased by remember { mutableStateOf(emptySet<String>()) }
     var ring by remember { mutableStateOf<Offset?>(null) }
+    // Gehaltene Form während des Strichs: Umriss in Seiteneinheiten, Farbe und Dicke.
+    var shapeLive by remember { mutableStateOf<ShapePreview?>(null) }
     val scope = rememberCoroutineScope()
     val ink = Impala.colors.accent
 
@@ -99,6 +103,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                 }) { drawInkStrokes(moved, 1f) }
             }
             drawHeftTexts(data?.texts.orEmpty(), k)
+            shapeLive?.let { drawShapePreview(it, k) }
             drawLassoPath(gesture.path, k)
             sel?.let { drawLassoSelection(it.shown, k) }
             ring?.let { drawCircle(ink, eraserPx, it * k, style = DrawStroke(1.5.dp.toPx())) }
@@ -111,6 +116,18 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                     pending += HeftStroke(id, tool, color, size, points, null)
                     vm.addStroke(heftPageId, tool, color, size, points, id)
                 }
+                override fun shapePreview(shape: HeftShape?, color: String, size: Double) {
+                    shapeLive = shape?.let { ShapePreview(heftShapeOutline(it), HeftPalette.color(color), size) }
+                }
+                override fun shapeFinished(shape: HeftShape, color: String, size: Double) {
+                    val id = uniffi.impala_ffi.heftNewId()
+                    val outline = heftShapeOutline(shape)
+                    val points = ArrayList<Float>(outline.size / 2 * 3)
+                    for (j in 0 until outline.size / 2) { points += outline[j * 2]; points += outline[j * 2 + 1]; points += 1f }
+                    pending += HeftStroke(id, "shape", color, size, points, shape)
+                    vm.addShape(heftPageId, color, size, shape, id)
+                }
+                override fun writing(on: Boolean) = vm.setWriting(on)
                 override fun eraseMove(x: Float, y: Float) { ring = Offset(x, y); tracker.move(x, y) }
                 override fun eraseEnd() = tracker.end()
                 override val lasso = gesture

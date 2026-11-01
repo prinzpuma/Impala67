@@ -189,8 +189,8 @@ Quelle: web/render.js:759–800 (`topbarActionsHtml`, `shareMenuHtml`, `moreMenu
 - [x] **↳ Internen Link kopieren** (`copylink`) — Kotlin: ✅ (Zwischenablage plus Snackbar)
 - [x] **Stern „Zu Favoriten“** (`data-pagefav`; Titel „Zu Favoriten hinzufügen“ / „Aus Favoriten entfernen“; web/render.js:762) — Kotlin: ✅ DeskPageActions.kt (`SmallButton`, aktiv getönt)
 - [x] **⋯ Weitere Optionen** (`data-morepagemenu`; web/render.js:763, 771–792) — Kotlin: ✅ DeskPageActions.kt (`DropdownMenu`)
-  - [ ] **Rückgängig** (Hinweis Strg+Z; `data-editundo`; web/render.js:773) — Kotlin: 🟡 Stub-Toast „folgt“
-  - [ ] **Wiederholen** (Hinweis Strg+Y; `data-editredo`) — Kotlin: 🟡 Stub-Toast
+  - [x] **Rückgängig** (Hinweis Strg+Z; `data-editundo`; web/render.js:773) — Kotlin: ✅ HeftViewModel.kt (höchstens 100 Schritte, je Sitzung)
+  - [x] **Wiederholen** (Hinweis Strg+Y; `data-editredo`) — Kotlin: ✅ HeftViewModel.kt (höchstens 100 Schritte)
   - [x] **Zu Favoriten / Favorit entfernen** — Kotlin: ✅
   - [ ] **Als PDF exportieren / drucken** — Kotlin: ✅ (Notiz), ⬜ (Heft)
   - [x] **Als Markdown (.md) speichern** — Kotlin: ✅
@@ -834,38 +834,38 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 ### 0. Hauptbefunde (zuerst beheben)
 
 - ~~**Bilder und Textfelder werden nicht gezeichnet.**~~ ✅ behoben (HeftMedia.kt). HeftPageView.kt, PageSketch (HeftThumbnail.kt) und HeftPagesGrid.kt zeichnen nur Papier und Striche. HeftPageData enthält aber images und texts (uniffi/impala_ffi/impala_ffi.kt, HeftPageData). Scans aus HeftScan.kt sind deshalb auf dem Gerät unsichtbar, ebenso PDF-Seiten.
-- **Optionsleiste liegt falsch (Telefon).** Unten (nicht Desk) steht die Optionsleiste über der Kapsel (HeftScreen.kt:215-220), auf schmalen Geräten links neben der vertikalen Kapsel (HeftScreen.kt:204-208). Die PWA hängt die Optionsleiste direkt unter die Kapsel, oben mittig (css/heft.css:487 top 58px; heft-toolbar-ui.js:133).
+- ~~**Optionsleiste liegt falsch (Telefon).**~~ ✅ behoben: Kapsel oben mittig, Optionsleiste direkt darunter (HeftToolbar.kt). Unten (nicht Desk) steht die Optionsleiste über der Kapsel (HeftScreen.kt:215-220), auf schmalen Geräten links neben der vertikalen Kapsel (HeftScreen.kt:204-208). Die PWA hängt die Optionsleiste direkt unter die Kapsel, oben mittig (css/heft.css:487 top 58px; heft-toolbar-ui.js:133).
 - ~~**Farbpunkte weichen ab.**~~ ✅ entspricht der aktuellen PWA (Ring in Menüfarbe, Farbfelder mit Textfarbe-Ring). Stift-Punkt in Kotlin mit Ring (HeftToolbar.kt PenDot, Durchmesser +5 dp). PWA: Punkt unten rechts in Stiftdicke ohne Ring (css/heft.css:477-484). Farbfelder 28 dp mit Textfarbe-Ring (HeftToolbar.kt:110-120); PWA 22/24/26 px mit Akzent-Ring (css/heft.css:502-508, 659, 276).
 - ~~**Marker.**~~ ✅ behoben. PWA: Marker nutzt Farbe und Dicke des aktuellen Stifts (heft-input.js:237, heft.js:1486-1493). Kotlin: eigene Werte, Standardfarbe Gelb (HeftState.kt:47-48, HeftViewModel.kt:81-92).
 - ~~**Werkzeugeinstellungen gehen verloren.**~~ ✅ behoben (DevicePrefs `heftTools`). PWA speichert Werkzeug, Stiftfavoriten, Radiergröße und Nur-Stift in localStorage (heft-tools.js:4, 17-39). Kotlin hält sie nur im ViewModel (HeftViewModel.kt:51).
 - ~~**Zoombereich.**~~ ✅ jetzt 0,4–6. Vorher Kotlin 0,5–4 (HeftZoom.kt:32-33), PWA 0,4–6 (heft-viewport.js:23).
 - **Kopfzeile.** Die Kotlin-Kopfzeile (HeftTopBar.kt) gibt es in der PWA-Desktopansicht nicht. Die PWA zeigt dort nur den Fokusmodus (render.js, Zweig `pg.kind === "heft"`, ca. Z. 667-677).
-- **Fehlende Gesten:** Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo, Mausrad mit Strg-Zoom, Lesemodus auf dem Handy.
-- **Fehlende Werkzeuge:** Formerkennung (Halten), Laser, Bild- und Textwerkzeuge, Radierer-Halten.
-- **Fehlende Export- und Importfunktionen**, Verlauf (Snapshots, TODO in HeftPagesSheet.kt:52-53), Schreib-Rückzug der Kapsel.
+- **Fehlende Gesten:** ~~Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo~~ ✅; offen: Mausrad mit Strg-Zoom, Lesemodus auf dem Handy.
+- **Fehlende Werkzeuge:** ~~Formerkennung (Halten), Laser, Radierer-Halten~~ ✅; offen: Bild- und Textwerkzeuge.
+- **Fehlende Export- und Importfunktionen**, Verlauf (Snapshots, TODO in HeftPagesSheet.kt:52-53). Schreib-Rückzug ✅.
 
 ### 1. Werkzeugkapsel (Haupt-Pille)
 
-- [ ] **Stift-Favorit 1, 2, 3** – Erster Tipp wählt, zweiter Tipp auf aktiven öffnet Optionen; Punkt zeigt Stiftdicke (web/heft-toolbar-ui.js:62-72; web/heft.js:1464-1470) — Kotlin: 🟡 HeftToolbar.kt (Auswahl und Doppeltipp ✅; Punkt-Darstellung mit Ring und Position abweichend; Favoriten nicht persistiert, HeftState.kt:45-46)
+- [x] **Stift-Favorit 1, 2, 3** – Erster Tipp wählt, zweiter Tipp auf aktiven öffnet Optionen; Punkt zeigt Stiftdicke (web/heft-toolbar-ui.js:62-72; web/heft.js:1464-1470) — Kotlin: ✅ HeftToolbar.kt (Punkt unten rechts in Stiftdicke; Favoriten gespeichert)
 - [x] **Marker** – nutzt Farbe und Dicke des aktuellen Stifts (web/heft-toolbar-ui.js:70-71; web/heft.js:1475-1478) — Kotlin: ✅ HeftState.kt (`color`/`size` gemeinsam)
 - [x] **Radierer** – Tipp wählt, zweiter Tipp öffnet Größen (web/heft-toolbar-ui.js:168-169; web/heft.js:1472-1474) — Kotlin: ✅ HeftToolbar.kt:69-70
-- [ ] **Radierer halten** – 380 ms gedrückt halten wechselt temporär zum Radierer und zurück (web/heft.js:1565-1578) — Kotlin: ⬜ (kein Halten-Handler im Heft-Ordner)
+- [x] **Radierer halten** – 380 ms gedrückt halten wechselt temporär zum Radierer und zurück (web/heft.js:1565-1578) — Kotlin: ✅ HeftToolbar.kt `ToolButton(onHold)`, HeftViewModel.kt `holdEraser`
 - [x] **Lasso** – Striche auswählen (web/heft-toolbar-ui.js:171-172; web/heft.js:1481) — Kotlin: ✅ HeftToolbar.kt:72
-- [ ] **Laser** – roter Zeigestift, nicht gespeichert, verblasst nach 900 ms, nur Nicht-Telefon (web/heft-toolbar-ui.js:173-174; web/heft-input.js:166-170, 414-417; css/heft.css:289) — Kotlin: ⬜ (HeftState.kt:13 „folgen später“)
+- [x] **Laser** – roter Zeigestift, nicht gespeichert, verblasst nach 900 ms, nur Nicht-Telefon (web/heft-toolbar-ui.js:173-174; web/heft-input.js:166-170, 414-417; css/heft.css:289) — Kotlin: ✅ HeftInput.kt (rot, 7 breit, nicht gespeichert, verschwindet nach 900 ms; nur Tablet)
 - [ ] **Bilder-Menü** – Knopf öffnet Popover, Zustand „aktiv“ bei Bild-Popover oder Auswahl-Werkzeug (web/heft-toolbar-ui.js:176-177; web/heft.js:1419) — Kotlin: ⬜ (kein Knopf in HeftToolbar.kt)
 - [x] **Rückgängig** – Knopf deaktiviert ohne Stapel (web/heft-toolbar-ui.js:179; web/heft.js:1496) — Kotlin: ✅ HeftToolbar.kt:74 (Stapel ohne Obergrenze, PWA: 100, web/heft.js:152; HeftViewModel.kt:277-282)
 - [x] **Wiederholen** – analog (web/heft-toolbar-ui.js:180; web/heft.js:1497) — Kotlin: ✅ HeftToolbar.kt:75
-- [ ] **Einklappen (▾/Chevron)** – Leiste schrumpft auf eine Farbpunkt-Kapsel mit „Werkzeugleiste ausklappen“ (web/heft-toolbar-ui.js:115-125, 181-182; web/heft.js:1498-1499; css/heft.css:423-428) — Kotlin: ⬜
-- [ ] **Schreib-Rückzug** – Kapsel wird beim Schreiben auf 30 % Deckkraft gesetzt, nach 700 ms zurück (web/heft.js:126-145; css/heft.css:423) — Kotlin: ⬜
-- [ ] **Position der Kapsel** – Oben mittig (Pille fest, css/heft.css:283) — Kotlin: 🟡 HeftScreen.kt:204-220 (Desk oben mittig ✅; Telefon vertikal rechts oder unten)
-- [ ] **Telefon-Sonderfall** – Undo/Redo stehen auf dem Telefon in der linken Eckgruppe, nicht in der Kapsel (web/heft-toolbar-ui.js:161-162, 178-180) — Kotlin: 🟡 HeftToolbar.kt:74-75 (immer in der Kapsel)
+- [x] **Einklappen (▾/Chevron)** – Leiste schrumpft auf eine Farbpunkt-Kapsel mit „Werkzeugleiste ausklappen“ (web/heft-toolbar-ui.js:115-125, 181-182; web/heft.js:1498-1499; css/heft.css:423-428) — Kotlin: ✅ HeftToolbar.kt `MiniCapsule` (Werkzeug-Icon, Farbpunkt, Chevron; Zustand gespeichert)
+- [x] **Schreib-Rückzug** – Kapsel wird beim Schreiben auf 30 % Deckkraft gesetzt, nach 700 ms zurück (web/heft.js:126-145; css/heft.css:423) — Kotlin: ✅ HeftScreen.kt `HeftChrome` (alle Leisten auf 30 %, 700 ms Nachlauf)
+- [x] **Position der Kapsel** – Oben mittig (Pille fest, css/heft.css:283) — Kotlin: ✅ HeftScreen.kt (oben mittig auf allen Geräten, Optionsleiste direkt darunter)
+- [x] **Telefon-Sonderfall** – Undo/Redo stehen auf dem Telefon in der linken Eckgruppe, nicht in der Kapsel (web/heft-toolbar-ui.js:161-162, 178-180) — Kotlin: ✅ Telefon ohne Laser; Rückgängig/Wiederholen in der Kopfzeile (HeftTopBar.kt), Seiten und „+“ unten in den Ecken
 
 ### 2. Optionsleiste (Tray) je Werkzeug
 
-- [ ] **Stiftdicke F / M / B** – Punkte 1,6 / 3 / 5,5; Punktgröße dynamisch (web/heft-tools.js:7; web/heft-toolbar-ui.js:74-77, 135) — Kotlin: ✅ HeftToolbar.kt:101-105 (Beschriftung „Fein/Mittel/Breit“, Werte und Punktgröße gleich; aktive Darstellung 🟡 Hintergrund statt Textfarbe, css/heft.css:497-499)
-- [ ] **Farben ×6** – #1c1c1e, #2f6fed, #e0483e, #1f9d55, #f5b800, #8b7cc8 (web/heft-tools.js:6; web/heft-toolbar-ui.js:137-138) — Kotlin: 🟡 HeftToolbar.kt:107-121 (gleiche Farben; Feld 28 dp mit Textfarbe-Ring statt 22/24/26 px mit Akzent-Ring)
+- [x] **Stiftdicke F / M / B** – Punkte 1,6 / 3 / 5,5; Punktgröße dynamisch (web/heft-tools.js:7; web/heft-toolbar-ui.js:74-77, 135) — Kotlin: ✅ HeftToolbar.kt (Punkte in der aktuellen Farbe, aktiv mit Akzent-Tönung)
+- [x] **Farben ×6** – #1c1c1e, #2f6fed, #e0483e, #1f9d55, #f5b800, #8b7cc8 (web/heft-tools.js:6; web/heft-toolbar-ui.js:137-138) — Kotlin: ✅ HeftToolbar.kt `Swatch` (aktiv mit Akzent-Ring)
 - [x] **Farbe wählen wirkt auf Stift** – Stift übernimmt Farbe, Favorit wird gespeichert (web/heft.js:1486-1490) — Kotlin: ✅ HeftViewModel.kt:81-83
-- [ ] **Farbe bei Radierer/Lasso** – PWA schaltet dann auf Stift mit offenen Optionen um (web/heft.js:1488) — Kotlin: ⬜ (setColor ändert nur den Stift, HeftViewModel.kt:81-83)
+- [x] **Farbe bei Radierer/Lasso** – PWA schaltet dann auf Stift mit offenen Optionen um (web/heft.js:1488) — Kotlin: ✅ HeftViewModel.kt `setColor` (wechselt zum Stift mit offenen Optionen)
 - [x] **Trenner** – senkrechte Striche zwischen Gruppen (web/heft-toolbar-ui.js:136, 139, 141) — Kotlin: ✅ HeftToolbar.kt:172-176
 - [x] **Nur-Stift / Finger-Umschalter** – Stift-Symbol „Nur Stift zeichnet“ oder Hand-Symbol „Finger dürfen zeichnen“; Standard: nur Stift (web/heft-toolbar-ui.js:140-142; web/heft.js:1500; web/heft-tools.js:22) — Kotlin: ✅ HeftToolbar.kt:122-125 (Standard true, HeftState.kt:51; Umschalten HeftViewModel.kt:94)
 - [x] **Radierer-Größen Klein 10 / Mittel 16 / Groß 30** – als Balken (web/heft-toolbar-ui.js:144-151; web/heft.js:1495) — Kotlin: ✅ HeftToolbar.kt:94-99 (Werte gleich; Balkenhöhe in dp statt px)
@@ -877,8 +877,8 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 - [ ] **Rückgängig** – Stapel bis 100 Schritte; Eintrag pro Strich, Radieren, Verschieben, Skalieren, Seite, Lasso (web/heft.js:151-158, 711-773) — Kotlin: 🟡 HeftViewModel.kt:259, 277-282 (ohne Obergrenze; Stapel pro Sitzung)
 - [ ] **Wiederholen** – analog (web/heft.js:773) — Kotlin: 🟡 HeftViewModel.kt:261 (ohne Obergrenze)
-- [ ] **Zwei-Finger-Doppeltipp = Rückgängig** – zwei Tipps innerhalb 500 ms (web/heft-viewport.js:607-613; web/heft.js:679) — Kotlin: ⬜
-- [ ] **Drei-Finger-Tipp = Wiederholen** (web/heft-viewport.js:615) — Kotlin: ⬜
+- [x] **Zwei-Finger-Doppeltipp = Rückgängig** – zwei Tipps innerhalb 500 ms (web/heft-viewport.js:607-613; web/heft.js:679) — Kotlin: ✅ HeftZoom.kt `heftGestures`
+- [x] **Drei-Finger-Tipp = Wiederholen** (web/heft-viewport.js:615) — Kotlin: ✅ HeftZoom.kt `heftGestures`
 
 ### 4. Eck-Knöpfe
 
@@ -887,12 +887,12 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [ ] **Vor (›)** – analog (web/heft-toolbar-ui.js:157; web/heft.js:1410) — Kotlin: ⬜
 - [x] **Seiten (links)** – öffnet Seitenübersicht; aktiv bei offenem Popover (web/heft-toolbar-ui.js:158-160; web/heft.js:1417) — Kotlin: ✅ HeftCorners.kt:50-54 (Desk); Telefon ✅ HeftTopBar.kt:87-86 (Übersicht-Symbol)
 - [ ] **Seitenzähler „n/m“ neben dem Seiten-Knopf** – im Code gerendert, aber per CSS ausgeblendet (web/heft.js:1064-1067; css/heft.css:522) — Kotlin: 🟡 HeftTopBar.kt:55 (Telefon zeigt „Seite x von y“ im Kopf; PWA zeigt die Zahl nur unter jeder Seite)
-- [ ] **KI-Chat (rechts, Funken-Symbol)** – öffnet KI-Panel (web/heft-toolbar-ui.js:187; web/heft.js:1507-1512; css/heft.css:311) — Kotlin: ✅ HeftCorners.kt:66 (nur Desk, `onAi`); Telefon ⬜ (HeftTopBar.kt ohne KI-Knopf)
+- [x] **KI-Chat (rechts, Funken-Symbol)** – öffnet KI-Panel (web/heft-toolbar-ui.js:187; web/heft.js:1507-1512; css/heft.css:311) — Kotlin: ✅ HeftCorners.kt (Tablet), HeftTopBar.kt (Telefon)
 - [x] **Seite hinzufügen (＋, rechts)** – öffnet Seiten-Menü (web/heft-toolbar-ui.js:188-189; web/heft.js:1418) — Kotlin: ✅ HeftCorners.kt:67-109 (Desk); Telefon ✅ HeftTopBar.kt:63-83
 
 ### 5. „Seite hinzufügen“-Menü (plusPop)
 
-- [ ] **Position Davor / Danach / Am Ende** – Segment-Auswahl; Standard „Danach“ (web/heft-toolbar-ui.js:194, 200; web/heft.js:1451-1455, 162, 1690; heft.js:1217-1220) — Kotlin: 🟡 HeftCorners.kt:76-98 und HeftTopBar.kt:70-75 (nur „Neue Seite danach“, keine Auswahl)
+- [x] **Position Davor / Danach / Am Ende** – Segment-Auswahl; Standard „Danach“ (web/heft-toolbar-ui.js:194, 200; web/heft.js:1451-1455, 162, 1690; heft.js:1217-1220) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu` (Segmentwahl, Standard „Danach“, gilt für die Sitzung)
 - [x] **Vorlage Liniert / Kariert / Punkte / Blanko** – Tipp legt Seite mit Papier an (web/heft-toolbar-ui.js:196-201; web/heft.js:1456; web/heft-tools.js:8) — Kotlin: ✅ HeftCorners.kt:115-171 (Mini-Vorschau), HeftTopBar.kt:73-75 (Menü)
 - [x] **Papier dieser Seite** – Chips zum Umstellen (web/heft-toolbar-ui.js:202-204; web/heft.js:1501-1506) — Kotlin: ✅ HeftCorners.kt:89-97, HeftTopBar.kt:95-98
 - [ ] **Bild als Seite** – Bilddatei als eigene Seite, seitenfüllend ohne Rand (web/heft-toolbar-ui.js:206; web/heft.js:1458; web/heft-import.js:79-99, 137-156) — Kotlin: ⬜
@@ -953,8 +953,8 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Marker** – halbtransparent (Deckkraft 32 %), dreifache Breite (web/heft.js:502-506) — Kotlin: ✅ HeftInk.kt:18-19, 31-32
 - [x] **Radierer löscht ganze Striche** – Ring in Radiergröße (web/heft-input.js:61-80; css/heft.css:456) — Kotlin: ✅ HeftErase.kt:15-43, HeftPageView.kt:100
 - [x] **Stift-Radierer am Stift-Ende** – Kotlin erkennt TOOL_TYPE_ERASER (HeftInput.kt:76, 92) — Kotlin: ✅ (Zusatz gegenüber PWA)
-- [ ] **Formerkennung** – Halten für 550 ms nach dem Strich wandelt in Linie, Ellipse, Dreieck, Pfeil oder Rechteck um (web/heft-input.js:243-263; web/heft.js:494-501; web/heft-geometry.js:24) — Kotlin: ⬜ (Brush „shape“ vorhanden, HeftInk.kt:49, aber keine Erkennung)
-- [ ] **Laser** – siehe Abschnitt 1 (web/heft-input.js:166-170) — Kotlin: ⬜
+- [x] **Formerkennung** – Halten für 550 ms nach dem Strich wandelt in Linie, Ellipse, Dreieck, Pfeil oder Rechteck um (web/heft-input.js:243-263; web/heft.js:494-501; web/heft-geometry.js:24) — Kotlin: ✅ HeftInput.kt `trySnap` (Halten 550 ms → `heftFitShape` im Kern; Linie folgt dem Stift weiter; Vorschau HeftPaint.kt)
+- [x] **Laser** – siehe Abschnitt 1 (web/heft-input.js:166-170) — Kotlin: ✅ HeftInput.kt
 - [ ] **Bild oder Text greifen, verschieben, Ecke skalieren, Löschen über Eckknopf** – Rahmen blau gestrichelt, roter Knopf zum Löschen (web/heft-input.js:171-215, 336-352; web/heft.js:581-598) — Kotlin: ⬜
 - [ ] **Textfeld** – wird auf der Seite gezeichnet, Wortumbruch, Schriftgröße 30 (web/heft.js:525-551, 542-551, 1045) — Kotlin: ⬜ (HeftPageView zeichnet keine Texte)
 - [ ] **Textfeld bearbeiten (Doppeltipp oder Doppeltipp auf leere Stelle)** – Enter speichert, Umschalt+Enter Zeilenumbruch, Esc verwirft (web/heft.js:984-1052; web/heft-input.js:223-229) — Kotlin: ⬜
@@ -963,9 +963,9 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 - [x] **Finger zeichnen** – wenn „Finger dürfen zeichnen“ aktiv (web/heft-input.js:33-35, 67, 123) — Kotlin: ✅ HeftInput.kt:64-67
 - [x] **Finger scrollt und zoomt bei „Nur Stift“** – Blättern vertikal (web/heft-viewport.js:504-506, 535-574) — Kotlin: ✅ HeftScreen.kt:178-201 (LazyColumn), HeftInput.kt:64-67
-- [ ] **Zwei-Finger-Pinch zoomt und verschiebt in einem Schritt** (web/heft-viewport.js:539-564) — Kotlin: ✅ HeftZoom.kt:41-58, HeftScreen.kt:174-175 (Bereich 🟡 0,5–4)
+- [x] **Zwei-Finger-Pinch zoomt und verschiebt in einem Schritt** (web/heft-viewport.js:539-564) — Kotlin: ✅ HeftZoom.kt `heftGestures` (0,4–6)
 - [x] **Zoom-Bereich 0,4–6** (web/heft-viewport.js:23) — Kotlin: ✅ HeftZoom.kt
-- [ ] **Doppeltipp mit einem Finger zoomt auf ca. 2,2× bzw. zurück auf Fit** (web/heft-viewport.js:616-623; animateZoom 477-482) — Kotlin: ⬜
+- [x] **Doppeltipp mit einem Finger zoomt auf ca. 2,2× bzw. zurück auf Fit** (web/heft-viewport.js:616-623; animateZoom 477-482) — Kotlin: ✅ HeftScreen.kt `zoomTo` (animiert; nur wenn der Finger nicht zeichnet)
 - [x] **Ausschwingen nach dem Loslassen (Schwung)** (web/heft-viewport.js:576-590) — Kotlin: ✅ (nativer Scroll von LazyColumn)
 - [ ] **Mausrad blättert, Strg+Mausrad zoomt** (web/heft-viewport.js:636-642) — Kotlin: ⬜
 - [x] **Stift-Vorrang: Finger wird 400 ms nach Stiftende ignoriert (Handballen)** (web/heft-input.js:20, 33-35; web/heft-viewport.js:522, 540, 602) — Kotlin: ✅ HeftInput.kt:23, 47-48
@@ -975,7 +975,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [ ] **Lesemodus auf dem Handy** – Blättern und Zoomen ohne Striche, bis Stift-Taste oder leeres Heft (web/heft.js:110-113, 1837; web/mobile.js:59-68) — Kotlin: ⬜
 - [ ] **Stift-Taste (Bearbeiten/Fertig) in der Handy-Kopfzeile** (web/mobile-view.js:26; web/mobile.js:286-290, 376-383) — Kotlin: ⬜
 - [x] **„Seite wird beim Zoomen zentriert“** (web/heft-viewport.js:78-88) — Kotlin: ✅ (fixer Mittelpunkt im Pinch, HeftScreen.kt:147-169)
-- [ ] **Hochziehen am Ende fügt neue Seite hinzu** – Geist-Knopf „＋ Neue Seite“ erscheint, Loslassen ab 70 px (web/heft.js:1626-1656; css/heft.css:452-454) — Kotlin: ⬜
+- [ ] **Hochziehen am Ende fügt neue Seite hinzu** – Geist-Knopf „＋ Neue Seite“ erscheint, Loslassen ab 70 px (web/heft.js:1626-1656; css/heft.css:452-454) — Kotlin: 🟡 HeftScreen.kt `AddPageGhost` (Knopf „Neue Seite“ steht immer am Ende; Hochziehen fehlt)
 
 ### 11. Darstellung (Papier, Linien, Farben, Format, Ausrichtung, Scroll, Zoom, Breite)
 
@@ -1111,7 +1111,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [ ] **⋯ → Duplizieren / Verschieben / Papierkorb** (web/render.js:788) — Kotlin: 🟡 (Papierkorb für Hefte im Regal, nicht im Heft geprüft)
 - [ ] **Teilen-Knopf (Export und Teilen-Menü)** – im Heft nicht vorhanden — Kotlin: ⬜ (DeskPageActions.kt:87-98: „PDF-Export für Hefte“ später; Teilen nur Text)
 - [x] **Seitenleiste und Tabs bleiben im Heft** (web/styles.css:99, 350-353) — Kotlin: ✅ (laut Kommentar DeskShell.kt:50; Sichtprüfung nicht erfolgt)
-- [ ] **KI-Knopf im Heft oben rechts (Ecke) statt unten rechts** (web/styles.css:350-353; web/render.js:639) — Kotlin: ✅ DeskShell.kt:103-104 (Desk); Telefon ⬜
+- [x] **KI-Knopf im Heft oben rechts (Ecke) statt unten rechts** (web/styles.css:350-353; web/render.js:639) — Kotlin: ✅ Tablet: Ecke; Telefon: Kopfzeile
 
 ### 20. Tastatur (Desktop/Tablet mit Tastatur)
 
@@ -1133,7 +1133,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 - [ ] **Speichern** – PWA: 350 ms Verzögerung, Speichern bei Verlassen (web/heft.js:335-380) — Kotlin: 🟡 HeftViewModel.kt:102-112 (jeder Strich sofort als Ereignis; kein Pufferwert)
 - [x] **Meldungen (Toasts)** — Kotlin: ✅ HeftScreen.kt:83, 122 (Snackbar)
-- [ ] **Ladeanzeige „Heft laden…“** (web/heft.js:1681) — Kotlin: ⬜ (kein Ladehinweis, HeftScreen.kt:73-75)
+- [x] **Ladeanzeige „Heft laden…“** (web/heft.js:1681) — Kotlin: ✅ HeftScreen.kt (`LoadingIndicator`)
 - [x] **Gleichzeitige Änderungen von zwei Geräten** (web/heft.js:62-78) — Kotlin: ✅ (gleicher Kern, HeftViewModel.kt:132-136 Schreiben über Kern)
 - [x] **Speicherbegrenzung der Miniaturen (60 Einträge) und Scan-Bitmaps (48)** (web/heft.js:97, 1180) — Kotlin: ✅ (durch Compose-Caches, nicht gezielt begrenzt, HeftThumbnail.kt)
 
