@@ -50,7 +50,7 @@ import uniffi.impala_ffi.MdBlockKind
  * und Bildschirmtastaturen, die DEL als Taste senden).
  */
 @Composable
-internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, slash: SlashState, style: TextStyle, modifier: Modifier) {
+internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, menus: EditorMenus, style: TextStyle, modifier: Modifier) {
     val c = Impala.colors
     val isCode = block.kind is MdBlockKind.Code
     val text = block.text()
@@ -81,16 +81,19 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, slas
                 val shortcut = if (typedSpace && block.kind is MdBlockKind.Paragraph) shortcutType(upto) else null
                 when {
                     !isCode && v.text.contains('\n') -> {
-                        slash.close()
+                        menus.close()
                         vm.split(block.id, v.text.split('\n'))
                     }
                     shortcut != null -> {
-                        slash.close()
+                        menus.close()
                         vm.retype(block.id, shortcut, v.text.substring(upto.length), 0)
                     }
                     else -> {
-                        val sm = if (isCode || !v.selection.collapsed) null else SLASH_TRIGGER.find(upto)
-                        if (sm != null) slash.open(block.id, sm.groupValues[1], upto.length) else slash.close()
+                        val typing = !isCode && v.selection.collapsed
+                        val sm = if (typing) SLASH_TRIGGER.find(upto) else null
+                        if (sm != null) menus.slash.open(block.id, sm.groupValues[1], upto.length) else menus.slash.close()
+                        val lm = if (typing) LINK_TRIGGER.find(upto) else null
+                        if (lm != null) menus.links.open(block.id, lm.groupValues[1], upto.length) else menus.links.close()
                         value = v
                         vm.onCursor(v.selection.start)
                         if (v.text != text) vm.setText(block.id, v.text)
@@ -98,7 +101,7 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, slas
                 }
             },
             modifier = Modifier.fillMaxWidth().focusRequester(focus)
-                .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) { slash.close(); vm.blur(a) } }
+                .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) { menus.close(); vm.blur(a) } }
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
@@ -121,7 +124,8 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, slas
                 }
             },
         )
-        SlashDropdown(slash, vm, block.id)
+        SlashDropdown(menus, vm, block.id)
+        LinkDropdown(menus, vm, block.id)
     }
 }
 

@@ -51,6 +51,7 @@ fun EditorScreen(
     onOpenPage: (String) -> Unit,
     modifier: Modifier = Modifier,
     chromeActions: (@Composable () -> Unit)? = null,
+    onToast: (String) -> Unit = {},
 ) {
     val vm: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
     val head by vm.header.collectAsStateWithLifecycle()
@@ -59,15 +60,18 @@ fun EditorScreen(
     BackHandler(enabled = vm.active != null) { vm.clearActive() }
 
     val onLink = rememberLinkHandler(store, onOpenPage)
-    val slash = remember { SlashState() }
+    val pick = rememberMediaPick(vm, onToast)
+    val menus = remember(pick) { EditorMenus(SlashState(), LinkState(), pick) }
+    // Tablet (Seitenzeile wie die PWA): Griff mit „+“ und „⋮⋮“ links neben den Blöcken.
+    val gutter = chromeActions != null
     val active = vm.active
-    val ctx = remember(store, onLink, onOpenPage, active) {
+    val ctx = remember(store, onLink, onOpenPage, active, menus) {
         ReadContext(
             store = store, onLink = onLink, onOpenPage = onOpenPage,
             selectedId = active?.takeIf { it.mode == EditMode.Select }?.id,
             editingId = active?.takeIf { it.mode == EditMode.Text }?.id,
             onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo,
-            editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, slash, style, mod) } },
+            editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, menus, style, mod) } },
         )
     }
     val numbers = remember(vm.blocks) { listNumbers(vm.blocks) }
@@ -86,18 +90,21 @@ fun EditorScreen(
                 }
                 LazyColumn(
                     Modifier.widthIn(max = 760.dp).fillMaxWidth().weight(1f), rememberLazyListState(),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = if (chromeActions != null) 56.dp else 0.dp, bottom = 180.dp),
+                    contentPadding = PaddingValues(start = if (gutter) 4.dp else 20.dp, end = 20.dp, top = if (chromeActions != null) 56.dp else 0.dp, bottom = 180.dp),
                 ) {
                     item(key = "head") {
-                        Column {
+                        Column(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) {
                             if (chromeActions == null) Breadcrumbs(head, vm.title, onOpenPage)
                             PageTitleBlock(head, vm.title, vm::onTitle, vm::focusFirst, onOpenPage)
                         }
                     }
                     itemsIndexed(vm.blocks, key = { _, b -> b.id }) { i, b ->
                         val raw = active?.takeIf { it.mode == EditMode.Raw && it.id == b.id }
-                        Box(Modifier.padding(vertical = 1.dp)) {
-                            if (raw != null) RawBlockEditor(b, raw, vm) else ReadBlock(b, ctx, numbers[b.id], i == 0)
+                        Row(Modifier.padding(vertical = 1.dp)) {
+                            if (gutter) BlockGutter(b, vm, menus, onToast)
+                            Box(Modifier.weight(1f)) {
+                                if (raw != null) RawBlockEditor(b, raw, vm) else ReadBlock(b, ctx, numbers[b.id], i == 0)
+                            }
                         }
                     }
                     item(key = "tail") {

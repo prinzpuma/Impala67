@@ -44,6 +44,7 @@ fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
                 val favorite by remember(store, id) { store.query(Touches.pages) { it.page(id)?.summary?.favorite == true } }.collectAsStateWithLifecycle()
                 PageActions(store, nav, id, favorite = favorite == true)
             }) else null,
+            onToast = nav::toast,
         )
     }
 }

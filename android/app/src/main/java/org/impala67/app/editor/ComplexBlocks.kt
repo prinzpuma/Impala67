@@ -2,6 +2,7 @@ package org.impala67.app.editor
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -48,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
@@ -72,7 +76,7 @@ internal fun ComplexBlock(block: MdBlock, ctx: ReadContext) {
             when (val k = block.kind) {
                 is MdBlockKind.Image -> ImageBlock(k, ctx.store)
                 is MdBlockKind.Heft -> LinkCard(R.drawable.ic_i_notebook, "Heft") { ctx.onOpenPage?.invoke(k.heftId) }
-                is MdBlockKind.File -> LinkCard(R.drawable.ic_i_paperclip, k.name.ifEmpty { "Datei" }) { }
+                is MdBlockKind.File -> FileBlock(k, ctx.store)
                 is MdBlockKind.Math -> Text(
                     k.text, Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).horizontalScroll(rememberScrollState()),
                     color = c.text, fontFamily = FontFamily.Monospace, fontSize = 15.sp, textAlign = TextAlign.Center,
@@ -106,10 +110,23 @@ private fun LinkCard(icon: Int, label: String, onClick: () -> Unit) {
     }
 }
 
+/** Datei/Medium: Antippen öffnet die Datei mit einer App des Geräts. */
+@Composable
+private fun FileBlock(k: MdBlockKind.File, store: ImpalaStore?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    LinkCard(R.drawable.ic_i_paperclip, k.name.ifEmpty { "Datei" }) {
+        if (store != null) scope.launch {
+            openBlob(context, store, k.src, k.name)?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+        }
+    }
+}
+
 @Composable
 private fun ImageBlock(k: MdBlockKind.Image, store: ImpalaStore?) {
     val c = Impala.colors
-    val id = k.src.removePrefix("file:").takeIf { k.src.startsWith("file:") }
+    // Bilder liegen als Blob im Kern (`img:…`, auch `file:…` und das Altformat `blob:<uuid>`).
+    val id = blobId(k.src)
     val bitmap by produceState<Bitmap?>(null, id, store) {
         value = if (id == null || store == null) null else withContext(Dispatchers.IO) {
             store.core.file(id)?.let { decodeSampled(it.bytes, 1600) }

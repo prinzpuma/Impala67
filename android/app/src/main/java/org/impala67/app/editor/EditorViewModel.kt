@@ -42,7 +42,7 @@ internal data class PageHeaderData(
  * Verlauf, entprelltes Speichern über `updatePage`. Änderungen von außen (Sync) kommen nur an, wenn
  * gerade nichts Ungespeichertes vorliegt und nicht getippt wird.
  */
-internal class EditorViewModel(private val store: ImpalaStore, private val pageId: String) : ViewModel() {
+internal class EditorViewModel(internal val store: ImpalaStore, internal val pageId: String) : ViewModel() {
     var title by mutableStateOf(""); private set
     var blocks by mutableStateOf<List<MdBlock>>(emptyList()); private set
     var loaded by mutableStateOf(false); private set
@@ -60,6 +60,9 @@ internal class EditorViewModel(private val store: ImpalaStore, private val pageI
             if (page == null) emptyList() else core.backlinks(pageId),
         )
     }
+
+    /** Ziele für das „[[“-Menü (`STATE.activePages()`); erst beim ersten Öffnen gelesen. */
+    val linkPages: StateFlow<List<PageSummary>?> by lazy { store.query(Touches.pages) { it.recentPages(UInt.MAX_VALUE) } }
 
     private val undoStack = ArrayDeque<List<MdBlock>>()
     private val redoStack = ArrayDeque<List<MdBlock>>()

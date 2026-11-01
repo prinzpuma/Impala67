@@ -33,6 +33,8 @@ internal class ReadContext(
  * Links aus dem Text: `wiki:<Titel>` ([[Wiki-Link]]), `#<Seiten-ID>` (von der PWA erzeugte Links),
  * sonst eine Web-Adresse.
  */
+private val SAFE_LINK = Regex("^(https?:|mailto:|tel:)", RegexOption.IGNORE_CASE)
+
 @Composable
 internal fun rememberLinkHandler(store: ImpalaStore?, onOpenPage: ((String) -> Unit)?): (String) -> Unit {
     val uri = LocalUriHandler.current
@@ -42,7 +44,8 @@ internal fun rememberLinkHandler(store: ImpalaStore?, onOpenPage: ((String) -> U
                 target.startsWith("wiki:") ->
                     store?.core?.findPageByTitle(target.removePrefix("wiki:"))?.let { onOpenPage?.invoke(it.id) }
                 target.startsWith("#") -> onOpenPage?.invoke(target.removePrefix("#"))
-                else -> runCatching { uri.openUri(target) }
+                // Nur Web-, Mail- und Telefon-Links öffnen (editor-inline.js `isSafeHref`), sonst nichts.
+                SAFE_LINK.containsMatchIn(target) -> runCatching { uri.openUri(target) }
             }
             Unit
         }

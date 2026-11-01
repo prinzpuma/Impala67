@@ -551,19 +551,19 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 
 ### 6. Blockgriff, Plus, Drag, Blockmenü, Blockauswahl
 
-- [ ] **Gutter links** mit Plus und Griff, nur bei Hover/Fokus sichtbar (web/editor.js:556-557, web/css/editor.css:7-8, 279-286) — Kotlin: ⬜ kein Gutter in editor/BlockView.kt
-- [ ] **Plus-Knopf „Block darunter einfügen“**: neuer Absatz mit „/“ und Slash-Menü offen (web/editor.js:1508-1518) — Kotlin: ⬜ (nur Leerbereich unter dem letzten Block: editor/EditorScreen.kt tail, EditorViewModel.kt:194 focusEnd)
-- [ ] **⋮⋮-Griff Klick** öffnet das Blockmenü (web/editor.js:1520-1521, editor-menus.js:272) — Kotlin: ⬜ (Blockmenü fehlt)
+- [x] **Gutter links** mit Plus und Griff, nur bei Hover/Fokus sichtbar (web/editor.js:556-557, web/css/editor.css:7-8, 279-286) — Kotlin: ✅ editor/BlockMenu.kt `BlockGutter` (Tablet, sichtbar am aktiven Block)
+- [x] **Plus-Knopf „Block darunter einfügen“**: neuer Absatz mit „/“ und Slash-Menü offen (web/editor.js:1508-1518) — Kotlin: ✅ editor/EditorBlockCommands.kt `insertSlashBelow`
+- [x] **⋮⋮-Griff Klick** öffnet das Blockmenü (web/editor.js:1520-1521, editor-menus.js:272) — Kotlin: ✅ editor/BlockMenu.kt
 - [ ] **⋮⋮-Griff ziehen** (nur Top-Level-Blöcke, drop-above/-below-Markierung, web/editor.js:1647-1690, css 221-222) — Kotlin: ⬜ (kein Drag in editor/)
 - [ ] **Blöcke per Maus über Blockgrenzen markieren** (Blockauswahl, web/editor.js:1624-1643) — Kotlin: ⬜
 - [x] **Blockauswahl-Rahmen** (web/css/editor.css:217-218, `.blk.selected`) — Kotlin: ✅ editor/BlockView.kt:84-86 (selected-Rahmen, nur für Nicht-Text-Blöcke im Select-Modus, EditorViewModel.kt:182-188)
 - [ ] **Blöcke mit Dateien per Drop einfügen** (web/editor.js:1684-1694) — Kotlin: ⬜
-- [ ] **Blockmenü Umwandeln in** (11 Typen: Text, Überschrift 1-3, To-do, Aufzählung, Nummerierte Liste, Toggle, Zitat, Callout, Code; web/editor-menus.js:266-271, 273-276) — Kotlin: 🟡 EditorToolbar.kt:49-57 (9 Typen: T, H1-3, •, 1., ☑, ”, </>; Toggle und Callout fehlen)
-- [ ] **Farbe Text (8 Farben) + Hintergrund (8) + Farbe entfernen ✕** (web/editor-menus.js:276-285, COLORS in 16, data-bcolor, web/editor.js:1780-1790) — Kotlin: 🟡 Darstellung ✅ (editor/BlockView.kt:55, 85 rendert textColor/bgColor), Auswahl ⬜ (kein Menü)
-- [ ] **Duplizieren (Strg+D)** (web/editor-menus.js:288, web/editor.js:1792-1797) — Kotlin: ⬜
-- [ ] **Als Markdown kopieren** (web/editor-menus.js:289, web/editor.js:1799-1811) — Kotlin: ⬜
-- [ ] **Lernkarte erstellen** (nur Textblöcke, web/editor-menus.js:290, web/editor.js:1813-1821, cardCreate) — Kotlin: ⬜
-- [ ] **Löschen (Entf)** (web/editor-menus.js:291-292, web/editor.js:1823-1830) — Kotlin: 🟡 EditorToolbar.kt:59 („Block löschen“, nur für den aktiven Block, Nachbar wird aktiviert)
+- [ ] **Blockmenü Umwandeln in** (11 Typen: Text, Überschrift 1-3, To-do, Aufzählung, Nummerierte Liste, Toggle, Zitat, Callout, Code; web/editor-menus.js:266-271, 273-276) — Kotlin: 🟡 editor/BlockMenu.kt und EditorToolbar.kt (9 Typen; Toggle und Callout fehlen)
+- [x] **Farbe Text (8 Farben) + Hintergrund (8) + Farbe entfernen ✕** (web/editor-menus.js:276-285, COLORS in 16, data-bcolor, web/editor.js:1780-1790) — Kotlin: ✅ editor/BlockMenu.kt, EditorBlockCommands.kt `setBlockColor`
+- [ ] **Duplizieren (Strg+D)** (web/editor-menus.js:288, web/editor.js:1792-1797) — Kotlin: 🟡 Blockmenü ✅ (EditorBlockCommands.kt `duplicateBlock`); Tastenkürzel fehlt
+- [x] **Als Markdown kopieren** (web/editor-menus.js:289, web/editor.js:1799-1811) — Kotlin: ✅ editor/BlockMenu.kt
+- [x] **Lernkarte erstellen** (nur Textblöcke, web/editor-menus.js:290, web/editor.js:1813-1821, cardCreate) — Kotlin: ✅ EditorBlockCommands.kt `cardFromBlock`
+- [ ] **Löschen (Entf)** (web/editor-menus.js:291-292, web/editor.js:1823-1830) — Kotlin: 🟡 Blockmenü ✅ (BlockMenu.kt), EditorToolbar.kt:59; Tastenkürzel Entf fehlt
 
 ### 7. Slash-Menü („/“, 22 Einträge)
 
@@ -592,21 +592,21 @@ Einträge (web/editor-menus.js:99-122, Reihenfolge wie PWA):
 - [ ] **Tabelle** (▦, einfache Tabelle 2×2) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
 - [ ] **2 Spalten** (Spalten-Icon, nebeneinander) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
 - [x] **Trennlinie** („—“, „---“) — Kotlin: ✅ SlashMenu.kt Divider, EditorBlockCommands.kt:24-29
-- [ ] **Bild** (Hochladen, accept image/*) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **PDF** (PDF einbetten, accept application/pdf) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **Datei / Medien** (Video, Audio, Sonstige, accept leer) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **Heft** (Notebook-Icon, legt Heft-Seite an und bettet ein; web/editor-menus.js:172-185) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **Seite verlinken** (Link-Icon, „[[“, öffnet Link-Menü) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
+- [x] **Bild** (Hochladen, accept image/*) — Kotlin: ✅ SlashMenu.kt Image → EditorMedia.kt
+- [x] **PDF** (PDF einbetten, accept application/pdf) — Kotlin: ✅ SlashMenu.kt Pdf (Dateiblock; ohne PDF-Text)
+- [x] **Datei / Medien** (Video, Audio, Sonstige, accept leer) — Kotlin: ✅ SlashMenu.kt File
+- [x] **Heft** (Notebook-Icon, legt Heft-Seite an und bettet ein; web/editor-menus.js:172-185) — Kotlin: ✅ EditorBlockCommands.kt `insertHeft`
+- [x] **Seite verlinken** (Link-Icon, „[[“, öffnet Link-Menü) — Kotlin: ✅ SlashMenu.kt Link
 
 ### 8. Seiten-Link-Menü („[[“)
 
-- [ ] **Öffnen bei „[[“** mit Debounce 80 ms beim Weitertippen (web/editor.js:1027-1044) — Kotlin: ⬜
-- [ ] **Max. 8 Treffer, ohne aktuelle Seite, Titelfilter** (web/editor-menus.js:227-244) — Kotlin: ⬜
-- [ ] **„Keine Seite gefunden“** (web/editor-menus.js:240) — Kotlin: ⬜
-- [ ] **Auswahl: Link „[Titel](#id)“ einfügen, Titel ohne eckige Klammern** (web/editor-menus.js:245-264) — Kotlin: ⬜
+- [x] **Öffnen bei „[[“** mit Debounce 80 ms beim Weitertippen (web/editor.js:1027-1044) — Kotlin: ✅ editor/LinkMenu.kt (ohne Debounce, Filter ist lokal)
+- [x] **Max. 8 Treffer, ohne aktuelle Seite, Titelfilter** (web/editor-menus.js:227-244) — Kotlin: ✅ LinkMenu.kt `linkItems`
+- [x] **„Keine Seite gefunden“** (web/editor-menus.js:240) — Kotlin: ✅ LinkMenu.kt
+- [x] **Auswahl: Link „[Titel](#id)“ einfügen, Titel ohne eckige Klammern** (web/editor-menus.js:245-264) — Kotlin: ✅ EditorBlockCommands.kt `applyLink`
 - [x] **Anzeige [[Titel]] als Link, nur bei exakt aktivem Titel** (web/editor-inline.js:34-40) — Kotlin: ✅ editor/InlineMarkdown.kt:50-51 (wiki:), editor/ReadContext.kt:43 (findPageByTitle)
 - [x] **Klick auf interne Seite (#id)** (web/editor.js:1582-1590) — Kotlin: ✅ editor/ReadContext.kt:44
-- [ ] **Externe Links öffnen (https, mailto, tel; sonst Text)** (web/editor.js:1572-1576, web/editor-inline.js:31) — Kotlin: 🟡 editor/ReadContext.kt:45 (öffnet jedes Ziel ohne Schema-Prüfung)
+- [x] **Externe Links öffnen (https, mailto, tel; sonst Text)** (web/editor.js:1572-1576, web/editor-inline.js:31) — Kotlin: ✅ editor/ReadContext.kt `SAFE_LINK`
 
 ### 9. Inline-Formatierung (Leiste, Tasten, Farben, Formeln)
 
@@ -730,7 +730,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 
 #### 12i Bilder
 - [ ] **Bildblock mit Bildunterschrift (alt-Text)** (web/editor.js:496-501, css 151-153) — Kotlin: 🟡 editor/ComplexBlocks.kt:110-131 (Bild, alt nur als Platzhalter beim Laden, keine Bildunterschrift)
-- [ ] **Bilder aus lokaler Ablage (img:-ID)** (web/editor.js:716-727 über DB.blobUrl; Upload web/editor.js:924 `img:`) — Kotlin: 🟡 ComplexBlocks.kt:112 liest nur `file:`-IDs (PWA-Bilder vermutlich Platzhalter)
+- [x] **Bilder aus lokaler Ablage (img:-ID)** (web/editor.js:716-727 über DB.blobUrl; Upload web/editor.js:924 `img:`) — Kotlin: ✅ ComplexBlocks.kt + EditorMedia.kt `blobId` (img:, file:, Altformat blob:)
 - [ ] **Platzhalter „Bild fehlt“ bei fehlendem Blob** (web/editor.js:725-726) — Kotlin: 🟡 (Platzhalter „Bild“ gleich, ComplexBlocks.kt:126-128)
 - [ ] **Bild hochladen über Slash „Bild“ (Dateiauswahl image/*)** (web/editor.js:903-916, editor-menus.js:147-170) — Kotlin: ⬜
 - [ ] **Bild per Drop oder Einfügen aus der Zwischenablage** (web/editor.js:1684-1694, 1698-1706) — Kotlin: ⬜
@@ -738,7 +738,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 
 #### 12j Dateien, Medien, PDF
 - [x] **Dateiblock als Zeile mit Büroklammer und Name** (web/editor.js:502-508, 752-760) — Kotlin: ✅ editor/ComplexBlocks.kt:75 (LinkCard)
-- [ ] **Klick auf Dateiblock öffnet oder lädt** (web/editor.js:1573-1586, 759 „Herunterladen“) — Kotlin: 🟡 ComplexBlocks.kt:75 (Klick ohne Aktion)
+- [x] **Klick auf Dateiblock öffnet oder lädt** (web/editor.js:1573-1586, 759 „Herunterladen“) — Kotlin: ✅ ComplexBlocks.kt `FileBlock` → EditorMedia.kt `openBlob` (App des Geräts)
 - [ ] **Download-Knopf „Herunterladen“ bei unbekanntem Format** (web/editor.js:759, data-fdl) — Kotlin: ⬜
 - [ ] **Video inline mit Steuerung, Höhe max. 480 px** (web/editor.js:753, css 154-155 in 210-216) — Kotlin: ⬜
 - [ ] **Audio-Player** (web/editor.js:754-755) — Kotlin: ⬜
@@ -751,7 +751,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 
 #### 12k Heft-Einbettung
 - [ ] **Heft-Vorschau als große klickbare Karte mit Vorschaubild** (web/editor.js:509-512, HEFT.hydrateEmbeds, css 212-215) — Kotlin: 🟡 editor/ComplexBlocks.kt:74 (Karte „Heft“ ohne Vorschau, öffnet die Seite)
-- [ ] **Heft-Einbettung über Slash „Heft“ (legt Heft-Seite an)** (web/editor-menus.js:172-185) — Kotlin: ⬜
+- [x] **Heft-Einbettung über Slash „Heft“ (legt Heft-Seite an)** (web/editor-menus.js:172-185) — Kotlin: ✅ EditorBlockCommands.kt `insertHeft`
 
 ### 13. Leere Zustände und Platzhalter
 

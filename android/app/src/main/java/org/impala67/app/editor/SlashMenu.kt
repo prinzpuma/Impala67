@@ -30,10 +30,15 @@ internal class SlashState {
     fun close() { current = null }
 }
 
+/** Menüs am Eingabefeld: Slash, „[[“-Links und die Dateiauswahl für Bild/PDF/Datei. */
+internal class EditorMenus(val slash: SlashState, val links: LinkState, val pick: (blockId: String, kind: MediaKind) -> Unit) {
+    fun close() { slash.close(); links.close() }
+}
+
 /**
  * Befehle des Slash-Menüs, Texte wörtlich aus SLASH in web/editor-menus.js. Nur Blöcke, die der Editor
- * nativ anlegen kann. TODO(desk): Toggle-Liste, Callout, Gleichung, Diagramm, SVG-Grafik, Tabelle,
- * 2 Spalten, Bild, PDF, Datei/Medien, Heft und „Seite verlinken“ fehlen noch.
+ * nativ anlegen kann. TODO(desk): Toggle-Liste, Callout, Gleichung, Diagramm, SVG-Grafik, Tabelle und
+ * 2 Spalten fehlen noch.
  */
 internal enum class SlashCmd(
     val key: String, val label: String, val hint: String, val glyph: String,
@@ -49,6 +54,11 @@ internal enum class SlashCmd(
     Quote("quote", "Zitat", "> ", "”", BlockType.Quote),
     Code("code", "Code", "Codeblock mit Syntax", "</>", BlockType.Code),
     Divider("divider", "Trennlinie", "---", "—", null),
+    Image("image", "Bild", "Hochladen", "", null, R.drawable.ic_i_image),
+    Pdf("pdf", "PDF", "PDF einbetten", "", null, R.drawable.ic_i_file),
+    File("file", "Datei / Medien", "Video, Audio, Sonstige", "", null, R.drawable.ic_i_paperclip),
+    Heft("heft", "Heft", "Handschrift-Einbettung", "", null, R.drawable.ic_i_notebook),
+    Link("link", "Seite verlinken", "[[", "", null, R.drawable.ic_i_link),
 }
 
 /** Befehle, deren Name oder Schlüssel [query] enthält (leer = alle), wie in web/editor-menus.js. */
@@ -63,8 +73,9 @@ internal fun slashItems(query: String): List<SlashCmd> {
  * TODO(desk): Auswahl per Pfeiltasten/Enter/Esc (Hardware-Tastatur) fehlt; bisher nur per Tipp.
  */
 @Composable
-internal fun SlashDropdown(slash: SlashState, vm: EditorViewModel, blockId: String) {
+internal fun SlashDropdown(menus: EditorMenus, vm: EditorViewModel, blockId: String) {
     val c = Impala.colors
+    val slash = menus.slash
     val q = slash.current?.takeIf { it.blockId == blockId }
     val items = slashItems(q?.query.orEmpty())
     DropdownMenu(
@@ -83,7 +94,7 @@ internal fun SlashDropdown(slash: SlashState, vm: EditorViewModel, blockId: Stri
                 },
                 onClick = {
                     slash.close()
-                    q?.let { vm.applySlash(blockId, it, cmd) }
+                    q?.let { vm.applySlash(blockId, it, cmd, menus) }
                 },
                 leadingIcon = { SlashIcon(cmd) },
             )
