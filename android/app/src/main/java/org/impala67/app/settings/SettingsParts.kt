@@ -21,6 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import android.os.Build
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -89,16 +93,29 @@ fun SettingsPlaceholderRow(title: String, hint: String) {
 
 /** Kreis-Auswahlpunkt für Akzentfarben (`.settings-accents` der PWA). */
 @Composable
-fun AccentSwatch(color: AccentColor, selected: Boolean, label: String, onSelect: () -> Unit) {
+fun AccentSwatch(color: Color, selected: Boolean, label: String, onSelect: () -> Unit) {
     val ring = if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier
     Box(
         Modifier
             .size(44.dp)
             .padding(4.dp)
             .clip(CircleShape)
-            .background(Color(color.swatch))
+            .background(color)
             .then(ring)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
             .semantics { contentDescription = label },
     )
+}
+
+/** Farbe aus dem Android-Hintergrundbild gibt es erst ab Android 12 (Material You). */
+val wallpaperAccentAvailable get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+/** Tatsächliche Akzentfarbe; [AccentColor.WALLPAPER] fällt vor Android 12 auf Blau zurück. */
+@Composable
+fun AccentColor.resolve(dark: Boolean): Color {
+    if (this == AccentColor.WALLPAPER && wallpaperAccentAvailable) {
+        val context = LocalContext.current
+        return (if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)).primary
+    }
+    return Color(if (dark) this.dark else light)
 }

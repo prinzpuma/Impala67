@@ -19,7 +19,7 @@ import org.impala67.app.ui.theme.Space
 fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val values by vm.values.collectAsStateWithLifecycle()
     val theme by prefs.themeMode.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
-    val accent by prefs.accent.collectAsStateWithLifecycle(AccentColor.BLUE)
+    val accent by prefs.accent.collectAsStateWithLifecycle(AccentColor.WALLPAPER)
     val density by prefs.density.collectAsStateWithLifecycle(Density.COMPACT)
     val fontScale by prefs.fontScale.collectAsStateWithLifecycle(FontScale.NORMAL)
     val reduceMotion by prefs.reduceMotion.collectAsStateWithLifecycle(false)
@@ -100,13 +100,14 @@ private fun AccentRow(selected: AccentColor, onSelect: (AccentColor) -> Unit) {
             color = Impala.colors.text2,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            AccentColor.entries.forEach { color ->
-                AccentSwatch(color, color == selected, ACCENT_LABELS.getValue(color)) { onSelect(color) }
+            val dark = Impala.colors.isDark
+            AccentColor.entries.filter { it != AccentColor.WALLPAPER || wallpaperAccentAvailable }.forEach { color ->
+                AccentSwatch(color.resolve(dark), color == selected, ACCENT_LABELS.getValue(color)) { onSelect(color) }
             }
         }
     }
 }
 
 private val ACCENT_LABELS = mapOf(
-    AccentColor.BLUE to "Blau", AccentColor.VIOLET to "Violett", AccentColor.GREEN to "Grün", AccentColor.ORANGE to "Orange",
+    AccentColor.WALLPAPER to "Hintergrundbild", AccentColor.BLUE to "Blau", AccentColor.VIOLET to "Violett", AccentColor.GREEN to "Grün", AccentColor.ORANGE to "Orange",
 )

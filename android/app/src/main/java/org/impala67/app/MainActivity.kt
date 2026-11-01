@@ -11,7 +11,9 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import org.impala67.app.settings.AccentColor
 import org.impala67.app.settings.ThemeMode
+import org.impala67.app.settings.resolve
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +34,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val mode by app.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
-            ImpalaTheme(dark = if (mode == ThemeMode.SYSTEM) isSystemInDarkTheme() else mode == ThemeMode.DARK) {
+            val accent by app.prefs.accent.collectAsState(AccentColor.WALLPAPER)
+            val dark = if (mode == ThemeMode.SYSTEM) isSystemInDarkTheme() else mode == ThemeMode.DARK
+            ImpalaTheme(dark = dark, accent = accent.resolve(dark)) {
                 val store by produceState<ImpalaStore?>(null) { value = app.store.await() }
                 store?.let { AppShell(it, app.prefs) }
                     ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }

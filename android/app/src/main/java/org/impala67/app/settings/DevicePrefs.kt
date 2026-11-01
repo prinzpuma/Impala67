@@ -16,9 +16,14 @@ private val Context.dataStore by preferencesDataStore("device")
 /** Erscheinungsbild: Systemvorgabe oder manuell (PWA: `impala67FollowSystemTheme` / `impala67Theme`). */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** Akzentfarben der PWA (`ACCENT_THEMES`); [swatch] ist die dunkle Variante für Auswahlpunkte. */
-enum class AccentColor(val swatch: Long) {
-    BLUE(0xFF6B8CAE), VIOLET(0xFF8F82A9), GREEN(0xFF6E8C75), ORANGE(0xFFB07F59),
+/**
+ * Akzentfarben der PWA (`ACCENT_THEMES`, dunkel/hell). [WALLPAPER] nimmt die Farbe aus dem
+ * Android-Hintergrundbild (Material You, ab Android 12) und ist dort Standard.
+ */
+enum class AccentColor(val dark: Long, val light: Long) {
+    WALLPAPER(0xFF6B8CAE, 0xFF2478C7),
+    BLUE(0xFF6B8CAE, 0xFF2478C7), VIOLET(0xFF8F82A9, 0xFF7C7193),
+    GREEN(0xFF6E8C75, 0xFF627D69), ORANGE(0xFFB07F59, 0xFF976D4D),
 }
 
 /** Darstellungsdichte (`impala67Density`). */
@@ -36,7 +41,7 @@ class DevicePrefs(private val context: Context) {
     private val store: DataStore<Preferences> get() = context.dataStore
 
     val themeMode: Flow<ThemeMode> = enumFlow(THEME, ThemeMode.SYSTEM)
-    val accent: Flow<AccentColor> = enumFlow(ACCENT, AccentColor.BLUE)
+    val accent: Flow<AccentColor> = enumFlow(ACCENT, AccentColor.WALLPAPER)
     val density: Flow<Density> = enumFlow(DENSITY, Density.COMPACT)
     val fontScale: Flow<FontScale> = enumFlow(FONT_SCALE, FontScale.NORMAL)
     /** Performance-Modus: ohne Animationen (PWA `impala67Motion` = reduced). */

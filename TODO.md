@@ -109,30 +109,41 @@ Stand: v2.2.86 (28. Oktober 2026)
 ### Priorität 3: Native Android-App (Kotlin + Jetpack Compose + UniFFI Rust-Kern)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
 
+*Stand geprüft am 1. November 2026 gegen den Code in `android/`. Oberfläche: Checkliste aller PWA-Elemente in
+[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 866 offen). Ein Punkt gilt erst als erledigt,
+wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
+
 - [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
-  - Capacitor- und Cordova-Reste aus `android/` entfernen.
-  - Gradle auf Kotlin (`kotlin-android`) und Jetpack Compose (Material 3 Expressive) umstellen.
-  - Rust NDK Cross-Compilation (`cargo-ndk` für arm64-v8a, x86_64) und UniFFI Kotlin-Binding-Generierung einbinden.
-  - JNA-Dependency (`net.java.dev.jna:jna`) einbinden.
-- [x] **Daten- & Schlüssel-Migration**:
-  - Einmaliger Start-Migrator: Liest `impala67_cf_sync_key` und `impala67_cf_server_url` aus den alten WebView-Dateien (`app_webview/.../Local Storage/leveldb/`) aus und sichert sie in `EncryptedSharedPreferences` / Android Keystore.
-  - Daten-Initialisierung: Rust-Kern holt alle Daten automatisch und vollständig über den Cloudflare-Sync (SQLite-Ablage in `impala-storage`).
-- [x] **Plattform-Features & Bibliotheken**:
-  - **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) für latenzfreie Stifteingabe mit Hardware-Prädiktion.
-  - **Handschrifterkennung**: ML Kit Digital Ink Recognition (on-device, direkt aus Strichkoordinaten).
-  - **Dokumentenscanner (Dual-Modus)**: Sowohl der bestehende manuelle Bild-Scanner als auch die Google ML Kit Document Scanner API bleiben als Option wählbar.
-  - **Hintergrund-Sync**: Jetpack WorkManager (akkuschonender Cloudflare- & Drive-Sync).
-  - **Sicherheit**: Android Keystore & EncryptedSharedPreferences (Schlüssel, Drive-Tokens, API-Keys).
-  - **Diktat**: Nativer Android `SpeechRecognizer` (on-device Spracherkennung).
-  - **Systemintegration**: Share Sheet (`ACTION_SEND` für Notizen), App Shortcuts, Predictive Back Wischgesten.
-- [x] **UI-Design-Richtung & Vorgehen (Parallel mit Subagents)**:
-  - *UI-Ansatz*: Start als native Portierung der bewährten Impala67-Oberfläche (dunkle Flächen `#191919`/`#202020`, Icons, Dock, Sheets) mit Jetpack Compose und Material 3 Expressive (Federphysik, flüssige Gesten). *Sollte die UI im Alltagstest nicht voll überzeugen, wird sie bei Bedarf modular neu gestaltet.*
-  - *Subagenten-Aufteilung*:
-    1. Subagent A: NDK/UniFFI-Brücke, Datenfluss, WorkManager Sync-Service.
-    2. Subagent B: Navigation, Adaptive Layouts, Seitenliste & Brotkrumen.
-    3. Subagent C: Notiz- & Markdown-Editor mit Expressive Floating Toolbar.
-    4. Subagent D: Heft-Ansicht (Jetpack Ink) & Dokumenten-Scanner (ML Kit + Manuell).
-- [x] **Android Google Drive OAuth**: Nativer Android Google Sign-In SDK Login für Drive-Backup.
+  - Capacitor- und Cordova-Reste aus `android/` entfernt.
+  - Gradle mit Kotlin und Jetpack Compose (Material 3 Expressive).
+  - Rust-NDK-Build und UniFFI-Kotlin-Bindings (`npm run build:android-core`, `tools/android-core.mjs`).
+  - JNA eingebunden.
+- [ ] **Daten- & Schlüssel-Migration** (Release-Sperre, siehe `android/PORTING.md` § 7):
+  - [ ] Start-Migrator für `impala67_cf_sync_key` / `impala67_cf_server_url` aus den alten WebView-Dateien – fehlt (kein Code liest `app_webview/…/leveldb`).
+  - [ ] Schlüssel in `EncryptedSharedPreferences` / Android Keystore – fehlt; der Sync-Schlüssel liegt derzeit im normalen DataStore (`settings/DevicePrefs.kt`).
+  - [x] Daten kommen über Cloudflare-Sync bzw. Drive in den Rust-Kern.
+  - [ ] Rein lokale Daten der alten Capacitor-App übernehmen (Export → `importJson` o. Ä.).
+- [ ] **Plattform-Features & Bibliotheken**:
+  - [x] **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) im Heft.
+  - [x] **Handschrifterkennung**: ML Kit Digital Ink (Lasso „In Text“, Suchindex).
+  - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
+  - [ ] **Hintergrund-Sync**: WorkManager – fehlt (Sync läuft nur bei geöffneter App).
+  - [ ] **Sicherheit**: Keystore / EncryptedSharedPreferences für Schlüssel, Drive-Tokens, API-Keys – fehlt.
+  - [ ] **Diktat**: `SpeechRecognizer` – fehlt (kein Mikrofon im Chat).
+  - [ ] **Systemintegration**: Teilen *aus* der App ✅ (`ACTION_SEND` in `DeskPageActions.kt`, nur Tablet); Teilen *an* die App und App-Shortcuts nur im Manifest, `MainActivity` wertet die Intents nicht aus; Predictive Back ✅.
+  - [ ] **Lokale Erinnerung „Karteikarten fällig“** (gab es in der Capacitor-App) – fehlt.
+- [ ] **Oberfläche wie die PWA** – Abarbeitung nach `android/UI-INVENTAR.md` (Reihenfolge oben in der Datei):
+  - [ ] Heft: sichtbare Fehler (Bilder/Scans/Textfelder zeichnen, Optionsleiste unter der Kapsel, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6).
+  - [ ] Heft: fehlende Werkzeuge und Gesten, Import/Export, Verlauf, Lesemodus (Telefon).
+  - [ ] Seitenmenü (⋯) auf dem Telefon; fehlende Einträge im Tablet-Menü.
+  - [ ] Editor: Slash-Menü vollständig, `[[`-Links, Blockmenü, Bilder (`img:`-IDs), Toggle-Zustand speichern, Link-Schema prüfen, KaTeX, Mermaid, Datenbankansicht.
+  - [ ] Shell: Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop, Breitengriff, Langdruck-Menüs, Dichte/Schrift/Bewegung.
+  - [ ] KI: Anhänge, Modellwahl, Diktat, Aktionen je Nachricht.
+  - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
+  - [ ] Einstellungen: Übersicht, KI-Quellen, Backup, Gefahrenzone, Speicher, Suche, Diagnose.
+  - [ ] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes.
+  - [x] Akzentfarbe aus dem Android-Hintergrundbild (Material You, ab Android 12; Standard) – Akzentauswahl wird jetzt auch angewendet.
+- [x] **Android Google Drive OAuth**: Anmeldung über Google Identity (`sync/DriveController.kt`).
 
 - [ ] **Android Home-Screen Widget (optional)**:
   - Startbildschirm-Widget für einen schnellen Blick auf heute fällige Karteikarten.

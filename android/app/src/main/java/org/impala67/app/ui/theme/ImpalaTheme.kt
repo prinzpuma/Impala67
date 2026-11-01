@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
@@ -33,17 +34,21 @@ val Nunito = FontFamily(
     Font(R.font.nunito, FontWeight.Bold),
 )
 
+/** Schrift auf dem Akzent: dunkel bei hellen Akzenten (z. B. Hintergrundbild-Farbe im Dunkelmodus). */
+private fun onAccentFor(accent: Color) = if (accent.luminance() > 0.4f) Color(0xFF081018) else Color.White
+
 /** Material-Rollen aus den PWA-Tokens: Die PWA bestimmt das Aussehen, Material liefert die Bausteine. */
 private fun colorScheme(c: ImpalaColors): ColorScheme {
     fun over(top: Color) = top.compositeOver(c.panel)
     val base = if (c.isDark) darkColorScheme() else lightColorScheme()
+    val onAccent = onAccentFor(c.accent)
     return base.copy(
         primary = c.accent,
-        onPrimary = if (c.isDark) Color.White else c.onAccent,
+        onPrimary = onAccent,
         primaryContainer = over(c.tint2),
         onPrimaryContainer = c.text,
         secondary = c.accent,
-        onSecondary = if (c.isDark) Color.White else c.onAccent,
+        onSecondary = onAccent,
         secondaryContainer = over(c.tint2),
         onSecondaryContainer = c.text,
         tertiary = c.success,
@@ -120,8 +125,11 @@ private val Typography = Typography(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ImpalaTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val colors = if (dark) DarkColors else LightColors
+fun ImpalaTheme(dark: Boolean = isSystemInDarkTheme(), accent: Color? = null, content: @Composable () -> Unit) {
+    val base = if (dark) DarkColors else LightColors
+    val colors = accent?.let {
+        base.copy(accent = it, onAccent = onAccentFor(it))
+    } ?: base
     CompositionLocalProvider(LocalImpalaColors provides colors) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme(colors),
