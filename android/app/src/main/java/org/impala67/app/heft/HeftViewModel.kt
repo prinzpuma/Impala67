@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -17,6 +18,7 @@ import org.impala67.app.heft.ink.HandwritingRecognizer
 import org.impala67.app.heft.ink.HeftIndexer
 import org.impala67.app.heft.scan.ScannedPage
 import org.impala67.app.heft.scan.insertScannedPages
+import org.impala67.app.settings.DevicePrefs
 import uniffi.impala_ffi.Changes
 import uniffi.impala_ffi.HeftChange
 import uniffi.impala_ffi.HeftEdit
@@ -30,7 +32,7 @@ import uniffi.impala_ffi.heftNewId
  * ausschließlich über `heftApply` des Kerns: jede Geste ein Event, dazu die Umkehr für Rückgängig.
  * Der Kern hält keinen Undo-Stapel (`heft_undo.rs`); er liegt hier und gilt nur für diese Sitzung.
  */
-class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewModel() {
+class HeftViewModel(val store: ImpalaStore, val pageId: String, private val prefs: DevicePrefs) : ViewModel() {
     private val touched: (Changes) -> Boolean = { pageId in it.hefte || pageId in it.closedPages }
 
     /** Erkennt die Handschrift einer Seite nach Strich-Änderungen und macht sie durchsuchbar. */
@@ -50,6 +52,10 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
 
     var tools by mutableStateOf(HeftTools())
         private set
+
+    init {
+        viewModelScope.launch { tools = HeftTools.fromJson(prefs.heftTools.first()).copy(tool = tools.tool, expanded = tools.expanded) }
+    }
 
     var canUndo by mutableStateOf(false)
         private set
@@ -72,29 +78,44 @@ class HeftViewModel(private val store: ImpalaStore, val pageId: String) : ViewMo
         val same = tools.tool == tool && (tool != HeftTool.PEN || tools.penSlot == slot)
         // Das Lasso hat keine Optionen; ein anderes Werkzeug hebt die Auswahl auf (heft.js `dropLasso`).
         val expanded = tool != HeftTool.LASSO && (if (same) !tools.expanded else true)
-        tools = tools.copy(tool = tool, penSlot = slot, expanded = expanded)
+        // Ein Stift-Favorit setzt Farbe und Dicke (heft.js `hepen`); der Marker übernimmt sie.
+        tools = if (tool == HeftTool.PEN) tools.copy(tool = tool, penSlot = slot, color = tools.pens[slot].color, size = tools.pens[slot].size, expanded = expanded)
+        else tools.copy(tool = tool, expanded = expanded)
         if (tool != HeftTool.LASSO) lasso = null
+        saveTools()
     }
 
     fun collapseOptions() { tools = tools.copy(expanded = false) }
 
+    /** heft.js `hecolor`: Radierer/Lasso wechseln dabei zum Stift; der Stift merkt sich die Farbe im Favoriten. */
     fun setColor(css: String) {
-        tools = if (tools.tool == HeftTool.MARKER) tools.copy(markerColor = css) else tools.withPen { it.copy(color = css) }
+        val t = if (tools.tool == HeftTool.ERASER || tools.tool == HeftTool.LASSO) tools.copy(tool = HeftTool.PEN, expanded = true) else tools
+        if (t.tool == HeftTool.PEN) lasso = null
+        tools = t.copy(color = css).syncPen()
+        saveTools()
     }
 
     fun setSize(size: Double) {
         tools = when (tools.tool) {
-            HeftTool.MARKER -> tools.copy(markerSize = size)
             HeftTool.ERASER -> tools.copy(eraserSize = size)
-            HeftTool.PEN -> tools.withPen { it.copy(size = size) }
+            HeftTool.PEN, HeftTool.MARKER -> tools.copy(size = size).syncPen()
             HeftTool.LASSO -> tools
         }
+        saveTools()
     }
 
-    fun toggleOnlyPen() { tools = tools.copy(onlyPen = !tools.onlyPen) }
+    fun toggleOnlyPen() {
+        tools = tools.copy(onlyPen = !tools.onlyPen)
+        saveTools()
+    }
 
-    private fun HeftTools.withPen(change: (PenSlot) -> PenSlot) =
-        copy(pens = pens.mapIndexed { i, p -> if (i == penSlot) change(p) else p })
+    private fun HeftTools.syncPen() =
+        if (tool != HeftTool.PEN) this else copy(pens = pens.mapIndexed { i, p -> if (i == penSlot) PenSlot(color, size) else p })
+
+    private fun saveTools() {
+        val t = tools
+        viewModelScope.launch { prefs.setHeftTools(t.toJson()) }
+    }
 
     // ---- Schreiben ----
 

@@ -1,5 +1,6 @@
 package org.impala67.app.ui.shell
 
+import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -10,6 +11,9 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.share.Incoming
+import org.impala67.app.share.importSharedFiles
+import org.impala67.app.share.importSharedText
 import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 
@@ -130,6 +134,23 @@ class ShellNav(
                 store.dispatch("pageUpdate", mapOf("id" to id, "patch" to mapOf("icon" to tpl.icon.ifEmpty { null }, "tags" to tpl.tags)))
             }
             if (req.newTab) openNewTab(id) else open(PageRoute(id))
+        }
+    }
+
+    /** Shortcut oder geteilte Inhalte ausführen (siehe [Incoming]). */
+    fun receive(incoming: Incoming, context: Context) {
+        scope.launch {
+            when (incoming) {
+                Incoming.NewNote -> open(PageRoute(store.write { it.createPage("Neue Seite", "", null, null) }))
+                Incoming.NewHeft -> open(PageRoute(store.write { it.createHeft("Neues Heft", null, null) }))
+                Incoming.Study -> { go(TopLevel.Study); open(ReviewRoute()) }
+                is Incoming.Text -> open(PageRoute(importSharedText(store, incoming)))
+                is Incoming.Files -> {
+                    toast("Wird importiert …")
+                    importSharedFiles(context, store, incoming.uris)?.let { open(PageRoute(it)) }
+                        ?: toast("Die geteilte Datei ließ sich nicht lesen.")
+                }
+            }
         }
     }
 

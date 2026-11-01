@@ -1,5 +1,13 @@
 package org.impala67.app
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +37,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.share.toIncoming
 import org.impala67.app.ui.shell.AppShell
 import org.impala67.app.ui.theme.ImpalaTheme
 
@@ -40,6 +49,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen().setKeepOnScreenCondition { !app.store.isCompleted }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) intent?.toIncoming()?.let { app.incoming.value = it }
+        askNotificationsOnce(app)
         setContent {
             val mode by app.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
             val accent by app.prefs.accent.collectAsState(AccentColor.WALLPAPER)
@@ -72,6 +83,25 @@ class MainActivity : ComponentActivity() {
                     ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
             }
         }
+    }
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
+    /** Für die Lern-Erinnerung (ab Android 13 nötig); gefragt wird nur beim ersten Start. */
+    private fun askNotificationsOnce(app: ImpalaApp) {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        lifecycleScope.launch {
+            if (app.prefs.notificationsAsked.first()) return@launch
+            app.prefs.setNotificationsAsked()
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /** Shortcut oder Teilen, während die App schon läuft (`singleTask`). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.toIncoming()?.let { (application as ImpalaApp).incoming.value = it }
     }
 
     /** Sichtbar: Live-Sync verbinden und nachholen, was auf anderen Geräten geändert wurde. */

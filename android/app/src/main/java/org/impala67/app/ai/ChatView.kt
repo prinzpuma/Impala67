@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,9 +85,31 @@ fun ChatView(
                 error?.let { e -> item { ErrorBox(e, onOpenSettings) } }
             }
         }
+        // voice.js: Teilergebnisse live im Feld, das Endergebnis wird gleich gesendet.
+        var dictBase by remember { mutableStateOf("") }
+        val join = { base: String, spoken: String -> if (base.isBlank()) spoken else base.trim() + " " + spoken }
+        val dictation = rememberDictation(
+            onPartial = { input = join(dictBase, it) },
+            onFinal = { spoken ->
+                input = dictBase
+                if (spoken.isNotEmpty()) {
+                    if (running) {
+                        input = join(dictBase, spoken)
+                    } else {
+                        ai.send(join(dictBase, spoken), activePageId)
+                        input = ""
+                    }
+                }
+            },
+        )
         Composer(
             input = input,
             running = running,
+            listening = dictation.listening,
+            onMic = {
+                if (!dictation.listening) dictBase = input
+                dictation.toggle()
+            },
             onInput = { input = it },
             onSend = {
                 ai.send(input, activePageId)
@@ -98,7 +121,7 @@ fun ChatView(
 }
 
 @Composable
-private fun Composer(input: String, running: Boolean, onInput: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit) {
+private fun Composer(input: String, running: Boolean, listening: Boolean, onMic: () -> Unit, onInput: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit) {
     val c = Impala.colors
     Row(
         Modifier.padding(10.dp).fillMaxWidth().clip(RoundedCornerShape(Radius.lg))
@@ -115,6 +138,12 @@ private fun Composer(input: String, running: Boolean, onInput: (String) -> Unit,
             },
         )
         Spacer(Modifier.size(Space.s2))
+        RoundButton(
+            if (listening) R.drawable.ic_i_stop else R.drawable.ic_i_mic,
+            if (listening) "Spracheingabe beenden" else "Spracheingabe starten",
+            if (listening) c.accent else Color.Transparent, if (listening) c.onAccent else c.text2, onMic,
+        )
+        Spacer(Modifier.size(Space.s1))
         if (running) {
             RoundButton(R.drawable.ic_i_stop, "Antwort abbrechen", c.surfaceActive, c.text, onStop)
         } else {

@@ -84,9 +84,12 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         val k = constraints.maxWidth / HeftPage.WIDTH
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
+        val images = data?.images.orEmpty()
+        val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, images, maxSide = constraints.maxWidth.coerceIn(512, 4096))
 
         Canvas(Modifier.fillMaxSize()) {
             drawPaper(paper, ink, k)
+            drawHeftImages(images, bitmaps, k)
             drawInkStrokes(strokes, k)
             if (drag != null && moved.isNotEmpty()) {
                 withTransform({
@@ -95,6 +98,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
                     scale(drag.factor, drag.factor, Offset(drag.ax, drag.ay))
                 }) { drawInkStrokes(moved, 1f) }
             }
+            drawHeftTexts(data?.texts.orEmpty(), k)
             drawLassoPath(gesture.path, k)
             sel?.let { drawLassoSelection(it.shown, k) }
             ring?.let { drawCircle(ink, eraserPx, it * k, style = DrawStroke(1.5.dp.toPx())) }

@@ -80,6 +80,14 @@ class DevicePrefs(private val context: Context) {
     val driveConnected: Flow<Boolean> = boolFlow(DRIVE_CONNECTED, false)
     val driveEmail: Flow<String> = store.data.map { it[DRIVE_EMAIL].orEmpty() }
     suspend fun setDriveConnected(on: Boolean) = put(DRIVE_CONNECTED, on)
+
+    /** Einmal nach der Erlaubnis für Benachrichtigungen gefragt (Lern-Erinnerung, ab Android 13). */
+    val notificationsAsked: Flow<Boolean> = boolFlow(NOTIFICATIONS_ASKED, false)
+    suspend fun setNotificationsAsked() = put(NOTIFICATIONS_ASKED, true)
+
+    /** Heft-Werkzeuge als JSON wie `impala67HeftTools` der PWA (heft-tools.js); leer = Standard. */
+    val heftTools: Flow<String> = store.data.map { it[HEFT_TOOLS].orEmpty() }
+    suspend fun setHeftTools(json: String) = put(HEFT_TOOLS, json)
     suspend fun setDriveEmail(email: String) = put(DRIVE_EMAIL, email)
     suspend fun setAccent(accent: AccentColor) = put(ACCENT, accent.name)
     suspend fun setDensity(density: Density) = put(DENSITY, density.name)
@@ -133,6 +141,8 @@ class DevicePrefs(private val context: Context) {
         val CF_SEEN_KEY = stringPreferencesKey("cfSeenKey")
         val DRIVE_CONNECTED = booleanPreferencesKey("driveConnected")
         val DRIVE_EMAIL = stringPreferencesKey("driveEmail")
+        val HEFT_TOOLS = stringPreferencesKey("heftTools")
+        val NOTIFICATIONS_ASKED = booleanPreferencesKey("notificationsAsked")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
     }
 }

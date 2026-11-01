@@ -110,7 +110,7 @@ Stand: v2.2.86 (28. Oktober 2026)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
 
 *Stand geprüft am 1. November 2026 gegen den Code in `android/`. Oberfläche: Checkliste aller PWA-Elemente in
-[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 866 offen). Ein Punkt gilt erst als erledigt,
+[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 858 offen). Ein Punkt gilt erst als erledigt,
 wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 
 - [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
@@ -123,18 +123,18 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [x] **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) im Heft.
   - [x] **Handschrifterkennung**: ML Kit Digital Ink (Lasso „In Text“, Suchindex).
   - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
-  - [ ] **Hintergrund-Sync**: WorkManager – fehlt (Sync läuft nur bei geöffneter App).
+  - [x] **Hintergrund-Sync**: WorkManager, stündlich ein Cloudflare-Durchgang mit Netz (`sync/BackgroundWork.kt`).
   - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel beim KI-Quellen-Modul ebenfalls über `SecretBox` ablegen.
-  - [ ] **Diktat**: `SpeechRecognizer` – fehlt (kein Mikrofon im Chat).
-  - [ ] **Systemintegration**: Teilen *aus* der App ✅ (`ACTION_SEND` in `DeskPageActions.kt`, nur Tablet); Teilen *an* die App und App-Shortcuts nur im Manifest, `MainActivity` wertet die Intents nicht aus; Predictive Back ✅.
-  - [ ] **Lokale Erinnerung „Karteikarten fällig“** (gab es in der Capacitor-App) – fehlt.
+  - [x] **Diktat**: `SpeechRecognizer` (de-DE) im Chat – Teilergebnisse live, Ergebnis wird gesendet (`ai/Dictation.kt`). Vorlesen der Antwort fehlt (in der PWA standardmäßig aus).
+  - [x] **Systemintegration**: Teilen *aus* der App ✅ (nur Tablet); Teilen *an* die App ✅ (Text → neue Seite, Bilder/PDF → neues Heft, `share/Incoming.kt`); App-Shortcuts ✅; Predictive Back ✅.
+  - [x] **Lokale Erinnerung „Karteikarten fällig“**: täglich 18 Uhr über WorkManager, Tipp öffnet das Lernen.
 - [ ] **Oberfläche wie die PWA** – Abarbeitung nach `android/UI-INVENTAR.md` (Reihenfolge oben in der Datei):
-  - [ ] Heft: sichtbare Fehler (Bilder/Scans/Textfelder zeichnen, Optionsleiste unter der Kapsel, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6).
+  - [ ] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen ✅, Farbpunkte ✅, Marker-Farbe ✅, Werkzeugzustand speichern ✅, Zoom 0,4–6 ✅; offen: Optionsleiste unter der Kapsel (Telefon).
   - [ ] Heft: fehlende Werkzeuge und Gesten, Import/Export, Verlauf, Lesemodus (Telefon).
   - [ ] Seitenmenü (⋯) auf dem Telefon; fehlende Einträge im Tablet-Menü.
   - [ ] Editor: Slash-Menü vollständig, `[[`-Links, Blockmenü, Bilder (`img:`-IDs), Toggle-Zustand speichern, Link-Schema prüfen, KaTeX, Mermaid, Datenbankansicht.
   - [ ] Shell: Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop, Breitengriff, Langdruck-Menüs, Dichte/Schrift/Bewegung.
-  - [ ] KI: Anhänge, Modellwahl, Diktat, Aktionen je Nachricht.
+  - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
   - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
   - [ ] Einstellungen: Übersicht, KI-Quellen, Backup, Gefahrenzone, Speicher, Suche, Diagnose.
   - [ ] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes.

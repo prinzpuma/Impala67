@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.ui.theme.Impala
@@ -35,12 +36,12 @@ fun HeftThumbnail(store: ImpalaStore, pageId: String, modifier: Modifier = Modif
                 ?.let { runCatching { core.heftPage(pageId, it) }.getOrNull() }
         }
     }.collectAsStateWithLifecycle()
-    PageSketch(page, modifier)
+    PageSketch(page, modifier, rememberHeftImages(store, pageId, page?.id, page?.images.orEmpty(), maxSide = 512))
 }
 
-/** Papier und gespeicherte Striche einer Seite als Skizze (Startseite und Seitenübersicht). */
+/** Papier, Bilder, Striche und Textfelder einer Seite als Skizze (Startseite und Seitenübersicht). */
 @Composable
-fun PageSketch(data: HeftPageData?, modifier: Modifier = Modifier) {
+fun PageSketch(data: HeftPageData?, modifier: Modifier = Modifier, images: Map<String, ImageBitmap> = emptyMap()) {
     val ink = Impala.colors.accent
     val cache = remember { StrokeCache() }
     val strokes = remember(data) { data?.strokes.orEmpty().mapNotNull(cache::get) }
@@ -48,6 +49,8 @@ fun PageSketch(data: HeftPageData?, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val k = size.width / HeftPage.WIDTH
         drawPaper(Paper.of(data?.paper.orEmpty()), ink, k)
+        drawHeftImages(data?.images.orEmpty(), images, k)
         drawInkStrokes(strokes, k)
+        drawHeftTexts(data?.texts.orEmpty(), k)
     }
 }

@@ -794,7 +794,7 @@ Gesamtes Modul fehlt in Kotlin (kein db-Feld im Seitenmodell, `android/app/src/m
 ### 15. PDF aus Zwischenablage und Teilen (pdfpaste.js)
 
 - [ ] **PDF per Strg+V in die Seite einfügen → Zielwahl (Notiz oder Heft)** (web/pdfpaste.js:18-33) — Kotlin: ⬜
-- [ ] **Web-Teilen-Ziel für PDF (Share-Target, Cache-Payload)** (web/pdfpaste.js:37-58) — Kotlin: ⬜ (kein ACTION_SEND in AndroidManifest.xml gefunden)
+- [x] **Web-Teilen-Ziel für PDF (Share-Target, Cache-Payload)** (web/pdfpaste.js:37-58) — Kotlin: ✅ share/Incoming.kt (PDF/Bilder → neues Heft, Text → neue Seite)
 - [ ] **PDF-Import über Bibliothek** (web/pdfpaste.js:12-16 ingest) — Kotlin: 🟡 library/LibraryImport.kt:13 (Import ohne Zielwahl)
 
 ### 16. Export und Medien (export-media.js, extras.js)
@@ -833,12 +833,12 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 ### 0. Hauptbefunde (zuerst beheben)
 
-- **Bilder und Textfelder werden nicht gezeichnet.** HeftPageView.kt, PageSketch (HeftThumbnail.kt) und HeftPagesGrid.kt zeichnen nur Papier und Striche. HeftPageData enthält aber images und texts (uniffi/impala_ffi/impala_ffi.kt, HeftPageData). Scans aus HeftScan.kt sind deshalb auf dem Gerät unsichtbar, ebenso PDF-Seiten.
+- ~~**Bilder und Textfelder werden nicht gezeichnet.**~~ ✅ behoben (HeftMedia.kt). HeftPageView.kt, PageSketch (HeftThumbnail.kt) und HeftPagesGrid.kt zeichnen nur Papier und Striche. HeftPageData enthält aber images und texts (uniffi/impala_ffi/impala_ffi.kt, HeftPageData). Scans aus HeftScan.kt sind deshalb auf dem Gerät unsichtbar, ebenso PDF-Seiten.
 - **Optionsleiste liegt falsch (Telefon).** Unten (nicht Desk) steht die Optionsleiste über der Kapsel (HeftScreen.kt:215-220), auf schmalen Geräten links neben der vertikalen Kapsel (HeftScreen.kt:204-208). Die PWA hängt die Optionsleiste direkt unter die Kapsel, oben mittig (css/heft.css:487 top 58px; heft-toolbar-ui.js:133).
-- **Farbpunkte weichen ab.** Stift-Punkt in Kotlin mit Ring (HeftToolbar.kt PenDot, Durchmesser +5 dp). PWA: Punkt unten rechts in Stiftdicke ohne Ring (css/heft.css:477-484). Farbfelder 28 dp mit Textfarbe-Ring (HeftToolbar.kt:110-120); PWA 22/24/26 px mit Akzent-Ring (css/heft.css:502-508, 659, 276).
-- **Marker.** PWA: Marker nutzt Farbe und Dicke des aktuellen Stifts (heft-input.js:237, heft.js:1486-1493). Kotlin: eigene Werte, Standardfarbe Gelb (HeftState.kt:47-48, HeftViewModel.kt:81-92).
-- **Werkzeugeinstellungen gehen verloren.** PWA speichert Werkzeug, Stiftfavoriten, Radiergröße und Nur-Stift in localStorage (heft-tools.js:4, 17-39). Kotlin hält sie nur im ViewModel (HeftViewModel.kt:51).
-- **Zoombereich.** Kotlin 0,5–4 (HeftZoom.kt:32-33), PWA 0,4–6 (heft-viewport.js:23).
+- ~~**Farbpunkte weichen ab.**~~ ✅ entspricht der aktuellen PWA (Ring in Menüfarbe, Farbfelder mit Textfarbe-Ring). Stift-Punkt in Kotlin mit Ring (HeftToolbar.kt PenDot, Durchmesser +5 dp). PWA: Punkt unten rechts in Stiftdicke ohne Ring (css/heft.css:477-484). Farbfelder 28 dp mit Textfarbe-Ring (HeftToolbar.kt:110-120); PWA 22/24/26 px mit Akzent-Ring (css/heft.css:502-508, 659, 276).
+- ~~**Marker.**~~ ✅ behoben. PWA: Marker nutzt Farbe und Dicke des aktuellen Stifts (heft-input.js:237, heft.js:1486-1493). Kotlin: eigene Werte, Standardfarbe Gelb (HeftState.kt:47-48, HeftViewModel.kt:81-92).
+- ~~**Werkzeugeinstellungen gehen verloren.**~~ ✅ behoben (DevicePrefs `heftTools`). PWA speichert Werkzeug, Stiftfavoriten, Radiergröße und Nur-Stift in localStorage (heft-tools.js:4, 17-39). Kotlin hält sie nur im ViewModel (HeftViewModel.kt:51).
+- ~~**Zoombereich.**~~ ✅ jetzt 0,4–6. Vorher Kotlin 0,5–4 (HeftZoom.kt:32-33), PWA 0,4–6 (heft-viewport.js:23).
 - **Kopfzeile.** Die Kotlin-Kopfzeile (HeftTopBar.kt) gibt es in der PWA-Desktopansicht nicht. Die PWA zeigt dort nur den Fokusmodus (render.js, Zweig `pg.kind === "heft"`, ca. Z. 667-677).
 - **Fehlende Gesten:** Doppeltipp-Zoom, Zwei- und Drei-Finger-Tipp für Undo/Redo, Mausrad mit Strg-Zoom, Lesemodus auf dem Handy.
 - **Fehlende Werkzeuge:** Formerkennung (Halten), Laser, Bild- und Textwerkzeuge, Radierer-Halten.
@@ -847,7 +847,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 ### 1. Werkzeugkapsel (Haupt-Pille)
 
 - [ ] **Stift-Favorit 1, 2, 3** – Erster Tipp wählt, zweiter Tipp auf aktiven öffnet Optionen; Punkt zeigt Stiftdicke (web/heft-toolbar-ui.js:62-72; web/heft.js:1464-1470) — Kotlin: 🟡 HeftToolbar.kt (Auswahl und Doppeltipp ✅; Punkt-Darstellung mit Ring und Position abweichend; Favoriten nicht persistiert, HeftState.kt:45-46)
-- [ ] **Marker** – Markierer mit Standardfarbe Gelb und eigener Dicke (web/heft-toolbar-ui.js:70-71; web/heft.js:1475-1478) — Kotlin: 🟡 HeftToolbar.kt:67 (Kotlin nutzt eigene Marker-Farbe und -Dicke statt die des aktuellen Stifts; HeftState.kt:47-48)
+- [x] **Marker** – nutzt Farbe und Dicke des aktuellen Stifts (web/heft-toolbar-ui.js:70-71; web/heft.js:1475-1478) — Kotlin: ✅ HeftState.kt (`color`/`size` gemeinsam)
 - [x] **Radierer** – Tipp wählt, zweiter Tipp öffnet Größen (web/heft-toolbar-ui.js:168-169; web/heft.js:1472-1474) — Kotlin: ✅ HeftToolbar.kt:69-70
 - [ ] **Radierer halten** – 380 ms gedrückt halten wechselt temporär zum Radierer und zurück (web/heft.js:1565-1578) — Kotlin: ⬜ (kein Halten-Handler im Heft-Ordner)
 - [x] **Lasso** – Striche auswählen (web/heft-toolbar-ui.js:171-172; web/heft.js:1481) — Kotlin: ✅ HeftToolbar.kt:72
@@ -964,7 +964,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Finger zeichnen** – wenn „Finger dürfen zeichnen“ aktiv (web/heft-input.js:33-35, 67, 123) — Kotlin: ✅ HeftInput.kt:64-67
 - [x] **Finger scrollt und zoomt bei „Nur Stift“** – Blättern vertikal (web/heft-viewport.js:504-506, 535-574) — Kotlin: ✅ HeftScreen.kt:178-201 (LazyColumn), HeftInput.kt:64-67
 - [ ] **Zwei-Finger-Pinch zoomt und verschiebt in einem Schritt** (web/heft-viewport.js:539-564) — Kotlin: ✅ HeftZoom.kt:41-58, HeftScreen.kt:174-175 (Bereich 🟡 0,5–4)
-- [ ] **Zoom-Bereich 0,4–6** (web/heft-viewport.js:23) — Kotlin: 🟡 HeftZoom.kt:31-34 (0,5–4)
+- [x] **Zoom-Bereich 0,4–6** (web/heft-viewport.js:23) — Kotlin: ✅ HeftZoom.kt
 - [ ] **Doppeltipp mit einem Finger zoomt auf ca. 2,2× bzw. zurück auf Fit** (web/heft-viewport.js:616-623; animateZoom 477-482) — Kotlin: ⬜
 - [x] **Ausschwingen nach dem Loslassen (Schwung)** (web/heft-viewport.js:576-590) — Kotlin: ✅ (nativer Scroll von LazyColumn)
 - [ ] **Mausrad blättert, Strg+Mausrad zoomt** (web/heft-viewport.js:636-642) — Kotlin: ⬜
@@ -1184,7 +1184,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [ ] **Langer Text einfügen** – Über 600 Zeichen oder über 15 Zeilen wird Anhang "geklebter-text.txt" (chat-fullscreen.js:480-485; Herunterladen-Knopf am Chip, chat-fullscreen.js:222-225) — Kotlin: ⬜ – (kein Gegenstück)
 - [ ] **Seitenkontext-Chip** – Zeigt aktuelle Seite mit Hinweis "Seitenkontext · wird mitgesendet" bzw. "Anfang mitgesendet (x von y Zeichen)" oder Heft-Hinweis; ✕ entfernt Kontext für diese Seite (index.html:235; render.js:1466-1494; app.js:351) — Kotlin: 🟡 ai/AiChatViewModel.kt (sendPageContext wird gesetzt, aber kein Chip und keine Abwahl)
 - [ ] **Modell-Knopf** – Tooltip "Modell: <Name>"; Icon; öffnet Modellmenü (index.html:243-245; render.js:208-218; chat-fullscreen.js:284-308) — Kotlin: ⬜ – (AiOptions model/providerId sind null; Modellwahl in ui/… settings/SettingsAiSync.kt nur Platzhalter "KI-Quellen")
-- [ ] **Sprache (Mikrofon)** – Spracheingabe, de-DE; Ergebnis wird direkt gesendet; Zustand zeigt Stopp-Icon (index.html:247; voice.js:27-33, 44-132, 47-61) — Kotlin: ⬜ – (kein Sprach-Code im Projekt)
+- [x] **Sprache (Mikrofon)** – Spracheingabe, de-DE; Ergebnis wird direkt gesendet; Zustand zeigt Stopp-Icon (index.html:247; voice.js:27-33, 44-132, 47-61) — Kotlin: ✅ ai/Dictation.kt, ChatView.kt
 - [ ] **Alt+Leertaste** – Startet/stoppt Spracheingabe im Seitenpanel (shortcuts.js:77-82; voice.js:44) — Kotlin: ⬜ – (kein Tastatur-Handler)
 - [ ] **Sprachausgabe der Antwort** – In PWA bewusst aus (voice.js:16, 154-165 vorhanden, nicht aktiv) — Kotlin: – (nichts nachzubauen)
 - [ ] **Vollbild-Spracheingabe-Knopf** – Wird vor dem Senden-Knopf im Vollbild eingefügt (app-dialogs.js:46-53; voice.js:28) — Kotlin: ⬜ – (kein Gegenstück)
@@ -2104,7 +2104,7 @@ PWA-Reihenfolge in `goBack()` (web/mobile.js:149-160): erst Sheet, dann Dialog/P
 - [ ] **Benachrichtigungs-Aktion** – Listener `localNotificationActionPerformed` (web/platform-native.js:145-165) — Kotlin: ⬜
 - [x] **Zurück-Taste (App-Lifecycle)** – `backButton` (web/platform-native.js:191-210) — Kotlin: ✅ (NavDisplay/BackHandler)
 - [x] **Dokument-Scanner** – ML Kit, Installationshinweis, 25 Seiten (web/platform-native.js:237-305) — Kotlin: ✅ heft/scan/HeftScan.kt (laut PORTING: Scannen ✅, OCR offen)
-- [ ] **Diktat („Sprechen…“)** – Sprachausgabe, Berechtigung, Teilergebnisse (web/platform-native.js:306-383, Prompt „Sprechen…“ Zeile 361, Sprache de-DE Zeile 328) — Kotlin: ⬜ (kein SpeechRecognizer; PORTING: `ai/voice.js` ⬜)
+- [x] **Diktat („Sprechen…“)** – Berechtigung, Teilergebnisse (web/platform-native.js:306-383, Sprache de-DE Zeile 328) — Kotlin: ✅ ai/Dictation.kt
 - [ ] **Teilen einer Datei (Export)** – Filesystem plus Share-Dialog, Dateiname bereinigt, „Teilen auf diesem Gerät nicht verfügbar“ (web/platform-native.js:170-189) — Kotlin: 🟡 ui/desk/DeskPageActions.kt (Teilen nur im Desk; Telefon ⬜)
 - [ ] **Empfangen per Teilen (Share-Intent)** – SendIntent-Abfrage mit 3,5 s Timeout (web/platform-native.js:385-416) — Kotlin: ⬜ (Manifest-Eintrag vorhanden; PORTING §7: die Activity wertet Intents noch nicht aus)
 

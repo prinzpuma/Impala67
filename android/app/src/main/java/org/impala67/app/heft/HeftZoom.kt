@@ -29,8 +29,8 @@ class HeftZoom {
     var origin by mutableStateOf(Offset.Zero)
 
     companion object {
-        const val MIN = 0.5f
-        const val MAX = 4f
+        const val MIN = 0.4f
+        const val MAX = 6f
     }
 }
 

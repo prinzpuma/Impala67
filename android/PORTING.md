@@ -115,8 +115,6 @@ neben die PWA (gleiche Breite) legen.
 
 - Ein Release baut aus diesem Stand eine APK, die erst die Startseite kann – Release erst nach den
   Kernbildschirmen.
-- App-Shortcuts (`res/xml/shortcuts.xml`: neue Notiz/Heft/Lernen) und „Teilen mit Impala67“ sind im
-  Manifest, die Activity wertet die Intents noch nicht aus.
 - Rundschrift `--b-display` (SF Pro Rounded/Nunito) gibt es auf Android nicht; derzeit Systemschrift.
 - Startseite: Heft-Vorschaubild (mit Heft-Modul), PDF-Seiten (`pdfId` fehlt in `PageSummary`), Lernanalyse
   (lernanalyse.js), Backup-Hinweis (backup-status.js, mit Sync), Tagesartikel schreiben (KI) und als
@@ -155,7 +153,7 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
 | `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | 🟡 (Chat im KI-Panel + Chat-Liste ✅; Anhänge, Modellwahl, RAG, Chat-Tabs, Umbenennen offen) |
 | `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`) | `ai/` | ⬜ |
-| `voice.js` | `SpeechRecognizer` | `ai/` | ⬜ |
+| `voice.js` | `SpeechRecognizer` | `ai/Dictation.kt` | 🟡 (Diktat ✅, Vorlesen offen) |
 | `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
 | `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), OkHttp-WebSocket | `sync/CloudSyncController.kt` | 🟡 (Sync + Konflikte ✅, nur im Vordergrund; QR-Kopplung, Backup-Hinweis offen) |
 | `drive*.js` | Rust-Drive (`drive.rs`) + Play-Services-Autorisierung (`drive.appdata`) | `sync/DriveController.kt` | 🟡 (Anmeldung, Sync, Intervall ✅; „nach jeder Änderung“ offen; braucht Android-OAuth-Client im Projekt der PWA-Client-ID) |

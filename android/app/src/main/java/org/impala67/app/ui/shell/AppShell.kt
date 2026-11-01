@@ -21,6 +21,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -28,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -35,6 +37,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import org.impala67.app.ImpalaApp
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
@@ -88,6 +91,13 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val landscape = config.screenWidthDp > config.screenHeightDp
     val desk = config.screenWidthDp >= DESK_MIN_WIDTH_DP || (landscape && config.screenWidthDp >= DESK_LANDSCAPE_MIN_WIDTH_DP)
     SideEffect { nav.desk = desk }
+    // Shortcut oder „Teilen mit Impala67“ (MainActivity): einmal ausführen, dann abholen.
+    val context = LocalContext.current
+    val app = context.applicationContext as ImpalaApp
+    val incoming by app.incoming.collectAsStateWithLifecycle()
+    LaunchedEffect(incoming) {
+        incoming?.let { nav.receive(it, context); app.incoming.value = null }
+    }
     if (nav.pendingNewPage != null) NewPageDialog(store, desk, onPick = nav::pickNewPage, onTemplate = nav::pickTemplate) { nav.pendingNewPage = null }
     if (desk) {
         DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)

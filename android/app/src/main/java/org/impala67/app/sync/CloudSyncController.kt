@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -86,6 +87,9 @@ class CloudSyncController(
     private val requests = Channel<Unit>(Channel.CONFLATED)
     private val forceAll = AtomicBoolean(false)
 
+    /** Zählt beendete Durchgänge (für [backgroundPass]). */
+    private val passes = MutableStateFlow(0L)
+
     init {
         scope.launch { runPasses() }
         scope.launch {
@@ -136,6 +140,21 @@ class CloudSyncController(
         lock.withLock { disconnectLocked() }
         prefs.setCfSyncKey("")
         _ui.update { it.copy(state = CloudSyncState.DISCONNECTED, label = "Getrennt", progress = null) }
+    }
+
+    /**
+     * Ein Durchgang aus dem Hintergrund ([BackgroundSyncWorker]), ohne WebSocket: nur wenn dieses
+     * Gerät gekoppelt ist. Wartet, bis der Durchgang fertig ist; `false` bei Fehler.
+     */
+    suspend fun backgroundPass(): Boolean {
+        val key = prefs.cfSyncKey.first()
+        if (key.isBlank()) return true
+        val before = passes.value
+        val error = lock.withLock { connectLocked(key, _ui.value.url) }
+        if (error != null) return false
+        syncNow()
+        return withTimeoutOrNull(BACKGROUND_PASS_TIMEOUT_MS) { passes.first { it > before } } != null &&
+            _ui.value.state != CloudSyncState.ERROR
     }
 
     /** Durchgang jetzt (z. B. „Jetzt synchronisieren“ oder nach einer Server-Nachricht). */
@@ -256,6 +275,7 @@ class CloudSyncController(
                     break
                 }
             }
+            passes.update { it + 1 }
         }
     }
 
@@ -318,5 +338,6 @@ class CloudSyncController(
     private companion object {
         const val CHANGE_DEBOUNCE_MS = 1_500L
         const val MAX_RETRIES = 5u
+        const val BACKGROUND_PASS_TIMEOUT_MS = 8 * 60_000L
     }
 }

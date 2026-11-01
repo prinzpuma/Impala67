@@ -216,7 +216,8 @@ private fun PageTile(
             // `.heft-pop-thumb canvas`: feiner dunkler Ring und weicher Schatten; aktiv mit Akzentrahmen 3 px außen.
             PageSketch(
                 data,
-                Modifier.fillMaxSize()
+                images = rememberHeftImages(vm.store, vm.pageId, data?.id, data?.images.orEmpty(), maxSide = 512),
+                modifier = Modifier.fillMaxSize()
                     .drawBehind {
                         if (!highlighted) return@drawBehind
                         val out = 3.dp.toPx() + 1.dp.toPx()

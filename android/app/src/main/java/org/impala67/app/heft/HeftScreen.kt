@@ -1,5 +1,7 @@
 package org.impala67.app.heft
 
+import androidx.compose.ui.platform.LocalContext
+import org.impala67.app.ImpalaApp
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -69,7 +71,8 @@ private val PAGE_GAP = 24.dp
 fun HeftScreen(store: ImpalaStore, pageId: String, onBack: () -> Unit, modifier: Modifier = Modifier, onAi: (() -> Unit)? = null) {
     // Tablet (mit [onAi]): wie die PWA ohne Kopfzeile – Werkzeuge oben mittig, Ecken-Knöpfe links/rechts oben.
     val desk = onAi != null
-    val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId) }
+    val prefs = (LocalContext.current.applicationContext as ImpalaApp).prefs
+    val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId, prefs) }
     val ids by vm.pageIds.collectAsStateWithLifecycle()
     val title by vm.title.collectAsStateWithLifecycle()
     val pages = ids.orEmpty()
