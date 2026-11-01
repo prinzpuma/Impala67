@@ -83,13 +83,14 @@ private fun BlockMenu(open: Boolean, onDismiss: () -> Unit, block: MdBlock, vm: 
     val clipboard = LocalClipboard.current
     val texty = block.isText() && block.kind !is MdBlockKind.Code
     DropdownMenu(open, onDismiss, containerColor = c.menu) {
-        if (block.isText()) {
+        val k = block.kind
+        if (block.isText() || k is MdBlockKind.Toggle || k is MdBlockKind.Callout) {
             Section("Umwandeln in")
-            BlockType.entries.forEach { t ->
-                val current = block.type() == t
+            TurnInto.entries.forEach { t ->
+                val current = if (t.type != null) block.type() == t.type else (t == TurnInto.Toggle && k is MdBlockKind.Toggle) || (t == TurnInto.Callout && k is MdBlockKind.Callout)
                 DropdownMenuItem(
                     { Text(t.label, color = if (current) c.accent else c.text) },
-                    { onDismiss(); vm.convertBlock(block.id, t) },
+                    { onDismiss(); vm.turnInto(block.id, t) },
                 )
             }
         }

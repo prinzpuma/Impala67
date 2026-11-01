@@ -558,7 +558,7 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 - [ ] **Blöcke per Maus über Blockgrenzen markieren** (Blockauswahl, web/editor.js:1624-1643) — Kotlin: ⬜
 - [x] **Blockauswahl-Rahmen** (web/css/editor.css:217-218, `.blk.selected`) — Kotlin: ✅ editor/BlockView.kt:84-86 (selected-Rahmen, nur für Nicht-Text-Blöcke im Select-Modus, EditorViewModel.kt:182-188)
 - [ ] **Blöcke mit Dateien per Drop einfügen** (web/editor.js:1684-1694) — Kotlin: ⬜
-- [ ] **Blockmenü Umwandeln in** (11 Typen: Text, Überschrift 1-3, To-do, Aufzählung, Nummerierte Liste, Toggle, Zitat, Callout, Code; web/editor-menus.js:266-271, 273-276) — Kotlin: 🟡 editor/BlockMenu.kt und EditorToolbar.kt (9 Typen; Toggle und Callout fehlen)
+- [x] **Blockmenü Umwandeln in** (11 Typen: Text, Überschrift 1-3, To-do, Aufzählung, Nummerierte Liste, Toggle, Zitat, Callout, Code; web/editor-menus.js:266-271, 273-276) — Kotlin: ✅ editor/BlockMenu.kt → EditorBlockCommands.kt `turnInto` (11 Typen)
 - [x] **Farbe Text (8 Farben) + Hintergrund (8) + Farbe entfernen ✕** (web/editor-menus.js:276-285, COLORS in 16, data-bcolor, web/editor.js:1780-1790) — Kotlin: ✅ editor/BlockMenu.kt, EditorBlockCommands.kt `setBlockColor`
 - [ ] **Duplizieren (Strg+D)** (web/editor-menus.js:288, web/editor.js:1792-1797) — Kotlin: 🟡 Blockmenü ✅ (EditorBlockCommands.kt `duplicateBlock`); Tastenkürzel fehlt
 - [x] **Als Markdown kopieren** (web/editor-menus.js:289, web/editor.js:1799-1811) — Kotlin: ✅ editor/BlockMenu.kt
@@ -582,15 +582,15 @@ Einträge (web/editor-menus.js:99-122, Reihenfolge wie PWA):
 - [x] **To-do-Liste** (Checkbox-Icon, „[] “) — Kotlin: ✅ SlashMenu.kt Todo
 - [x] **Aufzählung** („•“, „- “) — Kotlin: ✅ SlashMenu.kt Bullet
 - [x] **Nummerierte Liste** („1.“, „1. “) — Kotlin: ✅ SlashMenu.kt Number
-- [ ] **Toggle-Liste** (▸, „> aufklappbar“) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
+- [x] **Toggle-Liste** (▸, „> aufklappbar“) — Kotlin: ✅ SlashMenu.kt Toggle → EditorBlockCommands.kt `insertStructure` (Rohtext)
 - [x] **Zitat** (”, „> “) — Kotlin: ✅ SlashMenu.kt Quote
-- [ ] **Callout** (Glühbirne, Kasten blau) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
+- [x] **Callout** (Glühbirne, Kasten blau) — Kotlin: ✅ SlashMenu.kt Callout (Rohtext)
 - [x] **Code** (</>, Codeblock mit Syntax; Standardsprache javascript, web/editor.js:116) — Kotlin: ✅ SlashMenu.kt Code (Sprache nicht wählbar, siehe Abschnitt 12)
-- [ ] **Gleichung** (√, KaTeX-Formel, öffnet Popover) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **Diagramm** (Graph-Icon, Mermaid) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **SVG-Grafik** (Zeichenstift-Icon, SVG-Code) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **Tabelle** (▦, einfache Tabelle 2×2) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
-- [ ] **2 Spalten** (Spalten-Icon, nebeneinander) — Kotlin: ⬜ (TODO: SlashMenu.kt:35)
+- [x] **Gleichung** (√, KaTeX-Formel, öffnet Popover) — Kotlin: ✅ SlashMenu.kt Math (Rohtext statt Popover)
+- [x] **Diagramm** (Graph-Icon, Mermaid) — Kotlin: ✅ SlashMenu.kt Mermaid (Codeblock `mermaid`)
+- [x] **SVG-Grafik** (Zeichenstift-Icon, SVG-Code) — Kotlin: ✅ SlashMenu.kt Svg (Codeblock `svg`)
+- [x] **Tabelle** (▦, einfache Tabelle 2×2) — Kotlin: ✅ SlashMenu.kt Table (Rohtext)
+- [x] **2 Spalten** (Spalten-Icon, nebeneinander) — Kotlin: ✅ SlashMenu.kt Columns (Rohtext)
 - [x] **Trennlinie** („—“, „---“) — Kotlin: ✅ SlashMenu.kt Divider, EditorBlockCommands.kt:24-29
 - [x] **Bild** (Hochladen, accept image/*) — Kotlin: ✅ SlashMenu.kt Image → EditorMedia.kt
 - [x] **PDF** (PDF einbetten, accept application/pdf) — Kotlin: ✅ SlashMenu.kt Pdf (Dateiblock; ohne PDF-Text)

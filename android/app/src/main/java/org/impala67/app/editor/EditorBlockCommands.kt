@@ -1,6 +1,7 @@
 package org.impala67.app.editor
 
 import org.impala67.app.notes.pageTitle
+import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
 import uniffi.impala_ffi.PageSummary
 import uniffi.impala_ffi.blocksToMarkdown
@@ -25,6 +26,7 @@ internal fun EditorViewModel.applySlash(id: String, q: SlashQuery, cmd: SlashCmd
     when {
         type != null -> retype(id, type, rest, caret)
         cmd == SlashCmd.Divider -> insertDivider(id, rest)
+        cmd in STRUCTURE -> insertStructure(id, rest, cmd)
         cmd == SlashCmd.Link -> {
             // „[[“ an die Caret-Stelle, dann sofort das Link-Menü.
             val withLink = rest.substring(0, caret) + "[[" + rest.substring(caret)
@@ -52,6 +54,31 @@ internal fun EditorViewModel.insertDivider(id: String, rest: String) {
     activate(after.id, EditMode.Text, 0)
 }
 
+private val STRUCTURE = setOf(SlashCmd.Toggle, SlashCmd.Callout, SlashCmd.Math, SlashCmd.Mermaid, SlashCmd.Svg, SlashCmd.Table, SlashCmd.Columns)
+
+/**
+ * Strukturblock aus dem Slash-Menü (`applySlash`, Blöcke wie `newBlock` in editor.js): Callout und Toggle
+ * nehmen den Resttext auf, sonst bleibt er als eigener Block davor stehen. Danach wird der neue Block
+ * bearbeitet – Codeblöcke als Text, alles andere als Markdown-Rohtext.
+ */
+private fun EditorViewModel.insertStructure(id: String, rest: String, cmd: SlashCmd) {
+    val i = blocks.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return
+    val nb = newBlock(
+        when (cmd) {
+            SlashCmd.Toggle -> MdBlockKind.Toggle(rest, true, listOf(paragraph()))
+            SlashCmd.Callout -> MdBlockKind.Callout("blue", listOf(paragraph(rest)))
+            SlashCmd.Mermaid -> MdBlockKind.Code("mermaid", "")
+            SlashCmd.Svg -> MdBlockKind.Code("svg", "")
+            SlashCmd.Table -> MdBlockKind.Table(listOf(listOf("", ""), listOf("", "")))
+            SlashCmd.Columns -> MdBlockKind.Columns(listOf(listOf(paragraph()), listOf(paragraph())))
+            else -> MdBlockKind.Math("")
+        },
+    )
+    val keep = rest.isNotEmpty() && cmd != SlashCmd.Toggle && cmd != SlashCmd.Callout
+    mutate(true) { list -> list.take(i) + (if (keep) listOf(list[i].withText(rest), nb) else listOf(nb)) + list.drop(i + 1) }
+    activate(nb.id, if (nb.kind is MdBlockKind.Code) EditMode.Text else EditMode.Raw, 0)
+}
+
 /** `applyLink` (editor-menus.js): „[[suche“ vor dem Caret wird zu `[Titel](#id)`, Text dahinter bleibt. */
 internal fun EditorViewModel.applyLink(id: String, q: LinkQuery, page: PageSummary) {
     val full = blocks.firstOrNull { it.id == id }?.text() ?: return
@@ -74,10 +101,36 @@ internal fun EditorViewModel.insertSlashBelow(id: String, menus: EditorMenus) {
 
 // ---- Blockmenü (editor-menus.js `openBlockMenu`, Aktionen in editor.js) ----
 
-internal fun EditorViewModel.convertBlock(id: String, type: BlockType) {
-    val b = blocks.firstOrNull { it.id == id }?.takeIf { it.isText() } ?: return
-    mutate(true) { list -> list.map { if (it.id == id) it.convertTo(type) else it } }
-    activate(id, EditMode.Text, b.text().length)
+/** Ziele von „Umwandeln in“ (TURN_TYPES in editor-menus.js); Toggle und Callout sind keine Textblöcke. */
+internal enum class TurnInto(val label: String, val type: BlockType?) {
+    Text("Text", BlockType.Text), H1("Überschrift 1", BlockType.H1), H2("Überschrift 2", BlockType.H2),
+    H3("Überschrift 3", BlockType.H3), Todo("To-do-Liste", BlockType.Todo), Bullet("Aufzählung", BlockType.Bullet),
+    Number("Nummerierte Liste", BlockType.Number), Toggle("Toggle-Liste", null), Quote("Zitat", BlockType.Quote),
+    Callout("Callout", null), Code("Code", BlockType.Code),
+}
+
+/** Text eines Blocks ohne Struktur (`plainTextOf`): Toggle-Titel und Kinder von Toggle/Callout. */
+private fun MdBlock.plainText(): String = when (val k = kind) {
+    is MdBlockKind.Toggle -> (listOf(k.summary) + k.children.map { it.text() }).filter { it.isNotBlank() }.joinToString(" ")
+    is MdBlockKind.Callout -> k.children.map { it.text() }.filter { it.isNotBlank() }.joinToString(" ")
+    else -> text()
+}
+
+/** `turnInto` (editor.js): Textblöcke behalten ihren Text, Toggle/Callout behalten Kinder bzw. Klartext. */
+internal fun EditorViewModel.turnInto(id: String, to: TurnInto) {
+    val b = blocks.firstOrNull { it.id == id } ?: return
+    val k = b.kind
+    val texty = b.isText() && k !is MdBlockKind.Code
+    val type = to.type
+    val nb = when {
+        type != null -> (if (b.isText()) b else b.copy(kind = MdBlockKind.Paragraph(b.plainText()))).convertTo(type)
+        to == TurnInto.Toggle -> if (k is MdBlockKind.Toggle) return else
+            b.copy(kind = MdBlockKind.Toggle(if (texty) b.text() else "", true, (k as? MdBlockKind.Callout)?.children ?: listOf(paragraph())))
+        else -> if (k is MdBlockKind.Callout) return else
+            b.copy(kind = MdBlockKind.Callout("blue", listOf(paragraph(if (texty) b.text() else b.plainText()))))
+    }
+    mutate(true) { list -> list.map { if (it.id == id) nb else it } }
+    if (nb.isText()) activate(id, EditMode.Text, nb.text().length) else activate(id, EditMode.Raw, 0)
 }
 
 /** Farbe setzen: Text- und Hintergrundfarbe schließen sich aus; [name] `null` entfernt beide. */

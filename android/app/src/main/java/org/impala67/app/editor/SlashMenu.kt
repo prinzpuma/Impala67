@@ -37,8 +37,8 @@ internal class EditorMenus(val slash: SlashState, val links: LinkState, val pick
 
 /**
  * Befehle des Slash-Menüs, Texte wörtlich aus SLASH in web/editor-menus.js. Nur Blöcke, die der Editor
- * nativ anlegen kann. TODO(desk): Toggle-Liste, Callout, Gleichung, Diagramm, SVG-Grafik, Tabelle und
- * 2 Spalten fehlen noch.
+ * nativ anlegen kann. Strukturblöcke (Toggle, Callout, Gleichung, Tabelle, Spalten) öffnen danach
+ * gleich ihren Markdown-Rohtext, Diagramm und SVG sind Codeblöcke mit eigener Sprache.
  */
 internal enum class SlashCmd(
     val key: String, val label: String, val hint: String, val glyph: String,
@@ -51,8 +51,15 @@ internal enum class SlashCmd(
     Todo("todo", "To-do-Liste", "[] ", "", BlockType.Todo, R.drawable.ic_i_check_square),
     Bullet("bullet", "Aufzählung", "- ", "•", BlockType.Bullet),
     Number("number", "Nummerierte Liste", "1. ", "1.", BlockType.Number),
+    Toggle("toggle", "Toggle-Liste", "> aufklappbar", "▸", null),
     Quote("quote", "Zitat", "> ", "”", BlockType.Quote),
+    Callout("callout", "Callout", "Hervorgehobener Kasten", "", null, R.drawable.ic_i_bulb),
     Code("code", "Code", "Codeblock mit Syntax", "</>", BlockType.Code),
+    Math("math", "Gleichung", "KaTeX-Formel", "√", null),
+    Mermaid("mermaid", "Diagramm", "Mermaid: Ablauf, Zustände, Zeitachse", "", null, R.drawable.ic_i_graph),
+    Svg("svg", "SVG-Grafik", "Zeichnung als SVG-Code", "", null, R.drawable.ic_i_pen_tool),
+    Table("table", "Tabelle", "Einfache Tabelle", "▦", null),
+    Columns("columns", "2 Spalten", "Nebeneinander", "", null, R.drawable.ic_i_columns),
     Divider("divider", "Trennlinie", "---", "—", null),
     Image("image", "Bild", "Hochladen", "", null, R.drawable.ic_i_image),
     Pdf("pdf", "PDF", "PDF einbetten", "", null, R.drawable.ic_i_file),

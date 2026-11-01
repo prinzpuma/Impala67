@@ -110,7 +110,7 @@ Stand: v2.2.86 (28. Oktober 2026)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
 
 *Stand geprüft am 1. November 2026 gegen den Code in `android/`. Oberfläche: Checkliste aller PWA-Elemente in
-[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 817 offen). Ein Punkt gilt erst als erledigt,
+[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 809 offen). Ein Punkt gilt erst als erledigt,
 wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 
 - [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
@@ -132,7 +132,7 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [x] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6, Werkzeugleiste oben mittig mit Optionsleiste darunter (auch Telefon), Einklappen, Schreib-Rückzug.
   - [ ] Heft: Formerkennung ✅, Laser ✅, Radierer halten ✅, Doppeltipp-Zoom ✅, Zwei-/Drei-Finger-Tipp ✅, „Seite hinzufügen“ Davor/Danach/Am Ende ✅, Bild-/Text-Werkzeug ✅, Import/Export ✅ (auch in andere Hefte bzw. als Notiz), Verlauf ✅, Lesemodus (Telefon) ✅; offen: PDF-Text beim Import übernehmen.
   - [ ] Seitenmenü (⋯): Tablet ✅ bis auf „Als Vorlesungsübersicht“ (mit der Datenbankansicht) und „Fach…“ (mit dem Fächer-Modul); Telefon offen (zurückgestellt, erst Tablet).
-  - [ ] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash Bild/PDF/Datei/Heft/Seite verlinken ✅; offen: Slash Toggle/Callout/Gleichung/Diagramm/SVG/Tabelle/Spalten, Toggle-Zustand speichern, KaTeX, Mermaid, Datenbankansicht, Inline-Formatierung per Tasten.
+  - [ ] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext); offen: Toggle-Zustand speichern, KaTeX, Mermaid, Datenbankansicht, Inline-Formatierung per Tasten.
   - [ ] Shell: Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop, Breitengriff, Langdruck-Menüs, Dichte/Schrift/Bewegung.
   - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
   - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
