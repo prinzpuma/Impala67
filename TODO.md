@@ -118,17 +118,13 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - Gradle mit Kotlin und Jetpack Compose (Material 3 Expressive).
   - Rust-NDK-Build und UniFFI-Kotlin-Bindings (`npm run build:android-core`, `tools/android-core.mjs`).
   - JNA eingebunden.
-- [ ] **Daten- & Schlüssel-Migration** (Release-Sperre, siehe `android/PORTING.md` § 7):
-  - [ ] Start-Migrator für `impala67_cf_sync_key` / `impala67_cf_server_url` aus den alten WebView-Dateien – fehlt (kein Code liest `app_webview/…/leveldb`).
-  - [ ] Schlüssel in `EncryptedSharedPreferences` / Android Keystore – fehlt; der Sync-Schlüssel liegt derzeit im normalen DataStore (`settings/DevicePrefs.kt`).
-  - [x] Daten kommen über Cloudflare-Sync bzw. Drive in den Rust-Kern.
-  - [ ] Rein lokale Daten der alten Capacitor-App übernehmen (Export → `importJson` o. Ä.).
+- [x] **Daten & Schlüssel**: Daten kommen über Cloudflare-Sync bzw. Drive-Backup in den Rust-Kern (keine Übernahme aus der alten Capacitor-App – bewusst, Absicherung über Backup/Drive). Der Sync-Schlüssel liegt auf dem Gerät mit dem Android Keystore verschlüsselt (`settings/SecretBox.kt`).
 - [ ] **Plattform-Features & Bibliotheken**:
   - [x] **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) im Heft.
   - [x] **Handschrifterkennung**: ML Kit Digital Ink (Lasso „In Text“, Suchindex).
   - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
   - [ ] **Hintergrund-Sync**: WorkManager – fehlt (Sync läuft nur bei geöffneter App).
-  - [ ] **Sicherheit**: Keystore / EncryptedSharedPreferences für Schlüssel, Drive-Tokens, API-Keys – fehlt.
+  - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel beim KI-Quellen-Modul ebenfalls über `SecretBox` ablegen.
   - [ ] **Diktat**: `SpeechRecognizer` – fehlt (kein Mikrofon im Chat).
   - [ ] **Systemintegration**: Teilen *aus* der App ✅ (`ACTION_SEND` in `DeskPageActions.kt`, nur Tablet); Teilen *an* die App und App-Shortcuts nur im Manifest, `MainActivity` wertet die Intents nicht aus; Predictive Back ✅.
   - [ ] **Lokale Erinnerung „Karteikarten fällig“** (gab es in der Capacitor-App) – fehlt.

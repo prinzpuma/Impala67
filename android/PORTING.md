@@ -113,9 +113,6 @@ neben die PWA (gleiche Breite) legen.
 
 ## 7. Offene Punkte vor einem Release
 
-- **Datenübernahme aus der alten Capacitor-App:** Deren Daten liegen in der IndexedDB des WebViews.
-  Ohne Übernahme (z. B. Export → `ImpalaCore.importJson`, oder Sync/Drive vor dem Update) gingen rein
-  lokale Daten verloren. **Kein Release, bevor das gelöst ist.**
 - Ein Release baut aus diesem Stand eine APK, die erst die Startseite kann – Release erst nach den
   Kernbildschirmen.
 - App-Shortcuts (`res/xml/shortcuts.xml`: neue Notiz/Heft/Lernen) und „Teilen mit Impala67“ sind im

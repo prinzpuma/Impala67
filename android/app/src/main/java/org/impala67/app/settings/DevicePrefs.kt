@@ -62,19 +62,19 @@ class DevicePrefs(private val context: Context) {
 
     /**
      * Schlüssel des aktiven Cloudflare-Syncs (PWA: `LS_KEY` in sync-cloudflare.js). Leer = getrennt;
-     * nur dann verbindet die App beim Start nicht von selbst.
+     * nur dann verbindet die App beim Start nicht von selbst. Liegt verschlüsselt ([SecretBox]).
      */
-    val cfSyncKey: Flow<String> = store.data.map { it[CF_SYNC_KEY].orEmpty() }
+    val cfSyncKey: Flow<String> = store.data.map { prefs -> prefs[CF_SYNC_KEY]?.let(SecretBox::open).orEmpty() }
 
     suspend fun setThemeMode(mode: ThemeMode) = put(THEME, mode.name)
-    suspend fun setCfSyncKey(key: String) = put(CF_SYNC_KEY, key)
+    suspend fun setCfSyncKey(key: String) = put(CF_SYNC_KEY, SecretBox.seal(key))
 
     /**
      * Zuletzt gesehener Schlüssel aus den Einstellungen (`null`: noch nie). Nur ein neuer Schlüssel
      * (z. B. über Drive von einem anderen Gerät) verbindet von selbst – nach „Trennen“ nicht erneut.
      */
-    val cfSeenKey: Flow<String?> = store.data.map { it[CF_SEEN_KEY] }
-    suspend fun setCfSeenKey(key: String) = put(CF_SEEN_KEY, key)
+    val cfSeenKey: Flow<String?> = store.data.map { prefs -> prefs[CF_SEEN_KEY]?.let(SecretBox::open) }
+    suspend fun setCfSeenKey(key: String) = put(CF_SEEN_KEY, SecretBox.seal(key))
 
     /** Google Drive auf diesem Gerät angemeldet (PWA: `impala67_drive_session`) und mit welchem Konto. */
     val driveConnected: Flow<Boolean> = boolFlow(DRIVE_CONNECTED, false)
