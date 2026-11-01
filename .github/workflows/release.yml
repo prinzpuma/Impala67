@@ -134,7 +134,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0 ndk;27.2.12479018'
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
 
       - name: Gradle Wrapper ausführbar machen
         working-directory: android
@@ -165,7 +165,7 @@ jobs:
           fi
 
       - name: Rust-Kern für Android bauen
-        run: npm run build:android-core
+        run: npm run build:android-core -- --newest-ndk
 
       - name: Kotlin-Bindings aktuell?
         run: git diff --exit-code -- android/app/src/main/java/uniffi || { echo "::error::Bindings veraltet – npm run build:android-core ausführen und impala_ffi.kt committen."; exit 1; }

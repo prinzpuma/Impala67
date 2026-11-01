@@ -11,20 +11,32 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const core = path.join(root, "core");
+const byVersion = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 const run = (cmd, cwd = root, env = {}) => {
 	console.log(`> ${cmd}`);
 	execSync(cmd, { cwd, stdio: "inherit", env: { ...process.env, ...env } });
 };
 
-// 1. NDK finden (fehlt es, über sdkmanager installieren)
+// 1. NDK: das neueste installierte. Mit --newest-ndk (CI) vorher die neueste stabile Version installieren.
 const sdkRoot = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
 if (!sdkRoot) throw new Error("ANDROID_HOME / ANDROID_SDK_ROOT ist nicht gesetzt.");
 const ndkDir = path.join(sdkRoot, "ndk");
-if (!fs.existsSync(ndkDir) || fs.readdirSync(ndkDir).length === 0) {
+const installed = () => (fs.existsSync(ndkDir) ? fs.readdirSync(ndkDir) : []);
+if (process.argv.includes("--newest-ndk") || installed().length === 0) {
 	const sdkmanager = path.join(sdkRoot, "cmdline-tools", "latest", "bin", process.platform === "win32" ? "sdkmanager.bat" : "sdkmanager");
-	run(`"${sdkmanager}" "ndk;27.2.12479018"`);
+	const list = execSync(`"${sdkmanager}" --list`, { encoding: "utf8", maxBuffer: 64 << 20 });
+	const stable = [...list.matchAll(/^\s*ndk;(\d+\.\d+\.\d+)\s*\|[^\n]*$/gm)]
+		.filter((m) => !/rc|beta|alpha|preview/i.test(m[0]))
+		.map((m) => m[1])
+		.sort(byVersion);
+	if (stable.length === 0) throw new Error("Keine NDK-Version in `sdkmanager --list` gefunden.");
+	const newest = stable.at(-1);
+	if (!installed().includes(newest)) {
+		console.log(`> sdkmanager "ndk;${newest}"`);
+		execSync(`"${sdkmanager}" "ndk;${newest}"`, { input: "y\n".repeat(20), stdio: ["pipe", "inherit", "inherit"] });
+	}
 }
-const ndk = path.join(ndkDir, fs.readdirSync(ndkDir).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1));
+const ndk = path.join(ndkDir, installed().sort(byVersion).at(-1));
 const prebuilt = path.join(ndk, "toolchains", "llvm", "prebuilt");
 const bin = path.join(prebuilt, fs.readdirSync(prebuilt)[0], "bin");
 console.log(`NDK: ${ndk}`);
