@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import android.os.Build
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -110,12 +111,17 @@ fun AccentSwatch(color: Color, selected: Boolean, label: String, onSelect: () ->
 /** Farbe aus dem Android-Hintergrundbild gibt es erst ab Android 12 (Material You). */
 val wallpaperAccentAvailable get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-/** Tatsächliche Akzentfarbe; [AccentColor.WALLPAPER] fällt vor Android 12 auf Blau zurück. */
+/**
+ * Tatsächliche Akzentfarbe; [AccentColor.WALLPAPER] fällt vor Android 12 auf Blau zurück. Im Dunkeln liegt
+ * die Hintergrundbild-Farbe zwischen hellem und dunklem Material-You-Ton – gedämpft wie die PWA-Akzente
+ * (#6B8CAE), statt des grellen Pastells aus dem dunklen Schema.
+ */
 @Composable
 fun AccentColor.resolve(dark: Boolean): Color {
     if (this == AccentColor.WALLPAPER && wallpaperAccentAvailable) {
         val context = LocalContext.current
-        return (if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)).primary
+        val light = dynamicLightColorScheme(context).primary
+        return if (dark) lerp(dynamicDarkColorScheme(context).primary, light, 0.45f) else light
     }
     return Color(if (dark) this.dark else light)
 }

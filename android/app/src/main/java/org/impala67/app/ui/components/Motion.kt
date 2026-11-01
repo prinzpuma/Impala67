@@ -15,6 +15,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import org.impala67.app.ui.theme.LocalAppearance
 
 /** --ease-out der PWA. */
 val EaseOut = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
@@ -24,6 +25,7 @@ val EaseOut = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
  * gestaffelt um 40 ms je [index]. Spätere Neuzeichnungen animieren nicht erneut.
  */
 fun Modifier.riseIn(index: Int): Modifier = composed {
+    if (LocalAppearance.current.reduceMotion) return@composed Modifier
     val progress = remember { Animatable(0f) }
     val rise = with(LocalDensity.current) { 6.dp.toPx() }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(420, delayMillis = 40 * index.coerceAtMost(4), easing = EaseOut)) }

@@ -1,6 +1,15 @@
 package org.impala67.app.ui.theme
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -25,13 +34,18 @@ import androidx.compose.ui.unit.sp
 
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import org.impala67.app.R
 
+/** Nunito ist eine variable Schrift: ohne gesetzte `wght`-Achse sähe jede Stufe gleich (dünn) aus. */
+private fun nunito(weight: FontWeight) =
+    Font(R.font.nunito, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
+
 val Nunito = FontFamily(
-    Font(R.font.nunito, FontWeight.Normal),
-    Font(R.font.nunito, FontWeight.Medium),
-    Font(R.font.nunito, FontWeight.SemiBold),
-    Font(R.font.nunito, FontWeight.Bold),
+    nunito(FontWeight.Normal),
+    nunito(FontWeight.Medium),
+    nunito(FontWeight.SemiBold),
+    nunito(FontWeight.Bold),
 )
 
 /** Schrift auf dem Akzent: dunkel bei hellen Akzenten (z. B. Hintergrundbild-Farbe im Dunkelmodus). */
@@ -95,7 +109,7 @@ private fun style(
     weight: FontWeight = FontWeight.Normal,
     line: Float = 1.5f,
     tracking: TextUnit = 0.sp,
-    font: FontFamily = Nunito,
+    font: FontFamily = FontFamily.Default,
 ) = TextStyle(
     fontFamily = font,
     fontSize = size,
@@ -104,15 +118,15 @@ private fun style(
     letterSpacing = tracking,
 )
 
-/** Schriftgrößen der PWA (--text-*); Überschriften mit der Rundschrift von --b-display (Nunito). */
+/** Schriftgrößen der PWA (--text-*); Fließtext in der Systemschrift (`body` in base.css), Überschriften mit der Rundschrift von --b-display (Nunito). */
 private val Typography = Typography(
-    displayLarge = style(TextSize.xl * 1.3f, FontWeight.Bold, 1.15f, (-0.03).em),
-    displayMedium = style(TextSize.xl * 1.1f, FontWeight.Bold, 1.2f, (-0.025).em),
-    displaySmall = style(TextSize.xl, FontWeight.SemiBold, 1.2f, (-0.02).em),
-    headlineLarge = style(32.sp, FontWeight.Bold, 1.25f, (-0.025).em),
-    headlineMedium = style(28.sp, FontWeight.Medium, 1.3f, (-0.02).em),
-    headlineSmall = style(24.sp, FontWeight.SemiBold, 1.2f, (-0.015).em),
-    titleLarge = style(TextSize.lg, FontWeight.SemiBold, 1.3f, (-0.01).em),
+    displayLarge = style(TextSize.xl * 1.3f, FontWeight.Bold, 1.15f, (-0.03).em, font = Nunito),
+    displayMedium = style(TextSize.xl * 1.1f, FontWeight.Bold, 1.2f, (-0.025).em, font = Nunito),
+    displaySmall = style(TextSize.xl, FontWeight.SemiBold, 1.2f, (-0.02).em, font = Nunito),
+    headlineLarge = style(32.sp, FontWeight.Bold, 1.25f, (-0.025).em, font = Nunito),
+    headlineMedium = style(28.sp, FontWeight.Medium, 1.3f, (-0.02).em, font = Nunito),
+    headlineSmall = style(24.sp, FontWeight.SemiBold, 1.2f, (-0.015).em, font = Nunito),
+    titleLarge = style(TextSize.lg, FontWeight.SemiBold, 1.3f, (-0.01).em, font = Nunito),
     titleMedium = style(TextSize.md, FontWeight.SemiBold),
     titleSmall = style(TextSize.base, FontWeight.SemiBold),
     bodyLarge = style(TextSize.md),
@@ -123,17 +137,63 @@ private val Typography = Typography(
     labelSmall = style(TextSize.xs2, FontWeight.Medium, 1.3f),
 )
 
+/**
+ * Darstellungsoptionen nur für dieses Gerät (Einstellungen → Darstellung), wie die Body-Klassen der PWA
+ * (`applyAppearance` in settings.js): `density-compact`, `font-s`/`font-l`, `perf-mode`.
+ */
+@Immutable
+data class Appearance(
+    /** Kompakt: Spalten randlos bis an die Kante; Komfortabel: abgerundete Karten mit Abstand. */
+    val compact: Boolean = true,
+    /** Performance-Modus: keine Animationen. */
+    val reduceMotion: Boolean = false,
+)
+
+val LocalAppearance = staticCompositionLocalOf { Appearance() }
+
+/** Alle Bewegungen springen sofort ans Ziel (`body.perf-mode`: Dauer ≈ 0). */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private object SnapMotion : MotionScheme {
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = snap()
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = snap()
+}
+
+/** Haptik aus: alle Rückmeldungen verschlucken. */
+private object NoHaptics : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
+
+/**
+ * [fontScale] wirkt wie `--font-base` der PWA (15 / 16 / 18 px) zusätzlich zur Schriftgröße des Systems.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ImpalaTheme(dark: Boolean = isSystemInDarkTheme(), accent: Color? = null, content: @Composable () -> Unit) {
+fun ImpalaTheme(
+    dark: Boolean = isSystemInDarkTheme(),
+    accent: Color? = null,
+    fontScale: Float = 1f,
+    appearance: Appearance = Appearance(),
+    haptics: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val base = if (dark) DarkColors else LightColors
     val colors = accent?.let {
         base.copy(accent = it, onAccent = onAccentFor(it))
     } ?: base
-    CompositionLocalProvider(LocalImpalaColors provides colors) {
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalImpalaColors provides colors,
+        LocalAppearance provides appearance,
+        LocalDensity provides Density(density.density, density.fontScale * fontScale),
+        LocalHapticFeedback provides if (haptics) LocalHapticFeedback.current else NoHaptics,
+    ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme(colors),
-            motionScheme = MotionScheme.expressive(),
+            motionScheme = if (appearance.reduceMotion) SnapMotion else MotionScheme.expressive(),
             shapes = Shapes,
             typography = Typography,
             content = content,
@@ -147,4 +207,6 @@ object Impala {
         @Composable @ReadOnlyComposable get() = LocalImpalaColors.current
     val type: Typography
         @Composable @ReadOnlyComposable get() = MaterialTheme.typography
+    val appearance: Appearance
+        @Composable @ReadOnlyComposable get() = LocalAppearance.current
 }

@@ -11,8 +11,16 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.impala67.app.settings.AccentColor
+import org.impala67.app.settings.Density
+import org.impala67.app.settings.FontScale
 import org.impala67.app.settings.ThemeMode
+import org.impala67.app.ui.theme.Appearance
 import org.impala67.app.settings.resolve
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -36,7 +44,29 @@ class MainActivity : ComponentActivity() {
             val mode by app.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
             val accent by app.prefs.accent.collectAsState(AccentColor.WALLPAPER)
             val dark = if (mode == ThemeMode.SYSTEM) isSystemInDarkTheme() else mode == ThemeMode.DARK
-            ImpalaTheme(dark = dark, accent = accent.resolve(dark)) {
+            // Statusleisten-Symbole folgen dem App-Design, nicht dem System (sonst dunkel auf dunkel).
+            val view = LocalView.current
+            val hideBars by app.prefs.hideSystemBars.collectAsState(true)
+            SideEffect {
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                    // Vollbild: Leisten weg, die App nutzt die ganze Höhe; Wischen vom Rand blendet sie kurz ein.
+                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    if (hideBars) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+            val density by app.prefs.density.collectAsState(Density.COMPACT)
+            val fontScale by app.prefs.fontScale.collectAsState(FontScale.NORMAL)
+            val reduceMotion by app.prefs.reduceMotion.collectAsState(false)
+            val haptics by app.prefs.nativeHaptics.collectAsState(true)
+            ImpalaTheme(
+                dark = dark,
+                accent = accent.resolve(dark),
+                fontScale = fontScale.factor,
+                appearance = Appearance(compact = density == Density.COMPACT, reduceMotion = reduceMotion),
+                haptics = haptics,
+            ) {
                 val store by produceState<ImpalaStore?>(null) { value = app.store.await() }
                 store?.let { AppShell(it, app.prefs) }
                     ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }

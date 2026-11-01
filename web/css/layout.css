@@ -4,7 +4,8 @@
    (mind. 6px hoch, ≥80 % breit, ≤4px vom Rand). Der Streifen bleibt im Statusleisten-Bereich und nimmt keinen Platz weg. */
 #statusBand { display: none }
 body.is-ios.is-standalone #statusBand { display: block; position: fixed; z-index: var(--z-toast); top: 0; left: 0; right: 0; height: max(6px, env(safe-area-inset-top)); background: var(--panel-solid); pointer-events: none }
-#app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: var(--space-3); height: 100dvh; padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left)) }
+/* Komfortabel: Rand zum Bildschirm und Abstand zwischen den Panels sind gleich (auch in der Android-App, `AppGap`). */
+#app { --app-gap: var(--space-1-5); position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 340px; gap: var(--app-gap); height: 100dvh; padding: max(var(--app-gap), env(safe-area-inset-top)) max(var(--app-gap), env(safe-area-inset-right)) max(var(--app-gap), env(safe-area-inset-bottom)) max(var(--app-gap), env(safe-area-inset-left)) }
 /* Flache Panels, dezente Kanten, kein Glas-Look */
 #sidebar, #mainWrap, #panel, .modal { background: var(--panel-solid); border: 1px solid var(--edge-soft); border-radius: var(--radius-lg); min-height: 0 }
 /* 🎨 (29. Juli) Zwei feste Töne aus der Vorlage: Navigation #202020, Mitte + KI-Panel #191919. */
@@ -48,7 +49,7 @@ body.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1f
 /* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
 @media (min-width: 701px) and (max-width: 1024px) {
 	#app { grid-template-columns: 220px minmax(0, 1fr) }
-	#panel { position: fixed; z-index: 25; top: max(var(--space-3), env(safe-area-inset-top)); right: max(var(--space-3), env(safe-area-inset-right)); bottom: max(var(--space-3), env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
+	#panel { position: fixed; z-index: 25; top: max(var(--space-1-5), env(safe-area-inset-top)); right: max(var(--space-1-5), env(safe-area-inset-right)); bottom: max(var(--space-1-5), env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
 }
 /* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */

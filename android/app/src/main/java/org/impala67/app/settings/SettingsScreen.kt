@@ -2,6 +2,8 @@ package org.impala67.app.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -47,6 +49,7 @@ fun SettingsSection(
     prefs: DevicePrefs,
     toast: (String) -> Unit = {},
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s8),
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(store, prefs) }
     LaunchedEffect(vm) { vm.messages.collect { toast(it) } }
@@ -54,9 +57,10 @@ fun SettingsSection(
     Column(
         modifier.fillMaxSize().background(Impala.colors.panel)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = Space.s4).padding(top = Space.s4, bottom = Space.s8),
+            .padding(contentPadding),
     ) {
-        Text(info.pageTitle, style = MaterialTheme.typography.headlineMedium)
+        // `.settings-page-head h2`: Rundschrift, 32 px, halbfett.
+        Text(info.pageTitle, style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.SemiBold), color = Impala.colors.text)
         Text(
             info.pageSubtitle, style = MaterialTheme.typography.bodyMedium, color = Impala.colors.text2,
             modifier = Modifier.padding(top = Space.s1, bottom = Space.s4),

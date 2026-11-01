@@ -29,6 +29,16 @@ class ShellNav(
     /** KI-Panel rechts offen (nur [desk]; in der PWA `body:not(.panel-collapsed)`), startet zu. */
     var aiPanelOpen by mutableStateOf(false)
 
+    /** Einstellungsfenster offen (nur [desk], wie `.settings-modal-v2`): gewählter Bereich, null = zu. */
+    var settingsSection by mutableStateOf<String?>(null)
+
+    /** Einstellungen öffnen: auf dem Tablet als Fenster, auf dem Telefon als Liste (+ Bereich). */
+    fun openSettings(section: String? = null) {
+        if (desk) { settingsSection = section ?: "overview"; return }
+        open(SettingsRoute)
+        if (section != null) open(SettingsSectionRoute(section))
+    }
+
     /** Offene Seiten-Tabs (nur [desk]; in der PWA `S.tabs`). */
     val tabs = mutableStateListOf<String>()
 
@@ -125,8 +135,8 @@ class ShellNav(
 
     /** Aktionen aus „Mehr“ und Suche (IDs wie in der PWA). */
     fun action(id: String) = when (id) {
-        "settings" -> open(SettingsRoute)
-        "sync" -> { open(SettingsRoute); open(SettingsSectionRoute("sync")) }
+        "settings" -> openSettings()
+        "sync" -> openSettings("sync")
         "trash" -> open(TrashRoute)
         "archive" -> open(ArchiveRoute)
         "library" -> open(LibraryRoute)

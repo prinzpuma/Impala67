@@ -24,6 +24,7 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val fontScale by prefs.fontScale.collectAsStateWithLifecycle(FontScale.NORMAL)
     val reduceMotion by prefs.reduceMotion.collectAsStateWithLifecycle(false)
     val haptics by prefs.nativeHaptics.collectAsStateWithLifecycle(true)
+    val hideBars by prefs.hideSystemBars.collectAsStateWithLifecycle(true)
     val s = values
 
     SettingsGroup("Design") {
@@ -42,6 +43,9 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             selected = density,
             onSelect = { d -> vm.setPref { setDensity(d) } },
         )
+        SettingsSwitchRow(
+            "Vollbild", "Status- und Navigationsleiste ausblenden – Wischen vom Rand zeigt sie kurz an", hideBars,
+        ) { on -> vm.setPref { setHideSystemBars(on) } }
     }
     SettingsGroup("Lesbarkeit") {
         SettingsChoiceRow(

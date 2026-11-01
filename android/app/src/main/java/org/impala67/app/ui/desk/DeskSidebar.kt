@@ -60,6 +60,9 @@ enum class SidebarMode { Files, Chats, Cards }
 /** Breite der linken Spalte (`--sidebar-w` bei kompakter Dichte, dem PWA-Standard). */
 val SidebarWidth = 236.dp
 
+/** Breite bei komfortabler Dichte (`--sidebar-w` in variables.css). */
+val SidebarWidthComfortable = 260.dp
+
 /**
  * Linke Spalte der PWA (`#sidebar` in index.html): Pillen Home · Chat · Karten · Suche, darunter der
  * Seitenbaum (Favoriten + Arbeitsbereiche), unten die sekundäre Navigation (`.side-foot`).

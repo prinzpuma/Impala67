@@ -22,7 +22,7 @@ Stand: 2026-11-01 (aus dem Code erhoben, nicht im Emulator geprüft). Zeilenanga
    Bild-Upload, `img:`-Bilder anzeigen, Toggle-Zustand speichern, Link-Schema prüfen, KaTeX, Mermaid,
    Datenbankansicht.
 5. **Shell:** Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop im Baum, Breitengriff, Langdruck-Menüs,
-   Dock bei Tastatur/Lernmodus ausblenden, Darstellungsoptionen (Dichte, Schrift, Bewegung).
+   Dock bei Tastatur/Lernmodus ausblenden.
 6. **KI:** Anhänge, Modellwahl/Denkaufwand, Diktat, Kopieren/Anpassen/Bearbeiten je Nachricht, Seitenkontext-Chip.
 7. **Lernen:** Statistik-Tab, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung,
    Fächer, Schulnoten.
@@ -52,7 +52,7 @@ Kotlin-Basispfad: `android/app/src/main/java/org/impala67/app/` (Kurzform unten:
 **Kernbefunde**
 1. **Gemini Notebook und Wissensgraph sind in Kotlin nur Stubs.** `ShellNav.action()` (ui/shell/ShellNav.kt) kennt die IDs `notebooklm`, `graph`, `notebook` und `daily` nicht. Sie landen im Zweig „Folgt mit einem der nächsten Module.“. Es gibt kein Graph- und kein NotebookLM-Paket.
 2. **Der Vor-Knopf fehlt** in der Tab-Leiste (DeskTabBar.kt:46 als TODO vermerkt). Chat-, Gemini- und Karten-Tabs fehlen ebenfalls.
-3. **Nicht umgesetzt sind:** Drag & Drop (Seiten und Stapel), Breitengriff der Seitenleiste, Rechtsklick/Langdruck auf Zeilen, „Tabs in Seitenleiste“, Dichte-, Schrift- und Bewegungsoptionen, Mehrfachauswahl im Chat-Verlauf, Umbenennen von Chats, Stapel-⋯-Menü.
+3. **Nicht umgesetzt sind:** Drag & Drop (Seiten und Stapel), Breitengriff der Seitenleiste, Rechtsklick/Langdruck auf Zeilen, „Tabs in Seitenleiste“, Mehrfachauswahl im Chat-Verlauf, Umbenennen von Chats, Stapel-⋯-Menü.
 4. **Seitenkopf-⋯ hat Lücken:** Duplizieren, Vorlage und Vorlesungsübersicht, Fach, PDF-Aktionen, „Karten aus Markierungen“, Rückverweise und Breadcrumb fehlen. Rückgängig und Wiederholen sind Stubs.
 5. **Umbruchpunkte weichen ab:** PWA-Tablet 701–1024 px mit 220 px Seitenleiste; Kotlin Desk ab 840 dp bzw. quer ab 600 dp mit 236 dp.
 
@@ -395,8 +395,8 @@ Diese Module sind im Shell-Kontext nur als Einstieg relevant. Details wurden per
 Quelle: Startskript in web/index.html (Klassen am `body`), web/css/layout.css, web/settings.js:1112 (Schlüssel `impala67Density` u. a.).
 
 - [x] **Dichte „kompakt“ (Standard)** (`body.density-compact`; css/layout.css) — Kotlin: ✅ DeskShell.kt (Maße 236 dp, Zeilen 36 dp)
-- [ ] **Dichte „komfortabel“** (Gegenstück in settings.js; Werte nicht geprüft) — Kotlin: ⬜
-- [ ] **Schrift S / M (Standard) / L** (`body.font-s`, `body.font-l`) — Kotlin: ⬜ (feste Schriftgrößen)
+- [x] **Dichte „komfortabel“** (App-Rand und Abstand 6 px `--app-gap`, Spalten als Karten mit Radius 16, Seitenleiste 260 px; css/layout.css `#app`) — Kotlin: ✅ DeskShell.kt (`Appearance.compact`)
+- [x] **Schrift S / M (Standard) / L** (`body.font-s`, `body.font-l`) — Kotlin: ✅ ImpalaTheme.kt (`fontScale` 15/16 · 1 · 18/16)
 - [ ] **Bewegung reduziert** (`body.perf-mode`, Schlüssel `impala67Motion`) — Kotlin: ⬜
 - [x] **Tabs oben (Standard)** (Tab-Leiste, `#tabbar`) — Kotlin: ✅ DeskTabBar.kt
 - [ ] **Tabs in Seitenleiste** (`body.tabs-in-sidebar`) — Kotlin: ⬜ (siehe Abschnitt 7)
@@ -992,7 +992,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Passbreite / Seitengröße angepasst an Höhe** (fitScale = min(verfügbare Breite, verfügbare Höhe, 1)) (web/heft-viewport.js:449-476) — Kotlin: ✅ HeftScreen.kt:131-136 (Breite aus Höhe, Obergrenze nicht geprüft)
 - [x] **Zoom-Anzeige oder Zoomknöpfe** – PWA hat keine (nur Gesten) — Kotlin: ✅ (ebenfalls keine)
 - [x] **Kein Seitenwechsel-Zoom-Schalter / Vollbild** – PWA hat keinen Vollbild-Schalter im Heft — Kotlin: ✅ (ebenfalls nicht vorhanden)
-- [ ] **Darstellungs-Einstellungen (App)** – Design, Akzent, Dichte, Bewegung gelten app-weit (web/settings-schema.js:7, 31; web/settings.js:44-48) — Kotlin: 🟡 (Heft-Modul übernimmt nur die Akzentfarbe; Darstellung-Einstellungen unter SettingsAppearance.kt nur mit Performance-Modus, siehe SettingsAppearance.kt:55)
+- [x] **Darstellungs-Einstellungen (App)** – Design, Akzent, Dichte, Bewegung gelten app-weit (web/settings-schema.js:7, 31; web/settings.js:44-48) — Kotlin: ✅ MainActivity.kt → ImpalaTheme.kt (Design, Akzent, Dichte, Schrift, Performance-Modus als Snap-MotionScheme, Haptik)
 - [ ] **Experiment „Beta-Design“** – ohne Wirkung (web/settings-schema.js:62) — Kotlin: ⬜ (nicht vorhanden; ohne Wirkung in PWA)
 - [ ] **Zuletzt angesehene Seite merken** – Öffnen springt dorthin, Startseite zeigt sie (web/heft.js:83-93, 1690) — Kotlin: 🟡 HeftThumbnail.kt:6-11, HeftScreen.kt:77 (nur Sitzung, nicht gespeichert)
 

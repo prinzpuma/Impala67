@@ -36,7 +36,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
                 openPage = { nav.open(PageRoute(it)) },
                 newPage = { nav.askNewPage() },
                 study = { nav.go(TopLevel.Study) },
-                settings = { nav.open(SettingsRoute); nav.open(SettingsSectionRoute("home")) },
+                settings = { nav.openSettings("home") },
                 conflicts = { nav.open(ConflictsRoute) },
                 toast = nav::toast,
                 heftThumbnail = { id, m -> HeftThumbnail(store, id, m) },

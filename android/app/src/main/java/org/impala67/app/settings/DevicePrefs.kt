@@ -29,8 +29,8 @@ enum class AccentColor(val dark: Long, val light: Long) {
 /** Darstellungsdichte (`impala67Density`). */
 enum class Density { COMPACT, COMFORTABLE }
 
-/** Schriftgröße (`impala67FontSize`: s / m / l). */
-enum class FontScale { SMALL, NORMAL, LARGE }
+/** Schriftgröße (`impala67FontSize`: s / m / l → `--font-base` 15 / 16 / 18 px). */
+enum class FontScale(val factor: Float) { SMALL(15f / 16f), NORMAL(1f), LARGE(18f / 16f) }
 
 /**
  * Einstellungen nur für dieses Gerät (in der PWA: localStorage, damit sie nicht über den Sync
@@ -48,6 +48,8 @@ class DevicePrefs(private val context: Context) {
     val reduceMotion: Flow<Boolean> = boolFlow(REDUCE_MOTION, false)
     val nativeHaptics: Flow<Boolean> = boolFlow(HAPTICS, true)
     val betaUi: Flow<Boolean> = boolFlow(BETA_UI, true)
+    /** Vollbild: Status- und Navigationsleiste ausblenden, Wischen vom Rand holt sie kurz zurück. */
+    val hideSystemBars: Flow<Boolean> = boolFlow(HIDE_SYSTEM_BARS, true)
 
     /** Lernverhalten (`impala67Overlearn`, `impala67Confidence`, `impala67Telemetry`, `impala67BreakReminder`). */
     val overlearn: Flow<Boolean> = boolFlow(OVERLEARN, true)
@@ -85,6 +87,7 @@ class DevicePrefs(private val context: Context) {
     suspend fun setReduceMotion(on: Boolean) = put(REDUCE_MOTION, on)
     suspend fun setNativeHaptics(on: Boolean) = put(HAPTICS, on)
     suspend fun setBetaUi(on: Boolean) = put(BETA_UI, on)
+    suspend fun setHideSystemBars(on: Boolean) = put(HIDE_SYSTEM_BARS, on)
     suspend fun setOverlearn(on: Boolean) = put(OVERLEARN, on)
     suspend fun setConfidence(on: Boolean) = put(CONFIDENCE, on)
     suspend fun setTelemetry(on: Boolean) = put(TELEMETRY, on)
@@ -120,6 +123,7 @@ class DevicePrefs(private val context: Context) {
         val REDUCE_MOTION = booleanPreferencesKey("reduceMotion")
         val HAPTICS = booleanPreferencesKey("nativeHaptics")
         val BETA_UI = booleanPreferencesKey("betaUi")
+        val HIDE_SYSTEM_BARS = booleanPreferencesKey("hideSystemBars")
         val OVERLEARN = booleanPreferencesKey("overlearn")
         val CONFIDENCE = booleanPreferencesKey("confidence")
         val TELEMETRY = booleanPreferencesKey("telemetry")

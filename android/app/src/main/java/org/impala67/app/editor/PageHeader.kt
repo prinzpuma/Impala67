@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import org.impala67.app.R
 import org.impala67.app.ui.components.TintButton
 import org.impala67.app.ui.theme.Impala
+import org.impala67.app.ui.theme.Nunito
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.Radius
 import uniffi.impala_ffi.PageSummary
@@ -97,7 +98,8 @@ internal fun PageTitleBlock(
     Column(modifier.fillMaxWidth()) {
         val icon = head?.page?.summary?.icon.orEmpty()
         if (icon.isNotEmpty()) Text(icon, Modifier.padding(top = 14.dp, start = 2.dp), fontSize = 40.sp, lineHeight = 48.sp)
-        val style = TextStyle(color = c.text, fontSize = 34.sp, lineHeight = 41.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.85).sp)
+        // Seitentitel wie die PWA: Rundschrift (--b-display), 36 px, fett, -0.025em.
+        val style = TextStyle(color = c.text, fontFamily = Nunito, fontSize = 36.sp, lineHeight = 43.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.9).sp)
         BasicTextField(
             value = title,
             onValueChange = { v -> if (v.contains('\n')) { onTitle(v.replace("\n", "")); onEnter() } else onTitle(v) },
