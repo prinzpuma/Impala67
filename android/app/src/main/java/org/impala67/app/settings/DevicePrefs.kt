@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -103,6 +104,21 @@ class DevicePrefs(private val context: Context) {
     /** Heft-Werkzeuge als JSON wie `impala67HeftTools` der PWA (heft-tools.js); leer = Standard. */
     val heftTools: Flow<String> = store.data.map { it[HEFT_TOOLS].orEmpty() }
     suspend fun setHeftTools(json: String) = put(HEFT_TOOLS, json)
+    /** ★ Modell-Favoriten als „quelle::modell“ (`impala67FavModels`), bewusst nur auf diesem Gerät. */
+    val favModels: Flow<Set<String>> = store.data.map { it[FAV_MODELS].orEmpty() }
+    suspend fun toggleFavModel(key: String) = store.edit {
+        val now = it[FAV_MODELS].orEmpty()
+        it[FAV_MODELS] = if (key in now) now - key else now + key
+    }
+
+    /** Dokumentenscanner im Heft: Google-Scanner (ML Kit, Standard) oder der eigene Impala-Scanner. */
+    val impalaScanner: Flow<Boolean> = boolFlow(IMPALA_SCANNER, false)
+    suspend fun setImpalaScanner(on: Boolean) = put(IMPALA_SCANNER, on)
+
+    /** Performance-Profiler (`impala67PerformanceProfiler`), Standard aus. */
+    val profiler: Flow<Boolean> = boolFlow(PROFILER, false)
+    suspend fun setProfiler(on: Boolean) = put(PROFILER, on)
+
     suspend fun setDriveEmail(email: String) = put(DRIVE_EMAIL, email)
     suspend fun setAccent(accent: AccentColor) = put(ACCENT, accent.name)
     suspend fun setDensity(density: Density) = put(DENSITY, density.name)
@@ -162,6 +178,9 @@ class DevicePrefs(private val context: Context) {
         val SIDEBAR_WIDTH = intPreferencesKey("sidebarWidth")
         val TABS_IN_SIDEBAR = booleanPreferencesKey("tabsInSidebar")
         val LAST_BACKUP = longPreferencesKey("lastBackup")
+        val FAV_MODELS = stringSetPreferencesKey("favModels")
+        val IMPALA_SCANNER = booleanPreferencesKey("impalaScanner")
+        val PROFILER = booleanPreferencesKey("profiler")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
     }
 }

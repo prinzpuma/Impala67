@@ -25,6 +25,8 @@ mod heft_undo;
 mod markdown;
 mod pages;
 mod rag;
+mod scan;
+mod stats;
 mod study_records;
 mod sync;
 mod ui;

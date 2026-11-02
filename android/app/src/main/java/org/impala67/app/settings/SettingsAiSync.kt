@@ -71,6 +71,6 @@ fun SyncSettings(vm: SettingsViewModel, prefs: DevicePrefs, toast: (String) -> U
     DriveSyncGroup(toast)
     DriveAutomationGroup(vm)
     BackupGroup(vm, prefs)
-    // TODO(desk): „Weitere Exporte“ (Lerndaten als JSON, Workspace als Markdown-ZIP) fehlt noch.
+    org.impala67.app.diag.MoreExportsGroup()
     // „Erweitert“ mit Google Client-ID entfällt nativ (die Client-ID liegt im Projekt).
 }

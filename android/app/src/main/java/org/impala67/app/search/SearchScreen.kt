@@ -23,8 +23,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -68,11 +78,38 @@ fun SearchScreen(
         is SearchRow.Action -> onAction(row.id)
     }
 
-    Column(Modifier.fillMaxSize().background(c.panel)) {
+    // search.js:341–348: ↑/↓ wählen eine Zeile, Enter führt sie aus, Escape schließt.
+    val flat = sections.orEmpty().flatMap { it.rows }
+    var selected by remember { mutableIntStateOf(0) }
+    LaunchedEffect(query) { selected = 0 }
+    val listState = rememberLazyListState()
+    val keys = Modifier.onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (e.key) {
+            Key.DirectionDown -> { if (flat.isNotEmpty()) selected = (selected + 1) % flat.size; true }
+            Key.DirectionUp -> { if (flat.isNotEmpty()) selected = (selected - 1 + flat.size) % flat.size; true }
+            Key.Enter, Key.NumPadEnter -> { flat.getOrNull(selected)?.let(::run); true }
+            Key.Escape -> { onClose(); true }
+            else -> false
+        }
+    }
+    val selectedKey = flat.getOrNull(selected)?.let(::rowKey)
+    LaunchedEffect(selectedKey) {
+        val list = sections ?: return@LaunchedEffect
+        var index = 0
+        for (section in list) {
+            index++
+            val i = section.rows.indexOfFirst { rowKey(it) == selectedKey }
+            if (i >= 0) { listState.animateScrollToItem((index + i - 1).coerceAtLeast(0)); break }
+            index += section.rows.size
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(c.panel).then(keys)) {
         SearchBarDefaults.InputField(
             searchBarState = barState,
             textFieldState = text,
-            onSearch = { sections.orEmpty().firstOrNull()?.rows?.firstOrNull()?.let(::run) },
+            onSearch = { flat.getOrNull(selected)?.let(::run) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s2),
             placeholder = { Text(SearchText.PLACEHOLDER, color = c.text2) },
             leadingIcon = {
@@ -85,14 +122,17 @@ fun SearchScreen(
 
         val list = sections
         if (list != null) {
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 if (list.isEmpty()) item { EmptyHint() }
                 list.forEach { section ->
                     item(key = "h-" + section.title) { SectionHead(section.title) }
                     items(section.rows, key = { row -> rowKey(row) }) { row ->
-                        when (row) {
-                            is SearchRow.Page -> PageRowItem(row, query) { run(row) }
-                            is SearchRow.Action -> ActionRowItem(row, query) { run(row) }
+                        val mark = if (rowKey(row) == selectedKey) Modifier.drawWithContent { drawContent(); drawRect(c.text.copy(alpha = 0.07f)) } else Modifier
+                        Box(mark) {
+                            when (row) {
+                                is SearchRow.Page -> PageRowItem(row, query) { run(row) }
+                                is SearchRow.Action -> ActionRowItem(row, query) { run(row) }
+                            }
                         }
                     }
                 }

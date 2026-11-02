@@ -17,8 +17,18 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.focusable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,7 +52,9 @@ import org.impala67.app.ui.theme.Space
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier: Modifier = Modifier, mix: Boolean = false) {
-    val vm = viewModel(key = "review:$deck:$mix") { ReviewViewModel(store, deck, mix) }
+    val prefs = (androidx.compose.ui.platform.LocalContext.current.applicationContext as org.impala67.app.ImpalaApp).prefs
+    val record = prefs.telemetry.collectAsStateWithLifecycle(true)
+    val vm = viewModel(key = "review:$deck:$mix") { ReviewViewModel(store, deck, mix) { record.value } }
     val state by vm.state.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
@@ -51,7 +63,20 @@ fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier
     BackHandler(onBack = onExit)
 
     val s = state
-    Column(modifier.fillMaxSize().background(Impala.colors.panel)) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(s?.card?.id, editing, options) { if (!editing && !options) runCatching { focus.requestFocus() } }
+    // shortcuts.js (Anki-Zweig): Leertaste/Enter = Antwort zeigen, 1–4 = bewerten, Strg+Z = letzte Bewertung zurück.
+    val keys = Modifier.focusRequester(focus).focusable().onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown || editing || options || s?.card == null) return@onPreviewKeyEvent false
+        val grade = when (e.key) { Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4; else -> 0 }
+        when {
+            e.isCtrlPressed && e.key == Key.Z -> { if (s.canUndo) vm.undo(); true }
+            !s.showBack && (e.key == Key.Spacebar || e.key == Key.Enter) -> { vm.reveal(); true }
+            s.showBack && grade > 0 -> { vm.grade(grade); true }
+            else -> false
+        }
+    }
+    Column(modifier.fillMaxSize().background(Impala.colors.panel).then(keys)) {
         ReviewHeader(deck, mix, s?.canUndo == true, onExit, vm::undo)
         if (s == null) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }

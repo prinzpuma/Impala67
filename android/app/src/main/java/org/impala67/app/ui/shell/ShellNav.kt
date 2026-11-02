@@ -120,6 +120,9 @@ class ShellNav(
     /** Aktive Seite (für Tab-Leiste und Seitenleiste). */
     val currentPageId: String? get() = (backStack.lastOrNull() as? PageRoute)?.id
 
+    /** Zuletzt geöffnete Seite im Verlauf (für „Nur aktuelle Seite“ in Gemini Notebook). */
+    val lastPageId: String? get() = (backStack.lastOrNull { it is PageRoute } as? PageRoute)?.id
+
     /** Aktiver Tab (`S.activeTabId`), `null` auf Start, Bibliothek, Papierkorb … */
     val currentTab: String? get() = backStack.lastOrNull()?.let(::tabKey)
 
@@ -222,6 +225,9 @@ class ShellNav(
         "cards-manage" -> { go(TopLevel.Study); open(CardBrowserRoute()) }
         "search" -> open(SearchRoute)
         "newchat" -> openNewChatTab()
+        "stats", "lernzeit" -> { go(TopLevel.Study); open(StatsRoute) }
+        "graph" -> open(GraphRoute)
+        "notebook", "notebooklm" -> open(NotebookRoute)
         else -> toast("Folgt mit einem der nächsten Module.")
     }
 }
@@ -241,7 +247,7 @@ private const val MAX_TABS = 12
 fun tabKey(key: NavKey): String? = when (key) {
     is PageRoute -> key.id
     is ChatRoute -> CHAT_TAB + key.id
-    StudyRoute, is ReviewRoute, is CardBrowserRoute -> ANKI_TAB
+    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute -> ANKI_TAB
     else -> null
 }
 

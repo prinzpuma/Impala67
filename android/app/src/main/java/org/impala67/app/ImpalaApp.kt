@@ -6,6 +6,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.settings.DevicePrefs
 import org.impala67.app.sync.BackgroundWork
@@ -36,6 +37,10 @@ class ImpalaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        org.impala67.app.diag.Profiler.init(this)
+        org.impala67.app.diag.Profiler.restore()
+        // Choreographer braucht den Hauptthread.
+        scope.launch(Dispatchers.Main) { prefs.profiler.collect { org.impala67.app.diag.Profiler.setEnabled(it) } }
         BackgroundWork.schedule(this)
         store = scope.async(Dispatchers.IO) {
             // Derselbe Dateiname wie in der vorigen App-Version, damit vorhandene Daten erhalten bleiben.

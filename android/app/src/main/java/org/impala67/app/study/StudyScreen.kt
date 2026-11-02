@@ -1,5 +1,7 @@
 package org.impala67.app.study
 
+import org.impala67.app.study.transfer.CardExportDialog
+import org.impala67.app.study.transfer.CardImportDialog
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -68,12 +70,19 @@ fun StudyScreen(
     onBrowse: (deck: String?) -> Unit,
     modifier: Modifier = Modifier,
     onStudyMixed: (() -> Unit)? = null,
+    onStats: (() -> Unit)? = null,
+    onToast: (String) -> Unit = {},
 ) {
     val vm = viewModel { StudyViewModel(store) }
     val data by vm.data.collectAsStateWithLifecycle()
     val collapsed by vm.collapsed.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<DeckDialog?>(null) }
+    var transfer by remember { mutableStateOf<String?>(null) }
+    when (transfer) {
+        "import" -> CardImportDialog(store, null, onToast) { transfer = null }
+        "export" -> CardExportDialog(store, onToast) { transfer = null }
+    }
     val d = data
     if (d == null) {
         Box(modifier.fillMaxSize().background(Impala.colors.panel), contentAlignment = Alignment.Center) { LoadingIndicator() }
@@ -91,10 +100,26 @@ fun StudyScreen(
         ) {
             Column(Modifier.widthIn(max = 800.dp).fillMaxWidth()) {
                 Lead(d, entries.isNotEmpty(), narrow, { onStudyDeck(null) }, Modifier.riseIn(0))
-                if (open > 0 && onStudyMixed != null) {
-                    TintButton(onStudyMixed, Modifier.padding(top = Space.s4).riseIn(1), strong = false) {
-                        Icon(painterResource(R.drawable.ic_i_shuffle), null, Modifier.size(16.dp))
-                        Text("  Gemischt", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                Row(Modifier.padding(top = Space.s4).riseIn(1), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    if (open > 0 && onStudyMixed != null) {
+                        TintButton(onStudyMixed, strong = false) {
+                            Icon(painterResource(R.drawable.ic_i_shuffle), null, Modifier.size(16.dp))
+                            Text("  Gemischt", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    if (onStats != null) {
+                        TintButton(onStats, strong = false) {
+                            Icon(painterResource(R.drawable.ic_i_chart), null, Modifier.size(16.dp))
+                            Text("  Statistik", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    TintButton({ transfer = "import" }, strong = false) {
+                        Icon(painterResource(R.drawable.ic_i_download), null, Modifier.size(16.dp))
+                        Text("  Importieren", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                    }
+                    TintButton({ transfer = "export" }, strong = false) {
+                        Icon(painterResource(R.drawable.ic_i_upload), null, Modifier.size(16.dp))
+                        Text("  Exportieren", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
                     }
                 }
                 Stats(d, entries.isNotEmpty(), { onStudyDeck(null) }, Modifier.padding(top = Space.s6).riseIn(1))

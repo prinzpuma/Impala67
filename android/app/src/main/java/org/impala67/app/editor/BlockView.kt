@@ -1,5 +1,6 @@
 package org.impala67.app.editor
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,9 +18,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import kotlinx.coroutines.delay
+import org.impala67.app.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -164,7 +176,26 @@ private fun CodeBlock(block: MdBlock, k: MdBlockKind.Code, ctx: ReadContext, edi
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(shape).background(c.surfaceSubtle).border(1.dp, c.edgeSoft, shape)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        if (k.language.isNotEmpty()) Text(k.language, color = c.text2, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+        if (!editing) {
+            // Kopier-Knopf am Codeblock (app.js:374–385): Haken für einen Moment, Toast „Code kopiert.“
+            val clipboard = LocalClipboardManager.current
+            val context = LocalContext.current
+            var copied by remember { mutableStateOf(false) }
+            LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(k.language, Modifier.weight(1f), color = c.text2, fontSize = 12.sp)
+                Icon(
+                    painterResource(if (copied) R.drawable.ic_i_check else R.drawable.ic_i_copy),
+                    "Code kopieren",
+                    Modifier.size(22.dp).clip(RoundedCornerShape(Radius.xs)).clickable {
+                        clipboard.setText(AnnotatedString(k.text))
+                        copied = true
+                        Toast.makeText(context, "Code kopiert.", Toast.LENGTH_SHORT).show()
+                    }.padding(4.dp),
+                    tint = c.text2,
+                )
+            }
+        } else if (k.language.isNotEmpty()) Text(k.language, color = c.text2, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
         if (editing) {
             ctx.editSlot?.invoke(block, textStyleFor(block, c), Modifier.fillMaxWidth())
             if (diagram != null) RichBlock(diagram, k.text, Modifier.padding(top = 8.dp), debounceMs = 350)

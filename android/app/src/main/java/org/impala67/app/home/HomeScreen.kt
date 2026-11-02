@@ -61,11 +61,13 @@ data class HomeActions(
     val conflicts: () -> Unit,
     val toast: (String) -> Unit,
     val heftThumbnail: HeftThumb = { _, _ -> },
+    /** Einen Stapel lernen (Knopf „Fach lernen“ der Lernanalyse). */
+    val studyDeck: ((String) -> Unit)? = null,
 )
 
 /**
  * Startseite (web/home-view.js + home.css): Begrüßungssatz als Bedienung, darunter Weitermachen und
- * zwei Kennzahlen, darunter der Tagesartikel. Die Lernanalyse (lernanalyse.js) folgt mit dem Lern-Modul.
+ * zwei Kennzahlen, die Lernanalyse (lernanalyse.js) und der Tagesartikel.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -96,6 +98,8 @@ fun HomeScreen(vm: HomeViewModel, actions: HomeActions, modifier: Modifier = Mod
                 if (s.conflictCount > 0) ConflictAlert(s.conflictCount, actions.conflicts, Modifier.riseIn(1))
                 Lead(s, narrow, actions.study, Modifier.padding(top = Space.s6).riseIn(1))
                 Grid(s, width, actions, vm, Modifier.padding(top = 40.dp).riseIn(2))
+                val analysis by vm.analysis.collectAsStateWithLifecycle()
+                analysis?.let { HomeAnalysisCard(it, narrow, actions.study, actions.studyDeck ?: { actions.study() }, Modifier.padding(top = Space.s6)) }
                 s.article?.let { ArticleCard(it, width, actions.openPage, { vm.markArticleRead(it.article.id) }, { showHistory = true }) }
             }
         }

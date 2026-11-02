@@ -1,5 +1,6 @@
 package org.impala67.app.core
 
+import org.impala67.app.diag.Profiler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -56,7 +57,7 @@ class ImpalaStore(val core: ImpalaCore, private val scope: CoroutineScope) {
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Schreibender Aufruf im Hintergrund (z. B. `store.write { it.markHomeArticleRead(id) }`). */
-    suspend fun <T> write(block: (ImpalaCore) -> T): T = withContext(Dispatchers.IO) { block(core) }
+    suspend fun <T> write(block: (ImpalaCore) -> T): T = withContext(Dispatchers.IO) { Profiler.measure("core") { block(core) } }
 
     /** Beliebiges Event wie `STATE.dispatch(kind, payload)` in der PWA; liefert die Event-ID. */
     suspend fun dispatch(kind: String, payload: Map<String, Any?>): String =

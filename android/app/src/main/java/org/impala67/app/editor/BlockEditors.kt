@@ -79,10 +79,14 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, menu
                 // Markdown-Kürzel nur direkt nach dem Leerzeichen-Tippen am Absatzanfang (TRANSFORMS in editor.js).
                 val typedSpace = v.selection.collapsed && v.text.length > text.length && upto.endsWith(' ')
                 val shortcut = if (typedSpace && block.kind is MdBlockKind.Paragraph) shortcutType(upto) else null
+                // Nur neu getippte Zeilenumbrüche teilen den Block; weiche Umbrüche (Shift+Enter) bleiben stehen.
+                val newBreaks = v.text.count { it == '\n' } > value.text.count { it == '\n' }
                 when {
-                    !isCode && v.text.contains('\n') -> {
+                    !isCode && newBreaks -> {
                         menus.close()
-                        vm.split(block.id, v.text.split('\n'))
+                        val at = v.selection.start - 1
+                        val single = v.text.count { it == '\n' } == value.text.count { it == '\n' } + 1 && v.text.getOrNull(at) == '\n'
+                        vm.split(block.id, if (single) listOf(v.text.substring(0, at), v.text.substring(at + 1)) else v.text.split('\n'))
                     }
                     shortcut != null -> {
                         menus.close()
@@ -105,6 +109,7 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, menu
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
+                        vm.handleBlockKey(e, block.id, value, menus) { value = it } -> true
                         e.key == Key.Backspace && value.selection.collapsed && value.selection.start == 0 -> { vm.backspaceAtStart(block.id); true }
                         e.key == Key.Tab && block.kind is MdBlockKind.ListItem -> { vm.indent(block.id, if (e.isShiftPressed) -1 else 1); true }
                         else -> vm.handleFormatKey(e)

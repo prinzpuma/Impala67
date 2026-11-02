@@ -144,15 +144,9 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
         scope.launch { store.write { it.page(pageId) }?.summary?.let { moving = it } }
     }
 
-    /** „PDF im neuen Tab öffnen“: nativ mit der PDF-App des Geräts (wie in der Bibliothek). */
+    /** „PDF im neuen Tab öffnen“: eingebettete PDF-Ansicht (pdfs.js); dort geht es auch extern weiter. */
     fun openPdf(page: PageSummary, fileId: String) {
-        scope.launch {
-            val file = runCatching { cachePdf(context, store, fileId, pageTitle(page)) }.getOrNull()
-            when {
-                file == null -> nav.toast("PDF wird geladen…")
-                !openPdfExternally(context, file) -> nav.toast("Keine App zum Öffnen von PDFs gefunden.")
-            }
-        }
+        nav.open(org.impala67.app.ui.shell.PdfRoute(fileId, pageTitle(page)))
     }
 
     fun downloadPdf(page: PageSummary, fileId: String) {

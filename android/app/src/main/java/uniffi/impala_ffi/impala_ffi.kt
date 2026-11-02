@@ -1450,6 +1450,16 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1537,6 +1547,10 @@ fun uniffi_impala_ffi_checksum_func_markdown_to_blocks(
 ): Short
 fun uniffi_impala_ffi_checksum_func_merge_texts(
 ): Short
+fun uniffi_impala_ffi_checksum_func_scan_detect(
+): Short
+fun uniffi_impala_ffi_checksum_func_scan_process(
+): Short
 fun uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms(
 ): Short
 fun uniffi_impala_ffi_checksum_func_sync_retry_delay_ms(
@@ -1547,9 +1561,13 @@ fun uniffi_impala_ffi_checksum_func_ws_ping_message(
 ): Short
 fun uniffi_impala_ffi_checksum_method_aiassistant_cancel(
 ): Short
+fun uniffi_impala_ffi_checksum_method_aiassistant_complete(
+): Short
 fun uniffi_impala_ffi_checksum_method_aiassistant_forget_chat_state(
 ): Short
 fun uniffi_impala_ffi_checksum_method_aiassistant_is_running(
+): Short
+fun uniffi_impala_ffi_checksum_method_aiassistant_refine(
 ): Short
 fun uniffi_impala_ffi_checksum_method_aiassistant_run(
 ): Short
@@ -1807,6 +1825,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_learning_session(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_learning_sessions(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_load_info(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_mark_home_article_read(
@@ -2023,10 +2043,14 @@ fun uniffi_impala_ffi_fn_constructor_aiassistant_new(`core`: Pointer,`options`: 
 ): Pointer
 fun uniffi_impala_ffi_fn_method_aiassistant_cancel(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_aiassistant_complete(`ptr`: Pointer,`prompt`: RustBuffer.ByValue,`system`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_aiassistant_forget_chat_state(`ptr`: Pointer,`chatId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_aiassistant_is_running(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
+fun uniffi_impala_ffi_fn_method_aiassistant_refine(`ptr`: Pointer,`historyJson`: RustBuffer.ByValue,`instruction`: RustBuffer.ByValue,`utcOffsetMinutes`: Int,`listener`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_aiassistant_run(`ptr`: Pointer,`request`: RustBuffer.ByValue,`listener`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_aiassistant_run_async(`ptr`: Pointer,`request`: RustBuffer.ByValue,`listener`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2339,6 +2363,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_learning_session(`ptr`: Pointer,`id`:
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_learning_sessions(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_load_info(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_mark_home_article_read(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2566,6 +2592,10 @@ fun uniffi_impala_ffi_fn_func_markdown_teaser(`body`: RustBuffer.ByValue,uniffi_
 fun uniffi_impala_ffi_fn_func_markdown_to_blocks(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_merge_texts(`base`: RustBuffer.ByValue,`mine`: RustBuffer.ByValue,`theirs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_scan_detect(`img`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_scan_process(`img`: RustBuffer.ByValue,`corners`: RustBuffer.ByValue,`mode`: RustBuffer.ByValue,`rotation`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_sync_reconnect_delay_ms(`attempt`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
@@ -2809,6 +2839,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_merge_texts() != 21845.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_scan_detect() != 8517.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_scan_process() != 37929.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms() != 27487.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2824,10 +2860,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_aiassistant_cancel() != 4076.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_aiassistant_complete() != 21233.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_aiassistant_forget_chat_state() != 62837.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_aiassistant_is_running() != 8208.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_aiassistant_refine() != 44936.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_aiassistant_run() != 50709.toShort()) {
@@ -3212,6 +3254,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_sessions() != 60078.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json() != 14105.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_load_info() != 7430.toShort()) {
@@ -4009,6 +4054,12 @@ public interface AiAssistantInterface {
     fun `cancel`()
     
     /**
+     * Einfache Antwort ohne Werkzeuge und ohne Chat (`AI.complete` der PWA: Wissensgraph, Notebook,
+     * Karten aus Problemzonen). Blockiert (Netz): aus einem Hintergrund-Thread rufen.
+     */
+    fun `complete`(`prompt`: kotlin.String, `system`: kotlin.String?): kotlin.String
+    
+    /**
      * Zusammenfassung und freigeschaltete Werkzeuge eines Chats vergessen (neuer Gesprächsstand).
      */
     fun `forgetChatState`(`chatId`: kotlin.String)
@@ -4017,6 +4068,12 @@ public interface AiAssistantInterface {
      * Läuft gerade ein Lauf?
      */
     fun `isRunning`(): kotlin.Boolean
+    
+    /**
+     * Antwort umformulieren („Anpassen“: länger/gleich/kürzer). `history_json`: `[{ role, content }]`
+     * bis einschließlich der Antwort; der neue Text kommt gestreamt über `on_draft`. Abbruch mit `cancel`.
+     */
+    fun `refine`(`historyJson`: kotlin.String, `instruction`: kotlin.String, `utcOffsetMinutes`: kotlin.Int, `listener`: AiListener?): kotlin.String
     
     /**
      * Schickt eine Nutzernachricht, fährt die Agent-Schleife (Werkzeuge, Rückfragen) und speichert den
@@ -4146,6 +4203,23 @@ open class AiAssistant: Disposable, AutoCloseable, AiAssistantInterface
 
     
     /**
+     * Einfache Antwort ohne Werkzeuge und ohne Chat (`AI.complete` der PWA: Wissensgraph, Notebook,
+     * Karten aus Problemzonen). Blockiert (Netz): aus einem Hintergrund-Thread rufen.
+     */
+    @Throws(AiFailure::class)override fun `complete`(`prompt`: kotlin.String, `system`: kotlin.String?): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AiFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_aiassistant_complete(
+        it, FfiConverterString.lower(`prompt`),FfiConverterOptionalString.lower(`system`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Zusammenfassung und freigeschaltete Werkzeuge eines Chats vergessen (neuer Gesprächsstand).
      */override fun `forgetChatState`(`chatId`: kotlin.String)
         = 
@@ -4167,6 +4241,23 @@ open class AiAssistant: Disposable, AutoCloseable, AiAssistantInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_aiassistant_is_running(
         it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Antwort umformulieren („Anpassen“: länger/gleich/kürzer). `history_json`: `[{ role, content }]`
+     * bis einschließlich der Antwort; der neue Text kommt gestreamt über `on_draft`. Abbruch mit `cancel`.
+     */
+    @Throws(AiFailure::class)override fun `refine`(`historyJson`: kotlin.String, `instruction`: kotlin.String, `utcOffsetMinutes`: kotlin.Int, `listener`: AiListener?): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AiFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_aiassistant_refine(
+        it, FfiConverterString.lower(`historyJson`),FfiConverterString.lower(`instruction`),FfiConverterInt.lower(`utcOffsetMinutes`),FfiConverterOptionalTypeAiListener.lower(`listener`),_status)
 }
     }
     )
@@ -7627,6 +7718,12 @@ public interface ImpalaCoreInterface {
      */
     fun `learningSessions`(): List<LearningSessionInfo>
     
+    /**
+     * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
+     * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
+     */
+    fun `learningStatsJson`(): kotlin.String
+    
     fun `loadInfo`(): LoadInfo
     
     /**
@@ -9459,6 +9556,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_sessions(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
+     * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
+     */override fun `learningStatsJson`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(
         it, _status)
 }
     }
@@ -14349,6 +14462,136 @@ public object FfiConverterTypeRelatedPage: FfiConverterRustBuffer<RelatedPage> {
 
 
 
+/**
+ * Qualität eines Kamerabilds: unscharf, zu flau, zu dunkel, Spiegelung.
+ */
+data class ScanCheck (
+    var `soft`: kotlin.Boolean, 
+    var `flat`: kotlin.Boolean, 
+    var `tooDark`: kotlin.Boolean, 
+    var `glare`: kotlin.Boolean, 
+    var `sharp`: kotlin.Double, 
+    var `contrast`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeScanCheck: FfiConverterRustBuffer<ScanCheck> {
+    override fun read(buf: ByteBuffer): ScanCheck {
+        return ScanCheck(
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ScanCheck) = (
+            FfiConverterBoolean.allocationSize(value.`soft`) +
+            FfiConverterBoolean.allocationSize(value.`flat`) +
+            FfiConverterBoolean.allocationSize(value.`tooDark`) +
+            FfiConverterBoolean.allocationSize(value.`glare`) +
+            FfiConverterDouble.allocationSize(value.`sharp`) +
+            FfiConverterDouble.allocationSize(value.`contrast`)
+    )
+
+    override fun write(value: ScanCheck, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`soft`, buf)
+            FfiConverterBoolean.write(value.`flat`, buf)
+            FfiConverterBoolean.write(value.`tooDark`, buf)
+            FfiConverterBoolean.write(value.`glare`, buf)
+            FfiConverterDouble.write(value.`sharp`, buf)
+            FfiConverterDouble.write(value.`contrast`, buf)
+    }
+}
+
+
+
+/**
+ * Gefundenes Blatt: Ecken (oben-links, oben-rechts, unten-rechts, unten-links) als `[x0, y0, … x3, y3]`
+ * in Bildpixeln; `full` = keine sichere Kante, das ganze Bild.
+ */
+data class ScanDetection (
+    var `corners`: List<kotlin.Double>, 
+    var `full`: kotlin.Boolean, 
+    var `check`: ScanCheck
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeScanDetection: FfiConverterRustBuffer<ScanDetection> {
+    override fun read(buf: ByteBuffer): ScanDetection {
+        return ScanDetection(
+            FfiConverterSequenceDouble.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterTypeScanCheck.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ScanDetection) = (
+            FfiConverterSequenceDouble.allocationSize(value.`corners`) +
+            FfiConverterBoolean.allocationSize(value.`full`) +
+            FfiConverterTypeScanCheck.allocationSize(value.`check`)
+    )
+
+    override fun write(value: ScanDetection, buf: ByteBuffer) {
+            FfiConverterSequenceDouble.write(value.`corners`, buf)
+            FfiConverterBoolean.write(value.`full`, buf)
+            FfiConverterTypeScanCheck.write(value.`check`, buf)
+    }
+}
+
+
+
+/**
+ * Bild (RGBA, 4 Bytes je Pixel) an der Grenze.
+ */
+data class ScanImage (
+    var `width`: kotlin.UInt, 
+    var `height`: kotlin.UInt, 
+    var `rgba`: kotlin.ByteArray
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeScanImage: FfiConverterRustBuffer<ScanImage> {
+    override fun read(buf: ByteBuffer): ScanImage {
+        return ScanImage(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterByteArray.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ScanImage) = (
+            FfiConverterUInt.allocationSize(value.`width`) +
+            FfiConverterUInt.allocationSize(value.`height`) +
+            FfiConverterByteArray.allocationSize(value.`rgba`)
+    )
+
+    override fun write(value: ScanImage, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`width`, buf)
+            FfiConverterUInt.write(value.`height`, buf)
+            FfiConverterByteArray.write(value.`rgba`, buf)
+    }
+}
+
+
+
 data class SearchHit (
     var `pageId`: kotlin.String, 
     var `title`: kotlin.String, 
@@ -17096,6 +17339,65 @@ public object FfiConverterTypePageKind: FfiConverterRustBuffer<PageKind> {
 
 
 
+sealed class ScanFailure: kotlin.Exception() {
+    
+    class Invalid(
+        
+        val `reason`: kotlin.String
+        ) : ScanFailure() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
+    
+
+    companion object ErrorHandler : UniffiRustCallStatusErrorHandler<ScanFailure> {
+        override fun lift(error_buf: RustBuffer.ByValue): ScanFailure = FfiConverterTypeScanFailure.lift(error_buf)
+    }
+
+    
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeScanFailure : FfiConverterRustBuffer<ScanFailure> {
+    override fun read(buf: ByteBuffer): ScanFailure {
+        
+
+        return when(buf.getInt()) {
+            1 -> ScanFailure.Invalid(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: ScanFailure): ULong {
+        return when(value) {
+            is ScanFailure.Invalid -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`reason`)
+            )
+        }
+    }
+
+    override fun write(value: ScanFailure, buf: ByteBuffer) {
+        when(value) {
+            is ScanFailure.Invalid -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`reason`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+
+}
+
+
+
+
+
 /**
  * Fehler der semantischen Suche.
  */
@@ -18467,6 +18769,34 @@ public object FfiConverterSequenceFloat: FfiConverterRustBuffer<List<kotlin.Floa
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterFloat.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceDouble: FfiConverterRustBuffer<List<kotlin.Double>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Double> {
+        val len = buf.getInt()
+        return List<kotlin.Double>(len) {
+            FfiConverterDouble.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Double>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterDouble.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Double>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterDouble.write(it, buf)
         }
     }
 }
@@ -19965,6 +20295,33 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_merge_texts(
         FfiConverterString.lower(`base`),FfiConverterString.lower(`mine`),FfiConverterString.lower(`theirs`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Blattkanten und Qualität eines Bilds (Kamerabild oder Foto). Rechnet intern auf verkleinerten Kopien.
+         */
+    @Throws(ScanFailure::class) fun `scanDetect`(`img`: ScanImage): ScanDetection {
+            return FfiConverterTypeScanDetection.lift(
+    uniffiRustCallWithError(ScanFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_scan_detect(
+        FfiConverterTypeScanImage.lower(`img`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Fertiger Scan: entlang `corners` entzerren, Filter (`color`, `bw`, `gray`, `photo`) und Drehung
+         * (`rotation` in 90°-Schritten im Uhrzeigersinn) anwenden.
+         */
+    @Throws(ScanFailure::class) fun `scanProcess`(`img`: ScanImage, `corners`: List<kotlin.Double>, `mode`: kotlin.String, `rotation`: kotlin.Int): ScanImage {
+            return FfiConverterTypeScanImage.lift(
+    uniffiRustCallWithError(ScanFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_scan_process(
+        FfiConverterTypeScanImage.lower(`img`),FfiConverterSequenceDouble.lower(`corners`),FfiConverterString.lower(`mode`),FfiConverterInt.lower(`rotation`),_status)
 }
     )
     }

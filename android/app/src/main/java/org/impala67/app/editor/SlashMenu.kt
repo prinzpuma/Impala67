@@ -1,6 +1,8 @@
 package org.impala67.app.editor
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
@@ -26,7 +28,12 @@ internal data class SlashQuery(val blockId: String, val query: String, val end: 
 /** Offenes Slash-Menü; die Eingabe schreibt hinein, das Menü liest daraus (EditorScreen hält eine Instanz). */
 internal class SlashState {
     var current by mutableStateOf<SlashQuery?>(null); private set
-    fun open(blockId: String, query: String, end: Int) { current = SlashQuery(blockId, query, end) }
+    /** Mit ↑/↓ gewählter Eintrag (Enter/Tab übernimmt ihn). */
+    var selected by mutableIntStateOf(0)
+    fun open(blockId: String, query: String, end: Int) {
+        if (current?.query != query || current?.blockId != blockId) selected = 0
+        current = SlashQuery(blockId, query, end)
+    }
     fun close() { current = null }
 }
 
@@ -77,7 +84,7 @@ internal fun slashItems(query: String): List<SlashCmd> {
 /**
  * Slash-Menü am Eingabefeld von [blockId]. Das Menü nimmt den Fokus nicht (focusable = false), damit
  * die Tastatur und der Textblock offen bleiben. Ohne Treffer oder für einen anderen Block bleibt es zu.
- * TODO(desk): Auswahl per Pfeiltasten/Enter/Esc (Hardware-Tastatur) fehlt; bisher nur per Tipp.
+ * Pfeiltasten, Enter/Tab und Esc behandelt das Textfeld ([handleMenuKey]).
  */
 @Composable
 internal fun SlashDropdown(menus: EditorMenus, vm: EditorViewModel, blockId: String) {
@@ -91,8 +98,9 @@ internal fun SlashDropdown(menus: EditorMenus, vm: EditorViewModel, blockId: Str
         properties = PopupProperties(focusable = false),
         containerColor = c.menu,
     ) {
-        items.forEach { cmd ->
+        items.forEachIndexed { i, cmd ->
             DropdownMenuItem(
+                modifier = if (i == slash.selected) Modifier.background(c.hoverBg) else Modifier,
                 text = {
                     Column {
                         Text(cmd.label)

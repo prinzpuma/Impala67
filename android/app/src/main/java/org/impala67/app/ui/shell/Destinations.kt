@@ -25,6 +25,10 @@ import org.impala67.app.study.CardBrowserScreen
 import org.impala67.app.sync.ConflictsScreen
 import org.impala67.app.study.ReviewScreen
 import org.impala67.app.study.StudyScreen
+import org.impala67.app.study.stats.StatsScreen
+import org.impala67.app.graph.GraphScreen
+import org.impala67.app.notebook.NotebookScreen
+import org.impala67.app.library.PdfViewer
 
 /** Alle Ziele der App: welche Route welchen Bildschirm zeigt und in welchem Bereich (Liste/Detail). */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -40,6 +44,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
                 conflicts = { nav.open(ConflictsRoute) },
                 toast = nav::toast,
                 heftThumbnail = { id, m -> HeftThumbnail(store, id, m) },
+                studyDeck = { nav.go(TopLevel.Study); nav.open(ReviewRoute(it)) },
             ),
         )
     }
@@ -55,14 +60,22 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
             onStudyDeck = { nav.open(ReviewRoute(it)) },
             onBrowse = { nav.open(CardBrowserRoute(it)) },
             onStudyMixed = { nav.open(ReviewRoute(mix = true)) },
+            onStats = { nav.open(StatsRoute) },
+            onToast = nav::toast,
         )
     }
     entry<ReviewRoute> { ReviewScreen(store, it.deck, onExit = nav::back, mix = it.mix) }
     entry<CardBrowserRoute> { CardBrowserScreen(store, it.deck, onBack = nav::back) }
+    entry<StatsRoute> { StatsScreen(store, prefs, onToast = nav::toast) }
     entry<MoreRoute> { MoreScreen(onAction = nav::action) }
     entry<TrashRoute> { TrashScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
     entry<ArchiveRoute> { ArchiveScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
-    entry<LibraryRoute> { LibraryScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
+    entry<LibraryRoute> { LibraryScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast, onOpenPdf = { id, t -> nav.open(PdfRoute(id, t)) }) }
+    entry<GraphRoute> {
+        GraphScreen(store, prefs, onStudyDeck = { deck -> nav.go(TopLevel.Study); nav.open(ReviewRoute(deck)) }, onToast = nav::toast)
+    }
+    entry<NotebookRoute> { NotebookScreen(store, nav.lastPageId, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
+    entry<PdfRoute> { PdfViewer(store, it.fileId, it.title, onToggleFullscreen = { nav.immersive = !nav.immersive }) }
     entry<SearchRoute> {
         SearchScreen(
             store,

@@ -92,9 +92,13 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
         )
         // TODO(desk): „Verfügbar“-Wert und Prüfen-Schaltfläche folgen mit dem Release-Modul (APK-Update).
     }
+    val impalaScanner by prefs.impalaScanner.collectAsStateWithLifecycle(false)
     SettingsGroup("Gerät") {
-        // TODO(desk): Scanner-Auswahl (Google-Scanner oder Impala-Scanner) – nativ gibt es nur den Google-Scanner.
-        SettingsPlaceholderRow("Dokumenten-Scanner", "Google-Scanner oder Impala-Scanner folgen mit dem Heft-Modul")
+        SettingsSwitchRow(
+            "Impala-Scanner",
+            if (impalaScanner) "Eigener Scanner mit Kamera, Auto-Scan, Ecken und Filtern" else "Aus: Dokumente mit dem Google-Scanner scannen",
+            impalaScanner,
+        ) { vm.setPref { setImpalaScanner(it) } }
     }
     SettingsGroup(
         "Experimente",
@@ -105,10 +109,8 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
         }
     }
     DangerZoneGroup(vm)
-    // MCP-Live-Bridge entfällt nativ (PORTING § 8); der Profiler folgt über Android-Profiler und Logcat.
-    SettingsGroup("Für Entwickler") {
-        SettingsPlaceholderRow("Performance-Profiler", "Folgt (Android-Profiler und Logcat)")
-    }
+    // MCP-Live-Bridge entfällt nativ (PORTING § 8).
+    org.impala67.app.diag.ProfilerGroup(prefs, version)
 }
 
 /** Versionsname aus dem Paket (ohne BuildConfig). */

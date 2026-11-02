@@ -140,6 +140,19 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [ ] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes.
   - [x] Akzentfarbe aus dem Android-Hintergrundbild (Material You, ab Android 12; Standard) – Akzentauswahl wird jetzt auch angewendet.
 - [x] **Android Google Drive OAuth**: Anmeldung über Google Identity (`sync/DriveController.kt`).
+- [x] **Umgesetzt (2. November 2026, noch nicht auf dem Gerät getestet)**: eigener Impala-Scanner (Kern: `scan_detect`/`scan_process`,
+  Auswahl in Einstellungen → App), Wissensgraph (Anzeige/Bearbeiten des synchronisierten Graphen, KI-Analyse ohne Embeddings),
+  Gemini Notebook (Inbox nur auf dem Gerät), Bibliothek mit Heft-Regal/Ordnern und eingebetteter PDF-Ansicht, Tastaturkürzel
+  (Editor, Heft, Lernen, Palette, Chat), Statistik-Tab, Lern-Analyse, Startseiten-Lernanalyse, Lernzeit-Erfassung
+  (Kern: `learning_stats_json`), Karten-Import/-Export (TXT/CSV/Anki-Text/.apkg), Weitere Exporte, Performance-Profiler,
+  KI (Anhänge, Seitenkontext-Chip, Modellmenü mit Favoriten/Denkaufwand, Kopieren/Anpassen/Bearbeiten, Status-Chip, Verlauf;
+  Kern: `AiAssistant.complete`/`refine`).
+  Noch offen davon: Inline-Formeln im Chat, Seiten-Diff der KI-Änderungen, Tabellen-/Toggle-/Blockauswahl-Tasten,
+  Lerntimer (Pomodoro), Ehrlichkeits-/Pausen-Toast beim Lernen, Höhen-Griff eingebetteter PDFs, eigenes Cover-Bild anzeigen.
+- **Erstmal irrelevant (zurückgestellt)**: Schulnoten, Fächer, Abschreiben (Schreibübung), Beta-Lernfunktionen (Experimente),
+  Handschrift-Training/-Einstellungen, Export-Feinheiten, Seitenkopf-Reste (Cover-Bild, Breite, Schrift), App & Speicher
+  (APK-Update, Speicherbericht), Controller, Fach-Vorschläge, Heft-Kopfmenüs, Startbildschirm-Widget und die ganze
+  Telefon-Oberfläche (Teil 6 im Inventar).
 
 - [ ] **Android Home-Screen Widget (optional)**:
   - Startbildschirm-Widget für einen schnellen Blick auf heute fällige Karteikarten.

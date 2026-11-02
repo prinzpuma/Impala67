@@ -1,5 +1,16 @@
 package org.impala67.app.heft
 
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
@@ -151,10 +162,21 @@ fun HeftScreen(
     LaunchedEffect(current) { HeftLastPage[pageId] = current }
     val currentId = pages.getOrNull(current)
     val currentData by remember(currentId) { currentId?.let(vm::page) ?: MutableStateFlow<HeftPageData?>(null) }.collectAsStateWithLifecycle()
-    val scan = rememberDocumentScan(
+    val googleScan = rememberDocumentScan(
         onScanned = { scans -> scope.launch { focus = vm.addScanned(current + 1, scans) } },
         onError = vm::message,
     )
+    // Einstellungen → App → „Impala-Scanner“: eigener Scanner statt Google-Scanner.
+    val impalaScanner by app.prefs.impalaScanner.collectAsStateWithLifecycle(false)
+    var impalaOpen by remember { mutableStateOf(false) }
+    val scan: () -> Unit = { if (impalaScanner) impalaOpen = true else googleScan() }
+    if (impalaOpen) {
+        org.impala67.app.heft.scan.ImpalaScanner(
+            onInsert = { scans -> impalaOpen = false; scope.launch { focus = vm.addScanned(current + 1, scans) } },
+            onToast = vm::message,
+            onClose = { impalaOpen = false },
+        )
+    }
     val target by rememberUpdatedState(currentId)
     val imagePick = rememberHeftImagePick(onImage = { img -> target?.let { vm.addImage(it, img) } }, onError = vm::message)
     val pagePick = rememberHeftImagePick(
@@ -191,8 +213,31 @@ fun HeftScreen(
         setInsertPos = { insertPos = it },
     )
     val pageLabel = if (pages.isEmpty()) "" else "Seite ${current + 1} von ${pages.size}"
+    // heft.js:1521–1550: Strg+Z/Y, Esc schließt Popover bzw. Auswahl, Entf/Rücktaste löscht Auswahl, Bild oder Textfeld.
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(vm.textEdit) { if (vm.textEdit == null) runCatching { keyFocus.requestFocus() } }
+    val keys = Modifier.focusRequester(keyFocus).focusable().onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown || vm.textEdit != null || vm.reading) return@onPreviewKeyEvent false
+        val ctrl = e.isCtrlPressed || e.isMetaPressed
+        when {
+            ctrl && e.key == Key.Z && !e.isShiftPressed -> { vm.undo(); true }
+            ctrl && (e.key == Key.Y || (e.key == Key.Z && e.isShiftPressed)) -> { vm.redo(); true }
+            e.key == Key.Escape -> when {
+                showPages -> { showPages = false; true }
+                vm.lasso != null -> { vm.dismissLasso(); true }
+                vm.objSel != null -> { vm.clearObject(); true }
+                else -> false
+            }
+            e.key == Key.Delete || e.key == Key.Backspace -> when {
+                vm.lasso != null -> { vm.lassoDelete(); true }
+                vm.objSel != null -> { vm.removeObject(); true }
+                else -> false
+            }
+            else -> false
+        }
+    }
     Scaffold(
-        modifier,
+        modifier.then(keys),
         containerColor = if (desk) Impala.colors.panel else Impala.colors.bg0,
         topBar = {
             if (!desk) HeftTopBar(

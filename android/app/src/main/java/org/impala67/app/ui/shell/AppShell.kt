@@ -36,7 +36,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import org.impala67.app.study.LearningTimeHost
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -93,7 +95,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val config = LocalConfiguration.current
     val landscape = config.screenWidthDp > config.screenHeightDp
     val desk = config.screenWidthDp >= DESK_MIN_WIDTH_DP || (landscape && config.screenWidthDp >= DESK_LANDSCAPE_MIN_WIDTH_DP)
-    SideEffect { nav.desk = desk }
+    SideEffect { nav.desk = desk; org.impala67.app.diag.Profiler.bootReady() }
     // Shortcut oder „Teilen mit Impala67“ (MainActivity): einmal ausführen, dann abholen.
     val context = LocalContext.current
     val app = context.applicationContext as ImpalaApp
@@ -102,11 +104,24 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
         incoming?.let { nav.receive(it, context); app.incoming.value = null }
     }
     if (nav.pendingNewPage != null) NewPageDialog(store, desk, onPick = nav::pickNewPage, onTemplate = nav::pickTemplate) { nav.pendingNewPage = null }
-    if (desk) {
-        DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)
-        return
+    LearningTimeHost(store, prefs, current, paused = nav.settingsSection != null) {
+        if (desk) DeskShell(store, nav, current, canGoBack = backStack.size > 1, snackbar = snackbar, content = content)
+        else PhoneShell(nav, current, backStack.size, bar, suiteType, due, snackbar, content)
     }
+}
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun PhoneShell(
+    nav: ShellNav,
+    current: NavKey,
+    stackSize: Int,
+    bar: Boolean,
+    suiteType: NavigationSuiteType,
+    due: Int?,
+    snackbar: SnackbarHostState,
+    content: @Composable (Modifier) -> Unit,
+) {
     // Wie das Dock der PWA: im Heft, bei offener Tastatur und im Lernmodus verschwindet die Leiste.
     val hideDock = nav.immersive || WindowInsets.isImeVisible || current is ReviewRoute
     NavigationSuiteScaffold(
@@ -139,7 +154,7 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
                 if (!nav.immersive) TopAppBar(
                     title = { Text(current.title()) },
                     navigationIcon = {
-                        if (backStack.size > 1 && current != current.topLevel().route) {
+                        if (stackSize > 1 && current != current.topLevel().route) {
                             IconButton(nav::back, shapes = IconButtonDefaults.shapes()) {
                                 Icon(painterResource(R.drawable.ic_i_chevron_left), "Zurück")
                             }

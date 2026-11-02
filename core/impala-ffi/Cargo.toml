@@ -28,6 +28,7 @@ impala-heft = { path = "../impala-heft" }
 impala-markdown = { path = "../impala-markdown" }
 impala-model = { path = "../impala-model" }
 impala-net = { path = "../impala-net" }
+impala-scan = { path = "../impala-scan" }
 impala-sync = { path = "../impala-sync" }
 impala-search = { path = "../impala-search", default-features = false }
 impala-srs = { path = "../impala-srs" }

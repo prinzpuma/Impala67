@@ -107,6 +107,7 @@ class MainActivity : ComponentActivity() {
     /** Sichtbar: Live-Sync verbinden und nachholen, was auf anderen Geräten geändert wurde. */
     override fun onStart() {
         super.onStart()
+        org.impala67.app.diag.Profiler.setRunning(true)
         val app = application as ImpalaApp
         app.cloudSync.onForeground()
         app.drive.onForeground()
@@ -115,6 +116,7 @@ class MainActivity : ComponentActivity() {
     /** Start-Schnappschuss beim Wechsel in den Hintergrund: der nächste Start spielt weniger Events ab. */
     override fun onStop() {
         super.onStop()
+        org.impala67.app.diag.Profiler.setRunning(false)
         val app = application as ImpalaApp
         app.cloudSync.onBackground()
         app.drive.onBackground()

@@ -14,6 +14,11 @@ import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.settings.DevicePrefs
 import org.impala67.app.study.LearningTime
+import org.impala67.app.study.stats.HomeAnalysis
+import org.impala67.app.study.stats.LearnData
+import org.impala67.app.study.stats.homeAnalysis
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import org.json.JSONObject
 import uniffi.impala_ffi.CardInfo
 import uniffi.impala_ffi.CardStage
@@ -65,6 +70,15 @@ class HomeViewModel(private val store: ImpalaStore, private val prefs: DevicePre
             recall = c.recall, article = article,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Lernanalyse (lernanalyse.js); `null`, solange es noch keine Lerndaten gibt. */
+    val analysis: StateFlow<HomeAnalysis?> = combine(
+        store.query(Touches.cards) { LearnData.parse(it.learningStatsJson()) }.filterNotNull(),
+        learning.filterNotNull(),
+        prefs.weekGoalMinutes,
+    ) { data, time, goal -> data.homeAnalysis(time, goal) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun cycleGoal(done: (Int) -> Unit) = viewModelScope.launch { done(prefs.cycleWeekGoal()) }
 

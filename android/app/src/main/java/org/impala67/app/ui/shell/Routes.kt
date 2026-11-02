@@ -21,6 +21,12 @@ import org.impala67.app.R
 @Serializable data class CardBrowserRoute(val deck: String? = null) : NavKey
 @Serializable data object ArchiveRoute : NavKey
 @Serializable data object LibraryRoute : NavKey
+/** Statistik und Lernanalyse der Karteikarten (Anki-Tab „Statistik“). */
+@Serializable data object StatsRoute : NavKey
+@Serializable data object GraphRoute : NavKey
+@Serializable data object NotebookRoute : NavKey
+/** Eingebettete PDF-Ansicht (pdfs.js) für eine Datei des Kerns. */
+@Serializable data class PdfRoute(val fileId: String, val title: String) : NavKey
 /** Chat im eigenen Tab (Tablet, `chat:<id>`); unbekannte ID = neuer Chat mit dieser ID. */
 @Serializable data class ChatRoute(val id: String) : NavKey
 
@@ -35,8 +41,9 @@ enum class TopLevel(val route: NavKey, val label: String, @DrawableRes val icon:
 /** Zu welchem Hauptbereich ein Ziel gehört (markiert den Eintrag in Leiste/Schiene). */
 fun NavKey.topLevel(): TopLevel = when (this) {
     NotesRoute, is PageRoute -> TopLevel.Notes
-    StudyRoute, is ReviewRoute, is CardBrowserRoute -> TopLevel.Study
-    MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute, TrashRoute, ArchiveRoute, LibraryRoute -> TopLevel.More
+    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute -> TopLevel.Study
+    MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute, TrashRoute, ArchiveRoute, LibraryRoute,
+    GraphRoute, NotebookRoute, is PdfRoute -> TopLevel.More
     else -> TopLevel.Home
 }
 
@@ -49,6 +56,10 @@ fun NavKey.title(): String = when (this) {
     TrashRoute -> "Papierkorb"
     ArchiveRoute -> "Archiv"
     LibraryRoute -> "Bibliothek"
+    StatsRoute -> "Statistik"
+    GraphRoute -> "Wissensgraph"
+    NotebookRoute -> "Gemini Notebook"
+    is PdfRoute -> title
     is CardBrowserRoute -> "Karten"
     else -> topLevel().label
 }

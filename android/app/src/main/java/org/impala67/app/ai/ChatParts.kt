@@ -1,5 +1,8 @@
 package org.impala67.app.ai
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,20 +11,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import org.json.JSONObject
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,12 +44,12 @@ import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.ChatMessage
 
-/** Eine Nachricht des Chats je nach Art (`role`), wie `renderMessage` in der PWA. */
+/** Eine Nachricht des Chats je nach Art (`role`), wie `renderMessage` in der PWA. [onEdit]: Text zurück ins Eingabefeld. */
 @Composable
-fun ChatMessageItem(m: ChatMessage, ai: AiChatViewModel) {
+fun ChatMessageItem(m: ChatMessage, ai: AiChatViewModel, refining: String?, running: Boolean, onEdit: (String) -> Unit) {
     when (m.role) {
-        "user" -> UserBubble(m.content.orEmpty())
-        "assistant" -> MarkdownView(m.content.orEmpty(), Modifier.fillMaxWidth())
+        "user" -> UserBubble(m, enabled = !running) { m.mid?.let(ai::editFrom)?.let(onEdit) }
+        "assistant" -> if (m.mid == null || m.mid != refining) AssistantMessage(m, ai, running)
         "thought" -> ThinkBox(m.reasoning.orEmpty())
         "tool" -> ToolChip(m.name.orEmpty(), m.detail, m.error == true)
         "edit" -> EditCard(m.summary ?: "KI-Änderungen", undone = m.undone == true) { m.mid?.let(ai::undo) }
@@ -46,30 +57,115 @@ fun ChatMessageItem(m: ChatMessage, ai: AiChatViewModel) {
     }
 }
 
+/** Nutzernachricht mit Bild- oder Datei-Anhang und dem Stift „Bearbeiten“. */
 @Composable
-fun UserBubble(text: String) {
+fun UserBubble(m: ChatMessage, enabled: Boolean, onEdit: () -> Unit) {
     val c = Impala.colors
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Box(Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bubble).padding(horizontal = Space.s3, vertical = Space.s2)) {
-            Text(text, color = c.text, fontSize = TextSize.base)
+    val extra = remember(m.extraJson) { runCatching { JSONObject(m.extraJson) }.getOrDefault(JSONObject()) }
+    val file = extra.optJSONObject("pdfFile") ?: extra.optJSONObject("textFile")
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Top) {
+        if (m.mid != null) {
+            Box(
+                Modifier.padding(end = Space.s1).size(26.dp).clip(RoundedCornerShape(Radius.sm)).clickable(enabled = enabled, onClick = onEdit),
+                contentAlignment = Alignment.Center,
+            ) { Icon(painterResource(R.drawable.ic_i_pen), "Nachricht bearbeiten", Modifier.size(12.dp), tint = c.text2.copy(alpha = 0.6f)) }
+        }
+        Column(
+            Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bubble).padding(horizontal = Space.s3, vertical = Space.s2),
+            verticalArrangement = Arrangement.spacedBy(Space.s1),
+        ) {
+            m.image?.let { url -> DataUrlImage(url, Modifier.heightIn(max = 180.dp).clip(RoundedCornerShape(Radius.sm))) }
+            file?.let { f ->
+                val pdf = extra.has("pdfFile")
+                Text((if (pdf) "PDF · " else "Datei · ") + f.optString("name"), color = c.text2, fontSize = TextSize.xs, fontWeight = FontWeight.Medium)
+            }
+            if (!m.content.isNullOrEmpty()) Text(m.content.orEmpty(), color = c.text, fontSize = TextSize.base)
         }
     }
 }
 
-/** Gedankengang: eingeklappt bis zum Antippen (`thinkBoxHtml`). */
+/** Antwort als Markdown, darunter „Kopieren“ und „Anpassen ✦“ (Länger / Gleich / Kürzer). */
+@Composable
+fun AssistantMessage(m: ChatMessage, ai: AiChatViewModel, running: Boolean) {
+    val clipboard = LocalClipboardManager.current
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        MarkdownView(m.content.orEmpty(), Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+            SmallAction(R.drawable.ic_i_copy, "Kopieren") {
+                clipboard.setText(AnnotatedString(m.content.orEmpty()))
+                ai.notice("Antwort kopiert.")
+            }
+            Box {
+                SmallAction(R.drawable.ic_i_sparkles, "Anpassen", enabled = !running) { menu = true }
+                DropdownMenu(menu, { menu = false }) {
+                    Refine.entries.forEach { r ->
+                        DropdownMenuItem(text = { Text(r.label) }, onClick = { menu = false; m.mid?.let { ai.refine(it, r) } })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallAction(icon: Int, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = Impala.colors
+    Row(
+        Modifier.clip(RoundedCornerShape(Radius.sm)).clickable(enabled = enabled, onClick = onClick).padding(horizontal = Space.s2, vertical = Space.s1),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s1),
+    ) {
+        Icon(painterResource(icon), null, Modifier.size(12.dp), tint = c.text2)
+        Text(label, color = c.text2, fontSize = TextSize.xs)
+    }
+}
+
+/** Bild aus einer Data-URL (Anhänge). */
+@Composable
+fun DataUrlImage(url: String, modifier: Modifier = Modifier) {
+    val bmp = remember(url) {
+        runCatching {
+            val bytes = Base64.decode(url.substringAfter(","), Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }.getOrNull()
+    }
+    bmp?.let { Image(it, null, modifier) }
+}
+
+/** Gedankengang: eingeklappt bis zum Antippen, mit Wortzahl (`thinkBoxHtml`). */
 @Composable
 fun ThinkBox(text: String) {
     val c = Impala.colors
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val words = remember(text) { text.split(Regex("\\s+")).count { it.isNotBlank() } }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.sm)).border(1.dp, c.edgeSoft, RoundedCornerShape(Radius.sm))
             .clickable { expanded = !expanded }.padding(Space.s2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
             Icon(painterResource(R.drawable.ic_i_brain), null, Modifier.size(13.dp), tint = c.text2)
-            Text("Gedankengang", color = c.text2, fontSize = TextSize.xs, fontWeight = FontWeight.SemiBold)
+            Text("Gedankengang ($words Wörter)", color = c.text2, fontSize = TextSize.xs, fontWeight = FontWeight.SemiBold)
         }
         if (expanded) Text(text, Modifier.padding(top = Space.s1), color = c.text2, fontSize = TextSize.xs, fontStyle = FontStyle.Italic)
+    }
+}
+
+/** Gedankengang während der Antwort: die letzten zwei Zeilen, ausklappbar (`thinkingLiveHtml`). */
+@Composable
+fun ThinkLive(text: String) {
+    val c = Impala.colors
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) text else text.trimEnd().lines().takeLast(2).joinToString("\n")
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.sm)).border(1.dp, c.edgeSoft, RoundedCornerShape(Radius.sm))
+            .clickable { expanded = !expanded }.padding(Space.s2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+            Icon(painterResource(R.drawable.ic_i_brain), null, Modifier.size(13.dp), tint = c.text2)
+            Text("Gedankengang…", color = c.text2, fontSize = TextSize.xs, fontWeight = FontWeight.SemiBold)
+        }
+        Text(shown, Modifier.padding(top = Space.s1), color = c.text2, fontSize = TextSize.xs, fontStyle = FontStyle.Italic)
     }
 }
 
@@ -148,7 +244,7 @@ fun QuestionCard(m: ChatMessage, onAnswer: (String) -> Unit) {
 fun LiveBlock(thinking: String, draft: String, tool: String?) {
     val c = Impala.colors
     Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        if (thinking.isNotEmpty()) ThinkBox(thinking)
+        if (thinking.isNotEmpty()) ThinkLive(thinking)
         if (draft.isNotEmpty()) {
             MarkdownView(draft, Modifier.fillMaxWidth())
         } else {
@@ -166,9 +262,14 @@ fun ErrorBox(error: AiError, onOpenSettings: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
         if (error.aborted) {
-            Text("Abgebrochen.", color = c.text2, fontSize = TextSize.sm, fontStyle = FontStyle.Italic)
+            if (error.partial.isNotBlank()) MarkdownView(error.partial, Modifier.fillMaxWidth())
+            Text("(Abgebrochen.)", color = c.text2, fontSize = TextSize.sm, fontStyle = FontStyle.Italic)
         } else {
-            Text(error.message, color = c.alertText, fontSize = TextSize.sm)
+            Text("Fehler: " + error.message, color = c.alertText, fontSize = TextSize.sm)
+            if (error.withImage) Text(
+                "Für Bilder braucht es ein Modell mit Bildverständnis (Vision).",
+                color = c.alertText, fontSize = TextSize.xs,
+            )
             Box(Modifier.clip(RoundedCornerShape(Radius.sm)).clickable(onClick = onOpenSettings).padding(vertical = Space.s1)) {
                 Text("KI-Einstellungen öffnen", color = c.accent, fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
             }

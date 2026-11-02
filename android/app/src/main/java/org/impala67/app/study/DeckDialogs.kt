@@ -162,6 +162,9 @@ fun DeckConfigDialog(store: ImpalaStore, deck: String?, onDismiss: () -> Unit) {
         },
         dismissButton = {
             Row {
+                // `btnDeckConfUndo`: letzte Bewertung zurücknehmen.
+                val canUndo by produceState(false) { value = store.write { it.canUndoReview() } }
+                TextButton({ scope.launch { store.write { it.undoReview() }; onDismiss() } }, enabled = canUndo) { Text("↺ Rückgängig") }
                 TextButton({ scope.launch { store.write { it.resetDeckConfig(deck) }; onDismiss() } }) { Text("Zurücksetzen") }
                 TextButton(onDismiss) { Text("Abbrechen") }
             }

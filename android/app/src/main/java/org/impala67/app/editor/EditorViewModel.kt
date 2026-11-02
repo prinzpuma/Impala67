@@ -73,7 +73,8 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     private val redoStack = ArrayDeque<List<MdBlock>>()
     private var lastEdit = 0L
     private var nonce = 0
-    private var cursor = 0
+    internal var cursor = 0
+        private set
     private var dirtyContent = false
     private var dirtyTitle = false
     private var saveJob: Job? = null

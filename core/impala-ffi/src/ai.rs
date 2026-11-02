@@ -639,6 +639,52 @@ impl AiAssistant {
     pub fn forget_chat_state(&self, chat_id: String) {
         self.sessions.lock().unwrap_or_else(|e| e.into_inner()).remove(&chat_id);
     }
+
+    /// Einfache Antwort ohne Werkzeuge und ohne Chat (`AI.complete` der PWA: Wissensgraph, Notebook,
+    /// Karten aus Problemzonen). Blockiert (Netz): aus einem Hintergrund-Thread rufen.
+    pub fn complete(&self, prompt: String, system: Option<String>) -> Result<String, AiFailure> {
+        let resolved = resolve(&mut lock(&self.core), &self.options);
+        let config = ChatConfig::resolve(&resolved.settings);
+        let provider = HttpProvider::new(HttpHandle(self.http.clone()), config, resolved.request.clone());
+        Ok(block_on(impala_ai::chat::complete(&provider, &prompt, system.as_deref()))?)
+    }
+
+    /// Antwort umformulieren („Anpassen“: länger/gleich/kürzer). `history_json`: `[{ role, content }]`
+    /// bis einschließlich der Antwort; der neue Text kommt gestreamt über `on_draft`. Abbruch mit `cancel`.
+    pub fn refine(
+        &self,
+        history_json: String,
+        instruction: String,
+        utc_offset_minutes: i32,
+        listener: Option<Arc<dyn AiListener>>,
+    ) -> Result<String, AiFailure> {
+        let cancel = CancelToken::default();
+        *self.cancel.lock().unwrap_or_else(|e| e.into_inner()) = cancel.clone();
+        let resolved = resolve(&mut lock(&self.core), &self.options);
+        let config = ChatConfig::resolve(&resolved.settings);
+        let provider = HttpProvider::new(HttpHandle(self.http.clone()), config, resolved.request.clone());
+        let history: Vec<impala_ai::Message> = serde_json::from_str::<Vec<Value>>(&history_json)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|m| {
+                let role = match m["role"].as_str()? {
+                    "user" => impala_ai::Role::User,
+                    "assistant" => impala_ai::Role::Assistant,
+                    _ => return None,
+                };
+                Some(impala_ai::Message::text(role, m["content"].as_str().unwrap_or_default()))
+            })
+            .collect();
+        let mut on = |u: impala_ai::StreamUpdate<'_>| {
+            match u {
+                impala_ai::StreamUpdate::Content(t) => listener.iter().for_each(|l| l.on_draft(t.to_owned())),
+                impala_ai::StreamUpdate::Reasoning(t) => listener.iter().for_each(|l| l.on_thinking(t.to_owned())),
+            }
+            !cancel.is_cancelled()
+        };
+        let now = local_time(wall_ms(), utc_offset_minutes);
+        Ok(block_on(impala_ai::refine(&provider, &history, &instruction, &resolved.custom, now, &mut on))?)
+    }
 }
 
 // ---------------------------------------------------------------------------

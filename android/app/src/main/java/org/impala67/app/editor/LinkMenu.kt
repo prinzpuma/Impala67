@@ -1,6 +1,8 @@
 package org.impala67.app.editor
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -27,7 +29,11 @@ internal data class LinkQuery(val blockId: String, val query: String, val end: I
 /** Offenes Seiten-Link-Menü (wie [SlashState]). */
 internal class LinkState {
     var current by mutableStateOf<LinkQuery?>(null); private set
-    fun open(blockId: String, query: String, end: Int) { current = LinkQuery(blockId, query, end) }
+    var selected by mutableIntStateOf(0)
+    fun open(blockId: String, query: String, end: Int) {
+        if (current?.query != query || current?.blockId != blockId) selected = 0
+        current = LinkQuery(blockId, query, end)
+    }
     fun close() { current = null }
 }
 
@@ -54,8 +60,9 @@ internal fun LinkDropdown(menus: EditorMenus, vm: EditorViewModel, blockId: Stri
         containerColor = c.menu,
     ) {
         if (items.isEmpty()) DropdownMenuItem({ Text("Keine Seite gefunden", color = c.text2) }, {}, enabled = false)
-        items.forEach { p ->
+        items.forEachIndexed { i, p ->
             DropdownMenuItem(
+                modifier = if (i == menus.links.selected) Modifier.background(c.hoverBg) else Modifier,
                 text = { Text(pageTitle(p)) },
                 onClick = { menus.links.close(); vm.applyLink(blockId, q, p) },
                 leadingIcon = {
