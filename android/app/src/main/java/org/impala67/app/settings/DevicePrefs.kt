@@ -85,6 +85,16 @@ class DevicePrefs(private val context: Context) {
     val notificationsAsked: Flow<Boolean> = boolFlow(NOTIFICATIONS_ASKED, false)
     suspend fun setNotificationsAsked() = put(NOTIFICATIONS_ASKED, true)
 
+    /** Tablet-Seitenleiste: eingeklappt (`impala67.sidebarCollapsed`) und Breite in dp (`--sidebar-w`; 0 = Standard). */
+    val sidebarCollapsed: Flow<Boolean> = boolFlow(SIDEBAR_COLLAPSED, false)
+    val sidebarWidth: Flow<Int> = store.data.map { it[SIDEBAR_WIDTH] ?: 0 }
+    suspend fun setSidebarCollapsed(on: Boolean) = put(SIDEBAR_COLLAPSED, on)
+    suspend fun setSidebarWidth(dp: Int) = put(SIDEBAR_WIDTH, dp)
+
+    /** Tab-Anordnung (`impala67TabsPosition`): oben (Standard) oder in der Seitenleiste. */
+    val tabsInSidebar: Flow<Boolean> = boolFlow(TABS_IN_SIDEBAR, false)
+    suspend fun setTabsInSidebar(on: Boolean) = put(TABS_IN_SIDEBAR, on)
+
     /** Heft-Werkzeuge als JSON wie `impala67HeftTools` der PWA (heft-tools.js); leer = Standard. */
     val heftTools: Flow<String> = store.data.map { it[HEFT_TOOLS].orEmpty() }
     suspend fun setHeftTools(json: String) = put(HEFT_TOOLS, json)
@@ -143,6 +153,9 @@ class DevicePrefs(private val context: Context) {
         val DRIVE_EMAIL = stringPreferencesKey("driveEmail")
         val HEFT_TOOLS = stringPreferencesKey("heftTools")
         val NOTIFICATIONS_ASKED = booleanPreferencesKey("notificationsAsked")
+        val SIDEBAR_COLLAPSED = booleanPreferencesKey("sidebarCollapsed")
+        val SIDEBAR_WIDTH = intPreferencesKey("sidebarWidth")
+        val TABS_IN_SIDEBAR = booleanPreferencesKey("tabsInSidebar")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
     }
 }

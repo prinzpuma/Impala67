@@ -54,15 +54,6 @@ import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 import kotlin.math.roundToInt
 
-/** Welcher Dialog der Stapelübersicht offen ist. */
-private sealed interface DeckDialog {
-    data object New : DeckDialog
-    data class Sub(val parent: String) : DeckDialog
-    data class Rename(val name: String) : DeckDialog
-    data class Trash(val name: String) : DeckDialog
-    data class Options(val name: String) : DeckDialog
-}
-
 /**
  * Lernen-Übersicht (`ankiDecksHtml` in web/render-anki.js): ein Satz mit der Kartenzahl als Startknopf,
  * zwei Kennzahlen, darunter die Stapelliste (Unterstapel eingerückt und einklappbar).
@@ -120,45 +111,15 @@ fun StudyScreen(
                 entries.forEachIndexed { i, e ->
                     DeckRow(
                         e, narrow, onStudy = { onStudyDeck(e.name) }, onToggle = { vm.toggle(e.name) },
-                        menu = DeckMenuActions(
-                            browse = { onBrowse(e.name) }, subdeck = { dialog = DeckDialog.Sub(e.name) },
-                            rename = { dialog = DeckDialog.Rename(e.name) }, duplicate = { vm.duplicate(e.name) },
-                            options = { dialog = DeckDialog.Options(e.name) }, archive = { vm.archive(e.name) },
-                            trash = { dialog = DeckDialog.Trash(e.name) },
-                        ),
+                        menu = deckMenuActions(e.name, vm, { onBrowse(e.name) }) { dialog = it },
                     )
                     if (i < entries.lastIndex) HorizontalDivider(color = Impala.colors.edgeSoft)
                 }
             }
         }
     }
-    Dialogs(dialog, { dialog = null }, store, vm)
+    DeckDialogs(dialog, { dialog = null }, store, vm)
     error?.let { ErrorDialog(it, vm::dismissError) }
-}
-
-@Composable
-private fun Dialogs(dialog: DeckDialog?, close: () -> Unit, store: ImpalaStore, vm: StudyViewModel) {
-    when (dialog) {
-        null -> Unit
-        DeckDialog.New -> DeckNameDialog(
-            "Neuer Stapel", "Unterstapel per „Eltern::Kind“", "", "Anlegen",
-            { vm.create(it); close() }, close,
-        )
-        is DeckDialog.Sub -> DeckNameDialog(
-            "Unterstapel von „${deckLabel(dialog.parent)}“", null, "", "Anlegen",
-            { vm.create(dialog.parent + DECK_SEP + it); close() }, close,
-        )
-        is DeckDialog.Rename -> DeckNameDialog(
-            "Stapel umbenennen", null, deckLabel(dialog.name), "Umbenennen",
-            { text ->
-                val prefix = dialog.name.substringBeforeLast(DECK_SEP, "")
-                vm.rename(dialog.name, if (prefix.isEmpty()) text else prefix + DECK_SEP + text)
-                close()
-            }, close,
-        )
-        is DeckDialog.Trash -> DeckTrashDialog(dialog.name, { vm.trash(dialog.name); close() }, close)
-        is DeckDialog.Options -> DeckConfigDialog(store, dialog.name, close)
-    }
 }
 
 /** Ein Satz: „N Karten warten auf dich, etwa M Minuten.“ – die Kartenzahl startet das Lernen. */

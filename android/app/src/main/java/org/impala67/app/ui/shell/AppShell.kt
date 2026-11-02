@@ -1,5 +1,8 @@
 package org.impala67.app.ui.shell
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +61,7 @@ private const val DESK_LANDSCAPE_MIN_WIDTH_DP = 600
  * „+“ als Leisteneintrag (Telefon) bzw. Expressive-FAB-Menü (Tablet), Inhalt über Navigation 3 mit
  * List-Detail auf breiten Bildschirmen (Ziele: [appEntries]). Zurück nimmt das oberste Ziel vom Stapel.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val backStack = rememberNavBackStack(HomeRoute)
@@ -104,8 +107,10 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
         return
     }
 
+    // Wie das Dock der PWA: im Heft, bei offener Tastatur und im Lernmodus verschwindet die Leiste.
+    val hideDock = nav.immersive || WindowInsets.isImeVisible || current is ReviewRoute
     NavigationSuiteScaffold(
-        navigationSuiteType = if (nav.immersive) NavigationSuiteType.None else suiteType,
+        navigationSuiteType = if (hideDock) NavigationSuiteType.None else suiteType,
         navigationItems = {
             TopLevel.entries.forEach { top ->
                 if (bar && top == TopLevel.Study) {

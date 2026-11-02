@@ -51,8 +51,8 @@ Kotlin-Basispfad: `android/app/src/main/java/org/impala67/app/` (Kurzform unten:
 
 **Kernbefunde**
 1. **Gemini Notebook und Wissensgraph sind in Kotlin nur Stubs.** `ShellNav.action()` (ui/shell/ShellNav.kt) kennt die IDs `notebooklm`, `graph`, `notebook` und `daily` nicht. Sie landen im Zweig „Folgt mit einem der nächsten Module.“. Es gibt kein Graph- und kein NotebookLM-Paket.
-2. **Der Vor-Knopf fehlt** in der Tab-Leiste (DeskTabBar.kt:46 als TODO vermerkt). Chat-, Gemini- und Karten-Tabs fehlen ebenfalls.
-3. **Nicht umgesetzt sind:** Drag & Drop (Seiten und Stapel), Breitengriff der Seitenleiste, Rechtsklick/Langdruck auf Zeilen, „Tabs in Seitenleiste“, Mehrfachauswahl im Chat-Verlauf, Umbenennen von Chats, Stapel-⋯-Menü.
+2. ~~Der Vor-Knopf fehlt~~ ✅ Vor, Chat- und Karten-Tabs sind umgesetzt; nur der Gemini-Tab fehlt (Modul fehlt).
+3. ✅ Umgesetzt (2026-11-02): Drag & Drop (Seiten und Stapel), Breitengriff, Langdruck auf Zeilen, „Tabs in Seitenleiste“, Mehrfachauswahl und Umbenennen im Chat-Verlauf, Stapel-⋯-Menü, Tabs und Aufklappzustand über den Kern gespeichert.
 4. **Seitenkopf-⋯ hat Lücken:** Duplizieren, Vorlage und Vorlesungsübersicht, Fach, PDF-Aktionen, „Karten aus Markierungen“, Rückverweise und Breadcrumb fehlen. Rückgängig und Wiederholen sind Stubs.
 5. **Umbruchpunkte weichen ab:** PWA-Tablet 701–1024 px mit 220 px Seitenleiste; Kotlin Desk ab 840 dp bzw. quer ab 600 dp mit 236 dp.
 
@@ -93,12 +93,12 @@ Kotlin-Basispfad: `android/app/src/main/java/org/impala67/app/` (Kurzform unten:
 - [x] **Auf-/Zuklapp-Pfeil der Seite** – nur bei Unterseiten, Titel „Ein-/Ausklappen“ (web/render.js:552) — Kotlin: ✅ DeskTreeRow.kt (`Chevron`, Labels „Einklappen“/„Ausklappen“)
 - [x] **⋯-Knopf der Zeile** – Titel „Weitere Optionen“, öffnet Seiten-Kontextmenü (web/render.js:556) — Kotlin: ✅ DeskTreeRow.kt (`PageMenu`)
 - [x] **+-Knopf der Zeile** – Titel „Unterseite anlegen“ (web/render.js:557) — Kotlin: ✅ DeskTreeRow.kt
-- [ ] **Inline-Umbenennen** – Eingabefeld in der Zeile; Enter bestätigt, Esc bricht ab, Fokusverlust bestätigt (web/render.js:553–555; web/app-sidebar-events.js:284–300) — Kotlin: 🟡 DeskTreeRow.kt öffnet `RenameDialog` (NoteRows.kt) statt Feld in der Zeile
-- [ ] **Startzustand Aufklappen** – Workspaces offen, Seiten standardmäßig zu (web/collapse.js:5–13) — Kotlin: 🟡 DeskSidebar.kt (`collapsed` startet leer, also alle Seiten offen)
+- [x] **Inline-Umbenennen** – Eingabefeld in der Zeile; Enter bestätigt, Esc bricht ab, Fokusverlust bestätigt (web/render.js:553–555; web/app-sidebar-events.js:284–300) — Kotlin: ✅ DeskTreeRow.kt `RenameField` (Feld in der Zeile; Enter/Fokusverlust bestätigt, Esc bricht ab)
+- [x] **Startzustand Aufklappen** – Workspaces offen, Seiten standardmäßig zu (web/collapse.js:5–13) — Kotlin: ✅ DeskTree.kt `isCollapsed` (Seiten zu, Arbeitsbereiche offen; Zustand über `uiTreeSet`, geräteübergreifend)
 - [x] **Zeile öffnen** – Klick öffnet Seite, bereits offene Seite wird nicht erneut geöffnet (web/app-click-pages.js; web/tabs.js `openPage`) — Kotlin: ✅ DeskSidebar.kt (`open` ignoriert aktuelle Seite)
-- [ ] **Drag & Drop Seiten** – Pointer-Ziehen (kein HTML5-DnD), Touch erst nach 380 ms Halten, Schwelle 6 px, Ghost-Vorschau. Zonen: oberes/unteres Viertel = davor/danach, Mitte = Unterseite, freie Fläche = Wurzel. Wechsel des Arbeitsbereichs beim Verschieben (web/app-sidebar-events.js:188–265) — Kotlin: ⬜ kein `pointerInput`/`draggable` in ui/desk
-- [ ] **Drag & Drop Stapel** – HTML5-Ziehen; oberes/unteres Viertel = Reihenfolge, Mitte = Verschieben (web/app-sidebar-events.js:129–180) — Kotlin: ⬜ DeskDecks.kt
-- [ ] **Rechtsklick/Langdruck öffnet ⋯-Menü** – Langdruck 550 ms, Toleranz 10 px (web/popovers.js:149–190) — Kotlin: ⬜ (nur ⋯-Knopf, kein `combinedClickable` in DeskTreeRow.kt)
+- [x] **Drag & Drop Seiten** – Pointer-Ziehen (kein HTML5-DnD), Touch erst nach 380 ms Halten, Schwelle 6 px, Ghost-Vorschau. Zonen: oberes/unteres Viertel = davor/danach, Mitte = Unterseite, freie Fläche = Wurzel. Wechsel des Arbeitsbereichs beim Verschieben (web/app-sidebar-events.js:188–265) — Kotlin: ✅ TreeDrag.kt + DeskTree.kt `dropPage` (Halten, ab 6 dp ziehen, Vorschau am Finger, Zonen davor/danach/hinein, freie Fläche = Wurzel, Arbeitsbereich-Kopf = dessen Wurzel, Randscrollen)
+- [x] **Drag & Drop Stapel** – HTML5-Ziehen; oberes/unteres Viertel = Reihenfolge, Mitte = Verschieben (web/app-sidebar-events.js:129–180) — Kotlin: ✅ DeskDecks.kt (Halten und ziehen; davor/danach = `reorderDecks` unter Geschwistern, Mitte = `moveDeck`, freie Fläche = nach oben)
+- [x] **Rechtsklick/Langdruck öffnet ⋯-Menü** – Langdruck 550 ms, Toleranz 10 px (web/popovers.js:149–190) — Kotlin: ✅ Seiten-, Stapel- und Chatzeilen (Halten und loslassen öffnet das Menü, Halten und ziehen verschiebt)
 
 ### 4. Seiten-Kontextmenü (⋯ in der Sidebar)
 
@@ -108,7 +108,7 @@ Quelle: web/render.js:569–583 (`pageMenuHtml`, `moveTrashItems`, `dupTplItems`
 - [x] **Umbenennen** (`pagerename`) — Kotlin: ✅ DeskTreeRow.kt (`RenameDialog`)
 - [x] **Duplizieren** (`pageduplicate`, Titel „(Kopie)“; web/app-dialogs.js:129–143) — Kotlin: ✅ DeskTreeRow.kt (`duplicatePage`)
 - [x] **Als Vorlage / Vorlage entfernen** (`pagetemplate`, Umschalter) — Kotlin: ✅ DeskTreeRow.kt
-- [ ] **Als Vorlesungsübersicht / Übersicht aufheben** (`pagedb`, nur Notizen, nicht Hefte; web/render.js:571) — Kotlin: ⬜ kein Eintrag
+- [x] **Als Vorlesungsübersicht / Übersicht aufheben** (`pagedb`, nur Notizen, nicht Hefte; web/render.js:571) — Kotlin: ✅ DeskTreeRow.kt (nur Notizen, `setPageDb`)
 - [x] **Zu Favoriten / Favorit entfernen** (`pagefav`) — Kotlin: ✅ DeskTreeRow.kt
 - [ ] **Fach: {Name}…** (`pagesubject`; web/render.js:572; Dialog web/app-dialogs.js:103–128) — Kotlin: ⬜ kein Fach-Dialog
 - [x] **Verschieben nach…** (`pagemove`; web/app-dialogs.js:77–101) — Kotlin: ✅ DeskTreeRow.kt (`MovePageDialog`; Ziel-Auswahl nicht im Detail geprüft)
@@ -125,8 +125,8 @@ Rendering in web/render.js:50–51 (delegiert an `render-anki.js`, dort nicht ge
 - [x] **Zähler fällig / neu** (Badges `deck-badge`; fällig in Akzent, neu in Erfolgsfarbe) — Kotlin: ✅ DeskDecks.kt (`CountBadge`)
 - [x] **Leerer Stapelbaum** – „Noch keine Stapel“ — Kotlin: ✅ DeskDecks.kt
 - [x] **Stapelzeile öffnen** – startet Lernansicht des Stapels — Kotlin: ✅ DeskDecks.kt (`ReviewRoute`)
-- [ ] **Stapel-⋯-Menü** – Einträge laut web/popovers.js: `deckmenu`, `deckdel`, `deckrename`, `deckduplicate`, `deckarchive`; Details in render-anki.js nicht gelesen — Kotlin: ⬜ DeskDecks.kt (kein Menü, kein Umbenennen, Löschen, Duplizieren, Archivieren)
-- [ ] **Stapel-Drag & Drop** — siehe Abschnitt 3 — Kotlin: ⬜
+- [x] **Stapel-⋯-Menü** – Einträge laut web/popovers.js: `deckmenu`, `deckdel`, `deckrename`, `deckduplicate`, `deckarchive`; Details in render-anki.js nicht gelesen — Kotlin: ✅ DeskDecks.kt `DeckMenu` (Karten ansehen, Unterstapel, Umbenennen, Duplizieren, Optionen, Archivieren, In Papierkorb; Dialoge aus study/DeckDialogs.kt)
+- [x] **Stapel-Drag & Drop** — siehe Abschnitt 3 — Kotlin: ✅ DeskDecks.kt (siehe Abschnitt 3)
 
 ### 6. Sidebar: Chat-Verlauf (Modus „Chat“)
 
@@ -134,20 +134,20 @@ Quelle: web/render.js:514–539 (`chatListHtml`); Kotlin: ai/ChatList.kt.
 
 - [x] **„+ Neuer Chat“** (`data-newchat`) — Kotlin: ✅ ai/ChatList.kt:59
 - [x] **Chat-Zeile** – Titel, Datum (`U.fmtDate`), aktiver Chat markiert — Kotlin: ✅ ai/ChatList.kt (Datum, `formatDate`; Markierung aktiver Chat nicht geprüft)
-- [ ] **Chat umbenennen** (`data-chatrename`, Stift-Knopf je Zeile) — Kotlin: ⬜ ChatList.kt (kein Umbenennen gefunden)
+- [x] **Chat umbenennen** (`data-chatrename`, Stift-Knopf je Zeile) — Kotlin: ✅ ai/ChatList.kt (⋯ → „Umbenennen“, Kern `saveChat`)
 - [x] **Chat löschen** (`data-chatdel`, Papierkorb-Knopf je Zeile) — Kotlin: ✅ ai/ChatList.kt (⋯ → „Löschen“ mit Rückfrage)
-- [ ] **Mehrfachauswahl-Kästchen** (`data-chatsel`, erscheint im Auswahlmodus) — Kotlin: ⬜
-- [ ] **Auswahlleiste** – „N ausgewählt“, „Alle“ (`chatselall`), „✕“ Auswahl aufheben (`chatselnone`), Löschen der Auswahl (`chatdelsel`) — Kotlin: ⬜
+- [x] **Mehrfachauswahl-Kästchen** (`data-chatsel`, erscheint im Auswahlmodus) — Kotlin: ✅ ai/ChatList.kt (Halten oder ⋯ → „Auswählen“ startet die Auswahl)
+- [x] **Auswahlleiste** – „N ausgewählt“, „Alle“ (`chatselall`), „✕“ Auswahl aufheben (`chatselnone`), Löschen der Auswahl (`chatdelsel`) — Kotlin: ✅ ai/ChatList.kt `SelectionBar` (Löschen mit Rückfrage)
 - [x] **Leerzustand** – „Noch keine gespeicherten Chats.“ — Kotlin: ✅ ai/ChatList.kt:64
 
 ### 7. Sidebar: Offene Tabs (Variante „Tabs in Seitenleiste“)
 
 Quelle: web/render.js:411–455 (`sidebarTabsHtml`, nur bei `body.tabs-in-sidebar`).
 
-- [ ] **Kopf „Offene Tabs“** mit „＋“ (`data-tabnew`, Titel „Neuen Tab öffnen“) — Kotlin: ⬜
-- [ ] **Tab-Zeile** – Icon (✦ für Chat, Buch für Gemini, Karten-Icon, Seiten-Icon), Titel, aktiv getönt, Klick wechselt — Kotlin: ⬜
-- [ ] **✕ Tab schließen** je Zeile (`data-tabclose`, Titel „Tab schließen“) — Kotlin: ⬜
-- [ ] **Variante als Ganzes** — Kotlin: ⬜ (Tabs immer oben, DeskTabBar.kt)
+- [x] **Kopf „Offene Tabs“** mit „＋“ (`data-tabnew`, Titel „Neuen Tab öffnen“) — Kotlin: ✅ DeskSidebar.kt `SidebarTabs` (＋ öffnet das Neuer-Tab-Menü)
+- [x] **Tab-Zeile** – Icon (✦ für Chat, Buch für Gemini, Karten-Icon, Seiten-Icon), Titel, aktiv getönt, Klick wechselt — Kotlin: ✅ DeskSidebar.kt (Symbol ✦/Karten/Seite, aktiv getönt; halten und ziehen ordnet um)
+- [x] **✕ Tab schließen** je Zeile (`data-tabclose`, Titel „Tab schließen“) — Kotlin: ✅ DeskSidebar.kt
+- [x] **Variante als Ganzes** — Kotlin: ✅ Einstellung „Tab-Anordnung“ (Darstellung → Oberfläche; DevicePrefs `tabsInSidebar`), Tab-Leiste behält ☰, Zurück, Vor
 
 ### 8. Sidebar: Fußnavigation, Breite, Einklappen
 
@@ -158,9 +158,9 @@ Quelle: web/index.html:184–208 (`.side-foot`).
 - [x] **Bibliothek** (`#btnLibrary`, Titel „Bibliothek“) — Kotlin: ✅ DeskSidebar.kt (`action("library")`)
 - [x] **Papierkorb** (`#btnTrash`) — Kotlin: ✅ DeskSidebar.kt (`action("trash")`)
 - [x] **Einstellungen** (`#btnSettings`) — Kotlin: ✅ DeskSidebar.kt (`action("settings")`)
-- [ ] **Breitengriff** (`#sidebarResizer`, Rollenangabe Trennlinie, Titel „Ziehen zum Verbreitern · Doppelklick = Standardbreite“; web/index.html:209; web/app-sidebar-events.js:306–335) — Kotlin: ⬜ DeskShell.kt (feste `SidebarWidth`). Hinweis: Bereich 180–560 px im JS, Startskript klemmt auf 200–420 px (inkonsistent)
-- [ ] **Doppelklick auf Griff** – Standardbreite (web/app-sidebar-events.js:327–333) — Kotlin: ⬜
-- [ ] **Seitenleiste ein-/ausklappen** (☰, `#btnSidebarToggle`, Titel „Linke Spalte ein-/ausklappen“; web/render.js:606; web/app-click-buttons.js:288–300; Zustand in `localStorage` `impala67.sidebarCollapsed`) — Kotlin: 🟡 DeskTabBar.kt (`SidebarToggle`); Zustand nur `rememberSaveable`, nicht dauerhaft
+- [x] **Breitengriff** (`#sidebarResizer`, Rollenangabe Trennlinie, Titel „Ziehen zum Verbreitern · Doppelklick = Standardbreite“; web/index.html:209; web/app-sidebar-events.js:306–335) — Kotlin: ✅ DeskShell.kt `SidebarResizer` (180–560 dp, gespeichert in DevicePrefs `sidebarWidth`)
+- [x] **Doppelklick auf Griff** – Standardbreite (web/app-sidebar-events.js:327–333) — Kotlin: ✅ DeskShell.kt (Doppeltipp = Standardbreite)
+- [x] **Seitenleiste ein-/ausklappen** (☰, `#btnSidebarToggle`, Titel „Linke Spalte ein-/ausklappen“; web/render.js:606; web/app-click-buttons.js:288–300; Zustand in `localStorage` `impala67.sidebarCollapsed`) — Kotlin: ✅ DeskTabBar.kt `SidebarToggle`, Zustand dauerhaft in DevicePrefs `sidebarCollapsed`
 - [ ] **☰ im Telefon-Modus** – öffnet Navigator-Sheet (`mnav-open`; web/app-click-buttons.js:291–294) — Kotlin: n/a (Telefon nutzt `NavigationSuiteScaffold`, AppShell.kt)
 
 ### 9. Tab-Leiste (`#tabbar`)
@@ -169,13 +169,13 @@ Quelle: web/render.js:591–628 (`renderTabs`).
 
 - [x] **☰ Sidebar-Umschalter** — Kotlin: ✅ DeskTabBar.kt (`SidebarToggle`)
 - [x] **Zurück** (`#btnNavBack`, Titel „Zurück“, deaktiviert ohne Verlauf; web/render.js:607; web/app-click-buttons.js:82–83) — Kotlin: ✅ DeskTabBar.kt (`SmallButton`, deaktiviert bei `canGoBack=false`)
-- [ ] **Vor** (`#btnNavForward`, Titel „Vor“; web/render.js:608; web/app-click-buttons.js:84–85) — Kotlin: ⬜ (TODO in DeskTabBar.kt:46; ShellNav ohne Vorwärtsverlauf)
+- [x] **Vor** (`#btnNavForward`, Titel „Vor“; web/render.js:608; web/app-click-buttons.js:84–85) — Kotlin: ✅ DeskTabBar.kt + ShellNav `forward()` (Vorwärtsverlauf, neue Navigation leert ihn)
 - [x] **Seiten-Tab-Chip** – Icon, Titel, aktiv getönt, Klick wechselt, Breite bis 170 px (web/render.js:618–622) — Kotlin: ✅ DeskTabBar.kt (`TabChip`, 96–170 dp)
 - [x] **Tab schließen ✕** (`tabchip-x`, Titel „Schließen“; web/render.js:622) — Kotlin: ✅ DeskTabBar.kt (Titel „Tab schließen“, Nachbar wird aktiv, `ShellNav.closeTab`)
-- [ ] **Chat-Tab „✦ Titel“** (`chat:`-Tabs; web/render.js:614) — Kotlin: ⬜
+- [x] **Chat-Tab „✦ Titel“** (`chat:`-Tabs; web/render.js:614) — Kotlin: ✅ ShellNav `ChatRoute`/`chat:<id>` (eigener Verlauf, getrennt vom KI-Panel)
 - [ ] **Gemini-Notebook-Tab** (`nlm:main`; web/render.js:615) — Kotlin: ⬜
-- [ ] **Karteikarten-Tab** (`anki:main`; web/render.js:616) — Kotlin: ⬜
-- [ ] **„+“ Neuer Tab** (`#btnTabNew`, Titel „Neuen Tab öffnen“; web/render.js:625) — Kotlin: 🟡 DeskTabBar.kt öffnet direkt den Seiten-Anlegedialog. PWA öffnet ein Menü mit „Neuen Chat starten“ und „Neue Seite“ (web/search.js, `newTabActions`)
+- [x] **Karteikarten-Tab** (`anki:main`; web/render.js:616) — Kotlin: ✅ ShellNav `anki:main` (Übersicht, Lernen und Kartenbrowser teilen den Tab; Karten-Pille öffnet ihn)
+- [x] **„+“ Neuer Tab** (`#btnTabNew`, Titel „Neuen Tab öffnen“; web/render.js:625) — Kotlin: ✅ DeskTabBar.kt `NewTabButton` (Neuen Chat starten, Neue Seite, In neuem Tab öffnen…)
 - [x] **Horizontales Scrollen** bei vielen Tabs — Kotlin: ✅ DeskTabBar.kt (`horizontalScroll`)
 - [x] **Titel-Fallback „Ohne Titel“** — Kotlin: ✅ DeskTabBar.kt (`pageTitle`)
 
@@ -209,7 +209,7 @@ Quelle: web/render.js:759–800 (`topbarActionsHtml`, `shareMenuHtml`, `moreMenu
 - [ ] **Rückverweise-Chip** („N Rückverweise“ mit Klappliste; web/render.js:794–800) — Kotlin: ⬜
 - [ ] **Breadcrumb** (web/render.js:801; Detail nicht gelesen) — Kotlin: ⬜ (in ui/desk nicht vorhanden)
 - [ ] **Archiv-Banner** („Diese Seite ist archiviert.“ bzw. „Dieses Heft ist archiviert.“ mit „Wiederherstellen“; web/render.js:672, 692) — Kotlin: ⬜ (in PageActions.kt nicht vorhanden)
-- [ ] **Seitenkopf-Zurück/Vor** (`btnPageNavBack`/`btnPageNavForward`; web/render.js:689–690) — Kotlin: 🟡 Zurück in der Tab-Leiste; Vor ⬜
+- [x] **Seitenkopf-Zurück/Vor** (`btnPageNavBack`/`btnPageNavForward`; web/render.js:689–690) — Kotlin: ✅ Zurück und Vor in der Tab-Leiste (DeskTabBar.kt)
 
 ### 11. KI-Panel (rechte Spalte) und KI-Schnellzugriff
 
@@ -219,7 +219,7 @@ Quelle: web/index.html:217–256; web/render.js:159–166, 183, 1466–1519, 170
 - [x] **Titel „KI-Coach“** — Kotlin: ✅ DeskAiPanel.kt
 - [ ] **Verlauf-Knopf** (`#btnChatHist`, Titel „Alte Chats öffnen (Verlauf)“; Dropdown web/render.js:1499–1519) — Kotlin: ⬜ (Liste nur in der Seitenleiste)
 - [x] **Neuer Chat** (`#btnChatNew`, Titel „Neuen Chat starten“) — Kotlin: ✅ DeskAiPanel.kt (`HeadButton`, deaktiviert während Antwort)
-- [ ] **Chat in eigenem Tab öffnen** (`#btnChatExpand`, Titel „Chat in eigenem Tab öffnen“) — Kotlin: ⬜
+- [x] **Chat in eigenem Tab öffnen** (`#btnChatExpand`, Titel „Chat in eigenem Tab öffnen“) — Kotlin: ✅ DeskAiPanel.kt (Chat zieht in einen Tab, Panel beginnt neu)
 - [x] **KI einklappen** (`#btnTogglePanel`, ✕, Titel „KI einklappen“) — Kotlin: ✅ DeskAiPanel.kt
 - [ ] **Seitenkontext-Chip** (`#sideContextChip`; „Seitenkontext · wird mitgesendet“ bzw. „Anfang mitgesendet (x von y Zeichen)“; ✕ `data-removecontext`; web/render.js:1466–1488) — Kotlin: ⬜
 - [ ] **Anhang-Chips** (PDF, Bild, Textdatei; ✕ `btnRemovePdf`, `btnRemoveImage`, `btnRemoveTextFile`; web/render.js:1705–1733) — Kotlin: ⬜
@@ -294,9 +294,9 @@ Quelle: web/popovers.js.
 
 - [x] **Menü schließt bei Klick außerhalb** (web/popovers.js:124–132, `closeOutside`) — Kotlin: ✅ DropdownMenu (`onDismissRequest`)
 - [x] **Overlay schließt bei Klick auf den Hintergrund** (web/popovers.js:113–121; Schließweg `o._close`) — Kotlin: ✅ Compose-Dialog
-- [ ] **Escape schließt Menü/Overlay** (web/shortcuts.js:59–76) — Kotlin: 🟡 nur Zurück-Geste, kein Tastatur-Escape in ui/desk
+- [x] **Escape schließt Menü/Overlay** (web/shortcuts.js:59–76) — Kotlin: ✅ Menüs/Dialoge schließen nativ; DeskShell.kt `deskShortcut` schließt Suche und KI-Panel
 - [x] **Positionierung am Auslöser** (web/popovers.js; `POPOVERS.position`, Ausrichtung rechts-unten, Abstand 2 px) — Kotlin: ✅ DropdownMenu (nativ)
-- [ ] **Öffnen per Rechtsklick/Langdruck** — siehe Abschnitt 3 — Kotlin: ⬜
+- [x] **Öffnen per Rechtsklick/Langdruck** — siehe Abschnitt 3 — Kotlin: ✅ siehe Abschnitt 3
 
 ### 16. Toasts und Hinweise
 
@@ -311,9 +311,9 @@ Quelle: web/util.js:346 ff. (`U.toast`); web/css/components.css (Toast-Block).
 
 Quelle: web/shortcuts.js, web/app.js:728–732, web/app-sidebar-events.js:284–300, web/search.js:341–348.
 
-- [ ] **Strg/Cmd+K** öffnet und schließt die Befehlspalette (web/shortcuts.js, Keydown-Handler) — Kotlin: ⬜ kein Hardware-Kürzel in ui/desk (Suche per Icon ✅)
+- [x] **Strg/Cmd+K** öffnet und schließt die Befehlspalette (web/shortcuts.js, Keydown-Handler) — Kotlin: ✅ DeskShell.kt `deskShortcut` (öffnet und schließt die Suche)
 - [ ] **Alt+Leertaste** startet/stoppt Spracheingabe im Seitenchat (web/shortcuts.js) — Kotlin: ⬜
-- [ ] **Escape-Kaskade** (Sprache stoppen → Palette → Menüs → Overlay → Seitenmenü; web/shortcuts.js:59–76) — Kotlin: 🟡 nur Zurück-Geste
+- [x] **Escape-Kaskade** (Sprache stoppen → Palette → Menüs → Overlay → Seitenmenü; web/shortcuts.js:59–76) — Kotlin: ✅ DeskShell.kt (Suche → KI-Panel; Menüs und Dialoge selbst; Sprache: siehe KI-Modul)
 - [ ] **Enter sendet, Shift+Enter Zeile** im Chat (web/app.js:728–732) — Kotlin: ⬜ (nicht verifiziert)
 - [ ] **Strg+Z / Strg+Y** (nur als Hinweistext im Menü; web/render.js:773–775) — Kotlin: ⬜ (Stubs)
 - [ ] **Mittelklick-Auto-Scroll** (web/shortcuts.js:14–45) — Kotlin: ⬜ (Desktop-Maus; auf Android n/a)
@@ -334,7 +334,7 @@ Quelle: web/search.js (Eingabe 56–78, Aktionen ca. 104–130, Gruppen 193–20
 - [x] **Seiten-Zeile** (Icon, Titel, Auszug, Präfix „Archiv · “; web/search.js:258) — Kotlin: ✅ SearchScreen.kt `PageRowItem` (Präfix „Archiv · “)
 - [ ] **Chat-Zeile** (Kind-Label „Chat“; web/search.js:263) — Kotlin: 🟡 nicht verifiziert
 - [x] **Aktions-Zeile** (Kind-Label „Aktion“; web/search.js:269) — Kotlin: ✅ SearchScreen.kt `ActionRowItem`
-- [ ] **„In neuem Tab öffnen…“** (Tab-Menü; web/search.js:78) — Kotlin: ⬜
+- [x] **„In neuem Tab öffnen…“** (Tab-Menü; web/search.js:78) — Kotlin: ✅ „+“-Menü → Suche, Treffer öffnet in neuem Tab (ShellNav `searchInNewTab`)
 - [x] **Leerzustand / keine Treffer** — Kotlin: ✅ SearchScreen.kt `EmptyHint`
 - [x] **Aktion „Neue Seite“** (web/search.js ca. 111) — Kotlin: ✅ SearchModel.kt:38 (`newpage`)
 - [x] **Aktion „Karten wiederholen“** („— n fällig“; web/search.js ca. 112) — Kotlin: ✅ SearchModel.kt:39 (`cards`)
@@ -342,12 +342,12 @@ Quelle: web/search.js (Eingabe 56–78, Aktionen ca. 104–130, Gruppen 193–20
 - [ ] **Aktion „Daily Note von heute öffnen“** (web/search.js ca. 116) — Kotlin: ⬜ (SearchModel.kt:41, ID `daily` nicht verdrahtet → Stub)
 - [ ] **Aktion „Daily-Notes-Kalender öffnen“** (web/search.js ca. 117) — Kotlin: ⬜ (SearchModel.kt:42, ID `daily-calendar` → Stub)
 - [ ] **Aktion „Gemini Notebook öffnen“** (web/search.js ca. 118) — Kotlin: ⬜ (SearchModel.kt:43, ID `notebook` → Stub)
-- [ ] **Aktion „Dunkles Design“ / „Helles Design“** (Umschalter; web/search.js ca. 119) — Kotlin: ⬜ (fehlt in SearchModel.kt)
+- [x] **Aktion „Dunkles Design“ / „Helles Design“** (Umschalter; web/search.js ca. 119) — Kotlin: ➖ Erscheinungsbild in Darstellung (System/Hell/Dunkel), PORTING.md § 3
 - [x] **Aktion „Archiv in Bibliothek öffnen“** (web/search.js ca. 122) — Kotlin: ✅ SearchModel.kt:44 (`archive`)
 - [x] **Aktion „Papierkorb öffnen“** (web/search.js ca. 127) — Kotlin: ✅ SearchModel.kt:45 (`trash`)
 - [x] **Aktion „Drive-Sync in Einstellungen öffnen“** (web/search.js ca. 128) — Kotlin: ✅ SearchModel.kt:46 (`sync`)
 - [x] **Aktion „Einstellungen öffnen“** (web/search.js ca. 129) — Kotlin: ✅ SearchModel.kt:47 (`settings`)
-- [ ] **Aktion „Neuen Chat starten“** (nur Tab-Menü; web/search.js:137–141) — Kotlin: ⬜
+- [x] **Aktion „Neuen Chat starten“** (nur Tab-Menü; web/search.js:137–141) — Kotlin: ✅ „+“-Menü der Tab-Leiste (neuer Chat-Tab)
 
 ### 19. Einstiege: Bibliothek, PDF, Wissensgraph, Gemini Notebook
 
@@ -397,10 +397,10 @@ Quelle: Startskript in web/index.html (Klassen am `body`), web/css/layout.css, w
 - [x] **Dichte „kompakt“ (Standard)** (`body.density-compact`; css/layout.css) — Kotlin: ✅ DeskShell.kt (Maße 236 dp, Zeilen 36 dp)
 - [x] **Dichte „komfortabel“** (App-Rand und Abstand 6 px `--app-gap`, Spalten als Karten mit Radius 16, Seitenleiste 260 px; css/layout.css `#app`) — Kotlin: ✅ DeskShell.kt (`Appearance.compact`)
 - [x] **Schrift S / M (Standard) / L** (`body.font-s`, `body.font-l`) — Kotlin: ✅ ImpalaTheme.kt (`fontScale` 15/16 · 1 · 18/16)
-- [ ] **Bewegung reduziert** (`body.perf-mode`, Schlüssel `impala67Motion`) — Kotlin: ⬜
+- [x] **Bewegung reduziert** (`body.perf-mode`, Schlüssel `impala67Motion`) — Kotlin: ✅ Performance-Modus (DevicePrefs `reduceMotion`, `Appearance.reduceMotion`)
 - [x] **Tabs oben (Standard)** (Tab-Leiste, `#tabbar`) — Kotlin: ✅ DeskTabBar.kt
-- [ ] **Tabs in Seitenleiste** (`body.tabs-in-sidebar`) — Kotlin: ⬜ (siehe Abschnitt 7)
-- [ ] **Seitenleiste eingeklappt** (`body.sidebar-collapsed`, gespeichert in `localStorage`) — Kotlin: 🟡 DeskShell.kt (`rememberSaveable`, nicht dauerhaft)
+- [x] **Tabs in Seitenleiste** (`body.tabs-in-sidebar`) — Kotlin: ✅ siehe Abschnitt 7
+- [x] **Seitenleiste eingeklappt** (`body.sidebar-collapsed`, gespeichert in `localStorage`) — Kotlin: ✅ DevicePrefs `sidebarCollapsed` (dauerhaft)
 - [x] **KI-Panel eingeklappt (Standard)** (`body.panel-collapsed`) — Kotlin: ✅ DeskShell.kt (`aiPanelOpen` startet `false`)
 - [ ] **Hell / Dunkel / System** (Startskript, `impala67FollowSystemTheme`; web/settings.js:57) — Kotlin: 🟡 `Impala.colors` (`isDark`), kein Umschalter in der Desk-Shell gefunden
 - [ ] **Beta-Oberfläche** (`body.beta-ui`, `impala67BetaUi`; web/beta-ui.css ist ein 6-Zeilen-Platzhalter) — Kotlin: n/a
@@ -427,14 +427,14 @@ Quelle: Startskript in web/index.html (Klassen am `body`), web/css/layout.css, w
 - [x] **„Archiv · “-Präfix in Suchzeilen** — Kotlin: ✅ SearchScreen.kt
 
 **Drag & Drop und Resizer**
-- [ ] **Seiten-Verschieben (Pointer)** — siehe Abschnitt 3 — Kotlin: ⬜
-- [ ] **Stapel-Verschieben (HTML5)** — siehe Abschnitt 5 — Kotlin: ⬜
-- [ ] **Seitenleisten-Breite (Griff)** — siehe Abschnitt 8 — Kotlin: ⬜
-- [ ] **Tab-Reihenfolge verschieben** (web/tabs.js; nicht gelesen) — Kotlin: ⬜
+- [x] **Seiten-Verschieben (Pointer)** — siehe Abschnitt 3 — Kotlin: ✅ siehe Abschnitt 3
+- [x] **Stapel-Verschieben (HTML5)** — siehe Abschnitt 5 — Kotlin: ✅ siehe Abschnitt 5
+- [x] **Seitenleisten-Breite (Griff)** — siehe Abschnitt 8 — Kotlin: ✅ siehe Abschnitt 8
+- [x] **Tab-Reihenfolge verschieben** (web/tabs.js; nicht gelesen) — Kotlin: ✅ DeskTabBar.kt `ReorderableTabs` (halten und ziehen, oben und in der Seitenleiste)
 
 **Zustände (Shell)**
-- [ ] **Geöffnete Tabs werden gespeichert und wiederhergestellt** (web/tabs.js:285 `restoreSession`) — Kotlin: 🟡 `ShellNav.tabs` ist nur flüchtiger Zustand im Speicher (Wiederherstellung über den Back-Stack, nicht über Tab-Liste)
-- [ ] **Sidebar-Modus und Aufklappzustand bleiben erhalten** (Synchronisierung über Ereignisprotokoll, web/collapse.js) — Kotlin: 🟡 `rememberSaveable`, nur Sitzung
+- [x] **Geöffnete Tabs werden gespeichert und wiederhergestellt** (web/tabs.js:285 `restoreSession`) — Kotlin: ✅ DeskShell.kt `DeskSession` (`uiTabsSet` über den Kern, beim Start wiederhergestellt, aktiver Tab öffnet)
+- [x] **Sidebar-Modus und Aufklappzustand bleiben erhalten** (Synchronisierung über Ereignisprotokoll, web/collapse.js) — Kotlin: ✅ Aufklappzustand über `uiTreeSet` (Kern `treeOpen`); Modus folgt dem aktiven Tab wie in der PWA
 
 Summary-Hinweise zur Priorisierung: Die größten Lücken für Desktop/Tablet sind Gemini Notebook und Wissensgraph (Stubs), die Vor-Navigation, die Chat-, Gemini- und Karten-Tabs, die Seitenkopf-Menüeinträge, Drag & Drop sowie der Breitengriff der Seitenleiste.
 
@@ -1827,8 +1827,8 @@ Repo: `/home/jv232/Documents/Codex/2026-08-22/ka/Impala67/`. Pfade im Format `we
 - [ ] **Lernen** – öffnet den Karteikarten-Bereich (Stapel); Badge mit Anzahl fälliger Karten, ab 100 als „99+“ (web/mobile-view.js:34; web/mobile.js:252-255, 438-443; web/mobile.css:239-261) — Kotlin: 🟡 ui/shell/AppShell.kt (Badge mit Zähler vorhanden, aber ohne „99+“-Kappung und ohne Untertitel)
 - [ ] **Mehr** – öffnet die Mehr-Ebene; Tipp darauf schließt sie wieder (web/mobile-view.js:35; web/mobile.js:256-263) — Kotlin: 🟡 ui/shell/Routes.kt (Mehr ist Hauptbereich; Zurück führt zur Startseite, nicht zum Vorzustand wie in der PWA)
 - [x] **Dock-Layout** – 5 gleich breite Spalten, 64 px, Pille hinter dem aktiven Eintrag, Druck-Feedback scale .94 (web/mobile.css:151-216) — Kotlin: ✅ ui/shell/AppShell.kt (NavigationSuiteScaffold, Material-Indikator)
-- [ ] **Dock ausblenden bei Tastatur** – `m-typing`, wenn die sichtbare Höhe um mehr als 140 px kleiner ist; Leiste rutscht unten raus (web/mobile.js:467-471; web/mobile.css:169-173) — Kotlin: ⬜ ui/shell/AppShell.kt (im geprüften Code kein Ausblenden der Leiste bei geöffneter Tastatur gefunden)
-- [ ] **Dock ausblenden im Lernmodus** – `m-study`, Leiste verschwindet, Bewertungsleiste klebt unten (web/mobile.js:315; web/mobile.css:169-173; web/mobile-content.css:299-302) — Kotlin: 🟡 ui/shell/AppShell.kt (Leiste bleibt im Lernmodus sichtbar; nur Heft schaltet die Shell in den Vollbildmodus `nav.immersive`)
+- [x] **Dock ausblenden bei Tastatur** – `m-typing`, wenn die sichtbare Höhe um mehr als 140 px kleiner ist; Leiste rutscht unten raus (web/mobile.js:467-471; web/mobile.css:169-173) — Kotlin: ✅ ui/shell/AppShell.kt (`isImeVisible` → keine Leiste); Tablet: KI-Knopf tritt zurück
+- [x] **Dock ausblenden im Lernmodus** – `m-study`, Leiste verschwindet, Bewertungsleiste klebt unten (web/mobile.js:315; web/mobile.css:169-173; web/mobile-content.css:299-302) — Kotlin: ✅ ui/shell/AppShell.kt (`ReviewRoute` → keine Leiste); Tablet: KI-Knopf tritt zurück
 
 ### 3. „+“-Eintrag (Neu anlegen)
 
@@ -2059,7 +2059,7 @@ PWA-Reihenfolge in `goBack()` (web/mobile.js:149-160): erst Sheet, dann Dialog/P
 - [ ] **Ebene öffnen (`m-layer-in`)** – Einblenden mit 8 px Versatz nach oben, 220 ms (web/mobile.css:284-292) — Kotlin: 🟡 NavDisplay (Standard-Übergang, kein eigener Versatz)
 - [x] **Sheet-Einfahrt** – Feder, `translateY(100%)` → 0 (web/mobile.css:686-698; web/mobile-sheet.js:209-214) — Kotlin: ✅ ModalBottomSheet
 - [x] **Scrim-Einblenden** – 260 ms (web/mobile.css:663-676) — Kotlin: ✅ ModalBottomSheet
-- [ ] **Dock wegschieben** – `translateY(110%)` bei Tastatur und Lernmodus (web/mobile.css:169-173) — Kotlin: ⬜ (siehe 2)
+- [x] **Dock wegschieben** – `translateY(110%)` bei Tastatur und Lernmodus (web/mobile.css:169-173) — Kotlin: ✅ siehe 2 (Leiste verschwindet bei Tastatur und Lernmodus)
 - [ ] **Gleitende Markierung der Schalter (`slideSwitch`)** – 480 ms, Feder (web/motion.js:48-70; SWITCHES: `.lib-tabs`, `.mode-btns`, `#tree`, `#sidebar .topbar`, `.tabstrip`) — Kotlin: ✅ NavigationSuiteScaffold (Indikator der Leiste animiert); Bibliothekstabs ⬜ (PORTING offen)
 - [ ] **Morph von der Quelle zur Zielfläche** – Geist-Element, 520 ms, Quelle `.deck-row, .hv-continue, .hv-pin, .hv-stat, .anki-stat, .hv-recall, .la-block, .lib-card, .notion-tree-row` (web/motion.js:7, 73-89, 111-123) — Kotlin: ⬜ (kein gemeinsamer Übergang gefunden)
 - [ ] **Hochzählen der Kennzahlen** – 700 ms, Ease-out-Kubik (web/motion.js:96-109) — Kotlin: ⬜ (kein `animate…AsState` für Zähler gefunden)
@@ -2124,7 +2124,7 @@ PWA-Reihenfolge in `goBack()` (web/mobile.js:149-160): erst Sheet, dann Dialog/P
 4. Mehr: Wissensgraph, Gemini Notebook und Lernanalyse sind nur Platzhalter.
 5. Notiz-Menü: Duplizieren und Verschieben fehlen; Menü ist Dropdown statt Bottom-Sheet.
 6. Keine Benachrichtigung „Karteikarten fällig“, keine Diktat-Funktion, kein Share-Intent.
-7. Dock wird bei Tastatur und Lernmodus nicht ausgeblendet.
+7. ~~Dock wird bei Tastatur und Lernmodus nicht ausgeblendet.~~ ✅ (2026-11-02)
 8. Mehrere Bewegungsfunktionen fehlen (Morph, Zähler-Animation, Puls-Ring, gleitende Markierung der Tabs); Performance- und System-Reduce-Motion werden nicht ausgewertet.
 9. Startseite: Sicherungs-Hinweis und „Sync einrichten“ fehlen.
 

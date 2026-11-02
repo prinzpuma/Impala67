@@ -43,49 +43,104 @@ class ShellNav(
         if (section != null) open(SettingsSectionRoute(section))
     }
 
-    /** Offene Seiten-Tabs (nur [desk]; in der PWA `S.tabs`). */
+    /** Offene Tabs (nur [desk]; in der PWA `S.tabs`): Seiten-IDs, `chat:<id>` und [ANKI_TAB]. */
     val tabs = mutableStateListOf<String>()
 
+    /** Mit „Zurück“ verlassene Ziele für „Vor“ (`S.navHistory` hinter `S.navIndex`); neue Navigation leert sie. */
+    private val forwardStack = mutableStateListOf<NavKey>()
+    val canGoForward: Boolean get() = forwardStack.isNotEmpty()
+
+    /** Nächste Seitensuche öffnet ihr Ergebnis in einem neuen Tab („In neuem Tab öffnen…“ im „+“-Menü). */
+    var searchInNewTab by mutableStateOf(false)
+
     fun open(key: NavKey) {
-        if (desk && key is PageRoute) trackTab(key.id, newTab = false)
+        forwardStack.clear()
+        if (desk) tabKey(key)?.let { trackTab(it, newTab = false) }
         backStack.add(key)
     }
 
     /** Seite in einem neuen Tab öffnen (Seiten-⋯ „In neuem Tab öffnen“). */
-    fun openNewTab(id: String) {
-        trackTab(id, newTab = true)
-        backStack.add(PageRoute(id))
+    fun openNewTab(id: String) = openNewTab(PageRoute(id))
+
+    /** Ziel mit eigenem Tab ([tabKey]) in einem neuen Tab öffnen. */
+    fun openNewTab(key: NavKey) {
+        forwardStack.clear()
+        tabKey(key)?.let { trackTab(it, newTab = true) }
+        backStack.add(key)
     }
 
+    /** Neuen Chat in einem eigenen Tab beginnen (`startNewChat({ newTab: true })`); die ID vergibt die App. */
+    fun openNewChatTab() = openNewTab(ChatRoute(java.util.UUID.randomUUID().toString()))
+
+    /** Tab antippen: sein Ziel zeigen. */
+    fun openTab(tab: String) = open(tabRoute(tab))
+
     /**
-     * Wie `openPage` in tabs.js: Ist die Seite schon offen, wird nur ihr Tab aktiv; sonst ersetzt sie
-     * die Seite im aktiven Tab (bzw. bekommt einen neuen Tab, wenn keine Seite offen ist).
+     * Wie `activateTab` in tabs.js: Ist das Ziel schon offen, wird nur sein Tab aktiv; sonst ersetzt es
+     * den aktiven Tab (bzw. bekommt einen neuen Tab, wenn keiner aktiv ist). Höchstens 12 Tabs.
      */
-    private fun trackTab(id: String, newTab: Boolean) {
-        if (id in tabs) return
-        val i = (backStack.lastOrNull() as? PageRoute)?.let { tabs.indexOf(it.id) } ?: -1
-        if (newTab || i < 0) tabs.add(id) else tabs[i] = id
+    private fun trackTab(tab: String, newTab: Boolean) {
+        if (tab in tabs) return
+        val i = currentTab?.let(tabs::indexOf) ?: -1
+        if (newTab || i < 0) {
+            tabs.add(tab)
+            if (tabs.size > MAX_TABS) tabs.removeAt(0)
+        } else tabs[i] = tab
     }
 
     /** Tab schließen; war er sichtbar, rückt der Nachbar nach (sonst Start). */
-    fun closeTab(id: String) {
-        val i = tabs.indexOf(id)
+    fun closeTab(tab: String) {
+        val i = tabs.indexOf(tab)
         if (i < 0) return
         tabs.removeAt(i)
-        if ((backStack.lastOrNull() as? PageRoute)?.id != id) return
-        backStack.removeAll { it is PageRoute && it.id == id }
+        if (currentTab != tab) return
+        forwardStack.clear()
+        backStack.removeAll { tabKey(it) == tab }
         val next = tabs.getOrNull(i) ?: tabs.getOrNull(i - 1)
-        if (next != null) backStack.add(PageRoute(next)) else go(TopLevel.Home)
+        if (next != null) backStack.add(tabRoute(next)) else go(TopLevel.Home)
+    }
+
+    /** Tab an eine andere Stelle schieben (Tab-Leiste/Seitenleiste: halten und ziehen). */
+    fun moveTab(from: Int, to: Int) {
+        if (from !in tabs.indices || to !in tabs.indices || from == to) return
+        tabs.add(to, tabs.removeAt(from))
+    }
+
+    /**
+     * Gespeicherte Tabs übernehmen (`restoreSession` in tabs.js), solange noch keiner offen ist; beim
+     * frischen Start (nur Start auf dem Stapel) öffnet der aktive Tab – sonst der letzte.
+     */
+    fun restoreSession(saved: List<String>, active: String?) {
+        if (tabs.isNotEmpty() || saved.isEmpty()) return
+        tabs.addAll(saved.takeLast(MAX_TABS))
+        val show = active?.takeIf { it in tabs } ?: tabs.last()
+        if (backStack.size == 1 && backStack[0] == HomeRoute) backStack.add(tabRoute(show))
     }
 
     /** Aktive Seite (für Tab-Leiste und Seitenleiste). */
     val currentPageId: String? get() = (backStack.lastOrNull() as? PageRoute)?.id
 
-    /** Zurück; landet man auf einer Seite ohne Tab, übernimmt sie den Tab der verlassenen Seite. */
+    /** Aktiver Tab (`S.activeTabId`), `null` auf Start, Bibliothek, Papierkorb … */
+    val currentTab: String? get() = backStack.lastOrNull()?.let(::tabKey)
+
+    /** Zurück; landet man auf einem Ziel ohne Tab, übernimmt es den Tab des verlassenen Ziels. */
     fun back() {
-        val leaving = currentPageId
-        backStack.removeLastOrNull()
-        val now = currentPageId ?: return
+        val leaving = currentTab
+        // Die Suche ist wie die Befehlspalette eine Ebene, kein Verlaufsschritt: „Vor“ öffnet sie nicht erneut.
+        backStack.removeLastOrNull()?.takeIf { it != SearchRoute }?.let(forwardStack::add)
+        adoptTab(leaving)
+    }
+
+    /** Vor (`navForward`): das zuletzt mit „Zurück“ verlassene Ziel wieder zeigen. */
+    fun forward() {
+        val next = forwardStack.removeLastOrNull() ?: return
+        val leaving = currentTab
+        backStack.add(next)
+        adoptTab(leaving)
+    }
+
+    private fun adoptTab(leaving: String?) {
+        val now = currentTab ?: return
         if (!desk || now in tabs) return
         val i = leaving?.let(tabs::indexOf) ?: -1
         if (i >= 0) tabs[i] = now else tabs.add(now)
@@ -93,6 +148,7 @@ class ShellNav(
 
     /** Hauptbereich wechseln: Start bleibt unten liegen, damit „Zurück“ dorthin führt. */
     fun go(top: TopLevel) {
+        forwardStack.clear()
         backStack.clear()
         backStack.add(HomeRoute)
         if (top != TopLevel.Home) backStack.add(top.route)
@@ -165,9 +221,33 @@ class ShellNav(
         "cards" -> go(TopLevel.Study)
         "cards-manage" -> { go(TopLevel.Study); open(CardBrowserRoute()) }
         "search" -> open(SearchRoute)
+        "newchat" -> openNewChatTab()
         else -> toast("Folgt mit einem der nächsten Module.")
     }
 }
 
 /** Ziel der Anlege-Auswahl: Eltern, Arbeitsbereich und ob die neue Seite in einem neuen Tab öffnet. */
 data class NewPageRequest(val parentId: String?, val workspaceId: String?, val newTab: Boolean)
+
+/** Tab der Karteikarten (`anki:main`): Übersicht, Lernen und Kartenbrowser teilen ihn. */
+const val ANKI_TAB = "anki:main"
+
+/** Präfix der Chat-Tabs (`chat:<id>`). */
+const val CHAT_TAB = "chat:"
+
+private const val MAX_TABS = 12
+
+/** Welcher Tab zu einem Ziel gehört; `null` = Ziel ohne eigenen Tab (Start, Bibliothek, Papierkorb …). */
+fun tabKey(key: NavKey): String? = when (key) {
+    is PageRoute -> key.id
+    is ChatRoute -> CHAT_TAB + key.id
+    StudyRoute, is ReviewRoute, is CardBrowserRoute -> ANKI_TAB
+    else -> null
+}
+
+/** Ziel eines Tabs (Karteikarten: die Stapelübersicht). */
+fun tabRoute(tab: String): NavKey = when {
+    tab == ANKI_TAB -> StudyRoute
+    tab.startsWith(CHAT_TAB) -> ChatRoute(tab.removePrefix(CHAT_TAB))
+    else -> PageRoute(tab)
+}

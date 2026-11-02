@@ -25,6 +25,7 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val reduceMotion by prefs.reduceMotion.collectAsStateWithLifecycle(false)
     val haptics by prefs.nativeHaptics.collectAsStateWithLifecycle(true)
     val hideBars by prefs.hideSystemBars.collectAsStateWithLifecycle(true)
+    val tabsInSidebar by prefs.tabsInSidebar.collectAsStateWithLifecycle(false)
     val s = values
 
     SettingsGroup("Design") {
@@ -62,9 +63,16 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             "Haptisches Feedback", "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", haptics,
         ) { on -> vm.setPref { setNativeHaptics(on) } }
     }
-    // Tab-Anordnung entfällt nativ (Navigationsleiste oder Seitenleiste je Gerät). TODO(desk): Vorschläge
-    // „+ Fach“ unter den Themen (aus den aktiven Notizen) fehlen, bis die Fächer-Auswertung nativ ist.
+    // TODO(desk): Vorschläge „+ Fach“ unter den Themen (aus den aktiven Notizen) fehlen, bis die Fächer-Auswertung nativ ist.
     SettingsGroup("Oberfläche") {
+        // Nur im Tablet-Layout gibt es Tabs; auf dem Telefon bleibt die Navigationsleiste.
+        SettingsChoiceRow(
+            title = "Tab-Anordnung",
+            description = if (tabsInSidebar) "Vertikale Tabs in der linken Seitenleiste" else "Horizontale Leiste oben (Standard)",
+            options = listOf(false to "Oben", true to "Seitenleiste"),
+            selected = tabsInSidebar,
+            onSelect = { on -> vm.setPref { setTabsInSidebar(on) } },
+        )
         SettingsTextField(
             label = "Begrüßungsname",
             stored = s?.userName ?: "",

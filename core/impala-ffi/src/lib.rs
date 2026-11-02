@@ -27,6 +27,7 @@ mod pages;
 mod rag;
 mod study_records;
 mod sync;
+mod ui;
 
 use std::fmt;
 use std::sync::mpsc::Sender;

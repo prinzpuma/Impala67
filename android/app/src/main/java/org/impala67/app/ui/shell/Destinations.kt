@@ -64,10 +64,24 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     entry<ArchiveRoute> { ArchiveScreen(store, onOpenPage = { nav.open(PageRoute(it)) }) }
     entry<LibraryRoute> { LibraryScreen(store, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
     entry<SearchRoute> {
-        SearchScreen(store, onOpenPage = { nav.back(); nav.open(PageRoute(it)) }, onAction = { nav.back(); nav.action(it) }, onClose = nav::back)
+        SearchScreen(
+            store,
+            onOpenPage = { id ->
+                val newTab = nav.searchInNewTab
+                nav.searchInNewTab = false
+                nav.back()
+                if (newTab) nav.openNewTab(id) else nav.open(PageRoute(id))
+            },
+            onAction = { nav.searchInNewTab = false; nav.back(); nav.action(it) },
+            onClose = { nav.searchInNewTab = false; nav.back() },
+        )
     }
     entry<AiRoute> {
         ChatView(viewModel { AiChatViewModel(store, prefs) }, activePageId = null, onOpenSettings = { nav.action("settings") })
+    }
+    // Chat im eigenen Tab (Tablet): eigener Verlauf, getrennt vom KI-Panel – ein Chat lebt nur an einer Stelle.
+    entry<ChatRoute> { route ->
+        ChatView(viewModel { AiChatViewModel(store, prefs).also { it.open(route.id) } }, activePageId = null, onOpenSettings = { nav.action("settings") })
     }
     entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
         SettingsSection("overview", store, prefs, nav::toast)

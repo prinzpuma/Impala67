@@ -36,6 +36,8 @@ pub struct Changes {
     pub settings: bool,
     pub workspaces: bool,
     pub heft_folders: bool,
+    /// Offene Tabs oder Aufklapp-Zustand des Seitenbaums ([`ImpalaCore::ui_tabs`], [`ImpalaCore::tree_open`]).
+    pub ui: bool,
     /// Geänderte Hefte (Seiten-IDs): offene Heftansicht nachziehen.
     pub hefte: Vec<String>,
     /// Neu eingetroffene Heft-Bilder (Hash): Bilder neu zeichnen.
@@ -84,6 +86,7 @@ impl Changes {
         self.settings |= t.settings;
         self.workspaces |= t.workspaces;
         self.heft_folders |= t.gn_folders;
+        self.ui |= t.tree_open || t.tabs;
         add_one(&mut self.hefte, t.heft);
         add_one(&mut self.heft_images, t.blob);
         for id in t.closed_pages {

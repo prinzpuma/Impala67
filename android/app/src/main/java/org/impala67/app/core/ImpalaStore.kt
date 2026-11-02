@@ -71,6 +71,8 @@ object Touches {
     val articles: (Changes) -> Boolean = { it.homeArticles }
     val settings: (Changes) -> Boolean = { it.settings }
     val chats: (Changes) -> Boolean = { it.chatsAll || it.chats.isNotEmpty() }
+    /** Offene Tabs und Aufklapp-Zustand des Seitenbaums. */
+    val ui: (Changes) -> Boolean = { it.ui }
 
     fun any(vararg groups: (Changes) -> Boolean): (Changes) -> Boolean = { c -> groups.any { it(c) } }
 }

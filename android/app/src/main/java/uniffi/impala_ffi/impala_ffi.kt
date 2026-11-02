@@ -1432,6 +1432,14 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1849,6 +1857,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_page_db(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_page_prop(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_tree_open(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_settings_json(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_study_queue(
@@ -1864,6 +1876,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_trashed_cards(
 fun uniffi_impala_ffi_checksum_method_impalacore_trashed_decks(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_trashed_pages(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_tree_open(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_ui_tabs(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_unarchive_card(
 ): Short
@@ -2363,6 +2379,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_page_db(`ptr`: Pointer,`id`: Rust
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_page_prop(`ptr`: Pointer,`id`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_tree_open(`ptr`: Pointer,`key`: RustBuffer.ByValue,`open`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(`ptr`: Pointer,`tabs`: RustBuffer.ByValue,`activeTabId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_settings_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_study_queue(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`utcOffsetMinutes`: Int,`mix`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -2378,6 +2398,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_trashed_cards(`ptr`: Pointer,uniffi_o
 fun uniffi_impala_ffi_fn_method_impalacore_trashed_decks(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_trashed_pages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_tree_open(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_ui_tabs(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_unarchive_card(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -3250,6 +3274,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_page_prop() != 15143.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_tree_open() != 43668.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs() != 23040.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3272,6 +3302,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_trashed_pages() != 61887.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_tree_open() != 24285.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_ui_tabs() != 55771.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_unarchive_card() != 55133.toShort()) {
@@ -7701,6 +7737,16 @@ public interface ImpalaCoreInterface {
     fun `setPageProp`(`id`: kotlin.String, `name`: kotlin.String, `value`: kotlin.String)
     
     /**
+     * Einen Eintrag auf- oder zuklappen (`COLLAPSE.toggle` in der PWA).
+     */
+    fun `setTreeOpen`(`key`: kotlin.String, `open`: kotlin.Boolean)
+    
+    /**
+     * Tabs speichern (wie `saveSessionNow` in web/tabs.js; höchstens die letzten 12).
+     */
+    fun `setUiTabs`(`tabs`: List<kotlin.String>, `activeTabId`: kotlin.String?)
+    
+    /**
      * Alle Einstellungen als JSON-Objekt (dieselben Schlüssel wie in der PWA, z. B. `aiProviders`,
      * `deckConf`, `driveAutoSyncMinutes`). Geheimnisse (`cfSyncKey`, KI-Schlüssel) sind enthalten.
      */
@@ -7739,6 +7785,17 @@ public interface ImpalaCoreInterface {
     fun `trashedDecks`(): List<DeckInfo>
     
     fun `trashedPages`(): List<PageSummary>
+    
+    /**
+     * Aufklapp-Zustand des Baums: offene Seiten (`true`) und ausdrücklich zugeklappte
+     * Arbeitsbereiche (`ws:<id>` → `false`). Seiten sind sonst zu, Arbeitsbereiche offen.
+     */
+    fun `treeOpen`(): Map<kotlin.String, kotlin.Boolean>
+    
+    /**
+     * Zuletzt gespeicherte Tabs (auch von anderen Geräten).
+     */
+    fun `uiTabs`(): UiTabs
     
     /**
      * Archivierte Karte zurückholen.
@@ -9796,6 +9853,36 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Einen Eintrag auf- oder zuklappen (`COLLAPSE.toggle` in der PWA).
+     */
+    @Throws(CoreException::class)override fun `setTreeOpen`(`key`: kotlin.String, `open`: kotlin.Boolean)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_tree_open(
+        it, FfiConverterString.lower(`key`),FfiConverterBoolean.lower(`open`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Tabs speichern (wie `saveSessionNow` in web/tabs.js; höchstens die letzten 12).
+     */
+    @Throws(CoreException::class)override fun `setUiTabs`(`tabs`: List<kotlin.String>, `activeTabId`: kotlin.String?)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(
+        it, FfiConverterSequenceString.lower(`tabs`),FfiConverterOptionalString.lower(`activeTabId`),_status)
+}
+    }
+    
+    
+
+    
+    /**
      * Alle Einstellungen als JSON-Objekt (dieselben Schlüssel wie in der PWA, z. B. `aiProviders`,
      * `deckConf`, `driveAutoSyncMinutes`). Geheimnisse (`cfSyncKey`, KI-Schlüssel) sind enthalten.
      */override fun `settingsJson`(): kotlin.String {
@@ -9907,6 +9994,37 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_trashed_pages(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aufklapp-Zustand des Baums: offene Seiten (`true`) und ausdrücklich zugeklappte
+     * Arbeitsbereiche (`ws:<id>` → `false`). Seiten sind sonst zu, Arbeitsbereiche offen.
+     */override fun `treeOpen`(): Map<kotlin.String, kotlin.Boolean> {
+            return FfiConverterMapStringBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_tree_open(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Zuletzt gespeicherte Tabs (auch von anderen Geräten).
+     */override fun `uiTabs`(): UiTabs {
+            return FfiConverterTypeUiTabs.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_ui_tabs(
         it, _status)
 }
     }
@@ -11663,6 +11781,10 @@ data class Changes (
     var `workspaces`: kotlin.Boolean, 
     var `heftFolders`: kotlin.Boolean, 
     /**
+     * Offene Tabs oder Aufklapp-Zustand des Seitenbaums ([`ImpalaCore::ui_tabs`], [`ImpalaCore::tree_open`]).
+     */
+    var `ui`: kotlin.Boolean, 
+    /**
      * Geänderte Hefte (Seiten-IDs): offene Heftansicht nachziehen.
      */
     var `hefte`: List<kotlin.String>, 
@@ -11701,6 +11823,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -11724,6 +11847,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.allocationSize(value.`settings`) +
             FfiConverterBoolean.allocationSize(value.`workspaces`) +
             FfiConverterBoolean.allocationSize(value.`heftFolders`) +
+            FfiConverterBoolean.allocationSize(value.`ui`) +
             FfiConverterSequenceString.allocationSize(value.`hefte`) +
             FfiConverterSequenceString.allocationSize(value.`heftImages`) +
             FfiConverterSequenceString.allocationSize(value.`closedPages`)
@@ -11746,6 +11870,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.write(value.`settings`, buf)
             FfiConverterBoolean.write(value.`workspaces`, buf)
             FfiConverterBoolean.write(value.`heftFolders`, buf)
+            FfiConverterBoolean.write(value.`ui`, buf)
             FfiConverterSequenceString.write(value.`hefte`, buf)
             FfiConverterSequenceString.write(value.`heftImages`, buf)
             FfiConverterSequenceString.write(value.`closedPages`, buf)
@@ -14305,6 +14430,41 @@ public object FfiConverterTypeTimeSegment: FfiConverterRustBuffer<TimeSegment> {
     override fun write(value: TimeSegment, buf: ByteBuffer) {
             FfiConverterString.write(value.`startedAt`, buf)
             FfiConverterString.write(value.`endedAt`, buf)
+    }
+}
+
+
+
+/**
+ * Offene Tabs: Seiten-IDs, `chat:<id>`, `nlm:main`, `anki:main`; dazu der aktive Tab.
+ */
+data class UiTabs (
+    var `tabs`: List<kotlin.String>, 
+    var `activeTabId`: kotlin.String?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUiTabs: FfiConverterRustBuffer<UiTabs> {
+    override fun read(buf: ByteBuffer): UiTabs {
+        return UiTabs(
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: UiTabs) = (
+            FfiConverterSequenceString.allocationSize(value.`tabs`) +
+            FfiConverterOptionalString.allocationSize(value.`activeTabId`)
+    )
+
+    override fun write(value: UiTabs, buf: ByteBuffer) {
+            FfiConverterSequenceString.write(value.`tabs`, buf)
+            FfiConverterOptionalString.write(value.`activeTabId`, buf)
     }
 }
 
@@ -18989,6 +19149,45 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterSequenceTypeMdBlock.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringBoolean: FfiConverterRustBuffer<Map<kotlin.String, kotlin.Boolean>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.Boolean> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.Boolean>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterBoolean.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.Boolean>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren = value.map { (k, v) ->
+            FfiConverterString.allocationSize(k) +
+            FfiConverterBoolean.allocationSize(v)
+        }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(value: Map<kotlin.String, kotlin.Boolean>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterBoolean.write(v, buf)
         }
     }
 }

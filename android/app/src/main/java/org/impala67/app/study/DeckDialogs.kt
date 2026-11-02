@@ -31,6 +31,48 @@ import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.DeckConfig
 import uniffi.impala_ffi.LeechAction
 
+/** Welcher Stapel-Dialog offen ist (Lernen-Übersicht und Stapelbaum der Seitenleiste). */
+sealed interface DeckDialog {
+    data object New : DeckDialog
+    data class Sub(val parent: String) : DeckDialog
+    data class Rename(val name: String) : DeckDialog
+    data class Trash(val name: String) : DeckDialog
+    data class Options(val name: String) : DeckDialog
+}
+
+/** ⋯-Menü eines Stapels: Dialoge über [open], der Rest direkt über [vm]. */
+fun deckMenuActions(name: String, vm: StudyViewModel, browse: () -> Unit, open: (DeckDialog) -> Unit) = DeckMenuActions(
+    browse = browse, subdeck = { open(DeckDialog.Sub(name)) },
+    rename = { open(DeckDialog.Rename(name)) }, duplicate = { vm.duplicate(name) },
+    options = { open(DeckDialog.Options(name)) }, archive = { vm.archive(name) },
+    trash = { open(DeckDialog.Trash(name)) },
+)
+
+@Composable
+fun DeckDialogs(dialog: DeckDialog?, close: () -> Unit, store: ImpalaStore, vm: StudyViewModel) {
+    when (dialog) {
+        null -> Unit
+        DeckDialog.New -> DeckNameDialog(
+            "Neuer Stapel", "Unterstapel per „Eltern::Kind“", "", "Anlegen",
+            { vm.create(it); close() }, close,
+        )
+        is DeckDialog.Sub -> DeckNameDialog(
+            "Unterstapel von „${deckLabel(dialog.parent)}“", null, "", "Anlegen",
+            { vm.create(dialog.parent + DECK_SEP + it); close() }, close,
+        )
+        is DeckDialog.Rename -> DeckNameDialog(
+            "Stapel umbenennen", null, deckLabel(dialog.name), "Umbenennen",
+            { text ->
+                val prefix = dialog.name.substringBeforeLast(DECK_SEP, "")
+                vm.rename(dialog.name, if (prefix.isEmpty()) text else prefix + DECK_SEP + text)
+                close()
+            }, close,
+        )
+        is DeckDialog.Trash -> DeckTrashDialog(dialog.name, { vm.trash(dialog.name); close() }, close)
+        is DeckDialog.Options -> DeckConfigDialog(store, dialog.name, close)
+    }
+}
+
 /** Name eingeben: neuer Stapel, Unterstapel oder Umbenennen. */
 @Composable
 fun DeckNameDialog(title: String, hint: String?, initial: String, confirm: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {

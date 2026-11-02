@@ -35,7 +35,7 @@ import org.impala67.app.ui.theme.TextSize
 val AiPanelWidth = 320.dp
 
 /**
- * Rechte Spalte „KI-Coach“ (`#panel` in index.html): Kopf mit Neuer Chat und Einklappen, darunter der
+ * Rechte Spalte „KI-Coach“ (`#panel` in index.html): Kopf mit Neuer Chat, In eigenem Tab öffnen und Einklappen, darunter der
  * Chatverlauf mit Eingabe ([ChatView]). Die Chat-Liste steht in der Seitenleiste ([org.impala67.app.ai.ChatList]).
  */
 @Composable
@@ -44,6 +44,7 @@ fun DeskAiPanel(
     activePageId: String?,
     onOpenSettings: () -> Unit,
     onClose: () -> Unit,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = Impala.colors
@@ -56,6 +57,7 @@ fun DeskAiPanel(
             Box(Modifier.size(8.dp).clip(CircleShape).background(c.text2.copy(alpha = 0.5f)))
             Text("KI-Coach", Modifier.weight(1f).padding(start = Space.s2), color = c.text2, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold)
             HeadButton(R.drawable.ic_i_plus, "Neuen Chat starten", enabled = !running) { ai.newChat() }
+            HeadButton(R.drawable.ic_i_expand, "Chat in eigenem Tab öffnen", enabled = !running, onExpand)
             HeadButton(R.drawable.ic_i_x, "KI einklappen", enabled = true, onClose)
         }
         HorizontalDivider(color = c.edge)

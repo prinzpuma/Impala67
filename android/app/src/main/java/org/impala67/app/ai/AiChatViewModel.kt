@@ -186,26 +186,41 @@ class AiChatViewModel(private val store: ImpalaStore, private val prefs: DeviceP
         }
     }
 
-    /** Leeren Chat beginnen (nicht während eines Laufs). */
-    fun newChat() {
+    /** Leeren Chat beginnen (nicht während eines Laufs). [reveal]: das KI-Panel dafür aufklappen. */
+    fun newChat(reveal: Boolean = true) {
         if (_running.value) return
         _chatId.update { "" }
         _messages.update { emptyList() }
         _error.update { null }
-        _openRequests.update { it + 1 }
+        if (reveal) _openRequests.update { it + 1 }
     }
 
     /** Chat löschen; den laufenden Chat selbst nicht während seiner Antwort. */
-    fun delete(id: String) {
-        if (_running.value && id == _chatId.value) return
+    fun delete(id: String) = delete(setOf(id))
+
+    /** Mehrere Chats löschen (Auswahl in der Seitenleiste, `chatdelsel`). */
+    fun delete(ids: Set<String>) {
+        val running = _chatId.value.takeIf { _running.value }
+        val gone = ids - setOfNotNull(running)
+        if (gone.isEmpty()) return
         viewModelScope.launch {
-            runCatching { store.write { it.deleteChat(id) } }
+            runCatching { store.write { core -> gone.forEach(core::deleteChat) } }
                 .onFailure { Log.w(TAG, "Chat konnte nicht gelöscht werden", it) }
-            if (_chatId.value == id) {
+            if (_chatId.value in gone) {
                 _chatId.update { "" }
                 _messages.update { emptyList() }
                 _error.update { null }
             }
+        }
+    }
+
+    /** Chat umbenennen (`data-chatrename`); leerer Titel bleibt beim alten. */
+    fun rename(id: String, title: String) {
+        val t = title.trim()
+        if (t.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { store.write { core -> core.chat(id)?.let { core.saveChat(it.copy(title = t)) } } }
+                .onFailure { Log.w(TAG, "Chat konnte nicht umbenannt werden", it) }
         }
     }
 

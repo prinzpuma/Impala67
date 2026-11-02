@@ -40,4 +40,10 @@ class StudyViewModel(private val store: ImpalaStore) : ViewModel() {
     fun archive(name: String) = viewModelScope.guarded(_error) { store.write { it.archiveDeck(name) } }
 
     fun trash(name: String) = viewModelScope.guarded(_error) { store.write { it.trashDeck(name) } }
+
+    /** Stapel unter [target] hängen (`null`: nach oben), wie „hineinziehen“ in der Seitenleiste. */
+    fun move(name: String, target: String?) = viewModelScope.guarded(_error) { store.write { it.moveDeck(name, target) } }
+
+    /** Geschwister-Stapel in diese Reihenfolge bringen (Ziehen davor/danach). */
+    fun reorder(names: List<String>) = viewModelScope.guarded(_error) { store.write { it.reorderDecks(names) } }
 }
