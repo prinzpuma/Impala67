@@ -15,6 +15,7 @@ members = [
     "impala-markdown",
     "impala-model",
     "impala-net",
+    "impala-scan",
     "impala-search",
     "impala-srs",
     "impala-storage",
