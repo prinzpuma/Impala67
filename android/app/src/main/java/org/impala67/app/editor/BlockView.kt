@@ -153,6 +153,12 @@ private fun ListRow(block: MdBlock, k: MdBlockKind.ListItem, ctx: ReadContext, e
 @Composable
 private fun CodeBlock(block: MdBlock, k: MdBlockKind.Code, ctx: ReadContext, editing: Boolean) {
     val c = Impala.colors
+    val diagram = diagramKind(k.language)
+    // Diagramme zeigen die Grafik; beim Bearbeiten Code mit Live-Vorschau darunter (350 ms wie die PWA).
+    if (diagram != null && !editing) {
+        RichBlock(diagram, k.text, Modifier.padding(vertical = 4.dp))
+        return
+    }
     val shape = RoundedCornerShape(Radius.sm)
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(shape).background(c.surfaceSubtle).border(1.dp, c.edgeSoft, shape)
@@ -161,6 +167,7 @@ private fun CodeBlock(block: MdBlock, k: MdBlockKind.Code, ctx: ReadContext, edi
         if (k.language.isNotEmpty()) Text(k.language, color = c.text2, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
         if (editing) {
             ctx.editSlot?.invoke(block, textStyleFor(block, c), Modifier.fillMaxWidth())
+            if (diagram != null) RichBlock(diagram, k.text, Modifier.padding(top = 8.dp), debounceMs = 350)
         } else {
             val text = k.text.ifEmpty { " " }
             Text(text, Modifier.horizontalScroll(rememberScrollState()), style = textStyleFor(block, c), softWrap = false)

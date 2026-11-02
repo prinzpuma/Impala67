@@ -23,8 +23,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.impala67.app.R
@@ -45,6 +48,14 @@ internal fun EditorToolbar(vm: EditorViewModel, modifier: Modifier = Modifier) {
         Row(Modifier.widthIn(max = maxW).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             ToolIcon(R.drawable.ic_i_undo, "Rückgängig", vm.canUndo) { vm.undo() }
             ToolIcon(R.drawable.ic_i_redo, "Wiederholen", vm.canRedo) { vm.redo() }
+            Spacer(Modifier.width(6.dp))
+            // Inline-Formate wirken auf die Auswahl (wie Strg+B/I/Shift+S/E/K in der PWA).
+            val inline = vm.active?.mode == EditMode.Text && current != null && current != BlockType.Code
+            FormatButton("B", InlineFormat.Bold, inline, vm, TextStyle(fontWeight = FontWeight.Bold))
+            FormatButton("I", InlineFormat.Italic, inline, vm, TextStyle(fontStyle = FontStyle.Italic))
+            FormatButton("S", InlineFormat.Strike, inline, vm, TextStyle(textDecoration = TextDecoration.LineThrough))
+            FormatButton("`", InlineFormat.Code, inline, vm, TextStyle(fontFamily = FontFamily.Monospace))
+            ToolIcon(R.drawable.ic_i_link, "Link", inline) { vm.askLink() }
             Spacer(Modifier.width(6.dp))
             TypeButton("T", BlockType.Text, current, isText, vm)
             TypeButton("H1", BlockType.H1, current, isText, vm)
@@ -68,6 +79,14 @@ private fun ToolIcon(@DrawableRes icon: Int, description: String, enabled: Boole
             painterResource(icon), description, Modifier.size(20.dp),
             tint = if (enabled) tint else Impala.colors.text2.copy(alpha = 0.4f),
         )
+    }
+}
+
+@Composable
+private fun FormatButton(glyph: String, f: InlineFormat, enabled: Boolean, vm: EditorViewModel, style: TextStyle) {
+    val c = Impala.colors
+    IconButton(onClick = { vm.formatInline(f) }, enabled = enabled, modifier = Modifier.semantics { contentDescription = f.label }) {
+        Text(glyph, style = style.copy(fontSize = 16.sp, color = if (enabled) c.text else c.text2.copy(alpha = 0.4f)))
     }
 }
 

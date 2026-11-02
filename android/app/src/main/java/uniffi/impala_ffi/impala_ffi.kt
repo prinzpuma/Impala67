@@ -1424,6 +1424,14 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1787,7 +1795,11 @@ fun uniffi_impala_ffi_checksum_method_impalacore_orphan_trashed_cards(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_db(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_history(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_props(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subtree(
 ): Short
@@ -1832,6 +1844,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_change_listener(
 fun uniffi_impala_ffi_checksum_method_impalacore_set_clock_offset(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_deck_config(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_page_db(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_page_prop(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_settings_json(
 ): Short
@@ -2293,7 +2309,11 @@ fun uniffi_impala_ffi_fn_method_impalacore_orphan_trashed_cards(`ptr`: Pointer,u
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_history(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_props(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_subtree(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2338,6 +2358,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_change_listener(`ptr`: Pointer,`l
 fun uniffi_impala_ffi_fn_method_impalacore_set_clock_offset(`ptr`: Pointer,`ms`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_deck_config(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`conf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,`schema`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_page_prop(`ptr`: Pointer,`id`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_settings_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3145,7 +3169,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page() != 6888.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_db() != 21526.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_history() != 42129.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100.toShort()) {
@@ -3212,6 +3242,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_deck_config() != 55597.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_page_db() != 32891.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_page_prop() != 15143.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537.toShort()) {
@@ -7521,9 +7557,19 @@ public interface ImpalaCoreInterface {
     fun `page`(`id`: kotlin.String): PageDetail?
     
     /**
+     * Spalten der Datenbank-Seite `id`; `None`, wenn die Seite keine Datenbank ist.
+     */
+    fun `pageDb`(`id`: kotlin.String): List<DbColumn>?
+    
+    /**
      * Alle Versionen (Titel/Inhalt) aus dem Log, älteste zuerst. Liest das ganze Log: im Hintergrund rufen.
      */
     fun `pageHistory`(`id`: kotlin.String): List<PageVersion>
+    
+    /**
+     * Eigenschaften (`props`) einer Seite als Text.
+     */
+    fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String>
     
     /**
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
@@ -7643,6 +7689,16 @@ public interface ImpalaCoreInterface {
      * für alle speichern (`settingsSet { deckConf }`). Schwelle mindestens 1.
      */
     fun `setDeckConfig`(`deck`: kotlin.String?, `conf`: DeckConfig)
+    
+    /**
+     * „Als Vorlesungsübersicht“ (`Some(spalten)`) bzw. „Übersicht aufheben“ (`None`).
+     */
+    fun `setPageDb`(`id`: kotlin.String, `schema`: List<DbColumn>?)
+    
+    /**
+     * Einen Zellwert setzen; die übrigen Eigenschaften bleiben (app.js, `.db-cell`).
+     */
+    fun `setPageProp`(`id`: kotlin.String, `name`: kotlin.String, `value`: kotlin.String)
     
     /**
      * Alle Einstellungen als JSON-Objekt (dieselben Schlüssel wie in der PWA, z. B. `aiProviders`,
@@ -9321,6 +9377,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Spalten der Datenbank-Seite `id`; `None`, wenn die Seite keine Datenbank ist.
+     */override fun `pageDb`(`id`: kotlin.String): List<DbColumn>? {
+            return FfiConverterOptionalSequenceTypeDbColumn.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_db(
+        it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Alle Versionen (Titel/Inhalt) aus dem Log, älteste zuerst. Liest das ganze Log: im Hintergrund rufen.
      */
     @Throws(CoreException::class)override fun `pageHistory`(`id`: kotlin.String): List<PageVersion> {
@@ -9328,6 +9399,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_history(
+        it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Eigenschaften (`props`) einer Seite als Text.
+     */override fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String> {
+            return FfiConverterMapStringString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_props(
         it, FfiConverterString.lower(`id`),_status)
 }
     }
@@ -9673,6 +9759,36 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_deck_config(
         it, FfiConverterOptionalString.lower(`deck`),FfiConverterTypeDeckConfig.lower(`conf`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * „Als Vorlesungsübersicht“ (`Some(spalten)`) bzw. „Übersicht aufheben“ (`None`).
+     */
+    @Throws(CoreException::class)override fun `setPageDb`(`id`: kotlin.String, `schema`: List<DbColumn>?)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_page_db(
+        it, FfiConverterString.lower(`id`),FfiConverterOptionalSequenceTypeDbColumn.lower(`schema`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Einen Zellwert setzen; die übrigen Eigenschaften bleiben (app.js, `.db-cell`).
+     */
+    @Throws(CoreException::class)override fun `setPageProp`(`id`: kotlin.String, `name`: kotlin.String, `value`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_page_prop(
+        it, FfiConverterString.lower(`id`),FfiConverterString.lower(`name`),FfiConverterString.lower(`value`),_status)
 }
     }
     
@@ -12004,6 +12120,42 @@ public object FfiConverterTypeConflictInfo: FfiConverterRustBuffer<ConflictInfo>
             FfiConverterOptionalUInt.write(value.`extraLines`, buf)
             FfiConverterSequenceTypeConflictChoice.write(value.`choices`, buf)
             FfiConverterOptionalTypeConflictResolution.write(value.`recommended`, buf)
+    }
+}
+
+
+
+/**
+ * Eine Spalte; `kind` ist der Notion-Typ (`title`, `text`, `number`, `date`, `select`, `status`,
+ * `multi_select`, `url` …).
+ */
+data class DbColumn (
+    var `name`: kotlin.String, 
+    var `kind`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDbColumn: FfiConverterRustBuffer<DbColumn> {
+    override fun read(buf: ByteBuffer): DbColumn {
+        return DbColumn(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DbColumn) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`kind`)
+    )
+
+    override fun write(value: DbColumn, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`kind`, buf)
     }
 }
 
@@ -17803,6 +17955,38 @@ public object FfiConverterOptionalSequenceString: FfiConverterRustBuffer<List<ko
 /**
  * @suppress
  */
+public object FfiConverterOptionalSequenceTypeDbColumn: FfiConverterRustBuffer<List<DbColumn>?> {
+    override fun read(buf: ByteBuffer): List<DbColumn>? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterSequenceTypeDbColumn.read(buf)
+    }
+
+    override fun allocationSize(value: List<DbColumn>?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterSequenceTypeDbColumn.allocationSize(value)
+        }
+    }
+
+    override fun write(value: List<DbColumn>?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterSequenceTypeDbColumn.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalSequenceTypeDiffRow: FfiConverterRustBuffer<List<DiffRow>?> {
     override fun read(buf: ByteBuffer): List<DiffRow>? {
         if (buf.get().toInt() == 0) {
@@ -18049,6 +18233,34 @@ public object FfiConverterSequenceTypeConflictInfo: FfiConverterRustBuffer<List<
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeConflictInfo.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeDbColumn: FfiConverterRustBuffer<List<DbColumn>> {
+    override fun read(buf: ByteBuffer): List<DbColumn> {
+        val len = buf.getInt()
+        return List<DbColumn>(len) {
+            FfiConverterTypeDbColumn.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<DbColumn>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeDbColumn.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<DbColumn>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeDbColumn.write(it, buf)
         }
     }
 }
@@ -18777,6 +18989,45 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterSequenceTypeMdBlock.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.String, kotlin.String>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.String> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.String>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterString.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.String>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren = value.map { (k, v) ->
+            FfiConverterString.allocationSize(k) +
+            FfiConverterString.allocationSize(v)
+        }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(value: Map<kotlin.String, kotlin.String>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterString.write(v, buf)
         }
     }
 }

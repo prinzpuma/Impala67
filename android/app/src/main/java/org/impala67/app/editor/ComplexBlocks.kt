@@ -45,9 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -77,10 +75,7 @@ internal fun ComplexBlock(block: MdBlock, ctx: ReadContext) {
                 is MdBlockKind.Image -> ImageBlock(k, ctx.store)
                 is MdBlockKind.Heft -> LinkCard(R.drawable.ic_i_notebook, "Heft") { ctx.onOpenPage?.invoke(k.heftId) }
                 is MdBlockKind.File -> FileBlock(k, ctx.store)
-                is MdBlockKind.Math -> Text(
-                    k.text, Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).horizontalScroll(rememberScrollState()),
-                    color = c.text, fontFamily = FontFamily.Monospace, fontSize = 15.sp, textAlign = TextAlign.Center,
-                )
+                is MdBlockKind.Math -> RichBlock(RichKind.Math, k.text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                 is MdBlockKind.Table -> TableBlock(k.rows, ctx)
                 is MdBlockKind.Callout -> CalloutBlock(k, ctx)
                 is MdBlockKind.Toggle -> ToggleBlock(block.id, k, ctx)
@@ -193,11 +188,15 @@ private fun CalloutBlock(k: MdBlockKind.Callout, ctx: ReadContext) {
 @Composable
 private fun ToggleBlock(id: String, k: MdBlockKind.Toggle, ctx: ReadContext) {
     val c = Impala.colors
-    var open by rememberSaveable(id) { mutableStateOf(k.open) }
+    // Im Editor steht der Zustand in der Seite (`<details open>`), in der reinen Anzeige nur lokal.
+    var localOpen by rememberSaveable(id) { mutableStateOf(k.open) }
+    val persist = ctx.onToggleOpen
+    val open = if (persist != null) k.open else localOpen
     val styler = remember(c, ctx.onLink) { InlineStyler(c, keepMarkers = false, onLink = ctx.onLink) }
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xs)).clickable { open = !open }.padding(vertical = 3.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xs))
+                .clickable { if (persist != null) persist(id) else localOpen = !localOpen }.padding(vertical = 3.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Box(Modifier.size(24.dp).padding(top = 2.dp), contentAlignment = Alignment.Center) {

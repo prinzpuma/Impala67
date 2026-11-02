@@ -201,7 +201,7 @@ Quelle: web/render.js:759–800 (`topbarActionsHtml`, `shareMenuHtml`, `moreMenu
   - [x] **Icon ändern** (`data-iconpick`) — Kotlin: ✅ `IconDialog`
   - [x] **Cover ändern** (`data-coverpick`) — Kotlin: ✅ `CoverDialog` (eigenes Bild nicht geprüft)
   - [x] **Karten aus Markierungen (n)** (`cardsfromhl`; zählt `==…==` und `{{c1::…}}`; web/render.js:786) — Kotlin: ✅ DeskPageActions.kt (Kern `cardsFromHighlights`)
-  - [ ] **Duplizieren / Als Vorlage / Als Vorlesungsübersicht** (`dupTplItems`) — Kotlin: 🟡 Duplizieren ✅, Vorlage ✅ (DeskPageActions.kt); Vorlesungsübersicht fehlt (kommt mit der Datenbankansicht)
+  - [ ] **Duplizieren / Als Vorlage / Als Vorlesungsübersicht** (`dupTplItems`) — Kotlin: 🟡 Duplizieren ✅, Vorlage ✅ (DeskPageActions.kt); Vorlesungsübersicht ✅ (DeskPageActions.kt, Ansicht editor/DatabaseView.kt)
   - [ ] **Fach…** — Kotlin: ⬜
   - [x] **Verschieben nach…** — Kotlin: ✅ `MovePageDialog`
   - [x] **Archivieren** — Kotlin: ✅ (Tab wird geschlossen)
@@ -611,19 +611,19 @@ Einträge (web/editor-menus.js:99-122, Reihenfolge wie PWA):
 ### 9. Inline-Formatierung (Leiste, Tasten, Farben, Formeln)
 
 - [ ] **Schwebende Formatierungsleiste** (PWA: nicht vorhanden) — Kotlin: 🟡 nur Blockleiste EditorToolbar.kt (keine Inline-Schaltflächen)
-- [ ] **Fett Strg+B** (Wrap `**`, web/editor.js:1228) — Kotlin: ⬜
-- [ ] **Kursiv Strg+I** (Wrap `*`, web/editor.js:1229) — Kotlin: ⬜
-- [ ] **Unterstrichen Strg+U** (Wrap `<u>`, web/editor.js:1230) — Kotlin: ⬜
-- [ ] **Code Strg+E** (Wrap Backtick, web/editor.js:1231) — Kotlin: ⬜
-- [ ] **Durchgestrichen Strg+Shift+S** (Wrap `~~`, web/editor.js:1232) — Kotlin: ⬜
-- [ ] **Farbe wiederholen Strg+Shift+H** (letzte Farbe, Standard bg:yellow, web/editor.js:1233, 1132-1135) — Kotlin: ⬜
-- [ ] **Link Strg+K** (Prompt „Link-Adresse:“, web/editor.js:1234-1237) — Kotlin: ⬜
-- [ ] **Auswahl umschließen, Marker erkennen und entfernen** (web/editor.js:1109-1131 wrapSelection) — Kotlin: ⬜
+- [x] **Fett Strg+B** (Wrap `**`, web/editor.js:1228) — Kotlin: ✅ editor/InlineFormat.kt (Taste + Werkzeugleiste)
+- [x] **Kursiv Strg+I** (Wrap `*`, web/editor.js:1229) — Kotlin: ✅ editor/InlineFormat.kt
+- [x] **Unterstrichen Strg+U** (Wrap `<u>`, web/editor.js:1230) — Kotlin: ✅ editor/InlineFormat.kt
+- [x] **Code Strg+E** (Wrap Backtick, web/editor.js:1231) — Kotlin: ✅ editor/InlineFormat.kt
+- [x] **Durchgestrichen Strg+Shift+S** (Wrap `~~`, web/editor.js:1232) — Kotlin: ✅ editor/InlineFormat.kt
+- [x] **Farbe wiederholen Strg+Shift+H** (letzte Farbe, Standard bg:yellow, web/editor.js:1233, 1132-1135) — Kotlin: ✅ editor/InlineFormat.kt (fest bg:yellow, keine Farbauswahl)
+- [x] **Link Strg+K** (Prompt „Link-Adresse:“, web/editor.js:1234-1237) — Kotlin: ✅ editor/InlineFormat.kt (Dialog „Link einfügen“, auch Werkzeugleiste)
+- [x] **Auswahl umschließen, Marker erkennen und entfernen** (web/editor.js:1109-1131 wrapSelection) — Kotlin: ✅ editor/InlineFormat.kt wrapMarkers
 - [x] **Darstellung fett, kursiv, fett-kursiv, durchgestrichen, unterstrichen, Code** (web/editor-inline.js:34-74) — Kotlin: ✅ editor/InlineMarkdown.kt:47-86
 - [x] **Markierung ==…==** (Gelb, web/editor-inline.js:61) — Kotlin: ✅ editor/InlineMarkdown.kt:61 (gelbe Hintergrundfarbe)
 - [x] **Textfarbe {red}…{/} und Hintergrund {bg-red}…{/}** (8 Farben, web/editor-inline.js:58, web/css/editor.css:65-81) — Kotlin: ✅ editor/InlineMarkdown.kt:53-61 (inlineColor)
 - [ ] **Markdown-Zeichen beim Tippen ausgeblendet, sobald Muster vollständig** (web/editor.js:1087-1105) — Kotlin: 🟡 editor/BlockEditors.kt:61 (Marker bleiben beim Bearbeiten sichtbar)
-- [ ] **Inline-Formel $…$ und \(…\) als klickbarer Chip mit Popover** (web/editor-inline.js:139-175, 33; Chip-Klick editor.js:1563-1576) — Kotlin: 🟡 editor/InlineMarkdown.kt:89-97 (monospace, kein KaTeX, kein Popover)
+- [ ] **Inline-Formel $…$ und \(…\) als klickbarer Chip mit Popover** (web/editor-inline.js:139-175, 33; Chip-Klick editor.js:1563-1576) — Kotlin: 🟡 editor/InlineMarkdown.kt (monospace, kein KaTeX; Formelblöcke haben KaTeX)
 
 ### 10. Markdown-Kürzel (Live-Trigger und Syntax)
 
@@ -651,7 +651,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Backspace am Anfang: Liste zu Text, Überschrift zu Text, mit Vorgänger verschmelzen** (web/editor-keys.js:75-157) — Kotlin: 🟡 editor/EditorViewModel.kt:235-255 (vereinfacht, kein Verschmelzen mit Strukturblock)
 - [ ] **Entf am Ende: nächsten Block anhängen** (web/editor-keys.js:159-180) — Kotlin: ⬜
 - [ ] **↑ ↓ an Blockgrenzen in Nachbarblock wechseln** (web/editor-keys.js:182-200) — Kotlin: ⬜
-- [ ] **Strg+Z / Strg+Y (Strg+Shift+Z)** (web/editor.js:1187-1188) — Kotlin: ⬜ (nur Toolbar, siehe Abschnitt 5)
+- [x] **Strg+Z / Strg+Y (Strg+Shift+Z)** (web/editor.js:1187-1188) — Kotlin: ✅ editor/InlineFormat.kt handleFormatKey
 - [ ] **Strg+A zweistufig: Feld, dann alle Blöcke** (web/editor.js:1212-1226) — Kotlin: ⬜
 - [ ] **Strg+D: Block duplizieren** (web/editor.js:1245-1250) — Kotlin: ⬜
 - [ ] **Strg+Shift+0–8: Blocktyp (0 Text, 1–3 Überschriften, 4 To-do, 5 Aufzählung, 6 Nummer, 7 Toggle, 8 Code)** (web/editor.js:1252-1264) — Kotlin: ⬜
@@ -691,7 +691,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Callout über Slash oder Blockmenü anlegen** (web/editor-menus.js:103, 266-270) — Kotlin: ⬜
 
 #### 12d Toggle-Liste
-- [ ] **Aufklapp-Pfeil ▸/▾ schaltet und speichert** (web/editor.js:532-540, 1523-1527 `b.open` gespeichert) — Kotlin: 🟡 editor/ComplexBlocks.kt:177-195 (öffnet, aber nur lokal, nicht gespeichert)
+- [x] **Aufklapp-Pfeil ▸/▾ schaltet und speichert** (web/editor.js:532-540, 1523-1527 `b.open` gespeichert) — Kotlin: ✅ editor/ComplexBlocks.kt ToggleBlock + EditorViewModel.toggleOpen (auch verschachtelt)
 - [ ] **Titel (Summary) editierbar** (web/editor.js:536, Platzhalter „Toggle“) — Kotlin: 🟡 (nur Anzeige, ComplexBlocks.kt:188)
 - [x] **Kindblöcke eingerückt** (web/editor.js:538-539, css 200) — Kotlin: ✅ ComplexBlocks.kt:191-193
 - [ ] **Toggle über Slash/Blockmenü** (web/editor-menus.js:101, 266) — Kotlin: ⬜
@@ -713,11 +713,11 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Code-Zaun ```sprache Live-Trigger** — siehe Abschnitt 10 — Kotlin: ⬜
 
 #### 12g Diagramme (Mermaid und SVG)
-- [ ] **Mermaid-Codeblock wird als Diagramm angezeigt** (web/diagram.js:37-71, 26 Zeilen Logik) — Kotlin: ⬜ (Code wird als Text angezeigt)
-- [ ] **SVG-Codeblock wird als Grafik angezeigt, mit DOMPurify bereinigt (kein Skript, kein foreignObject, kein style)** (web/diagram.js:19-35, 51) — Kotlin: ⬜
-- [ ] **Klick auf Diagramm öffnet Code mit Live-Vorschau (350 ms)** (web/editor.js:1561-1562, 809-819, css 128-137) — Kotlin: ⬜
-- [ ] **Fehlermeldung „Diagramm-Fehler: …“ / „Kein gültiges SVG …“ / „Leeres Diagramm“** (web/diagram.js:48-69) — Kotlin: ⬜
-- [ ] **Mermaid nachladen, Hinweis bei fehlender Verbindung** (web/diagram.js:55-57, U.ensureMermaid) — Kotlin: ⬜
+- [x] **Mermaid-Codeblock wird als Diagramm angezeigt** (web/diagram.js:37-71, 26 Zeilen Logik) — Kotlin: ✅ editor/RichBlocks.kt (WebView, Mermaid 11.17.2 wie PWA)
+- [x] **SVG-Codeblock wird als Grafik angezeigt, mit DOMPurify bereinigt (kein Skript, kein foreignObject, kein style)** (web/diagram.js:19-35, 51) — Kotlin: ✅ editor/RichBlocks.kt (als <img> eingebunden: keine Skripte, kein Nachladen)
+- [x] **Klick auf Diagramm öffnet Code mit Live-Vorschau (350 ms)** (web/editor.js:1561-1562, 809-819, css 128-137) — Kotlin: ✅ editor/BlockView.kt CodeBlock (Tipp bearbeitet, Vorschau 350 ms)
+- [x] **Fehlermeldung „Diagramm-Fehler: …“ / „Kein gültiges SVG …“ / „Leeres Diagramm“** (web/diagram.js:48-69) — Kotlin: ✅ editor/RichBlocks.kt fail()
+- [x] **Mermaid nachladen, Hinweis bei fehlender Verbindung** (web/diagram.js:55-57, U.ensureMermaid) — Kotlin: ✅ editor/RichBlocks.kt (CDN mit SRI, WebView-Cache; offline Hinweis + Quelltext)
 - [ ] **Slash „Diagramm“ und „SVG-Grafik“** (web/editor-menus.js:107-108) — Kotlin: ⬜
 
 #### 12h Gleichungen (Formeln)
@@ -761,35 +761,35 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Platzhalter Absatz „Schreib etwas, oder drücke „/“ für Befehle …“** (web/editor.js:547) — Kotlin: 🟡 (kein Platzhalter für Absätze)
 - [ ] **Platzhalter Toggle „Toggle“** (web/editor.js:536) — Kotlin: ⬜
 - [ ] **Leere Gleichung „Neue Gleichung — klicken zum Bearbeiten“** (web/editor.js:493) — Kotlin: ⬜
-- [ ] **Leeres Diagramm / Fehler-Hinweise** (web/diagram.js:48-69) — Kotlin: ⬜
+- [x] **Leeres Diagramm / Fehler-Hinweise** (web/diagram.js:48-69) — Kotlin: ✅ editor/RichBlocks.kt
 - [x] **Klick unter dem letzten Block legt Absatz an oder fokussiert ihn** (web/editor.js:1600-1613) — Kotlin: ✅ editor/EditorScreen.kt tail, EditorViewModel.kt:194-205
 - [x] **Titel-Platzhalter „Unbenannt“** (web/render.js:704, 1645) — Kotlin: ✅ editor/PageHeader.kt:110
 - [ ] **Seite nicht gefunden** (PWA: Startseite statt Fehler, web/render.js:637-641) — Kotlin: 🟡 editor/EditorScreen.kt:77 („Seite nicht gefunden.“)
 - [ ] **Keine Seite gefunden (Link-Menü)** (web/editor-menus.js:240) — Kotlin: ⬜
 - [x] **Keine Versionen (Verlauf)** (web/render.js:1160) — Kotlin: ✅ notes/PageDialogs.kt:100
 - [ ] **Archiv-Banner** (web/render.js:692) — Kotlin: ⬜
-- [ ] **Datenbank: „0 Einträge“, „Neue Zeile“, „–“ für leere Werte** (web/db-view.js:85-88, 45-58) — Kotlin: ⬜
+- [x] **Datenbank: „0 Einträge“, „Neue Zeile“, „–“ für leere Werte** (web/db-view.js:85-88, 45-58) — Kotlin: ✅ editor/DatabaseView.kt
 - [ ] **Verwandt leer = verborgen** (web/related-pages.js:22-27) — Kotlin: ⬜
 
 ### 14. Datenbankansicht (Vorlesungsübersicht)
 
-Gesamtes Modul fehlt in Kotlin (kein db-Feld im Seitenmodell, `android/app/src/main/java/uniffi/impala_ffi/impala_ffi.kt:13571-13625`).
+Kotlin: Ansicht in editor/DatabaseView.kt, Daten über den Kern (`page_db`, `page_props`, `set_page_db`, `set_page_prop` in core/impala-ffi/src/database.rs).
 
-- [ ] **Umschalter „Als Vorlesungsübersicht“ / „Übersicht aufheben“** (web/render.js:571, web/app-click-pages.js:39-46) — Kotlin: ⬜
-- [ ] **Standard-Schema LECTURE_SCHEMA: Thema, Nr, Datum, Schwierigkeit, Status, Klausurrelevanz, Themen, Folien** (web/db-view.js:66-71) — Kotlin: ⬜
-- [ ] **Zähler „N Einträge“** (web/db-view.js:85) — Kotlin: ⬜
-- [ ] **Liste der Unterseiten als Karten (db-item)** (web/db-view.js:72-88, css 296-299) — Kotlin: ⬜
-- [ ] **Laufnummer #Nr vor dem Titel (erste Zahlenspalte)** (web/db-view.js:73-80, 81) — Kotlin: ⬜
-- [ ] **Öffnen-Knopf mit Icon und Titel (title „Öffnen“)** (web/db-view.js:81, css 301-305) — Kotlin: ⬜
-- [ ] **Eigenschaften-Raster mit Feldern (Beschriftung und Wert)** (web/db-view.js:45-57, css 306-320) — Kotlin: ⬜
-- [ ] **Feldtyp Text, Rich-Text, URL, E-Mail (volle Breite)** (web/db-view.js:33) — Kotlin: ⬜
-- [ ] **Feldtyp Mehrfachauswahl (ganze Zeile, graue Pills)** (web/db-view.js:29-31) — Kotlin: ⬜
-- [ ] **Feldtyp Zahl (Dezimal-Tastatur)** (web/db-view.js:50) — Kotlin: ⬜
-- [ ] **Feldtyp Datum (Datumsfeld nur bei ISO-Wert, Anzeige „de-DE“)** (web/db-view.js:34, 50) — Kotlin: ⬜
-- [ ] **Feldtypen Auswahl und Status (Pills, Farbton aus Wert oder Hash, Vorschläge per datalist)** (web/db-view.js:14-31, 59-64) — Kotlin: ⬜
-- [ ] **Schreibgeschützte Typen (Formel, Rollup, Erstellt, Bearbeitet, Personen, Relation, Dateien, Button, Eindeutige ID, Verifikation)** (web/db-view.js:9) — Kotlin: ⬜
-- [ ] **Zellenänderung speichert als pageUpdate** (web/db-view.js:1-3 Kommentar, web/app.js change-Listener) — Kotlin: ⬜
-- [ ] **+ Neue Zeile** (web/db-view.js:88, data-dbnewrow) — Kotlin: ⬜
+- [x] **Umschalter „Als Vorlesungsübersicht“ / „Übersicht aufheben“** (web/render.js:571, web/app-click-pages.js:39-46) — Kotlin: ✅ ui/desk/DeskPageActions.kt (Tablet)
+- [x] **Standard-Schema LECTURE_SCHEMA: Thema, Nr, Datum, Schwierigkeit, Status, Klausurrelevanz, Themen, Folien** (web/db-view.js:66-71) — Kotlin: ✅ editor/DatabaseView.kt LECTURE_SCHEMA
+- [x] **Zähler „N Einträge“** (web/db-view.js:85) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Liste der Unterseiten als Karten (db-item)** (web/db-view.js:72-88, css 296-299) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Laufnummer #Nr vor dem Titel (erste Zahlenspalte)** (web/db-view.js:73-80, 81) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Öffnen-Knopf mit Icon und Titel (title „Öffnen“)** (web/db-view.js:81, css 301-305) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Eigenschaften-Raster mit Feldern (Beschriftung und Wert)** (web/db-view.js:45-57, css 306-320) — Kotlin: ✅ editor/DatabaseView.kt (FlowRow, Mindestbreite 124 dp)
+- [x] **Feldtyp Text, Rich-Text, URL, E-Mail (volle Breite)** (web/db-view.js:33) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Feldtyp Mehrfachauswahl (ganze Zeile, graue Pills)** (web/db-view.js:29-31) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Feldtyp Zahl (Dezimal-Tastatur)** (web/db-view.js:50) — Kotlin: ✅ editor/DatabaseView.kt (Dezimal-Tastatur)
+- [x] **Feldtyp Datum (Datumsfeld nur bei ISO-Wert, Anzeige „de-DE“)** (web/db-view.js:34, 50) — Kotlin: ✅ editor/DatabaseView.kt (DatePicker)
+- [x] **Feldtypen Auswahl und Status (Pills, Farbton aus Wert oder Hash, Vorschläge per datalist)** (web/db-view.js:14-31, 59-64) — Kotlin: ✅ editor/DatabaseView.kt (Vorschläge als Chips)
+- [x] **Schreibgeschützte Typen (Formel, Rollup, Erstellt, Bearbeitet, Personen, Relation, Dateien, Button, Eindeutige ID, Verifikation)** (web/db-view.js:9) — Kotlin: ✅ editor/DatabaseView.kt
+- [x] **Zellenänderung speichert als pageUpdate** (web/db-view.js:1-3 Kommentar, web/app.js change-Listener) — Kotlin: ✅ Kern set_page_prop (core/impala-ffi/src/database.rs)
+- [x] **+ Neue Zeile** (web/db-view.js:88, data-dbnewrow) — Kotlin: ✅ editor/DatabaseView.kt
 
 ### 15. PDF aus Zwischenablage und Teilen (pdfpaste.js)
 

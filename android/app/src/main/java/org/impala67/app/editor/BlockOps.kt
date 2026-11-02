@@ -87,6 +87,17 @@ internal fun MdBlock.withChecked(checked: Boolean): MdBlock {
     return if (k.style is MdListStyle.Todo) copy(kind = k.copy(style = MdListStyle.Todo(checked))) else this
 }
 
+/** Wendet [f] auf den Block mit [id] an, auch wenn er in Callout, Toggle oder Spalten steckt. */
+internal fun List<MdBlock>.mapDeep(id: String, f: (MdBlock) -> MdBlock): List<MdBlock> = map { b ->
+    if (b.id == id) return@map f(b)
+    when (val k = b.kind) {
+        is MdBlockKind.Callout -> b.copy(kind = k.copy(children = k.children.mapDeep(id, f)))
+        is MdBlockKind.Toggle -> b.copy(kind = k.copy(children = k.children.mapDeep(id, f)))
+        is MdBlockKind.Columns -> b.copy(kind = k.copy(columns = k.columns.map { it.mapDeep(id, f) }))
+        else -> b
+    }
+}
+
 /** Laufende Nummern nummerierter Listen je Ebene (wie `listNums` in editor.js). */
 internal fun listNumbers(blocks: List<MdBlock>): Map<String, Int> {
     val out = HashMap<String, Int>()

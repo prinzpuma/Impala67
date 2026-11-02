@@ -110,7 +110,7 @@ Stand: v2.2.86 (28. Oktober 2026)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
 
 *Stand geprüft am 1. November 2026 gegen den Code in `android/`. Oberfläche: Checkliste aller PWA-Elemente in
-[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 809 offen). Ein Punkt gilt erst als erledigt,
+[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 740 offen). Ein Punkt gilt erst als erledigt,
 wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 
 - [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
@@ -131,8 +131,8 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 - [ ] **Oberfläche wie die PWA** – Abarbeitung nach `android/UI-INVENTAR.md` (Reihenfolge oben in der Datei):
   - [x] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6, Werkzeugleiste oben mittig mit Optionsleiste darunter (auch Telefon), Einklappen, Schreib-Rückzug.
   - [ ] Heft: Formerkennung ✅, Laser ✅, Radierer halten ✅, Doppeltipp-Zoom ✅, Zwei-/Drei-Finger-Tipp ✅, „Seite hinzufügen“ Davor/Danach/Am Ende ✅, Bild-/Text-Werkzeug ✅, Import/Export ✅ (auch in andere Hefte bzw. als Notiz), Verlauf ✅, Lesemodus (Telefon) ✅; offen: PDF-Text beim Import übernehmen.
-  - [ ] Seitenmenü (⋯): Tablet ✅ bis auf „Als Vorlesungsübersicht“ (mit der Datenbankansicht) und „Fach…“ (mit dem Fächer-Modul); Telefon offen (zurückgestellt, erst Tablet).
-  - [ ] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext); offen: Toggle-Zustand speichern, KaTeX, Mermaid, Datenbankansicht, Inline-Formatierung per Tasten.
+  - [ ] Seitenmenü (⋯): Tablet ✅ inkl. „Als Vorlesungsübersicht“ bis auf „Fach…“ (mit dem Fächer-Modul); Telefon offen (zurückgestellt, erst Tablet).
+  - [x] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext), Toggle-Zustand gespeichert ✅, Formelblöcke (KaTeX) ✅, Mermaid/SVG mit Live-Vorschau ✅ (WebView, Bibliotheken wie die PWA vom CDN, danach im Cache), Datenbankansicht ✅ (Kern: `page_db`/`page_props`/`set_page_db`/`set_page_prop`), Inline-Formatierung per Tasten und Werkzeugleiste ✅ (Strg+B/I/U/E/K, Strg+Shift+S/H, Strg+Z/Y). Noch offen im Editor: Inline-Formeln `$…$` als KaTeX, Tabellenzellen direkt bearbeiten.
   - [ ] Shell: Vor-Navigation, Chat-/Karten-Tabs, Drag & Drop, Breitengriff, Langdruck-Menüs, Dichte/Schrift/Bewegung.
   - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
   - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.

@@ -23,10 +23,12 @@ internal class ReadContext(
     val onTap: ((MdBlock) -> Unit)? = null,
     val onEditRaw: ((MdBlock) -> Unit)? = null,
     val onToggleTodo: ((String) -> Unit)? = null,
+    /** Toggle auf-/zuklappen und den Zustand in der Seite speichern (auch verschachtelt, wie die PWA). */
+    val onToggleOpen: ((String) -> Unit)? = null,
     val editSlot: (@Composable (MdBlock, TextStyle, Modifier) -> Unit)? = null,
 ) {
     /** Kinder (Callout, Toggle, Spalten) sind in der Anzeige nur lesbar; bearbeitet wird der Elternblock. */
-    fun forChildren() = ReadContext(store, onLink, onOpenPage)
+    fun forChildren() = ReadContext(store, onLink, onOpenPage, onToggleOpen = onToggleOpen)
 }
 
 /**

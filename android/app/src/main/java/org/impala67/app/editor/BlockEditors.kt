@@ -95,7 +95,7 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, menu
                         val lm = if (typing) LINK_TRIGGER.find(upto) else null
                         if (lm != null) menus.links.open(block.id, lm.groupValues[1], upto.length) else menus.links.close()
                         value = v
-                        vm.onCursor(v.selection.start)
+                        vm.onCursor(v.selection.min, v.selection.max)
                         if (v.text != text) vm.setText(block.id, v.text)
                     }
                 }
@@ -107,7 +107,7 @@ internal fun BlockTextField(block: MdBlock, a: Active, vm: EditorViewModel, menu
                     when {
                         e.key == Key.Backspace && value.selection.collapsed && value.selection.start == 0 -> { vm.backspaceAtStart(block.id); true }
                         e.key == Key.Tab && block.kind is MdBlockKind.ListItem -> { vm.indent(block.id, if (e.isShiftPressed) -1 else 1); true }
-                        else -> false
+                        else -> vm.handleFormatKey(e)
                     }
                 },
             textStyle = style,

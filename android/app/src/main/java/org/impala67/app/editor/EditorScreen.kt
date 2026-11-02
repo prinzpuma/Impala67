@@ -70,7 +70,7 @@ fun EditorScreen(
             store = store, onLink = onLink, onOpenPage = onOpenPage,
             selectedId = active?.takeIf { it.mode == EditMode.Select }?.id,
             editingId = active?.takeIf { it.mode == EditMode.Text }?.id,
-            onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo,
+            onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo, onToggleOpen = vm::toggleOpen,
             editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, menus, style, mod) } },
         )
     }
@@ -96,6 +96,8 @@ fun EditorScreen(
                         Column(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) {
                             if (chromeActions == null) Breadcrumbs(head, vm.title, onOpenPage)
                             PageTitleBlock(head, vm.title, vm::onTitle, vm::focusFirst, onOpenPage)
+                            // Datenbank-Seiten zeigen ihre Unterseiten zwischen Titel und Inhalt (render.js).
+                            DatabaseView(store, pageId, onOpenPage)
                         }
                     }
                     itemsIndexed(vm.blocks, key = { _, b -> b.id }) { i, b ->
@@ -120,4 +122,5 @@ fun EditorScreen(
             exit = slideOutVertically { it } + fadeOut(),
         ) { EditorToolbar(vm) }
     }
+    LinkPromptDialog(vm)
 }

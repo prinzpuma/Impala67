@@ -41,7 +41,7 @@ internal fun EditorViewModel.applySlash(id: String, q: SlashQuery, cmd: SlashCmd
     }
 }
 
-private fun EditorViewModel.setTextAt(id: String, text: String, caret: Int) {
+internal fun EditorViewModel.setTextAt(id: String, text: String, caret: Int) {
     mutate(true) { list -> list.map { if (it.id == id) it.withText(text) else it } }
     activate(id, EditMode.Text, caret)
 }

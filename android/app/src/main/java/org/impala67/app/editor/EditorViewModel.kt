@@ -50,6 +50,11 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     var active by mutableStateOf<Active?>(null); private set
     var canUndo by mutableStateOf(false); private set
     var canRedo by mutableStateOf(false); private set
+    /** Offene Link-Abfrage (Strg+K); das Textfeld hat dabei keinen Fokus. */
+    var linkPrompt by mutableStateOf<LinkPrompt?>(null)
+    /** Auswahl im aktiven Textfeld (für Formate aus Tasten und Werkzeugleiste). */
+    internal var selectionStart = 0; private set
+    internal var selectionEnd = 0; private set
 
     val header: StateFlow<PageHeaderData?> = store.query(Touches.pages) { core ->
         val page = core.page(pageId)
@@ -171,11 +176,11 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     // ---- Auswahl und Fokus ----
 
     internal fun activate(id: String, mode: EditMode, at: Int) {
-        cursor = at
+        cursor = at; selectionStart = at; selectionEnd = at
         active = Active(id, mode, at, ++nonce)
     }
 
-    fun onCursor(position: Int) { cursor = position }
+    fun onCursor(position: Int, end: Int = position) { cursor = position; selectionStart = position; selectionEnd = end }
 
     /** Das Feld hat den Fokus verloren (Tastatur weg, anderer Block): nur wenn es noch das aktive ist. */
     fun blur(a: Active) { if (active == a) active = null }
@@ -214,6 +219,11 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
             val style = (b.kind as? MdBlockKind.ListItem)?.style
             if (b.id == id && style is uniffi.impala_ffi.MdListStyle.Todo) b.withChecked(!style.checked) else b
         }
+    }
+
+    /** Toggle auf-/zuklappen; der Zustand wird mitgespeichert (editor.js: `b.open = !b.open`). */
+    fun toggleOpen(id: String) = mutate(false) { list ->
+        list.mapDeep(id) { b -> (b.kind as? MdBlockKind.Toggle)?.let { b.copy(kind = it.copy(open = !it.open)) } ?: b }
     }
 
     /** Enter (oder eingefügte Zeilen): der Text des Blocks wird auf [lines] aufgeteilt. */

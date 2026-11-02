@@ -12,6 +12,7 @@ mod chats;
 mod clock;
 mod cloze;
 mod conflicts;
+mod database;
 mod decks;
 mod drive;
 mod heft;

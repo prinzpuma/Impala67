@@ -39,6 +39,7 @@ import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.editor.EditorViewModel
+import org.impala67.app.editor.LECTURE_SCHEMA
 import org.impala67.app.library.cachePdf
 import org.impala67.app.library.openPdfExternally
 import org.impala67.app.notes.CoverDialog
@@ -77,6 +78,7 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
     val editor: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
     val summary by remember(store, pageId) { store.query(Touches.pages) { it.page(pageId)?.summary } }.collectAsStateWithLifecycle()
     val marks by remember(store, pageId) { store.query(Touches.pages) { highlightCount(it.page(pageId)?.content.orEmpty()) } }.collectAsStateWithLifecycle()
+    val isDb by remember(store, pageId) { store.query(Touches.pages) { it.pageDb(pageId) != null } }.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<PageDialog?>(null) }
     var moving by remember { mutableStateOf<PageSummary?>(null) }
@@ -202,6 +204,10 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
                 if (n > 0) MenuEntry(R.drawable.ic_i_cards, "Karten aus Markierungen ($n)") { menuOpen = false; cardsFromHighlights() }
                 MenuEntry(R.drawable.ic_i_copy, "Duplizieren") { menuOpen = false; duplicate() }
                 if (page != null) MenuEntry(R.drawable.ic_i_template, if (page.isTemplate) "Vorlage entfernen" else "Als Vorlage") { menuOpen = false; toggleTemplate(page) }
+                MenuEntry(R.drawable.ic_i_grid, if (isDb == true) "Übersicht aufheben" else "Als Vorlesungsübersicht") {
+                    menuOpen = false
+                    scope.launch { store.write { it.setPageDb(pageId, if (isDb == true) null else LECTURE_SCHEMA) } }
+                }
                 HorizontalDivider(color = c.edgeSoft)
                 MenuEntry(R.drawable.ic_i_folder_move, "Verschieben nach…") { menuOpen = false; openMove() }
                 MenuEntry(R.drawable.ic_i_archive, "Archivieren") {
