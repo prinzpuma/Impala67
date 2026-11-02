@@ -50,6 +50,8 @@ fun SettingsSection(
     toast: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s8),
+    /** Sprung in einen anderen Bereich (Übersicht: „Einrichten“, „Verwalten“). */
+    onOpen: (String) -> Unit = {},
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(store, prefs) }
     LaunchedEffect(vm) { vm.messages.collect { toast(it) } }
@@ -66,11 +68,11 @@ fun SettingsSection(
             modifier = Modifier.padding(top = Space.s1, bottom = Space.s4),
         )
         when (info) {
-            SettingsSectionInfo.OVERVIEW -> OverviewSettings()
+            SettingsSectionInfo.OVERVIEW -> OverviewSettings(vm, prefs, onOpen)
             SettingsSectionInfo.APPEARANCE -> AppearanceSettings(vm, prefs)
             SettingsSectionInfo.AI -> AiSettings(vm)
             SettingsSectionInfo.LEARNING -> LearningSettings(vm, prefs)
-            SettingsSectionInfo.SYNC -> SyncSettings(vm, toast)
+            SettingsSectionInfo.SYNC -> SyncSettings(vm, prefs, toast)
             SettingsSectionInfo.APP -> AppSettings(vm, prefs)
         }
     }

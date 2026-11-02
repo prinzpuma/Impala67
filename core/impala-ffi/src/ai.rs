@@ -641,6 +641,64 @@ impl AiAssistant {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Einstellungen → KI: Modell-Liste und Verbindungstest
+
+/// Gefundenes Chat-Modell samt Quelle.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct AiModel {
+    pub id: String,
+    pub provider_id: String,
+}
+
+/// Ergebnis von „Verbindung testen“.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct AiPing {
+    pub ok: bool,
+    pub models: u32,
+    pub status: Option<u16>,
+    /// Vorschlag, wenn der Server erst unter `…/v1` antwortet.
+    pub suggested_base: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Wie `MODELS_TIMEOUT_S` im KI-Kern: Eine Quelle, die nicht antwortet, hält die Liste nicht auf.
+fn models_client() -> UreqClient {
+    UreqClient::new(std::time::Duration::from_secs(5))
+}
+
+#[uniffi::export]
+impl ImpalaCore {
+    /// Modelle aller abfragbaren KI-Quellen (`aiListModels` der PWA). Blockiert (Netz): aus einem
+    /// Hintergrund-Thread rufen. Fehler nur, wenn alle Quellen scheitern.
+    pub fn ai_list_models(&self) -> Result<Vec<AiModel>, AiFailure> {
+        let (providers, sync_url) = {
+            let inner = self.lock();
+            (ai_providers(&inner), setting_text(&inner, "cfUrl"))
+        };
+        let found = block_on(impala_ai::list_models(
+            &models_client(),
+            impala_ai::Sources { providers: &providers, sync_url: &sync_url },
+        ))?;
+        Ok(found.into_iter().map(|m| AiModel { id: m.id, provider_id: m.provider_id }).collect())
+    }
+
+    /// Verbindungstest einer (auch ungespeicherten) Quelle (`aiPingProvider`). Blockiert (Netz).
+    pub fn ai_ping_provider(&self, base: String, key: String) -> AiPing {
+        let (providers, sync_url) = {
+            let inner = self.lock();
+            (ai_providers(&inner), setting_text(&inner, "cfUrl"))
+        };
+        let provider = Provider { base, key, ..Default::default() };
+        let r = block_on(impala_ai::ping_provider(
+            &models_client(),
+            &provider,
+            impala_ai::Sources { providers: &providers, sync_url: &sync_url },
+        ));
+        AiPing { ok: r.ok, models: r.models as u32, status: r.status, suggested_base: r.suggested_base, error: r.error }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};

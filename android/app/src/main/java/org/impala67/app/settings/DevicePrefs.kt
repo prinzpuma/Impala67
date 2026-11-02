@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -95,6 +96,10 @@ class DevicePrefs(private val context: Context) {
     val tabsInSidebar: Flow<Boolean> = boolFlow(TABS_IN_SIDEBAR, false)
     suspend fun setTabsInSidebar(on: Boolean) = put(TABS_IN_SIDEBAR, on)
 
+    /** Letztes lokales Backup in ms seit 1970 (`impala67LastBackup`); `null` = noch keines. */
+    val lastBackup: Flow<Long?> = store.data.map { it[LAST_BACKUP] }
+    suspend fun setLastBackup(ms: Long) = put(LAST_BACKUP, ms)
+
     /** Heft-Werkzeuge als JSON wie `impala67HeftTools` der PWA (heft-tools.js); leer = Standard. */
     val heftTools: Flow<String> = store.data.map { it[HEFT_TOOLS].orEmpty() }
     suspend fun setHeftTools(json: String) = put(HEFT_TOOLS, json)
@@ -156,6 +161,7 @@ class DevicePrefs(private val context: Context) {
         val SIDEBAR_COLLAPSED = booleanPreferencesKey("sidebarCollapsed")
         val SIDEBAR_WIDTH = intPreferencesKey("sidebarWidth")
         val TABS_IN_SIDEBAR = booleanPreferencesKey("tabsInSidebar")
+        val LAST_BACKUP = longPreferencesKey("lastBackup")
         val GOAL_PRESETS = listOf(120, 300, 480, 720)
     }
 }

@@ -546,6 +546,15 @@ impl ImpalaCore {
             bad_blobs: report.bad_blobs as u64,
         })
     }
+
+    /// Seiten-Reset (`DB.clearPages`): Seiten- und Heft-Events, Vektoren und Dateien entfernen;
+    /// Einstellungen, Chats und Karteikarten bleiben. Ein lokaler Neuanfang, kein Sync-Reset.
+    pub fn clear_pages(&self) -> Result<(), CoreError> {
+        let mut inner = self.lock();
+        inner.storage.clear_pages()?;
+        inner.reload()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

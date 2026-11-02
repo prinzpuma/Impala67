@@ -16,21 +16,15 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.impala67.app.ui.theme.Space
 
-/**
- * KI (settings-renderer.js `renderAi`). Modelle, Quellen und lokale KI folgen mit dem KI-Modul;
- * API-Schlüssel bleiben – wie in der PWA – nur auf diesem Gerät.
- */
+/** KI (settings-renderer.js `renderAi`): Modell, Quellen, lokale KI und Verhalten. */
 @Composable
 fun AiSettings(vm: SettingsViewModel) {
     val values by vm.values.collectAsStateWithLifecycle()
     val s = values
 
-    // TODO(desk): Modellliste („Neu laden“, Suche) und „Manuelle Modell-ID“ folgen mit dem KI-Modul.
-    SettingsGroup("Aktives Modell") {
-        SettingsPlaceholderRow("Chat-Modell", "Folgt mit dem KI-Modul")
-    }
-    SettingsGroup("Quellen", footnote = "Zugangsdaten werden erst mit Speichern übernommen.") {
-        SettingsPlaceholderRow("KI-Quellen", "OpenAI, Gemini, LM Studio und eigene Endpunkte folgen mit dem KI-Modul")
+    if (s != null) {
+        AiModelsGroup(vm, s)
+        AiSourcesGroup(vm, s)
     }
     SettingsGroup(
         "Lokale KI",
@@ -70,19 +64,13 @@ private fun CustomInstructionsField(stored: String, onSave: (String) -> Unit) {
     }
 }
 
-/** Sync & Backup (settings-renderer.js `renderSync`): Cloudflare, Google Drive, Automatik; Backup folgt. */
+/** Sync & Backup (settings-renderer.js `renderSync`): Cloudflare, Google Drive, Automatik, Backup. */
 @Composable
-fun SyncSettings(vm: SettingsViewModel, toast: (String) -> Unit) {
+fun SyncSettings(vm: SettingsViewModel, prefs: DevicePrefs, toast: (String) -> Unit) {
     CloudflareSyncGroup(toast)
     DriveSyncGroup(toast)
     DriveAutomationGroup(vm)
-    SettingsGroup("Backup & Wiederherstellung") {
-        SettingsPlaceholderRow(
-            "Vollständiges Backup",
-            "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt",
-        )
-    }
-    // TODO(desk): „Vollständiges Backup“ (Export/Import, Storage Access Framework) braucht Export-Logik.
+    BackupGroup(vm, prefs)
     // TODO(desk): „Weitere Exporte“ (Lerndaten als JSON, Workspace als Markdown-ZIP) fehlt noch.
     // „Erweitert“ mit Google Client-ID entfällt nativ (die Client-ID liegt im Projekt).
 }

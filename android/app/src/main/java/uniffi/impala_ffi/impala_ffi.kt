@@ -1440,6 +1440,16 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1613,6 +1623,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_add_file(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_add_grade(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_ai_list_models(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_ai_ping_provider(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_ancestors_of(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_archive_card(
@@ -1633,6 +1647,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_can_undo_review(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_card(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_card_totals(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_cards_from_highlights(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_cards_in_deck(
@@ -1644,6 +1660,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_chat(
 fun uniffi_impala_ffi_checksum_method_impalacore_chats(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_children_of(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_clear_pages(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_conflict_count(
 ): Short
@@ -1666,6 +1684,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_deck_config(
 fun uniffi_impala_ffi_checksum_method_impalacore_deck_overview(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_decks(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_delete_all_cards(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_delete_card(
 ): Short
@@ -2135,6 +2155,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_add_file(`ptr`: Pointer,`bytes`: Rust
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_add_grade(`ptr`: Pointer,`subject`: RustBuffer.ByValue,`grade`: Double,`weight`: RustBuffer.ByValue,`date`: RustBuffer.ByValue,`comment`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_ai_list_models(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_ai_ping_provider(`ptr`: Pointer,`base`: RustBuffer.ByValue,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_ancestors_of(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_archive_card(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2155,6 +2179,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_can_undo_review(`ptr`: Pointer,uniffi
 ): Byte
 fun uniffi_impala_ffi_fn_method_impalacore_card(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_card_totals(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_cards_from_highlights(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`deck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun uniffi_impala_ffi_fn_method_impalacore_cards_in_deck(`ptr`: Pointer,`deck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2167,6 +2193,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_chats(`ptr`: Pointer,uniffi_out_err: 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_children_of(`ptr`: Pointer,`parentId`: RustBuffer.ByValue,`workspaceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_clear_pages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_conflict_count(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun uniffi_impala_ffi_fn_method_impalacore_conflicts(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2189,6 +2217,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_deck_overview(`ptr`: Pointer,`utcOffs
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_decks(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_delete_all_cards(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Long
 fun uniffi_impala_ffi_fn_method_impalacore_delete_card(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_delete_chat(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2908,6 +2938,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_add_grade() != 22455.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_ai_list_models() != 36417.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_ai_ping_provider() != 55509.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_ancestors_of() != 28158.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2938,6 +2974,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_card() != 7297.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_card_totals() != 32183.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_cards_from_highlights() != 6837.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2954,6 +2993,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_children_of() != 44896.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_clear_pages() != 2531.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_conflict_count() != 65320.toShort()) {
@@ -2987,6 +3029,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_decks() != 11748.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_delete_all_cards() != 45387.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_delete_card() != 49618.toShort()) {
@@ -7119,6 +7164,17 @@ public interface ImpalaCoreInterface {
     fun `addGrade`(`subject`: kotlin.String, `grade`: kotlin.Double, `weight`: kotlin.Double?, `date`: kotlin.String?, `comment`: kotlin.String?): kotlin.String
     
     /**
+     * Modelle aller abfragbaren KI-Quellen (`aiListModels` der PWA). Blockiert (Netz): aus einem
+     * Hintergrund-Thread rufen. Fehler nur, wenn alle Quellen scheitern.
+     */
+    fun `aiListModels`(): List<AiModel>
+    
+    /**
+     * Verbindungstest einer (auch ungespeicherten) Quelle (`aiPingProvider`). Blockiert (Netz).
+     */
+    fun `aiPingProvider`(`base`: kotlin.String, `key`: kotlin.String): AiPing
+    
+    /**
      * Elternkette (Wurzel zuerst) fÃ¼r Brotkrumen.
      */
     fun `ancestorsOf`(`id`: kotlin.String): List<PageSummary>
@@ -7166,6 +7222,11 @@ public interface ImpalaCoreInterface {
     fun `card`(`id`: kotlin.String): CardInfo?
     
     /**
+     * Alle Karten und Stapel, auch archivierte und gelöschte (Anzeige der Gefahrenzone).
+     */
+    fun `cardTotals`(): CardTotals
+    
+    /**
      * Karten aus den `==Markierungen==` und Lücken einer Seite; Zeilen mit schon vorhandenen
      * Karten werden übersprungen. Liefert die Zahl neuer Karten.
      */
@@ -7196,6 +7257,12 @@ public interface ImpalaCoreInterface {
      * Sichtbare Unterseiten in Seitenleisten-Reihenfolge; ohne `parent_id` die Wurzeln von `workspace_id`.
      */
     fun `childrenOf`(`parentId`: kotlin.String?, `workspaceId`: kotlin.String?): List<PageSummary>
+    
+    /**
+     * Seiten-Reset (`DB.clearPages`): Seiten- und Heft-Events, Vektoren und Dateien entfernen;
+     * Einstellungen, Chats und Karteikarten bleiben. Ein lokaler Neuanfang, kein Sync-Reset.
+     */
+    fun `clearPages`()
     
     /**
      * Zahl der offenen Konflikte (Hinweis-Zähler).
@@ -7254,6 +7321,12 @@ public interface ImpalaCoreInterface {
      * Stapel außerhalb von Papierkorb und Archiv, mit Kartenzahl.
      */
     fun `decks`(): List<DeckInfo>
+    
+    /**
+     * Gefahrenzone „Alle Karteikarten löschen“ (`handleDeleteAllCards`): alle Stapel-Wurzeln und
+     * Karten samt Lernstand endgültig entfernen, auch aus Archiv und Papierkorb. Liefert die Kartenzahl.
+     */
+    fun `deleteAllCards`(): kotlin.ULong
     
     /**
      * Karte endgültig löschen. Abweichung von der PWA: nur aus dem Papierkorb heraus; so löscht ein
@@ -7965,6 +8038,38 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Modelle aller abfragbaren KI-Quellen (`aiListModels` der PWA). Blockiert (Netz): aus einem
+     * Hintergrund-Thread rufen. Fehler nur, wenn alle Quellen scheitern.
+     */
+    @Throws(AiFailure::class)override fun `aiListModels`(): List<AiModel> {
+            return FfiConverterSequenceTypeAiModel.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AiFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_ai_list_models(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Verbindungstest einer (auch ungespeicherten) Quelle (`aiPingProvider`). Blockiert (Netz).
+     */override fun `aiPingProvider`(`base`: kotlin.String, `key`: kotlin.String): AiPing {
+            return FfiConverterTypeAiPing.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_ai_ping_provider(
+        it, FfiConverterString.lower(`base`),FfiConverterString.lower(`key`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Elternkette (Wurzel zuerst) fÃ¼r Brotkrumen.
      */override fun `ancestorsOf`(`id`: kotlin.String): List<PageSummary> {
             return FfiConverterSequenceTypePageSummary.lift(
@@ -8112,6 +8217,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Alle Karten und Stapel, auch archivierte und gelöschte (Anzeige der Gefahrenzone).
+     */override fun `cardTotals`(): CardTotals {
+            return FfiConverterTypeCardTotals.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_card_totals(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Karten aus den `==Markierungen==` und Lücken einer Seite; Zeilen mit schon vorhandenen
      * Karten werden übersprungen. Liefert die Zahl neuer Karten.
      */
@@ -8201,6 +8321,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Seiten-Reset (`DB.clearPages`): Seiten- und Heft-Events, Vektoren und Dateien entfernen;
+     * Einstellungen, Chats und Karteikarten bleiben. Ein lokaler Neuanfang, kein Sync-Reset.
+     */
+    @Throws(CoreException::class)override fun `clearPages`()
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_clear_pages(
+        it, _status)
+}
+    }
+    
     
 
     
@@ -8370,6 +8506,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_decks(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gefahrenzone „Alle Karteikarten löschen“ (`handleDeleteAllCards`): alle Stapel-Wurzeln und
+     * Karten samt Lernstand endgültig entfernen, auch aus Archiv und Papierkorb. Liefert die Kartenzahl.
+     */
+    @Throws(CoreException::class)override fun `deleteAllCards`(): kotlin.ULong {
+            return FfiConverterULong.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_delete_all_cards(
         it, _status)
 }
     }
@@ -11392,6 +11545,41 @@ public object FfiConverterTypeAiFile: FfiConverterRustBuffer<AiFile> {
 
 
 /**
+ * Gefundenes Chat-Modell samt Quelle.
+ */
+data class AiModel (
+    var `id`: kotlin.String, 
+    var `providerId`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAiModel: FfiConverterRustBuffer<AiModel> {
+    override fun read(buf: ByteBuffer): AiModel {
+        return AiModel(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AiModel) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`providerId`)
+    )
+
+    override fun write(value: AiModel, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`providerId`, buf)
+    }
+}
+
+
+
+/**
  * Anbieter und Verhalten; nicht gesetzte Felder kommen aus den Einstellungen des Kerns.
  */
 data class AiOptions (
@@ -11500,6 +11688,56 @@ public object FfiConverterTypeAiOutcome: FfiConverterRustBuffer<AiOutcome> {
             FfiConverterString.write(value.`text`, buf)
             FfiConverterOptionalUInt.write(value.`contextSent`, buf)
             FfiConverterOptionalUInt.write(value.`contextTotal`, buf)
+    }
+}
+
+
+
+/**
+ * Ergebnis von „Verbindung testen“.
+ */
+data class AiPing (
+    var `ok`: kotlin.Boolean, 
+    var `models`: kotlin.UInt, 
+    var `status`: kotlin.UShort?, 
+    /**
+     * Vorschlag, wenn der Server erst unter `…/v1` antwortet.
+     */
+    var `suggestedBase`: kotlin.String?, 
+    var `error`: kotlin.String?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAiPing: FfiConverterRustBuffer<AiPing> {
+    override fun read(buf: ByteBuffer): AiPing {
+        return AiPing(
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalUShort.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AiPing) = (
+            FfiConverterBoolean.allocationSize(value.`ok`) +
+            FfiConverterUInt.allocationSize(value.`models`) +
+            FfiConverterOptionalUShort.allocationSize(value.`status`) +
+            FfiConverterOptionalString.allocationSize(value.`suggestedBase`) +
+            FfiConverterOptionalString.allocationSize(value.`error`)
+    )
+
+    override fun write(value: AiPing, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`ok`, buf)
+            FfiConverterUInt.write(value.`models`, buf)
+            FfiConverterOptionalUShort.write(value.`status`, buf)
+            FfiConverterOptionalString.write(value.`suggestedBase`, buf)
+            FfiConverterOptionalString.write(value.`error`, buf)
     }
 }
 
@@ -11749,6 +11987,38 @@ public object FfiConverterTypeCardInfo: FfiConverterRustBuffer<CardInfo> {
             FfiConverterBoolean.write(value.`leech`, buf)
             FfiConverterBoolean.write(value.`archived`, buf)
             FfiConverterBoolean.write(value.`trashed`, buf)
+    }
+}
+
+
+
+data class CardTotals (
+    var `cards`: kotlin.ULong, 
+    var `decks`: kotlin.ULong
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCardTotals: FfiConverterRustBuffer<CardTotals> {
+    override fun read(buf: ByteBuffer): CardTotals {
+        return CardTotals(
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CardTotals) = (
+            FfiConverterULong.allocationSize(value.`cards`) +
+            FfiConverterULong.allocationSize(value.`decks`)
+    )
+
+    override fun write(value: CardTotals, buf: ByteBuffer) {
+            FfiConverterULong.write(value.`cards`, buf)
+            FfiConverterULong.write(value.`decks`, buf)
     }
 }
 
@@ -18225,6 +18495,34 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeAiModel: FfiConverterRustBuffer<List<AiModel>> {
+    override fun read(buf: ByteBuffer): List<AiModel> {
+        val len = buf.getInt()
+        return List<AiModel>(len) {
+            FfiConverterTypeAiModel.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AiModel>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAiModel.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<AiModel>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAiModel.write(it, buf)
         }
     }
 }

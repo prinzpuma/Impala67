@@ -59,8 +59,18 @@ enum class SettingsSectionInfo(
     }
 }
 
-/** Die Felder, die über `settingsJson` kommen (nur diese; Geheimnisse werden hier nicht gelesen). */
+/**
+ * Eine KI-Quelle wie in `settings.aiProviders`. [key] ist der API-Schlüssel; er reist wie in der PWA
+ * Ende-zu-Ende-verschlüsselt mit dem Sync zu den eigenen Geräten.
+ */
+data class AiProvider(val id: String, val name: String, val base: String, val key: String)
+
+/** Die Felder, die über `settingsJson` kommen (nur diese). */
 data class SettingsValues(
+    val providers: List<AiProvider> = emptyList(),
+    /** Aktive Quelle und Modell (`aiProviderId`, `aiModel`); leer = nichts gewählt. */
+    val providerId: String = "",
+    val model: String = "",
     val userName: String = "",
     val homeArticle: Boolean = true,
     val homeTopics: String = "",

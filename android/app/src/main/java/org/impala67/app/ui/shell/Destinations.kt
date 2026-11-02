@@ -84,8 +84,10 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
         ChatView(viewModel { AiChatViewModel(store, prefs).also { it.open(route.id) } }, activePageId = null, onOpenSettings = { nav.action("settings") })
     }
     entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
-        SettingsSection("overview", store, prefs, nav::toast)
+        SettingsSection("overview", store, prefs, nav::toast, onOpen = { nav.open(SettingsSectionRoute(it)) })
     })) { SettingsSections(onOpen = { nav.open(SettingsSectionRoute(it)) }) }
-    entry<SettingsSectionRoute>(metadata = ListDetailSceneStrategy.detailPane()) { SettingsSection(it.section, store, prefs, nav::toast) }
+    entry<SettingsSectionRoute>(metadata = ListDetailSceneStrategy.detailPane()) {
+        SettingsSection(it.section, store, prefs, nav::toast, onOpen = { s -> nav.open(SettingsSectionRoute(s)) })
+    }
     entry<ConflictsRoute> { ConflictsScreen(store, onDone = nav::back) }
 }

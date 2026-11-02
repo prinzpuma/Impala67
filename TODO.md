@@ -124,7 +124,7 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [x] **Handschrifterkennung**: ML Kit Digital Ink (Lasso „In Text“, Suchindex).
   - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
   - [x] **Hintergrund-Sync**: WorkManager, stündlich ein Cloudflare-Durchgang mit Netz (`sync/BackgroundWork.kt`).
-  - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel beim KI-Quellen-Modul ebenfalls über `SecretBox` ablegen.
+  - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel liegen wie in der PWA in `settings.aiProviders` (reisen E2EE mit dem Sync; `SecretBox` brächte dort nichts, weil der Kern sie ohnehin speichert).
   - [x] **Diktat**: `SpeechRecognizer` (de-DE) im Chat – Teilergebnisse live, Ergebnis wird gesendet (`ai/Dictation.kt`). Vorlesen der Antwort fehlt (in der PWA standardmäßig aus).
   - [x] **Systemintegration**: Teilen *aus* der App ✅ (nur Tablet); Teilen *an* die App ✅ (Text → neue Seite, Bilder/PDF → neues Heft, `share/Incoming.kt`); App-Shortcuts ✅; Predictive Back ✅.
   - [x] **Lokale Erinnerung „Karteikarten fällig“**: täglich 18 Uhr über WorkManager, Tipp öffnet das Lernen.
@@ -136,7 +136,7 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [ ] Shell: Vor-Navigation ✅, Chat-/Karten-Tabs ✅, Drag & Drop (Seiten, Stapel, Tabs) ✅, Breitengriff ✅, Langdruck-Menüs ✅, Dichte/Schrift/Bewegung ✅, Tabs in Seitenleiste ✅, Tabs/Aufklappzustand gespeichert ✅, Dock bei Tastatur/Lernen ausblenden ✅; offen: Gemini-Notebook-Tab und Wissensgraph (Module fehlen), Daily Notes.
   - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
   - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
-  - [ ] Einstellungen: Übersicht, KI-Quellen, Backup, Gefahrenzone, Speicher, Suche, Diagnose.
+  - [ ] Einstellungen: Übersicht ✅, KI-Quellen und Modellwahl ✅ (Kern: `ai_list_models`/`ai_ping_provider`), Backup Export/Import ✅, Gefahrenzone ✅ (Kern: `clear_pages`/`delete_all_cards`/`card_totals`), Speicher ✅; offen: Suche, Diagnose, Modell-Favoriten, Weitere Exporte, Embedding-/Handschrift-Modell, Controller, Beta-Lernfunktionen, APK-Update.
   - [ ] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes.
   - [x] Akzentfarbe aus dem Android-Hintergrundbild (Material You, ab Android 12; Standard) – Akzentauswahl wird jetzt auch angewendet.
 - [x] **Android Google Drive OAuth**: Anmeldung über Google Identity (`sync/DriveController.kt`).

@@ -3,38 +3,87 @@ package org.impala67.app.settings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.impala67.app.ImpalaApp
+import org.impala67.app.sync.CloudSyncState
+import org.impala67.app.ui.theme.Impala
 
-/** Übersicht (settings-renderer.js `renderOverview`): Status der Bereiche, bis deren Module stehen. */
+/** Übersicht (settings-renderer.js `overviewTiles`): Status von KI, Sync, Backup, Speicher und Version. */
 @Composable
-fun OverviewSettings() {
+fun OverviewSettings(vm: SettingsViewModel, prefs: DevicePrefs, onOpen: (String) -> Unit) {
+    val context = LocalContext.current
+    val app = context.applicationContext as ImpalaApp
+    val values by vm.values.collectAsStateWithLifecycle()
+    val cloud by app.cloudSync.ui.collectAsStateWithLifecycle()
+    val drive by app.drive.ui.collectAsStateWithLifecycle()
+    val last by prefs.lastBackup.collectAsStateWithLifecycle(null)
+    val storage = rememberStorageUse()
     val version = appVersion()
-    // TODO(desk): Werte der Kacheln (KI-Modell, Sync- und Drive-Status, letztes Backup, Speicher) folgen
-    // mit ihren Modulen; die Zustände liegen nativ in CloudSyncController und DriveController.
+    val c = Impala.colors
+
+    val s = values
+    val provider = s?.let { v -> v.providers.firstOrNull { it.id == v.providerId } ?: v.providers.firstOrNull() }
+    val aiReady = s != null && s.model.isNotEmpty() && provider != null
+    val cfOn = cloud.state in setOf(CloudSyncState.CONNECTED, CloudSyncState.SYNCING, CloudSyncState.CONNECTING)
+    val (syncDot, syncText) = when {
+        cfOn -> c.accent to "Cloudflare Live-Sync aktiv"
+        drive.connected && !drive.needsLogin -> c.accent to (if (drive.email.isNotEmpty()) "Google Drive · ${drive.email}" else "Google Drive verbunden")
+        drive.needsLogin -> c.warn to "Google Drive · zum Weitersichern neu anmelden"
+        else -> c.text2 to "Noch nicht eingerichtet"
+    }
+
     SettingsGroup("Status") {
-        SettingsPlaceholderRow("KI", "Folgt mit dem KI-Modul")
-        SettingsPlaceholderRow("Sync", "Folgt mit dem Sync-Modul")
-        SettingsPlaceholderRow("Backup", "Folgt mit dem Sync-Modul")
-        SettingsPlaceholderRow("Speicher", "Folgt mit dem Speicher-Modul")
-        SettingsRow("App-Version", "v$version · Offline-App")
+        StatusRow(
+            "KI", if (aiReady) provider!!.name.ifEmpty { provider.id } + " · " + s!!.model else "Noch kein Modell gewählt",
+            if (aiReady) c.accent else c.text2, if (aiReady) "Konfigurieren" else "Einrichten",
+        ) { onOpen("ai") }
+        StatusRow("Sync", syncText, syncDot, if (syncText.startsWith("Noch")) "Einrichten" else "Verwalten") { onOpen("sync") }
+        StatusRow(
+            "Backup", last?.let { "Zuletzt ${formatBackupTime(it)}" } ?: "Noch kein lokales Backup",
+            if (last != null) c.accent else c.warn, "Backup",
+        ) { onOpen("sync") }
+        StatusRow(
+            "Speicher", storage?.let { "${formatBytes(context, it.used)} belegt · ${formatBytes(context, it.free)} frei" } ?: "Wird berechnet …",
+            c.text2, "Verwalten",
+        ) { onOpen("app") }
+        StatusRow("App-Version", "v$version · Offline-App", c.accent, null) {}
     }
 }
 
-/** App & Speicher (settings-renderer.js `renderApp`). Löschen und Speicherwerte folgen mit ihren Modulen. */
+@Composable
+private fun StatusRow(title: String, description: String, dot: Color, action: String?, onAction: () -> Unit) {
+    ListItem(
+        leadingContent = { Box(Modifier.size(10.dp).clip(CircleShape).background(dot)) },
+        supportingContent = { Text(description) },
+        trailingContent = action?.let { { TextButton(onClick = onAction) { Text(it) } } },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    ) { Text(title) }
+}
+
+/** App & Speicher (settings-renderer.js `renderApp`). */
 @Composable
 fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val betaUi by prefs.betaUi.collectAsStateWithLifecycle(true)
     val version = appVersion()
 
-    SettingsGroup("Lokaler Speicher") {
-        SettingsPlaceholderRow("Verwendeter Speicher", "Anzeige folgt mit dem Speicher-Modul")
-    }
+    StorageGroup()
     SettingsGroup("App-Updates") {
         SettingsRow(
             "App-Version",
@@ -55,11 +104,7 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             vm.setPref { setBetaUi(it) }
         }
     }
-    SettingsGroup("Gefahrenzone") {
-        SettingsPlaceholderRow("Alle lokalen Seiten löschen", "Folgt mit dem Datenmodul")
-        SettingsPlaceholderRow("Alle Chats löschen", "Folgt mit dem KI-Modul")
-        SettingsPlaceholderRow("Alle Karteikarten löschen", "Folgt mit dem Lern-Modul")
-    }
+    DangerZoneGroup(vm)
     // MCP-Live-Bridge entfällt nativ (PORTING § 8); der Profiler folgt über Android-Profiler und Logcat.
     SettingsGroup("Für Entwickler") {
         SettingsPlaceholderRow("Performance-Profiler", "Folgt (Android-Profiler und Logcat)")

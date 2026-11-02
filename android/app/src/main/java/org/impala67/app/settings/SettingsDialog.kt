@@ -74,6 +74,7 @@ fun SettingsDialog(
                 SettingsSection(
                     active.id, store, prefs, toast, Modifier.weight(1f),
                     contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 38.dp, bottom = 48.dp),
+                    onOpen = onSection,
                 )
             }
             Box(

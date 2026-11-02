@@ -13,6 +13,12 @@ const UNDO_KEY: &str = "reviewUndo";
 /// So viele Bewertungen lassen sich zurücknehmen (wie in der PWA).
 const UNDO_DEPTH: usize = 50;
 
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct CardTotals {
+    pub cards: u64,
+    pub decks: u64,
+}
+
 /// Stand einer Karte vor einer Bewertung.
 pub(crate) struct ReviewUndo {
     pub id: String,
@@ -165,6 +171,29 @@ impl ImpalaCore {
             inner.dispatch("cardDelete", json!({ "id": id }))?;
         }
         Ok((decks.len() + cards.len()) as u64)
+    }
+
+    /// Alle Karten und Stapel, auch archivierte und gelöschte (Anzeige der Gefahrenzone).
+    pub fn card_totals(&self) -> CardTotals {
+        let inner = self.lock();
+        let state = inner.model.state();
+        CardTotals { cards: state.cards.len() as u64, decks: state.decks.len() as u64 }
+    }
+
+    /// Gefahrenzone „Alle Karteikarten löschen“ (`handleDeleteAllCards`): alle Stapel-Wurzeln und
+    /// Karten samt Lernstand endgültig entfernen, auch aus Archiv und Papierkorb. Liefert die Kartenzahl.
+    pub fn delete_all_cards(&self) -> Result<u64, CoreError> {
+        let mut inner = self.lock();
+        let state = inner.model.state();
+        let roots: Vec<String> = state.decks.keys().filter(|name| !name.contains("::")).cloned().collect();
+        let cards: Vec<String> = state.cards.keys().cloned().collect();
+        for name in &roots {
+            inner.dispatch("deckDelete", json!({ "name": name }))?;
+        }
+        for id in &cards {
+            inner.dispatch("cardDelete", json!({ "id": id }))?;
+        }
+        Ok(cards.len() as u64)
     }
 
     /// Gibt es eine Bewertung zum Zurücknehmen?
