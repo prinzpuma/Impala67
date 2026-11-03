@@ -1496,6 +1496,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1994,6 +1996,8 @@ fun uniffi_impala_ffi_checksum_method_semanticsearch_index_page(
 fun uniffi_impala_ffi_checksum_method_semanticsearch_pending_pages(
 ): Short
 fun uniffi_impala_ffi_checksum_method_semanticsearch_related_pages(
+): Short
+fun uniffi_impala_ffi_checksum_method_semanticsearch_release_idle_model(
 ): Short
 fun uniffi_impala_ffi_checksum_method_semanticsearch_search(
 ): Short
@@ -2558,6 +2562,8 @@ fun uniffi_impala_ffi_fn_method_semanticsearch_pending_pages(`ptr`: Pointer,unif
 ): Int
 fun uniffi_impala_ffi_fn_method_semanticsearch_related_pages(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`k`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_semanticsearch_release_idle_model(`ptr`: Pointer,`idleSecs`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_impala_ffi_fn_method_semanticsearch_search(`ptr`: Pointer,`query`: RustBuffer.ByValue,`k`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_semanticsearch_store_pdf_text(`ptr`: Pointer,`fileId`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3528,6 +3534,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_semanticsearch_related_pages() != 45993.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_semanticsearch_release_idle_model() != 51371.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_semanticsearch_search() != 12168.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3576,7 +3585,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_with_cloud_embeddings() != 64946.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_with_local_model() != 25895.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_with_local_model() != 5876.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -11049,6 +11058,12 @@ public interface SemanticSearchInterface {
     fun `relatedPages`(`pageId`: kotlin.String, `k`: kotlin.UInt): List<RelatedPage>
     
     /**
+     * Gibt das geladene lokale Modell frei, wenn es seit `idle_secs` nicht gebraucht wurde (laufende
+     * Berechnungen rechnen zu Ende). `true`, wenn freigegeben. Ohne lokales Modell: `false`.
+     */
+    fun `releaseIdleModel`(`idleSecs`: kotlin.UInt): kotlin.Boolean
+    
+    /**
      * Semantische Suche wie `RAG.search` der PWA (Bedeutung + Wörter, höchstens zwei Abschnitte je Seite).
      */
     fun `search`(`query`: kotlin.String, `k`: kotlin.UInt): List<SemanticHit>
@@ -11213,6 +11228,22 @@ open class SemanticSearch: Disposable, AutoCloseable, SemanticSearchInterface
 
     
     /**
+     * Gibt das geladene lokale Modell frei, wenn es seit `idle_secs` nicht gebraucht wurde (laufende
+     * Berechnungen rechnen zu Ende). `true`, wenn freigegeben. Ohne lokales Modell: `false`.
+     */override fun `releaseIdleModel`(`idleSecs`: kotlin.UInt): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_semanticsearch_release_idle_model(
+        it, FfiConverterUInt.lower(`idleSecs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Semantische Suche wie `RAG.search` der PWA (Bedeutung + Wörter, höchstens zwei Abschnitte je Seite).
      */
     @Throws(SearchFailure::class)override fun `search`(`query`: kotlin.String, `k`: kotlin.UInt): List<SemanticHit> {
@@ -11280,8 +11311,8 @@ open class SemanticSearch: Disposable, AutoCloseable, SemanticSearchInterface
 
         
     /**
-     * Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Lädt das
-     * Modell (einige Sekunden): aus einem Hintergrund-Thread rufen.
+     * Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Das Modell
+     * lädt erst beim ersten Einbetten (einige Sekunden) und bleibt bis [`Self::release_idle_model`].
      */
     @Throws(SearchFailure::class) fun `withLocalModel`(`core`: ImpalaCore, `modelDir`: kotlin.String): SemanticSearch {
             return FfiConverterTypeSemanticSearch.lift(

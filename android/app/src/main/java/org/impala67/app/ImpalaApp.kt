@@ -59,4 +59,9 @@ class ImpalaApp : Application() {
         }
         semantic = SemanticIndex(filesDir, store, scope)
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        semantic.releaseModel()
+    }
 }

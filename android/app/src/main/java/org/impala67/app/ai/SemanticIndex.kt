@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,6 +84,21 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
                 .conflate()
                 .collect { refresh(s) }
         }
+        // Das lokale Modell lädt der Kern erst beim Einbetten; nach einer Minute Ruhe wieder freigeben.
+        scope.launch(Dispatchers.IO) {
+            while (true) {
+                delay(RELEASE_CHECK_MS)
+                runCatching { search?.releaseIdleModel(IDLE_SECS) }
+            }
+        }
+    }
+
+    /**
+     * App im Hintergrund oder Speicher knapp (`onTrimMemory`): das lokale Modell freigeben, außer es hat
+     * gerade eben gerechnet (ein laufender Indexlauf müsste es sonst je Stapel neu laden).
+     */
+    fun releaseModel() {
+        scope.launch(Dispatchers.IO) { runCatching { search?.releaseIdleModel(BUSY_SECS) } }
     }
 
     fun model(): LocalEmbeddingModel = localEmbeddingModel(modelDir.path)
@@ -152,7 +168,6 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
                 _state.value = if (setup is EmbeddingSetup.Local) SemanticState.NeedsModel else SemanticState.Off
                 return
             }
-            if (setup is EmbeddingSetup.Local) _state.value = SemanticState.Loading
             search = runCatching {
                 if (setup is EmbeddingSetup.Local) SemanticSearch.withLocalModel(store.core, modelDir.path)
                 else SemanticSearch.withCloudEmbeddings(store.core)
@@ -180,5 +195,8 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
         const val TAG = "SemanticIndex"
         const val DEBOUNCE_MS = 2_000L
         const val PAGES_PER_STEP = 8u
+        const val RELEASE_CHECK_MS = 30_000L
+        const val IDLE_SECS = 60u
+        const val BUSY_SECS = 5u
     }
 }

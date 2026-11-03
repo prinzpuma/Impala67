@@ -17,7 +17,7 @@ use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use impala_ai::{EmbedRoute, Provider, embed_provider, embed_remote, embed_route};
 use impala_net::{HttpClient, UreqClient, block_on};
@@ -253,6 +253,53 @@ impl<H: HttpClient> Embedder for CloudEmbedder<H> {
     }
 }
 
+/// Lokales Modell, das erst beim ersten Einbetten lädt und sich über [`SemanticSearch::release_idle_model`]
+/// wieder freigeben lässt: Es belegt einige hundert MB, gebraucht wird es aber nur beim Indexieren und
+/// für Suchanfragen („Verwandt“ rechnet mit den gespeicherten Vektoren).
+struct LocalEmbedder {
+    dir: PathBuf,
+    model: Mutex<Option<Arc<OnnxEmbedder>>>,
+    last_used: Mutex<Instant>,
+    key: String,
+}
+
+impl LocalEmbedder {
+    fn loaded(&self) -> Result<Arc<OnnxEmbedder>, EmbedError> {
+        let mut model = self.model.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = model.as_ref() {
+            return Ok(m.clone());
+        }
+        let m = Arc::new(OnnxEmbedder::load(&self.dir, &LOCAL_EMBEDDING_MODELS[0])?);
+        *model = Some(m.clone());
+        Ok(m)
+    }
+
+    fn touch(&self) {
+        *self.last_used.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+    }
+}
+
+/// Teilt den [`LocalEmbedder`] zwischen Suche ([`Embedder`]) und Freigabe.
+struct LazyLocal(Arc<LocalEmbedder>);
+
+impl Embedder for LazyLocal {
+    fn model_key(&self) -> &str {
+        &self.0.key
+    }
+    fn provider_id(&self) -> &str {
+        LOCAL_EMBEDDING_MODELS[0].provider_id
+    }
+    fn dim(&self) -> usize {
+        LOCAL_EMBEDDING_MODELS[0].dim
+    }
+    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.0.touch();
+        let out = self.0.loaded()?.embed(texts);
+        self.0.touch();
+        out
+    }
+}
+
 /// Trefferliste der semantischen Suche (Werte auf drei Stellen gerundet).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct SemanticHit {
@@ -297,6 +344,8 @@ struct Cache {
 pub struct SemanticSearch {
     core: Shared,
     embedder: Box<dyn Embedder + Send + Sync>,
+    /// Nur beim lokalen Modell: für [`SemanticSearch::release_idle_model`].
+    local: Option<Arc<LocalEmbedder>>,
     cache: Mutex<Cache>,
     /// Ein Indexlauf zur Zeit.
     run: Mutex<()>,
@@ -377,6 +426,7 @@ impl SemanticSearch {
         Arc::new(SemanticSearch {
             core: core.shared(),
             embedder,
+            local: None,
             cache: Mutex::new(Cache { index: None, queries: QueryCache::default() }),
             run: Mutex::new(()),
         })
@@ -523,12 +573,39 @@ impl SemanticSearch {
         SemanticSearch::start(&core, Box::new(PlatformEmbedder { inner: embedder, model, provider }))
     }
 
-    /// Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Lädt das
-    /// Modell (einige Sekunden): aus einem Hintergrund-Thread rufen.
+    /// Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Das Modell
+    /// lädt erst beim ersten Einbetten (einige Sekunden) und bleibt bis [`Self::release_idle_model`].
     #[uniffi::constructor]
     pub fn with_local_model(core: Arc<ImpalaCore>, model_dir: String) -> Result<Arc<Self>, SearchFailure> {
-        let embedder = OnnxEmbedder::load(Path::new(&model_dir), &LOCAL_EMBEDDING_MODELS[0]).map_err(embed_err)?;
-        Ok(SemanticSearch::start(&core, Box::new(embedder)))
+        let dir = PathBuf::from(model_dir);
+        if !model_present(&dir) {
+            return Err(embed_err("Das lokale Modell liegt nicht auf diesem Gerät."));
+        }
+        let local = Arc::new(LocalEmbedder {
+            dir,
+            model: Mutex::new(None),
+            last_used: Mutex::new(Instant::now()),
+            key: vector_model_key(LOCAL_EMBEDDING_MODELS[0].id),
+        });
+        let search = SemanticSearch {
+            core: core.shared(),
+            embedder: Box::new(LazyLocal(local.clone())),
+            local: Some(local),
+            cache: Mutex::new(Cache { index: None, queries: QueryCache::default() }),
+            run: Mutex::new(()),
+        };
+        Ok(Arc::new(search))
+    }
+
+    /// Gibt das geladene lokale Modell frei, wenn es seit `idle_secs` nicht gebraucht wurde (laufende
+    /// Berechnungen rechnen zu Ende). `true`, wenn freigegeben. Ohne lokales Modell: `false`.
+    pub fn release_idle_model(&self, idle_secs: u32) -> bool {
+        let Some(local) = &self.local else { return false };
+        let idle = local.last_used.lock().unwrap_or_else(|e| e.into_inner()).elapsed();
+        if idle < Duration::from_secs(u64::from(idle_secs)) {
+            return false;
+        }
+        local.model.lock().unwrap_or_else(|e| e.into_inner()).take().is_some()
     }
 
     /// Index mit Vektoren einer Cloud-Quelle laut Einstellungen (`embedModel`, `embedProviderId`,
