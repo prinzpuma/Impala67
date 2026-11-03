@@ -98,6 +98,9 @@ class CardsReminderWorker(context: Context, params: WorkerParameters) : Coroutin
             .setContentTitle("Impala67 – Karteikarten fällig")
             .setContentText("Du hast $due Karteikarte${if (due == 1) "" else "n"} zur Wiederholung bereit.")
             .setContentIntent(open)
+            // Zahl am App-Symbol (app-badge.js): Android zeigt sie über die Benachrichtigung an.
+            .setNumber(due)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setAutoCancel(true)
             .build()
         runCatching { NotificationManagerCompat.from(ctx).notify(NOTIFICATION_ID, note) }

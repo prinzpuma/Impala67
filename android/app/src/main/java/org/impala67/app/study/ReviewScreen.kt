@@ -51,12 +51,20 @@ import org.impala67.app.ui.theme.Space
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier: Modifier = Modifier, mix: Boolean = false) {
-    val prefs = (androidx.compose.ui.platform.LocalContext.current.applicationContext as org.impala67.app.ImpalaApp).prefs
+fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier: Modifier = Modifier, mix: Boolean = false, feynman: Boolean = false) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = (context.applicationContext as org.impala67.app.ImpalaApp).prefs
     val record = prefs.telemetry.collectAsStateWithLifecycle(true)
-    val vm = viewModel(key = "review:$deck:$mix") { ReviewViewModel(store, deck, mix) { record.value } }
+    val vm = viewModel(key = "review:$deck:$mix:$feynman") { ReviewViewModel(store, deck, mix, { record.value }, feynman, prefs) }
     val state by vm.state.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val hint by vm.hint.collectAsStateWithLifecycle()
+    val explanation by vm.explanation.collectAsStateWithLifecycle()
+    val checking by vm.checking.collectAsStateWithLifecycle()
+    val verdict by vm.verdict.collectAsStateWithLifecycle()
+    LaunchedEffect(hint) {
+        hint?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show(); vm.hint.value = null }
+    }
     val haptics = LocalHapticFeedback.current
     var editing by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
@@ -68,6 +76,8 @@ fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier
     // shortcuts.js (Anki-Zweig): Leertaste/Enter = Antwort zeigen, 1–4 = bewerten, Strg+Z = letzte Bewertung zurück.
     val keys = Modifier.focusRequester(focus).focusable().onPreviewKeyEvent { e ->
         if (e.type != KeyEventType.KeyDown || editing || options || s?.card == null) return@onPreviewKeyEvent false
+        // Im Erklär-Feld lösen ␣ und 1–4 keine Lern-Kürzel aus (experimente.js).
+        if (feynman && !s.showBack) return@onPreviewKeyEvent false
         val grade = when (e.key) { Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2; Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4; else -> 0 }
         when {
             e.isCtrlPressed && e.key == Key.Z -> { if (s.canUndo) vm.undo(); true }
@@ -77,7 +87,7 @@ fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier
         }
     }
     Column(modifier.fillMaxSize().background(Impala.colors.panel).then(keys)) {
-        ReviewHeader(deck, mix, s?.canUndo == true, onExit, vm::undo)
+        ReviewHeader(deck, mix, s?.canUndo == true, onExit, vm::undo, feynman)
         if (s == null) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
             return@Column
@@ -105,9 +115,13 @@ fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier
             Column(Modifier.widthIn(max = 640.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                 CardMeta(card)
                 CardFace("Frage", card.front, back = false)
+                if (feynman && !s.showBack) {
+                    FeynmanInput(explanation, { vm.explanation.value = it }, checking, vm::check, vm::reveal)
+                }
                 if (s.showBack) {
                     AnswerDivider()
                     CardFace("Rückseite", card.back, back = true)
+                    verdict?.takeIf { it.cardId == card.id }?.let { FeynmanFeedback(it) }
                 }
             }
         }
@@ -121,7 +135,7 @@ fun ReviewScreen(store: ImpalaStore, deck: String?, onExit: () -> Unit, modifier
                     haptics.performHapticFeedback(if (g == 1) HapticFeedbackType.Reject else HapticFeedbackType.Confirm)
                     vm.grade(g)
                 }
-            } else {
+            } else if (!feynman) {
                 RevealButton {
                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                     vm.reveal()

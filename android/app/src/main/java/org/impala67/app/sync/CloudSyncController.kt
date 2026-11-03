@@ -177,6 +177,13 @@ class CloudSyncController(
 
     fun newKey(): String = generateSyncKey()
 
+    /** Bis zu welcher lokalen seq alles hochgeladen ist; `null`, wenn dieses Gerät nicht gekoppelt ist (backup-status.js). */
+    suspend fun uploadedSeq(): ULong? {
+        if (prefs.cfSyncKey.first().isBlank()) return null
+        val current = sync ?: return 0uL
+        return withContext(Dispatchers.IO) { runCatching { current.status().lastUploadedSeq }.getOrDefault(0uL) }
+    }
+
     // --- intern ---
 
     private fun refreshSettings(store: ImpalaStore) {

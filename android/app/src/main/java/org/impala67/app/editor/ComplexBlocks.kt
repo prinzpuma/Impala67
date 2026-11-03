@@ -76,7 +76,7 @@ internal fun ComplexBlock(block: MdBlock, ctx: ReadContext) {
                 is MdBlockKind.Heft -> LinkCard(R.drawable.ic_i_notebook, "Heft") { ctx.onOpenPage?.invoke(k.heftId) }
                 is MdBlockKind.File -> FileBlock(k, ctx.store)
                 is MdBlockKind.Math -> RichBlock(RichKind.Math, k.text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                is MdBlockKind.Table -> TableBlock(k.rows, ctx)
+                is MdBlockKind.Table -> ctx.onTableEdit?.let { edit -> TableEditor(block.id, k.rows) { edit(block.id, it) } } ?: TableBlock(k.rows, ctx)
                 is MdBlockKind.Callout -> CalloutBlock(k, ctx)
                 is MdBlockKind.Toggle -> ToggleBlock(block.id, k, ctx)
                 is MdBlockKind.Columns -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -159,7 +159,7 @@ private fun TableBlock(rows: List<List<String>>, ctx: ReadContext) {
             Row(Modifier.height(IntrinsicSize.Min)) {
                 row.forEach { cell ->
                     Box(Modifier.width(150.dp).fillMaxHeight().border(0.5.dp, c.edge).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                        Text(
+                        MathText(
                             styler.build(cell.replace(BR, "\n")),
                             style = TextStyle(color = c.text, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = if (r == 0) FontWeight.SemiBold else null),
                         )
@@ -202,7 +202,7 @@ private fun ToggleBlock(id: String, k: MdBlockKind.Toggle, ctx: ReadContext) {
             Box(Modifier.size(24.dp).padding(top = 2.dp), contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_i_chevron_right), if (open) "Zuklappen" else "Aufklappen", Modifier.size(16.dp).rotate(if (open) 90f else 0f), tint = c.text2)
             }
-            Text(styler.build(k.summary), color = c.text, fontSize = 16.sp, lineHeight = 25.sp, modifier = Modifier.weight(1f))
+            MathText(styler.build(k.summary), Modifier.weight(1f), style = TextStyle(color = c.text, fontSize = 16.sp, lineHeight = 25.sp))
         }
         AnimatedVisibility(open) {
             BlockList(k.children, ctx.forChildren(), Modifier.padding(start = 24.dp))

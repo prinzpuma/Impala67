@@ -516,8 +516,15 @@ const UNSAFE_SCAN_BATCH: usize = 500;
 
 /// Zustand der Datensicherheit aus Drive-Wasserstand und (falls aktiv) Cloudflare-Wasserstand.
 /// `cloudflare_uploaded_seq`: `Some(letzte hochgeladene seq)` bei aktivem Cloudflare-Sync, sonst `None`.
+/// `drive_active`: Drive ist angemeldet (oder wartet auf neue Anmeldung) – wie in backup-status.js
+/// zählt dann auch Drive als Kanal („hängt hinterher“ statt „nur lokal“).
 #[uniffi::export]
-pub fn drive_backup_view(core: Arc<ImpalaCore>, cloudflare_uploaded_seq: Option<u64>, now_ms: f64) -> DriveBackupView {
+pub fn drive_backup_view(
+    core: Arc<ImpalaCore>,
+    cloudflare_uploaded_seq: Option<u64>,
+    drive_active: bool,
+    now_ms: f64,
+) -> DriveBackupView {
     let inner = core.lock();
     let drive = read_state(&inner).unwrap_or_default().uploaded_seq.unwrap_or(0);
     let protected =
@@ -532,7 +539,8 @@ pub fn drive_backup_view(core: Arc<ImpalaCore>, cloudflare_uploaded_seq: Option<
         since = status::first_unsafe_at(&batch, protected);
         after = last;
     }
-    let (level, unsafe_since) = status::backup_view(cloudflare_uploaded_seq.is_some(), since.as_deref(), now_ms);
+    let has_channel = cloudflare_uploaded_seq.is_some() || drive_active;
+    let (level, unsafe_since) = status::backup_view(has_channel, since.as_deref(), now_ms);
     let level = match level {
         BackupLevel::Safe => DriveBackupLevel::Safe,
         BackupLevel::Pending => DriveBackupLevel::Pending,
@@ -1230,15 +1238,16 @@ mod tests {
     fn zustand_zuruecksetzen_und_sicherheitsanzeige() {
         let net = net();
         let (a, da) = device(&net);
-        let view = |cf: Option<u64>| drive_backup_view(a.clone(), cf, 0.0);
+        let view = |cf: Option<u64>| drive_backup_view(a.clone(), cf, false, 0.0);
         assert_eq!(view(None).level, DriveBackupLevel::Safe);
         a.create_page("X".into(), String::new(), None, None).unwrap();
         let since = view(None);
         assert!(since.unsafe_since.is_some() && since.level != DriveBackupLevel::Safe);
         // Weit nach dem Ereignis: kein Sync eingerichtet = nur lokal; mit Cloudflare = hängt hinterher.
-        let late = |cf| drive_backup_view(a.clone(), cf, 4_000_000_000_000.0);
+        let late = |cf| drive_backup_view(a.clone(), cf, false, 4_000_000_000_000.0);
         assert_eq!((late(None).level, late(None).needs_hint), (DriveBackupLevel::Local, true));
         assert_eq!(late(Some(0)).level, DriveBackupLevel::Stale);
+        assert_eq!(drive_backup_view(a.clone(), None, true, 4_000_000_000_000.0).level, DriveBackupLevel::Stale);
 
         da.sync(None).unwrap();
         assert_eq!(late(None).level, DriveBackupLevel::Safe);

@@ -132,8 +132,8 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [x] Heft: sichtbare Fehler – Bilder/Scans/Textfelder zeichnen, Farbpunkte, Marker-Farbe, Werkzeugzustand speichern, Zoom 0,4–6, Werkzeugleiste oben mittig mit Optionsleiste darunter (auch Telefon), Einklappen, Schreib-Rückzug.
   - [ ] Heft: Formerkennung ✅, Laser ✅, Radierer halten ✅, Doppeltipp-Zoom ✅, Zwei-/Drei-Finger-Tipp ✅, „Seite hinzufügen“ Davor/Danach/Am Ende ✅, Bild-/Text-Werkzeug ✅, Import/Export ✅ (auch in andere Hefte bzw. als Notiz), Verlauf ✅, Lesemodus (Telefon) ✅; offen: PDF-Text beim Import übernehmen.
   - [ ] Seitenmenü (⋯): Tablet ✅ inkl. „Als Vorlesungsübersicht“ bis auf „Fach…“ (mit dem Fächer-Modul); Telefon offen (zurückgestellt, erst Tablet).
-  - [x] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext), Toggle-Zustand gespeichert ✅, Formelblöcke (KaTeX) ✅, Mermaid/SVG mit Live-Vorschau ✅ (WebView, Bibliotheken wie die PWA vom CDN, danach im Cache), Datenbankansicht ✅ (Kern: `page_db`/`page_props`/`set_page_db`/`set_page_prop`), Inline-Formatierung per Tasten und Werkzeugleiste ✅ (Strg+B/I/U/E/K, Strg+Shift+S/H, Strg+Z/Y). Noch offen im Editor: Inline-Formeln `$…$` als KaTeX, Tabellenzellen direkt bearbeiten.
-  - [ ] Shell: Vor-Navigation ✅, Chat-/Karten-Tabs ✅, Drag & Drop (Seiten, Stapel, Tabs) ✅, Breitengriff ✅, Langdruck-Menüs ✅, Dichte/Schrift/Bewegung ✅, Tabs in Seitenleiste ✅, Tabs/Aufklappzustand gespeichert ✅, Dock bei Tastatur/Lernen ausblenden ✅; offen: Gemini-Notebook-Tab und Wissensgraph (Module fehlen), Daily Notes.
+  - [x] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext), Toggle-Zustand gespeichert ✅, Formelblöcke (KaTeX) ✅, Mermaid/SVG mit Live-Vorschau ✅ (WebView, Bibliotheken wie die PWA vom CDN, danach im Cache), Datenbankansicht ✅ (Kern: `page_db`/`page_props`/`set_page_db`/`set_page_prop`), Inline-Formatierung per Tasten und Werkzeugleiste ✅ (Strg+B/I/U/E/K, Strg+Shift+S/H, Strg+Z/Y). Inline-Formeln `$…$` als KaTeX ✅, Tabellenzellen direkt bearbeiten ✅.
+  - [ ] Shell: Vor-Navigation ✅, Chat-/Karten-Tabs ✅, Drag & Drop (Seiten, Stapel, Tabs) ✅, Breitengriff ✅, Langdruck-Menüs ✅, Dichte/Schrift/Bewegung ✅, Tabs in Seitenleiste ✅, Tabs/Aufklappzustand gespeichert ✅, Dock bei Tastatur/Lernen ausblenden ✅; Daily Notes ✅; offen: Gemini-Notebook-Tab.
   - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
   - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
   - [ ] Einstellungen: Übersicht ✅, KI-Quellen und Modellwahl ✅ (Kern: `ai_list_models`/`ai_ping_provider`), Backup Export/Import ✅, Gefahrenzone ✅ (Kern: `clear_pages`/`delete_all_cards`/`card_totals`), Speicher ✅; offen: Suche, Diagnose, Modell-Favoriten, Weitere Exporte, Embedding-/Handschrift-Modell, Controller, Beta-Lernfunktionen, APK-Update.
@@ -147,8 +147,17 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   (Kern: `learning_stats_json`), Karten-Import/-Export (TXT/CSV/Anki-Text/.apkg), Weitere Exporte, Performance-Profiler,
   KI (Anhänge, Seitenkontext-Chip, Modellmenü mit Favoriten/Denkaufwand, Kopieren/Anpassen/Bearbeiten, Status-Chip, Verlauf;
   Kern: `AiAssistant.complete`/`refine`).
-  Noch offen davon: Inline-Formeln im Chat, Seiten-Diff der KI-Änderungen, Tabellen-/Toggle-/Blockauswahl-Tasten,
-  Lerntimer (Pomodoro), Ehrlichkeits-/Pausen-Toast beim Lernen, Höhen-Griff eingebetteter PDFs, eigenes Cover-Bild anzeigen.
+  Noch offen davon: Seiten-Diff der KI-Änderungen, Toggle-/Blockauswahl-Tasten, Höhen-Griff eingebetteter PDFs,
+  eigenes Cover-Bild anzeigen.
+- [x] **Umgesetzt (3. November 2026, noch nicht auf dem Gerät getestet)**: Inline-Formeln `$…$`/`\(…\)` als KaTeX
+  (Notizen und Chat), Tabellenzellen direkt bearbeiten (Tab/Enter/↑↓, „+ Zeile“/„+ Spalte“), Archiv-Banner und
+  Unterseiten-Liste am Seitenende, Daily Notes (Kalender und Tagesseite; Kern: `daily_notes`/`open_daily_note`),
+  Karten-Archiv mit Wiederherstellen, Feynman-Lernmodus (je Stapel und alle Stapel, KI-Prüfung mit Notenvorschlag),
+  Ehrlichkeits- und Pausen-Hinweis beim Lernen, Backup-Hinweis auf der Startseite (Kern: `drive_backup_view` zählt
+  jetzt auch Drive als Kanal), Startfehler-Anzeige und Hinweis bei langem Start, Einstellungssuche, Kartenzahl am
+  App-Symbol über die Erinnerung. Bewusst nicht übernommen, weil in der PWA ohne Wirkung: Lerntimer-Start, Vorlesen.
+  Noch offen: „Verwandt“-Leiste und RAG-Quellen (brauchen den semantischen Index auf Android).
+  `android/UI-INVENTAR.md` ist für die Arbeit vom 2. November noch nicht vollständig abgehakt.
 - **Erstmal irrelevant (zurückgestellt)**: Schulnoten, Fächer, Abschreiben (Schreibübung), Beta-Lernfunktionen (Experimente),
   Handschrift-Training/-Einstellungen, Export-Feinheiten, Seitenkopf-Reste (Cover-Bild, Breite, Schrift), App & Speicher
   (APK-Update, Speicherbericht), Controller, Fach-Vorschläge, Heft-Kopfmenüs, Startbildschirm-Widget und die ganze

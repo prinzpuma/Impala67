@@ -26,8 +26,8 @@ import kotlinx.coroutines.delay
 import org.impala67.app.ui.theme.Impala
 import org.json.JSONObject
 
-/** Was die WebView zeichnet: Formelblock (KaTeX), Mermaid-Diagramm oder SVG-Grafik (web/diagram.js). */
-internal enum class RichKind { Math, Mermaid, Svg }
+/** Was die WebView zeichnet: Formelblock (KaTeX), Inline-Formel, Mermaid-Diagramm oder SVG-Grafik (web/diagram.js). */
+internal enum class RichKind { Math, InlineMath, Mermaid, Svg }
 
 /** Diagramm-Sprache eines Codeblocks (`diagramLang` in diagram.js), sonst `null`. */
 internal fun diagramKind(language: String): RichKind? = when (language.trim().lowercase()) {
@@ -55,16 +55,29 @@ internal fun RichBlock(kind: RichKind, source: String, modifier: Modifier = Modi
     val html = remember(kind, shown, c.text, c.text2, c.isDark) { richHtml(kind, shown, c.text, c.text2, c.isDark) }
     var heightDp by remember { mutableFloatStateOf(if (kind == RichKind.Math) 56f else 120f) }
     AndroidView(
-        factory = { ctx -> PassiveWebView(ctx) { h -> heightDp = h } },
+        factory = { ctx -> PassiveWebView(ctx) { _, h -> heightDp = h } },
         update = { it.show(html) },
         onRelease = { it.destroy() },
         modifier = modifier.fillMaxWidth().height(heightDp.dp),
     )
 }
 
-/** WebView ohne Navigation, Datei- und Inhaltszugriff; meldet ihre Höhe über `Impala.height`. */
+/** Inline-Formel `$…$` im Fließtext; meldet ihre Größe (dp), damit der Platzhalter im Text passt. */
+@Composable
+internal fun InlineMathView(source: String, onSize: (Float, Float) -> Unit, modifier: Modifier = Modifier) {
+    val c = Impala.colors
+    val html = remember(source, c.text, c.text2, c.isDark) { richHtml(RichKind.InlineMath, source, c.text, c.text2, c.isDark) }
+    AndroidView(
+        factory = { ctx -> PassiveWebView(ctx, onSize) },
+        update = { it.show(html) },
+        onRelease = { it.destroy() },
+        modifier = modifier,
+    )
+}
+
+/** WebView ohne Navigation, Datei- und Inhaltszugriff; meldet ihre Größe über `Impala.size`. */
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
-private class PassiveWebView(context: Context, onHeight: (Float) -> Unit) : WebView(context) {
+private class PassiveWebView(context: Context, onSize: (Float, Float) -> Unit) : WebView(context) {
     private var loaded: String? = null
 
     init {
@@ -79,10 +92,10 @@ private class PassiveWebView(context: Context, onHeight: (Float) -> Unit) : WebV
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
         }
-        // Die Seite meldet nur ihre Höhe (CSS-Pixel = dp bei `width=device-width`).
+        // Die Seite meldet nur ihre Größe (CSS-Pixel = dp bei `width=device-width`).
         addJavascriptInterface(object {
             @JavascriptInterface
-            fun height(px: Float) { post { if (px > 0) onHeight(px) } }
+            fun size(w: Float, h: Float) { post { if (h > 0) onSize(w, h) } }
         }, "Impala")
     }
 
@@ -101,7 +114,7 @@ private fun css(c: Color) = String.format("#%06X", c.toArgb() and 0xFFFFFF)
 private fun richHtml(kind: RichKind, source: String, text: Color, text2: Color, dark: Boolean): String {
     val src = JSONObject.quote(source) // maskiert auch „</“, das Skript kann nicht vorzeitig enden
     val head = when (kind) {
-        RichKind.Math -> """<link rel="stylesheet" href="$KATEX_CSS" integrity="$KATEX_CSS_SRI" crossorigin="anonymous">
+        RichKind.Math, RichKind.InlineMath -> """<link rel="stylesheet" href="$KATEX_CSS" integrity="$KATEX_CSS_SRI" crossorigin="anonymous">
 <script src="$KATEX_JS" integrity="$KATEX_JS_SRI" crossorigin="anonymous"></script>"""
         RichKind.Mermaid -> """<script src="$MERMAID_JS" integrity="$MERMAID_JS_SRI" crossorigin="anonymous"></script>"""
         RichKind.Svg -> ""
@@ -112,6 +125,10 @@ if (!window.katex) return fail("Formel braucht einmal Internet zum Laden.");
 if (!SRC.trim()) return fail("Leere Formel");
 try { katex.render(SRC, out, { displayMode: true, throwOnError: false }); done(); }
 catch (e) { fail("Formel-Fehler: " + e.message); }"""
+        RichKind.InlineMath -> """
+if (!window.katex) { out.textContent = SRC; return done(); }
+try { katex.render(SRC, out, { displayMode: false, throwOnError: false }); } catch (e) { out.textContent = SRC; }
+done();"""
         RichKind.Mermaid -> """
 if (!SRC.trim()) return fail("Leeres Diagramm");
 if (!window.mermaid) return fail("Diagramm braucht einmal Internet zum Laden.");
@@ -126,18 +143,25 @@ if (!/xmlns=/.test(s.slice(0, 200))) s = s.replace(/^<svg/i, '<svg xmlns="http:/
 var img = new Image(); img.onload = done; img.onerror = function () { fail("Kein gültiges SVG"); };
 img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s); out.appendChild(img);"""
     }
+    val outCss = if (kind == RichKind.InlineMath) {
+        "#out { display: inline-block; white-space: nowrap; font-size: 16px; line-height: 1.2; }\n.katex { font-size: 1.05em; }"
+    } else {
+        "#out { padding: 6px 0; text-align: center; overflow-x: auto; }\n.katex { font-size: 1.15em; }"
+    }
     return """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 html, body { margin: 0; padding: 0; background: transparent; color: ${css(text)}; font-family: sans-serif; overflow: hidden; }
-#out { padding: 6px 0; text-align: center; overflow-x: auto; }
+$outCss
 #out svg, #out img { max-width: 100%; height: auto; }
-.katex { font-size: 1.15em; }
 .msg { font-size: 13px; color: ${css(text2)}; text-align: left; }
 pre { white-space: pre-wrap; text-align: left; font-size: 13px; margin: 4px 0 0; }
 </style>$head</head><body><div id="out"></div><script>
 var SRC = $src, out = document.getElementById("out");
-function done() { Impala.height(Math.ceil(document.documentElement.scrollHeight)); }
+function done() {
+  var r = out.getBoundingClientRect();
+  Impala.size(Math.ceil(r.width), Math.ceil(${if (kind == RichKind.InlineMath) "r.height" else "document.documentElement.scrollHeight"}));
+}
 function fail(msg) {
   out.textContent = "";
   var m = document.createElement("div"); m.className = "msg"; m.textContent = msg; out.appendChild(m);

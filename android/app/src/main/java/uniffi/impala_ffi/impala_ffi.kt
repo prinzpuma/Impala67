@@ -1460,6 +1460,10 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1697,6 +1701,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_create_page(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_create_workspace(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_daily_notes(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_deck_config(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_deck_overview(
@@ -1836,6 +1842,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_move_deck(
 fun uniffi_impala_ffi_checksum_method_impalacore_move_page(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_move_page_to_workspace(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_open_daily_note(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_orphan_archived_cards(
 ): Short
@@ -2235,6 +2243,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_create_page(`ptr`: Pointer,`title`: R
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_create_workspace(`ptr`: Pointer,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_daily_notes(`ptr`: Pointer,`prefix`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_deck_config(`ptr`: Pointer,`deck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_deck_overview(`ptr`: Pointer,`utcOffsetMinutes`: Int,`mix`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -2375,6 +2385,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_move_page(`ptr`: Pointer,`id`: RustBu
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_move_page_to_workspace(`ptr`: Pointer,`id`: RustBuffer.ByValue,`workspaceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_open_daily_note(`ptr`: Pointer,`key`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_orphan_archived_cards(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_orphan_trashed_cards(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2531,7 +2543,7 @@ fun uniffi_impala_ffi_fn_func_drive_auth_state(`tokenValid`: Byte,`sessionKnown`
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_drive_auto_sync_gate(`reason`: RustBuffer.ByValue,`force`: Byte,`connected`: Byte,`online`: Byte,`editing`: Byte,`inFlight`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_func_drive_backup_view(`core`: Pointer,`cloudflareUploadedSeq`: RustBuffer.ByValue,`nowMs`: Double,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_drive_backup_view(`core`: Pointer,`cloudflareUploadedSeq`: RustBuffer.ByValue,`driveActive`: Byte,`nowMs`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_drive_failed_ui(`message`: RustBuffer.ByValue,`sessionExpired`: Byte,`online`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2746,7 +2758,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_drive_auto_sync_gate() != 25236.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_drive_backup_view() != 26936.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_drive_backup_view() != 56366.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_drive_failed_ui() != 45115.toShort()) {
@@ -3064,6 +3076,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_create_workspace() != 30198.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_daily_notes() != 65015.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_deck_config() != 55764.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3272,6 +3287,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_move_page_to_workspace() != 37662.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_open_daily_note() != 25170.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_orphan_archived_cards() != 59944.toShort()) {
@@ -7397,6 +7415,11 @@ public interface ImpalaCoreInterface {
     fun `createWorkspace`(`name`: kotlin.String): kotlin.String
     
     /**
+     * Aktive Tagesseiten, deren Tag mit `prefix` beginnt (z. B. `"2026-11"` für einen Monat).
+     */
+    fun `dailyNotes`(`prefix`: kotlin.String): List<DailyNote>
+    
+    /**
      * Stapel-Optionen mit Vererbung. `deck`: `None` = die Standardwerte aller Stapel (`"*"`).
      */
     fun `deckConfig`(`deck`: kotlin.String?): DeckConfig
@@ -7748,6 +7771,12 @@ public interface ImpalaCoreInterface {
      * Seite samt Unterseiten in einen anderen Workspace (als Wurzel).
      */
     fun `movePageToWorkspace`(`id`: kotlin.String, `workspaceId`: kotlin.String)
+    
+    /**
+     * Tagesseite zu `key` öffnen: vorhandene ID oder neu anlegen (samt Ordner „Daily Notes“).
+     * `title` ist der lesbare Tag (die Plattform formatiert ihn, z. B. „Dienstag, 03. November 2026“).
+     */
+    fun `openDailyNote`(`key`: kotlin.String, `title`: kotlin.String): kotlin.String
     
     /**
      * Einzeln archivierte Karten, deren Stapel nicht archiviert ist (die Liste „Archiv“ der PWA
@@ -8557,6 +8586,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_create_workspace(
         it, FfiConverterString.lower(`name`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aktive Tagesseiten, deren Tag mit `prefix` beginnt (z. B. `"2026-11"` für einen Monat).
+     */override fun `dailyNotes`(`prefix`: kotlin.String): List<DailyNote> {
+            return FfiConverterSequenceTypeDailyNote.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_daily_notes(
+        it, FfiConverterString.lower(`prefix`),_status)
 }
     }
     )
@@ -9653,6 +9697,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 }
     }
     
+    
+
+    
+    /**
+     * Tagesseite zu `key` öffnen: vorhandene ID oder neu anlegen (samt Ordner „Daily Notes“).
+     * `title` ist der lesbare Tag (die Plattform formatiert ihn, z. B. „Dienstag, 03. November 2026“).
+     */
+    @Throws(CoreException::class)override fun `openDailyNote`(`key`: kotlin.String, `title`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_open_daily_note(
+        it, FfiConverterString.lower(`key`),FfiConverterString.lower(`title`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -12628,6 +12689,51 @@ public object FfiConverterTypeConflictInfo: FfiConverterRustBuffer<ConflictInfo>
             FfiConverterOptionalUInt.write(value.`extraLines`, buf)
             FfiConverterSequenceTypeConflictChoice.write(value.`choices`, buf)
             FfiConverterOptionalTypeConflictResolution.write(value.`recommended`, buf)
+    }
+}
+
+
+
+/**
+ * Eine vorhandene Tagesseite.
+ */
+data class DailyNote (
+    /**
+     * Tag als `JJJJ-MM-TT`.
+     */
+    var `key`: kotlin.String, 
+    var `pageId`: kotlin.String, 
+    /**
+     * Erste nicht leere Zeile des Inhalts (höchstens 70 Zeichen, wie der Kalender der PWA).
+     */
+    var `snippet`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDailyNote: FfiConverterRustBuffer<DailyNote> {
+    override fun read(buf: ByteBuffer): DailyNote {
+        return DailyNote(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DailyNote) = (
+            FfiConverterString.allocationSize(value.`key`) +
+            FfiConverterString.allocationSize(value.`pageId`) +
+            FfiConverterString.allocationSize(value.`snippet`)
+    )
+
+    override fun write(value: DailyNote, buf: ByteBuffer) {
+            FfiConverterString.write(value.`key`, buf)
+            FfiConverterString.write(value.`pageId`, buf)
+            FfiConverterString.write(value.`snippet`, buf)
     }
 }
 
@@ -19031,6 +19137,34 @@ public object FfiConverterSequenceTypeConflictInfo: FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeDailyNote: FfiConverterRustBuffer<List<DailyNote>> {
+    override fun read(buf: ByteBuffer): List<DailyNote> {
+        val len = buf.getInt()
+        return List<DailyNote>(len) {
+            FfiConverterTypeDailyNote.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<DailyNote>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeDailyNote.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<DailyNote>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeDailyNote.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeDbColumn: FfiConverterRustBuffer<List<DbColumn>> {
     override fun read(buf: ByteBuffer): List<DbColumn> {
         val len = buf.getInt()
@@ -19923,11 +20057,13 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
         /**
          * Zustand der Datensicherheit aus Drive-Wasserstand und (falls aktiv) Cloudflare-Wasserstand.
          * `cloudflare_uploaded_seq`: `Some(letzte hochgeladene seq)` bei aktivem Cloudflare-Sync, sonst `None`.
-         */ fun `driveBackupView`(`core`: ImpalaCore, `cloudflareUploadedSeq`: kotlin.ULong?, `nowMs`: kotlin.Double): DriveBackupView {
+         * `drive_active`: Drive ist angemeldet (oder wartet auf neue Anmeldung) – wie in backup-status.js
+         * zählt dann auch Drive als Kanal („hängt hinterher“ statt „nur lokal“).
+         */ fun `driveBackupView`(`core`: ImpalaCore, `cloudflareUploadedSeq`: kotlin.ULong?, `driveActive`: kotlin.Boolean, `nowMs`: kotlin.Double): DriveBackupView {
             return FfiConverterTypeDriveBackupView.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_drive_backup_view(
-        FfiConverterTypeImpalaCore.lower(`core`),FfiConverterOptionalULong.lower(`cloudflareUploadedSeq`),FfiConverterDouble.lower(`nowMs`),_status)
+        FfiConverterTypeImpalaCore.lower(`core`),FfiConverterOptionalULong.lower(`cloudflareUploadedSeq`),FfiConverterBoolean.lower(`driveActive`),FfiConverterDouble.lower(`nowMs`),_status)
 }
     )
     }

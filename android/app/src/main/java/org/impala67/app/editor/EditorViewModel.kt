@@ -192,7 +192,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
         val k = block.kind
         when {
             block.isText() -> activate(block.id, EditMode.Text, block.text().length)
-            k is MdBlockKind.Table || k is MdBlockKind.Other || k is MdBlockKind.Math -> activate(block.id, EditMode.Raw, 0)
+            k is MdBlockKind.Other || k is MdBlockKind.Math -> activate(block.id, EditMode.Raw, 0)
             else -> activate(block.id, EditMode.Select, 0)
         }
     }
@@ -214,6 +214,13 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     // ---- Bearbeiten ----
 
     fun setText(id: String, text: String) = mutate(false) { list -> list.map { if (it.id == id) it.withText(text) else it } }
+
+    /** Tabellenzellen geändert; neue Zeilen/Spalten zählen als eigener Verlaufsschritt. */
+    fun setTable(id: String, rows: List<List<String>>) {
+        val old = (blocks.firstOrNull { it.id == id }?.kind as? MdBlockKind.Table)?.rows ?: return
+        val structural = old.size != rows.size || old.firstOrNull()?.size != rows.firstOrNull()?.size
+        mutate(structural) { list -> list.map { if (it.id == id) it.copy(kind = MdBlockKind.Table(rows)) else it } }
+    }
 
     fun toggleTodo(id: String) = mutate(true) { list ->
         list.map { b ->

@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -73,10 +74,17 @@ internal class InlineStyler(
                     val href = g[13]
                     if (SAFE.containsMatchIn(href)) link("[", g[12], "]($href)", href) else append(m.value)
                 }
-                g[14].isNotEmpty() -> {
-                    marker("$")
-                    withStyle(CODE) { append(g[14]) }
-                    marker("$")
+                g[14].isNotEmpty() || g[15].isNotEmpty() -> {
+                    val tex = g[14].ifEmpty { g[15] }
+                    val (open, close) = if (g[14].isNotEmpty()) "$" to "$" else "\\(" to "\\)"
+                    // Anzeige: KaTeX-Formel als Platzhalter im Text (InlineMath.kt); beim Bearbeiten Quelltext.
+                    if (keepMarkers) {
+                        marker(open)
+                        withStyle(CODE) { append(tex) }
+                        marker(close)
+                    } else {
+                        appendInlineContent(MATH_PREFIX + tex, tex)
+                    }
                 }
                 else -> append(m.value)
             }
@@ -102,7 +110,7 @@ internal class InlineStyler(
         val CODE = SpanStyle(fontFamily = FontFamily.Monospace)
         val SAFE = Regex("""^(https?:|mailto:|tel:|#)""", RegexOption.IGNORE_CASE)
 
-        // Reihenfolge wie in editor-inline.js; Gruppen 1..14, siehe `render`.
+        // Reihenfolge wie in editor-inline.js; Gruppen 1..15, siehe `render`.
         val PATTERN = Regex(
             listOf(
                 """\[\[([^\]\n]+)\]\]""",
@@ -116,6 +124,7 @@ internal class InlineStyler(
                 """(?<![*\\])\*([^*\n]+)\*""",
                 """\[([^\]]+)\]\(([^)\s]+)\)""",
                 """(?<!\\)\$([^${'$'}\n]+?)(?<!\\)\$""",
+                """\\\((.+?)\\\)""",
             ).joinToString("|"),
         )
     }

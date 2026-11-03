@@ -41,11 +41,11 @@ sealed interface DeckDialog {
 }
 
 /** ⋯-Menü eines Stapels: Dialoge über [open], der Rest direkt über [vm]. */
-fun deckMenuActions(name: String, vm: StudyViewModel, browse: () -> Unit, open: (DeckDialog) -> Unit) = DeckMenuActions(
+fun deckMenuActions(name: String, vm: StudyViewModel, browse: () -> Unit, feynman: (() -> Unit)? = null, open: (DeckDialog) -> Unit) = DeckMenuActions(
     browse = browse, subdeck = { open(DeckDialog.Sub(name)) },
     rename = { open(DeckDialog.Rename(name)) }, duplicate = { vm.duplicate(name) },
     options = { open(DeckDialog.Options(name)) }, archive = { vm.archive(name) },
-    trash = { open(DeckDialog.Trash(name)) },
+    trash = { open(DeckDialog.Trash(name)) }, feynman = feynman,
 )
 
 @Composable

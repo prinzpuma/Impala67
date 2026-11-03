@@ -12,10 +12,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,8 +27,6 @@ import org.impala67.app.settings.ThemeMode
 import org.impala67.app.ui.theme.Appearance
 import org.impala67.app.settings.resolve
 import androidx.compose.runtime.produceState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,10 +37,11 @@ import org.impala67.app.ui.theme.ImpalaTheme
 
 /** Einzige Activity: Compose von Rand zu Rand, Startbild bis der Kern geladen ist. */
 class MainActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val app = application as ImpalaApp
-        installSplashScreen().setKeepOnScreenCondition { !app.store.isCompleted }
+        // Startbild höchstens 12 s; danach zeigt [StartWaiting] den Hinweis „Der Start dauert ungewöhnlich lange“.
+        val started = android.os.SystemClock.uptimeMillis()
+        installSplashScreen().setKeepOnScreenCondition { !app.store.isCompleted && android.os.SystemClock.uptimeMillis() - started < SLOW_START_MS }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) intent?.toIncoming()?.let { app.incoming.value = it }
@@ -78,9 +73,13 @@ class MainActivity : ComponentActivity() {
                 appearance = Appearance(compact = density == Density.COMPACT, reduceMotion = reduceMotion),
                 haptics = haptics,
             ) {
-                val store by produceState<ImpalaStore?>(null) { value = app.store.await() }
-                store?.let { AppShell(it, app.prefs) }
-                    ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                val store by produceState<Result<ImpalaStore>?>(null) { value = runCatching { app.store.await() } }
+                val result = store
+                when {
+                    result == null -> StartWaiting()
+                    result.isFailure -> StartError(result.exceptionOrNull())
+                    else -> AppShell(result.getOrThrow(), app.prefs)
+                }
             }
         }
     }

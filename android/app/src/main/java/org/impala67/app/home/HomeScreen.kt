@@ -63,6 +63,8 @@ data class HomeActions(
     val heftThumbnail: HeftThumb = { _, _ -> },
     /** Einen Stapel lernen (Knopf „Fach lernen“ der Lernanalyse). */
     val studyDeck: ((String) -> Unit)? = null,
+    /** Einstellungen → Sync („Sync einrichten“ im Backup-Hinweis). */
+    val syncSettings: () -> Unit = settings,
 )
 
 /**
@@ -96,6 +98,7 @@ fun HomeScreen(vm: HomeViewModel, actions: HomeActions, modifier: Modifier = Mod
             Column(Modifier.widthIn(max = 800.dp).fillMaxWidth()) {
                 TopRow(s, actions, Modifier.riseIn(0))
                 if (s.conflictCount > 0) ConflictAlert(s.conflictCount, actions.conflicts, Modifier.riseIn(1))
+                BackupAlert(actions.syncSettings, actions.toast, Modifier.riseIn(1))
                 Lead(s, narrow, actions.study, Modifier.padding(top = Space.s6).riseIn(1))
                 Grid(s, width, actions, vm, Modifier.padding(top = 40.dp).riseIn(2))
                 val analysis by vm.analysis.collectAsStateWithLifecycle()

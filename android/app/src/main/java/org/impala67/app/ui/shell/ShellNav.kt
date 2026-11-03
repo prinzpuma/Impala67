@@ -11,6 +11,8 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.daily.dailyKey
+import org.impala67.app.daily.dailyTitle
 import org.impala67.app.share.Incoming
 import org.impala67.app.share.importSharedFiles
 import org.impala67.app.share.importSharedText
@@ -228,7 +230,18 @@ class ShellNav(
         "stats", "lernzeit" -> { go(TopLevel.Study); open(StatsRoute) }
         "graph" -> open(GraphRoute)
         "notebook", "notebooklm" -> open(NotebookRoute)
+        "daily" -> openDaily(java.time.LocalDate.now())
+        "daily-calendar" -> open(DailyRoute)
         else -> toast("Folgt mit einem der nächsten Module.")
+    }
+
+    /** Tagesseite öffnen, bei Bedarf samt Ordner „Daily Notes“ anlegen (`openDailyNote`). */
+    fun openDaily(day: java.time.LocalDate) {
+        scope.launch {
+            runCatching { store.write { it.openDailyNote(dailyKey(day), dailyTitle(day)) } }
+                .onSuccess { open(PageRoute(it)) }
+                .onFailure { toast("Tagesseite konnte nicht angelegt werden.") }
+        }
     }
 }
 
@@ -247,7 +260,7 @@ private const val MAX_TABS = 12
 fun tabKey(key: NavKey): String? = when (key) {
     is PageRoute -> key.id
     is ChatRoute -> CHAT_TAB + key.id
-    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute -> ANKI_TAB
+    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute, CardArchiveRoute -> ANKI_TAB
     else -> null
 }
 

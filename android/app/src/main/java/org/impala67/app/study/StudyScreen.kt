@@ -71,6 +71,9 @@ fun StudyScreen(
     modifier: Modifier = Modifier,
     onStudyMixed: (() -> Unit)? = null,
     onStats: (() -> Unit)? = null,
+    onArchive: (() -> Unit)? = null,
+    /** Feynman-Lernmodus für einen Stapel (`null`: alle Stapel). */
+    onFeynman: ((String?) -> Unit)? = null,
     onToast: (String) -> Unit = {},
 ) {
     val vm = viewModel { StudyViewModel(store) }
@@ -107,10 +110,22 @@ fun StudyScreen(
                             Text("  Gemischt", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
                         }
                     }
+                    if (open > 0 && onFeynman != null) {
+                        TintButton({ onFeynman(null) }, strong = false) {
+                            Icon(painterResource(R.drawable.ic_i_explain), null, Modifier.size(16.dp))
+                            Text("  Feynman-Modus", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                        }
+                    }
                     if (onStats != null) {
                         TintButton(onStats, strong = false) {
                             Icon(painterResource(R.drawable.ic_i_chart), null, Modifier.size(16.dp))
                             Text("  Statistik", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    if (onArchive != null) {
+                        TintButton(onArchive, strong = false) {
+                            Icon(painterResource(R.drawable.ic_i_archive), null, Modifier.size(16.dp))
+                            Text("  Archiv", fontSize = TextSize.sm, fontWeight = FontWeight.Medium)
                         }
                     }
                     TintButton({ transfer = "import" }, strong = false) {
@@ -136,7 +151,7 @@ fun StudyScreen(
                 entries.forEachIndexed { i, e ->
                     DeckRow(
                         e, narrow, onStudy = { onStudyDeck(e.name) }, onToggle = { vm.toggle(e.name) },
-                        menu = deckMenuActions(e.name, vm, { onBrowse(e.name) }) { dialog = it },
+                        menu = deckMenuActions(e.name, vm, { onBrowse(e.name) }, feynman = onFeynman?.takeIf { e.open }?.let { f -> { f(e.name) } }) { dialog = it },
                     )
                     if (i < entries.lastIndex) HorizontalDivider(color = Impala.colors.edgeSoft)
                 }

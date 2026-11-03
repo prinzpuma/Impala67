@@ -68,7 +68,10 @@ fun SettingsSection(
             modifier = Modifier.padding(top = Space.s1, bottom = Space.s4),
         )
         when (info) {
-            SettingsSectionInfo.OVERVIEW -> OverviewSettings(vm, prefs, onOpen)
+            SettingsSectionInfo.OVERVIEW -> {
+                SettingsSearchBox(onOpen)
+                OverviewSettings(vm, prefs, onOpen)
+            }
             SettingsSectionInfo.APPEARANCE -> AppearanceSettings(vm, prefs)
             SettingsSectionInfo.AI -> AiSettings(vm)
             SettingsSectionInfo.LEARNING -> LearningSettings(vm, prefs)

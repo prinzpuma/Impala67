@@ -101,6 +101,10 @@ class DevicePrefs(private val context: Context) {
     val lastBackup: Flow<Long?> = store.data.map { it[LAST_BACKUP] }
     suspend fun setLastBackup(ms: Long) = put(LAST_BACKUP, ms)
 
+    /** Backup-Hinweis der Startseite ausgeblendet bis (ms seit 1970, `impala67_backup_snooze_until`). */
+    val backupSnoozeUntil: Flow<Long> = store.data.map { it[BACKUP_SNOOZE] ?: 0L }
+    suspend fun setBackupSnoozeUntil(ms: Long) = put(BACKUP_SNOOZE, ms)
+
     /** Heft-Werkzeuge als JSON wie `impala67HeftTools` der PWA (heft-tools.js); leer = Standard. */
     val heftTools: Flow<String> = store.data.map { it[HEFT_TOOLS].orEmpty() }
     suspend fun setHeftTools(json: String) = put(HEFT_TOOLS, json)
@@ -178,6 +182,7 @@ class DevicePrefs(private val context: Context) {
         val SIDEBAR_WIDTH = intPreferencesKey("sidebarWidth")
         val TABS_IN_SIDEBAR = booleanPreferencesKey("tabsInSidebar")
         val LAST_BACKUP = longPreferencesKey("lastBackup")
+        val BACKUP_SNOOZE = longPreferencesKey("backupSnoozeUntil")
         val FAV_MODELS = stringSetPreferencesKey("favModels")
         val IMPALA_SCANNER = booleanPreferencesKey("impalaScanner")
         val PROFILER = booleanPreferencesKey("profiler")

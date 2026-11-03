@@ -17,14 +17,18 @@ import org.impala67.app.R
 @Serializable data class SettingsSectionRoute(val section: String) : NavKey
 @Serializable data object ConflictsRoute : NavKey
 @Serializable data object TrashRoute : NavKey
-@Serializable data class ReviewRoute(val deck: String? = null, val mix: Boolean = false) : NavKey
+@Serializable data class ReviewRoute(val deck: String? = null, val mix: Boolean = false, val feynman: Boolean = false) : NavKey
 @Serializable data class CardBrowserRoute(val deck: String? = null) : NavKey
 @Serializable data object ArchiveRoute : NavKey
 @Serializable data object LibraryRoute : NavKey
 /** Statistik und Lernanalyse der Karteikarten (Anki-Tab „Statistik“). */
 @Serializable data object StatsRoute : NavKey
+/** Archiv der Karteikarten (Anki-Tab „Archiv“). */
+@Serializable data object CardArchiveRoute : NavKey
 @Serializable data object GraphRoute : NavKey
 @Serializable data object NotebookRoute : NavKey
+/** Daily-Notes-Kalender (render.js `renderDaily`). */
+@Serializable data object DailyRoute : NavKey
 /** Eingebettete PDF-Ansicht (pdfs.js) für eine Datei des Kerns. */
 @Serializable data class PdfRoute(val fileId: String, val title: String) : NavKey
 /** Chat im eigenen Tab (Tablet, `chat:<id>`); unbekannte ID = neuer Chat mit dieser ID. */
@@ -41,9 +45,9 @@ enum class TopLevel(val route: NavKey, val label: String, @DrawableRes val icon:
 /** Zu welchem Hauptbereich ein Ziel gehört (markiert den Eintrag in Leiste/Schiene). */
 fun NavKey.topLevel(): TopLevel = when (this) {
     NotesRoute, is PageRoute -> TopLevel.Notes
-    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute -> TopLevel.Study
+    StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute, CardArchiveRoute -> TopLevel.Study
     MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute, TrashRoute, ArchiveRoute, LibraryRoute,
-    GraphRoute, NotebookRoute, is PdfRoute -> TopLevel.More
+    GraphRoute, NotebookRoute, DailyRoute, is PdfRoute -> TopLevel.More
     else -> TopLevel.Home
 }
 
@@ -57,8 +61,10 @@ fun NavKey.title(): String = when (this) {
     ArchiveRoute -> "Archiv"
     LibraryRoute -> "Bibliothek"
     StatsRoute -> "Statistik"
+    CardArchiveRoute -> "Archiv"
     GraphRoute -> "Wissensgraph"
     NotebookRoute -> "Gemini Notebook"
+    DailyRoute -> "Daily Notes"
     is PdfRoute -> title
     is CardBrowserRoute -> "Karten"
     else -> topLevel().label

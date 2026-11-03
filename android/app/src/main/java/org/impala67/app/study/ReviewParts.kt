@@ -53,7 +53,7 @@ import uniffi.impala_ffi.StudyQueue
 /** Kopf des Lernmodus (`.study-head`): zurück zu den Stapeln, Stapelname, Rückgängig. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ReviewHeader(deck: String?, mix: Boolean, canUndo: Boolean, onExit: () -> Unit, onUndo: () -> Unit) {
+fun ReviewHeader(deck: String?, mix: Boolean, canUndo: Boolean, onExit: () -> Unit, onUndo: () -> Unit, feynman: Boolean = false) {
     val c = Impala.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = Space.s1, vertical = Space.s1), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onExit) {
@@ -61,7 +61,7 @@ fun ReviewHeader(deck: String?, mix: Boolean, canUndo: Boolean, onExit: () -> Un
             Text("Stapel", color = c.text2, fontSize = TextSize.base)
         }
         Text(
-            (deck?.let { deckLabel(it) } ?: "Alle Stapel") + if (mix) " · gemischt" else "",
+            (deck?.let { deckLabel(it) } ?: "Alle Stapel") + (if (mix) " · gemischt" else "") + if (feynman) " · Feynman" else "",
             Modifier.weight(1f), fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )

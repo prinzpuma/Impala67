@@ -1,6 +1,7 @@
 package org.impala67.app
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,11 @@ import org.impala67.app.share.Incoming
 
 /** Hält den einen Kern der App. Das Öffnen (Checkpoint + Log abspielen) läuft im Hintergrund. */
 class ImpalaApp : Application() {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Ein fehlgeschlagener Start des Kerns darf Hintergrundarbeit (Sync, Drive) nicht abstürzen lassen;
+    // die Startfehler-Anzeige der [MainActivity] zeigt ihn stattdessen.
+    val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> android.util.Log.e("Impala67", "Hintergrundfehler", e) },
+    )
 
     lateinit var store: Deferred<ImpalaStore>
         private set

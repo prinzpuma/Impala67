@@ -25,6 +25,8 @@ internal class ReadContext(
     val onToggleTodo: ((String) -> Unit)? = null,
     /** Toggle auf-/zuklappen und den Zustand in der Seite speichern (auch verschachtelt, wie die PWA). */
     val onToggleOpen: ((String) -> Unit)? = null,
+    /** Tabellenzellen direkt bearbeiten (editor-table.js): neue Zeilen des Blocks mit dieser ID. */
+    val onTableEdit: ((String, List<List<String>>) -> Unit)? = null,
     val editSlot: (@Composable (MdBlock, TextStyle, Modifier) -> Unit)? = null,
 ) {
     /** Kinder (Callout, Toggle, Spalten) sind in der Anzeige nur lesbar; bearbeitet wird der Elternblock. */

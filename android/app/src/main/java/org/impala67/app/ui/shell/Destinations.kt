@@ -8,6 +8,7 @@ import androidx.navigation3.runtime.NavKey
 import org.impala67.app.ai.AiChatViewModel
 import org.impala67.app.ai.ChatView
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.daily.DailyScreen
 import org.impala67.app.heft.HeftThumbnail
 import org.impala67.app.home.HomeActions
 import org.impala67.app.home.HomeScreen
@@ -21,6 +22,7 @@ import org.impala67.app.search.SearchScreen
 import org.impala67.app.settings.DevicePrefs
 import org.impala67.app.settings.SettingsSection
 import org.impala67.app.settings.SettingsSections
+import org.impala67.app.study.CardArchiveScreen
 import org.impala67.app.study.CardBrowserScreen
 import org.impala67.app.sync.ConflictsScreen
 import org.impala67.app.study.ReviewScreen
@@ -45,6 +47,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
                 toast = nav::toast,
                 heftThumbnail = { id, m -> HeftThumbnail(store, id, m) },
                 studyDeck = { nav.go(TopLevel.Study); nav.open(ReviewRoute(it)) },
+                syncSettings = { nav.openSettings("sync") },
             ),
         )
     }
@@ -60,11 +63,14 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
             onStudyDeck = { nav.open(ReviewRoute(it)) },
             onBrowse = { nav.open(CardBrowserRoute(it)) },
             onStudyMixed = { nav.open(ReviewRoute(mix = true)) },
+            onFeynman = { nav.open(ReviewRoute(it, feynman = true)) },
             onStats = { nav.open(StatsRoute) },
+            onArchive = { nav.open(CardArchiveRoute) },
             onToast = nav::toast,
         )
     }
-    entry<ReviewRoute> { ReviewScreen(store, it.deck, onExit = nav::back, mix = it.mix) }
+    entry<CardArchiveRoute> { CardArchiveScreen(store, onToast = nav::toast) }
+    entry<ReviewRoute> { ReviewScreen(store, it.deck, onExit = nav::back, mix = it.mix, feynman = it.feynman) }
     entry<CardBrowserRoute> { CardBrowserScreen(store, it.deck, onBack = nav::back) }
     entry<StatsRoute> { StatsScreen(store, prefs, onToast = nav::toast) }
     entry<MoreRoute> { MoreScreen(onAction = nav::action) }
@@ -74,6 +80,7 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
     entry<GraphRoute> {
         GraphScreen(store, prefs, onStudyDeck = { deck -> nav.go(TopLevel.Study); nav.open(ReviewRoute(deck)) }, onToast = nav::toast)
     }
+    entry<DailyRoute> { DailyScreen(store, onOpenDay = nav::openDaily) }
     entry<NotebookRoute> { NotebookScreen(store, nav.lastPageId, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
     entry<PdfRoute> { PdfViewer(store, it.fileId, it.title, onToggleFullscreen = { nav.immersive = !nav.immersive }) }
     entry<SearchRoute> {

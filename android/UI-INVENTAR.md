@@ -65,8 +65,8 @@ Kotlin-Basispfad: `android/app/src/main/java/org/impala67/app/` (Kurzform unten:
 
 ### 1. Gerüst und Layout
 
-- [ ] **Boot-Splash** – Vollbild-Spinner mit Phasentext (`#bootSplashMsg`). Nach 12 s Hinweis „Der Start dauert ungewöhnlich lange …“ mit Knopf „Neu laden“ (web/index.html:136) — Kotlin: ⬜ kein Pendant in ui/shell (Android-Startbildschirm nicht geprüft)
-- [ ] **Startfehler-Anzeige** – Unerwartete Fehler werden im Splash angezeigt (web/index.html, Skript `recordAppError`) — Kotlin: ⬜ kein Pendant
+- [x] **Boot-Splash** – Vollbild-Spinner mit Phasentext (`#bootSplashMsg`). Nach 12 s Hinweis „Der Start dauert ungewöhnlich lange …“ mit Knopf „Neu laden“ (web/index.html:136) — Kotlin: ⬜ kein Pendant in ui/shell (Android-Startbildschirm nicht geprüft) → ✅ nativ (3. Nov. 2026)
+- [x] **Startfehler-Anzeige** – Unerwartete Fehler werden im Splash angezeigt (web/index.html, Skript `recordAppError`) — Kotlin: ⬜ kein Pendant → ✅ nativ (3. Nov. 2026)
 - [ ] **Statusband** – fester Streifen oben, nur iOS Standalone (web/index.html:159; css/layout.css:6–8) — Kotlin: ⬜ entfällt (iOS-spezifisch)
 - [x] **Dreispalten-Raster Desktop** – Seitenleiste 236 px | Mitte (Tab-Leiste + Inhalt) | KI-Panel 320 px (css/layout.css, `#app`) — Kotlin: ✅ DeskShell.kt (SidebarWidth 236, AiPanelWidth 320)
 - [ ] **Tablet-Raster 701–1024 px** – Seitenleiste fix 220 px, KI-Panel als Overlay rechts (css/layout.css, Medienabfrage 701–1024) — Kotlin: 🟡 DeskShell.kt (keine 220-px-Variante, Panel nicht als Overlay, Schwelle abweichend)
@@ -208,7 +208,7 @@ Quelle: web/render.js:759–800 (`topbarActionsHtml`, `shareMenuHtml`, `moreMenu
   - [x] **Löschen** (Gefahrenfarbe) — Kotlin: ✅ (Tab wird geschlossen)
 - [ ] **Rückverweise-Chip** („N Rückverweise“ mit Klappliste; web/render.js:794–800) — Kotlin: ⬜
 - [ ] **Breadcrumb** (web/render.js:801; Detail nicht gelesen) — Kotlin: ⬜ (in ui/desk nicht vorhanden)
-- [ ] **Archiv-Banner** („Diese Seite ist archiviert.“ bzw. „Dieses Heft ist archiviert.“ mit „Wiederherstellen“; web/render.js:672, 692) — Kotlin: ⬜ (in PageActions.kt nicht vorhanden)
+- [x] **Archiv-Banner** („Diese Seite ist archiviert.“ bzw. „Dieses Heft ist archiviert.“ mit „Wiederherstellen“; web/render.js:672, 692) — Kotlin: ⬜ (in PageActions.kt nicht vorhanden) → ✅ nativ (3. Nov. 2026)
 - [x] **Seitenkopf-Zurück/Vor** (`btnPageNavBack`/`btnPageNavForward`; web/render.js:689–690) — Kotlin: ✅ Zurück und Vor in der Tab-Leiste (DeskTabBar.kt)
 
 ### 11. KI-Panel (rechte Spalte) und KI-Schnellzugriff
@@ -243,8 +243,8 @@ Quelle: web/home-view.js:82–158; web/home-article.js:209–240; web/render.js:
 - [ ] **+ Neue Seite** (`hv-btn`, `data-homeaction="newpage"`) — Kotlin: 🟡 Beschriftung im Kopf per Grep nicht gefunden (HomeScreen.kt)
 - [x] **Startseite anpassen** (Zahnrad, `hv-ghost`, Titel und aria „Startseite anpassen“; web/home-view.js:107) — Kotlin: ✅ HomeScreen.kt:114
 - [x] **Sync-Konflikt-Hinweis** („Ein Sync-Konflikt wartet …“ bzw. „N Sync-Konflikte warten …“ mit „Lösen“; web/home-view.js:111) — Kotlin: ✅ HomeScreen.kt:122–132 (`ConflictAlert`)
-- [ ] **Backup-Hinweis „stale“** („Änderungen seit … noch nicht gesichert“ mit „Jetzt sichern“ und „Später“; web/home-view.js:116) — Kotlin: ⬜
-- [ ] **Backup-Hinweis „nur lokal“** („Deine Notizen liegen bisher nur auf diesem Gerät“ mit „Sync einrichten“ und „Später“; web/home-view.js:117) — Kotlin: ⬜
+- [x] **Backup-Hinweis „stale“** („Änderungen seit … noch nicht gesichert“ mit „Jetzt sichern“ und „Später“; web/home-view.js:116) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
+- [x] **Backup-Hinweis „nur lokal“** („Deine Notizen liegen bisher nur auf diesem Gerät“ mit „Sync einrichten“ und „Später“; web/home-view.js:117) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
 - [x] **Begrüßungssatz mit Link** („N Karten warten, etwa X Min“, Streak-Hinweis, Wochenziel-Hinweis; web/home-view.js:99–104) — Kotlin: ✅ HomeScreen.kt `Lead` (HomeState.kt:104–110)
 - [x] **Weitermachen-Karte** (`hv-continue`, Vorschau, „Weitermachen“, Titel, Meta, Zeit; web/home-view.js:120) — Kotlin: ✅ home/HomeCards.kt `ContinueCard`
 - [x] **Leere Weitermachen-Karte** („Noch keine Seiten“ / „Erste Seite anlegen“; web/home-view.js:122) — Kotlin: ✅ HomeCards.kt
@@ -285,7 +285,7 @@ Quelle: web/render.js:1037–1081 (`renderTrash`, `trashRow`).
 - [x] **Cover wählen** (web/render.js:1749–1759) — Kotlin: ✅ PageDialogs.kt `CoverDialog` („Entfernen“, „Schließen“); „Eigenes Bild wählen“ nicht geprüft
 - [ ] **Sync-Konflikt-Auflösung** (web/render.js:857–893; Sammelaktion „Empfehlung übernehmen“, web/conflict-ui.js) — Kotlin: 🟡 `ConflictsRoute` existiert (ui/shell/Routes.kt), Dialog nicht geprüft
 - [x] **Bestätigung** (Papierkorb leeren, Endgültig löschen) — Kotlin: ✅ notes/NoteParts.kt `ConfirmDialog`
-- [ ] **Tagesnotiz anlegen** (`openDailyNote`; web/app-dialogs.js:171–188) — Kotlin: ⬜
+- [x] **Tagesnotiz anlegen** (`openDailyNote`; web/app-dialogs.js:171–188) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
 - [x] **Schließen-Kreuz im Overlay** (`#btnCloseOverlay`, Titel „Schließen (Escape)“) — Kotlin: ✅ (Compose-Dialog)
 
 ### 15. Popover- und Menü-Mechanik
@@ -339,8 +339,8 @@ Quelle: web/search.js (Eingabe 56–78, Aktionen ca. 104–130, Gruppen 193–20
 - [x] **Aktion „Neue Seite“** (web/search.js ca. 111) — Kotlin: ✅ SearchModel.kt:38 (`newpage`)
 - [x] **Aktion „Karten wiederholen“** („— n fällig“; web/search.js ca. 112) — Kotlin: ✅ SearchModel.kt:39 (`cards`)
 - [x] **Aktion „Karten verwalten“** (web/search.js ca. 115) — Kotlin: ✅ SearchModel.kt:40 (`cards-manage`)
-- [ ] **Aktion „Daily Note von heute öffnen“** (web/search.js ca. 116) — Kotlin: ⬜ (SearchModel.kt:41, ID `daily` nicht verdrahtet → Stub)
-- [ ] **Aktion „Daily-Notes-Kalender öffnen“** (web/search.js ca. 117) — Kotlin: ⬜ (SearchModel.kt:42, ID `daily-calendar` → Stub)
+- [x] **Aktion „Daily Note von heute öffnen“** (web/search.js ca. 116) — Kotlin: ⬜ (SearchModel.kt:41, ID `daily` nicht verdrahtet → Stub) → ✅ nativ (3. Nov. 2026)
+- [x] **Aktion „Daily-Notes-Kalender öffnen“** (web/search.js ca. 117) — Kotlin: ⬜ (SearchModel.kt:42, ID `daily-calendar` → Stub) → ✅ nativ (3. Nov. 2026)
 - [x] **Aktion „Gemini Notebook öffnen“** (web/search.js ca. 118) — Kotlin: ⬜ (SearchModel.kt:43, ID `notebook` → Stub) → ✅ nativ (2. Nov. 2026)
 - [x] **Aktion „Dunkles Design“ / „Helles Design“** (Umschalter; web/search.js ca. 119) — Kotlin: ➖ Erscheinungsbild in Darstellung (System/Hell/Dunkel), PORTING.md § 3
 - [x] **Aktion „Archiv in Bibliothek öffnen“** (web/search.js ca. 122) — Kotlin: ✅ SearchModel.kt:44 (`archive`)
@@ -466,7 +466,7 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 - [x] **Breadcrumb** mit Workspace, Ahnen, „…“ bei mehr als zwei Ebenen, aktuellem Titel (web/render.js:801-821) — Kotlin: ✅ editor/PageHeader.kt:45-72 (Workspace, „…“ und Ahnen vorhanden)
 - [x] **Ahnen-Krümel klickbar** (web/render.js:806-814, data-page) — Kotlin: ✅ editor/PageHeader.kt:58-63 (Crumb mit onOpenPage)
 - [ ] **Workspace-Krümel klickbar** (web/render.js:815, data-crumbws) — Kotlin: 🟡 editor/PageHeader.kt (als Text, keine Aktion gefunden)
-- [ ] **Archiv-Banner** „Diese Seite ist archiviert.“ mit Wiederherstellen (web/render.js:692) — Kotlin: ⬜ kein Banner in editor/ (Archiv nur in notes/ArchiveScreen.kt)
+- [x] **Archiv-Banner** „Diese Seite ist archiviert.“ mit Wiederherstellen (web/render.js:692) — Kotlin: ⬜ kein Banner in editor/ (Archiv nur in notes/ArchiveScreen.kt) → ✅ nativ (3. Nov. 2026)
 - [ ] **Icon-Knopf** öffnet Icon-Picker per Klick auf das Icon (web/render.js:698, title „Icon ändern“) — Kotlin: 🟡 editor/PageHeader.kt zeigt Icon, Klick ohne Wirkung; Auswahl nur über ⋯ → Icon ändern (ui/desk/DeskPageActions.kt)
 - [x] **Icon-Anzeige** (Emoji vor dem Titel, Größe 40) (web/render.js:698) — Kotlin: ✅ editor/PageHeader.kt:91-92
 - [x] **Icon-Picker** mit 24 Emojis, „Entfernen“, „Schließen“ (web/render.js:1739-1748, Auswahl 📝 📘 … 🚀) — Kotlin: ✅ notes/PageDialogs.kt:141-166 (IconDialog, 24 Emojis identisch in PageIcons, Entfernen, Schließen)
@@ -530,7 +530,7 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 
 ### 4. Unterseiten, Verwandt, Backlinks
 
-- [ ] **Unterseiten-Liste am Seitenende** (Icon, Titel, data-page, Heft-Einbettung ausgeblendet, nicht bei DB-Seiten; web/editor.js:566-589, Klasse child-pages) — Kotlin: ⬜ editor/EditorScreen.kt (keine Unterseitenliste; Navigation über Desk-Baum und Liste notes/NoteRows.kt:84)
+- [x] **Unterseiten-Liste am Seitenende** (Icon, Titel, data-page, Heft-Einbettung ausgeblendet, nicht bei DB-Seiten; web/editor.js:566-589, Klasse child-pages) — Kotlin: ⬜ editor/EditorScreen.kt (keine Unterseitenliste; Navigation über Desk-Baum und Liste notes/NoteRows.kt:84) → ✅ nativ (3. Nov. 2026)
 - [x] **Unterseite anlegen** (Notiz-Liste, Optionen-Menü) (notes/NoteRows.kt:126) — Kotlin: ✅ notes/NoteRows.kt (nur Notizliste, nicht im Editor)
 - [ ] **„Verwandt“-Leiste** mit bis zu 3 ähnlichen Seiten aus Embeddings, Chips mit Icon, ×-Knopf zum Ausblenden (web/related-pages.js:15-38, render.js:712) — Kotlin: ⬜ kein Gegenstück in editor/ (nur Einstellungsschalter settings/SettingsAppearance.kt:76 ✅)
 - [ ] **Verwandt ausblenden (×)** setzt relatedPages=false (web/related-pages.js:35-38) — Kotlin: ⬜
@@ -623,7 +623,7 @@ Einträge (web/editor-menus.js:99-122, Reihenfolge wie PWA):
 - [x] **Markierung ==…==** (Gelb, web/editor-inline.js:61) — Kotlin: ✅ editor/InlineMarkdown.kt:61 (gelbe Hintergrundfarbe)
 - [x] **Textfarbe {red}…{/} und Hintergrund {bg-red}…{/}** (8 Farben, web/editor-inline.js:58, web/css/editor.css:65-81) — Kotlin: ✅ editor/InlineMarkdown.kt:53-61 (inlineColor)
 - [ ] **Markdown-Zeichen beim Tippen ausgeblendet, sobald Muster vollständig** (web/editor.js:1087-1105) — Kotlin: 🟡 editor/BlockEditors.kt:61 (Marker bleiben beim Bearbeiten sichtbar)
-- [ ] **Inline-Formel $…$ und \(…\) als klickbarer Chip mit Popover** (web/editor-inline.js:139-175, 33; Chip-Klick editor.js:1563-1576) — Kotlin: 🟡 editor/InlineMarkdown.kt (monospace, kein KaTeX; Formelblöcke haben KaTeX)
+- [x] **Inline-Formel $…$ und \(…\) als klickbarer Chip mit Popover** (web/editor-inline.js:139-175, 33; Chip-Klick editor.js:1563-1576) — Kotlin: 🟡 editor/InlineMarkdown.kt (monospace, kein KaTeX; Formelblöcke haben KaTeX) → ✅ nativ (3. Nov. 2026)
 
 ### 10. Markdown-Kürzel (Live-Trigger und Syntax)
 
@@ -658,7 +658,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [x] **Strg+Shift+↑/↓: Block verschieben** (web/editor.js:1266-1275) — Kotlin: ⬜ → ✅ nativ (2. Nov. 2026)
 - [x] **Esc: Textfokus zur Blockauswahl** (web/editor.js:1202-1210) — Kotlin: 🟡 editor/EditorScreen.kt:52 (Zurück beendet nur die Bearbeitung) → ✅ nativ (2. Nov. 2026)
 - [ ] **Blockauswahl: Esc, Backspace/Entf löscht, Enter zum Nachbarn, Strg+C/X/D, ↑↓ mit Shift erweitern** (web/editor.js:1377-1445) — Kotlin: ⬜
-- [ ] **Tabelle: Tab/Shift+Tab zu Nachbarzelle, letzte Zelle erzeugt Zeile, Enter zur Zelle darunter, Backspace in leerer Zelle, ↑↓** (web/editor-keys.js:235-290) — Kotlin: ⬜
+- [x] **Tabelle: Tab/Shift+Tab zu Nachbarzelle, letzte Zelle erzeugt Zeile, Enter zur Zelle darunter, Backspace in leerer Zelle, ↑↓** (web/editor-keys.js:235-290) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
 - [x] **Code: Tab fügt zwei Leerzeichen ein, Backspace in leerem Block macht Absatz, ↓/↑ verlässt Block** (web/editor-keys.js:291-320) — Kotlin: ⬜ → ✅ nativ (2. Nov. 2026)
 - [ ] **Toggle-Titel: Enter öffnet und legt Kind an, Backspace leer entpackt, ↑↓** (web/editor.js:1284-1340) — Kotlin: ⬜
 - [ ] **Gleichungs-Popover: Enter fertig, Shift+Enter neue Zeile, Esc abbrechen** (web/editor.js:1845-1847, web/editor-menus.js:297-325) — Kotlin: ⬜
@@ -679,9 +679,9 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 
 #### 12b Tabellen
 - [x] **Tabelle, Kopfzeile fett** (web/editor.js:513-526, web/css/editor.css:155-161) — Kotlin: ✅ editor/ComplexBlocks.kt:142-160 (Kopf halbfett, horizontal scrollbar)
-- [ ] **Zellen direkt editierbar mit Inline-Markdown** (web/editor.js:518-520, editable mit data-bcell) — Kotlin: ⬜ (nur Rohtext über Stift, ComplexBlocks.kt:64-94)
-- [ ] **+ Spalte rechts / + Zeile unten** (web/editor.js:523-524, css 162-170) — Kotlin: ⬜
-- [ ] **Tabellen-Tastatur** (Abschnitt 11) — Kotlin: ⬜
+- [x] **Zellen direkt editierbar mit Inline-Markdown** (web/editor.js:518-520, editable mit data-bcell) — Kotlin: ⬜ (nur Rohtext über Stift, ComplexBlocks.kt:64-94) → ✅ nativ (3. Nov. 2026)
+- [x] **+ Spalte rechts / + Zeile unten** (web/editor.js:523-524, css 162-170) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
+- [x] **Tabellen-Tastatur** (Abschnitt 11) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
 - [x] **Zeilen auf gleiche Breite auffüllen (GFM, mindestens 2 Spalten)** (core/impala-markdown/src/parse.rs:262-281) — Kotlin: ✅ (über Kern)
 
 #### 12c Callouts
@@ -725,7 +725,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Leere Gleichung: „Neue Gleichung — klicken zum Bearbeiten“** (web/editor.js:493) — Kotlin: ⬜
 - [ ] **Klick öffnet Popover mit Textfeld (Platzhalter „E = mc^2“), Fußzeile „Esc = abbrechen“ und Knopf „Fertig ↵“** (web/editor-menus.js:297-318, css 145-149) — Kotlin: ⬜ (Stift öffnet Rohtext-Editor, editor/ComplexBlocks.kt:92; kein Popover)
 - [ ] **Popover-Bestätigung per Enter, Abbruch per Esc, Shift+Enter Zeile** (web/editor.js:1845-1847, editor-menus.js:326-340) — Kotlin: ⬜
-- [ ] **Inline-Formel als Chip** (siehe Abschnitt 9) — Kotlin: 🟡
+- [x] **Inline-Formel als Chip** (siehe Abschnitt 9) — Kotlin: 🟡 → ✅ nativ (3. Nov. 2026)
 - [ ] **Slash „Gleichung“** (web/editor-menus.js:106) — Kotlin: ⬜
 
 #### 12i Bilder
@@ -767,7 +767,7 @@ Editor-Text (web/editor-keys.js, web/editor.js):
 - [ ] **Seite nicht gefunden** (PWA: Startseite statt Fehler, web/render.js:637-641) — Kotlin: 🟡 editor/EditorScreen.kt:77 („Seite nicht gefunden.“)
 - [ ] **Keine Seite gefunden (Link-Menü)** (web/editor-menus.js:240) — Kotlin: ⬜
 - [x] **Keine Versionen (Verlauf)** (web/render.js:1160) — Kotlin: ✅ notes/PageDialogs.kt:100
-- [ ] **Archiv-Banner** (web/render.js:692) — Kotlin: ⬜
+- [x] **Archiv-Banner** (web/render.js:692) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
 - [x] **Datenbank: „0 Einträge“, „Neue Zeile“, „–“ für leere Werte** (web/db-view.js:85-88, 45-58) — Kotlin: ✅ editor/DatabaseView.kt
 - [ ] **Verwandt leer = verborgen** (web/related-pages.js:22-27) — Kotlin: ⬜
 
@@ -1187,7 +1187,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Modell-Knopf** – Tooltip "Modell: <Name>"; Icon; öffnet Modellmenü (index.html:243-245; render.js:208-218; chat-fullscreen.js:284-308) — Kotlin: ⬜ – (AiOptions model/providerId sind null; Modellwahl in ui/… settings/SettingsAiSync.kt nur Platzhalter "KI-Quellen") → ✅ nativ (2. Nov. 2026)
 - [x] **Sprache (Mikrofon)** – Spracheingabe, de-DE; Ergebnis wird direkt gesendet; Zustand zeigt Stopp-Icon (index.html:247; voice.js:27-33, 44-132, 47-61) — Kotlin: ✅ ai/Dictation.kt, ChatView.kt
 - [x] **Alt+Leertaste** – Startet/stoppt Spracheingabe im Seitenpanel (shortcuts.js:77-82; voice.js:44) — Kotlin: ⬜ – (kein Tastatur-Handler) → ✅ nativ (2. Nov. 2026)
-- [ ] **Sprachausgabe der Antwort** – In PWA bewusst aus (voice.js:16, 154-165 vorhanden, nicht aktiv) — Kotlin: – (nichts nachzubauen)
+- [x] **Sprachausgabe der Antwort** – In PWA bewusst aus (voice.js:16, 154-165 vorhanden, nicht aktiv) — Kotlin: – (nichts nachzubauen) → ➖ entfällt (in der PWA ohne Startknopf bzw. fest aus)
 - [x] **Vollbild-Spracheingabe-Knopf** – Wird vor dem Senden-Knopf im Vollbild eingefügt (app-dialogs.js:46-53; voice.js:28) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (2. Nov. 2026)
 - [ ] **Quellen (RAG)** – In PWA keine sichtbaren Quellen: Notiz-Treffer laufen unsichtbar in den Kontext (ai.js:316-326, Auto-RAG 4 Treffer) — Kotlin: ⬜ – (AiRunRequest useRag=false; kein Gegenstück, daher nicht anzuzeigen)
 
@@ -1281,7 +1281,7 @@ Baum-⋯-Menü (render-anki.js:142-150; app-click-anki.js:19-70):
 - [x] **Archivieren (Icon)** (render-anki.js:231) — Kotlin: ✅ study/DeckRow.kt (im Menü)
 - [x] **Papierkorb (Icon)** (render-anki.js:234) — Kotlin: ✅ study/DeckRow.kt (im Menü)
 - [x] **Lernen** – Startet Stapel; deaktiviert wenn nichts fällig (render-anki.js:235) — Kotlin: ✅ study/DeckRow.kt (TintButton "Lernen", nur in Breitansicht und wenn fällig)
-- [ ] **Feynman (je Stapel)** – Lernt im Feynman-Modus (render-anki.js:237) — Kotlin: ⬜ – (study/DeckRow.kt ohne Feynman; Beta-Platzhalter in settings/SettingsLearning.kt:50)
+- [x] **Feynman (je Stapel)** – Lernt im Feynman-Modus (render-anki.js:237) — Kotlin: ⬜ – (study/DeckRow.kt ohne Feynman; Beta-Platzhalter in settings/SettingsLearning.kt:50) → ✅ nativ (3. Nov. 2026)
 - [x] **⋯ Menü** (render-anki.js:238) — Kotlin: ✅ study/DeckRow.kt:DeckMenu
 - [x] **Menü-Eintrag "Optionen" (Stapel-Optionen)** – Nicht in der PWA-Baum-Menü, aber in der Übersicht über data-deckconf (render-anki.js:160, 517) — Kotlin: ✅ study/DeckRow.kt (Eintrag "Optionen"; Android-Zusatz)
 - [x] **Menü-Eintrag "Karten ansehen"** – Android-Zusatz; in PWA über Lupe (siehe oben) — Kotlin: ✅ study/DeckRow.kt
@@ -1300,7 +1300,7 @@ Baum-⋯-Menü (render-anki.js:142-150; app-click-anki.js:19-70):
   - [ ] **Eintrag "Import"** – TXT, CSV oder Anki-Paket (render-anki.js:165) — Kotlin: ⬜ – (kein Karten-Import)
   - [ ] **Eintrag "Export"** – TXT, CSV oder Anki-Paket (render-anki.js:166) — Kotlin: ⬜ – (kein Karten-Export)
 - [x] **Lead-Satz** – "N Karten warten auf dich, etwa X Minuten." bzw. "Für heute ist alles gelernt." bzw. Leerhinweis; Karten-Zahl ist Startknopf (render-anki.js:254-257) — Kotlin: ✅ study/StudyScreen.kt:Lead (gleiche Sätze, Startknopf)
-- [ ] **Modus "Feynman-Modus" (alle Stapel)** – Nur wenn Lernen möglich (render-anki.js:259-261) — Kotlin: ⬜ – (kein Feynman)
+- [x] **Modus "Feynman-Modus" (alle Stapel)** – Nur wenn Lernen möglich (render-anki.js:259-261) — Kotlin: ⬜ – (kein Feynman) → ✅ nativ (3. Nov. 2026)
 - [x] **Modus "Gemischt"** – Interleaved, fällige Karten aller Stapel gemischt (render-anki.js:262) — Kotlin: ✅ study/StudyScreen.kt:Gemischt-Knopf (ReviewScreen mix)
 - [x] **Kennzahl "Heute fällig"** – Zahl plus "etwa X Min · Lernen starten" (Knopf), "✓ Alles gelernt", "Keine Karten" (render-anki.js:265-269) — Kotlin: ✅ study/StudyScreen.kt:Stats (alle drei Zustände)
 - [x] **Kennzahl "Neue Karten"** – "im heutigen Tageslimit" (render-anki.js:271) — Kotlin: ✅ study/StudyScreen.kt:Stats
@@ -1340,7 +1340,7 @@ Baum-⋯-Menü (render-anki.js:142-150; app-click-anki.js:19-70):
 - [x] **Rückgängig (letzte Bewertung)** – Android-Zusatz über Kopf-Icon; PWA-Entsprechung im Stapel-Optionsdialog (extras.js:475 btnDeckConfUndo) — Kotlin: ✅ study/ReviewParts.kt:ReviewHeader (Undo-Icon) + study/ReviewViewModel.kt:undo
 - [x] **Fortschrittsbalken** – Android-Zusatz; PWA hat nur Zähler (ReviewScreen.kt) — Kotlin: ✅ study/ReviewScreen.kt (Extra)
 - [ ] **Modus-Kopf "· gemischt" / "· Feynman"** (render-anki.js:403) — Kotlin: 🟡 study/ReviewParts.kt:ReviewHeader (gemischt ja, Feynman fehlt)
-- [ ] **Feynman-Lernmodus (Erklärfeld, Diktieren, "Prüfen & aufdecken", "Ohne Erklärung aufdecken")** (render-anki.js:491-503; experimente.js:383-403) — Kotlin: ⬜ – (kein Feynman; Beta-Platzhalter settings/SettingsLearning.kt:50)
+- [x] **Feynman-Lernmodus (Erklärfeld, Diktieren, "Prüfen & aufdecken", "Ohne Erklärung aufdecken")** (render-anki.js:491-503; experimente.js:383-403) — Kotlin: ⬜ – (kein Feynman; Beta-Platzhalter settings/SettingsLearning.kt:50) → ✅ nativ (3. Nov. 2026)
 - [ ] **Selbsteinschätzung-Chips "Sicher / Unsicher / Geraten"** – Nur wenn Einstellung an (render-anki.js:477-483; telemetrie.js:155-158) — Kotlin: ⬜ – (Schalter in settings/SettingsLearning.kt:31-34 vorhanden, Chips in study/ReviewParts.kt fehlen)
 - [ ] **Tastatur-Kürzel: ␣/Enter = Antwort zeigen bzw. Gut; 1–4 = bewerten** (shortcuts.js:91-106; app-dialogs.js:228-256) — Kotlin: ⬜ – (kein Tastatur-Handler in study/)
 - [x] **Leech-Pille** (render-anki.js:450) — Kotlin: ✅ study/ReviewParts.kt:Pill("Leech")
@@ -1381,10 +1381,10 @@ Baum-⋯-Menü (render-anki.js:142-150; app-click-anki.js:19-70):
 
 ### 15. Archiv (Anki-Tab)
 
-- [ ] **Abschnitt "Archiv"** mit Hinweistext "Archivierte Karten bleiben erhalten …" (render-anki.js:345-358, 355) — Kotlin: ⬜ – (kein Archiv-Screen für Karteikarten)
-- [ ] **Archivierte Stapel mit "Wiederherstellen"** (render-anki.js:346-350) — Kotlin: ⬜ – (Archivieren ja, Wiederherstellen fehlt)
-- [ ] **Einzelne archivierte Karten mit "Wiederherstellen"** (render-anki.js:352-354) — Kotlin: ⬜ – (kein Karten-Archiv)
-- [ ] **Leerzustände "Keine archivierten Stapel" / "Keine einzeln archivierten Karten"** (render-anki.js:356-357) — Kotlin: ⬜ – (kein Gegenstück)
+- [x] **Abschnitt "Archiv"** mit Hinweistext "Archivierte Karten bleiben erhalten …" (render-anki.js:345-358, 355) — Kotlin: ⬜ – (kein Archiv-Screen für Karteikarten) → ✅ nativ (3. Nov. 2026)
+- [x] **Archivierte Stapel mit "Wiederherstellen"** (render-anki.js:346-350) — Kotlin: ⬜ – (Archivieren ja, Wiederherstellen fehlt) → ✅ nativ (3. Nov. 2026)
+- [x] **Einzelne archivierte Karten mit "Wiederherstellen"** (render-anki.js:352-354) — Kotlin: ⬜ – (kein Karten-Archiv) → ✅ nativ (3. Nov. 2026)
+- [x] **Leerzustände "Keine archivierten Stapel" / "Keine einzeln archivierten Karten"** (render-anki.js:356-357) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (3. Nov. 2026)
 
 ### 16. Statistik (Anki-Tab "Statistik") – jedes Diagramm und Kennzahl
 
@@ -1413,8 +1413,8 @@ Diagramme:
 - [x] **Problemzonen (viel Lesezeit)** – Top 5 Seiten ab 5 Minuten; Lesezeit, App-Wechsel, PDF-Kennzeichen; Knopf "＋ Karte" (lernmuster.js:90-107) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (2. Nov. 2026)
 - [x] **Knopf "＋ Karte" (KI-Karte aus Problemzone)** – Erzeugt eine Karte im Stapel "Problemzonen", Fallback-Text wenn KI fehlschlägt (lernmuster.js:108-123) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (2. Nov. 2026)
 - [x] **Experimente × Bewertung** – Tabelle Feynman / Hinweise / Variation / Quiz gegen "ohne Experimente" (lernmuster.js:180-197; ab 15 Reviews je Experiment) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (2. Nov. 2026)
-- [ ] **Toast "Ehrlich bewerten hilft dem Planer."** (lernmuster.js:146-150) — Kotlin: ⬜ – (kein Gegenstück)
-- [ ] **Toast Pausenhinweis "5 Minuten Pause …"** (lernmuster.js:154-166) — Kotlin: ⬜ – (kein Gegenstück)
+- [x] **Toast "Ehrlich bewerten hilft dem Planer."** (lernmuster.js:146-150) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (3. Nov. 2026)
+- [x] **Toast Pausenhinweis "5 Minuten Pause …"** (lernmuster.js:154-166) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (3. Nov. 2026)
 
 ### 18. Lernanalyse auf der Startseite (lernanalyse.js)
 
@@ -1435,7 +1435,7 @@ Diagramme:
 - [x] **Streak "N Tage am Stück"** – Tage mit mind. 5 Minuten; heutiger leerer Tag bricht nicht (lernzeit.js:349-360) — Kotlin: ✅ study/LearningTime.kt:streakDays + home/HomeStats.kt:WeekStat
 - [x] **Lernzeit-Erfassung (Sitzungen, Segmente, Kategorie Chat/Karten/Heft/Notiz, Fach)** – Aktiv nur bei Chat, Kartenlernen, Heft- und Notizseiten; Sitzung endet nach 15 Minuten Pause (lernzeit.js:61-130; categoryNow 61-72; persistCurrent 97-114 schreibt learningSessionUpsert) — Kotlin: ⬜ – (study/LearningTime.kt liest nur; keine Schreibaufrufe gefunden) → ✅ nativ (2. Nov. 2026)
 - [x] **Doppelzählung-Schutz (Intervall-Vereinigung)** – Überlappende Segmente zählen einmal (lernzeit.js:265-288) — Kotlin: ✅ study/LearningTime.kt:mergedSeconds
-- [ ] **Lerntimer (Pomodoro)** – Dauer 5 bis 240 Minuten, Standard 25; Ende zeigt "Lernblock geschafft" mit "5 Min weiter" / "Pause machen" (lernzeit.js:177-195, 197-211, 181) — Kotlin: ⬜ – (kein Timer; in PWA gibt es außerdem keinen sichtbaren Startknopf, nur den Abschluss-Dialog)
+- [x] **Lerntimer (Pomodoro)** – Dauer 5 bis 240 Minuten, Standard 25; Ende zeigt "Lernblock geschafft" mit "5 Min weiter" / "Pause machen" (lernzeit.js:177-195, 197-211, 181) — Kotlin: ⬜ – (kein Timer; in PWA gibt es außerdem keinen sichtbaren Startknopf, nur den Abschluss-Dialog) → ➖ entfällt (in der PWA ohne Startknopf bzw. fest aus)
 - [x] **Pausen-Erinnerung nach 40 Minuten** – Dialog "Zeit für eine kurze Pause?" mit "5 Min Pause" / "Weiterlernen" (lernzeit.js:165-175, 250-253; 401-426) — Kotlin: 🟡 settings/SettingsLearning.kt (Schalter "Pausen-Erinnerung" ohne Logik; DevicePrefs.breakReminder) → ✅ nativ (2. Nov. 2026)
 - [x] **Tierchen "Lernst du noch?"** – Nach 60 Sekunden ohne Eingabe in Chat, Kartenlernen oder Heft; Klick oder Hover setzt fort (lernzeit.js:152-163, 143-150; lernzeit-context.js) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (2. Nov. 2026)
 - [x] **Lernzeit pausiert bei verstecktem Tab und Einstellungen** (lernzeit.js:391-399, 57-59) — Kotlin: ⬜ – (keine Erfassung) → ✅ nativ (2. Nov. 2026)
@@ -1477,7 +1477,7 @@ Diagramme:
 - [ ] **Keine fälligen Karten / Gratulation / Geschafft** — Kotlin: ✅ study/ReviewParts.kt:ReviewDone (Wartezustand mit Kurzzeit-Hinweis 🟡)
 - [x] **Browser leer / keine Treffer** — Kotlin: ✅ study/CardBrowserScreen.kt:105
 - [ ] **Statistik leer** — Kotlin: ⬜ – (kein Statistik-Screen)
-- [ ] **Archiv leer** — Kotlin: ⬜ – (kein Karten-Archiv)
+- [x] **Archiv leer** — Kotlin: ⬜ – (kein Karten-Archiv) → ✅ nativ (3. Nov. 2026)
 - [ ] **Lernanalyse "zu wenig Daten"** — Kotlin: ⬜ – (kein Gegenstück)
 - [ ] **Wochenziel "Sobald du …"** — Kotlin: ⬜ – (kein Gegenstück)
 - [ ] **Schulnoten leer** — Kotlin: ⬜ – (kein Gegenstück)
@@ -1492,7 +1492,7 @@ Diagramme:
 - [ ] **Fehler-Detektor** – Einstellbereich mit Start-Knopf und Auflösung (experimente.js:113, 524-541) — Kotlin: ⬜ – (kein Gegenstück)
 - [ ] **Pre-Testing bei PDFs** (experimente.js:563-580) — Kotlin: ⬜ – (kein Gegenstück)
 - [ ] **"Und warum?"-Dialog** (experimente.js:481-493) — Kotlin: ⬜ – (kein Gegenstück)
-- [ ] **Strg/⌘+Enter prüft Feynman-Erklärung** (experimente.js:383-386) — Kotlin: ⬜ – (kein Gegenstück)
+- [x] **Strg/⌘+Enter prüft Feynman-Erklärung** (experimente.js:383-386) — Kotlin: ⬜ – (kein Gegenstück) → ✅ nativ (3. Nov. 2026)
 - [ ] **Tastatur: Escape schließt Overlay / Sprachaufnahme / Befehlsmenü** (shortcuts.js:59-75) — Kotlin: 🟡 (Zurück-Geste; keine Tastatur-Kürzel)
 - [ ] **Tastatur: Strg/⌘+K öffnet Befehlsmenü** (shortcuts.js:84-89) — Kotlin: ⬜ – (Suche in ui/shell/… vorhanden, Kürzel nicht)
 - [ ] **Controller/Gamepad-Lernen** (Beta-Platzhalter) — Kotlin: ⬜ – (settings/SettingsLearning.kt:55-56 Platzhalter)
@@ -1500,7 +1500,7 @@ Diagramme:
 ### 24. Stub- und Totpfade in der PWA (nicht als Vorlage nachbauen)
 
 - [ ] **@-Erwähnung** – nur Toast (app-click-buttons.js:119-122) — Kotlin: – (nicht umsetzen)
-- [ ] **Sprachausgabe** – im Code aus (voice.js:16) — Kotlin: – (nicht umsetzen)
+- [x] **Sprachausgabe** – im Code aus (voice.js:16) — Kotlin: – (nicht umsetzen) → ➖ entfällt (in der PWA ohne Startknopf bzw. fest aus)
 - [ ] **Eigenes-Modell-Eingabe und Thinking-Probe** – Handler ohne Markup (app-click-chat.js:53-62, 133-155) — Kotlin: – (nicht umsetzen)
 - [ ] **Alle Chats löschen in Einstellungen** – In PWA umgesetzt, in Kotlin nur Platzhalter (settings/SettingsApp.kt:60)
 
@@ -1539,8 +1539,8 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. "
 - [x] **Alias-Auflösung alter Bereichs-IDs** – z. B. drive/backup→sync, update/storage→app, devices/controller→learning (web/settings-schema.js:15-20, 73-77) — Kotlin: ✅ settings/SettingsState.kt (Zuordnung vorhanden)
 - [x] **Desktop-Layout Seitenleiste + Detailbereich** – nav + main (web/settings-renderer.js:447-469) — Kotlin: ✅ ui/shell/Destinations.kt (ListDetail-Szene) + settings/SettingsScreen.kt
 - [x] **Mobiler Hub mit Bereichsliste und Zurück-Knopf** – (web/settings-renderer.js:83-91, 449-466) — Kotlin: ✅ settings/SettingsScreen.kt (Telefon: Liste allein)
-- [ ] **Suchfeld „Einstellungen suchen…“ mit ⌘K und Trefferliste (max. 8)** – (web/settings-renderer.js:456-458, 467-476; web/settings.js:1081-1100) — Kotlin: ⬜ keine Suche gefunden
-- [ ] **Suchindex (40 Einträge, plattformabhängig native/web, Gewichtung)** – (web/settings-schema.js:27-68, 79-90) — Kotlin: ⬜ kein Index/keine Suche
+- [x] **Suchfeld „Einstellungen suchen…“ mit ⌘K und Trefferliste (max. 8)** – (web/settings-renderer.js:456-458, 467-476; web/settings.js:1081-1100) — Kotlin: ⬜ keine Suche gefunden → ✅ nativ (3. Nov. 2026)
+- [x] **Suchindex (40 Einträge, plattformabhängig native/web, Gewichtung)** – (web/settings-schema.js:27-68, 79-90) — Kotlin: ⬜ kein Index/keine Suche → ✅ nativ (3. Nov. 2026)
 - [ ] **Speichern-Leiste „Nicht gespeicherte Änderungen“ (Verwerfen/Speichern)** – (web/settings-ui.js:66-67; web/settings.js:921-961) — Kotlin: 🟡 settings/SettingsAiSync.kt (nur „Eigene Anweisungen“ hat Speichern-Knopf; keine Sammel-Leiste)
 - [ ] **Dialog „Änderungen verwerfen?“ beim Schließen mit ungespeicherten Änderungen** – (web/settings.js:154-172) — Kotlin: ⬜ nicht gefunden
 - [ ] **Schließen per Esc und Schließen-Knopf** – (web/settings.js:1081-1100; web/settings-renderer.js:453, 468) — Kotlin: 🟡 settings/SettingsScreen.kt (Schließen über Systemnavigation, kein Esc-Pfad eigens geprüft)
@@ -1733,11 +1733,11 @@ Alle sieben Schalter Std **aus** (web/experimente.js:111 `on()` = !!Flag). Ände
 
 ### 16. Status-Anzeigen (ohne eigenen Bereich)
 
-- [ ] **Backup-Status-Logik (sicher / ausstehend / veraltet ab 24 h / nur lokal)** – Schwelle 24 h, Erinnerung zurückstellen 3 Tage (veraltet) bzw. 14 Tage (nur lokal) (web/backup-status.js:9-11, 15-22, 82-100) — Kotlin: ⬜
-- [ ] **Startseiten-Hinweis „Backup-Hinweis“ (nur bei Handlungsbedarf, „Später“)** – (web/backup-status.js:86-87) — Kotlin: ⬜ (nicht gefunden)
+- [x] **Backup-Status-Logik (sicher / ausstehend / veraltet ab 24 h / nur lokal)** – Schwelle 24 h, Erinnerung zurückstellen 3 Tage (veraltet) bzw. 14 Tage (nur lokal) (web/backup-status.js:9-11, 15-22, 82-100) — Kotlin: ⬜ → ✅ nativ (3. Nov. 2026)
+- [x] **Startseiten-Hinweis „Backup-Hinweis“ (nur bei Handlungsbedarf, „Später“)** – (web/backup-status.js:86-87) — Kotlin: ⬜ (nicht gefunden) → ✅ nativ (3. Nov. 2026)
 - [ ] **Drive-Status (gemeinsame Aussage Anmeldung/Netz/Sync)** – Labels „Anmeldung läuft…“, „Nicht verbunden“, „Offline“, „Pausiert“, „Verbunden“, „Verbunden als <Mail>“ (web/drive-status.js:21-43) — Kotlin: 🟡 sync/DriveController.kt (Einzelzustände ✅; gemeinsame Zustandsaussage nicht identisch)
 - [ ] **Cloudflare-Statuspunkt (Zustände connected/syncing/connecting/error/disconnected)** – (web/settings-renderer.js:330) — Kotlin: 🟡 settings/SettingsCloudflare.kt (Punkte vorhanden, Zustandsmenge leicht abweichend)
-- [ ] **App-Icon-Badge: Anzahl fälliger Karten (neu + lernen + wiederholen), gebündelt alle 2 s** – nur installierte PWA mit Badging-API (web/app-badge.js:1-42) — Kotlin: ⬜ (nicht geprüft/nicht gefunden)
+- [x] **App-Icon-Badge: Anzahl fälliger Karten (neu + lernen + wiederholen), gebündelt alle 2 s** – nur installierte PWA mit Badging-API (web/app-badge.js:1-42) — Kotlin: ⬜ (nicht geprüft/nicht gefunden) → ✅ nativ (3. Nov. 2026)
 - [ ] **Lernanalyse-Insights auf der Startseite (sechs Hinweise, z. B. beste Tageszeit, Denkzeit, Kalibrierung, Ermüdung, Fokus, schwierigster Stapel)** – (web/telemetrie.js ca. Z. 292-375, `homeInsightsHtml`) — Kotlin: ⬜ (nicht gefunden; Lernanalyse-Ansicht more/MoreScreen.kt „Lernanalyse“ separat)
 - [ ] **Lernanalyse: Denkzeit-/Fokus-Erfassung (intern, ohne UI)** – (web/telemetrie.js:71-117) — Kotlin: 🟡 (Speicher-Schalter ✅, Erfassung nicht geprüft)
 

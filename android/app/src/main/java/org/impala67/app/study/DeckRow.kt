@@ -49,6 +49,8 @@ data class DeckMenuActions(
     val options: () -> Unit,
     val archive: () -> Unit,
     val trash: () -> Unit,
+    /** „Feynman“: Stapel im Feynman-Lernmodus lernen (nur mit offenen Karten). */
+    val feynman: (() -> Unit)? = null,
 )
 
 /** Stapel-Zeile (`.deck-row`): Auf-/Zuklappen, Name mit Kartenzahl, Zähler, „Lernen“, ⋯-Menü. */
@@ -128,6 +130,7 @@ private fun DeckMenu(name: String, a: DeckMenuActions) {
                 leadingIcon = { Icon(painterResource(icon), null, Modifier.size(18.dp), tint = if (danger) Impala.colors.danger else Impala.colors.text2) },
                 onClick = { open = false; action() },
             )
+            a.feynman?.let { item("Feynman", R.drawable.ic_i_explain, action = it) }
             item("Karten ansehen", R.drawable.ic_i_search, action = a.browse)
             item("Unterstapel anlegen", R.drawable.ic_i_plus, action = a.subdeck)
             if (!standard) item("Umbenennen", R.drawable.ic_i_pen, action = a.rename)

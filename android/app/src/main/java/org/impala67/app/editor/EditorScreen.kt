@@ -71,6 +71,7 @@ fun EditorScreen(
             selectedId = active?.takeIf { it.mode == EditMode.Select }?.id,
             editingId = active?.takeIf { it.mode == EditMode.Text }?.id,
             onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo, onToggleOpen = vm::toggleOpen,
+            onTableEdit = vm::setTable,
             editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, menus, style, mod) } },
         )
     }
@@ -95,6 +96,7 @@ fun EditorScreen(
                     item(key = "head") {
                         Column(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) {
                             if (chromeActions == null) Breadcrumbs(head, vm.title, onOpenPage)
+                            if (head?.page?.archived == true) ArchivedBanner(store, pageId, onToast)
                             PageTitleBlock(head, vm.title, vm::onTitle, vm::focusFirst, onOpenPage)
                             // Datenbank-Seiten zeigen ihre Unterseiten zwischen Titel und Inhalt (render.js).
                             DatabaseView(store, pageId, onOpenPage)
@@ -108,6 +110,9 @@ fun EditorScreen(
                                 if (raw != null) RawBlockEditor(b, raw, vm) else ReadBlock(b, ctx, numbers[b.id], i == 0)
                             }
                         }
+                    }
+                    item(key = "footer") {
+                        Box(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) { PageFooter(store, pageId, vm.blocks, onOpenPage) }
                     }
                     item(key = "tail") {
                         Box(Modifier.fillMaxWidth().heightIn(min = 160.dp).clickable(indication = null, interactionSource = null) { vm.focusEnd() })
