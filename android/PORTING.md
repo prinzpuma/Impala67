@@ -163,7 +163,7 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `graph.js`, `graph-worker.js`, `diagram.js` | Compose `Canvas` | `graph/` | ⬜ |
 | `qrcode.js`, `qr-scanner.js` | ML Kit Barcode (+ CameraX) | `sync/` | ⬜ |
 | `telemetrie.js`, `perf-hint.js`, `performance-profiler*.js` | Android-Profiler / Logcat | – | ➖ |
-| `service-worker.js`, `updater.js`, `version.json`, `optional-modules.js`, `platform*.js` | APK-Update über Release | – | ➖ |
+| `service-worker.js`, `updater.js`, `version.json`, `optional-modules.js`, `platform*.js` | APK-Update über GitHub Releases | `settings/AppUpdater.kt`, `settings/SettingsUpdate.kt` | ✅ |
 | `mcp-bridge*.js` | (vorerst keine Live-Bridge für die native App) | – | ➖ |
 | `util.js`, `html-escape.js`, `cooperative.js`, `storage-tools.js`, `app-badge.js` | Kotlin-Standard / je Bereich | – | ➖ |
 

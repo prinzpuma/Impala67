@@ -1703,11 +1703,11 @@ Alle sieben Schalter Std **aus** (web/experimente.js:111 `on()` = !!Flag). Ände
 
 - [ ] **Lokaler Speicher – „Verwendeter Speicher“ mit Balken und Angabe „X MB von Y GB“** – navigator.storage.estimate, „< 1 MB“ möglich (web/settings-renderer.js:400, 499-517; web/settings-renderer.js:37-40 Übersicht) — Kotlin: ⬜ settings/SettingsApp.kt (Platzhalter „Anzeige folgt mit dem Speicher-Modul“)
 - [ ] **Speicherbericht / PDF auslagern (storage-tools)** – keine sichtbare PWA-Oberfläche; nur über den MCP-Bridge-Pfad `impala_storage_report` / `impala_storage_cleanup` (web/storage-tools.js:5-62; web/mcp-bridge.js:582-620) — Kotlin: ⬜ keine Entsprechung (nur Entscheidung nötig, ob UI gewünscht)
-- [ ] **App-Version „Installiert v<x>“ (live-Feld) und „Verfügbar: —/v<neu>“** – (web/settings-renderer.js:401; web/settings.js:659-704 updateLocalVer/updateRemoteVer) — Kotlin: 🟡 settings/SettingsApp.kt (Installiert ✅; „Verfügbar“ fehlt)
+- [x] **App-Version „Installiert v<x>“ (live-Feld) und „Verfügbar: —/v<neu>“** – (web/settings-renderer.js:401; web/settings.js:659-704 updateLocalVer/updateRemoteVer) — Kotlin: ✅ settings/SettingsApp.kt + settings/SettingsUpdate.kt
 - [x] **Hinweistext „Updates werden nur auf Wunsch geprüft“** – (web/settings-renderer.js:402) — Kotlin: ✅ settings/SettingsApp.kt
-- [ ] **Knopf „Nach Updates suchen“ (Zustand „Prüfe…“ deaktiviert)** – (web/settings-action-state.js:27-33; web/settings.js:659-704) — Kotlin: ⬜ (TODO Release-Modul)
-- [ ] **Knopf „Update vX installieren“ / „Update wird geladen…“ / „App neu laden“** – (web/settings-action-state.js:27-33; web/settings.js:706-725; web/updater.js:228-296 installAppUpdate) — Kotlin: ⬜ (APK-Update nicht implementiert)
-- [ ] **Status-Text unter dem Update-Feld (live)** – „Update vX verfügbar (du: vY). Tippe „Update laden“.“, „Aktuell: vX“, „Check fehlgeschlagen: …“, „Lokal neuer als Server-Stand.“ (web/settings.js:659-704) — Kotlin: ⬜
+- [x] **Knopf „Nach Updates suchen“ (Zustand „Prüfe…“ deaktiviert)** – (web/settings-action-state.js:27-33; web/settings.js:659-704) — Kotlin: ✅ settings/SettingsUpdate.kt (AppUpdater)
+- [x] **Knopf „Update vX installieren“ / „Update wird geladen…“ / „App neu laden“** – (web/settings-action-state.js:27-33; web/settings.js:706-725; web/updater.js:228-296 installAppUpdate) — Kotlin: ✅ settings/SettingsUpdate.kt + settings/AppUpdater.kt (APK-Download und System-Installer)
+- [x] **Status-Text unter dem Update-Feld (live)** – „Update vX verfügbar (du: vY). Tippe „Update laden“.“, „Aktuell: vX“, „Check fehlgeschlagen: …“, „Lokal neuer als Server-Stand.“ (web/settings.js:659-704) — Kotlin: ✅ settings/SettingsUpdate.kt (AppUpdater)
 - [ ] **Update-Banner (Toast unten) „Update vX verfügbar“ mit „Aktualisieren“ / „Lade…“ / „Wiederholen“ und Schließen** – (web/updater.js:304-335, 347-371) — Kotlin: ⬜
 - [ ] **Meldung „Update auf vX installiert.“ nach Neustart / „Update vX wurde nicht übernommen“** – (web/updater.js:351-367) — Kotlin: ⬜
 - [ ] **Hintergrund-Prüfung auf neue Version (Watcher)** – (web/updater.js:347-371; Quelle version.json bzw. service-worker.js: web/updater.js:197-223) — Kotlin: ⬜

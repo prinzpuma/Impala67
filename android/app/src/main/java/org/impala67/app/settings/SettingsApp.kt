@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -84,14 +83,7 @@ fun AppSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val version = appVersion()
 
     StorageGroup()
-    SettingsGroup("App-Updates") {
-        SettingsRow(
-            "App-Version",
-            "Updates werden nur auf Wunsch geprüft",
-            trailing = { Text("Installiert v$version", style = MaterialTheme.typography.bodyMedium) },
-        )
-        // TODO(desk): „Verfügbar“-Wert und Prüfen-Schaltfläche folgen mit dem Release-Modul (APK-Update).
-    }
+    UpdateGroup(version)
     val impalaScanner by prefs.impalaScanner.collectAsStateWithLifecycle(false)
     SettingsGroup("Gerät") {
         SettingsSwitchRow(
