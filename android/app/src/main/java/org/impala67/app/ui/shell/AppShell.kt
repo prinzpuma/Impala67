@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -82,15 +83,19 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val bar = suiteType == NavigationSuiteType.NavigationBar || suiteType == NavigationSuiteType.ShortNavigationBarCompact ||
         suiteType == NavigationSuiteType.ShortNavigationBarMedium
 
-    val content: @Composable (Modifier) -> Unit = { m ->
-        NavDisplay(
-            backStack = backStack,
-            modifier = m,
-            onBack = nav::back,
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
-            sceneStrategies = listOf(rememberListDetailSceneStrategy()),
-            entryProvider = entryProvider { appEntries(nav, store, prefs) },
-        )
+    // Verschiebbar: Beim Drehen wechselt die Shell zwischen [DeskShell] und [PhoneShell]. Der Inhalt zieht mit um,
+    // statt neu aufgebaut zu werden – sonst gingen offene Dialoge (z. B. der Scanner) und ihr Zustand verloren.
+    val content: @Composable (Modifier) -> Unit = remember(backStack, nav, store, prefs) {
+        movableContentOf { m: Modifier ->
+            NavDisplay(
+                backStack = backStack,
+                modifier = m,
+                onBack = nav::back,
+                entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
+                sceneStrategies = listOf(rememberListDetailSceneStrategy()),
+                entryProvider = entryProvider { appEntries(nav, store, prefs) },
+            )
+        }
     }
     val config = LocalConfiguration.current
     val landscape = config.screenWidthDp > config.screenHeightDp
