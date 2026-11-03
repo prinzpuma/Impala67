@@ -17,7 +17,12 @@ android {
         // Setzt .github/scripts/set-version.mjs beim Release.
         versionCode = 2021140
         versionName = "2.2.114"
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        val isRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+        val isCi = System.getenv("CI") == "true"
+        val abis = (project.findProperty("abiFilters") as? String)
+            ?.split(",")?.map { it.trim() }
+            ?: if (isCi || isRelease) listOf("arm64-v8a") else listOf("arm64-v8a", "x86_64")
+        ndk { abiFilters += abis }
     }
 
     buildFeatures { compose = true }

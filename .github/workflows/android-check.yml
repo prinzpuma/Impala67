@@ -27,8 +27,13 @@ jobs:
       - uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+      - name: Rust Cache einrichten
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "core -> target"
+
       - name: Rust-Kern für Android bauen
-        run: node tools/android-core.mjs --newest-ndk
+        run: node tools/android-core.mjs --newest-ndk --arm64-only
       - name: Kotlin-Bindings aktuell?
         run: git diff --exit-code -- android/app/src/main/java/uniffi || { echo "::error::Bindings veraltet – npm run build:android-core ausführen und impala_ffi.kt committen."; exit 1; }
       - name: Debug-APK bauen

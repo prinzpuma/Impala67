@@ -69,6 +69,7 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
             VERSION="${TAG#v}"
           else
+            EXISTING_TAGS=$(git ls-remote --tags origin "refs/tags/v*" | awk '{print $2}' | sed 's#refs/tags/##')
             TYPE="${{ github.event.inputs.release_type }}"
             if [ "$TYPE" = "manual" ]; then
               VERSION="${{ github.event.inputs.manual_version }}"
@@ -90,13 +91,13 @@ jobs:
                 PATCH=$((PATCH + 1))
               fi
               VERSION="$MAJOR.$MINOR.$PATCH"
-              while git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; do
+              while echo "$EXISTING_TAGS" | grep -qx "v$VERSION"; do
                 PATCH=$((PATCH + 1))
                 VERSION="$MAJOR.$MINOR.$PATCH"
               done
             fi
             TAG="v$VERSION"
-            if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            if ! echo "$EXISTING_TAGS" | grep -qx "$TAG"; then
               git tag -a "$TAG" "$GITHUB_SHA" -m "Impala67 $TAG"
               git push origin "$TAG"
             fi
@@ -130,6 +131,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
@@ -164,8 +166,13 @@ jobs:
             echo "Hinweis: Kein Release-Keystore hinterlegt. APK wird mit Debug-Signatur als installierbarer Fallback gebaut."
           fi
 
+      - name: Rust Cache einrichten
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "core -> target"
+
       - name: Rust-Kern für Android bauen
-        run: npm run build:android-core -- --newest-ndk
+        run: npm run build:android-core -- --newest-ndk --arm64-only
 
       - name: Kotlin-Bindings aktuell?
         run: git diff --exit-code -- android/app/src/main/java/uniffi || { echo "::error::Bindings veraltet – npm run build:android-core ausführen und impala_ffi.kt committen."; exit 1; }

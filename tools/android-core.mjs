@@ -42,14 +42,18 @@ const bin = path.join(prebuilt, fs.readdirSync(prebuilt)[0], "bin");
 console.log(`NDK: ${ndk}`);
 
 // 2. Rust-Ziele und Compiler/Linker für cc-rs (rusqlite bundled) und rustc
-run("rustup target add aarch64-linux-android x86_64-linux-android");
-const api = 26; // = minSdk in android/app/build.gradle.kts
-const cmd = process.platform === "win32" ? ".cmd" : "";
-const exe = process.platform === "win32" ? ".exe" : "";
-const targets = [
+const allTargets = [
 	{ rust: "aarch64-linux-android", abi: "arm64-v8a" },
 	{ rust: "x86_64-linux-android", abi: "x86_64" },
 ];
+// Auf GitHub (CI) oder mit --arm64-only nur arm64-v8a bauen (spart halbe Build-Zeit und ~20 MB APK).
+const arm64Only = process.argv.includes("--arm64-only") || (process.env.CI === "true" && !process.argv.includes("--with-x86_64"));
+const targets = arm64Only ? [allTargets[0]] : allTargets;
+run(`rustup target add ${targets.map((t) => t.rust).join(" ")}`);
+const api = 26; // = minSdk in android/app/build.gradle.kts
+const cmd = process.platform === "win32" ? ".cmd" : "";
+const exe = process.platform === "win32" ? ".exe" : "";
+
 const env = { ANDROID_NDK_HOME: ndk, ANDROID_NDK_ROOT: ndk };
 for (const { rust } of targets) {
 	const under = rust.replaceAll("-", "_");
