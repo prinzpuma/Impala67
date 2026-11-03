@@ -532,8 +532,8 @@ Kotlin-Pfade relativ zu `android/app/src/main/java/org/impala67/app/` (editor/, 
 
 - [x] **Unterseiten-Liste am Seitenende** (Icon, Titel, data-page, Heft-Einbettung ausgeblendet, nicht bei DB-Seiten; web/editor.js:566-589, Klasse child-pages) — Kotlin: ⬜ editor/EditorScreen.kt (keine Unterseitenliste; Navigation über Desk-Baum und Liste notes/NoteRows.kt:84) → ✅ nativ (3. Nov. 2026)
 - [x] **Unterseite anlegen** (Notiz-Liste, Optionen-Menü) (notes/NoteRows.kt:126) — Kotlin: ✅ notes/NoteRows.kt (nur Notizliste, nicht im Editor)
-- [ ] **„Verwandt“-Leiste** mit bis zu 3 ähnlichen Seiten aus Embeddings, Chips mit Icon, ×-Knopf zum Ausblenden (web/related-pages.js:15-38, render.js:712) — Kotlin: ⬜ kein Gegenstück in editor/ (nur Einstellungsschalter settings/SettingsAppearance.kt:76 ✅)
-- [ ] **Verwandt ausblenden (×)** setzt relatedPages=false (web/related-pages.js:35-38) — Kotlin: ⬜
+- [x] **„Verwandt“-Leiste** mit bis zu 3 ähnlichen Seiten aus Embeddings, Chips mit Icon, ×-Knopf zum Ausblenden (web/related-pages.js:15-38, render.js:712) — Kotlin: ✅ editor/PageFooter.kt `RelatedPages`
+- [x] **Verwandt ausblenden (×)** setzt relatedPages=false (web/related-pages.js:35-38) — Kotlin: ✅ editor/PageFooter.kt
 - [ ] **Verwandt-Leiste leer = versteckt** (web/related-pages.js:22-27) — Kotlin: ⬜
 - [x] **Rückverweise** (siehe Abschnitt 1) — Kotlin: ✅ editor/PageHeader.kt:120-135
 
@@ -1579,7 +1579,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. "
 - [ ] **KI-Quellen: pro Quelle Name, Server-URL, API-Key (Passwortfeld, nur lokal), „Verbindung testen“, „Entfernen“** – (web/settings-renderer.js:141-149; web/settings.js:782-804) — Kotlin: ⬜
 - [ ] **„Quelle hinzufügen“** – Std: neue Quelle „Neue Quelle“ (web/settings-renderer.js:150; web/settings.js:632-643) — Kotlin: ⬜
 - [ ] **Schnellvorlagen: Impala AI, LM Studio, Gemini, OpenAI** – URLs laut web/extras.js:657-661 (Impala AI: Cloudflare-Worker; LM Studio: localhost:1234/v1; Gemini: generativelanguage…/openai; OpenAI: api.openai.com/v1) — Kotlin: ⬜
-- [ ] **Semantische Suche (Bekko a8m) – Status und Aktion** – Zustände: Download erforderlich / Download fortsetzen / Im Cache, nicht aktiviert / Bereit; Std Größe ca. 165 MB; Buttons „Herunterladen (ca. 165 MB)“, „Für Suche aktivieren“, „Modell löschen“ (web/settings-renderer.js:215-245, 247-260; web/settings.js:842-919) — Kotlin: ⬜ settings/SettingsAiSync.kt (Platzhalter)
+- [ ] **Semantische Suche (Bekko a8m) – Status und Aktion** – Zustände: Download erforderlich / Download fortsetzen / Im Cache, nicht aktiviert / Bereit; Std Größe ca. 165 MB; Buttons „Herunterladen (ca. 165 MB)“, „Für Suche aktivieren“, „Modell löschen“ (web/settings-renderer.js:215-245, 247-260; web/settings.js:842-919) — Kotlin: ✅ settings/SettingsAiSync.kt `SemanticSearchRow` (Laden & aktivieren in einem Schritt, Fortschritt, Abbrechen, Index-Stand, Modell löschen nur vom Gerät)
 - [ ] **Fortschrittsbalken für Modell-Download** – (web/settings-renderer.js:257) — Kotlin: ⬜
 - [ ] **Handschrifterkennung (Digital Ink) – Status, Trainingsbeispiel-Zähler, Quellenangaben** – 100 % lokal, ca. 10 MB ONNX; Indexfortschritt live (web/settings-renderer.js:264-273; web/settings.js:1254-1259) — Kotlin: ⬜ (Platzhalter „Folgt mit dem Heft-Modul“)
 - [ ] **Button „Abschreiben“ (Öffnet Abschreib-Werkzeug)** – (web/settings-renderer.js:276) — Kotlin: ⬜

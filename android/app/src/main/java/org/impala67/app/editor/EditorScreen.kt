@@ -112,7 +112,7 @@ fun EditorScreen(
                         }
                     }
                     item(key = "footer") {
-                        Box(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) { PageFooter(store, pageId, vm.blocks, onOpenPage) }
+                        Box(Modifier.padding(start = if (gutter) GUTTER else 0.dp)) { PageFooter(store, pageId, vm.blocks, onOpenPage, onToast) }
                     }
                     item(key = "tail") {
                         Box(Modifier.fillMaxWidth().heightIn(min = 160.dp).clickable(indication = null, interactionSource = null) { vm.focusEnd() })

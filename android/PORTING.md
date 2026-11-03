@@ -152,7 +152,7 @@ Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
 | `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | 🟡 (Import/Export, Karten-Papierkorb offen) |
 | `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
 | `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | 🟡 (Chat im KI-Panel + Chat-Liste ✅; Anhänge, Modellwahl, RAG, Chat-Tabs, Umbenennen offen) |
-| `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`) | `ai/` | ⬜ |
+| `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`, Bekko a8m über tract im Kern) | `ai/SemanticIndex.kt`, `editor/PageFooter.kt` | ✅ (Modell-Download, Index im Hintergrund, KI-Chat, „Verwandt“) |
 | `voice.js` | `SpeechRecognizer` | `ai/Dictation.kt` | 🟡 (Diktat ✅, Vorlesen offen) |
 | `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
 | `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), OkHttp-WebSocket | `sync/CloudSyncController.kt` | 🟡 (Sync + Konflikte ✅, nur im Vordergrund; QR-Kopplung, Backup-Hinweis offen) |

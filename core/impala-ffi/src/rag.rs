@@ -7,13 +7,22 @@
 //!
 //! Das Einbetten läuft ohne Sperre auf den Daten: die App ruft `update`/`search` aus einem
 //! Hintergrund-Thread (blockierend).
+//!
+//! Das lokale Modell (Bekko a8m) rechnet der Kern selbst (`impala-search`, Feature `onnx`); die
+//! Plattform gibt nur das Verzeichnis der Modelldateien vor ([`download_local_embedding_model`]).
 
 use std::collections::HashMap;
+use std::fs;
+use std::io::{BufWriter, Write as _};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use impala_ai::{EmbedRoute, Provider, embed_provider, embed_remote, embed_route};
 use impala_net::{HttpClient, UreqClient, block_on};
+use impala_search::embed::LOCAL_EMBEDDING_MODELS;
+use impala_search::onnx::OnnxEmbedder;
 use impala_search::store::{EMBEDDING_BATCH_SIZE, GRAPH_CARD_PREFIX};
 use impala_search::{
     EmbedError, Embedder, HeftPageText, IndexSource, PageMeta, QueryCache, ReindexPlan, VecEntry, VecRecord,
@@ -40,7 +49,9 @@ pub enum SearchFailure {
 impl std::fmt::Display for SearchFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SearchFailure::Embedding { reason: message } | SearchFailure::Storage { reason: message } => f.write_str(message),
+            SearchFailure::Embedding { reason: message } | SearchFailure::Storage { reason: message } => {
+                f.write_str(message)
+            }
         }
     }
 }
@@ -93,6 +104,99 @@ pub trait TextEmbedder: Send + Sync {
 #[uniffi::export]
 pub fn embedding_model_key(model: String) -> String {
     vector_model_key(&model)
+}
+
+/// Modelldateien wie bei Hugging Face (siehe `impala_search::onnx`); das große Modell zuletzt.
+const LOCAL_MODEL_FILES: [&str; 2] = ["tokenizer.json", "onnx/model.onnx"];
+
+/// Das lokale Embedding-Modell auf diesem Gerät.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LocalEmbeddingModel {
+    /// Kennung für die Einstellung `embedModel` (Quelle `local`).
+    pub id: String,
+    /// Ungefähre Downloadgröße.
+    pub size_mb: u32,
+    /// Alle Dateien liegen im Verzeichnis.
+    pub downloaded: bool,
+}
+
+/// Wie die Einstellungen die Vektoren beziehen.
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum EmbeddingSetup {
+    /// Kein Embedding-Modell gewählt: keine semantische Suche.
+    Off,
+    /// Lokales Modell; `downloaded` = Dateien liegen im Modellverzeichnis.
+    Local { downloaded: bool },
+    /// Cloud-Quelle ([`SemanticSearch::with_cloud_embeddings`]).
+    Cloud { model: String },
+}
+
+fn model_present(dir: &Path) -> bool {
+    LOCAL_MODEL_FILES.iter().all(|f| dir.join(f).is_file())
+}
+
+/// Stand des lokalen Modells im Verzeichnis `model_dir`.
+#[uniffi::export]
+pub fn local_embedding_model(model_dir: String) -> LocalEmbeddingModel {
+    let m = &LOCAL_EMBEDDING_MODELS[0];
+    LocalEmbeddingModel { id: m.id.to_owned(), size_mb: m.size_mb, downloaded: model_present(Path::new(&model_dir)) }
+}
+
+/// Lokal, Cloud oder aus – laut `embedModel`/`embedProviderId` (wie `embed` in ai.js).
+#[uniffi::export]
+pub fn embedding_setup(core: Arc<ImpalaCore>, model_dir: String) -> EmbeddingSetup {
+    let shared = core.shared();
+    let inner = lock(&shared);
+    let (model, provider_id) = (setting_text(&inner, "embedModel"), setting_text(&inner, "embedProviderId"));
+    match embed_route(&provider_id, &model) {
+        Err(_) => EmbeddingSetup::Off,
+        Ok(EmbedRoute::Local) => EmbeddingSetup::Local { downloaded: model_present(Path::new(&model_dir)) },
+        Ok(EmbedRoute::Remote) => EmbeddingSetup::Cloud { model },
+    }
+}
+
+/// Fortschritt des Modell-Downloads.
+#[uniffi::export(with_foreign)]
+pub trait DownloadListener: Send + Sync {
+    /// Datei `file` (ab 0) von `files`: `done` von `total` Bytes (0 = unbekannt). `false` bricht ab.
+    fn on_progress(&self, file: u32, files: u32, done: u64, total: u64) -> bool;
+}
+
+/// Lädt das lokale Modell von Hugging Face nach `model_dir` (blockierend, Hintergrund-Thread).
+/// Vorhandene Dateien bleiben; halbe Downloads (`*.part`) werden verworfen.
+#[uniffi::export]
+pub fn download_local_embedding_model(
+    model_dir: String,
+    listener: Arc<dyn DownloadListener>,
+) -> Result<(), SearchFailure> {
+    let hf_id = LOCAL_EMBEDDING_MODELS[0].hf_id;
+    // Ohne Grenze für den Körper hinge ein abgerissener Download (Mobilfunk) für immer.
+    let http = UreqClient::with_body_timeout(Duration::from_secs(30), Duration::from_secs(60 * 60));
+    let files = LOCAL_MODEL_FILES.len() as u32;
+    for (i, file) in LOCAL_MODEL_FILES.iter().enumerate() {
+        let path = Path::new(&model_dir).join(file);
+        if path.is_file() {
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(storage_err)?;
+        }
+        let part = PathBuf::from(format!("{}.part", path.display()));
+        let url = format!("https://huggingface.co/{hf_id}/resolve/main/{file}");
+        let result = (|| {
+            let mut out = BufWriter::new(fs::File::create(&part).map_err(storage_err)?);
+            http.download(&url, &mut out, &mut |done, total| listener.on_progress(i as u32, files, done, total))
+                .map_err(embed_err)?;
+            out.flush().map_err(storage_err)?;
+            drop(out);
+            fs::rename(&part, &path).map_err(storage_err)
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&part);
+        }
+        result?;
+    }
+    Ok(())
 }
 
 struct PlatformEmbedder {
@@ -417,6 +521,14 @@ impl SemanticSearch {
     pub fn new(core: Arc<ImpalaCore>, embedder: Arc<dyn TextEmbedder>) -> Arc<Self> {
         let (model, provider) = (embedder.model_key(), embedder.provider_id());
         SemanticSearch::start(&core, Box::new(PlatformEmbedder { inner: embedder, model, provider }))
+    }
+
+    /// Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Lädt das
+    /// Modell (einige Sekunden): aus einem Hintergrund-Thread rufen.
+    #[uniffi::constructor]
+    pub fn with_local_model(core: Arc<ImpalaCore>, model_dir: String) -> Result<Arc<Self>, SearchFailure> {
+        let embedder = OnnxEmbedder::load(Path::new(&model_dir), &LOCAL_EMBEDDING_MODELS[0]).map_err(embed_err)?;
+        Ok(SemanticSearch::start(&core, Box::new(embedder)))
     }
 
     /// Index mit Vektoren einer Cloud-Quelle laut Einstellungen (`embedModel`, `embedProviderId`,

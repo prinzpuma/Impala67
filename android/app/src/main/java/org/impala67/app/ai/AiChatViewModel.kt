@@ -52,7 +52,11 @@ enum class Refine(val label: String, val prompt: String) {
  * seine Rückrufe im Zustand (Entwurf, Denkaufwand, Werkzeug, Nachrichten). Rückrufe kommen aus
  * Fremd-Threads, deshalb nur über [MutableStateFlow.update]. Ein Lauf zur Zeit (wie `Busy` im Kern).
  */
-class AiChatViewModel(private val store: ImpalaStore, private val prefs: DevicePrefs) : ViewModel() {
+class AiChatViewModel(
+    private val store: ImpalaStore,
+    private val prefs: DevicePrefs,
+    private val semantic: SemanticIndex,
+) : ViewModel() {
     /** Chat-Liste der Seitenleiste, zuletzt geänderte zuerst. */
     val chats: StateFlow<List<ChatInfo>?> = store.query(Touches.chats) { it.chats() }
 
@@ -209,7 +213,7 @@ class AiChatViewModel(private val store: ImpalaStore, private val prefs: DeviceP
             heftPageIndex = activePageId?.let { HeftLastPage[it].toUInt() },
             sendPageContext = activePageId != null && activePageId !in _contextOff.value,
             anki = null,
-            useRag = false,
+            useRag = semantic.search != null,
             utcOffsetMinutes = utcOffset(),
         )
         viewModelScope.launch {
@@ -367,11 +371,12 @@ class AiChatViewModel(private val store: ImpalaStore, private val prefs: DeviceP
 
     /**
      * Der Assistent hält Zustand je Chat (Zusammenfassung, Werkzeuge); er wird nur neu gebaut, wenn sich
-     * Sync-Schlüssel, Modell oder Denkaufwand ändern.
+     * Sync-Schlüssel, Modell, Denkaufwand oder die semantische Suche ändern.
      */
     private suspend fun assistant(): AiAssistant {
         val syncKey = prefs.cfSyncKey.first()
-        val key = syncKey + "|" + (models.choice.value?.key ?: "")
+        val search = semantic.search
+        val key = syncKey + "|" + (models.choice.value?.key ?: "") + "|" + System.identityHashCode(search)
         assistant?.takeIf { key == assistantKey }?.let { return it }
         assistant?.close()
         val options = AiOptions(
@@ -384,7 +389,7 @@ class AiChatViewModel(private val store: ImpalaStore, private val prefs: DeviceP
             syncKey = syncKey.takeIf { it.isNotBlank() },
             workerUrl = null,
         )
-        return AiAssistant(store.core, options, platform, null).also {
+        return AiAssistant(store.core, options, platform, search).also {
             assistant = it
             assistantKey = key
         }

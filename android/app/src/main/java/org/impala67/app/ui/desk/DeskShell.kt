@@ -120,7 +120,7 @@ fun DeskShell(
     val savedWidth by prefs.sidebarWidth.collectAsStateWithLifecycle(0)
     var dragWidth by remember { mutableStateOf<Dp?>(null) }
     val tabsInSidebar by prefs.tabsInSidebar.collectAsStateWithLifecycle(false)
-    val ai: AiChatViewModel = viewModel { AiChatViewModel(store, prefs) }
+    val ai: AiChatViewModel = viewModel { AiChatViewModel(store, prefs, app.semantic) }
     // Chat aus der Seitenleiste oder ein neuer Chat klappt das KI-Panel auf.
     val openRequest by ai.openRequests.collectAsStateWithLifecycle()
     LaunchedEffect(openRequest) { if (openRequest > 0) nav.aiPanelOpen = true }

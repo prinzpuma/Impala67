@@ -42,6 +42,37 @@ impl UreqClient {
         let request = builder.body(req.body.clone()).map_err(|e| NetError::Other(e.to_string()))?;
         self.agent.run(request).map_err(map_err)
     }
+
+    /// Lädt `url` (GET, Umleitungen inklusive) stückweise nach `out`, ohne die Datei im Speicher zu
+    /// halten (Modelldateien). `on_progress(geladen, gesamt)` – `gesamt` 0, wenn unbekannt – gibt
+    /// `false` zurück, um abzubrechen. Anders als bei `send` ist ein Statuscode ≥ 400 hier ein Fehler.
+    pub fn download(
+        &self,
+        url: &str,
+        out: &mut dyn std::io::Write,
+        on_progress: &mut dyn FnMut(u64, u64) -> bool,
+    ) -> Result<u64, NetError> {
+        let mut res = self.call(&Request::new(crate::Method::Get, url))?;
+        let status = res.status().as_u16();
+        if !(200..300).contains(&status) {
+            return Err(NetError::Other(format!("HTTP {status} für {url}")));
+        }
+        let total = res.body().content_length().unwrap_or(0);
+        let mut reader = res.body_mut().as_reader();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut done = 0u64;
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| NetError::Connect(e.to_string()))?;
+            if n == 0 {
+                return Ok(done);
+            }
+            out.write_all(&buf[..n]).map_err(|e| NetError::Other(e.to_string()))?;
+            done += n as u64;
+            if !on_progress(done, total) {
+                return Err(NetError::Aborted);
+            }
+        }
+    }
 }
 
 impl Default for UreqClient {

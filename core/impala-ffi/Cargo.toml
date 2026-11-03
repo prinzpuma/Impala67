@@ -30,7 +30,8 @@ impala-model = { path = "../impala-model" }
 impala-net = { path = "../impala-net" }
 impala-scan = { path = "../impala-scan" }
 impala-sync = { path = "../impala-sync" }
-impala-search = { path = "../impala-search", default-features = false }
+# onnx: lokales Embedding-Modell (Bekko a8m) im Kern statt einer Plattform-Laufzeit.
+impala-search = { path = "../impala-search", default-features = false, features = ["onnx"] }
 impala-srs = { path = "../impala-srs" }
 impala-storage = { path = "../impala-storage" }
 serde = "1"

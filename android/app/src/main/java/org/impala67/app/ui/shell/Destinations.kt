@@ -7,6 +7,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import org.impala67.app.ai.AiChatViewModel
 import org.impala67.app.ai.ChatView
+import org.impala67.app.ai.semanticIndex
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.daily.DailyScreen
 import org.impala67.app.heft.HeftThumbnail
@@ -97,11 +98,13 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
         )
     }
     entry<AiRoute> {
-        ChatView(viewModel { AiChatViewModel(store, prefs) }, activePageId = null, onOpenSettings = { nav.action("settings") })
+        val semantic = semanticIndex()
+        ChatView(viewModel { AiChatViewModel(store, prefs, semantic) }, activePageId = null, onOpenSettings = { nav.action("settings") })
     }
     // Chat im eigenen Tab (Tablet): eigener Verlauf, getrennt vom KI-Panel – ein Chat lebt nur an einer Stelle.
     entry<ChatRoute> { route ->
-        ChatView(viewModel { AiChatViewModel(store, prefs).also { it.open(route.id) } }, activePageId = null, onOpenSettings = { nav.action("settings") })
+        val semantic = semanticIndex()
+        ChatView(viewModel { AiChatViewModel(store, prefs, semantic).also { it.open(route.id) } }, activePageId = null, onOpenSettings = { nav.action("settings") })
     }
     entry<SettingsRoute>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = {
         SettingsSection("overview", store, prefs, nav::toast, onOpen = { nav.open(SettingsSectionRoute(it)) })

@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import org.impala67.app.ai.SemanticIndex
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.settings.DevicePrefs
 import org.impala67.app.sync.BackgroundWork
@@ -40,6 +41,10 @@ class ImpalaApp : Application() {
     /** Google-Drive-Backup; Timer laufen nur, solange die App sichtbar ist. */
     val drive by lazy { DriveController(this, store, prefs, scope) }
 
+    /** Semantische Suche (lokales Modell oder Cloud-Quelle); führt den Index im Hintergrund nach. */
+    lateinit var semantic: SemanticIndex
+        private set
+
     override fun onCreate() {
         super.onCreate()
         org.impala67.app.diag.Profiler.init(this)
@@ -52,5 +57,6 @@ class ImpalaApp : Application() {
             val db = File(filesDir, "impala67.db")
             ImpalaStore(ImpalaCore.open(db.absolutePath), scope)
         }
+        semantic = SemanticIndex(filesDir, store, scope)
     }
 }

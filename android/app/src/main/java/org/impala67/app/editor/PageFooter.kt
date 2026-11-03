@@ -2,19 +2,31 @@ package org.impala67.app.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.impala67.app.ai.semanticIndex
+import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,10 +83,24 @@ private fun childPages(core: ImpalaCore, pageId: String): List<PageSummary> {
 
 /**
  * Unterseiten wie in Notion am Ende des Inhalts (editor.js `childPagesHtml`), ohne bereits als
- * Heft-Block eingebettete Unterseiten. „Verwandt“ (related-pages.js) folgt mit dem semantischen Index.
+ * Heft-Block eingebettete Unterseiten; darunter „Verwandt“ (related-pages.js).
  */
 @Composable
-internal fun PageFooter(store: ImpalaStore, pageId: String, blocks: List<MdBlock>, onOpenPage: (String) -> Unit) {
+internal fun PageFooter(
+    store: ImpalaStore,
+    pageId: String,
+    blocks: List<MdBlock>,
+    onOpenPage: (String) -> Unit,
+    onToast: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        ChildPages(store, pageId, blocks, onOpenPage)
+        RelatedPages(store, pageId, onOpenPage, onToast)
+    }
+}
+
+@Composable
+private fun ChildPages(store: ImpalaStore, pageId: String, blocks: List<MdBlock>, onOpenPage: (String) -> Unit) {
     val c = Impala.colors
     val children by remember(store, pageId) { store.query(Touches.pages) { core -> childPages(core, pageId) } }
         .collectAsStateWithLifecycle()
@@ -97,6 +123,62 @@ internal fun PageFooter(store: ImpalaStore, pageId: String, blocks: List<MdBlock
                 }
             }
         }
+    }
+}
+
+/**
+ * „Verwandt“: bis zu drei inhaltlich ähnliche Seiten aus dem semantischen Index (related-pages.js).
+ * Ohne Index, bei Datenbank-Seiten oder mit Einstellung `relatedPages = false` bleibt die Leiste weg;
+ * das × schaltet sie für alle Seiten aus.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RelatedPages(store: ImpalaStore, pageId: String, onOpenPage: (String) -> Unit, onToast: (String) -> Unit) {
+    val c = Impala.colors
+    val semantic = semanticIndex()
+    val revision by semantic.revision.collectAsStateWithLifecycle()
+    val on by remember(store) {
+        store.query(Touches.settings) { core -> runCatching { JSONObject(core.settingsJson()).optBoolean("relatedPages", true) }.getOrDefault(true) }
+    }.collectAsStateWithLifecycle()
+    var related by remember(pageId) { mutableStateOf(emptyList<PageSummary>()) }
+    LaunchedEffect(pageId, revision, on) {
+        if (on != true) {
+            related = emptyList()
+            return@LaunchedEffect
+        }
+        val hits = semantic.related(pageId, 3)
+        related = withContext(Dispatchers.IO) {
+            if (store.core.pageDb(pageId) != null) emptyList() else hits.mapNotNull { store.core.page(it.pageId)?.summary }
+        }
+    }
+    if (related.isEmpty()) return
+    val scope = rememberCoroutineScope()
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Verwandt", color = c.text2, fontSize = 13.sp, modifier = Modifier.padding(end = 2.dp))
+        related.forEach { p ->
+            Row(
+                Modifier.clip(RoundedCornerShape(Radius.sm)).background(c.surfaceHover).clickable { onOpenPage(p.id) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PageMark(p)
+                Text(pageTitle(p), Modifier.padding(start = 6.dp).widthIn(max = 220.dp), color = c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        IconButton(
+            onClick = {
+                scope.launch {
+                    runCatching { store.dispatch("settingsSet", mapOf("relatedPages" to false)) }
+                        .onSuccess { onToast("Verwandte Seiten ausgeblendet. Unter Einstellungen → Darstellung wieder einschalten.") }
+                }
+            },
+            modifier = Modifier.size(28.dp),
+        ) { Icon(painterResource(R.drawable.ic_i_x), "Verwandte Seiten ausblenden", Modifier.size(14.dp), tint = c.text2) }
     }
 }
 
