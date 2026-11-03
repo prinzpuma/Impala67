@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.view.Surface
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
@@ -47,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +64,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -213,6 +217,20 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
     var lastShot by remember { mutableStateOf(0L) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
+    val preview = remember { Preview.Builder().build() }
+    val analysis = remember {
+        ImageAnalysis.Builder()
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+    }
+    // Die Activity bleibt beim Drehen bestehen (configChanges im Manifest): Vorschau, Analyse und Aufnahme
+    // folgen der Bildschirmdrehung deshalb selbst.
+    val rotation = rememberDisplayRotation()
+    LaunchedEffect(rotation) {
+        preview.targetRotation = rotation
+        analysis.targetRotation = rotation
+        capture.targetRotation = rotation
+    }
     var shooting by remember { mutableStateOf(false) }
     val shoot = {
         if (!shooting) {
@@ -233,11 +251,8 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
         var provider: ProcessCameraProvider? = null
         future.addListener({
             provider = future.get()
-            val preview = Preview.Builder().build().apply { setSurfaceProvider { request = it } }
+            preview.setSurfaceProvider { request = it }
             var lastRun = 0L
-            val analysis = ImageAnalysis.Builder()
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
             analysis.setAnalyzer(executor) { proxy ->
                 proxy.use { p ->
                     val now = System.currentTimeMillis()
@@ -299,6 +314,27 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
             Box(Modifier.size(40.dp))
         }
     }
+}
+
+/** Aktuelle Bildschirmdrehung (`Surface.ROTATION_*`), auch bei 180°-Wechseln ohne Konfigurationsänderung. */
+@Composable
+private fun rememberDisplayRotation(): Int {
+    val view = LocalView.current
+    var rotation by remember { mutableIntStateOf(view.display?.rotation ?: Surface.ROTATION_0) }
+    DisposableEffect(view) {
+        val displays = view.context.getSystemService(DisplayManager::class.java)
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {
+                view.display?.takeIf { it.displayId == displayId }?.let { rotation = it.rotation }
+            }
+        }
+        displays.registerDisplayListener(listener, null)
+        view.display?.let { rotation = it.rotation }
+        onDispose { displays.unregisterDisplayListener(listener) }
+    }
+    return rotation
 }
 
 @Composable
