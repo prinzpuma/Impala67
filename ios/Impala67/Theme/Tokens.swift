@@ -11,6 +11,12 @@ enum Impala {
     static let accent = dynamic(light: 0x2478C7, dark: 0x6B8CAE)
     static let danger = dynamic(light: 0xD84D43, dark: 0xE97366)
     static let edge = dynamic(light: 0xC9C1B2, dark: 0xFFFFFF, darkAlpha: 0.14)
+    static let edgeSoft = dynamic(light: 0xDDD6CA, dark: 0xFFFFFF, darkAlpha: 0.06)
+    /// Seitenleiste: im Hellen 3 % Schwarz über dem Panel, dunkel #202020.
+    static let sidebar = dynamic(light: 0xF7F5F2, dark: 0x202020)
+    static let surface = dynamic(light: 0xF0EDE6, dark: 0xFFFFFF, darkAlpha: 0.04)
+    /// --b-tint-2: aktive Zeile, aktive Pille, aktiver Tab.
+    static var activeTint: Color { accent.opacity(0.14) }
     /// Heftpapier (in beiden Modi hell, wie in der PWA).
     static let paper = Color(uiColor: UIColor(hex: 0xFBF9F4))
 
@@ -19,6 +25,24 @@ enum Impala {
             traits.userInterfaceStyle == .dark ? UIColor(hex: dark, alpha: darkAlpha) : UIColor(hex: light)
         })
     }
+}
+
+/// --radius-*.
+enum Radius {
+    static let xs: CGFloat = 6
+    static let sm: CGFloat = 10
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 16
+}
+
+/// --text-* (pt = px der PWA).
+enum TextSize {
+    static let xs: CGFloat = 12
+    static let sm: CGFloat = 13
+    static let base: CGFloat = 14
+    static let md: CGFloat = 15
+    static let lg: CGFloat = 20
+    static let xl: CGFloat = 30
 }
 
 /// --space-*: 8-px-Raster mit Halbschritten.

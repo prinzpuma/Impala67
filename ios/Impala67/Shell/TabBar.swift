@@ -1,0 +1,93 @@
+import SwiftUI
+
+/// Tab-Leiste über dem Inhalt (`#tabs` der PWA, `DeskTabBar.kt`): Chips mit Symbol, Titel und ✕,
+/// aktiv mit Akzent-Tönung; „+“ öffnet einen neuen Tab. Die Tabs liegen im Kern und gelten auf allen Geräten.
+struct TabBar: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        let _ = store.pagesRevision
+        HStack(spacing: Space.s1) {
+            Button { shell.toggleSidebar() } label: {
+                Icon("columns", size: 16)
+                    .foregroundStyle(Impala.text2)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Linke Spalte ein-/ausklappen")
+            ScrollView(.horizontal) {
+                HStack(spacing: Space.s1) {
+                    ForEach(shell.tabs, id: \.self) { tab in
+                        TabChip(info: info(tab), active: tab == shell.active, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            Menu {
+                MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
+                MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
+                MenuItem("Seite suchen", icon: "search") { shell.sheet = .search }
+            } label: {
+                Icon("plus", size: 15)
+                    .foregroundStyle(Impala.text2)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Neuer Tab")
+        }
+        .padding(.horizontal, Space.s2)
+        .padding(.vertical, 6)
+        .background(Impala.panel)
+        .overlay(alignment: .bottom) { Rectangle().fill(Impala.edgeSoft).frame(height: 1) }
+    }
+
+    private func info(_ tab: String) -> (title: String, icon: String, emoji: String?) {
+        if tab.hasPrefix("chat:") { return ("Chat", "sparkles", nil) }
+        if tab == "anki:main" { return ("Karteikarten", "cards", nil) }
+        if tab == "nlm:main" { return ("Gemini Notebook", "book", nil) }
+        guard let p = store.core.page(id: tab)?.summary else { return ("Ohne Titel", "file", nil) }
+        return (PageStyle.title(p), PageStyle.iconName(p), PageStyle.emoji(p))
+    }
+
+    private func newPage(_ kind: PageKind) {
+        let id: String? = switch kind {
+        case .note: try? store.core.createPage(title: "", content: "", parentId: nil, workspaceId: nil)
+        case .heft: try? store.core.createHeft(title: "Heft", parentId: nil, workspaceId: nil)
+        }
+        if let id { shell.openNewTab(id) }
+    }
+}
+
+private struct TabChip: View {
+    let info: (title: String, icon: String, emoji: String?)
+    let active: Bool
+    let onOpen: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let emoji = info.emoji { Text(emoji).font(.system(size: TextSize.xs)) } else { Icon(info.icon, size: 14) }
+            Text(info.title)
+                .font(.system(size: TextSize.sm))
+                .lineLimit(1)
+            Button(action: onClose) {
+                Icon("x", size: 12)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Tab schließen")
+        }
+        .foregroundStyle(active ? Impala.text : Impala.text2)
+        .padding(.leading, Space.s2)
+        .padding(.trailing, 2)
+        .frame(minWidth: 96, maxWidth: 170, minHeight: 32, alignment: .leading)
+        .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
+        .onTapGesture(perform: onOpen)
+        .hoverEffect(.highlight)
+    }
+}

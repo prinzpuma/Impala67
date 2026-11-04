@@ -11,6 +11,8 @@ final class ImpalaStore {
 
     /// Seitenbaum, Titel, Arbeitsbereiche.
     private(set) var pagesRevision = 0
+    /// Offene Tabs und Aufklapp-Zustand des Seitenbaums (geräteübergreifend gespeichert).
+    private(set) var uiRevision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
     private(set) var lastRemote: Changes?
 
@@ -27,6 +29,7 @@ final class ImpalaStore {
 
     private func apply(_ c: Changes) {
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
+        if c.everything || c.ui { uiRevision += 1 }
         if c.remote || c.everything { lastRemote = c }
     }
 

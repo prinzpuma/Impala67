@@ -20,7 +20,7 @@ struct Impala67App: App {
                 }
             }
             .tint(Impala.accent)
-            .task { await open() }
+            .task { await openCore() }
         }
         .onChange(of: scenePhase) { _, phase in
             // Wie die Android-App in onStop: Checkpoint schreiben, damit der nächste Start schnell ist.
@@ -30,7 +30,7 @@ struct Impala67App: App {
         }
     }
 
-    private func open() async {
+    private func openCore() async {
         guard store == nil else { return }
         do {
             let core = try await Task.detached(priority: .userInitiated) {

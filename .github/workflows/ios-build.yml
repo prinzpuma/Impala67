@@ -9,12 +9,13 @@ on:
       - 'ios/**'
       - 'core/impala-ffi/**'
       - 'tools/ios-core.mjs'
+      - 'tools/ios-icons.mjs'
       - '.github/workflows/ios-build.yml'
   workflow_dispatch:
 
 jobs:
   build-ipa:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -30,6 +31,10 @@ jobs:
       - name: Swift-Bindings aktuell?
         run: git diff --exit-code -- ios/Bindings ios/Impala67/Core/Generated || { echo "::error::Bindings veraltet – npm run build:ios-core ausführen und die Dateien committen."; exit 1; }
 
+      - name: Neuestes Xcode wählen (Liquid Glass braucht das iOS-26-SDK)
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC" && xcodebuild -version
       - name: Xcode-Projekt erzeugen
         working-directory: ios
         run: brew install xcodegen && xcodegen generate

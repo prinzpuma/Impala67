@@ -1,27 +1,60 @@
 import SwiftUI
 
-/// Layout der PWA am iPad: links die Seitenleiste mit dem Seitenbaum, rechts die offene Seite.
-/// Auf dem iPhone klappt `NavigationSplitView` zu einem Stapel zusammen.
+/// Layout der PWA am iPad (`DeskShell.kt`): links die Seitenleiste, in der Mitte Tab-Leiste und Inhalt.
+/// `NavigationSplitView` liefert das Ein-/Ausklappen der Seitenleiste und ab iOS 26 deren Liquid Glass.
 struct RootView: View {
     @Environment(ImpalaStore.self) private var store
-    @State private var selection: String?
-    @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var shell: ShellModel?
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columns) {
-            Sidebar(selection: $selection)
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
-        } detail: {
-            // pagesRevision lesen, damit ein gelöschter oder umbenannter Eintrag die Ansicht neu baut.
-            let _ = store.pagesRevision
-            if let id = selection, let page = store.core.page(id: id), !page.trashed {
-                PageScreen(summary: page.summary)
-                    .id(id)
-            } else {
-                ContentUnavailableView("Keine Seite geöffnet", systemImage: "doc.text", description: Text("Wähle links eine Seite oder lege eine neue an."))
+        if let shell {
+            @Bindable var shell = shell
+            NavigationSplitView(columnVisibility: $shell.columns) {
+                Sidebar()
+                    .navigationSplitViewColumnWidth(min: 236, ideal: 260, max: 320)
+            } detail: {
+                VStack(spacing: 0) {
+                    TabBar()
+                    MainContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .background(Impala.panel)
+                .toolbar(.hidden, for: .navigationBar)
             }
+            .navigationSplitViewStyle(.balanced)
+            .environment(shell)
+            .sheet(item: $shell.sheet) { sheet in
+                ShellSheetView(sheet: sheet).environment(shell)
+            }
+            .onChange(of: store.uiRevision) { shell.reload() }
+        } else {
+            Color.clear.onAppear { shell = ShellModel(store: store) }
         }
-        .navigationSplitViewStyle(.balanced)
+    }
+}
+
+/// Inhalt des aktiven Tabs.
+private struct MainContent: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        let _ = store.pagesRevision
+        if let tab = shell.active {
+            if let page = store.core.page(id: tab), !page.trashed {
+                PageScreen(summary: page.summary).id(tab)
+            } else if tab.hasPrefix("chat:") {
+                Placeholder(icon: "chat", title: "KI-Chat", text: "Chats folgen in der iPad-App.")
+            } else if tab == "anki:main" {
+                Placeholder(icon: "cards", title: "Karteikarten", text: "Karteikarten folgen in der iPad-App.")
+            } else if tab == "nlm:main" {
+                Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")
+            } else {
+                Placeholder(icon: "file", title: "Seite nicht gefunden", text: "Die Seite wurde gelöscht oder ist noch nicht synchronisiert.")
+            }
+        } else {
+            HomeScreen()
+        }
     }
 }
 
@@ -32,7 +65,23 @@ struct PageScreen: View {
     var body: some View {
         switch summary.kind {
         case .note: NoteEditor(pageId: summary.id)
-        case .heft: HeftScreen(pageId: summary.id, title: summary.title)
+        case .heft: HeftScreen(pageId: summary.id)
         }
+    }
+}
+
+/// Leerer Zustand mit Sprite-Symbol.
+struct Placeholder: View {
+    let icon: String
+    let title: String
+    let text: String
+
+    var body: some View {
+        ContentUnavailableView {
+            Label { Text(title) } icon: { Icon(icon, size: 40).foregroundStyle(Impala.text2) }
+        } description: {
+            Text(text)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

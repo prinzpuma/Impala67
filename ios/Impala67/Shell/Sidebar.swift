@@ -1,107 +1,98 @@
 import SwiftUI
 
-/// Seitenleiste wie in der PWA: Arbeitsbereich, Seitenbaum (Unterseiten aufklappbar), Neu anlegen.
+/// Linke Spalte der PWA (`#sidebar` in index.html, `DeskSidebar.kt`): Pillen Home · Chat · Karten · Suche,
+/// darunter Seitenbaum (Favoriten + Arbeitsbereiche), unten die sekundäre Navigation (`.side-foot`).
 struct Sidebar: View {
     @Environment(ImpalaStore.self) private var store
-    @Binding var selection: String?
-    @State private var workspaceId = "default"
-    @State private var error: String?
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let _ = store.pagesRevision
-        let workspaces = store.core.workspaces()
-        List(selection: $selection) {
-            PageChildren(parentId: nil, workspaceId: workspaceId)
-        }
-        .listStyle(.sidebar)
-        .navigationTitle(workspaces.first { $0.id == workspaceId }?.name ?? "Impala67")
-        .toolbar {
-            if workspaces.count > 1 {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker("Arbeitsbereich", selection: $workspaceId) {
-                            ForEach(workspaces, id: \.id) { Text($0.name).tag($0.id) }
-                        }
-                    } label: { Image(systemName: "square.stack") }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 2) {
+                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil) {
+                    shell.sidebarMode = .files
+                    shell.goHome()
+                }
+                Pill(icon: "chat", label: "Chat", active: shell.sidebarMode == .chats) { shell.sidebarMode = .chats }
+                Pill(icon: "cards", label: "Karten", active: shell.sidebarMode == .cards) { shell.sidebarMode = .cards }
+                Spacer(minLength: 0)
+                Pill(icon: "search", label: "Suchen", active: false) { shell.sheet = .search }
+            }
+            Group {
+                switch shell.sidebarMode {
+                case .files: PageTree()
+                case .chats: SidebarPlaceholder(text: "Chats folgen mit der KI.")
+                case .cards: SidebarPlaceholder(text: "Karteikarten folgen.")
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Neue Seite", systemImage: "doc.text") { create(heft: false) }
-                    Button("Neues Heft", systemImage: "pencil.and.scribble") { create(heft: true) }
-                } label: { Image(systemName: "plus") }
+            .frame(maxHeight: .infinity, alignment: .top)
+            Divider().overlay(Impala.edgeSoft)
+            VStack(spacing: 2) {
+                FootButton(icon: "book", label: "Gemini Notebook") { shell.sheet = .notebook }
+                FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }
+                FootButton(icon: "library", label: "Bibliothek") { shell.sheet = .library }
+                FootButton(icon: "trash", label: "Papierkorb") { shell.sheet = .trash }
+                FootButton(icon: "sliders", label: "Einstellungen") { shell.sheet = .settings }
             }
         }
-        .alert("Fehler", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(error ?? "") }
-    }
-
-    private func create(heft: Bool) {
-        do {
-            selection = heft
-                ? try store.core.createHeft(title: "Neues Heft", parentId: nil, workspaceId: workspaceId)
-                : try store.core.createPage(title: "", content: "", parentId: nil, workspaceId: workspaceId)
-        } catch {
-            self.error = String(describing: error)
-        }
+        .padding(.horizontal, Space.s2)
+        .padding(.vertical, 10)
+        .background(Impala.sidebar)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
-/// Unterseiten einer Seite (bzw. die Wurzeln eines Arbeitsbereichs), rekursiv aufklappbar.
-private struct PageChildren: View {
-    @Environment(ImpalaStore.self) private var store
-    let parentId: String?
-    let workspaceId: String
+/// Pille der Kopfzeile (`.topbar .tab`): aktiv mit Akzent-Tönung und Label, sonst nur das Symbol.
+private struct Pill: View {
+    let icon: String
+    let label: String
+    let active: Bool
+    let action: () -> Void
 
     var body: some View {
-        let _ = store.pagesRevision
-        ForEach(store.core.childrenOf(parentId: parentId, workspaceId: parentId == nil ? workspaceId : nil)) { page in
-            PageRow(page: page, workspaceId: workspaceId)
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Icon(icon, size: 16)
+                if active { Text(label).font(.system(size: TextSize.sm, weight: .medium)) }
+            }
+            .foregroundStyle(active ? Impala.text : Impala.text2)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 36)
+            .background(active ? Impala.activeTint : .clear, in: Capsule())
         }
+        .pressable()
+        .accessibilityLabel(label)
+        .animation(.spring(duration: 0.25), value: active)
     }
 }
 
-private struct PageRow: View {
-    @Environment(ImpalaStore.self) private var store
-    let page: PageSummary
-    let workspaceId: String
-    @State private var expanded = false
+/// Knopf der sekundären Navigation (`.side-foot button`).
+private struct FootButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
 
     var body: some View {
-        let hasChildren = !store.core.childrenOf(parentId: page.id, workspaceId: nil).isEmpty
-        Group {
-            if hasChildren {
-                DisclosureGroup(isExpanded: $expanded) {
-                    PageChildren(parentId: page.id, workspaceId: workspaceId)
-                } label: { label }
-            } else {
-                label
+        Button(action: action) {
+            HStack(spacing: Space.s2) {
+                Icon(icon, size: 15)
+                Text(label).font(.system(size: TextSize.sm))
+                Spacer(minLength: 0)
             }
+            .foregroundStyle(Impala.text2)
+            .padding(.horizontal, Space.s2)
+            .frame(minHeight: 40)
         }
-        .tag(Optional(page.id))
-        .contextMenu {
-            Button("Unterseite", systemImage: "plus") {
-                _ = try? store.core.createPage(title: "", content: "", parentId: page.id, workspaceId: nil)
-                expanded = true
-            }
-            Button("In den Papierkorb", systemImage: "trash", role: .destructive) {
-                try? store.core.trashPage(id: page.id)
-            }
-        }
+        .pressable()
     }
+}
 
-    private var label: some View {
-        Label {
-            Text(page.title.isEmpty ? "Unbenannt" : page.title)
-                .foregroundStyle(page.title.isEmpty ? Impala.text2 : Impala.text)
-                .lineLimit(1)
-        } icon: {
-            if !page.icon.isEmpty {
-                Text(page.icon)
-            } else {
-                Image(systemName: page.kind == .heft ? "pencil.and.scribble" : "doc.text")
-            }
-        }
+private struct SidebarPlaceholder: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: TextSize.sm))
+            .foregroundStyle(Impala.text2)
+            .padding(Space.s2)
     }
 }

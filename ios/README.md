@@ -3,8 +3,21 @@
 Komplett native SwiftUI-App (kein WebView) über dem Rust-Kern (`core/impala-ffi`, UniFFI) – das
 iOS-Gegenstück zur Android-App. Es gelten dieselben Regeln wie in `android/PORTING.md` §1: Aussehen und
 Verhalten der PWA übernehmen, native Bausteine statt Eigenbau, keine Logik nachbauen, die im Kern liegt.
-Die Oberfläche folgt dem Tablet-Layout der PWA (links Seitenleiste, rechts die Seite);
+Die Oberfläche folgt dem Tablet-Layout der PWA (Vorlage: `android/…/ui/desk/`, die es schon nachbaut);
 `android/UI-INVENTAR.md` dient als Liste der Bildschirme.
+
+## Oberfläche: PWA + Apple-Feinschliff
+
+- **Wie die PWA**: Farben (`Theme/Tokens.swift`), Abstände, Schriftgrößen und Icons (`web/icons.svg` →
+  `Assets.xcassets`, `npm run ios:icons`). Seitenleiste mit Pillen Home · Chat · Karten · Suche,
+  Favoriten, Arbeitsbereichen und Fußleiste; Tab-Leiste mit ☰, Chips und „+“; Startseite, Notiz mit
+  Brotkrumen und großem Titel. Texte wörtlich aus der PWA.
+- **Geräteübergreifend wie in der PWA**: offene Tabs (`uiTabs`) und Aufklapp-Zustand des Baums
+  (`treeOpen`) liegen im Kern und synchronisieren mit.
+- **Apple-Feinschliff**: Liquid Glass ab iOS 26 nur für schwebende Bedienelemente (`impalaGlass`, z. B.
+  Heft-Seitenleiste oben rechts; davor Material), Seitenleiste über `NavigationSplitView`,
+  Kontextmenüs (Halten) statt ⋯-Popover, Sheets für Suche/Papierkorb, Hover-Effekt mit Trackpad,
+  PencilKit-Werkzeugpicker im Heft.
 
 ## Aufbau
 
@@ -17,8 +30,10 @@ ios/
    ├─ App/                     Einstieg, Kern öffnen, Checkpoint im Hintergrund
    ├─ Core/ImpalaStore.swift   Änderungs-Meldungen des Kerns → Revisionen für die Ansichten
    ├─ Core/Generated/          Swift-Bindings (erzeugt, nie von Hand ändern)
-   ├─ Theme/                   Farben der PWA (wie Tokens.kt)
-   ├─ Shell/                   NavigationSplitView, Seitenleiste mit Seitenbaum
+   ├─ Assets.xcassets/         Icons aus web/icons.svg (erzeugt: npm run ios:icons)
+   ├─ Theme/                   Farben, Maße, Icon, Liquid Glass (impalaGlass)
+   ├─ Shell/                   Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb (ShellModel: Tabs)
+   ├─ Home/                    Startseite (erster Teil)
    ├─ Notes/                   Notiz (vorerst Markdown als Text)
    └─ Heft/                    PencilKit-Heft
 ```
@@ -53,4 +68,6 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Notiz-Editor mit Blöcken (`markdownToBlocks`) statt Rohtext.
 - Heft: Papiermuster (liniert/kariert), Seitenübersicht, Bilder und Textfelder, Formerkennung,
   Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.
-- App-Icon, Startseite.
+- App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.
+- Chat, Karteikarten, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
+- Seitenbaum: Ziehen zum Verschieben, Duplizieren, Verschieben nach…, Vorlagenwahl bei „Neu“.
