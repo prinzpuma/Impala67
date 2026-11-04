@@ -234,6 +234,9 @@ final class HeftCanvasLink {
     var textEdit: HeftTextEdit?
     /// Ergebnis der Handschrifterkennung.
     var ocr: HeftOcrResult?
+    /// Rückgängig/Wiederholen der Heftleiste (aus dem Undo-Verlauf des Canvas).
+    var canUndo = false
+    var canRedo = false
     @ObservationIgnored weak var coordinator: HeftCanvas.Coordinator?
 }
 

@@ -16,8 +16,8 @@ Die Oberfläche folgt dem Tablet-Layout der PWA (Vorlage: `android/…/ui/desk/`
   (`treeOpen`) liegen im Kern und synchronisieren mit.
 - **Apple-Feinschliff**: Liquid Glass nur für schwebende Bedienelemente (`impalaGlass`, z. B. die
   Blätter-Leiste im Heft), Seitenleiste über `NavigationSplitView`,
-  Kontextmenüs (Halten) statt ⋯-Popover, Sheets für Suche/Papierkorb, Hover-Effekt mit Trackpad,
-  PencilKit-Werkzeugpicker im Heft.
+  Kontextmenüs (Halten) statt ⋯-Popover, Sheets für Suche/Papierkorb, Hover-Effekt mit Trackpad.
+  Das Heft nutzt PencilKit zum Zeichnen, aber die Werkzeugleiste der PWA (kein Apple-Werkzeugpicker).
 - **Animationen (Apple-Federn statt CSS-Kurven)**: aktive Pille, Baumzeile und Tab-Markierung gleiten
   (`matchedGeometryEffect`), Pillen-Label mit Blur-Übergang, Baum klappt weich auf, Tabs federn
   herein/heraus, Tabwechsel blendet über, Sheets zoomen aus ihrem Knopf (`navigationTransition(.zoom)`),
@@ -248,9 +248,13 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
   Seite (`heftSetPaper`) und Löschen; „Auswählen“ löscht mehrere (`heftRemovePage`, eine Seite bleibt).
 - **Neue Seite** („+“ in der Leiste bzw. in der Übersicht): Tippen nimmt das Papier der letzten Seite,
   Halten bietet Liniert/Kariert/Punkte/Blanko (`heftAddPage(paper:)`).
-- **Farben** der PWA-Palette (heft-tools.js `COLORS`) als schwebende Glas-Leiste mit gleitendem Ring;
-  die Wahl landet über `PKToolPicker.selectedTool` im Werkzeugpicker, Farbwechsel im Picker kommen zurück.
-  Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`, Dicke 3. In schmalen Fenstern nur der Picker.
+- **Werkzeugleiste** (`HeftToolbar.swift`, wie `toolbarHtml`): drei Stift-Favoriten, Marker, Radierer,
+  Lasso, „Bilder“, Rückgängig/Wiederholen, Einklappen. Erster Tipp wählt, zweiter Tipp auf das aktive
+  Werkzeug öffnet die Optionen (`HeftToolTray`: Dicke F/M/B, Farben `COLORS`, „Nur Stift zeichnet“ bzw.
+  Radierergröße). Gespeichert wie `impala67HeftTools` (UserDefaults). Links Blättern/Seitenübersicht,
+  rechts „+“ und Teilen; in schmalen Fenstern rutschen die Werkzeuge in eine zweite Zeile.
+- **Papier sichtbar**: Der Canvas ist durchsichtig (`isOpaque = false`), sonst übermalt PencilKit das
+  Papier mit seiner Hintergrundfarbe (schwarzes Heft im Dunkelmodus).
 - **Bilder und Textfelder** (`HeftObjects.swift`): Bilder unter, Textfelder über den
   Strichen wie `renderPageTo`; Bilder über `heftImageData`, per ImageIO verkleinert und zwischengespeichert,
   Text wie `drawTextBox` (gerundete Schrift 500, Zeilenhöhe 1,4, Innenabstand 10).

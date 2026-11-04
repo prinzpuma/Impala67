@@ -13,9 +13,8 @@ struct HeftCanvas: UIViewRepresentable {
     let heftPageId: String
     /// Zählt hoch, wenn das Heft außerhalb des Canvas geändert wurde (anderes Gerät, Seitenübersicht).
     let revision: Int
-    /// Farbe aus der Palette (`#rrggbb`); [onColor] meldet Farbwechsel im Werkzeugpicker zurück.
-    let color: String
-    let onColor: (String) -> Void
+    /// Werkzeug, Farbe und Dicke aus der Heftleiste (wie die PWA, ohne Apples Werkzeugpicker).
+    let tools: HeftToolPrefs
     /// Verbindung zur Leiste (Auswahl, Lasso für Text, Einfügen an der sichtbaren Stelle).
     let link: HeftCanvasLink
     /// „Bilder & Texte auswählen & bearbeiten“: Finger und Stift wählen statt zu zeichnen.
@@ -28,10 +27,12 @@ struct HeftCanvas: UIViewRepresentable {
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = HeftCanvasView()
         canvas.delegate = context.coordinator
-        canvas.drawingPolicy = .default
         // Papier ist in beiden Modi hell; sonst kehrt PencilKit die Farben im Dunkelmodus um.
         canvas.overrideUserInterfaceStyle = .light
-        canvas.isOpaque = true
+        // Durchsichtig, sonst übermalt PencilKit das Papier darunter mit der Hintergrundfarbe (schwarzes
+        // Heft im Dunkelmodus). Die Arbeitsfläche um die Seite liefert der Hintergrund von `HeftScreen`.
+        canvas.isOpaque = false
+        canvas.backgroundColor = .clear
         canvas.minimumZoomScale = 0.25
         canvas.maximumZoomScale = 5
         canvas.bouncesZoom = true
@@ -41,24 +42,15 @@ struct HeftCanvas: UIViewRepresentable {
     }
 
     func updateUIView(_ canvas: PKCanvasView, context: Context) {
-        // Arbeitsfläche um die Seite wie `--bg0` der PWA (der Canvas selbst steht fest auf hell).
-        canvas.backgroundColor = context.environment.colorScheme == .dark ? UIColor(hex: 0x05070D) : UIColor(hex: 0xF2EFE9)
-        context.coordinator.onColor = onColor
         context.coordinator.link = link
         link.coordinator = context.coordinator
-        context.coordinator.setColor(color)
         context.coordinator.reloadIfNeeded(revision)
         context.coordinator.setModes(selecting: selecting, lassoText: lassoText)
-    }
-
-    static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
-        coordinator.toolPicker.setVisible(false, forFirstResponder: canvas)
-        coordinator.toolPicker.removeObserver(canvas)
-        coordinator.toolPicker.removeObserver(coordinator)
+        context.coordinator.setTools(tools)
     }
 
     @MainActor
-    final class Coordinator: NSObject, PKCanvasViewDelegate, PKToolPickerObserver {
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
         private let core: ImpalaCore
         private let pageId: String
         private let heftPageId: String
@@ -68,13 +60,10 @@ struct HeftCanvas: UIViewRepresentable {
         private let texts = HeftObjectsView(.texts)
         private let select = HeftSelectLayer()
         private let hold = HoldWatcher(target: nil, action: nil)
-        var onColor: ((String) -> Void)?
         weak var link: HeftCanvasLink?
         private var selecting = false
         private var lassoText = false
-        /// Werkzeug vor dem Lasso für „Handschrift → Text“.
-        private var toolBeforeLasso: PKTool?
-        private var color = ""
+        private var tools: HeftToolPrefs?
         private var pageSize = CGSize(width: 794, height: 1123)
         private var loadedRevision = -1
         private var applying = false
@@ -87,15 +76,6 @@ struct HeftCanvas: UIViewRepresentable {
         private var removed: [UInt32: HeftStroke] = [:]
         /// Neue Stiftstriche, die erst nach dem Loslassen geschrieben werden (Formerkennung braucht das Halten).
         private var pending: [PKStroke] = []
-
-        /// Werkzeuge wie in der PWA: Stift, Marker, Radierer (ganze Striche), Lasso, Lineal.
-        let toolPicker = PKToolPicker(toolItems: [
-            PKToolPickerInkingItem(type: .pen, color: UIColor(css: HeftPalette.colors[0].css), width: HeftPalette.size),
-            PKToolPickerInkingItem(type: .marker, color: UIColor(css: HeftPalette.colors[4].css), width: HeftPalette.size * 3),
-            PKToolPickerEraserItem(type: .vector),
-            PKToolPickerLassoItem(),
-            PKToolPickerRulerItem(),
-        ])
 
         init(core: ImpalaCore, pageId: String, heftPageId: String) {
             self.core = core
@@ -120,9 +100,6 @@ struct HeftCanvas: UIViewRepresentable {
             hold.delaysTouchesEnded = false
             hold.delegate = hold
             canvas.addGestureRecognizer(hold)
-            toolPicker.addObserver(canvas)
-            toolPicker.addObserver(self)
-            toolPicker.setVisible(true, forFirstResponder: canvas)
             // Die Seite lädt das gleich folgende `updateUIView` (mit der aktuellen Revision).
             DispatchQueue.main.async { [weak self, weak canvas] in
                 canvas?.becomeFirstResponder()
@@ -201,6 +178,7 @@ struct HeftCanvas: UIViewRepresentable {
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
             guard !applying else { return }
             sync(canvas)
+            reportUndo()
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
@@ -318,13 +296,43 @@ struct HeftCanvas: UIViewRepresentable {
             }
             if lassoText != self.lassoText {
                 self.lassoText = lassoText
-                if lassoText {
-                    toolBeforeLasso = canvas.tool
-                    canvas.tool = PKInkingTool(.pen, color: UIColor(Impala.accent).withAlphaComponent(0.7), width: 2)
-                } else if let before = toolBeforeLasso {
-                    canvas.tool = before
-                    toolBeforeLasso = nil
-                }
+                applyTool()
+            }
+        }
+
+        /// Werkzeug der Heftleiste übernehmen und „Nur Stift zeichnet“ setzen.
+        func setTools(_ tools: HeftToolPrefs) {
+            guard tools != self.tools else { return }
+            self.tools = tools
+            applyTool()
+        }
+
+        /// Beim Lasso für „Handschrift → Text“ ein dünner Akzentstift, sonst das Werkzeug der Leiste.
+        private func applyTool() {
+            guard let canvas, let tools else { return }
+            canvas.drawingPolicy = tools.onlyPen ? .pencilOnly : .anyInput
+            canvas.tool = lassoText
+                ? PKInkingTool(.pen, color: UIColor(Impala.accent).withAlphaComponent(0.7), width: 2)
+                : tools.pkTool
+        }
+
+        func undo() {
+            canvas?.undoManager?.undo()
+            reportUndo()
+        }
+
+        func redo() {
+            canvas?.undoManager?.redo()
+            reportUndo()
+        }
+
+        /// Ob Rückgängig/Wiederholen gerade möglich sind, an die Leiste melden.
+        private func reportUndo() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let link = self.link else { return }
+                let m = self.canvas?.undoManager
+                if link.canUndo != (m?.canUndo ?? false) { link.canUndo = m?.canUndo ?? false }
+                if link.canRedo != (m?.canRedo ?? false) { link.canRedo = m?.canRedo ?? false }
             }
         }
 
@@ -433,34 +441,6 @@ struct HeftCanvas: UIViewRepresentable {
                                       x: result.bounds.minX, y: result.bounds.minY, w: w, color: color, size: 30)
             reload()
             HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
-        }
-
-        // MARK: Farbe (Palette ↔ Werkzeugpicker)
-
-        /// Palettenfarbe auf Stift bzw. Marker legen; bei Radierer oder Lasso wechselt es zum Stift.
-        func setColor(_ css: String) {
-            guard css != color, let canvas else { return }
-            color = css
-            let current = canvas.tool as? PKInkingTool
-            let type: PKInkingTool.InkType = current?.inkType == .marker ? .marker : .pen
-            let width = current?.width ?? (type == .marker ? HeftPalette.size * 3 : HeftPalette.size)
-            let tool = PKInkingTool(type, color: UIColor(css: css), width: width)
-            toolPicker.selectedTool = tool
-            canvas.tool = tool
-        }
-
-        func toolPickerSelectedToolDidChange(_ toolPicker: PKToolPicker) { reportColor() }
-        func toolPickerSelectedToolItemDidChange(_ toolPicker: PKToolPicker) { reportColor() }
-
-        /// Im Picker gewählte Farbe an die Palette melden (nach dem Canvas, der das Werkzeug übernimmt).
-        private func reportColor() {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let ink = self.canvas?.tool as? PKInkingTool else { return }
-                let css = ink.color.cssHex
-                guard css != self.color else { return }
-                self.color = css
-                self.onColor?(css)
-            }
         }
 
         /// Strich in den Kern schreiben. Mit `original` (Rückgängig, gedrehter/skalierter Strich) bleiben
