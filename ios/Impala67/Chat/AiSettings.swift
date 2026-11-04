@@ -108,7 +108,7 @@ struct AiSettings: Equatable {
 
     static func patch(_ core: ImpalaCore, _ values: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: values) else { return }
-        try? core.updateSettings(patchJson: String(decoding: data, as: UTF8.self))
+        attempt(try core.updateSettings(patchJson: String(decoding: data, as: UTF8.self)), "updateSettings")
     }
 
     static func select(_ core: ImpalaCore, providerId: String, model: String) {

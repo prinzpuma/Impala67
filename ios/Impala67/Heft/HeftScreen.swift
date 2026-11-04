@@ -162,7 +162,7 @@ struct HeftScreen: View {
             HStack(spacing: 2) {
                 imageMenu
                 AddPageMenu(
-                    currentPaper: currentId.flatMap { try? store.core.heftPage(pageId: pageId, heftPageId: $0).paper },
+                    currentPaper: currentId.flatMap { attempt(try store.core.heftPage(pageId: pageId, heftPageId: $0), "heftPage")?.paper },
                     onAdd: addPage, onPaper: setPaper,
                     onImagePage: { photos = []; photoTarget = .page },
                     onImport: { showImporter = true },
@@ -219,8 +219,8 @@ struct HeftScreen: View {
 
     /// Neue Seite am Ende; ohne Wahl mit dem Papier der letzten Seite (wie PWA und Android).
     private func addPage(_ paper: HeftPaperKind?) {
-        let last = pageIds.last.flatMap { try? store.core.heftPage(pageId: pageId, heftPageId: $0).paper }
-        guard let id = try? store.core.heftAddPage(pageId: pageId, at: nil, paper: paper?.rawValue ?? last) else { return }
+        let last = pageIds.last.flatMap { attempt(try store.core.heftPage(pageId: pageId, heftPageId: $0), "heftPage")?.paper }
+        guard let id = attempt(try store.core.heftAddPage(pageId: pageId, at: nil, paper: paper?.rawValue ?? last), "heftAddPage") else { return }
         loadPages()
         jump(id)
     }
@@ -234,7 +234,7 @@ struct HeftScreen: View {
 
     private func setPaper(_ paper: HeftPaperKind) {
         guard let id = currentId else { return }
-        _ = try? store.core.heftSetPaper(pageId: pageId, heftPageId: id, paper: paper.rawValue)
+        _ = attempt(try store.core.heftSetPaper(pageId: pageId, heftPageId: id, paper: paper.rawValue), "heftSetPaper")
         revision += 1
     }
 
@@ -297,16 +297,16 @@ struct HeftScreen: View {
         if let textId = edit.textId {
             guard var t = canvas.text(textId) else { return }
             if trimmed.isEmpty {
-                _ = try? store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId])
+                _ = attempt(try store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId]), "heftRemoveTexts")
             } else {
                 t.text = text
-                _ = try? store.core.heftSetText(pageId: pageId, heftPageId: id, text: t)
+                _ = attempt(try store.core.heftSetText(pageId: pageId, heftPageId: id, text: t), "heftSetText")
             }
             canvas.reload()
         } else if !trimmed.isEmpty {
             let c = canvas.visibleCenter()
-            let new = try? store.core.heftAddText(pageId: pageId, heftPageId: id, text: text,
-                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: canvas.currentColor, size: 30)
+            let new = attempt(try store.core.heftAddText(pageId: pageId, heftPageId: id, text: text,
+                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: canvas.currentColor, size: 30), "heftAddText")
             link.selecting = true
             canvas.reload()
             if let tid = new?.ids.first { canvas.selectAfterReload(.text(tid)) }
@@ -315,7 +315,7 @@ struct HeftScreen: View {
 
     private func deleteText(_ edit: HeftTextEdit) {
         guard let id = currentId, let textId = edit.textId else { return }
-        _ = try? store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId])
+        _ = attempt(try store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId]), "heftRemoveTexts")
         link.selection = nil
         link.coordinator?.reload()
     }

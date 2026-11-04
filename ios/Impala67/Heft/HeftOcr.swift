@@ -52,19 +52,19 @@ enum HeftOcr {
     /// (der Kern hängt den Text vorhandener Scan-Bilder an und prüft Fingerabdruck + Rangfolge).
     @MainActor
     static func indexPage(core: ImpalaCore, pageId: String, heftPageId: String) async {
-        guard let page = try? core.heftPage(pageId: pageId, heftPageId: heftPageId) else { return }
+        guard let page = attempt(try core.heftPage(pageId: pageId, heftPageId: heftPageId), "heftPage") else { return }
         if page.strokes.isEmpty {
-            _ = try? core.heftRecordOcr(
+            _ = attempt(try core.heftRecordOcr(
                 pageId: pageId, heftPageId: heftPageId, strokeText: "", src: src, expectedKey: page.contentKey
-            )
+            ), "heftRecordOcr")
             return
         }
         guard let cg = renderStrokes(page.strokes) else { return }
         let text = await recognize(cg)
         guard !Task.isCancelled else { return }
-        _ = try? core.heftRecordOcr(
+        _ = attempt(try core.heftRecordOcr(
             pageId: pageId, heftPageId: heftPageId, strokeText: text, src: src, expectedKey: page.contentKey
-        )
+        ), "heftRecordOcr")
     }
 
     /// Rendert die Striche einer Seite dunkel auf weißem Grund (ohne Papierlinien, optimal für Vision).

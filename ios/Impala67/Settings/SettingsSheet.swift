@@ -181,6 +181,112 @@ private struct AppSection: View {
         Section("App") {
             LabeledContent("Version", value: AppInfo.version)
         }
+        ProfilerSection()
+    }
+}
+
+/// „Für Entwickler → Performance-Profiler“ wie die PWA: Schalter, Einträge (neueste zuerst), Kopieren,
+/// Teilen, Löschen.
+private struct ProfilerSection: View {
+    @State private var enabled = Profiler.shared.isEnabled
+    @State private var records: [Profiler.Record] = []
+    @State private var share: SharedFile?
+    @State private var copied = false
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $enabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Performance-Profiler")
+                    Text("Hänger, App- und KI-Fehler lokal protokollieren").font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+                }
+            }
+            .tint(Impala.accent)
+            .onChange(of: enabled) { _, on in Profiler.shared.setEnabled(on) }
+            if enabled || !records.isEmpty {
+                if records.isEmpty {
+                    Text("Noch keine Auffälligkeiten.").font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+                } else {
+                    ForEach(records.prefix(60)) { r in ProfilerRow(record: r) }
+                }
+                HStack {
+                    Button(copied ? "Kopiert" : "Kopieren") {
+                        UIPasteboard.general.string = Profiler.shared.report()
+                        copied = true
+                    }
+                    .buttonStyle(.glass)
+                    Button("Teilen") { share = SharedFile(url: Profiler.shared.reportFile()) }
+                        .buttonStyle(.glass)
+                    Button("Aktualisieren") { reload() }
+                        .buttonStyle(.glass)
+                    Spacer()
+                    Button("Löschen", role: .destructive) {
+                        Profiler.shared.clear()
+                        reload()
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(records.isEmpty)
+                }
+            }
+        } header: {
+            Text("Für Entwickler")
+        } footer: {
+            Text("Nur Auffälligkeiten: Hänger über 100 ms, Fehler des Kerns, Sync- und KI-Fehler, langsamer Start. Gleiche Einträge werden zusammengefasst; alles bleibt auf diesem iPad.")
+        }
+        .onAppear(perform: reload)
+        .sheet(item: $share) { ShareSheet(items: [$0.url]) }
+    }
+
+    private func reload() {
+        records = Profiler.shared.snapshot()
+        copied = false
+    }
+}
+
+/// Eintrag: Art und Name, Meldung, Anzahl, längste Dauer, Ansicht, Stelle, zuletzt.
+private struct ProfilerRow: View {
+    let record: Profiler.Record
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: Space.s2) {
+                Circle().fill(isError ? Impala.danger : Impala.warn).frame(width: 8, height: 8)
+                Text(title).font(.system(size: TextSize.sm, weight: .semibold)).foregroundStyle(Impala.text).lineLimit(1)
+                Spacer(minLength: Space.s2)
+                Text("\(record.count)×").font(.system(size: TextSize.sm).monospacedDigit()).foregroundStyle(Impala.text2)
+            }
+            if !record.message.isEmpty {
+                Text(record.message).font(.system(size: TextSize.xs, design: .monospaced)).foregroundStyle(Impala.text2).lineLimit(3)
+            }
+            Text(details).font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2).lineLimit(1)
+        }
+        .padding(.vertical, 2)
+        .textSelection(.enabled)
+    }
+
+    private var isError: Bool { record.kind.contains("error") }
+
+    private var title: String {
+        switch record.kind {
+        case "main-thread-stall": "Hänger"
+        case "core-error": "Kern-Fehler · \(record.name)"
+        case "sync-error": "Sync-Fehler"
+        case "ai-error": "KI-Fehler"
+        case "boot-error": "Startfehler"
+        case "operation": "Langsam · \(record.name)"
+        default: record.kind
+        }
+    }
+
+    private var details: String {
+        var parts: [String] = []
+        if record.maxDurationMs > 0 {
+            parts.append("max. \(Int(record.maxDurationMs.rounded())) ms · Ø \(Int(record.avgDurationMs.rounded())) ms")
+        }
+        parts.append(record.screen)
+        if !record.source.isEmpty { parts.append(record.source) }
+        parts.append(ChatList.when(ISO8601DateFormatter().string(from: record.lastAt)))
+        return parts.joined(separator: " · ")
     }
 }
 

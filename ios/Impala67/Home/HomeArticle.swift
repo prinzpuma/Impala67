@@ -171,7 +171,7 @@ struct ArticleSection: View {
                 }
             } else {
                 ArticleCard(article: a, history: history, onHistory: onHistory) {
-                    try? store.core.markHomeArticleRead(id: a.id)
+                    attempt(try store.core.markHomeArticleRead(id: a.id), "markHomeArticleRead")
                 }
             }
         } else if writer.phase == .busy {

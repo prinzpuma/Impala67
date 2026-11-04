@@ -58,16 +58,21 @@ final class AppModel {
     func open() async {
         if store != nil || startError != nil { return }
         if let opening { return await opening.value }
+        Profiler.shared.start()
+        let started = Date()
         let task = Task {
             do {
                 let core = try await Task.detached(priority: .userInitiated) {
                     try ImpalaCore.open(dbPath: Self.databaseURL().path)
                 }.value
+                // Wie `boot-ready` der PWA: auffällig ab 1,5 s.
+                Profiler.shared.operation("boot.core-open", durationMs: Date().timeIntervalSince(started) * 1000, thresholdMs: 1500)
                 let store = ImpalaStore(core: core)
                 self.store = store
                 self.sync = SyncController(store: store)
                 self.drive = DriveController(store: store)
             } catch {
+                Profiler.shared.error("boot-error", String(describing: error), name: "boot.core-open")
                 startError = String(describing: error)
             }
         }
@@ -107,7 +112,7 @@ final class AppModel {
 
     private func saveCheckpoint() {
         guard let core = store?.core else { return }
-        Task.detached(priority: .utility) { _ = try? core.saveCheckpoint() }
+        Task.detached(priority: .utility) { _ = attempt(try core.saveCheckpoint(), "saveCheckpoint") }
     }
 
     /// Frühestens in einer Stunde; iOS entscheidet je nach Nutzung, wann wirklich.

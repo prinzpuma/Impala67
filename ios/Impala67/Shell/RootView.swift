@@ -87,7 +87,19 @@ private struct MainContent: View {
         }
         .animation(.smooth(duration: 0.22), value: shell.active)
         .animation(.smooth(duration: 0.22), value: shell.libraryOpen)
+        // Ansicht als Kontext für den Profiler (welche Ansicht hing bzw. scheiterte).
+        .onChange(of: screenName, initial: true) { Profiler.shared.setScreen(screenName) }
         .sensoryFeedback(.selection, trigger: shell.active)
+    }
+
+    /// Art der Ansicht ohne Inhalte (keine Titel im Protokoll).
+    private var screenName: String {
+        if shell.libraryOpen { return "library" }
+        guard let tab = shell.active else { return "home" }
+        if let page = store.core.page(id: tab), !page.trashed { return page.summary.kind == .heft ? "heft" : "note" }
+        if tab.hasPrefix("chat:") { return "chat" }
+        if tab == ShellModel.cardsTab { return "cards" }
+        return tab == "nlm:main" ? "notebook" : "other"
     }
 
     @ViewBuilder

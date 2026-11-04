@@ -81,6 +81,15 @@ Halten: Öffnen, Als Seite öffnen (PDF), Favorit, Archivieren, Papierkorb. Anti
 mehrere PDFs über den Dateiimporter: Datei in den Kern (`addFile`), Seite mit `pdfId` (`pageCreate`,
 Zusammenfassungs-Platzhalter wie `PDFS.ingest` ohne KI); das letzte öffnet sich gleich.
 
+## Performance-Profiler
+
+`App/Profiler.swift` wie web/performance-profiler.js (Einstellungen → App & Speicher → Für Entwickler,
+Schalter `impala67PerformanceProfiler`, standardmäßig aus): nur Auffälligkeiten – Hänger des Hauptthreads
+über 100 ms (Wachhund-Thread, alle 250 ms), Fehler des Rust-Kerns, Sync- und KI-Fehler, Start über 1,5 s.
+Gleiche Einträge (Art, Name, Meldungsanfang, Version) werden zusammengefasst, höchstens 180, gespeichert in
+`impala67-performance.json` (Application Support). Kopieren und Teilen als JSON. Kern-Aufrufe laufen über
+`attempt(try core.…(), "name")` statt `try?`, damit Fehler mit Aufrufstelle im Protokoll landen.
+
 ## App-Icon
 
 `npm run ios:app-icon` (`tools/ios-app-icon.mjs`) zeichnet `web/icon.svg` mit Chrome/Edge (puppeteer-core,

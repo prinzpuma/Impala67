@@ -215,7 +215,7 @@ final class ChatModel {
     /// Chats löschen; den laufenden Chat nicht während seiner Antwort.
     func delete(_ ids: Set<String>) {
         let gone = ids.subtracting(running ? [chatId] : [])
-        for id in gone { try? core.deleteChat(id: id) }
+        for id in gone { attempt(try core.deleteChat(id: id), "deleteChat") }
         if gone.contains(chatId) { chatId = ""; messages = []; error = nil }
     }
 
@@ -224,7 +224,7 @@ final class ChatModel {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty, var chat = core.chat(id: id) else { return }
         chat.title = t
-        _ = try? core.saveChat(chat: chat)
+        _ = attempt(try core.saveChat(chat: chat), "saveChat")
     }
 
     /// Fremde Änderung am offenen Chat (Sync) nachladen.
@@ -241,7 +241,7 @@ final class ChatModel {
         let core = core
         let json = settings.providersJson
         Task.detached {
-            let list = try? core.aiListModelsWith(providersJson: json)
+            let list = attempt(try core.aiListModelsWith(providersJson: json), "aiListModelsWith")
             await MainActor.run {
                 if let list { self.models = list; self.modelsAt = Date() }
                 self.modelsLoading = false
@@ -292,6 +292,7 @@ final class ChatModel {
     }
 
     fileprivate func onFailed(_ message: String, aborted: Bool) {
+        if !aborted { Profiler.shared.error("ai-error", message, name: "ai.chat") }
         error = ChatRunError(message: message, aborted: aborted, partial: aborted ? draft : "")
         finishRun()
         reload()
@@ -321,7 +322,7 @@ final class ChatModel {
     private func persist() {
         guard !chatId.isEmpty, var chat = core.chat(id: chatId) else { return }
         chat.messages = messages
-        _ = try? core.saveChat(chat: chat)
+        _ = attempt(try core.saveChat(chat: chat), "saveChat")
     }
 
     /// Einfache Antwort ohne Werkzeuge und Chat (`AI.complete` der PWA: Tagesartikel); läuft im Hintergrund.

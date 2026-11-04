@@ -75,7 +75,7 @@ struct LibraryScreen: View {
         .alert("PDF-Datei konnte nicht geladen werden.", isPresented: $failed) { Button("OK", role: .cancel) {} }
         .sheet(isPresented: $newHeft) {
             NewHeftSheet { title, cover in
-                guard let id = try? store.core.createHeft(title: title, parentId: nil, workspaceId: nil) else { return }
+                guard let id = attempt(try store.core.createHeft(title: title, parentId: nil, workspaceId: nil), "createHeft") else { return }
                 store.core.patchPage(id, ["cover": cover])
                 shell.open(id)
             }
@@ -111,7 +111,7 @@ struct LibraryScreen: View {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url),
-                  let id = try? store.core.importPdf(name: url.lastPathComponent, bytes: data) else {
+                  let id = attempt(try store.core.importPdf(name: url.lastPathComponent, bytes: data), "importPdf") else {
                 failed = true
                 continue
             }
@@ -307,7 +307,7 @@ private struct NotionTree: View {
     }
 
     private func toggle(_ row: Row) {
-        try? store.core.setTreeOpen(key: row.page.id, open: row.collapsed)
+        attempt(try store.core.setTreeOpen(key: row.page.id, open: row.collapsed), "setTreeOpen")
     }
 }
 
@@ -384,11 +384,11 @@ private struct PageMenu: View {
         }
         MenuItem("Archivieren", icon: "archive") {
             shell.close(page.id)
-            try? store.core.archivePage(id: page.id)
+            attempt(try store.core.archivePage(id: page.id), "archivePage")
         }
         MenuItem("In Papierkorb", icon: "trash", role: .destructive) {
             shell.close(page.id)
-            try? store.core.trashPage(id: page.id)
+            attempt(try store.core.trashPage(id: page.id), "trashPage")
         }
     }
 }
@@ -622,13 +622,13 @@ private struct HeftOptionsSheet: View {
 
     private func archive() {
         shell.close(page.id)
-        try? store.core.archivePage(id: page.id)
+        attempt(try store.core.archivePage(id: page.id), "archivePage")
         dismiss()
     }
 
     private func trash() {
         shell.close(page.id)
-        try? store.core.trashPage(id: page.id)
+        attempt(try store.core.trashPage(id: page.id), "trashPage")
         dismiss()
     }
 }
@@ -665,7 +665,7 @@ private struct ArchiveList: View {
                     }
                     Spacer(minLength: Space.s2)
                     Button {
-                        try? store.core.unarchivePage(id: p.id)
+                        attempt(try store.core.unarchivePage(id: p.id), "unarchivePage")
                     } label: {
                         Label { Text("Aus Archiv holen") } icon: { Image("i-undo").renderingMode(.template) }
                     }

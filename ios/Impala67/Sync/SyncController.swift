@@ -90,7 +90,7 @@ final class SyncController {
         deviceKey = key
         if let data = try? JSONSerialization.data(withJSONObject: ["cfUrl": url, "cfSyncKey": key]),
            let patch = String(data: data, encoding: .utf8) {
-            try? store.core.updateSettings(patchJson: patch)
+            attempt(try store.core.updateSettings(patchJson: patch), "updateSettings")
         }
         return nil
     }
@@ -202,6 +202,7 @@ final class SyncController {
             return nil
         } catch {
             let message = Self.message(error)
+            Profiler.shared.error("sync-error", message, name: "cloudflare.configure")
             state = .error
             label = "Fehler"
             detail = message
@@ -259,6 +260,7 @@ final class SyncController {
     }
 
     private func fail(_ message: String) {
+        Profiler.shared.error("sync-error", message, name: "cloudflare.sync")
         state = .error
         label = "Fehler"
         detail = message

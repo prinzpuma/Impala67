@@ -83,8 +83,8 @@ private struct TrashSheet: View {
                 Text(PageStyle.title(p)).foregroundStyle(Impala.text)
             }
             .swipeActions(edge: .trailing) {
-                Button("Löschen", role: .destructive) { try? store.core.deletePageForever(id: p.id) }
-                Button("Wiederherstellen") { try? store.core.restorePage(id: p.id) }.tint(Impala.accent)
+                Button("Löschen", role: .destructive) { attempt(try store.core.deletePageForever(id: p.id), "deletePageForever") }
+                Button("Wiederherstellen") { attempt(try store.core.restorePage(id: p.id), "restorePage") }.tint(Impala.accent)
             }
         }
         .overlay {
@@ -100,7 +100,7 @@ private struct TrashSheet: View {
             }
         }
         .confirmationDialog("Papierkorb endgültig leeren?", isPresented: $confirmEmpty, titleVisibility: .visible) {
-            Button("Endgültig löschen", role: .destructive) { _ = try? store.core.emptyPageTrash() }
+            Button("Endgültig löschen", role: .destructive) { _ = attempt(try store.core.emptyPageTrash(), "emptyPageTrash") }
         }
     }
 }

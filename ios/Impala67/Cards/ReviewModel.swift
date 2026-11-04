@@ -56,7 +56,7 @@ final class ReviewModel {
         pinned = next?.id
         queue = q
         card = next
-        preview = next.flatMap { try? core.reviewPreview(cardId: $0.id) } ?? []
+        preview = next.flatMap { attempt(try core.reviewPreview(cardId: $0.id), "reviewPreview") } ?? []
         total = max(total, remaining)
         canUndo = core.canUndoReview()
     }

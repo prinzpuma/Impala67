@@ -515,7 +515,7 @@ extension NoteModel {
     /// „Lernkarte erstellen“: Klartext des Blocks als Vorderseite, mit Verweis auf die Seite.
     func cardFromBlock(_ id: String) -> Bool {
         guard let b = blocks.deep(id) else { return false }
-        return (try? core.createCard(front: markdownPlainText(markdown: b.plainText), back: "", deck: nil, pageId: pageId)) != nil
+        return (attempt(try core.createCard(front: markdownPlainText(markdown: b.plainText), back: "", deck: nil, pageId: pageId), "createCard")) != nil
     }
 
     // MARK: Tabellen und Medien
@@ -529,7 +529,7 @@ extension NoteModel {
 
     /// Datei im Kern ablegen und als Bild- bzw. Dateiblock hinter `mediaAfter` einfügen.
     func addMedia(_ data: Data, mime: String, name: String) -> Bool {
-        guard let fileId = try? core.addFile(bytes: data, mime: mime, name: name) else { return false }
+        guard let fileId = attempt(try core.addFile(bytes: data, mime: mime, name: name), "addFile") else { return false }
         let kind: MdBlockKind = mime.hasPrefix("image/")
             ? .image(alt: name.replacingOccurrences(of: #"\.[A-Za-z0-9]+$"#, with: "", options: .regularExpression), src: fileId)
             : .file(src: fileId, name: name)
@@ -571,7 +571,7 @@ extension NoteModel {
 
     /// Slash „Heft“: neues Heft als Unterseite anlegen und dahinter einbetten.
     private func insertHeft(after id: String) {
-        guard let (_, i) = place(id), let heftId = try? core.createHeft(title: "Heft", parentId: pageId, workspaceId: nil) else { return }
+        guard let (_, i) = place(id), let heftId = attempt(try core.createHeft(title: "Heft", parentId: pageId, workspaceId: nil), "createHeft") else { return }
         mutateSiblings(of: id) { list in Array(list[...i]) + [MdBlock.make(.heft(heftId: heftId))] + Array(list[(i + 1)...]) }
     }
 }

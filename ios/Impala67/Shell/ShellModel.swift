@@ -112,6 +112,6 @@ final class ShellModel {
     }
 
     private func save() {
-        try? store.core.setUiTabs(tabs: tabs, activeTabId: active)
+        attempt(try store.core.setUiTabs(tabs: tabs, activeTabId: active), "setUiTabs")
     }
 }

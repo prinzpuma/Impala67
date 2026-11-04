@@ -159,7 +159,7 @@ enum HeftImages {
     static func image(core: ImpalaCore, pageId: String, heftPageId: String, image im: HeftImage, maxPixels: Int) -> UIImage? {
         let key = "\(im.id)@\(maxPixels)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
-        guard let data = try? core.heftImageData(pageId: pageId, heftPageId: heftPageId, imageId: im.id),
+        guard let data = attempt(try core.heftImageData(pageId: pageId, heftPageId: heftPageId, imageId: im.id), "heftImageData"),
               let src = CGImageSourceCreateWithData(data.bytes as CFData, nil),
               let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
