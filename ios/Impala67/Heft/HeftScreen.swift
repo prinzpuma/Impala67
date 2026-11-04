@@ -2,11 +2,10 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Heft: eine Seite zum Zeichnen auf dem Arbeitsflächen-Hintergrund der PWA, darüber schwebende Leisten
-/// (Liquid Glass) aufgeteilt wie die Heftleiste der PWA: links Blättern und Seitenübersicht, in der Mitte
-/// die Werkzeuge (`HeftToolbar`: drei Stifte, Marker, Radierer, Lasso, Bilder, Rückgängig/Wiederholen),
-/// rechts „+“ (neue Seite, Papier, Bild als Seite, Import, Scannen) und Teilen (PDF, SVG). Kein
-/// PencilKit-Werkzeugpicker – sonst gäbe es Farben und Werkzeuge doppelt.
+/// Heft: eine Seite zum Zeichnen auf dem Arbeitsflächen-Hintergrund der PWA. Stifte, Farben, Radierer
+/// und Lasso kommen nur aus Apples Werkzeugleiste (PencilKit). Darüber schweben (Liquid Glass) links
+/// Blättern und Seitenübersicht, rechts „Bilder“ (Auswählen & Bearbeiten, Text, Bild, Kamera,
+/// Handschrift → Text), „+“ (neue Seite, Papier, Bild als Seite, Import, Scannen) und Teilen (PDF, SVG).
 struct HeftScreen: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String
@@ -17,11 +16,6 @@ struct HeftScreen: View {
     @State private var revision = 0
     /// Blätterrichtung für den Übergang (vor: von rechts, zurück: von links).
     @State private var forward = true
-    @State private var tools = HeftToolPrefs.load()
-    /// Optionen des aktiven Werkzeugs offen (zweiter Tipp darauf).
-    @State private var trayOpen = false
-    /// Leiste eingeklappt – mehr Platz zum Schreiben.
-    @State private var collapsed = false
     @State private var showPages = false
     @State private var link = HeftCanvasLink()
     @State private var photoTarget: PhotoTarget?
@@ -41,7 +35,7 @@ struct HeftScreen: View {
     var body: some View {
         ZStack(alignment: .top) {
             if let id = currentId, pageIds.contains(id) {
-                HeftCanvas(core: store.core, pageId: pageId, heftPageId: id, revision: revision, tools: tools,
+                HeftCanvas(core: store.core, pageId: pageId, heftPageId: id, revision: revision,
                            link: link, selecting: link.selecting, lassoText: link.lassoText)
                     .id(id)
                     .ignoresSafeArea(edges: .bottom)
@@ -49,27 +43,13 @@ struct HeftScreen: View {
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            VStack(spacing: Space.s2) {
-                // Wie die PWA: links Seiten, in der Mitte die Werkzeuge, rechts „+“ und Teilen.
-                // In schmalen Fenstern (Split View) rutschen die Werkzeuge in eine zweite Zeile.
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: Space.s2) {
-                        pageNav
-                        Spacer(minLength: 0)
-                        toolbar
-                        Spacer(minLength: 0)
-                        corner
-                    }
-                    VStack(spacing: Space.s2) {
-                        HStack(spacing: Space.s2) {
-                            pageNav
-                            Spacer(minLength: 0)
-                            corner
-                        }
-                        toolbar
-                    }
+            VStack(alignment: .trailing, spacing: Space.s2) {
+                // Links Seiten, rechts Bilder, „+“ und Teilen. Zeichenwerkzeuge kommen nur aus Apples Leiste.
+                HStack(alignment: .top, spacing: Space.s2) {
+                    pageNav
+                    Spacer(minLength: 0)
+                    corner
                 }
-                if trayOpen && !collapsed && tools.tool != .lasso { HeftToolTray(prefs: $tools) }
                 if link.selecting { SelectBar(link: link) }
                 if link.lassoText { hint("Umkreise die Handschrift, die als Text erkannt werden soll.") { link.lassoText = false } }
                 if let busy { hint(busy, onCancel: nil) }
@@ -77,10 +57,8 @@ struct HeftScreen: View {
             .padding(Space.s3)
             .animation(.snappy, value: link.selecting)
             .animation(.snappy, value: link.lassoText)
-            .animation(.snappy, value: trayOpen)
         }
         .clipped()
-        .onChange(of: tools) { tools.save() }
         .sensoryFeedback(.selection, trigger: currentId)
         // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`).
         .onChange(of: currentId, initial: true) { HeftLastPage.index[pageId] = index }
@@ -112,7 +90,7 @@ struct HeftScreen: View {
                 .presentationSizing(.form)
         }
         .sheet(item: $link.ocr) { result in
-            HeftOcrSheet(result: result) { text in link.coordinator?.replaceWithText(result, text: text, color: tools.color) }
+            HeftOcrSheet(result: result) { text in link.coordinator?.replaceWithText(result, text: text, color: link.coordinator?.currentColor ?? HeftPalette.colors[0].css) }
                 .presentationSizing(.form)
         }
         .sheet(item: $share) { ShareSheet(items: [$0.url]) }
@@ -147,15 +125,9 @@ struct HeftScreen: View {
 
     // MARK: Leisten
 
-    /// Werkzeugleiste der PWA (Stifte, Marker, Radierer, Lasso, Bilder, Rückgängig/Wiederholen, Einklappen).
-    private var toolbar: some View {
-        HeftToolbar(
-            prefs: $tools, trayOpen: $trayOpen, collapsed: $collapsed,
-            imageActive: link.selecting || link.lassoText,
-            canUndo: link.canUndo, canRedo: link.canRedo,
-            onUndo: { link.coordinator?.undo() }, onRedo: { link.coordinator?.redo() }
-        ) {
-            // heft-toolbar-ui.js `imgPopHtml`, dazu „Handschrift → Text“ mit Apple Vision.
+    /// „Bilder“ (heft-toolbar-ui.js `imgPopHtml`), dazu „Handschrift → Text“ mit Apple Vision.
+    private var imageMenu: some View {
+        Menu {
             Section("Bilder") {
                 Toggle(isOn: Binding(get: { link.selecting }, set: { on in
                     link.lassoText = false
@@ -174,13 +146,21 @@ struct HeftScreen: View {
                 link.selecting = false
                 link.lassoText = true
             } label: { Label { Text("Handschrift → Text") } icon: { Icon("note") } }
+        } label: {
+            Icon("image", size: 18)
+                .foregroundStyle(link.selecting || link.lassoText ? Impala.accent : Impala.text)
+                .frame(width: 40, height: 40)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Bilder einfügen oder bearbeiten")
     }
 
-    /// Rechte Ecke: „Seite hinzufügen“ (`plusPopHtml`) und Teilen (Apple-Teilen-Blatt).
+    /// Rechte Ecke: Bilder, „Seite hinzufügen“ (`plusPopHtml`) und Teilen (Apple-Teilen-Blatt).
     private var corner: some View {
         GlassEffectContainer {
             HStack(spacing: 2) {
+                imageMenu
                 AddPageMenu(
                     currentPaper: currentId.flatMap { try? store.core.heftPage(pageId: pageId, heftPageId: $0).paper },
                     onAdd: addPage, onPaper: setPaper,
@@ -326,7 +306,7 @@ struct HeftScreen: View {
         } else if !trimmed.isEmpty {
             let c = canvas.visibleCenter()
             let new = try? store.core.heftAddText(pageId: pageId, heftPageId: id, text: text,
-                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: tools.color, size: 30)
+                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: canvas.currentColor, size: 30)
             link.selecting = true
             canvas.reload()
             if let tid = new?.ids.first { canvas.selectAfterReload(.text(tid)) }
