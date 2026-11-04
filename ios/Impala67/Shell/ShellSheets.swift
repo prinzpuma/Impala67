@@ -10,7 +10,7 @@ struct ShellSheetView: View {
                 switch sheet {
                 case .search: SearchSheet()
                 case .trash: TrashSheet()
-                case .settings: Placeholder(icon: "sliders", title: "Einstellungen", text: "Sync, KI und Speicher folgen in der iPad-App.")
+                case .settings: SettingsSheet()
                 case .library: Placeholder(icon: "library", title: "Bibliothek", text: "Folgt in der iPad-App.")
                 case .graph: Placeholder(icon: "graph", title: "Wissensgraph", text: "Folgt in der iPad-App.")
                 case .notebook: Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")

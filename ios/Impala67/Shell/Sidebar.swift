@@ -5,6 +5,7 @@ import SwiftUI
 struct Sidebar: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Environment(SyncController.self) private var sync
     @Environment(\.shellNamespace) private var zoom
     @Namespace private var pills
 
@@ -36,7 +37,8 @@ struct Sidebar: View {
                 FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }.zoomSource(ShellSheet.graph, zoom)
                 FootButton(icon: "library", label: "Bibliothek") { shell.sheet = .library }.zoomSource(ShellSheet.library, zoom)
                 FootButton(icon: "trash", label: "Papierkorb") { shell.sheet = .trash }.zoomSource(ShellSheet.trash, zoom)
-                FootButton(icon: "sliders", label: "Einstellungen") { shell.sheet = .settings }.zoomSource(ShellSheet.settings, zoom)
+                FootButton(icon: "sliders", label: "Einstellungen", status: sync.isPaired ? sync.state : nil) { shell.sheet = .settings }
+                    .zoomSource(ShellSheet.settings, zoom)
             }
         }
         .padding(.horizontal, Space.s2)
@@ -84,6 +86,8 @@ private struct Pill: View {
 private struct FootButton: View {
     let icon: String
     let label: String
+    /// Sync-Zustand als Punkt (nur am Einstellungen-Knopf, wenn gekoppelt).
+    var status: SyncController.State?
     let action: () -> Void
 
     var body: some View {
@@ -92,6 +96,7 @@ private struct FootButton: View {
                 Icon(icon, size: 15)
                 Text(label).font(.system(size: TextSize.sm))
                 Spacer(minLength: 0)
+                if let status { StatusDot(state: status) }
             }
             .foregroundStyle(Impala.text2)
             .padding(.horizontal, Space.s2)

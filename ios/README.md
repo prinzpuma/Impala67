@@ -40,6 +40,8 @@ ios/
    ├─ Shell/                   Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb (ShellModel: Tabs)
    ├─ Home/                    Startseite (erster Teil)
    ├─ Notes/                   Notiz (vorerst Markdown als Text)
+   ├─ Sync/SyncController.swift Cloudflare Live-Sync: WebSocket, Ping, Neuaufbau (Ablauf im Kern)
+   ├─ Settings/                Einstellungen (bisher: Cloudflare Live-Sync)
    └─ Heft/                    PencilKit-Heft
 ```
 
@@ -52,6 +54,14 @@ dem letzten Stand (Schlüssel: `PKStroke.randomSeed`, für Kern-Striche aus der 
 `heftAddStroke`, `heftRemoveStrokes` bzw. `heftMoveStrokes` (Lasso). Papier (liniert, kariert, Punkte,
 leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPaper.swift`). Breiten wie die PWA (`segW` in
 `web/heft.js`), Marker halbtransparent mit dreifacher Breite. Fremde Änderungen bauen die Seite neu auf.
+
+## Sync
+
+Wie `CloudSyncController.kt`: Abrufen, Verschlüsseln, Konflikte und Dateien macht der Kern (`CloudSync`,
+HTTP über ureq/rustls im Rust-Code). Die App hält nur den WebSocket (`URLSessionWebSocketTask`), Ping,
+Neuaufbau mit wachsender Pause und Wiederholversuche, verbindet im Vordergrund und schließt den
+Socket im Hintergrund. Schlüssel und URL stehen wie in der PWA in den Kern-Einstellungen
+(`cfUrl`, `cfSyncKey`); gekoppelt ist das Gerät, wenn der Schlüssel zusätzlich in `UserDefaults` liegt.
 
 ## Bauen ohne Mac
 
@@ -70,7 +80,8 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 ## Offen
 
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
-- Sync (Cloudflare, `SyncCore` + URLSession-WebSocket), Drive, Suche, Karten, KI, Einstellungen.
+- Sync: QR-Kopplung, automatisches Koppeln bei neuem Schlüssel aus den Einstellungen, Konflikt-Ansicht,
+  Hintergrund-Sync (BGTaskScheduler). Drive, Karten, KI, weitere Einstellungen.
 - Notiz-Editor mit Blöcken (`markdownToBlocks`) statt Rohtext.
 - Heft: Papierwahl für neue Seiten, Seitenübersicht, Bilder und Textfelder, Formerkennung,
   Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.

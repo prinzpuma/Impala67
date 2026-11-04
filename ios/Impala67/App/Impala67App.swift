@@ -5,6 +5,7 @@ import SwiftUI
 @main
 struct Impala67App: App {
     @State private var store: ImpalaStore?
+    @State private var sync: SyncController?
     @State private var startError: String?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -12,7 +13,7 @@ struct Impala67App: App {
         WindowGroup {
             Group {
                 if let store {
-                    RootView().environment(store)
+                    RootView().environment(store).environment(sync)
                 } else if let startError {
                     ContentUnavailableView("Start fehlgeschlagen", systemImage: "exclamationmark.triangle", description: Text(startError))
                 } else {
@@ -24,8 +25,12 @@ struct Impala67App: App {
         }
         .onChange(of: scenePhase) { _, phase in
             // Wie die Android-App in onStop: Checkpoint schreiben, damit der nächste Start schnell ist.
-            if phase == .background, let core = store?.core {
-                Task.detached(priority: .utility) { _ = try? core.saveCheckpoint() }
+            switch phase {
+            case .active: sync?.onForeground()
+            case .background:
+                sync?.onBackground()
+                if let core = store?.core { Task.detached(priority: .utility) { _ = try? core.saveCheckpoint() } }
+            default: break
             }
         }
     }
@@ -36,7 +41,11 @@ struct Impala67App: App {
             let core = try await Task.detached(priority: .userInitiated) {
                 try ImpalaCore.open(dbPath: Self.databaseURL().path)
             }.value
-            store = ImpalaStore(core: core)
+            let store = ImpalaStore(core: core)
+            let sync = SyncController(store: store)
+            self.store = store
+            self.sync = sync
+            sync.onForeground()
         } catch {
             startError = String(describing: error)
         }
