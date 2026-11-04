@@ -1,0 +1,300 @@
+import Foundation
+import Observation
+
+/// Zustand einer offenen Notiz wie `EditorViewModel.kt`: Blöcke aus `markdownToBlocks`, aktiver Block,
+/// Verlauf, entprelltes Speichern über `updatePage`. Parsen und Schreiben des Markdowns macht der Kern;
+/// hier liegen nur die Block-Operationen der Bedienung (Enter teilt, Rücktaste verschmilzt, Umwandeln).
+@MainActor @Observable
+final class NoteModel {
+    let pageId: String
+    @ObservationIgnored private let core: ImpalaCore
+
+    private(set) var title = ""
+    private(set) var blocks: [MdBlock] = []
+    /// Block mit Eingabefeld; nil = nur Anzeige.
+    private(set) var activeId: String?
+    /// Gewünschte Caret-Position (UTF-16) beim Aktivieren; nil = ans Ende.
+    private(set) var cursor: Int?
+    /// Zählt bei jedem Aktivieren hoch, damit das Eingabefeld den Fokus (neu) setzt.
+    private(set) var focusToken = 0
+    private var undoStack: [[MdBlock]] = []
+    private var redoStack: [[MdBlock]] = []
+
+    /// Letzte Caret-Position im aktiven Feld (für Umwandeln ohne Sprung).
+    @ObservationIgnored var caret = 0
+    @ObservationIgnored private var savedTitle = ""
+    @ObservationIgnored private var savedMarkdown = ""
+    @ObservationIgnored private var dirtyTitle = false
+    @ObservationIgnored private var dirtyContent = false
+    @ObservationIgnored private var lastEdit = Date.distantPast
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
+    var activeBlock: MdBlock? { activeId.flatMap { id in blocks.first { $0.id == id } } }
+
+    init(core: ImpalaCore, pageId: String) {
+        self.core = core
+        self.pageId = pageId
+        guard let page = core.page(id: pageId) else { return }
+        title = page.summary.title
+        savedTitle = title
+        savedMarkdown = page.content
+        blocks = markdownToBlocks(markdown: page.content)
+    }
+
+    // MARK: Laden und Speichern
+
+    /// Fremde Änderung (Sync): nur übernehmen, wenn hier nichts ungespeichert ist und gerade niemand tippt.
+    func applyRemote() {
+        guard !dirtyTitle, !dirtyContent, Date().timeIntervalSince(lastEdit) > 1.5,
+              let page = core.page(id: pageId) else { return }
+        if page.summary.title != savedTitle {
+            title = page.summary.title
+            savedTitle = title
+        }
+        if page.content != savedMarkdown {
+            savedMarkdown = page.content
+            blocks = markdownToBlocks(markdown: page.content)
+            undoStack = []
+            redoStack = []
+            if let a = activeId, !blocks.contains(where: { $0.id == a }) { activeId = nil }
+        }
+    }
+
+    func setTitle(_ value: String) {
+        // Enter im Titel springt in den ersten Block (Titel bleibt einzeilig).
+        let clean = value.replacingOccurrences(of: "\n", with: "")
+        if clean != value { focusFirst() }
+        guard clean != title else { return }
+        title = clean
+        dirtyTitle = true
+        lastEdit = Date()
+        scheduleSave()
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            self?.flush()
+        }
+    }
+
+    /// Sofort speichern (Seite verlassen, App im Hintergrund).
+    func flush() {
+        saveTask?.cancel()
+        saveTask = nil
+        guard dirtyTitle || dirtyContent else { return }
+        let newTitle = dirtyTitle && title != savedTitle ? title : nil
+        var md: String?
+        if dirtyContent {
+            let m = blocksToMarkdown(blocks: blocks)
+            if m != savedMarkdown { md = m }
+        }
+        dirtyTitle = false
+        dirtyContent = false
+        if let newTitle { savedTitle = newTitle }
+        if let md { savedMarkdown = md }
+        guard newTitle != nil || md != nil else { return }
+        try? core.updatePage(id: pageId, title: newTitle, content: md)
+    }
+
+    // MARK: Verlauf
+
+    /// Jede Änderung der Blöcke läuft hierüber; Tippen in kurzer Folge ist ein Verlaufsschritt.
+    private func mutate(structural: Bool, _ change: ([MdBlock]) -> [MdBlock]) {
+        let next = change(blocks)
+        guard next != blocks else { return }
+        let now = Date()
+        if structural || now.timeIntervalSince(lastEdit) > 0.9 {
+            undoStack.append(blocks)
+            if undoStack.count > 100 { undoStack.removeFirst() }
+        }
+        redoStack.removeAll()
+        blocks = next
+        lastEdit = now
+        dirtyContent = true
+        scheduleSave()
+    }
+
+    func undo() {
+        guard let prev = undoStack.popLast() else { return }
+        redoStack.append(blocks)
+        restore(prev)
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(blocks)
+        restore(next)
+    }
+
+    private func restore(_ list: [MdBlock]) {
+        blocks = list
+        lastEdit = .distantPast
+        dirtyContent = true
+        scheduleSave()
+        if let a = activeId {
+            if list.contains(where: { $0.id == a }) { activate(a, at: nil) } else { activeId = nil }
+        }
+    }
+
+    // MARK: Fokus
+
+    func activate(_ id: String, at position: Int?) {
+        activeId = id
+        cursor = position
+        focusToken += 1
+    }
+
+    func endEditing() { activeId = nil }
+
+    /// Eingabefeld hat den Fokus verloren. Ein veraltetes `token` heißt: der Block wurde gerade neu
+    /// aktiviert (z. B. umgewandelt) – dann bleibt er aktiv.
+    func blurred(_ id: String, token: Int) {
+        if activeId == id, token == focusToken { activeId = nil }
+    }
+
+    /// Titel fertig getippt: in den ersten Block springen.
+    func focusFirst() {
+        if let first = blocks.first {
+            if first.isText { activate(first.id, at: 0) }
+        } else {
+            focusEnd()
+        }
+    }
+
+    /// Tippen unter den Blöcken: in einen leeren Absatz am Ende schreiben.
+    func focusEnd() {
+        if let last = blocks.last, last.type == .text, last.text.isEmpty {
+            activate(last.id, at: 0)
+            return
+        }
+        let p = MdBlock.paragraph()
+        mutate(structural: true) { list in list + [p] }
+        activate(p.id, at: 0)
+    }
+
+    // MARK: Bearbeiten
+
+    /// Text eines Blocks geändert. Zeilenumbrüche teilen den Block (außer im Code), ein Kürzel am Anfang
+    /// eines Absatzes („# “, „- “, „[] “ …) wandelt ihn um.
+    func edit(_ id: String, text: String, caret: Int) {
+        guard let b = blocks.first(where: { $0.id == id }) else { return }
+        self.caret = caret
+        if !b.isCode, text.contains("\n") {
+            split(id, lines: text.components(separatedBy: "\n"))
+            return
+        }
+        let ns = text as NSString
+        let at = min(caret, ns.length)
+        if b.type == .text, let t = shortcutType(ns.substring(to: at)) {
+            let rest = ns.substring(from: at)
+            mutate(structural: true) { list in list.map { $0.id == id ? $0.withText(rest).converted(to: t) : $0 } }
+            activate(id, at: 0)
+            return
+        }
+        mutate(structural: false) { list in list.map { $0.id == id ? $0.withText(text) : $0 } }
+    }
+
+    /// Enter (oder eingefügte Zeilen): der Text des Blocks wird auf `lines` aufgeteilt.
+    func split(_ id: String, lines: [String]) {
+        guard let i = blocks.firstIndex(where: { $0.id == id }), let firstLine = lines.first else { return }
+        let b = blocks[i]
+        if lines.count == 2, lines[0].isEmpty, lines[1].isEmpty, b.isListOrQuote {
+            // Enter in leerer Zeile beendet die Liste bzw. rückt aus.
+            let outdent = b.indent > 0
+            mutate(structural: true) { list in
+                list.map { $0.id == id ? (outdent ? $0.indented(-1) : $0.converted(to: .text)) : $0 }
+            }
+            activate(id, at: 0)
+            return
+        }
+        let head = b.withText(firstLine)
+        var prev = b
+        var tail: [MdBlock] = []
+        for line in lines.dropFirst() {
+            let next = prev.continuation().withText(line)
+            tail.append(next)
+            prev = next
+        }
+        guard let last = tail.last else { return }
+        mutate(structural: true) { list in Array(list[..<i]) + [head] + tail + Array(list[(i + 1)...]) }
+        activate(last.id, at: lines.count == 2 ? 0 : last.text.utf16.count)
+    }
+
+    /// Rücktaste am Blockanfang: erst ausrücken bzw. zum Absatz machen, dann mit dem vorigen verschmelzen.
+    func backspaceAtStart(_ id: String) {
+        guard let i = blocks.firstIndex(where: { $0.id == id }) else { return }
+        let b = blocks[i]
+        if b.indent > 0 {
+            mutate(structural: true) { list in list.map { $0.id == id ? $0.indented(-1) : $0 } }
+        } else if b.type != .text {
+            mutate(structural: true) { list in list.map { $0.id == id ? $0.converted(to: .text) : $0 } }
+            activate(id, at: 0)
+        } else if i > 0 {
+            let prev = blocks[i - 1]
+            if prev.isText {
+                let join = prev.text.utf16.count
+                let merged = prev.withText(prev.text + b.text)
+                mutate(structural: true) { list in Array(list[..<(i - 1)]) + [merged] + Array(list[(i + 1)...]) }
+                activate(prev.id, at: join)
+            } else if b.text.isEmpty {
+                delete(id)
+            }
+        }
+    }
+
+    func indent(_ delta: Int) {
+        guard let id = activeId else { return }
+        mutate(structural: true) { list in list.map { $0.id == id ? $0.indented(delta) : $0 } }
+    }
+
+    func convert(_ type: BlockType) {
+        guard let id = activeId else { return }
+        mutate(structural: true) { list in list.map { $0.id == id && $0.isText ? $0.converted(to: type) : $0 } }
+        activate(id, at: caret)
+    }
+
+    func toggleTodo(_ id: String) {
+        mutate(structural: true) { list in list.mapDeep(id) { b in b.toggledTodo() } }
+    }
+
+    /// Toggle auf-/zuklappen; der Zustand wird mitgespeichert (editor.js: `b.open = !b.open`).
+    func toggleOpen(_ id: String) {
+        mutate(structural: false) { list in list.mapDeep(id) { b in b.toggledOpen() } }
+    }
+
+    func deleteActive() {
+        if let id = activeId { delete(id) }
+    }
+
+    func delete(_ id: String) {
+        guard let i = blocks.firstIndex(where: { $0.id == id }) else { return }
+        mutate(structural: true) { list in
+            var l = list
+            l.remove(at: i)
+            return l
+        }
+        guard activeId == id else { return }
+        if i > 0, blocks[i - 1].isText {
+            activate(blocks[i - 1].id, at: nil)
+        } else {
+            activeId = nil
+        }
+    }
+
+    /// Markdown eines Blocks für die Rohtext-Bearbeitung (Tabellen, Callouts, Bilder …).
+    func rawOf(_ block: MdBlock) -> String { blocksToMarkdown(blocks: [block]) }
+
+    /// Rohtext fertig: wieder in Blöcke umwandeln (0, 1 oder mehrere).
+    func commitRaw(_ id: String, markdown: String) {
+        guard let i = blocks.firstIndex(where: { $0.id == id }),
+              markdown != blocksToMarkdown(blocks: [blocks[i]]) else { return }
+        var parsed = markdownToBlocks(markdown: markdown)
+        if parsed.count == 1 { parsed[0].id = id }
+        mutate(structural: true) { list in Array(list[..<i]) + parsed + Array(list[(i + 1)...]) }
+    }
+}

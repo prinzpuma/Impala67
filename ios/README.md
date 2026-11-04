@@ -39,11 +39,24 @@ ios/
    ├─ Theme/                   Farben, Maße, Icon, Liquid Glass (impalaGlass)
    ├─ Shell/                   Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb (ShellModel: Tabs)
    ├─ Home/                    Startseite (erster Teil)
-   ├─ Notes/                   Notiz (vorerst Markdown als Text)
+   ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern)
    ├─ Sync/SyncController.swift Cloudflare Live-Sync: WebSocket, Ping, Neuaufbau (Ablauf im Kern)
    ├─ Settings/                Einstellungen (bisher: Cloudflare Live-Sync)
    └─ Heft/                    PencilKit-Heft
 ```
+
+## Notiz-Editor
+
+Wie `android/…/editor/`: Der Kern zerlegt den Seiteninhalt in Blöcke (`markdownToBlocks`) und schreibt
+sie zurück (`blocksToMarkdown` → `updatePage`, 600 ms nach dem Tippen bzw. beim Verlassen). Die App
+kennt nur die Bedien-Operationen (`NoteModel`): Enter teilt den Block (Listen und Zitate setzen sich
+fort, Enter in leerer Zeile beendet die Liste), Rücktaste am Anfang rückt aus, macht zum Absatz oder
+verschmilzt mit dem vorigen, Kürzel wie `# `, `- `, `1. `, `[] `, `> ` wandeln einen Absatz um.
+Angezeigt wird mit Inline-Markdown (fett, kursiv, Code, Links); der angetippte Block wird zum
+Eingabefeld (`BlockTextView`, eine `UITextView`, weil nur sie Rücktaste am Anfang und Caret meldet).
+Darüber schwebt die Block-Leiste in Liquid Glass (Verlauf, Blocktyp mit gleitender Markierung, Einzug,
+Löschen, Fertig). Bilder, Dateien (Quick Look), Heft-Verweise, Tabellen, Callouts, Toggles und Spalten
+werden angezeigt; Halten → „Als Markdown bearbeiten“ ändert sie als Rohtext.
 
 ## Heft und Sync
 
@@ -82,7 +95,10 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
 - Sync: QR-Kopplung, automatisches Koppeln bei neuem Schlüssel aus den Einstellungen, Konflikt-Ansicht,
   Hintergrund-Sync (BGTaskScheduler). Drive, Karten, KI, weitere Einstellungen.
-- Notiz-Editor mit Blöcken (`markdownToBlocks`) statt Rohtext.
+- Notiz-Editor: Slash-Menü („/“), Inline-Formatierung per Leiste (fett, kursiv, Link), Hervorhebung
+  `==…==` und Textfarben im Fließtext, Formeln setzen (bisher TeX-Quelltext), Diagramme (Mermaid),
+  Tabellen direkt bearbeiten, Bilder/Dateien einfügen, Seitenlinks und Rückverweise, Blöcke ziehen,
+  Tab/Umschalt-Tab auf der Hardware-Tastatur, Links im angezeigten Text antippbar machen.
 - Heft: Papierwahl für neue Seiten, Seitenübersicht, Bilder und Textfelder, Formerkennung,
   Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.
 - App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.
