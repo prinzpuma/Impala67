@@ -28,6 +28,7 @@ struct HomeScreen: View {
                     Menu {
                         MenuItem("Notiz", icon: "note") { create(.note) }
                         MenuItem("Heft", icon: "notebook") { create(.heft) }
+                        TemplateMenuSection(create: create)
                     } label: {
                         Text("+ Neue Seite")
                             .font(.system(size: TextSize.sm, weight: .semibold))
@@ -121,12 +122,8 @@ struct HomeScreen: View {
         return h < 5 ? "Gute Nacht" : h < 11 ? "Guten Morgen" : h < 18 ? "Guten Tag" : "Guten Abend"
     }
 
-    private func create(_ kind: PageKind) {
-        let id: String? = switch kind {
-        case .note: try? store.core.createPage(title: "", content: "", parentId: nil, workspaceId: nil)
-        case .heft: try? store.core.createHeft(title: "Heft", parentId: nil, workspaceId: nil)
-        }
-        if let id { shell.openNewTab(id) }
+    private func create(_ choice: NewPageChoice) {
+        if let id = store.core.createNew(choice, parent: nil, workspace: nil) { shell.openNewTab(id) }
     }
 }
 

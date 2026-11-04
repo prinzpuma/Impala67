@@ -20,6 +20,7 @@
     "build:android-core": "node tools/android-core.mjs",
     "build:ios-core": "node tools/ios-core.mjs",
     "ios:icons": "node tools/ios-icons.mjs",
+    "ios:app-icon": "node tools/ios-app-icon.mjs",
     "android:icons": "node tools/android-icons.mjs",
     "check:core": "node .github/scripts/check-core-build.mjs"
   },

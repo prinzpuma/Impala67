@@ -35,9 +35,11 @@ ios/
    ├─ App/                     Einstieg, Kern öffnen, Checkpoint im Hintergrund
    ├─ Core/ImpalaStore.swift   Änderungs-Meldungen des Kerns → Revisionen für die Ansichten
    ├─ Core/Generated/          Swift-Bindings (erzeugt, nie von Hand ändern)
-   ├─ Assets.xcassets/         Icons aus web/icons.svg (erzeugt: npm run ios:icons)
+   ├─ Assets.xcassets/         Icons aus web/icons.svg (npm run ios:icons), AppIcon aus web/icon.svg (npm run ios:app-icon)
    ├─ Theme/                   Farben, Maße, Icon, Liquid Glass (impalaGlass)
-   ├─ Shell/                   Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb (ShellModel: Tabs)
+   ├─ Shell/                   Seitenleiste, Seitenbaum (Ziehen: TreeDrop), Tab-Leiste, Suche, Papierkorb,
+   │                           PageOps (Neu/Vorlage, Duplizieren, Verschieben, PDF-Import), ShellModel: Tabs
+   ├─ Library/                 Bibliothek: PDF-Liste, PDFKit-Ansicht
    ├─ Home/                    Startseite (erster Teil)
    ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
    ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
@@ -46,6 +48,37 @@ ios/
    ├─ Settings/                Einstellungen (Cloudflare Live-Sync, KI)
    └─ Heft/                    PencilKit-Heft
 ```
+
+## Seitenbaum
+
+Wie `DeskTree.kt`/`TreeDrag.kt`: Reihenfolge, Zyklen und Arbeitsbereiche prüft der Kern (`movePage`,
+`movePageToWorkspace`); die App wählt nur das Ziel.
+
+- **Ziehen**: Halten öffnet das Menü, Halten und Ziehen hebt die Zeile an (System-Drag mit Karte als
+  Vorschau). Oberes/unteres Viertel einer Zeile legt davor/danach ab (Akzentlinie), die Mitte hinein
+  (getönte Fläche, der Ast klappt auf), ein Arbeitsbereich-Kopf oder „Keine Seiten“ an dessen Wurzel.
+  Haptik beim Ablegen, Zeilen gleiten an ihren Platz. Das Ziehobjekt ist Text mit Präfix `impala-page:`,
+  fremder Text verschiebt nichts.
+- **Menü**: zusätzlich „Duplizieren“ (samt Unterseiten, „(Kopie)“ wie `duplicatePage`) und „Verschieben
+  nach…“ (Sheet mit Arbeitsbereichen und Seiten, ohne eigenen Unterbaum, jetziger Ort abgehakt).
+- **Neu** („+“ im Baum, in der Tab-Leiste und auf der Startseite): Notiz, Heft und darunter „Aus Vorlage“
+  (als Vorlage markierte Seiten; Titel, Inhalt, Icon, Schlagwörter wie `data-tpluse`).
+
+## Bibliothek
+
+Wie `android/…/library/` (Bereich „Dokumente“): Seiten mit `pdfId`, neueste zuerst, Stern für Favoriten,
+Halten: PDF öffnen, Als Seite öffnen, Favorit, Papierkorb. Antippen öffnet das PDF **nativ mit PDFKit**
+(zoomt aus der Zeile; fortlaufend, an die Breite angepasst, Seitenzahl „n / m“ in Liquid Glass, Teilen,
+„Als Seite öffnen“). Fehlt die Datei noch (Sync), steht „PDF nicht gefunden“. „PDF hinzufügen“ nimmt
+mehrere PDFs über den Dateiimporter: Datei in den Kern (`addFile`), Seite mit `pdfId` (`pageCreate`,
+Zusammenfassungs-Platzhalter wie `PDFS.ingest` ohne KI); das letzte öffnet sich gleich.
+
+## App-Icon
+
+`npm run ios:app-icon` (`tools/ios-app-icon.mjs`) zeichnet `web/icon.svg` mit Chrome/Edge (puppeteer-core,
+Pfad notfalls über `CHROME_BIN`) randlos als 1024×1024-PNG ohne Alphakanal in
+`Assets.xcassets/AppIcon.appiconset`; die Ecken rundet iOS. `project.yml` setzt
+`ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon`.
 
 ## Notiz-Editor
 
@@ -197,9 +230,14 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   Zwischenablage bzw. per Drag & Drop von außen.
 - Heft: Bilder und Textfelder bearbeiten (anlegen, verschieben, löschen), Import von PDFs/Fotos,
   Export, Verlauf, Handschrift → Text, Formvorschau während des Haltens, Dicken der PWA (`SIZES`).
-- App-Icon; Startseite: Lernzeit/Wochenziel, „Weißt du's noch?“, Tagesartikel.
+- Startseite: Lernzeit/Wochenziel, „Weißt du's noch?“, Tagesartikel.
 - Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Stapel-Optionen (Tageslimits, Leech),
   Feynman-Modus, Lernzeit-Messung und Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
   Import/Export, Statistik.
-- Bibliothek, Wissensgraph, Gemini Notebook (Fußleiste zeigt Platzhalter).
-- Seitenbaum: Ziehen zum Verschieben, Duplizieren, Verschieben nach…, Vorlagenwahl bei „Neu“.
+- Bibliothek: Heft-Regal mit Ordnern und Covern, Smart-Filter (Alle/Favoriten/Vorlagen), PDF-KI-Zusammenfassung.
+  Wissensgraph, Gemini Notebook (Fußleiste zeigt Platzhalter).
+- Seitenbaum: Stapel (Karteikarten) ziehen, Mehrfachauswahl; Duplizieren ist App-Logik wie in Android
+  (Kandidat für den Kern).
+- App-Icon: dunkle/getönte Varianten (iOS 18+). Die Körnung in `web/icon.svg` färbt den ganzen
+  Filterbereich grau (gedrehtes Rechteck hinter dem Heft) – das ist auch in der PWA so; bei Bedarf im SVG
+  korrigieren und `npm run ios:app-icon` neu laufen lassen.

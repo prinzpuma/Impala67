@@ -33,6 +33,7 @@ struct TabBar: View {
             Menu {
                 MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
                 MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
+                TemplateMenuSection(create: newPage)
                 MenuItem("Seite suchen", icon: "search") { shell.sheet = .search }
             } label: {
                 Icon("plus", size: 15)
@@ -60,12 +61,8 @@ struct TabBar: View {
         return (PageStyle.title(p), PageStyle.iconName(p), PageStyle.emoji(p))
     }
 
-    private func newPage(_ kind: PageKind) {
-        let id: String? = switch kind {
-        case .note: try? store.core.createPage(title: "", content: "", parentId: nil, workspaceId: nil)
-        case .heft: try? store.core.createHeft(title: "Heft", parentId: nil, workspaceId: nil)
-        }
-        if let id { shell.openNewTab(id) }
+    private func newPage(_ choice: NewPageChoice) {
+        if let id = store.core.createNew(choice, parent: nil, workspace: nil) { shell.openNewTab(id) }
     }
 }
 

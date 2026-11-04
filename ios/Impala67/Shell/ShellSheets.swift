@@ -1,17 +1,26 @@
 import SwiftUI
 
-/// Overlays der Shell: Suche und Papierkorb; der Rest folgt.
+/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Bibliothek; Graph und Notebook folgen.
 struct ShellSheetView: View {
     let sheet: ShellSheet
 
     var body: some View {
+        if sheet == .library {
+            // Eigener Stapel: PDFs werden darin geöffnet (Zoom aus der Zeile).
+            LibrarySheet().presentationDetents([.large])
+        } else {
+            stack
+        }
+    }
+
+    private var stack: some View {
         NavigationStack {
             Group {
                 switch sheet {
                 case .search: SearchSheet()
                 case .trash: TrashSheet()
                 case .settings: SettingsSheet()
-                case .library: Placeholder(icon: "library", title: "Bibliothek", text: "Folgt in der iPad-App.")
+                case .library: EmptyView()
                 case .graph: Placeholder(icon: "graph", title: "Wissensgraph", text: "Folgt in der iPad-App.")
                 case .notebook: Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")
                 }
@@ -22,7 +31,7 @@ struct ShellSheetView: View {
     }
 }
 
-private struct CloseButton: View {
+struct CloseButton: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         Button("Schließen") { dismiss() }

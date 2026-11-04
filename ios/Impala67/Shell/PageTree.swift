@@ -8,6 +8,8 @@ struct PageTree: View {
     @Environment(ShellModel.self) private var shell
     @State private var renaming: PageSummary?
     @State private var renameText = ""
+    @State private var moving: PageSummary?
+    @State private var drops = 0
     @Namespace private var highlight
 
     var body: some View {
@@ -21,6 +23,10 @@ struct PageTree: View {
                         TreeHead(title: title, collapsed: collapseKey.map { rows.isCollapsed($0) }, onToggle: { if let k = collapseKey { toggle(k) } }) {
                             workspaceId.map { ws in NewPageMenu(label: "Neue Seite in \(title)") { create($0, parent: nil, workspace: ws) } }
                         }
+                        // Auf den Kopf ziehen = Wurzel dieses Arbeitsbereichs.
+                        .treeDrop(enabled: workspaceId != nil, zones: false) { id, _ in
+                            if let ws = workspaceId { dropped { store.core.dropPage(id, toWorkspace: ws) } }
+                        }
                     case let .page(page, depth, hasKids):
                         TreePageRow(
                             page: page, depth: depth, hasKids: hasKids,
@@ -32,12 +38,27 @@ struct PageTree: View {
                             menu: { menu(page) },
                             onAddChild: { create($0, parent: page.id, workspace: nil) }
                         )
-                    case .empty:
+                        // Halten öffnet das Menü, Halten und Ziehen hebt die Zeile an (System-Ziehen).
+                        .onDrag { TreeDragItem.provider(page.id) } preview: {
+                            TreeDragPreview(page: page)
+                        }
+                        .treeDrop(enabled: true, zones: true) { id, zone in
+                            guard id != page.id else { return }
+                            dropped {
+                                store.core.dropPage(id, onto: page, zone: zone)
+                                if zone == .into { try? store.core.setTreeOpen(key: page.id, open: true) }
+                            }
+                        }
+                    case let .empty(workspaceId):
                         Text("Keine Seiten")
                             .font(.system(size: TextSize.sm))
                             .foregroundStyle(Impala.text2)
                             .padding(.leading, 30)
                             .padding(.vertical, Space.s1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .treeDrop(enabled: true, zones: false) { id, _ in
+                                dropped { store.core.dropPage(id, toWorkspace: workspaceId) }
+                            }
                     }
                 }
             }
@@ -47,6 +68,8 @@ struct PageTree: View {
             .animation(.smooth(duration: 0.3), value: shell.active)
         }
         .scrollIndicators(.hidden)
+        .sensoryFeedback(.impact(weight: .medium), trigger: drops)
+        .sheet(item: $moving) { MovePageSheet(page: $0) }
         .alert("Umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Titel", text: $renameText)
             Button("Abbrechen", role: .cancel) {}
@@ -61,11 +84,15 @@ struct PageTree: View {
     private func menu(_ page: PageSummary) -> some View {
         MenuItem("In neuem Tab öffnen", icon: "external") { shell.openNewTab(page.id) }
         MenuItem("Umbenennen", icon: "pen") { renameText = page.title; renaming = page }
+        MenuItem("Duplizieren", icon: "copy") {
+            if let id = store.core.duplicate(page.id) { shell.open(id) }
+        }
+        MenuItem("Verschieben nach…", icon: "folder-move") { moving = page }
         MenuItem(page.isTemplate ? "Vorlage entfernen" : "Als Vorlage", icon: "template") {
-            patch(page.id, ["isTemplate": !page.isTemplate])
+            store.core.patchPage(page.id, ["isTemplate": !page.isTemplate])
         }
         MenuItem(page.favorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
-            patch(page.id, ["favorite": !page.favorite])
+            store.core.patchPage(page.id, ["favorite": !page.favorite])
         }
         MenuItem("Archivieren", icon: "archive") {
             shell.close(page.id)
@@ -82,31 +109,29 @@ struct PageTree: View {
         try? store.core.setTreeOpen(key: key, open: open)
     }
 
-    private func patch(_ id: String, _ patch: [String: Any]) {
-        guard let json = try? JSONSerialization.data(withJSONObject: ["id": id, "patch": patch]),
-              let s = String(data: json, encoding: .utf8) else { return }
-        _ = try? store.core.dispatch(kind: "pageUpdate", payloadJson: s)
+    /// Abgelegt: Kern verschiebt, Zeilen gleiten an ihren Platz, kurze Haptik.
+    private func dropped(_ move: () -> Void) {
+        withAnimation(.snappy(duration: 0.3)) { move() }
+        drops += 1
     }
 
-    private func create(_ kind: PageKind, parent: String?, workspace: String?) {
-        let id: String? = switch kind {
-        case .note: try? store.core.createPage(title: "", content: "", parentId: parent, workspaceId: workspace)
-        case .heft: try? store.core.createHeft(title: "Heft", parentId: parent, workspaceId: workspace)
-        }
+    private func create(_ choice: NewPageChoice, parent: String?, workspace: String?) {
+        let id = store.core.createNew(choice, parent: parent, workspace: workspace)
         if let parent { try? store.core.setTreeOpen(key: parent, open: true) }
         if let id { shell.open(id) }
     }
 }
 
-/// „+“ mit Auswahl Notiz/Heft (wie die Vorlagenwahl der PWA, ohne Vorlagen).
+/// „+“ mit Auswahl Notiz/Heft und den Vorlagen darunter (wie `openTemplatePicker` der PWA).
 struct NewPageMenu: View {
     let label: String
-    let create: (PageKind) -> Void
+    let create: (NewPageChoice) -> Void
 
     var body: some View {
         Menu {
             MenuItem("Notiz", icon: "note") { create(.note) }
             MenuItem("Heft", icon: "notebook") { create(.heft) }
+            TemplateMenuSection(create: create)
         } label: {
             Icon("plus", size: 14)
                 .foregroundStyle(Impala.text2)
@@ -114,6 +139,24 @@ struct NewPageMenu: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
+    }
+}
+
+/// Abschnitt „Aus Vorlage“ in Neu-Menüs: als Vorlage markierte Seiten (Titel, Inhalt, Icon, Schlagwörter).
+struct TemplateMenuSection: View {
+    @Environment(ImpalaStore.self) private var store
+    let create: (NewPageChoice) -> Void
+
+    var body: some View {
+        let _ = store.pagesRevision
+        let templates = store.core.templates()
+        if !templates.isEmpty {
+            Section("Aus Vorlage") {
+                ForEach(templates) { t in
+                    MenuItem(PageStyle.title(t), icon: "template") { create(.template(t)) }
+                }
+            }
+        }
     }
 }
 
@@ -153,7 +196,7 @@ private struct TreePageRow<MenuContent: View>: View {
     let onOpen: () -> Void
     let onToggle: () -> Void
     @ViewBuilder let menu: () -> MenuContent
-    let onAddChild: (PageKind) -> Void
+    let onAddChild: (NewPageChoice) -> Void
 
     var body: some View {
         HStack(spacing: Space.s1) {
@@ -214,7 +257,7 @@ struct TreeRows: RandomAccessCollection {
     enum Kind {
         case head(title: String, collapseKey: String?, workspaceId: String?)
         case page(PageSummary, depth: Int, hasKids: Bool)
-        case empty
+        case empty(workspaceId: String)
     }
 
     struct Row: Identifiable {
@@ -258,7 +301,7 @@ struct TreeRows: RandomAccessCollection {
             guard !t.isCollapsed(key) else { continue }
             let before = t.rows.count
             branch(nil, ws.id, 0)
-            if t.rows.count == before { t.rows.append(Row(id: "empty:\(ws.id)", kind: .empty)) }
+            if t.rows.count == before { t.rows.append(Row(id: "empty:\(ws.id)", kind: .empty(workspaceId: ws.id))) }
         }
         return t
     }
