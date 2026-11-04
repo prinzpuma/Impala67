@@ -8,6 +8,8 @@ struct HeftScreen: View {
     @State private var pageIds: [String] = []
     @State private var index = 0
     @State private var remoteRevision = 0
+    /// Blätterrichtung für den Übergang (vor: von rechts, zurück: von links).
+    @State private var forward = true
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -15,12 +17,15 @@ struct HeftScreen: View {
                 HeftCanvas(core: store.core, pageId: pageId, heftPageId: pageIds[index], remoteRevision: remoteRevision)
                     .id(pageIds[index])
                     .ignoresSafeArea(edges: .bottom)
+                    .transition(.push(from: forward ? .trailing : .leading))
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            PageControls(index: $index, count: pageIds.count, onAdd: addPage)
+            PageControls(index: index, count: pageIds.count, onMove: move, onAdd: addPage)
                 .padding(Space.s3)
         }
+        .clipped()
+        .sensoryFeedback(.selection, trigger: index)
         .background(Impala.bg0)
         .onAppear(perform: loadPages)
         .onChange(of: store.lastRemote) {
@@ -38,29 +43,40 @@ struct HeftScreen: View {
     private func addPage() {
         guard let id = try? store.core.heftAddPage(pageId: pageId, at: nil, paper: nil) else { return }
         loadPages()
-        withAnimation(.spring(duration: 0.3)) { index = pageIds.firstIndex(of: id) ?? index }
+        forward = true
+        withAnimation(.smooth(duration: 0.35)) { index = pageIds.firstIndex(of: id) ?? index }
+    }
+
+    private func move(_ by: Int) {
+        forward = by > 0
+        withAnimation(.smooth(duration: 0.35)) { index = min(max(0, index + by), pageIds.count - 1) }
     }
 }
 
 /// Blättern wie die Seitenanzeige der PWA-Heftleiste: ‹ n / m › und „Seite hinzufügen“.
 private struct PageControls: View {
-    @Binding var index: Int
+    let index: Int
     let count: Int
+    let onMove: (Int) -> Void
     let onAdd: () -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
-            button("chevron-left", "Vorige Seite", enabled: index > 0) { index -= 1 }
-            Text(count == 0 ? "–" : "\(index + 1) / \(count)")
-                .font(.system(size: TextSize.sm, weight: .medium).monospacedDigit())
-                .foregroundStyle(Impala.text)
-                .frame(minWidth: 52)
-            button("chevron-right", "Nächste Seite", enabled: index < count - 1) { index += 1 }
-            button("plus", "Seite hinzufügen", enabled: true, action: onAdd)
+        GlassEffectContainer {
+            HStack(spacing: 2) {
+                button("chevron-left", "Vorige Seite", enabled: index > 0) { onMove(-1) }
+                Text(count == 0 ? "–" : "\(index + 1) / \(count)")
+                    .font(.system(size: TextSize.sm, weight: .medium).monospacedDigit())
+                    .foregroundStyle(Impala.text)
+                    .contentTransition(.numericText(value: Double(index)))
+                    .animation(.snappy, value: index)
+                    .frame(minWidth: 52)
+                button("chevron-right", "Nächste Seite", enabled: index < count - 1) { onMove(1) }
+                button("plus", "Seite hinzufügen", enabled: true, action: onAdd)
+            }
+            .padding(.horizontal, Space.s1)
+            .frame(height: 44)
+            .impalaGlass(interactive: true)
         }
-        .padding(.horizontal, Space.s1)
-        .frame(height: 44)
-        .impalaGlass(interactive: true)
     }
 
     private func button(_ icon: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {

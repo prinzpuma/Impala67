@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(ImpalaStore.self) private var store
     @State private var shell: ShellModel?
+    @Namespace private var namespace
 
     var body: some View {
         if let shell {
@@ -23,8 +24,11 @@ struct RootView: View {
             }
             .navigationSplitViewStyle(.balanced)
             .environment(shell)
+            .environment(\.shellNamespace, namespace)
             .sheet(item: $shell.sheet) { sheet in
-                ShellSheetView(sheet: sheet).environment(shell)
+                ShellSheetView(sheet: sheet)
+                    .environment(shell)
+                    .navigationTransition(.zoom(sourceID: sheet.id, in: namespace))
             }
             .onChange(of: store.uiRevision) { shell.reload() }
         } else {
@@ -40,6 +44,16 @@ private struct MainContent: View {
 
     var body: some View {
         let _ = store.pagesRevision
+        // Tabwechsel blendet weich über (wie der Seitenwechsel der PWA), Haptik beim Wechsel.
+        ZStack {
+            content.id(shell.active ?? "home").transition(.opacity.combined(with: .scale(scale: 0.995)))
+        }
+        .animation(.smooth(duration: 0.22), value: shell.active)
+        .sensoryFeedback(.selection, trigger: shell.active)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if let tab = shell.active {
             if let page = store.core.page(id: tab), !page.trashed {
                 PageScreen(summary: page.summary).id(tab)

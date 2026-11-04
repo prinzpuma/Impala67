@@ -20,7 +20,6 @@ struct HeftCanvas: UIViewRepresentable {
         canvas.drawingPolicy = .default
         // Papier ist in beiden Modi hell; sonst kehrt PencilKit die Farben im Dunkelmodus um.
         canvas.overrideUserInterfaceStyle = .light
-        canvas.backgroundColor = UIColor(hex: 0xFBF9F4)
         canvas.isOpaque = true
         canvas.minimumZoomScale = 0.25
         canvas.maximumZoomScale = 5
@@ -31,6 +30,8 @@ struct HeftCanvas: UIViewRepresentable {
     }
 
     func updateUIView(_ canvas: PKCanvasView, context: Context) {
+        // Arbeitsfläche um die Seite wie `--bg0` der PWA (der Canvas selbst steht fest auf hell).
+        canvas.backgroundColor = context.environment.colorScheme == .dark ? UIColor(hex: 0x05070D) : UIColor(hex: 0xF2EFE9)
         context.coordinator.reloadIfNeeded(remoteRevision)
     }
 
@@ -45,6 +46,7 @@ struct HeftCanvas: UIViewRepresentable {
         private let pageId: String
         private let heftPageId: String
         private weak var canvas: PKCanvasView?
+        private let paper = HeftPaperView()
         private var pageSize = CGSize(width: 794, height: 1123)
         private var loadedRevision = -1
         private var applying = false
@@ -73,6 +75,7 @@ struct HeftCanvas: UIViewRepresentable {
 
         func attach(_ canvas: PKCanvasView) {
             self.canvas = canvas
+            canvas.insertSubview(paper, at: 0)
             toolPicker.addObserver(canvas)
             toolPicker.setVisible(true, forFirstResponder: canvas)
             reloadIfNeeded(0)
@@ -88,6 +91,7 @@ struct HeftCanvas: UIViewRepresentable {
             loadedRevision = revision
             guard let data = try? core.heftPage(pageId: pageId, heftPageId: heftPageId) else { return }
             pageSize = CGSize(width: data.width, height: data.height)
+            paper.configure(size: pageSize, paper: data.paper)
             var strokes: [PKStroke] = []
             known.removeAll()
             for s in data.strokes {
@@ -99,18 +103,35 @@ struct HeftCanvas: UIViewRepresentable {
             applying = true
             canvas.drawing = PKDrawing(strokes: strokes)
             applying = false
-            canvas.contentSize = pageSize
+            canvas.contentSize = CGSize(width: pageSize.width * canvas.zoomScale, height: pageSize.height * canvas.zoomScale)
             fitWidth()
+            layoutPage()
         }
 
-        /// Beim ersten Anzeigen die Seitenbreite einpassen.
+        /// Beim ersten Anzeigen die Seitenbreite einpassen (mit Rand wie die Arbeitsfläche der PWA).
         func fitWidth() {
             guard !fitted, let canvas, canvas.bounds.width > 0 else { return }
             fitted = true
-            let scale = canvas.bounds.width / pageSize.width
+            let scale = (canvas.bounds.width - 2 * Self.gutter) / pageSize.width
             canvas.minimumZoomScale = min(scale, 1) * 0.5
-            canvas.zoomScale = scale
+            canvas.setZoomScale(scale, animated: false)
+            layoutPage()
+            canvas.contentOffset = CGPoint(x: -canvas.contentInset.left, y: -canvas.contentInset.top)
         }
+
+        private static let gutter: CGFloat = 24
+
+        /// Papier mitzoomen und die Seite mittig halten, solange sie schmaler als der Canvas ist.
+        private func layoutPage() {
+            guard let canvas else { return }
+            let z = canvas.zoomScale
+            paper.follow(zoom: z)
+            let w = pageSize.width * z
+            let side = max(Self.gutter, (canvas.bounds.width - w) / 2)
+            canvas.contentInset = UIEdgeInsets(top: Self.gutter, left: side, bottom: Self.gutter + 80, right: side)
+        }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) { layoutPage() }
 
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
             guard !applying else { return }

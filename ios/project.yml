@@ -4,7 +4,7 @@ name: Impala67
 options:
   bundleIdPrefix: org.impala67
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "27.0"
 settings:
   base:
     SWIFT_VERSION: "5.0"

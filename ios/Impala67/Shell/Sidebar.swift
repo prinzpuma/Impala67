@@ -5,18 +5,21 @@ import SwiftUI
 struct Sidebar: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Environment(\.shellNamespace) private var zoom
+    @Namespace private var pills
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 2) {
-                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil) {
+                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil, ns: pills) {
                     shell.sidebarMode = .files
                     shell.goHome()
                 }
-                Pill(icon: "chat", label: "Chat", active: shell.sidebarMode == .chats) { shell.sidebarMode = .chats }
-                Pill(icon: "cards", label: "Karten", active: shell.sidebarMode == .cards) { shell.sidebarMode = .cards }
+                Pill(icon: "chat", label: "Chat", active: shell.sidebarMode == .chats, ns: pills) { shell.sidebarMode = .chats }
+                Pill(icon: "cards", label: "Karten", active: shell.sidebarMode == .cards, ns: pills) { shell.sidebarMode = .cards }
                 Spacer(minLength: 0)
-                Pill(icon: "search", label: "Suchen", active: false) { shell.sheet = .search }
+                Pill(icon: "search", label: "Suchen", active: false, ns: pills) { shell.sheet = .search }
+                    .zoomSource(ShellSheet.search, zoom)
             }
             Group {
                 switch shell.sidebarMode {
@@ -26,13 +29,14 @@ struct Sidebar: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
+            .animation(.smooth(duration: 0.25), value: shell.sidebarMode)
             Divider().overlay(Impala.edgeSoft)
             VStack(spacing: 2) {
-                FootButton(icon: "book", label: "Gemini Notebook") { shell.sheet = .notebook }
-                FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }
-                FootButton(icon: "library", label: "Bibliothek") { shell.sheet = .library }
-                FootButton(icon: "trash", label: "Papierkorb") { shell.sheet = .trash }
-                FootButton(icon: "sliders", label: "Einstellungen") { shell.sheet = .settings }
+                FootButton(icon: "book", label: "Gemini Notebook") { shell.sheet = .notebook }.zoomSource(ShellSheet.notebook, zoom)
+                FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }.zoomSource(ShellSheet.graph, zoom)
+                FootButton(icon: "library", label: "Bibliothek") { shell.sheet = .library }.zoomSource(ShellSheet.library, zoom)
+                FootButton(icon: "trash", label: "Papierkorb") { shell.sheet = .trash }.zoomSource(ShellSheet.trash, zoom)
+                FootButton(icon: "sliders", label: "Einstellungen") { shell.sheet = .settings }.zoomSource(ShellSheet.settings, zoom)
             }
         }
         .padding(.horizontal, Space.s2)
@@ -47,22 +51,32 @@ private struct Pill: View {
     let icon: String
     let label: String
     let active: Bool
+    let ns: Namespace.ID
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) { action() }
+        } label: {
             HStack(spacing: 6) {
                 Icon(icon, size: 16)
-                if active { Text(label).font(.system(size: TextSize.sm, weight: .medium)) }
+                if active {
+                    Text(label)
+                        .font(.system(size: TextSize.sm, weight: .medium))
+                        .transition(.blurReplace)
+                }
             }
             .foregroundStyle(active ? Impala.text : Impala.text2)
             .padding(.horizontal, 10)
             .frame(minHeight: 36)
-            .background(active ? Impala.activeTint : .clear, in: Capsule())
+            .background {
+                // Die Tönung gleitet von Pille zu Pille.
+                if active { Capsule().fill(Impala.activeTint).matchedGeometryEffect(id: "pill", in: ns) }
+            }
         }
         .pressable()
         .accessibilityLabel(label)
-        .animation(.spring(duration: 0.25), value: active)
+        .sensoryFeedback(.selection, trigger: active) { _, now in now }
     }
 }
 
@@ -94,5 +108,13 @@ private struct SidebarPlaceholder: View {
             .font(.system(size: TextSize.sm))
             .foregroundStyle(Impala.text2)
             .padding(Space.s2)
+    }
+}
+
+extension View {
+    /// Quelle eines Zoom-Übergangs für das Sheet `sheet`.
+    @ViewBuilder
+    func zoomSource(_ sheet: ShellSheet, _ ns: Namespace.ID?) -> some View {
+        if let ns { matchedTransitionSource(id: sheet.id, in: ns) } else { self }
     }
 }

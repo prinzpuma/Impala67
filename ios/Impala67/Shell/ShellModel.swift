@@ -4,6 +4,11 @@ import SwiftUI
 /// Was links in der Seitenleiste steht (Pillen oben, wie `renderTopbar` der PWA).
 enum SidebarMode { case files, chats, cards }
 
+extension EnvironmentValues {
+    /// Namensraum der Shell: Sheets zoomen aus dem Knopf, der sie geöffnet hat.
+    @Entry var shellNamespace: Namespace.ID? = nil
+}
+
 /// Overlays der Shell (Suche, Papierkorb …).
 enum ShellSheet: String, Identifiable {
     case search, trash, settings, library, graph, notebook

@@ -32,6 +32,7 @@ struct HomeScreen: View {
                             .overlay(Capsule().stroke(Impala.accent.opacity(0.36), lineWidth: 1))
                     }
                 }
+                .riseIn(0)
                 VStack(alignment: .leading, spacing: Space.s2) {
                     Text("\(Self.greeting()).")
                         .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
@@ -40,12 +41,15 @@ struct HomeScreen: View {
                         .font(.system(size: TextSize.md))
                         .foregroundStyle(Impala.text2)
                 }
+                .riseIn(1)
                 if let last {
                     Button { shell.open(last.id) } label: { ContinueCard(page: last) }
                         .pressable()
+                        .riseIn(2)
                 }
                 if !pins.isEmpty {
                     FlowRow(pins: Array(pins)) { shell.open($0) }
+                        .riseIn(3)
                 }
             }
             .padding(Space.s6)

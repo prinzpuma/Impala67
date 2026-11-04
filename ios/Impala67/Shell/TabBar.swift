@@ -5,6 +5,7 @@ import SwiftUI
 struct TabBar: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Namespace private var highlight
 
     var body: some View {
         let _ = store.pagesRevision
@@ -20,10 +21,13 @@ struct TabBar: View {
             ScrollView(.horizontal) {
                 HStack(spacing: Space.s1) {
                     ForEach(shell.tabs, id: \.self) { tab in
-                        TabChip(info: info(tab), active: tab == shell.active, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                        TabChip(info: info(tab), active: tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                            .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.9))))
                     }
                 }
                 .padding(.vertical, 2)
+                .animation(.bouncy(duration: 0.35), value: shell.tabs)
+                .animation(.smooth(duration: 0.3), value: shell.active)
             }
             .scrollIndicators(.hidden)
             Menu {
@@ -64,6 +68,7 @@ struct TabBar: View {
 private struct TabChip: View {
     let info: (title: String, icon: String, emoji: String?)
     let active: Bool
+    let ns: Namespace.ID
     let onOpen: () -> Void
     let onClose: () -> Void
 
@@ -85,7 +90,13 @@ private struct TabChip: View {
         .padding(.leading, Space.s2)
         .padding(.trailing, 2)
         .frame(minWidth: 96, maxWidth: 170, minHeight: 32, alignment: .leading)
-        .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .background {
+            if active {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(Impala.activeTint)
+                    .matchedGeometryEffect(id: "tab", in: ns)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
         .onTapGesture(perform: onOpen)
         .hoverEffect(.highlight)

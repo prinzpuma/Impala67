@@ -8,6 +8,7 @@ struct PageTree: View {
     @Environment(ShellModel.self) private var shell
     @State private var renaming: PageSummary?
     @State private var renameText = ""
+    @Namespace private var highlight
 
     var body: some View {
         let _ = (store.pagesRevision, store.uiRevision)
@@ -25,6 +26,7 @@ struct PageTree: View {
                             page: page, depth: depth, hasKids: hasKids,
                             collapsed: rows.isCollapsed(page.id),
                             active: shell.active == page.id,
+                            ns: highlight,
                             onOpen: { shell.open(page.id) },
                             onToggle: { toggle(page.id) },
                             menu: { menu(page) },
@@ -39,6 +41,10 @@ struct PageTree: View {
                     }
                 }
             }
+            // Auf-/Zuklappen und neue Seiten: Zeilen gleiten statt zu springen (der Kern meldet asynchron).
+            .animation(.snappy(duration: 0.28), value: store.uiRevision)
+            .animation(.snappy(duration: 0.28), value: store.pagesRevision)
+            .animation(.smooth(duration: 0.3), value: shell.active)
         }
         .scrollIndicators(.hidden)
         .alert("Umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -143,6 +149,7 @@ private struct TreePageRow<MenuContent: View>: View {
     let hasKids: Bool
     let collapsed: Bool
     let active: Bool
+    let ns: Namespace.ID
     let onOpen: () -> Void
     let onToggle: () -> Void
     @ViewBuilder let menu: () -> MenuContent
@@ -161,15 +168,25 @@ private struct TreePageRow<MenuContent: View>: View {
                 .foregroundStyle(active ? Impala.text : Impala.text2)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if active { NewPageMenu(label: "Unterseite anlegen", create: onAddChild) }
+            if active {
+                NewPageMenu(label: "Unterseite anlegen", create: onAddChild).transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
         }
         .padding(.leading, CGFloat(depth) * 16)
         .padding(.trailing, 2)
         .frame(minHeight: 34)
-        .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .background {
+            // Die Markierung der aktiven Seite gleitet zur neuen Zeile.
+            if active {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(Impala.activeTint)
+                    .matchedGeometryEffect(id: "active", in: ns)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
         .onTapGesture(perform: onOpen)
         .contextMenu { menu() }
+        .transition(.opacity.combined(with: .move(edge: .top)))
         .hoverEffect(.highlight)
     }
 }

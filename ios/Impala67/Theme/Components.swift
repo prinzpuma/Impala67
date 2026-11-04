@@ -21,25 +21,19 @@ struct Icon: View {
 }
 
 extension View {
-    /// Liquid Glass ab iOS 26 (schwebende Leisten und Knöpfe), davor dünnes Material – die einzige
-    /// bewusste Abweichung vom flachen PWA-Look.
+    /// Liquid Glass für schwebende Bedienelemente (Leisten und Knöpfe über dem Inhalt) – die bewusste
+    /// Abweichung vom flachen PWA-Look. Flächen wie Seitenleiste und Seiten bleiben wie in der PWA.
     func impalaGlass(interactive: Bool = false) -> some View { impalaGlass(in: Capsule(), interactive: interactive) }
 
-    @ViewBuilder
     func impalaGlass(in shape: some Shape, interactive: Bool = false) -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
-        } else {
-            background(.thinMaterial, in: shape)
-        }
-        #else
-        background(.thinMaterial, in: shape)
-        #endif
+        glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
     }
 
-    /// Druck-Rückmeldung wie `scale(.97)` der PWA.
+    /// Druck-Rückmeldung wie `scale(.97)` der PWA, mit Feder statt CSS-Kurve.
     func pressable() -> some View { buttonStyle(PressStyle()) }
+
+    /// Auftritt wie `hv-in` der PWA (leicht von unten, gestaffelt nach `index`).
+    func riseIn(_ index: Int = 0) -> some View { modifier(RiseIn(index: index)) }
 }
 
 private struct PressStyle: ButtonStyle {
@@ -47,6 +41,22 @@ private struct PressStyle: ButtonStyle {
         configuration.label
             .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+    }
+}
+
+private struct RiseIn: ViewModifier {
+    let index: Int
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 10)
+            .blur(radius: shown || reduceMotion ? 0 : 3)
+            .onAppear {
+                withAnimation(.smooth(duration: 0.45).delay(Double(index) * 0.05)) { shown = true }
+            }
     }
 }

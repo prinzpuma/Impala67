@@ -1,6 +1,6 @@
 # Native iPad-App
 
-Komplett native SwiftUI-App (kein WebView) über dem Rust-Kern (`core/impala-ffi`, UniFFI) – das
+Für **iPadOS 27** gebaut (Mindestversion 27.0, keine Rückfallebenen für ältere Systeme). Komplett native SwiftUI-App (kein WebView) über dem Rust-Kern (`core/impala-ffi`, UniFFI) – das
 iOS-Gegenstück zur Android-App. Es gelten dieselben Regeln wie in `android/PORTING.md` §1: Aussehen und
 Verhalten der PWA übernehmen, native Bausteine statt Eigenbau, keine Logik nachbauen, die im Kern liegt.
 Die Oberfläche folgt dem Tablet-Layout der PWA (Vorlage: `android/…/ui/desk/`, die es schon nachbaut);
@@ -14,10 +14,15 @@ Die Oberfläche folgt dem Tablet-Layout der PWA (Vorlage: `android/…/ui/desk/`
   Brotkrumen und großem Titel. Texte wörtlich aus der PWA.
 - **Geräteübergreifend wie in der PWA**: offene Tabs (`uiTabs`) und Aufklapp-Zustand des Baums
   (`treeOpen`) liegen im Kern und synchronisieren mit.
-- **Apple-Feinschliff**: Liquid Glass ab iOS 26 nur für schwebende Bedienelemente (`impalaGlass`, z. B.
-  Heft-Seitenleiste oben rechts; davor Material), Seitenleiste über `NavigationSplitView`,
+- **Apple-Feinschliff**: Liquid Glass nur für schwebende Bedienelemente (`impalaGlass`, z. B. die
+  Blätter-Leiste im Heft), Seitenleiste über `NavigationSplitView`,
   Kontextmenüs (Halten) statt ⋯-Popover, Sheets für Suche/Papierkorb, Hover-Effekt mit Trackpad,
   PencilKit-Werkzeugpicker im Heft.
+- **Animationen (Apple-Federn statt CSS-Kurven)**: aktive Pille, Baumzeile und Tab-Markierung gleiten
+  (`matchedGeometryEffect`), Pillen-Label mit Blur-Übergang, Baum klappt weich auf, Tabs federn
+  herein/heraus, Tabwechsel blendet über, Sheets zoomen aus ihrem Knopf (`navigationTransition(.zoom)`),
+  Heftseiten schieben in Blätterrichtung, Seitenzahl zählt (`numericText`), Startseite erscheint
+  gestaffelt (`riseIn` wie `hv-in`), Haptik bei Auswahl. „Bewegung reduzieren“ wird beachtet.
 
 ## Aufbau
 
@@ -44,7 +49,8 @@ PencilKit zeichnet nur. Gespeichert wird ausschließlich das Strichformat des Ke
 `pen`/`marker`, CSS-Farbe, Breite, `[x, y, druck, …]`), damit PWA, Android und iPad dieselben Hefte
 zeigen und der Sync unverändert bleibt. `HeftCanvas` vergleicht nach jeder Änderung die Zeichnung mit
 dem letzten Stand (Schlüssel: `PKStroke.randomSeed`, für Kern-Striche aus der ID abgeleitet) und ruft
-`heftAddStroke`, `heftRemoveStrokes` bzw. `heftMoveStrokes` (Lasso). Breiten wie die PWA (`segW` in
+`heftAddStroke`, `heftRemoveStrokes` bzw. `heftMoveStrokes` (Lasso). Papier (liniert, kariert, Punkte,
+leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPaper.swift`). Breiten wie die PWA (`segW` in
 `web/heft.js`), Marker halbtransparent mit dreifacher Breite. Fremde Änderungen bauen die Seite neu auf.
 
 ## Bauen ohne Mac
@@ -66,7 +72,7 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
 - Sync (Cloudflare, `SyncCore` + URLSession-WebSocket), Drive, Suche, Karten, KI, Einstellungen.
 - Notiz-Editor mit Blöcken (`markdownToBlocks`) statt Rohtext.
-- Heft: Papiermuster (liniert/kariert), Seitenübersicht, Bilder und Textfelder, Formerkennung,
+- Heft: Papierwahl für neue Seiten, Seitenübersicht, Bilder und Textfelder, Formerkennung,
   Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.
 - App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.
 - Chat, Karteikarten, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
