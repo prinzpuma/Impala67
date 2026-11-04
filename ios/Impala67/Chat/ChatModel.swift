@@ -215,7 +215,7 @@ final class ChatModel {
     /// Chats löschen; den laufenden Chat nicht während seiner Antwort.
     func delete(_ ids: Set<String>) {
         let gone = ids.subtracting(running ? [chatId] : [])
-        for id in gone { attempt(try core.deleteChat(id: id), "deleteChat") }
+        for id in gone { attempt("deleteChat", { try core.deleteChat(id: id) }) }
         if gone.contains(chatId) { chatId = ""; messages = []; error = nil }
     }
 
@@ -224,7 +224,7 @@ final class ChatModel {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty, var chat = core.chat(id: id) else { return }
         chat.title = t
-        _ = attempt(try core.saveChat(chat: chat), "saveChat")
+        _ = attempt("saveChat", { try core.saveChat(chat: chat) })
     }
 
     /// Fremde Änderung am offenen Chat (Sync) nachladen.
@@ -241,7 +241,7 @@ final class ChatModel {
         let core = core
         let json = settings.providersJson
         Task.detached {
-            let list = attempt(try core.aiListModelsWith(providersJson: json), "aiListModelsWith")
+            let list = attempt("aiListModelsWith", { try core.aiListModelsWith(providersJson: json) })
             await MainActor.run {
                 if let list { self.models = list; self.modelsAt = Date() }
                 self.modelsLoading = false
@@ -322,7 +322,7 @@ final class ChatModel {
     private func persist() {
         guard !chatId.isEmpty, var chat = core.chat(id: chatId) else { return }
         chat.messages = messages
-        _ = attempt(try core.saveChat(chat: chat), "saveChat")
+        _ = attempt("saveChat", { try core.saveChat(chat: chat) })
     }
 
     /// Einfache Antwort ohne Werkzeuge und Chat (`AI.complete` der PWA: Tagesartikel); läuft im Hintergrund.

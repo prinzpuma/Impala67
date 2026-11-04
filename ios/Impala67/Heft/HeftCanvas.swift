@@ -139,7 +139,7 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Seite aus dem Kern neu aufbauen (auch nach Änderungen an Bildern und Textfeldern).
         func reload() {
-            guard let canvas, let data = attempt(try core.heftPage(pageId: pageId, heftPageId: heftPageId), "heftPage") else { return }
+            guard let canvas, let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return }
             pageSize = CGSize(width: data.width, height: data.height)
             paper.configure(size: pageSize, paper: data.paper)
             let maxSide = canvas.traitCollection.displayScale * 2
@@ -255,11 +255,11 @@ struct HeftCanvas: UIViewRepresentable {
                 known[seed] = nil
             }
             if !toRemove.isEmpty {
-                attempt(try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove), "heftRemoveStrokes")
+                attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove) })
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             for move in moves.values {
-                _ = attempt(try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy), "heftMoveStrokes")
+                _ = attempt("heftMoveStrokes", { try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy) })
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             // Erst nach dem Loslassen entscheiden, ob der Stift am Ende gehalten wurde (`HoldWatcher`).
@@ -285,7 +285,7 @@ struct HeftCanvas: UIViewRepresentable {
         private func replaceWithShape(_ stroke: PKStroke, in canvas: PKCanvasView) -> Bool {
             let c = HeftInk.coreStroke(stroke, toolWidth: (canvas.tool as? PKInkingTool)?.width ?? HeftPalette.size)
             guard let shape = heftFitShape(points: c.points),
-                  let edit = attempt(try core.heftAddShape(pageId: pageId, heftPageId: heftPageId, color: c.color, size: c.size, shape: shape), "heftAddShape"),
+                  let edit = attempt("heftAddShape", { try core.heftAddShape(pageId: pageId, heftPageId: heftPageId, color: c.color, size: c.size, shape: shape) }),
                   let id = edit.ids.first
             else { return false }
             let data = HeftStroke(id: id, tool: "shape", color: c.color, size: c.size, points: [], shape: shape)
@@ -353,14 +353,14 @@ struct HeftCanvas: UIViewRepresentable {
         private func commit(_ item: HeftSelectLayer.Item, _ frame: CGRect) {
             switch item {
             case .image(let id):
-                _ = attempt(try core.heftSetImageFrame(pageId: pageId, heftPageId: heftPageId, imageId: id,
-                                                x: frame.minX, y: frame.minY, w: frame.width, h: frame.height), "heftSetImageFrame")
+                _ = attempt("heftSetImageFrame", { try core.heftSetImageFrame(pageId: pageId, heftPageId: heftPageId, imageId: id,
+                                                x: frame.minX, y: frame.minY, w: frame.width, h: frame.height) })
             case .text(let id):
                 guard var t = text(id) else { return }
                 t.x = frame.minX
                 t.y = frame.minY
                 t.w = frame.width
-                _ = attempt(try core.heftSetText(pageId: pageId, heftPageId: heftPageId, text: t), "heftSetText")
+                _ = attempt("heftSetText", { try core.heftSetText(pageId: pageId, heftPageId: heftPageId, text: t) })
             }
             reload()
         }
@@ -369,8 +369,8 @@ struct HeftCanvas: UIViewRepresentable {
         func deleteSelection() {
             guard let item = select.selected else { return }
             switch item {
-            case .image(let id): _ = attempt(try core.heftRemoveImages(pageId: pageId, heftPageId: heftPageId, ids: [id]), "heftRemoveImages")
-            case .text(let id): _ = attempt(try core.heftRemoveTexts(pageId: pageId, heftPageId: heftPageId, ids: [id]), "heftRemoveTexts")
+            case .image(let id): _ = attempt("heftRemoveImages", { try core.heftRemoveImages(pageId: pageId, heftPageId: heftPageId, ids: [id]) })
+            case .text(let id): _ = attempt("heftRemoveTexts", { try core.heftRemoveTexts(pageId: pageId, heftPageId: heftPageId, ids: [id]) })
             }
             select.select(nil)
             link?.selection = nil
@@ -378,7 +378,7 @@ struct HeftCanvas: UIViewRepresentable {
         }
 
         func text(_ id: String) -> HeftText? {
-            (attempt(try core.heftPage(pageId: pageId, heftPageId: heftPageId), "heftPage"))?.texts.first { $0.id == id }
+            (attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }))?.texts.first { $0.id == id }
         }
 
         private func editText(_ id: String) {
@@ -397,7 +397,7 @@ struct HeftCanvas: UIViewRepresentable {
                 let loc = p.location.applying(stroke.transform)
                 polygon += [Float(loc.x), Float(loc.y)]
             }
-            let ids = (attempt(try core.heftSelectByLasso(pageId: pageId, heftPageId: heftPageId, polygon: polygon), "heftSelectByLasso")) ?? []
+            let ids = (attempt("heftSelectByLasso", { try core.heftSelectByLasso(pageId: pageId, heftPageId: heftPageId, polygon: polygon) })) ?? []
             let want = Set(ids)
             let picked = canvas.drawing.strokes.filter { s in known[s.randomSeed].map { want.contains($0.id) } ?? false }
             guard !picked.isEmpty else {
@@ -427,10 +427,10 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Striche des Lassos durch ein Textfeld an ihrer Stelle ersetzen.
         func replaceWithText(_ result: HeftOcrResult, text: String, color: String) {
-            _ = attempt(try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: result.strokeIds), "heftRemoveStrokes")
+            _ = attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: result.strokeIds) })
             let w = max(160, result.bounds.width)
-            _ = attempt(try core.heftAddText(pageId: pageId, heftPageId: heftPageId, text: text,
-                                      x: result.bounds.minX, y: result.bounds.minY, w: w, color: color, size: 30), "heftAddText")
+            _ = attempt("heftAddText", { try core.heftAddText(pageId: pageId, heftPageId: heftPageId, text: text,
+                                      x: result.bounds.minX, y: result.bounds.minY, w: w, color: color, size: 30) })
             reload()
             HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
         }
@@ -448,7 +448,7 @@ struct HeftCanvas: UIViewRepresentable {
                 c.size = original.size
             }
             guard !c.points.isEmpty,
-                  let id = attempt(try core.heftAddStroke(pageId: pageId, heftPageId: heftPageId, tool: c.tool, color: c.color, size: c.size, points: c.points), "heftAddStroke")
+                  let id = attempt("heftAddStroke", { try core.heftAddStroke(pageId: pageId, heftPageId: heftPageId, tool: c.tool, color: c.color, size: c.size, points: c.points) })
             else { return }
             known[stroke.randomSeed] = Known(
                 id: id,

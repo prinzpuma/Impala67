@@ -131,7 +131,7 @@ final class NoteModel {
         if let newTitle { savedTitle = newTitle }
         if let md { savedMarkdown = md }
         guard newTitle != nil || md != nil else { return }
-        attempt(try core.updatePage(id: pageId, title: newTitle, content: md), "updatePage")
+        attempt("updatePage", { try core.updatePage(id: pageId, title: newTitle, content: md) })
     }
 
     // MARK: Verlauf

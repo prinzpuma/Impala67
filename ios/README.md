@@ -88,7 +88,7 @@ Schalter `impala67PerformanceProfiler`, standardmäßig aus): nur Auffälligkeit
 über 100 ms (Wachhund-Thread, alle 250 ms), Fehler des Rust-Kerns, Sync- und KI-Fehler, Start über 1,5 s.
 Gleiche Einträge (Art, Name, Meldungsanfang, Version) werden zusammengefasst, höchstens 180, gespeichert in
 `impala67-performance.json` (Application Support). Kopieren und Teilen als JSON. Kern-Aufrufe laufen über
-`attempt(try core.…(), "name")` statt `try?`, damit Fehler mit Aufrufstelle im Protokoll landen.
+`attempt("name", { try core.…() })` statt `try?`, damit Fehler mit Aufrufstelle im Protokoll landen.
 
 ## App-Icon
 

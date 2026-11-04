@@ -112,7 +112,7 @@ final class AppModel {
 
     private func saveCheckpoint() {
         guard let core = store?.core else { return }
-        Task.detached(priority: .utility) { _ = attempt(try core.saveCheckpoint(), "saveCheckpoint") }
+        Task.detached(priority: .utility) { _ = attempt("saveCheckpoint", { try core.saveCheckpoint() }) }
     }
 
     /// Frühestens in einer Stunde; iOS entscheidet je nach Nutzung, wann wirklich.

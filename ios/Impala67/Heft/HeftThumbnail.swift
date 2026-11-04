@@ -9,7 +9,7 @@ enum HeftThumbnail {
     /// eingefügten Bilder (Vorschau klein, Export groß).
     static func render(core: ImpalaCore, pageId: String, heftPageId: String, width: CGFloat, scale: CGFloat,
                        imagePixels: Int = 512) -> UIImage? {
-        guard let data = attempt(try core.heftPage(pageId: pageId, heftPageId: heftPageId), "heftPage"), data.width > 0 else { return nil }
+        guard let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }), data.width > 0 else { return nil }
         let size = CGSize(width: data.width, height: data.height)
         let k = width / size.width
         let strokes = data.strokes.compactMap { HeftInk.pkStroke($0, seed: HeftInk.seed($0.id)) }

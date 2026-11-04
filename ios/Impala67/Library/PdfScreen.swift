@@ -59,7 +59,7 @@ struct PdfScreen: View {
         let core = store.core
         let name = Self.fileName(PageStyle.title(page))
         let loaded: (Data, URL?)? = await Task.detached {
-            guard let file = attempt(try core.file(id: id), "file") else { return nil }
+            guard let file = attempt("file", { try core.file(id: id) }) ?? nil else { return nil }
             // Für „Teilen“ eine Kopie mit lesbarem Namen ablegen.
             let url = FileManager.default.temporaryDirectory.appending(path: name)
             return (file.bytes, (try? file.bytes.write(to: url)) != nil ? url : nil)

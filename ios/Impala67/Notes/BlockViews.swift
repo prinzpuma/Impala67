@@ -490,7 +490,7 @@ private struct NoteImage: View {
             guard let id = blobId(src) else { return }
             let core = store.core
             image = await Task.detached {
-                guard let file = attempt(try core.file(id: id), "file") else { return nil }
+                guard let file = attempt("file", { try core.file(id: id) }) ?? nil else { return nil }
                 return UIImage(data: file.bytes)?.preparingThumbnail(of: CGSize(width: 1600, height: 1600))
             }.value
         }
@@ -512,7 +512,7 @@ private struct FileCard: View {
 
     var body: some View {
         LinkCard(icon: "paperclip", label: name.isEmpty ? "Datei" : name) {
-            guard let id = blobId(src), let file = attempt(try store.core.file(id: id), "file") else { return }
+            guard let id = blobId(src), let file = attempt("file", { try store.core.file(id: id) }) ?? nil else { return }
             let url = FileManager.default.temporaryDirectory.appending(path: name.isEmpty ? (file.name.isEmpty ? "Datei" : file.name) : name)
             if (try? file.bytes.write(to: url)) != nil { preview = url }
         }

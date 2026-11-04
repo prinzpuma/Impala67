@@ -46,7 +46,7 @@ struct PageTree: View {
                             guard id != page.id else { return }
                             dropped {
                                 store.core.dropPage(id, onto: page, zone: zone)
-                                if zone == .into { attempt(try store.core.setTreeOpen(key: page.id, open: true), "setTreeOpen") }
+                                if zone == .into { attempt("setTreeOpen", { try store.core.setTreeOpen(key: page.id, open: true) }) }
                             }
                         }
                     case let .empty(workspaceId):
@@ -74,7 +74,7 @@ struct PageTree: View {
             TextField("Titel", text: $renameText)
             Button("Abbrechen", role: .cancel) {}
             Button("Speichern") {
-                if let p = renaming, renameText != p.title { attempt(try store.core.updatePage(id: p.id, title: renameText, content: nil), "updatePage") }
+                if let p = renaming, renameText != p.title { attempt("updatePage", { try store.core.updatePage(id: p.id, title: renameText, content: nil) }) }
             }
         }
     }
@@ -96,17 +96,17 @@ struct PageTree: View {
         }
         MenuItem("Archivieren", icon: "archive") {
             shell.close(page.id)
-            attempt(try store.core.archivePage(id: page.id), "archivePage")
+            attempt("archivePage", { try store.core.archivePage(id: page.id) })
         }
         MenuItem("Löschen", icon: "trash", role: .destructive) {
             shell.close(page.id)
-            attempt(try store.core.trashPage(id: page.id), "trashPage")
+            attempt("trashPage", { try store.core.trashPage(id: page.id) })
         }
     }
 
     private func toggle(_ key: String) {
         let open = TreeRows.read(store.core).isCollapsed(key)
-        attempt(try store.core.setTreeOpen(key: key, open: open), "setTreeOpen")
+        attempt("setTreeOpen", { try store.core.setTreeOpen(key: key, open: open) })
     }
 
     /// Abgelegt: Kern verschiebt, Zeilen gleiten an ihren Platz, kurze Haptik.
@@ -117,7 +117,7 @@ struct PageTree: View {
 
     private func create(_ choice: NewPageChoice, parent: String?, workspace: String?) {
         let id = store.core.createNew(choice, parent: parent, workspace: workspace)
-        if let parent { attempt(try store.core.setTreeOpen(key: parent, open: true), "setTreeOpen") }
+        if let parent { attempt("setTreeOpen", { try store.core.setTreeOpen(key: parent, open: true) }) }
         if let id { shell.open(id) }
     }
 }

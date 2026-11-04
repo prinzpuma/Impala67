@@ -237,21 +237,13 @@ private final class HangWatchdog: Thread, @unchecked Sendable {
     }
 }
 
-/// Wie `try?`, aber ein Fehler landet im Profiler (Art `core-error`, mit Aufrufstelle), statt still zu
-/// verschwinden. Aufruf: `attempt(try core.trashPage(id: id), "trashPage")`.
-@discardableResult
-func attempt<T>(_ body: @autoclosure () throws -> T, _ op: String = "", file: String = #fileID, line: Int = #line) -> T? {
-    do {
-        return try body()
-    } catch {
-        Profiler.shared.coreError(error, op: op, file: file, line: line)
-        return nil
-    }
-}
 
-/// Für Kern-Aufrufe, die selbst schon optional liefern: flach wie `try?` (kein `T??`).
+/// Wie `try?`, aber ein Fehler landet im Profiler (Art `core-error`, mit Aufrufstelle), statt still zu
+/// verschwinden. Aufruf: `attempt("trashPage", { try core.trashPage(id: id) })`. Ausdrückliche Closure statt
+/// `@autoclosure`: Ein `try` im Argument würde sonst die umgebende Closure zur werfenden machen. Liefert der
+/// Kern selbst schon optional, mit `?? nil` flach machen.
 @discardableResult
-func attempt<T>(_ body: @autoclosure () throws -> T?, _ op: String = "", file: String = #fileID, line: Int = #line) -> T? {
+func attempt<T>(_ op: String, _ body: () throws -> T, file: String = #fileID, line: Int = #line) -> T? {
     do {
         return try body()
     } catch {

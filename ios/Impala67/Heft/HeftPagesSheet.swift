@@ -175,11 +175,11 @@ struct HeftPagesSheet: View {
 
     @ViewBuilder
     private func menu(_ id: String) -> some View {
-        let paper = (attempt(try store.core.heftPage(pageId: pageId, heftPageId: id), "heftPage")?.paper) ?? ""
+        let paper = (attempt("heftPage", { try store.core.heftPage(pageId: pageId, heftPageId: id) })?.paper) ?? ""
         Menu {
             ForEach(HeftPaperKind.allCases) { kind in
                 Button {
-                    _ = attempt(try store.core.heftSetPaper(pageId: pageId, heftPageId: id, paper: kind.rawValue), "heftSetPaper")
+                    _ = attempt("heftSetPaper", { try store.core.heftSetPaper(pageId: pageId, heftPageId: id, paper: kind.rawValue) })
                     onChanged()
                 } label: {
                     Label(kind.label, systemImage: kind.rawValue == paper ? "checkmark" : kind.symbol)
@@ -230,7 +230,7 @@ struct HeftPagesSheet: View {
     }
 
     private func move(_ id: String, to index: Int) {
-        _ = attempt(try store.core.heftMovePage(pageId: pageId, heftPageId: id, to: UInt32(index)), "heftMovePage")
+        _ = attempt("heftMovePage", { try store.core.heftMovePage(pageId: pageId, heftPageId: id, to: UInt32(index)) })
         onChanged()
     }
 

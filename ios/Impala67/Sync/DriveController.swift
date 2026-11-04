@@ -173,7 +173,7 @@ final class DriveController {
         set {
             if let data = try? JSONSerialization.data(withJSONObject: ["driveAutoSyncMinutes": newValue]),
                let patch = String(data: data, encoding: .utf8) {
-                attempt(try store.core.updateSettings(patchJson: patch), "updateSettings")
+                attempt("updateSettings", { try store.core.updateSettings(patchJson: patch) })
             }
             if foreground && connected { startInterval() }
         }

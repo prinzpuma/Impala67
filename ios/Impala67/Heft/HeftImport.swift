@@ -18,15 +18,15 @@ enum HeftImport {
     /// Bild auf die Seite `heftPageId` legen; liefert die Bild-ID.
     @discardableResult
     static func insertImage(core: ImpalaCore, pageId: String, heftPageId: String, image: UIImage) -> String? {
-        guard let page = attempt(try core.heftPage(pageId: pageId, heftPageId: heftPageId), "heftPage"),
+        guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }),
               let (data, size) = jpeg(image, maxEdge: insertMaxEdge) else { return nil }
         let sw = Double(size.width), sh = Double(size.height)
         let k = min(page.width * 0.7 / sw, page.height * 0.7 / sh, 1)
         let w = sw * k, h = sh * k
-        return attempt(try core.heftAddImage(
+        return attempt("heftAddImage", { try core.heftAddImage(
             pageId: pageId, heftPageId: heftPageId, bytes: data, mime: "image/jpeg",
             x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h
-        ), "heftAddImage")?.ids.first
+        ) })?.ids.first
     }
 
     /// Neue Seite mit `image` an Stelle `at` (nil = am Ende); `bleed` = randlos (PDF, Scan). Liefert die Seiten-ID.
@@ -34,19 +34,19 @@ enum HeftImport {
     static func addImagePage(core: ImpalaCore, pageId: String, image: UIImage, at: Int?, bleed: Bool,
                              paper: String = "blank", text: String? = nil) -> String? {
         guard let (data, size) = jpeg(image, maxEdge: pageMaxEdge),
-              let id = attempt(try core.heftAddPage(pageId: pageId, at: at.map { UInt32($0) }, paper: paper), "heftAddPage"),
-              let page = attempt(try core.heftPage(pageId: pageId, heftPageId: id), "heftPage") else { return nil }
+              let id = attempt("heftAddPage", { try core.heftAddPage(pageId: pageId, at: at.map { UInt32($0) }, paper: paper) }),
+              let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return nil }
         let pad: Double = bleed ? 0 : 40
         let sw = Double(size.width), sh = Double(size.height)
         let k = min((page.width - pad * 2) / sw, (page.height - pad * 2) / sh)
         let w = sw * k, h = sh * k
-        guard let imageId = attempt(try core.heftAddImage(
+        guard let imageId = attempt("heftAddImage", { try core.heftAddImage(
             pageId: pageId, heftPageId: id, bytes: data, mime: "image/jpeg",
             x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h
-        ), "heftAddImage")?.ids.first else { return id }
+        ) })?.ids.first else { return id }
         if let text, text.count >= 20 {
-            _ = attempt(try core.heftSetImageText(pageId: pageId, heftPageId: id, imageId: imageId, text: text), "heftSetImageText")
-            _ = attempt(try core.heftSetPageText(pageId: pageId, heftPageId: id, text: text), "heftSetPageText")
+            _ = attempt("heftSetImageText", { try core.heftSetImageText(pageId: pageId, heftPageId: id, imageId: imageId, text: text) })
+            _ = attempt("heftSetPageText", { try core.heftSetPageText(pageId: pageId, heftPageId: id, text: text) })
         }
         return id
     }

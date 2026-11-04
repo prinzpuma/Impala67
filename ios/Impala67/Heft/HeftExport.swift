@@ -24,7 +24,7 @@ enum HeftExport {
 
     /// SVG der Seite `heftPageId` (Papiermuster in der Linienfarbe der PWA).
     static func svg(core: ImpalaCore, pageId: String, heftPageId: String) -> URL? {
-        guard let svg = attempt(try core.heftPageSvg(pageId: pageId, heftPageId: heftPageId, paperInk: "#2478c7"), "heftPageSvg") else { return nil }
+        guard let svg = attempt("heftPageSvg", { try core.heftPageSvg(pageId: pageId, heftPageId: heftPageId, paperInk: "#2478c7") }) else { return nil }
         let n = (core.heftPageIds(pageId: pageId).firstIndex(of: heftPageId) ?? 0) + 1
         return write(Data(svg.utf8), name: fileName(core, pageId) + "-seite-\(n).svg")
     }

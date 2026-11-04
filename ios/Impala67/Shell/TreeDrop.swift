@@ -152,7 +152,7 @@ struct MovePageSheet: View {
             List(store.core.moveTargets(for: page.id)) { t in
                 Button {
                     withAnimation(.snappy(duration: 0.3)) { store.core.move(page.id, to: t) }
-                    if let parent = t.pageId { attempt(try store.core.setTreeOpen(key: parent, open: true), "setTreeOpen") }
+                    if let parent = t.pageId { attempt("setTreeOpen", { try store.core.setTreeOpen(key: parent, open: true) }) }
                     dismiss()
                 } label: {
                     HStack(spacing: Space.s2) {

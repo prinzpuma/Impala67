@@ -90,7 +90,7 @@ final class SyncController {
         deviceKey = key
         if let data = try? JSONSerialization.data(withJSONObject: ["cfUrl": url, "cfSyncKey": key]),
            let patch = String(data: data, encoding: .utf8) {
-            attempt(try store.core.updateSettings(patchJson: patch), "updateSettings")
+            attempt("updateSettings", { try store.core.updateSettings(patchJson: patch) })
         }
         return nil
     }
