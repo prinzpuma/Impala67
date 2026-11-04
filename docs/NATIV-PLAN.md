@@ -136,6 +136,8 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    `impala-ffi/src/cloze.rs`, JS in `web/extras.js`) bis die PWA sie über den WASM-Kern nutzt; KI-Chats werden erst
    am Lauf-Ende gespeichert.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
+   Begonnen in `ios/` (Aufbau und Bauen ohne Mac: `ios/README.md`): Seitenleiste, Notiz als Text, Heft mit
+   PencilKit im Strichformat des Kerns; Build als unsignierte `.ipa` über `.github/workflows/ios-build.yml`.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
 

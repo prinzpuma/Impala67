@@ -92,7 +92,8 @@ Stand: v2.2.86 (28. Oktober 2026)
   - [ ] Heft-Editor: Speichern serialisiert die ganze Arbeitskopie für den Diff (≈ 50 ms bei 2000 Strichen, wie vorher) – nur geänderte Seiten übergeben.
   - [ ] Start vom Checkpoint ≈ 15–30 % langsamer als die JS-Fassung (Text-Übergabe an WASM, `opt-level = "z"`); Kern-Zustand als Binärformat oder Teile je Sammlung prüfen.
   - [ ] Sync: WASM-Größe senken.
-  - [ ] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe.
+  - [x] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe (`core/impala-ffi`).
+  - [ ] iPad-App nativ (`ios/`, Stand und offene Punkte in `ios/README.md`): erster CI-Build und Test auf dem Gerät, dann Sync.
   - [x] PWA: RAG-Index als WASM im Worker.
   - [ ] WASM-Größe (2,29 MB mit Datenmodell): `opt-level` (gemessen: `3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in impala-ai ersetzen.
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.

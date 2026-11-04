@@ -1,0 +1,52 @@
+name: iPad-App bauen
+
+# Baut die native iPad-App samt Rust-Kern auf einem macOS-Runner (ohne eigenen Mac) und legt eine
+# unsignierte Impala67.ipa als Artefakt ab. Installation mit AltStore, SideStore oder Sideloadly
+# (signieren mit der eigenen Apple-ID). Schlägt fehl, wenn die committeten Swift-Bindings veraltet sind.
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - 'core/impala-ffi/**'
+      - 'tools/ios-core.mjs'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Rust Cache einrichten
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "core -> target"
+
+      - name: Rust-Kern für iOS bauen
+        run: node tools/ios-core.mjs
+      - name: Swift-Bindings aktuell?
+        run: git diff --exit-code -- ios/Bindings ios/Impala67/Core/Generated || { echo "::error::Bindings veraltet – npm run build:ios-core ausführen und die Dateien committen."; exit 1; }
+
+      - name: Xcode-Projekt erzeugen
+        working-directory: ios
+        run: brew install xcodegen && xcodegen generate
+      - name: App bauen (unsigniert)
+        working-directory: ios
+        run: |
+          xcodebuild -project Impala67.xcodeproj -scheme Impala67 -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: .ipa packen
+        working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Impala67.app Payload/
+          zip -qry Impala67.ipa Payload
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Impala67-ipa
+          path: ios/Impala67.ipa
+          retention-days: 14
