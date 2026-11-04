@@ -186,6 +186,10 @@ fn field<'v>(json: &'v Option<Value>, key: &str) -> Option<&'v Value> {
     json.as_ref().and_then(|v| v.get(key))
 }
 
+fn is_error(json: &str) -> bool {
+    field(&serde_json::from_str(json).ok(), "error").is_some_and(js::truthy)
+}
+
 struct Run<'a, P: LlmProvider, E: ToolExecutor> {
     provider: &'a P,
     executor: &'a mut E,
@@ -338,6 +342,8 @@ pub async fn run_agent(
 
     let mut run = Run { provider, executor, cancel, on_event, messages, edits: vec![] };
     let mut nudged = false;
+    // Kleine Modelle wiederholen einen abgelehnten Aufruf sonst bis MAX_STEPS unverändert.
+    let mut failed_calls: Vec<String> = vec![];
     for _ in 0..MAX_STEPS {
         run.check()?;
         (run.on_event)(AgentEvent::Draft(""));
@@ -430,6 +436,14 @@ pub async fn run_agent(
                 run.finish_tool(call, Some("unbekanntes Werkzeug"), error_json(&msg));
                 continue;
             }
+            let call_key = format!("{name}:{args}");
+            if failed_calls.contains(&call_key) {
+                let msg = format!(
+                    "Dieser {name}-Aufruf ist mit genau diesen Argumenten schon fehlgeschlagen. Nicht wiederholen: Argumente laut der Fehlermeldung korrigieren oder dem Nutzer antworten."
+                );
+                run.finish_tool(call, Some("wiederholter Fehlaufruf"), error_json(&msg));
+                continue;
+            }
             if name == "change" {
                 let (json, undo, detail) = match change_confirmation(&args) {
                     None => {
@@ -449,6 +463,9 @@ pub async fn run_agent(
                         }
                     }
                 };
+                if is_error(&json) {
+                    failed_calls.push(call_key);
+                }
                 run.finish_tool(call, detail.as_deref(), json.clone());
                 run.record_change(&json, undo);
                 continue;
@@ -466,6 +483,9 @@ pub async fn run_agent(
                 continue;
             }
             let (json, _) = run.run_tool(name, &args).await;
+            if is_error(&json) {
+                failed_calls.push(call_key);
+            }
             run.finish_tool(call, Some(&tool_detail(name, &args, req.embed_model)), json);
         }
         if !pending_images.is_empty() {

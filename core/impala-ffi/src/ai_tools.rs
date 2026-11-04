@@ -1201,24 +1201,20 @@ fn validate_op(op: &Value) -> Option<&'static str> {
             if has_text(op, &["title"]) && (has_field(op, "content") || has_field(op, "text")) {
                 return None;
             } else {
-                "title oder content fehlt"
+                "braucht title und content"
             }
         }
         "page.patch" => {
-            if has_text(op, &["title", "search"])
-                && has_text(op, &["search"])
-                && (has_field(op, "replace") || has_field(op, "content"))
-                && has_text(op, &["title"])
-            {
+            if has_text(op, &["title"]) && has_text(op, &["search"]) && (has_field(op, "replace") || has_field(op, "content")) {
                 return None;
             }
-            "title, search oder replace fehlt"
+            "braucht title, search (exakter Text, der schon in der Seite steht) und replace (neuer Text)"
         }
         "page.rename" => {
             if has_text(op, &["title"]) && has_text(op, &["to"]) {
                 return None;
             } else {
-                "title oder neuer Name fehlt"
+                "braucht title und to (neuer Name)"
             }
         }
         "page.move" | "page.trash" | "page.archive" | "page.unarchive" => {
@@ -1233,10 +1229,16 @@ fn validate_op(op: &Value) -> Option<&'static str> {
         }
         "card.create" => {
             return match op.get("cards").and_then(Value::as_array) {
-                Some(cards) => (cards.is_empty()
-                    || !cards.iter().all(|c| has_text(c, &["front"]) && has_field(c, "back")))
-                .then_some("Karten brauchen front und back"),
-                None => (!(has_text(op, &["front"]) && has_field(op, "back"))).then_some("front oder back fehlt"),
+                None if !has_text(op, &["front"]) => Some(
+                    r#"cards fehlt – die Karten selbst gehören in den Aufruf: "cards": [{"front": "Frage", "back": "Antwort"}, …] (limit gibt es bei card.create nicht)"#,
+                ),
+                None if !has_field(op, "back") => Some("back fehlt"),
+                Some(cards) if cards.is_empty() => Some(r#"cards ist leer – mindestens eine Karte {"front": …, "back": …} angeben"#),
+                Some(cards) if !cards.iter().all(|c| has_text(c, &["front"]) && has_field(c, "back")) => {
+                    Some("jede Karte in cards braucht front und back")
+                }
+                _ if !has_text(op, &["deck"]) => Some("deck fehlt (Stapelname, z. B. der Name aus deck.create)"),
+                _ => None,
             };
         }
         "card.update" => {
@@ -1245,7 +1247,7 @@ fn validate_op(op: &Value) -> Option<&'static str> {
             {
                 return None;
             } else {
-                "Karte oder neue Werte fehlen"
+                "braucht front (bisherige Vorderseite) und new_front, new_back oder to"
             }
         }
         "card.move" => {
@@ -1258,7 +1260,7 @@ fn validate_op(op: &Value) -> Option<&'static str> {
             return (!has_text(op, &["front", "fronts", "deck", "query"])).then_some("Karten-Auswahl fehlt");
         }
         "card.reset" => return (!has_text(op, &["front"])).then_some("front fehlt"),
-        "deck.create" => return (!has_text(op, &["deck", "title"])).then_some("Stapelname fehlt"),
+        "deck.create" => return (!has_text(op, &["deck", "title"])).then_some("braucht deck (Stapelname)"),
         "deck.rename" => {
             if has_text(op, &["deck"]) && has_text(op, &["to"]) {
                 return None;

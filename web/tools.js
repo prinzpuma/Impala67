@@ -282,23 +282,33 @@ export const TOOLS = (() => {
 		switch (name) {
 			case "page.create": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.append":
-			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "title oder content fehlt";
-			case "page.patch": return hasText(op, "title") && hasText(op, "search") && (hasField(op, "replace") || hasField(op, "content")) ? "" : "title, search oder replace fehlt";
-			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "title oder neuer Name fehlt";
+			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "braucht title und content";
+			case "page.patch": return hasText(op, "title") && hasText(op, "search") && (hasField(op, "replace") || hasField(op, "content")) ? "" : "braucht title, search (exakter Text, der schon in der Seite steht) und replace (neuer Text)";
+			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "braucht title und to (neuer Name)";
 			case "page.move": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.trash": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.archive":
 			case "page.unarchive": return hasText(op, "title") ? "" : "title fehlt";
 			case "heft.append": return hasText(op, "title") && hasText(op, "text", "content") ? "" : "Hefttitel oder Text fehlt";
-			case "card.create": return Array.isArray(op.cards) ? (op.cards.length && op.cards.every((card) => hasText(card, "front") && hasField(card, "back") ? true : false) ? "" : "Karten brauchen front und back") : (hasText(op, "front") && hasField(op, "back") ? "" : "front oder back fehlt");
-			case "card.update": return hasText(op, "front", "query") && (hasField(op, "new_front") || hasField(op, "new_back") || hasField(op, "back") || hasField(op, "to")) ? "" : "Karte oder neue Werte fehlen";
+			case "card.create": {
+				if (!Array.isArray(op.cards)) {
+					if (!hasText(op, "front")) return 'cards fehlt – die Karten selbst gehören in den Aufruf: "cards": [{"front": "Frage", "back": "Antwort"}, …] (limit gibt es bei card.create nicht)';
+					if (!hasField(op, "back")) return "back fehlt";
+				} else if (!op.cards.length) {
+					return 'cards ist leer – mindestens eine Karte {"front": …, "back": …} angeben';
+				} else if (!op.cards.every((card) => hasText(card, "front") && hasField(card, "back"))) {
+					return "jede Karte in cards braucht front und back";
+				}
+				return hasText(op, "deck") ? "" : "deck fehlt (Stapelname, z. B. der Name aus deck.create)";
+			}
+			case "card.update": return hasText(op, "front", "query") && (hasField(op, "new_front") || hasField(op, "new_back") || hasField(op, "back") || hasField(op, "to")) ? "" : "braucht front (bisherige Vorderseite) und new_front, new_back oder to";
 			case "card.move":
 				if (!hasText(op, "to")) return "Zielstapel fehlt";
 				return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
 			case "card.trash":
 			case "card.suspend": return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
 			case "card.reset": return hasText(op, "front") ? "" : "front fehlt";
-			case "deck.create": return hasText(op, "deck", "title") ? "" : "Stapelname fehlt";
+			case "deck.create": return hasText(op, "deck", "title") ? "" : "braucht deck (Stapelname)";
 			case "deck.rename": return hasText(op, "deck") && hasText(op, "to") ? "" : "Stapel oder neuer Name fehlt";
 			case "deck.move": return hasText(op, "deck") && hasField(op, "to") ? "" : "Stapel oder Ziel fehlt";
 			case "deck.trash": return hasText(op, "deck") ? "" : "Stapel fehlt";
