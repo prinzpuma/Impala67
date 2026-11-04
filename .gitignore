@@ -53,3 +53,10 @@ code.zip
 # Kladaba / Uni-Scraper Session-Cookies
 tools/kladaba-sync/kladaba_*.json
 
+
+# AI Finetuning & QLoRA
+training/outputs/
+training/data/*.jsonl
+training/data/fixtures/
+training/*.gguf
+training/.venv/

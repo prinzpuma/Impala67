@@ -135,9 +135,9 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    Google-Konto, echtem KI-Anbieter und echtem Embedding-Modell; Cloze-Regeln liegen doppelt (Rust in
    `impala-ffi/src/cloze.rs`, JS in `web/extras.js`) bis die PWA sie über den WASM-Kern nutzt; KI-Chats werden erst
    am Lauf-Ende gespeichert.
-4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz.
-   Begonnen in `ios/` (Aufbau und Bauen ohne Mac: `ios/README.md`): Seitenleiste, Notiz als Text, Heft mit
-   PencilKit im Strichformat des Kerns; Build als unsignierte `.ipa` über `.github/workflows/ios-build.yml`.
+4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz. Beschlossen am 4. November 2026,
+   Details siehe „iPad-App“ unten. Begonnen in ios/ (Aufbau und Bauen ohne Mac: ios/README.md): Seitenleiste,
+   Notiz als Text, Heft mit PencilKit im Strichformat des Kerns; Build als unsignierte .ipa über .github/workflows/ios-build.yml.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
 
@@ -215,13 +215,44 @@ Gesamt: 242 Tests grün, `cargo clippy -D warnings` sauber, alles außer ONNX/SQ
 (Vision, ML Kit) oder `ort`. Das Bekko-Embedding-Modell war im Container nicht ladbar, Ende-zu-Ende ungeprüft.
 Rust-Code ist meist 1,5–2× länger als das JS (Typen, Doku, JS-genaue Zahlen-/Text-Semantik).
 
-## iOS ohne Mac
+## iPad-App (beschlossen 4. November 2026)
 
-- Swift unter Windows schreiben (VS Code + Swift-Erweiterung); kein Simulator, keine SwiftUI-Vorschau.
-- Build über GitHub Actions (macOS-Runner, `xcodebuild`) → unsignierte `.ipa` als Artefakt.
-- Installation mit kostenloser Apple-ID über **AltStore**, **SideStore** oder **Sideloadly**
-  (7 Tage gültig, max. 3 Apps, kein iCloud/Push).
-- Später sinnvoll: gebrauchter Mac mini (M1) für schnelle Iterationen.
+**Ziel**: zuerst nur iPad (Gerät mit Apple Intelligence). iPhone später.
+
+**Aufbau** wie bei Android: SwiftUI-Oberfläche über `impala-ffi` (UniFFI-Swift-Bindings). Logik nur im Kern,
+Swift liefert Oberfläche und Plattform-Anbindung (URLSession, Keychain, WebSocket, Timer).
+
+**Heft: PencilKit zeichnet, der Kern speichert** (Muster von `android/…/heft/HeftInk.kt` mit `androidx.ink`):
+- Neue Striche nimmt eine durchsichtige `PKCanvasView` auf (Apples Latenz und Stiftgefühl). Ein fertiger Strich
+  wird in `[x, y, druck, …]` umgewandelt und über `heft_apply` (`HeftChange::AddStroke`) gespeichert; eine
+  Zuordnungstabelle merkt sich Strich-ID ↔ `PKStroke`.
+- Angezeigt wird eine `PKDrawing`, die aus den Kernstrichen aufgebaut wird (auch nach Sync-Änderungen).
+- Gespeichert wird nur das Kernformat; ein Strich darf auf dem iPad etwas anders aussehen als in der PWA.
+- Radierer, Lasso, Formen, Rückgängig sind eigene Werkzeuge über den Kern (`heft_strokes_at`, `heft_apply`,
+  `heft_apply_ops`), nicht die PencilKit-Werkzeuge – so muss die Zeichnung nie mit dem Kern abgeglichen werden.
+- Papier (Linien, Karos) und Bilder liegen als eigene Ebene unter der `PKCanvasView`.
+- Apple Pencil Pro: Squeeze/Doppeltippen (`UIPencilInteraction`), Barrel Roll (`rollAngle`), Hover.
+- Smart Script und Math Notes haben keine öffentliche API → nicht eingeplant.
+
+**Oberfläche**: 3 Spalten mit `NavigationSplitView`, Liquid Glass (`.glassEffect()`, `GlassEffectContainer`, ab
+iPadOS 26). Schmale Breiten nur für Split View/Slide Over.
+
+**KI**: zuerst über die vorhandenen API-Anbieter im Kern (`AiAssistant`, Swift liefert nur den Netzzugang).
+Apple Foundation Models (`@Generable`, ~4k Tokens Kontext) kommt später als `LlmProvider` – sinnvoll, sobald das
+neue Siri in der EU verfügbar ist. Lokale Embeddings zurückgestellt. Keine Abhängigkeit von Siri.
+
+**Reihenfolge**: Kern-Anbindung und Seitenliste → Heft (Stift, Radierer, Lasso) → Cloudflare-Sync und Drive →
+Editor und Karteikarten → Layout-Feinschliff → Foundation Models.
+
+### iOS ohne Mac
+
+- Kein Mac geplant. Swift unter Windows schreiben (VS Code + Swift-Erweiterung); kein Simulator, keine SwiftUI-Vorschau.
+- Gebaut und installiert wird erst, wenn die App größtenteils steht. Bis dahin je größerer Etappe ein reiner
+  Compile-Lauf in GitHub Actions (macOS-Runner, `xcodebuild build`, unsigniert), um Fehler früh zu finden.
+- Rust-Kern für `aarch64-apple-ios` als XCFramework, ebenfalls nur auf dem macOS-Runner.
+- Build → unsignierte `.ipa` als Artefakt; Installation mit kostenloser Apple-ID über **SideStore**
+  (7 Tage gültig, Auto-Refresh; max. 3 Apps, 10 App-IDs pro Woche, kein iCloud/Push). Sync startet beim Öffnen
+  und gelegentlich per `BGAppRefreshTask`.
 
 ## Nutzen für die PWA
 

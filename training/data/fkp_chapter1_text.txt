@@ -1,0 +1,255 @@
+
+--- Seite 1 ---
+Kapitel 1: Struktur der Festkörper
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 1
+Prof. Dr. Oliver Paul
+Professur für Materialien der Mikrosystemtechnik
+IMTEK, Technische Fakultät
+Vorlesung Festkörperphysik
+--- Seite 2 ---
+Makroskopische Morphologie –Phänomenologie
+Beispiel 1: Kochsalz, 
+Natriumchlorid (NaCl)
+Rechte Winkel, Würfelgeometrie
+transparent, wasserlöslich
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 2
+Quelle: Wikipedia “Kochsalz”, Bildautor włodi, 
+Lizenz CC BY-SA 2.0
+Beispiel 2: Quarz, Bergkristall 
+Siliziumdioxid (SiO2)
+Hexagonal (60°/120°-Winkel),
+Längsachse, transparent
+Beispiel 3: Silizium (Si), 
+einkristalliner Wafer, KOH-geätzt
+35,3° / 54,7° / 109,5°
+grau, opak
+Quelle: Wikipedia “Quarz”, Bildautor Didier 
+Descouens, Lizenz CC BY-SA 4.0
+
+--- Seite 3 ---
+Platonische Körper
+Tetraeder
+„Vierseiter“, 
+4 gleichseitige 
+Dreiecke
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 3
+Dodekaeder
+“Zwölfseiter“, 
+12 regelmäßige 
+Fünfecke
+Oktaeder
+„Achtseiter“, 
+8 gleichseitige 
+Dreiecke
+Würfel
+6 Quadrate
+Ikosaeder
+„Zwanzigseiter“, 
+20 gleichseitige 
+Dreiecke
+
+--- Seite 4 ---
+Visualisierung der mikroskopischen Struktur der Materie
+Hochauflösende Transmissionselektronenmikroskopie  (HRTEM = high resolution TEM)
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 4
+Quelle: Wikipedia commons,Category:
+Transmission electron microscopes
+Bildautor Klingm01, Lizenz CC BY-SA 4.0
+(bearbeitet: Ausschnitt)
+Quelle: Wikipedia „Transmissions-
+elektronenmikroskop“
+Bildautor Uwe Falke, Lizenz CC BY 2.5
+Quelle: Wikipedia „Transmissions-
+elektronenmikroskop“, Bildautor Johannes 
+Schneider, Lizenz CC BY-SA 4.0
+--- Seite 5 ---
+Visualisierung der mikroskopischen Struktur der Materie
+Rastertunnelmikroskopie (STM = Scanning tunneling microscopy)
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 5
+Quelle: Wikipedia „Rastertunnelmikroskop“, 
+Bildautor Frank Trixler, LMU, adapted 
+fromLMU/CeNS: Organic Semiconductor Group-
+Lizenz CC BY 2.5
+Quelle: Wikipedia „Rastertunnelmikroskop“, 
+Bildautor Frank Trixler, LMU, adapted 
+fromLMU/CeNS: Organic Semiconductor Group, 
+Lizenzgemeinfrei
+--- Seite 6 ---
+Das Kristallgitter
+Schlussfolgerung
+Die makroskopische Geometrie ist Ausdruck einer mikroskopischen Regelmäßigkeit
+Kristalle haben einen periodischen Aufbau von sich wiederholenden gleichen Einheiten
+Das Kristallgitter ist die geometrische Abstraktion dieses Aufbaus in Form einer Punkteanordnung
+Auch Punktgitter genannt
+Ausgangspunkt 𝐫!=x!,y!,z!, oEdA: 𝐫!=(0,0,0)
+3 unabhängige 3D Translationsvektoren: 𝐚", 𝐚#, 𝐚$
+Elementarzelle (auch Einheitszelle) aufgespannt von 𝐚", 𝐚#, 𝐚$
+Alle Punkte des Gitters sind definiert durch
+ 
+n"𝐚"+n#𝐚# +n$𝐚$ sind sogenannte Gittervektoren
+Gitterkonstante: Länge günstiger Translationsvektoren, z.B. die kubische Gitterkonstante a
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 6
+𝐫!!!"!#=n"𝐚"+n#𝐚#+n$𝐚$    mit n",n#,n$∈ℤ Kubisch𝐚"⊥𝐚#⊥𝐚$⊥𝐚"
+a"=a#=a$=a
+Allgemein (triklin)
+α,β,γ≠90°,60°
+α≠β≠γ≠α
+a"≠a#≠a$≠a"
+
+--- Seite 7 ---
+Das Kristallgitter
+Gitteraufbau
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 7
+𝐫!!!"!#	=	 n"𝐚"	 +n#𝐚#	 +n$𝐚$
+
+--- Seite 8 ---
+Das Kristallgitter
+Befüllung des Gitters mit Materie 
+(hier: Kugeln)
+Die mit Gitterperiodizität wiederholte
+Einheit ist die sogenannte Basis:
+ - Atom, Elemente des 
+  Periodensystems
+ - Gruppe aus mehreren, gleichen 
+  oder verschiedenen Atomen 
+ - Komplexes Molekül, 
+  z.B. Mineralien, Proteine
+ - Elektronendichteverteilung 
+  Röntgenstreuung (Kap. 2)
+  Eigenschaften: optische, elektronische, 
+  magnetische, thermische 
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 8
+Einatomige Basis
+Zweiatomige 
+Basis
+Vieratomige Basis
+Achtatomige 
+Basis
+
+--- Seite 9 ---
+Elementarzelle und Basis
+Nichteindeutigkeit der Translationsvektoren, der Elementarzelle, der Basis
+Es existieren unterschiedliche Darstellungen
+ - primitive Translationsvektoren = Translationsvektoren, die eine Elementarzelle mit dem 
+   kleinstmöglichen Volumen aufspannen;  Volumen  V%&=𝐚"+(𝐚#×𝐚$)
+ - primitive Elementarzelle = eine Elementarzelle mit dem kleinsten Volumen
+ - primitive Basis = eine kleinste, mit den primitiven Translationsvektoren periodisch 
+   zu wiederholende Einheit
+ - alle andere sind nicht-primitiv; z.B. die kubische Einheitszelle kubischer Gitter mit komplexer Basis
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 9
+
+--- Seite 10 ---
+Das Kristallgitter und seine Symmetrien
+Translationssymmetrie
+= Translationsinvarianz = Invarianz unter Verschiebung mit beliebigem Gittervektor
+⇒  Jeder Gitterpunkt eines Kristallgitter hat die gleiche Umgebung
+Weitere Symmetrien der Punktgitter
+𝐧-zählige Rotationssymmetrien (Drehsymmetrie) um Achsen
+Invarianz des Gitters unter Drehung um Winkel φ („phi“) 
+mit φ=2π/n, mit n=2,3,4,6, d.h. 180°, 120°, 90°, 60°
+Spiegelsymmetrien an Ebenen
+Inversion = Punktspiegelung
+Beliebige Kombinationen davon
+2 orthogonale Spiegelungen = 2-zählige Rotation
+3 orthogonale Spiegelungen = Inversion
+⇒ mathematisches Gebiet der Gruppentheorie
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 10
+Hier: 2D
+--- Seite 11 ---
+Bravais-Gitter
+Konsequenzen der Gruppentheorie
+232 Raumgruppen ⇒ 32 kristallographische Punktgruppen ⇒ 14 Bravais-Gitter in 7 Kristallklassen
+Klassifizierung der periodischen Anordnung von sphärisch symmetrischen Objekten (z.B. Kugelatomen)
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 11
+Primitiv, einfach
+(simple)
+Raumzentriert
+(body-centered)
+Flächenzentriert
+(face-centered)
+Basiszentriert
+(base-centered)
+Kubisch
+(cubic)
+Tetragonal Ortho-
+rhombisch
+HexagonalMonoklin Rhombo-
+edrisch
+Triklin
+•Die kubische Kristallklasse hat die höchste Symmetrie:
+2-, 3-und 4-zähliche Drehachsen
+verschiedene Spiegelsymmetrien, 
+Inversionszentren
+•Die trikline Kristallklasse hat die niedrigste Symmetrie: 
+Inversionszentren
+Quelle aller Bilder: Wikipedia „Bravais-Gitter
+Bildautor Stannered, Lizenz CC BY-SA 3.0
+--- Seite 12 ---
+Atomaufbau
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 12
+Elementarladung, Plancksches Wirkungsquantum
+𝑒=1,602×10%"& As (Ampère Sekunden = Coulomb = Clb)
+h=6,626×10%$’ Js (Joule-Sekunden),    ℏ=(#)=1,055×10%$’ Js  („h quer“ = „e-itsch bar“)
+Atomkern Anzahl Ladung Masse Ausdehnung
+Protonen Z	(Ordnungszahl)    𝑒 m*+,-=1,6726×10%#. kg fm (Femtometer =10%"/ m)
+Neutronen N	    0 m012-=1,6749×10%#. kg fm (Femtometer)
+Elektronenhülle
+Elektronen Z (im neutralen Atom)  −𝑒 m1=9,1094×10%$" kg 0	 Spin =±ℏ/2
+Insgesamt
+Ladung =0 Ausdehnung = wenige Å (Ångström =10%"! m =0,1 nm {Nanometer =10%& m})
+Masse =Z	m*+,-+N	m012-+Z	m1≈(Z+N)×1,67×10%#. kg
+Konsequenz
+Gitterkonstante a atomarer Kristalle ist von der Größenordnung weniger Å 
+--- Seite 13 ---
+Periodensystem
+•92 Elemente von 
+H (Wasserstoff) bis 
+U (Uran), danach schnell 
+zerfallende Transurane
+•Alkalimetalle
+•Erdalkalimetalle
+•Übergangsmetalle (3d, 4d, 5d)
+•Seltene Erden (4f-Metalle, 
+Lanthanoide, Actinoide)
+•B-, C-, N-Gruppen
+•Chalkogene
+•Halogene
+•Edelgase
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 13
+Quelle: Wikipedia „Periodensystem“, Bildautor Mrmw, Lizenz CC0
+
+--- Seite 14 ---
+Elektronenorbitale im Coulomb-Potenzial des Protons: H-Atom
+Gemäß quantenmechanischer 
+Bewegungsgleichung des 
+Elektrons: Schrödingergleichung
+Keine klassischen Trajektorien, 
+sondern ausgedehnte 
+Wellenfunktion ψ034x,y,z
+mit Quantenzahlen nlm
+Aufenthaltswahrscheinlichkeit
+=|ψ034|#
+Energie     E034=−"$,6	180!
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 14
+Darstellung von |ψ!’(r,θ,ϕ	beliebig|#
+s-Orbitale
+p-Orbitale
+d-Orbitale
+f-Orbitale
+--- Seite 15 ---
+Kubische Kristallgitter
+Drei Typen
+Kubisch primitiv (kp)
+= Einfach kubisch (ek)
+= Simple cubic (sc)
+Kubisch raumzentriert (krz)
+= Body-centered cubic (bcc)
+Kubisch flächenzentriert (kfz)
+= Face-centered cubid (fcc)
+Wintersemester 2026-27Oliver Paul | Festkörperphysik | 15
+Beispiele
+-keine
+-Alkaliatome
+-V, Cr, Nb, Mo, Ta, W, …
+-Edelgase (außer He)
+-Ni, Pd, Pt, Cu, Ag, Au, …
