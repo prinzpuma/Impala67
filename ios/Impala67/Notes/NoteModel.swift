@@ -7,7 +7,7 @@ import Observation
 @MainActor @Observable
 final class NoteModel {
     let pageId: String
-    @ObservationIgnored private let core: ImpalaCore
+    @ObservationIgnored let core: ImpalaCore
 
     private(set) var title = ""
     private(set) var blocks: [MdBlock] = []
@@ -20,8 +20,28 @@ final class NoteModel {
     private var undoStack: [[MdBlock]] = []
     private var redoStack: [[MdBlock]] = []
 
-    /// Letzte Caret-Position im aktiven Feld (für Umwandeln ohne Sprung).
-    @ObservationIgnored var caret = 0
+    /// Auswahl im aktiven Feld (UTF-16), für Umwandeln ohne Sprung und Inline-Formate.
+    @ObservationIgnored var selection = NSRange(location: 0, length: 0)
+    var caret: Int { selection.location }
+    /// Offenes Slash- oder Link-Menü am aktiven Block.
+    var menu: MenuQuery?
+    /// Link-Adresse wird abgefragt (Strg+K bzw. Link-Knopf).
+    var linkPrompt: LinkPrompt?
+    /// Dateiauswahl für Bild/PDF/Datei ist offen; neue Blöcke folgen hinter `mediaAfter`.
+    var mediaRequest: MediaKind?
+    @ObservationIgnored var mediaAfter: String?
+    /// Kurze Meldung unten (wie `toast` der PWA).
+    private(set) var toast: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
+    func showToast(_ text: String) {
+        toast = text
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.2))
+            if !Task.isCancelled { self?.toast = nil }
+        }
+    }
     @ObservationIgnored private var savedTitle = ""
     @ObservationIgnored private var savedMarkdown = ""
     @ObservationIgnored private var dirtyTitle = false
@@ -104,7 +124,7 @@ final class NoteModel {
     // MARK: Verlauf
 
     /// Jede Änderung der Blöcke läuft hierüber; Tippen in kurzer Folge ist ein Verlaufsschritt.
-    private func mutate(structural: Bool, _ change: ([MdBlock]) -> [MdBlock]) {
+    func mutate(structural: Bool, _ change: ([MdBlock]) -> [MdBlock]) {
         let next = change(blocks)
         guard next != blocks else { return }
         let now = Date()
@@ -144,17 +164,24 @@ final class NoteModel {
     // MARK: Fokus
 
     func activate(_ id: String, at position: Int?) {
+        if activeId != id { menu = nil }
         activeId = id
         cursor = position
         focusToken += 1
     }
 
-    func endEditing() { activeId = nil }
+    func endEditing() {
+        activeId = nil
+        menu = nil
+    }
 
     /// Eingabefeld hat den Fokus verloren. Ein veraltetes `token` heißt: der Block wurde gerade neu
     /// aktiviert (z. B. umgewandelt) – dann bleibt er aktiv.
     func blurred(_ id: String, token: Int) {
-        if activeId == id, token == focusToken { activeId = nil }
+        if activeId == id, token == focusToken, linkPrompt == nil, mediaRequest == nil {
+            activeId = nil
+            menu = nil
+        }
     }
 
     /// Titel fertig getippt: in den ersten Block springen.
@@ -179,17 +206,31 @@ final class NoteModel {
 
     // MARK: Bearbeiten
 
-    /// Text eines Blocks geändert. Zeilenumbrüche teilen den Block (außer im Code), ein Kürzel am Anfang
-    /// eines Absatzes („# “, „- “, „[] “ …) wandelt ihn um.
+    /// Text eines Blocks geändert. Ein neuer Zeilenumbruch teilt den Block (außer in Code und Formel)
+    /// bzw. übernimmt den gewählten Menüeintrag; ein Kürzel am Anfang eines Absatzes („# “, „- “, „[] “ …)
+    /// wandelt ihn um; „/“ und „[[“ öffnen die Menüs.
     func edit(_ id: String, text: String, caret: Int) {
         guard let b = blocks.first(where: { $0.id == id }) else { return }
-        self.caret = caret
-        if !b.isCode, text.contains("\n") {
-            split(id, lines: text.components(separatedBy: "\n"))
-            return
-        }
+        selection = NSRange(location: caret, length: 0)
         let ns = text as NSString
         let at = min(caret, ns.length)
+        let added = newlineCount(text) - newlineCount(b.text)
+        if !b.keepsNewlines, added > 0 {
+            if added == 1, at > 0, ns.character(at: at - 1) == 10 {
+                let before = ns.substring(to: at - 1), after = ns.substring(from: at)
+                if menu != nil, menu?.blockId == id {
+                    // Enter im offenen Menü: Eintrag übernehmen statt teilen.
+                    mutate(structural: false) { list in list.map { $0.id == id ? $0.withText(before + after) : $0 } }
+                    selection = NSRange(location: at - 1, length: 0)
+                    pickMenuItem()
+                    return
+                }
+                split(id, lines: [before, after])
+            } else {
+                split(id, lines: text.components(separatedBy: "\n"))
+            }
+            return
+        }
         if b.type == .text, let t = shortcutType(ns.substring(to: at)) {
             let rest = ns.substring(from: at)
             mutate(structural: true) { list in list.map { $0.id == id ? $0.withText(rest).converted(to: t) : $0 } }
@@ -197,7 +238,10 @@ final class NoteModel {
             return
         }
         mutate(structural: false) { list in list.map { $0.id == id ? $0.withText(text) : $0 } }
+        if !b.keepsNewlines { updateMenu(id, text: text, caret: at) }
     }
+
+    private func newlineCount(_ s: String) -> Int { s.utf16.reduce(0) { $0 + ($1 == 10 ? 1 : 0) } }
 
     /// Enter (oder eingefügte Zeilen): der Text des Blocks wird auf `lines` aufgeteilt.
     func split(_ id: String, lines: [String]) {
@@ -229,6 +273,7 @@ final class NoteModel {
     func backspaceAtStart(_ id: String) {
         guard let i = blocks.firstIndex(where: { $0.id == id }) else { return }
         let b = blocks[i]
+        guard b.isText else { return }
         if b.indent > 0 {
             mutate(structural: true) { list in list.map { $0.id == id ? $0.indented(-1) : $0 } }
         } else if b.type != .text {

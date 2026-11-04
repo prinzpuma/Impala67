@@ -49,14 +49,33 @@ ios/
 
 Wie `android/…/editor/`: Der Kern zerlegt den Seiteninhalt in Blöcke (`markdownToBlocks`) und schreibt
 sie zurück (`blocksToMarkdown` → `updatePage`, 600 ms nach dem Tippen bzw. beim Verlassen). Die App
-kennt nur die Bedien-Operationen (`NoteModel`): Enter teilt den Block (Listen und Zitate setzen sich
-fort, Enter in leerer Zeile beendet die Liste), Rücktaste am Anfang rückt aus, macht zum Absatz oder
-verschmilzt mit dem vorigen, Kürzel wie `# `, `- `, `1. `, `[] `, `> ` wandeln einen Absatz um.
-Angezeigt wird mit Inline-Markdown (fett, kursiv, Code, Links); der angetippte Block wird zum
-Eingabefeld (`BlockTextView`, eine `UITextView`, weil nur sie Rücktaste am Anfang und Caret meldet).
-Darüber schwebt die Block-Leiste in Liquid Glass (Verlauf, Blocktyp mit gleitender Markierung, Einzug,
-Löschen, Fertig). Bilder, Dateien (Quick Look), Heft-Verweise, Tabellen, Callouts, Toggles und Spalten
-werden angezeigt; Halten → „Als Markdown bearbeiten“ ändert sie als Rohtext.
+kennt nur die Bedien-Operationen (`NoteModel`, `NoteCommands.swift`):
+
+- **Tippen**: Enter teilt den Block (Listen und Zitate setzen sich fort, Enter in leerer Zeile beendet
+  die Liste), Shift+Enter bricht weich um, Rücktaste am Anfang rückt aus, macht zum Absatz oder
+  verschmilzt, Kürzel wie `# `, `- `, `1. `, `[] `, `> ` wandeln einen Absatz um. Eingabefeld ist eine
+  `UITextView` (`BlockTextView`), weil nur sie Rücktaste am Anfang, Auswahl und Tastenkürzel meldet.
+- **Inline-Markdown** (`InlineMarkdown.swift`, wie editor-inline.js): fett, kursiv, unterstrichen,
+  durchgestrichen, `==Markierung==`, Farben `{red}…{/}`/`{bg-red}…{/}`, Code, Links, `[[Wiki-Links]]`
+  und Formeln. Anzeige ohne Marker mit antippbaren Links (Seitenlinks öffnen den Tab), beim Tippen live
+  formatiert mit abgeblendeten Markern.
+- **Menüs**: „/“ öffnet das Slash-Menü (alle Einträge der PWA), „[[“ bzw. „Seite verlinken“ das
+  Link-Menü; beide schweben über der Block-Leiste, ↑/↓ und Enter/Tab wählen.
+- **Block-Leiste** (Liquid Glass): Verlauf, Fett/Kursiv/Unterstrichen/Durchgestrichen/Code/Markieren/Link,
+  Blocktyp mit gleitender Markierung, Einzug, Löschen, Fertig; in Split View kompakt mit Menüs.
+- **Hardware-Tastatur**: Tab/Shift+Tab rückt ein/aus (im Code zwei Leerzeichen), ↑/↓ wechseln den
+  Block, Entf am Ende verschmilzt mit dem nächsten, ⌘B/I/U/E, ⌘⇧S/H, ⌘K, ⌘Z/⌘⇧Z, ⌘D,
+  ⌘⇧↑/↓ verschiebt, Esc schließt Menü bzw. Bearbeitung.
+- **Blockmenü** (Halten bzw. Griff „⋮⋮“ links vom aktiven Block): Umwandeln in, Farbe (Text/Hintergrund),
+  Duplizieren, Als Markdown kopieren/bearbeiten, Nach oben/unten, Lernkarte erstellen, Löschen. Am Griff
+  ziehen verschiebt den Block.
+- **Besondere Blöcke**: Formeln, Inline-Formeln, Mermaid und SVG zeichnet eine WebView mit KaTeX bzw.
+  Mermaid vom CDN (gleiche Versionen und Prüfsummen wie die PWA, beim ersten Mal Internet nötig;
+  `RichView.swift`), beim Bearbeiten mit Live-Vorschau. Tabellen werden direkt in Zellen bearbeitet
+  (`TableEditor`, „+ Zeile“/„+ Spalte“). Bilder (Fotos), PDFs und Dateien kommen über das Slash-Menü in
+  den Kern (`addFile`); Dateien öffnen in Quick Look. Callouts, Toggles und Spalten zeigen ihre Kinder;
+  ändern über „Als Markdown bearbeiten“.
+- **Rund um die Seite**: „N Rückverweise“ unter dem Titel (aufklappbar), Unterseiten am Ende.
 
 ## Heft und Sync
 
@@ -95,10 +114,9 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
 - Sync: QR-Kopplung, automatisches Koppeln bei neuem Schlüssel aus den Einstellungen, Konflikt-Ansicht,
   Hintergrund-Sync (BGTaskScheduler). Drive, Karten, KI, weitere Einstellungen.
-- Notiz-Editor: Slash-Menü („/“), Inline-Formatierung per Leiste (fett, kursiv, Link), Hervorhebung
-  `==…==` und Textfarben im Fließtext, Formeln setzen (bisher TeX-Quelltext), Diagramme (Mermaid),
-  Tabellen direkt bearbeiten, Bilder/Dateien einfügen, Seitenlinks und Rückverweise, Blöcke ziehen,
-  Tab/Umschalt-Tab auf der Hardware-Tastatur, Links im angezeigten Text antippbar machen.
+- Notiz-Editor: Kinder von Callouts, Toggles und Spalten direkt bearbeiten (bisher als Markdown),
+  Datenbank-Ansicht, „Verwandt“-Leiste, Mehrfachauswahl von Blöcken, Einfügen von Bildern aus der
+  Zwischenablage bzw. per Drag & Drop von außen.
 - Heft: Papierwahl für neue Seiten, Seitenübersicht, Bilder und Textfelder, Formerkennung,
   Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.
 - App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.

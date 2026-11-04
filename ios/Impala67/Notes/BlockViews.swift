@@ -2,9 +2,10 @@ import QuickLook
 import SwiftUI
 import UIKit
 
-/// Ein Block, wie ihn die PWA zeigt (editor.css). Textblöcke werden beim Antippen zum Eingabefeld;
-/// alle anderen lassen sich über Halten → „Als Markdown bearbeiten“ ändern. `nested` = in Callout,
-/// Toggle oder Spalten (dort nur Anzeige, Checkboxen und Toggles bleiben bedienbar).
+/// Ein Block, wie ihn die PWA zeigt (editor.css). Textblöcke und Formeln werden beim Antippen zum
+/// Eingabefeld, Tabellen zum Raster aus Zellen; alles andere lässt sich über Halten → „Als Markdown
+/// bearbeiten“ ändern. `nested` = in Callout, Toggle oder Spalten (dort nur Anzeige, Checkboxen und
+/// Toggles bleiben bedienbar).
 struct BlockRow: View {
     let block: MdBlock
     let number: Int?
@@ -23,7 +24,7 @@ struct BlockRow: View {
                     RoundedRectangle(cornerRadius: Radius.xs).fill(noteColor(bg).opacity(0.28))
                 }
             }
-            .blockMenu(!nested && !editing, edit: { raw = model.rawOf(block) }, delete: { model.delete(block.id) })
+            .blockMenu(!nested && !editing, block: block, model: model) { raw = model.rawOf(block) }
             .sheet(isPresented: Binding(get: { raw != nil }, set: { if !$0 { raw = nil } })) {
                 RawMarkdownSheet(text: raw ?? "") { model.commitRaw(block.id, markdown: $0) }
             }
@@ -51,6 +52,16 @@ struct BlockRow: View {
                 .padding(.leading, 3)
         case .code(let language, let text):
             CodeBlockView(block: block, language: language, text: text, editing: editing, model: model, nested: nested)
+        case .math(let text):
+            MathBlockView(block: block, text: text, editing: editing, model: model, nested: nested)
+        case .table(let rows):
+            if editing {
+                TableEditor(rows: rows) { model.setTable(block.id, $0) }
+            } else {
+                TableBlock(rows: rows)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+            }
         case .divider:
             Rectangle().fill(Impala.edge).frame(height: 1).padding(.vertical, 13)
         default:
@@ -70,21 +81,75 @@ private extension MdHeadingLevel {
     }
 }
 
-private extension View {
-    /// Kontextmenü (Halten) eines Blocks; nicht am aktiven Feld, dort gehört Halten der Textauswahl.
-    @ViewBuilder func blockMenu(_ on: Bool, edit: @escaping () -> Void, delete: @escaping () -> Void) -> some View {
+private let blockColors = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"]
+
+/// Farbnamen wie im Farbmenü der PWA.
+private func colorLabel(_ name: String) -> String {
+    switch name {
+    case "gray": "Grau"
+    case "red": "Rot"
+    case "orange": "Orange"
+    case "yellow": "Gelb"
+    case "green": "Grün"
+    case "blue": "Blau"
+    case "purple": "Lila"
+    default: "Pink"
+    }
+}
+
+extension View {
+    /// Blockmenü (editor-menus.js `openBlockMenu`) als Kontextmenü (Halten); nicht am aktiven Feld, dort
+    /// gehört Halten der Textauswahl. Der Griff neben dem aktiven Block zeigt dasselbe Menü.
+    @ViewBuilder func blockMenu(_ on: Bool, block: MdBlock, model: NoteModel, editRaw: @escaping () -> Void) -> some View {
         if on {
-            contextMenu {
-                Button(action: edit) { Label { Text("Als Markdown bearbeiten") } icon: { Icon("pen") } }
-                Button(role: .destructive, action: delete) { Label { Text("Block löschen") } icon: { Icon("trash") } }
-            }
+            contextMenu { BlockMenuItems(block: block, model: model, editRaw: editRaw) }
         } else {
             self
         }
     }
 }
 
-/// Text eines Blocks: angezeigt mit Inline-Markdown, aktiv als Eingabefeld mit dem Rohtext.
+struct BlockMenuItems: View {
+    let block: MdBlock
+    let model: NoteModel
+    let editRaw: () -> Void
+
+    var body: some View {
+        let id = block.id
+        Menu {
+            ForEach(TurnInto.allCases, id: \.self) { t in
+                Button(t.label) { model.turnInto(id, t) }
+            }
+        } label: { Label { Text("Umwandeln in") } icon: { Icon("rotate") } }
+        Menu {
+            Section("Text") {
+                ForEach(blockColors, id: \.self) { n in Button(colorLabel(n)) { model.setColor(id, n, background: false) } }
+            }
+            Section("Hintergrund") {
+                ForEach(blockColors, id: \.self) { n in Button(colorLabel(n)) { model.setColor(id, n, background: true) } }
+            }
+            Button("Farbe entfernen") { model.setColor(id, nil, background: false) }
+        } label: { Label { Text("Farbe") } icon: { Icon("palette") } }
+        Divider()
+        Button { model.duplicate(id) } label: { Label { Text("Duplizieren") } icon: { Icon("copy") } }
+        Button {
+            UIPasteboard.general.string = model.rawOf(block).trimmingCharacters(in: .newlines)
+            model.showToast("Als Markdown kopiert")
+        } label: { Label { Text("Als Markdown kopieren") } icon: { Icon("file") } }
+        Button(action: editRaw) { Label { Text("Als Markdown bearbeiten") } icon: { Icon("pen") } }
+        Button { model.moveBlock(id, -1) } label: { Label { Text("Nach oben") } icon: { Icon("arrow-up") } }
+        Button { model.moveBlock(id, 1) } label: { Label { Text("Nach unten") } icon: { Icon("arrow-down") } }
+        if block.isText {
+            Button {
+                model.showToast(model.cardFromBlock(id) ? "Lernkarte erstellt — Rückseite in Anki ergänzen" : "Lernkarte konnte nicht erstellt werden")
+            } label: { Label { Text("Lernkarte erstellen") } icon: { Icon("cards") } }
+        }
+        Divider()
+        Button(role: .destructive) { model.delete(id) } label: { Label { Text("Löschen") } icon: { Icon("trash") } }
+    }
+}
+
+/// Text eines Blocks: angezeigt mit Inline-Markdown (mit Formeln über KaTeX), aktiv als Eingabefeld.
 private struct BlockText: View {
     let block: MdBlock
     let editing: Bool
@@ -95,15 +160,14 @@ private struct BlockText: View {
         let font = BlockFont.of(block)
         let color = block.textColor.map(noteColor) ?? Impala.text
         if editing {
-            let id = block.id
-            BlockTextView(
-                text: block.text, font: font, color: UIColor(color), code: block.isCode,
-                focusToken: model.focusToken, cursor: model.cursor,
-                onChange: { model.edit(id, text: $0, caret: $1) },
-                onCaret: { model.caret = $0 },
-                onBackspaceAtStart: { model.backspaceAtStart(id) },
-                onBlur: { model.blurred(id, token: $0) }
-            )
+            BlockInput(block: block, color: color, model: model)
+        } else if !block.isCode, hasInlineMath(block.text) {
+            RichBlock(kind: .inline(size: font.size, weight: font.weight == .regular ? 400 : 600,
+                                    lineHeight: font.size + font.lineSpacing + 3),
+                      source: inlineHTML(block.text))
+                .opacity(block.isChecked ? 0.6 : 1)
+                .contentShape(Rectangle())
+                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
         } else {
             Group {
                 if block.text.isEmpty {
@@ -120,8 +184,30 @@ private struct BlockText: View {
             .lineSpacing(font.lineSpacing)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+            // Gleichzeitig, damit Links im Text antippbar bleiben.
+            .simultaneousGesture(TapGesture().onEnded { if !nested { model.activate(block.id, at: nil) } })
         }
+    }
+}
+
+/// Eingabefeld eines Blocks, verbunden mit dem Modell.
+private struct BlockInput: View {
+    let block: MdBlock
+    let color: Color
+    let model: NoteModel
+
+    var body: some View {
+        let id = block.id
+        BlockTextView(
+            text: block.text, font: BlockFont.of(block), color: UIColor(color), raw: block.keepsNewlines,
+            focusToken: model.focusToken, cursor: model.cursor,
+            onChange: { model.edit(id, text: $0, caret: $1) },
+            onSelection: { model.selection = $0 },
+            onBackspaceAtStart: { model.backspaceAtStart(id) },
+            onBlur: { model.blurred(id, token: $0) },
+            wants: { model.wants($0, id: id, text: $1) },
+            onKey: { model.handle($0, id: id) }
+        )
     }
 }
 
@@ -156,6 +242,7 @@ private struct ListMarker: View {
 }
 
 /// Codeblock mit Sprache und Kopier-Knopf (app.js: Haken für einen Moment nach dem Kopieren).
+/// Mermaid und SVG zeigen die Grafik; beim Bearbeiten Code mit Live-Vorschau darunter (350 ms).
 private struct CodeBlockView: View {
     let block: MdBlock
     let language: String
@@ -166,8 +253,20 @@ private struct CodeBlockView: View {
     @State private var copied = false
 
     var body: some View {
+        let diagram = diagramKind(language)
+        if let diagram, !editing {
+            RichBlock(kind: diagram, source: text)
+                .padding(.vertical, Space.s1)
+                .contentShape(Rectangle())
+                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+        } else {
+            panel(diagram)
+        }
+    }
+
+    private func panel(_ diagram: RichKind?) -> some View {
         let font = BlockFont.of(block)
-        VStack(alignment: .leading, spacing: Space.s1) {
+        return VStack(alignment: .leading, spacing: Space.s1) {
             if !language.isEmpty || !editing {
                 HStack {
                     Text(language).font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
@@ -176,6 +275,7 @@ private struct CodeBlockView: View {
                         Button {
                             UIPasteboard.general.string = text
                             withAnimation(.snappy) { copied = true }
+                            model.showToast("Code kopiert.")
                         } label: {
                             Icon(copied ? "check" : "copy", size: 14).foregroundStyle(Impala.text2)
                                 .contentTransition(.opacity)
@@ -188,7 +288,10 @@ private struct CodeBlockView: View {
                 }
             }
             if editing {
-                BlockText(block: block, editing: true, model: model, nested: nested)
+                BlockInput(block: block, color: Impala.text, model: model)
+                if let diagram {
+                    RichBlock(kind: diagram, source: text, debounce: .milliseconds(350)).padding(.top, Space.s2)
+                }
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     Text(text.isEmpty ? " " : text)
@@ -211,6 +314,34 @@ private struct CodeBlockView: View {
     }
 }
 
+/// Formelblock: gesetzt mit KaTeX; beim Bearbeiten TeX mit Live-Vorschau.
+private struct MathBlockView: View {
+    let block: MdBlock
+    let text: String
+    let editing: Bool
+    let model: NoteModel
+    let nested: Bool
+
+    var body: some View {
+        if editing {
+            VStack(alignment: .leading, spacing: Space.s2) {
+                Text("TeX").font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
+                BlockInput(block: block, color: Impala.text, model: model)
+                RichBlock(kind: .math, source: text, debounce: .milliseconds(350))
+            }
+            .padding(.horizontal, Space.s4).padding(.vertical, 10)
+            .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Impala.edgeSoft))
+            .padding(.vertical, Space.s1)
+        } else {
+            RichBlock(kind: .math, source: text)
+                .padding(.vertical, Space.s1)
+                .contentShape(Rectangle())
+                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+        }
+    }
+}
+
 /// Blöcke ohne direkt tippbaren Text: Bild, Heft, Datei, Formel, Tabelle, Callout, Toggle, Spalten.
 private struct ComplexBlockView: View {
     let block: MdBlock
@@ -225,12 +356,6 @@ private struct ComplexBlockView: View {
             LinkCard(icon: "notebook", label: "Heft") { shell.open(heftId) }
         case .file(let src, let name):
             FileCard(src: src, name: name)
-        case .math(let text):
-            // Formeln vorerst als TeX-Quelltext (Satz folgt).
-            Text(text).font(.system(size: 16, design: .serif)).italic().foregroundStyle(Impala.text)
-                .frame(maxWidth: .infinity).padding(.vertical, 6)
-        case .table(let rows):
-            TableBlock(rows: rows)
         case .callout(let color, let children):
             let tone = noteColor(color)
             HStack(alignment: .top, spacing: 10) {
@@ -420,7 +545,7 @@ private struct LinkCard: View {
 }
 
 /// Markdown eines Blocks als Text bearbeiten (für alles ohne eigenes Eingabefeld).
-private struct RawMarkdownSheet: View {
+struct RawMarkdownSheet: View {
     @State var text: String
     let onDone: (String) -> Void
     @Environment(\.dismiss) private var dismiss

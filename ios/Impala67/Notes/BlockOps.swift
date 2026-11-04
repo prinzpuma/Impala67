@@ -54,6 +54,14 @@ extension MdBlock {
 
     var isCode: Bool { if case .code = kind { true } else { false } }
 
+    var isMath: Bool { if case .math = kind { true } else { false } }
+
+    /// Code und Formeln: Enter bleibt ein Zeilenumbruch, keine Autokorrektur.
+    var keepsNewlines: Bool { isCode || isMath }
+
+    /// Blöcke mit eigenem Eingabefeld (Textblöcke und Formeln).
+    var isEditable: Bool { isText || isMath }
+
     var isListOrQuote: Bool {
         switch kind {
         case .listItem, .quote: true
@@ -71,6 +79,7 @@ extension MdBlock {
         case .heading(_, let t): t
         case .listItem(_, _, let t): t
         case .code(_, let t): t
+        case .math(let t): t
         default: ""
         }
     }
@@ -83,6 +92,7 @@ extension MdBlock {
         case .listItem(let style, let indent, _): b.kind = .listItem(style: style, indent: indent, text: t)
         case .quote: b.kind = .quote(text: t)
         case .code(let language, _): b.kind = .code(language: language, text: t)
+        case .math: b.kind = .math(text: t)
         default: break
         }
         return b
@@ -223,15 +233,6 @@ func shortcutType(_ prefix: String) -> BlockType? {
     case "> ": .quote
     default: nil
     }
-}
-
-/// Inline-Markdown (fett, kursiv, durchgestrichen, Code, Links) für die Anzeige.
-func inlineMarkdown(_ s: String) -> AttributedString {
-    let options = AttributedString.MarkdownParsingOptions(
-        interpretedSyntax: .inlineOnlyPreservingWhitespace,
-        failurePolicy: .returnPartiallyParsedIfPossible
-    )
-    return (try? AttributedString(markdown: s, options: options)) ?? AttributedString(s)
 }
 
 /// Benannte Notizfarben der PWA (Text-, Hintergrund- und Callout-Farben), hell/dunkel.
