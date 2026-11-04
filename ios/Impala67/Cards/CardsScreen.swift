@@ -9,7 +9,7 @@ struct CardsScreen: View {
         ZStack {
             switch view {
             case .decks:
-                DeckOverview().transition(.opacity.combined(with: .scale(scale: 0.99)))
+                DeckOverviewScreen().transition(.opacity.combined(with: .scale(scale: 0.99)))
             case .review(let deck, let mix):
                 ReviewScreen(deck: deck, mix: mix)
                     .id("review:\(deck ?? "*"):\(mix)")
@@ -29,7 +29,7 @@ struct CardsScreen: View {
 
 /// Stapelübersicht (`ankiDecksHtml` v3): ein Satz vorn – die Kartenzahl ist selbst der Startknopf –,
 /// darunter „Gemischt“ und zwei Kennzahlen, dann die Stapel-Liste.
-private struct DeckOverview: View {
+private struct DeckOverviewScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
 
