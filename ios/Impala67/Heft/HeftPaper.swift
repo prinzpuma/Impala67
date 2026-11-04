@@ -49,6 +49,16 @@ final class HeftPaperView: UIView {
         CATransaction.setDisableActions(true)
         for l in [sheet, lines, margin, dots] { l.frame = CGRect(origin: .zero, size: size) }
         sheet.shadowPath = UIBezierPath(roundedRect: sheet.bounds, cornerRadius: 4).cgPath
+        let (l, m, d) = Self.patterns(size: size, paper: paper)
+        lines.path = l
+        margin.path = m
+        dots.path = d
+        CATransaction.commit()
+        bounds = CGRect(origin: .zero, size: size)
+    }
+
+    /// Linien, Randlinie und Punkte des Musters in Seitenkoordinaten (`drawPaper` in heft.js).
+    static func patterns(size: CGSize, paper: String) -> (lines: CGPath, margin: CGPath, dots: CGPath) {
         let (w, h) = (size.width, size.height)
         let gap: CGFloat = 28
         let l = CGMutablePath(), m = CGMutablePath(), d = CGMutablePath()
@@ -73,11 +83,21 @@ final class HeftPaperView: UIView {
             }
         default: break
         }
-        lines.path = l
-        margin.path = m
-        dots.path = d
-        CATransaction.commit()
-        bounds = CGRect(origin: .zero, size: size)
+        return (l, m, d)
+    }
+
+    /// Papier in einen Grafikkontext zeichnen (Vorschaubilder der Seitenübersicht), Seitenkoordinaten.
+    static func draw(in ctx: CGContext, size: CGSize, paper: String) {
+        ctx.setFillColor(Self.paper.cgColor)
+        ctx.fill(CGRect(origin: .zero, size: size))
+        let (l, m, d) = patterns(size: size, paper: paper)
+        ctx.setLineWidth(1)
+        ctx.setStrokeColor(ink.withAlphaComponent(0.22).cgColor)
+        ctx.addPath(l); ctx.strokePath()
+        ctx.setStrokeColor(ink.withAlphaComponent(0.4 * 0.22).cgColor)
+        ctx.addPath(m); ctx.strokePath()
+        ctx.setFillColor(ink.withAlphaComponent(0.35).cgColor)
+        ctx.addPath(d); ctx.fillPath()
     }
 
     /// Dem Zoom des Canvas folgen (Ursprung oben links = Seitenursprung).
@@ -89,4 +109,39 @@ final class HeftPaperView: UIView {
         for l in [lines, margin, dots] { l.contentsScale = traitCollection.displayScale * zoom }
         CATransaction.commit()
     }
+}
+
+/// Papierarten des Kerns mit den Namen aus heft-tools.js (`PAPERS`).
+enum HeftPaperKind: String, CaseIterable, Identifiable {
+    case lined, grid, dots, blank
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .lined: "Liniert"
+        case .grid: "Kariert"
+        case .dots: "Punkte"
+        case .blank: "Blanko"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .lined: "line.3.horizontal"
+        case .grid: "squareshape.split.3x3"
+        case .dots: "circle.grid.3x3"
+        case .blank: "square"
+        }
+    }
+}
+
+/// Farben und Standard-Dicke der PWA (heft-tools.js `COLORS`, `SIZES`; wie `HeftPalette` in Android).
+enum HeftPalette {
+    static let colors: [(css: String, name: String)] = [
+        ("#1c1c1e", "Schwarz"), ("#2f6fed", "Blau"), ("#e0483e", "Rot"),
+        ("#1f9d55", "Grün"), ("#f5b800", "Gelb"), ("#8b7cc8", "Lila"),
+    ]
+    /// „Mittel“; Marker zeichnen mit dreifacher Breite.
+    static let size: CGFloat = 3
 }

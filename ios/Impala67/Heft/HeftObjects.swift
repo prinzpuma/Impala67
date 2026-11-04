@@ -1,0 +1,160 @@
+import ImageIO
+import UIKit
+
+/// Bilder und Textfelder einer Heftseite (bisher nur Anzeige), gezeichnet wie `renderPageTo` in heft.js:
+/// Papier → Bilder → Striche → Textfelder. Bilder liegen deshalb unter, Textfelder über der PencilKit-Ebene.
+/// Wie `HeftPaperView` in Seitenkoordinaten und per Transform mit dem Zoom skaliert.
+final class HeftObjectsView: UIView {
+    enum Kind { case images, texts }
+
+    private let kind: Kind
+    private var boxes: [HeftTextBox] = []
+    private var zoom: CGFloat = 1
+
+    init(_ kind: Kind) {
+        self.kind = kind
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.anchorPoint = .zero
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Inhalt der Seite setzen; `image` liefert das dekodierte Bild zu einer Bild-ID (`nil`: Daten fehlen noch).
+    func configure(size: CGSize, data: HeftPageData, image: (HeftImage) -> UIImage?) {
+        bounds = CGRect(origin: .zero, size: size)
+        subviews.forEach { $0.removeFromSuperview() }
+        layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        boxes.removeAll()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        switch kind {
+        case .images:
+            for im in data.images {
+                guard let img = image(im)?.cgImage else { continue }
+                let l = CALayer()
+                l.frame = CGRect(x: im.x, y: im.y, width: im.w, height: im.h)
+                l.contents = img
+                l.contentsGravity = .resize
+                l.minificationFilter = .trilinear
+                layer.addSublayer(l)
+            }
+        case .texts:
+            for t in data.texts where !t.text.isEmpty {
+                let box = HeftTextBox(t)
+                addSubview(box)
+                boxes.append(box)
+            }
+        }
+        CATransaction.commit()
+        follow(zoom: zoom)
+    }
+
+    func follow(zoom: CGFloat) {
+        self.zoom = zoom
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        transform = CGAffineTransform(scaleX: zoom, y: zoom)
+        layer.position = .zero
+        CATransaction.commit()
+        // Text scharf halten, aber den Bildspeicher begrenzen (bei starkem Zoom höchstens dreifach).
+        let scale = max(1, traitCollection.displayScale) * min(max(zoom, 1), 3)
+        for box in boxes where abs(box.contentScaleFactor - scale) > 0.25 {
+            box.contentScaleFactor = scale
+            box.setNeedsDisplay()
+        }
+    }
+}
+
+/// Ein Textfeld wie `drawTextBox` in heft.js (Innenabstand 10, Zeilenhöhe 1,4, Breite `w` oder 400).
+private final class HeftTextBox: UIView {
+    private let text: HeftText
+
+    init(_ text: HeftText) {
+        self.text = text
+        super.init(frame: HeftTextStyle.frame(text))
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ rect: CGRect) {
+        HeftTextStyle.draw(text, at: .zero)
+    }
+}
+
+/// Schrift und Umbruch der Heft-Textfelder (heft.js `wrapTextLines`/`drawTextBox`).
+enum HeftTextStyle {
+    static let pad: CGFloat = 10
+    static let lineHeight: CGFloat = 1.4
+
+    /// „500 30px ui-rounded“ der PWA.
+    static func font(_ size: CGFloat) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: .medium)
+        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return UIFont(descriptor: d, size: size)
+    }
+
+    private static func attributed(_ t: HeftText) -> NSAttributedString {
+        let size = CGFloat(t.size ?? 30)
+        let p = NSMutableParagraphStyle()
+        p.minimumLineHeight = size * lineHeight
+        p.maximumLineHeight = size * lineHeight
+        p.lineBreakMode = .byWordWrapping
+        return NSAttributedString(string: t.text, attributes: [
+            .font: font(size),
+            .foregroundColor: UIColor(css: t.color ?? "#1c1c1e"),
+            .paragraphStyle: p,
+        ])
+    }
+
+    private static func textWidth(_ t: HeftText) -> CGFloat { max(60, CGFloat(t.w ?? 400) - 2 * pad) }
+
+    /// Rahmen in Seitenkoordinaten; die Höhe ergibt sich aus dem Umbruch (wie `t.h` in der PWA).
+    static func frame(_ t: HeftText) -> CGRect {
+        let w = textWidth(t)
+        let used = attributed(t).boundingRect(
+            with: CGSize(width: w, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin], context: nil
+        )
+        return CGRect(x: t.x, y: t.y, width: w + 2 * pad, height: ceil(used.height) + 2 * pad)
+    }
+
+    /// Text in den aktuellen UIKit-Kontext zeichnen; `origin` ist die linke obere Ecke des Felds.
+    static func draw(_ t: HeftText, at origin: CGPoint) {
+        let rect = CGRect(x: origin.x + pad, y: origin.y + pad, width: textWidth(t), height: .greatestFiniteMagnitude)
+        attributed(t).draw(with: rect, options: [.usesLineFragmentOrigin], context: nil)
+    }
+}
+
+/// Dekodierte Heftbilder (`heftImageData`), verkleinert auf die benötigte Größe und zwischengespeichert.
+@MainActor
+enum HeftImages {
+    private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.totalCostLimit = 96 * 1024 * 1024
+        return c
+    }()
+
+    /// Bild `im` mit höchstens `maxPixels` an der längeren Seite; `nil`, solange die Daten fehlen.
+    static func image(core: ImpalaCore, pageId: String, heftPageId: String, image im: HeftImage, maxPixels: Int) -> UIImage? {
+        let key = "\(im.id)@\(maxPixels)" as NSString
+        if let hit = cache.object(forKey: key) { return hit }
+        guard let data = try? core.heftImageData(pageId: pageId, heftPageId: heftPageId, imageId: im.id),
+              let src = CGImageSourceCreateWithData(data.bytes as CFData, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+              ] as CFDictionary)
+        else { return nil }
+        let img = UIImage(cgImage: cg)
+        cache.setObject(img, forKey: key, cost: cg.bytesPerRow * cg.height)
+        return img
+    }
+}

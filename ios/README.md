@@ -87,6 +87,24 @@ dem letzten Stand (Schlüssel: `PKStroke.randomSeed`, für Kern-Striche aus der 
 leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPaper.swift`). Breiten wie die PWA (`segW` in
 `web/heft.js`), Marker halbtransparent mit dreifacher Breite. Fremde Änderungen bauen die Seite neu auf.
 
+- **Seitenübersicht** (`HeftPagesSheet`, Tippen auf „n / m“, zoomt aus dem Knopf): Raster mit
+  Vorschaubildern (`HeftThumbnail`: Papier, Bilder, Striche, Textfelder aus dem Kernformat), aktive Seite
+  umrandet. Antippen springt, Ziehen sortiert um (`heftMovePage`, Ziel gestrichelt), Halten: Papier der
+  Seite (`heftSetPaper`) und Löschen; „Auswählen“ löscht mehrere (`heftRemovePage`, eine Seite bleibt).
+- **Neue Seite** („+“ in der Leiste bzw. in der Übersicht): Tippen nimmt das Papier der letzten Seite,
+  Halten bietet Liniert/Kariert/Punkte/Blanko (`heftAddPage(paper:)`).
+- **Farben** der PWA-Palette (heft-tools.js `COLORS`) als schwebende Glas-Leiste mit gleitendem Ring;
+  die Wahl landet über `PKToolPicker.selectedTool` im Werkzeugpicker, Farbwechsel im Picker kommen zurück.
+  Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`, Dicke 3. In schmalen Fenstern nur der Picker.
+- **Bilder und Textfelder** (`HeftObjects.swift`, nur Anzeige): Bilder unter, Textfelder über den
+  Strichen wie `renderPageTo`; Bilder über `heftImageData`, per ImageIO verkleinert und zwischengespeichert,
+  Text wie `drawTextBox` (gerundete Schrift 500, Zeilenhöhe 1,4, Innenabstand 10).
+- **Formerkennung**: Wird der Stift am Strichende ~0,45 s gehalten (`HoldWatcher`), erkennt der Kern
+  eine Form (`heftFitShape`: Linie, Rechteck, Dreieck, Pfeil, Ellipse); der Strich wird dann durch die
+  Form ersetzt (`heftAddShape`, gespeichert wie in PWA/Android als `shape` ohne Punkte). Formen anderer
+  Geräte zeichnet die App über `heftShapeOutline`. Anders als in der PWA rastet die Form erst beim
+  Loslassen ein (PencilKit meldet den Strich erst am Ende).
+
 ## Sync
 
 Wie `CloudSyncController.kt`: Abrufen, Verschlüsseln, Konflikte und Dateien macht der Kern (`CloudSync`,
@@ -117,8 +135,8 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Notiz-Editor: Kinder von Callouts, Toggles und Spalten direkt bearbeiten (bisher als Markdown),
   Datenbank-Ansicht, „Verwandt“-Leiste, Mehrfachauswahl von Blöcken, Einfügen von Bildern aus der
   Zwischenablage bzw. per Drag & Drop von außen.
-- Heft: Papierwahl für neue Seiten, Seitenübersicht, Bilder und Textfelder, Formerkennung,
-  Handschrift → Text, Farben der PWA-Palette im Werkzeugpicker.
+- Heft: Bilder und Textfelder bearbeiten (anlegen, verschieben, löschen), Import von PDFs/Fotos,
+  Export, Verlauf, Handschrift → Text, Formvorschau während des Haltens, Dicken der PWA (`SIZES`).
 - App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.
 - Chat, Karteikarten, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
 - Seitenbaum: Ziehen zum Verschieben, Duplizieren, Verschieben nach…, Vorlagenwahl bei „Neu“.

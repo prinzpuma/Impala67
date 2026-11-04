@@ -23,7 +23,7 @@ enum HeftInk {
     /// Zeichenfähiger PencilKit-Strich aus Kerndaten; `nil` ohne Punkte. Der `randomSeed` ist aus der
     /// Strich-ID abgeleitet und dient beim Vergleichen als Schlüssel (`HeftCanvas`).
     static func pkStroke(_ s: HeftStroke, seed: UInt32) -> PKStroke? {
-        let p = s.points
+        let p = points(s)
         let n = p.count / 3
         guard n > 0 else { return nil }
         let marker = s.tool == "marker"
@@ -45,6 +45,17 @@ enum HeftInk {
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date())
         return PKStroke(ink: ink, path: path, transform: .identity, mask: nil, randomSeed: seed)
+    }
+
+    /// Punkte zum Zeichnen: Formen (`tool` „shape“) speichern keine Punkte, nur ihre Geometrie; der Umriss
+    /// kommt aus dem Kern (`heftShapeOutline`, `[x, y, …]`) und bekommt Druck 0,5.
+    static func points(_ s: HeftStroke) -> [Float] {
+        guard s.points.isEmpty, let shape = s.shape else { return s.points }
+        let o = heftShapeOutline(shape: shape)
+        var out: [Float] = []
+        out.reserveCapacity(o.count / 2 * 3)
+        for i in stride(from: 0, to: o.count - 1, by: 2) { out += [o[i], o[i + 1], 0.5] }
+        return out
     }
 
     /// Neuer Strich vom Stift im Kernformat. `size` kommt vom Werkzeug (PencilKit kennt nur Punktbreiten).
