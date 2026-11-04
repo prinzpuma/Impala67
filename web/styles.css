@@ -717,28 +717,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .bar-wrap:hover .bar { opacity: 1 }
 .bar-label { font-size: var(--text-3xs); color: var(--text2) }
 .bar-chart.forecast .bar { background: var(--accent); opacity: .5 }
-/* == Daily Notes: Monatskalender == */
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1-5); max-width: 980px }
-.cal-head-row { margin-bottom: var(--space-1-5) }
-.cal-dow { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); padding: 0 var(--space-1) }
-.cal-day { min-height: 92px; border: 1px solid var(--surface-hover); border-radius: var(--radius-lg); padding: var(--space-1-5) var(--space-2); cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1); background: var(--surface-faint) }
-.cal-day:hover { background: var(--edge-soft) }
-.cal-day.other { visibility: hidden }
-.cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
-.cal-day.has-note { background: var(--accent-soft) }
-.cal-num { font-size: var(--text-sm); font-weight: 600; color: var(--text2) }
-.cal-day.today .cal-num { color: var(--accent) }
-.cal-snippet { font-size: var(--text-xs); color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical }
-@media (max-width: 680px) {
-	.cal-grid { gap: 3px }
-	.cal-dow { text-align: center; padding: 0 }
-	.cal-day { min-height: 48px; padding: var(--space-1) 2px; border-radius: var(--radius-sm); align-items: center; justify-content: center; gap: 2px }
-	.cal-num { font-size: var(--text-xs); text-align: center }
-	.cal-snippet { display: none }
-	.cal-day.has-note::after { content: "•"; color: var(--accent); font-size: var(--text-base); line-height: 1; text-align: center; display: block; margin-top: -2px }
-	.library.daily { padding: var(--space-4) 10px }
-	.library.daily .lib-head h1 { font-size: var(--text-lg) }
-}
 /* == Stapel-Baum in der Sidebar (Anki-Tab) == */
 /* UI-Fix v7 */
 .deck-badge { flex-shrink: 0; font-size: var(--text-2xs); min-width: 18px; text-align: center; border-radius: var(--radius-lg); padding: 1px 5px; margin-left: 2px; background: var(--success-soft); color: var(--success) }
@@ -793,12 +771,11 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 .menu-hint { font-size: var(--text-2xs); color: var(--text2) }
 /* Desktop: Karteikarten bleiben in der Topbar (rechts neben Chat). */
 @media (min-width: 769px) {
-	.topbar #btnDaily { display: none }
 	.side-foot #btnCards { display: none }
 }
 /* Einheitliche Interaktionszustände und bessere Tastaturbedienung */
-button, input, textarea, select, .row, .lib-card, .cal-day { -webkit-tap-highlight-color: transparent }
-button:focus-visible, [tabindex]:focus-visible, .row:focus-visible, .lib-card:focus-visible, .cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+button, input, textarea, select, .row, .lib-card { -webkit-tap-highlight-color: transparent }
+button:focus-visible, [tabindex]:focus-visible, .row:focus-visible, .lib-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft) }
 button:disabled { opacity: .38; cursor: not-allowed; transform: none }
 .modal, .page-menu, .model-menu, .palette-box { border-radius: var(--radius-lg) }

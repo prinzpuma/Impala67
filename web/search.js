@@ -11,7 +11,7 @@ import { CHATS } from "./chats.js";
 import { TABS } from "./tabs.js";
 import { RENDER } from "./render.js";
 import { SETTINGS } from "./settings.js";
-import { newPageFlow, openAnki, openDailyNote, startNewChat, createPageInNewTab } from "./app-dialogs.js";
+import { newPageFlow, openAnki, startNewChat, createPageInNewTab } from "./app-dialogs.js";
 import { icon, pageIcon } from "./icons.js";
 import { PLATFORM } from "./platform.js";
 
@@ -112,8 +112,6 @@ function actionItems() {
 		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
 		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
 		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => openAnki("browser") },
-		{ type: "action", icon: "calendar", label: "Daily Note von heute öffnen", run: () => openDailyNote(RENDER.localDayKey(new Date())) },
-		{ type: "action", icon: "calendar", label: "Daily-Notes-Kalender öffnen", run: click("btnDaily") },
 		{ type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
 		{ type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");

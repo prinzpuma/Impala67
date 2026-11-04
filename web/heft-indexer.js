@@ -5,7 +5,7 @@ import { HANDSCHRIFT } from "./handschrift.js";
 import { HEFT } from "./heft.js";
 import { RAG } from "./rag.js";
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
-import { PAGE_W, PAGE_H, composePageText } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, ocrKey, needsOcr, ocrOp } from "./heft-document-core.js";
 import { SCAN_OCR } from "./scan-ocr.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { BUS } from "./event-bus.js";
@@ -14,24 +14,29 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 // heft-indexer.js — Automatischer, akkuschonender Hintergrund-Crawler für Handschrift-Hefte.
 //
 // Aufgabe:
-//   Durchsucht beim App-Start den Bestand. Jede Seite mit Strichen, die noch keinen
-//   ocrText hat, wird nacheinander in Idle-Phasen durch die lokale Vektor-Handschrifterkennung
-//   analysiert, gespeichert, synchronisiert und ins RAG übergeben.
+//   Durchsucht beim App-Start den Bestand. Jede Seite mit Strichen, die noch keinen aktuellen Text hat,
+//   wird nacheinander in Idle-Phasen durch die lokale Vektor-Handschrifterkennung analysiert (`ocrSrc: "pwa"`),
+//   gespeichert, synchronisiert und ins RAG übergeben. Seiten, die bereits eine aktuelle Erkennung einer
+//   höheren Stufe (`android`, `apple`) tragen, bleiben unangetastet.
 //   Gescannte Bilder ohne ocr-Feld (Scan-Flag oder ältere Vollseiten-Scans) werden per
 //   Tesseract (scan-ocr.js) erkannt; das Ergebnis steht am Bild (ocr) und fließt über
-//   composePageText in den Seitentext.
-//   Nach einem Modellwechsel (HANDWRITING_MODEL_VERSION) werden einmalig ALLE Seiten neu
-//   erkannt, damit alte Notizen vom besseren Modell profitieren.
-//   Läuft im Hintergrund und pausiert sofort, wenn der Nutzer aktiv schreibt.
+//   ocrOp in den Seitentext.
+//   Nach einem Modellwechsel (HANDWRITING_MODEL_VERSION) werden einmalig eigene (`pwa`/unbekannte) Seiten
+//   neu erkannt, damit alte Notizen vom besseren Modell profitieren.
+//   Läuft im Hintergrund mit langen Schonpausen und pausiert sofort, wenn der Nutzer aktiv schreibt.
 
 export const HEFT_INDEXER = (() => {
+	const SRC = "pwa";
+	// Schonende Intervalle auf der PWA (15 s nach dem letzten Strich, 5 s Pause zwischen Hintergrund-Seiten).
+	const PRIORITY_DEBOUNCE_MS = 15000;
+	const SCAN_PAUSE_MS = 5000;
 	let scanRunning = false;
 	let scanTimer = null;
 	// In dieser Sitzung schon geprüfte Aufgaben. Neue Striche ändern den Schlüssel,
 	// dann wird die Seite erneut geprüft.
 	const checked = new Set();
-	// pg: Heftseite oder Eintrag der Index-Übersicht (dort ist strokes die Anzahl).
-	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${Array.isArray(pg.strokes) ? pg.strokes.length : pg.strokes}`;
+	// pg: Heftseite oder Eintrag der Index-Übersicht (dort steht contentKey direkt dran).
+	const checkKey = (pageId, pg) => `${pageId}:${pg.id}:${pg.contentKey || (Array.isArray(pg.strokes) ? ocrKey(pg) : pg.strokes)}`;
 	const scanKey = (pageId, pg, im) => `${pageId}:${pg.id}:img:${im.id}`;
 
 	// Priorisierte Aufgaben: Seiten, auf denen der Nutzer gerade gezeichnet hat
@@ -118,10 +123,9 @@ export const HEFT_INDEXER = (() => {
 		return !(Array.isArray(pg.strokes) ? pg.strokes.length : pg.strokes) && pg.images.length === 1 && fillsPage(im);
 	}
 
-	// Findet alle offenen Aufgaben: Stricherkennung (nach Modellwechsel: alle) und Scan-Bilder
-	// Nebenbei: Fortschritt (Seiten mit Strichen gesamt / davon erledigt) und alle aktuellen Seiten-Schlüssel
-	// Übersicht aller Hefte aus dem Kern ohne Strichpunkte (heftIndexSummary); Aufgaben merken sich
-	// nur Heft, Seiten-ID und Index, die Seite selbst holt die Erkennung frisch (pageOf).
+	// Findet alle offenen Aufgaben: Stricherkennung (nach Modellwechsel: alle eigenen) und Scan-Bilder.
+	// Seiten, die schon einen aktuellen Text einer besseren Plattform (`android`, `apple`) haben,
+	// gelten für die PWA als erledigt und werden auch bei einem Modellwechsel nicht überschrieben.
 	function findUnindexedPages() {
 		const jobs = [];
 		let total = 0;
@@ -133,12 +137,13 @@ export const HEFT_INDEXER = (() => {
 				if (!pg) continue;
 				if (pg.strokes) {
 					const key = checkKey(pageId, pg);
-					const hasText = !!String(pg.ocrText || "").trim();
+					const higherTierCurrent = pg.ocrKey === pg.contentKey && (pg.ocrSrc === "android" || pg.ocrSrc === "apple");
+					const hasCurrentText = !pg.needsOcr && !!String(pg.ocrText || "").trim();
+					const needsWork = !higherTierCurrent && (pg.needsOcr || !hasCurrentText || reindexAll);
 					total++;
 					present.add(key);
-					// Fehlgeschlagene Seiten (checked, aber nicht done) zählen nicht als erledigt
-					if (done.has(key) || (!reindexAll && hasText)) doneCount++;
-					if (!checked.has(key) && !done.has(key) && !crashedTooOften(key) && (reindexAll || !hasText)) {
+					if (done.has(key) || higherTierCurrent || !needsWork) doneCount++;
+					if (!checked.has(key) && !done.has(key) && !crashedTooOften(key) && needsWork) {
 						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, pageKey: pg.id });
 					}
 				}
@@ -167,24 +172,30 @@ export const HEFT_INDEXER = (() => {
 	// true = Seite ist erkannt (auch ohne Text, z. B. reine Skizze); false = später erneut versuchen.
 	// Der Text geht nur als Event in den Kern; das offene Heft übernimmt ihn von dort.
 	async function indexStrokes(job) {
-		const page = pageOf(job);
-		if (!page) return;
+		const startPage = pageOf(job);
+		if (!startPage) return;
+		if (!reindexAll && !needsOcr(startPage, SRC) && String(startPage.ocrText || "").trim()) {
+			done.add(job.key);
+			saveDone();
+			return;
+		}
+		const expectedKey = ocrKey(startPage);
 		let text = null;
 		try {
-			text = await HANDSCHRIFT.recognizeStrokes(page.strokes, {}, "indexer");
+			text = await HANDSCHRIFT.recognizeStrokes(startPage.strokes, {}, "indexer");
 		} catch (err) {
 			hadFailure = true;
 			console.info("[heft-indexer] Stricherkennung Fehler:", err);
 		}
 		if (text == null) return false;
+		const latest = pageOf(job) || startPage;
+		const op = ocrOp(latest, text, SRC, expectedKey);
 		done.add(job.key);
 		saveDone();
-		// Ein leeres Ergebnis ersetzt keinen vorhandenen Text: sicherer bei reinen Skizzen mit Beschriftung.
-		const composed = composePageText(text, page);
-		if (!composed || composed === String(page.ocrText || "").trim()) return;
+		if (!op) return;
 		await STATE.dispatch("heftOps", {
 			pageId: job.pageId,
-			ops: [{ t: "ocr", p: page.id, text: composed }],
+			ops: [op],
 		});
 		ragPending.add(job.pageId);
 	}
@@ -207,12 +218,12 @@ export const HEFT_INDEXER = (() => {
 			const src = await blobData(im.ref);
 			if (!src) return;
 			const { text } = await SCAN_OCR.recognize(src);
-			const previous = String(pg.ocrText || "").trim();
 			// Neue Fassung nur als Kopie: Seite und Bild gehören dem Kern bzw. dem Heft-Editor.
 			const image = { ...im, ocr: text };
-			const composed = composePageText(strokeText, { ...pg, images: pg.images.map((x) => (x.id === im.id ? image : x)) });
+			const updatedPage = { ...pg, images: pg.images.map((x) => (x.id === im.id ? image : x)) };
 			const ops = [{ t: "i=", p: pg.id, o: image }];
-			if (composed && composed !== previous) ops.push({ t: "ocr", p: pg.id, text: composed });
+			const op = ocrOp(updatedPage, strokeText, SRC);
+			if (op) ops.push(op);
 			await STATE.dispatch("heftOps", { pageId, ops });
 			ragPending.add(pageId);
 		} catch (err) {
@@ -224,9 +235,9 @@ export const HEFT_INDEXER = (() => {
 	// Alle Striche weg (radiert, rückgängig): ihr Text darf nicht weiter in der Suche stehen.
 	// Übrig bleibt nur der Text der Scan-Bilder.
 	function clearStrokeText(pageId, pg) {
-		const composed = composePageText("", pg);
-		if (composed === String(pg.ocrText || "").trim()) return;
-		STATE.dispatch("heftOps", { pageId, ops: [{ t: "ocr", p: pg.id, text: composed }] }).catch((e) => console.warn("[heft-indexer] Text leeren:", e));
+		const op = ocrOp(pg, "", SRC);
+		if (!op) return;
+		STATE.dispatch("heftOps", { pageId, ops: [op] }).catch((e) => console.warn("[heft-indexer] Text leeren:", e));
 		ragPending.add(pageId);
 	}
 
@@ -236,6 +247,8 @@ export const HEFT_INDEXER = (() => {
 		const key = checkKey(pageId, pg);
 		// Auch beim Öffnen des Hefts: sonst risse dieselbe Seite die App bei jedem Neustart erneut mit
 		if (crashedTooOften(key)) return;
+		// Hat ein besseres Gerät (Android/Apple) genau diesen Stand schon erkannt, nichts überschreiben.
+		if (!needsOcr(pg, SRC) && String(pg.ocrText || "").trim()) return;
 		const isRecentEdit = force || (HEFT.isWriting && HEFT.isWriting());
 		if (!isRecentEdit && done.has(key) && String(pg.ocrText || "").trim()) return;
 		checked.delete(key);
@@ -247,7 +260,7 @@ export const HEFT_INDEXER = (() => {
 			pageKey: pg.id,
 		});
 		clearTimeout(priorityTimer);
-		priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 3500);
+		priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), PRIORITY_DEBOUNCE_MS);
 	}
 
 	async function processNextBatch() {
@@ -267,7 +280,7 @@ export const HEFT_INDEXER = (() => {
 		if ((HEFT.isWriting && HEFT.isWriting()) || (typeof document !== "undefined" && document.hidden)) {
 			clearTimeout(scanTimer);
 			clearTimeout(priorityTimer);
-			const retryDelay = priorityQueue.size ? 3500 : 5000;
+			const retryDelay = priorityQueue.size ? PRIORITY_DEBOUNCE_MS : SCAN_PAUSE_MS;
 			const timerId = setTimeout(() => runWhenIdle(processNextBatch), retryDelay);
 			if (priorityQueue.size) priorityTimer = timerId;
 			else scanTimer = timerId;
@@ -292,10 +305,10 @@ export const HEFT_INDEXER = (() => {
 			flushRag();
 			if (priorityQueue.size > 0) {
 				clearTimeout(priorityTimer);
-				priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 500);
+				priorityTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
 			} else if (scanRunning) {
 				clearTimeout(scanTimer);
-				scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
+				scanTimer = setTimeout(() => runWhenIdle(processNextBatch), SCAN_PAUSE_MS);
 			}
 			return;
 		}
@@ -332,10 +345,10 @@ export const HEFT_INDEXER = (() => {
 			busy = false;
 		}
 
-		// Nach jedem Durchlauf kurz an den Browser abgeben (2 s Schonpause, schont Akku & CPU)
+		// Nach jedem Durchlauf an den Browser abgeben (5 s Schonpause, schont Akku & CPU)
 		if (scanRunning) {
 			clearTimeout(scanTimer);
-			scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
+			scanTimer = setTimeout(() => runWhenIdle(processNextBatch), SCAN_PAUSE_MS);
 		}
 	}
 
@@ -346,8 +359,8 @@ export const HEFT_INDEXER = (() => {
 		reindexAll = readIndexedModel() !== INDEX_VERSION;
 		hadFailure = false;
 		clearTimeout(scanTimer);
-		// Startet 2 Sekunden nach Aufruf, damit der initiale Renderzyklus frei bleibt
-		scanTimer = setTimeout(() => runWhenIdle(processNextBatch), 2000);
+		// Startet verzögert nach Aufruf, damit der initiale Renderzyklus frei bleibt
+		scanTimer = setTimeout(() => runWhenIdle(processNextBatch), SCAN_PAUSE_MS);
 	}
 
 	return { startBackgroundScan, schedulePage };

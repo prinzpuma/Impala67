@@ -94,6 +94,7 @@ Stand: v2.2.86 (28. Oktober 2026)
   - [ ] Sync: WASM-Größe senken.
   - [x] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe (`core/impala-ffi`).
   - [ ] iPad-App nativ (`ios/`, Stand und offene Punkte in `ios/README.md`): erster CI-Build und Test auf dem Gerät, dann Sync.
+    - [ ] Später: semantische Suche auf dem iPad – lokales Embedding-Modell (`SemanticSearch`), „Verwandt“-Leiste unter Notizen, RAG-Quellen im Chat.
   - [x] PWA: RAG-Index als WASM im Worker.
   - [ ] WASM-Größe (2,29 MB mit Datenmodell): `opt-level` (gemessen: `3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in impala-ai ersetzen.
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.

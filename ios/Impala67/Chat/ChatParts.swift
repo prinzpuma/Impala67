@@ -43,7 +43,12 @@ private struct UserBubble: View {
                     .accessibilityLabel("Nachricht bearbeiten")
             }
             VStack(alignment: .leading, spacing: Space.s1) {
-                if let name = attachmentName { Text(name).font(.system(size: TextSize.xs, weight: .medium)).foregroundStyle(Impala.text2) }
+                if let img = attachedImage {
+                    Image(uiImage: img).resizable().scaledToFit().frame(maxWidth: 220, maxHeight: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                } else if let name = attachmentName {
+                    Text(name).font(.system(size: TextSize.xs, weight: .medium)).foregroundStyle(Impala.text2)
+                }
                 if let text = message.content, !text.isEmpty {
                     Text(text).font(.system(size: TextSize.base)).foregroundStyle(Impala.text).textSelection(.enabled)
                 }
@@ -54,7 +59,14 @@ private struct UserBubble: View {
         }
     }
 
-    /// Anhang aus einer anderen App (`extra.pdfFile`/`textFile`), nur als Name.
+    /// Angehängtes Bild (Data-URL) als Vorschau.
+    private var attachedImage: UIImage? {
+        guard let url = message.image, let comma = url.firstIndex(of: ","), url.hasPrefix("data:"),
+              let data = Data(base64Encoded: String(url[url.index(after: comma)...])) else { return nil }
+        return UIImage(data: data)
+    }
+
+    /// Angehängte Datei (`extra.pdfFile`/`textFile`), nur als Name.
     private var attachmentName: String? {
         let extra = (try? JSONSerialization.jsonObject(with: Data(message.extraJson.utf8))) as? [String: Any] ?? [:]
         if let f = extra["pdfFile"] as? [String: Any] { return "PDF · " + (f["name"] as? String ?? "") }

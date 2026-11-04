@@ -96,7 +96,6 @@ export function updateLassoBarUI(host, lassoSel, lead) {
 		'<button type="button" class="heft-lasso-btn" data-helassotext="1" title="Handschrift als Text erkennen & kopieren">' + lead("note") + 'In Text</button>' +
 		'<button type="button" class="heft-lasso-btn" data-helassodup="1" title="Auswahl duplizieren">' + lead("copy") + 'Duplizieren</button>' +
 		'<button type="button" class="heft-lasso-btn heft-lasso-del" data-helassodel="1" title="Auswahl löschen">' + lead("trash") + 'Löschen</button>' +
-		'<button type="button" class="heft-lasso-btn heft-lasso-train" data-helassotrain="1" title="Als KI-Trainingsbeispiel speichern" aria-label="Als KI-Trainingsbeispiel speichern">' + lead("graduation") + '</button>' +
 		'<button type="button" class="heft-lasso-btn heft-lasso-close" data-helassoclear="1" title="Auswahl aufheben" aria-label="Auswahl aufheben">✕</button>';
 }
 
@@ -162,21 +161,3 @@ export async function recognizeLassoText(lassoSel, handschrift, toast, perfProfi
 	}
 }
 
-/**
- * Speichert die Auswahl als Trainingsbeispiel für die Handschrift-KI.
- */
-export async function trainLassoSample(lassoSel, handschrift, toast) {
-	if (!lassoSel || !lassoSel.strokes || !lassoSel.strokes.length) return;
-	let guess = "";
-	try {
-		guess = (await handschrift.recognizeStrokes(lassoSel.strokes, {}, "lasso-train")) || "";
-	} catch {}
-	const label = window.prompt("Welcher Text steht in dieser Auswahl?", guess);
-	if (label != null && label.trim()) {
-		const saved = handschrift.saveTrainingSample(lassoSel.strokes, label.trim());
-		if (saved && toast) {
-			const count = handschrift.getTrainingSamples().length;
-			toast("Gespeichert! (" + count + " Trainingsbeispiele gesammelt)");
-		}
-	}
-}

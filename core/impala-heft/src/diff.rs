@@ -162,6 +162,8 @@ pub struct ShadowPage {
     pub id: String,
     pub paper: Paper,
     pub ocr_text: String,
+    pub ocr_src: String,
+    pub ocr_key: String,
     pub strokes: Signatures,
     pub images: Signatures,
     pub texts: Signatures,
@@ -208,6 +210,8 @@ impl Shadow {
                     id: p.id.clone(),
                     paper: p.paper.clone(),
                     ocr_text: p.ocr_text.clone(),
+                    ocr_src: p.ocr_src.clone(),
+                    ocr_key: p.ocr_key.clone(),
                     strokes: signatures(&p.strokes, |s| &s.id, Signature::of_stroke),
                     images: signatures(&p.images, |s| &s.id, Signature::of_image),
                     texts: signatures(&p.texts, |s| &s.id, Signature::of_text),
@@ -241,9 +245,14 @@ impl Shadow {
                         self.pages[i].paper = paper.clone();
                     }
                 }
-                HeftOp::Ocr { text, .. } => {
+                HeftOp::Ocr { text, src, key, .. } => {
                     if let Some(i) = page {
-                        self.pages[i].ocr_text = text.clone();
+                        let p = &mut self.pages[i];
+                        if crate::ocr::accepts(&p.ocr_src, &p.ocr_key, src, key) {
+                            p.ocr_text = text.clone();
+                            p.ocr_src = src.clone();
+                            p.ocr_key = key.clone();
+                        }
                     }
                 }
                 HeftOp::Add { item, .. } | HeftOp::Set { item, .. } => {
@@ -386,14 +395,23 @@ pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>,
             {
                 ops.push(HeftOp::PagePaper { page: page.id.clone(), paper: page.paper.clone() });
             }
-            if old.map_or("", |o| o.ocr_text.as_str()) != page.ocr_text {
-                ops.push(HeftOp::Ocr { page: page.id.clone(), text: page.ocr_text.clone() });
+            if old.map_or(("", "", ""), |o| (o.ocr_text.as_str(), o.ocr_src.as_str(), o.ocr_key.as_str()))
+                != (page.ocr_text.as_str(), page.ocr_src.as_str(), page.ocr_key.as_str())
+            {
+                ops.push(HeftOp::Ocr {
+                    page: page.id.clone(),
+                    text: page.ocr_text.clone(),
+                    src: page.ocr_src.clone(),
+                    key: page.ocr_key.clone(),
+                });
             }
             let id = &page.id;
             ShadowPage {
                 id: id.clone(),
                 paper: page.paper.clone(),
                 ocr_text: page.ocr_text.clone(),
+                ocr_src: page.ocr_src.clone(),
+                ocr_key: page.ocr_key.clone(),
                 strokes: diff_items(&mut ops, id, old.map(|o| &o.strokes), &page.strokes),
                 images: diff_items(&mut ops, id, old.map(|o| &o.images), &page.images),
                 texts: diff_items(&mut ops, id, old.map(|o| &o.texts), &page.texts),

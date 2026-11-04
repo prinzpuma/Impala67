@@ -349,6 +349,33 @@ pub fn heft_compose_page_text(stroke_text: &str, page: &JsValue) -> Result<Strin
     Ok(compose_page_text(stroke_text, &HeftPage::from_value(value(page)?)))
 }
 
+/// Fingerabdruck der Striche und Scan-Texte einer Seite.
+#[wasm_bindgen(js_name = heftOcrKey)]
+pub fn heft_ocr_key(page: &JsValue) -> Result<String, JsError> {
+    Ok(impala_heft::ocr::content_key(&HeftPage::from_value(value(page)?)))
+}
+
+/// Braucht `page` eine (erneute) Erkennung durch Quelle `src` (`pwa`, `android`, `apple`)?
+#[wasm_bindgen(js_name = heftNeedsOcr)]
+pub fn heft_needs_ocr(page: &JsValue, src: &str) -> Result<bool, JsError> {
+    Ok(impala_heft::ocr::needs_ocr(&HeftPage::from_value(value(page)?), src))
+}
+
+/// `ocr`-Operation für `page` (oder `null`, wenn veraltet/überflüssig/niedrigerer Rang).
+#[wasm_bindgen(js_name = heftOcrOp)]
+pub fn heft_ocr_op(
+    page: &JsValue,
+    stroke_text: &str,
+    src: &str,
+    expected_key: Option<String>,
+) -> Result<JsValue, JsError> {
+    let pg = HeftPage::from_value(value(page)?);
+    Ok(match impala_heft::ocr::ocr_op(&pg, stroke_text, src, expected_key.as_deref()) {
+        Some(op) => out(op),
+        None => JsValue::NULL,
+    })
+}
+
 /// ID eines Bild-Blobs aus seinen Daten (Teil des gespeicherten Formats).
 #[wasm_bindgen(js_name = heftBlobId)]
 pub fn heft_blob_id(data: &str) -> String {

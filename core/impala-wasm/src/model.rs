@@ -591,7 +591,16 @@ impl ModelCore {
                                 Value::Object(o)
                             })
                             .collect();
-                        json!({ "id": p.id, "strokes": p.strokes.len(), "ocrText": p.ocr_text, "images": images })
+                        json!({
+                            "id": p.id,
+                            "strokes": p.strokes.len(),
+                            "ocrText": p.ocr_text,
+                            "ocrSrc": p.ocr_src,
+                            "ocrKey": p.ocr_key,
+                            "contentKey": impala_heft::ocr::content_key(p),
+                            "needsOcr": impala_heft::ocr::needs_ocr(p, "pwa"),
+                            "images": images,
+                        })
                     })
                     .collect();
                 json!({ "pageId": id, "pages": pages })

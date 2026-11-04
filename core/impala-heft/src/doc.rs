@@ -488,6 +488,10 @@ pub struct HeftPage {
     pub texts: Vec<TextBox>,
     /// Handschrift-Erkennung dieser Seite (für die Suche).
     pub ocr_text: String,
+    /// Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte), siehe [`crate::ocr`].
+    pub ocr_src: String,
+    /// Fingerabdruck der Seite, aus der der Text erkannt wurde ([`crate::ocr::content_key`]).
+    pub ocr_key: String,
     pub extra: Map<String, Value>,
 }
 
@@ -519,6 +523,8 @@ impl HeftPage {
             images: f.take_owned("images", list_of(Image::from_value)).unwrap_or_default(),
             texts: f.take_owned("texts", list_of(TextBox::from_value)).unwrap_or_default(),
             ocr_text: f.take("ocrText", string).unwrap_or_default(),
+            ocr_src: f.take("ocrSrc", string).unwrap_or_default(),
+            ocr_key: f.take("ocrKey", string).unwrap_or_default(),
             extra: f.0,
         }
     }
@@ -537,6 +543,13 @@ impl Serialize for HeftPage {
         w.list("images", &self.images, &self.extra)?;
         w.list("texts", &self.texts, &self.extra)?;
         w.field("ocrText", &self.ocr_text)?;
+        // Nur wenn gesetzt: Hefte ohne Rangfolge-Angaben bleiben unverändert.
+        if !self.ocr_src.is_empty() {
+            w.field("ocrSrc", &self.ocr_src)?;
+        }
+        if !self.ocr_key.is_empty() {
+            w.field("ocrKey", &self.ocr_key)?;
+        }
         w.finish(&self.extra)
     }
 }

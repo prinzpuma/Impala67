@@ -16,6 +16,12 @@ struct HeftCanvas: UIViewRepresentable {
     /// Farbe aus der Palette (`#rrggbb`); [onColor] meldet Farbwechsel im Werkzeugpicker zurück.
     let color: String
     let onColor: (String) -> Void
+    /// Verbindung zur Leiste (Auswahl, Lasso für Text, Einfügen an der sichtbaren Stelle).
+    let link: HeftCanvasLink
+    /// „Bilder & Texte auswählen & bearbeiten“: Finger und Stift wählen statt zu zeichnen.
+    let selecting: Bool
+    /// „Handschrift → Text“: der nächste Strich ist ein Lasso und wird nicht gespeichert.
+    let lassoText: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(core: core, pageId: pageId, heftPageId: heftPageId) }
 
@@ -38,8 +44,11 @@ struct HeftCanvas: UIViewRepresentable {
         // Arbeitsfläche um die Seite wie `--bg0` der PWA (der Canvas selbst steht fest auf hell).
         canvas.backgroundColor = context.environment.colorScheme == .dark ? UIColor(hex: 0x05070D) : UIColor(hex: 0xF2EFE9)
         context.coordinator.onColor = onColor
+        context.coordinator.link = link
+        link.coordinator = context.coordinator
         context.coordinator.setColor(color)
         context.coordinator.reloadIfNeeded(revision)
+        context.coordinator.setModes(selecting: selecting, lassoText: lassoText)
     }
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
@@ -57,8 +66,14 @@ struct HeftCanvas: UIViewRepresentable {
         private let paper = HeftPaperView()
         private let images = HeftObjectsView(.images)
         private let texts = HeftObjectsView(.texts)
+        private let select = HeftSelectLayer()
         private let hold = HoldWatcher(target: nil, action: nil)
         var onColor: ((String) -> Void)?
+        weak var link: HeftCanvasLink?
+        private var selecting = false
+        private var lassoText = false
+        /// Werkzeug vor dem Lasso für „Handschrift → Text“.
+        private var toolBeforeLasso: PKTool?
         private var color = ""
         private var pageSize = CGSize(width: 794, height: 1123)
         private var loadedRevision = -1
@@ -93,6 +108,13 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.insertSubview(paper, at: 0)
             canvas.insertSubview(images, at: 1)
             canvas.addSubview(texts)
+            canvas.addSubview(select)
+            // Ziehen auf der Auswahl verschiebt sie; sonst scrollt die Seite.
+            canvas.panGestureRecognizer.require(toFail: select.pan)
+            select.onSelect = { [weak self] item in self?.link?.selection = item }
+            select.onPreview = { [weak self] item, frame in self?.preview(item, frame) }
+            select.onCommit = { [weak self] item, frame in self?.commit(item, frame) }
+            select.onEditText = { [weak self] id in self?.editText(id) }
             hold.cancelsTouchesInView = false
             hold.delaysTouchesBegan = false
             hold.delaysTouchesEnded = false
@@ -110,9 +132,14 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Seite aus dem Kern neu aufbauen (Öffnen, fremde Änderung).
         func reloadIfNeeded(_ revision: Int) {
-            guard revision != loadedRevision, let canvas else { return }
+            guard revision != loadedRevision else { return }
             loadedRevision = revision
-            guard let data = try? core.heftPage(pageId: pageId, heftPageId: heftPageId) else { return }
+            reload()
+        }
+
+        /// Seite aus dem Kern neu aufbauen (auch nach Änderungen an Bildern und Textfeldern).
+        func reload() {
+            guard let canvas, let data = try? core.heftPage(pageId: pageId, heftPageId: heftPageId) else { return }
             pageSize = CGSize(width: data.width, height: data.height)
             paper.configure(size: pageSize, paper: data.paper)
             let maxSide = canvas.traitCollection.displayScale * 2
@@ -121,6 +148,11 @@ struct HeftCanvas: UIViewRepresentable {
                                  maxPixels: min(4096, Int(max(im.w, im.h) * maxSide)))
             }
             texts.configure(size: pageSize, data: data) { _ in nil }
+            select.configure(size: pageSize, data: data)
+            if link?.selection != select.selected {
+                let kept = select.selected
+                DispatchQueue.main.async { [weak self] in self?.link?.selection = kept }
+            }
             pending.removeAll()
             var strokes: [PKStroke] = []
             known.removeAll()
@@ -158,6 +190,7 @@ struct HeftCanvas: UIViewRepresentable {
             paper.follow(zoom: z)
             images.follow(zoom: z)
             texts.follow(zoom: z)
+            select.follow(zoom: z)
             let w = pageSize.width * z
             let side = max(Self.gutter, (canvas.bounds.width - w) / 2)
             canvas.contentInset = UIEdgeInsets(top: Self.gutter, left: side, bottom: Self.gutter + 80, right: side)
@@ -173,6 +206,7 @@ struct HeftCanvas: UIViewRepresentable {
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
         private func sync(_ canvas: PKCanvasView) {
             let strokes = canvas.drawing.strokes
+            var lasso: PKStroke?
             var seen = Set<UInt32>()
             var moves: [String: (dx: Double, dy: Double, ids: [String])] = [:]
             var toRemove: [String] = []
@@ -202,6 +236,8 @@ struct HeftCanvas: UIViewRepresentable {
                     addStroke(stroke, original: original)
                 } else if pending.contains(where: { $0.randomSeed == seed }) {
                     continue
+                } else if lassoText {
+                    lasso = stroke
                 } else if stroke.ink.inkType == .pen {
                     pending.append(stroke)
                 } else {
@@ -209,6 +245,10 @@ struct HeftCanvas: UIViewRepresentable {
                 }
             }
 
+            if let lasso {
+                recognizeLasso(lasso, in: canvas)
+                return
+            }
             for (seed, k) in known where !seen.contains(seed) {
                 toRemove.append(k.id)
                 removed[seed] = k.data
@@ -216,9 +256,11 @@ struct HeftCanvas: UIViewRepresentable {
             }
             if !toRemove.isEmpty {
                 try? core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove)
+                HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             for move in moves.values {
                 _ = try? core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy)
+                HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             // Erst nach dem Loslassen entscheiden, ob der Stift am Ende gehalten wurde (`HoldWatcher`).
             if !pending.isEmpty {
@@ -258,6 +300,139 @@ struct HeftCanvas: UIViewRepresentable {
             applying = false
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             return true
+        }
+
+        // MARK: Bilder, Textfelder, Handschrift → Text
+
+        /// Auswahlmodus bzw. Lasso für Text ein-/ausschalten (Zeichnen ruht im Auswahlmodus).
+        func setModes(selecting: Bool, lassoText: Bool) {
+            guard let canvas else { return }
+            if selecting != self.selecting {
+                self.selecting = selecting
+                select.isUserInteractionEnabled = selecting
+                canvas.drawingGestureRecognizer.isEnabled = !selecting
+                if !selecting {
+                    select.select(nil)
+                    DispatchQueue.main.async { [weak self] in self?.link?.selection = nil }
+                }
+            }
+            if lassoText != self.lassoText {
+                self.lassoText = lassoText
+                if lassoText {
+                    toolBeforeLasso = canvas.tool
+                    canvas.tool = PKInkingTool(.pen, color: UIColor(Impala.accent).withAlphaComponent(0.7), width: 2)
+                } else if let before = toolBeforeLasso {
+                    canvas.tool = before
+                    toolBeforeLasso = nil
+                }
+            }
+        }
+
+        /// Mitte des sichtbaren Ausschnitts in Seitenkoordinaten (dort landen neue Bilder und Texte).
+        func visibleCenter() -> CGPoint {
+            guard let canvas else { return CGPoint(x: pageSize.width / 2, y: pageSize.height / 2) }
+            let z = max(canvas.zoomScale, 0.01)
+            let c = CGPoint(x: (canvas.contentOffset.x + canvas.bounds.width / 2) / z,
+                            y: (canvas.contentOffset.y + canvas.bounds.height / 2) / z)
+            return CGPoint(x: min(max(c.x, 0), pageSize.width), y: min(max(c.y, 0), pageSize.height))
+        }
+
+        /// Element nach dem Einfügen auswählen (Auswahlmodus an, wie nach „Bild hinzufügen“ in der PWA).
+        func selectAfterReload(_ item: HeftSelectLayer.Item) {
+            select.select(item)
+            link?.selection = item
+        }
+
+        private func preview(_ item: HeftSelectLayer.Item, _ frame: CGRect) {
+            switch item {
+            case .image(let id): images.preview(id, frame: frame)
+            case .text(let id): texts.preview(id, frame: frame)
+            }
+        }
+
+        private func commit(_ item: HeftSelectLayer.Item, _ frame: CGRect) {
+            switch item {
+            case .image(let id):
+                _ = try? core.heftSetImageFrame(pageId: pageId, heftPageId: heftPageId, imageId: id,
+                                                x: frame.minX, y: frame.minY, w: frame.width, h: frame.height)
+            case .text(let id):
+                guard var t = text(id) else { return }
+                t.x = frame.minX
+                t.y = frame.minY
+                t.w = frame.width
+                _ = try? core.heftSetText(pageId: pageId, heftPageId: heftPageId, text: t)
+            }
+            reload()
+        }
+
+        /// Ausgewähltes Bild bzw. Textfeld löschen.
+        func deleteSelection() {
+            guard let item = select.selected else { return }
+            switch item {
+            case .image(let id): _ = try? core.heftRemoveImages(pageId: pageId, heftPageId: heftPageId, ids: [id])
+            case .text(let id): _ = try? core.heftRemoveTexts(pageId: pageId, heftPageId: heftPageId, ids: [id])
+            }
+            select.select(nil)
+            link?.selection = nil
+            reload()
+        }
+
+        func text(_ id: String) -> HeftText? {
+            (try? core.heftPage(pageId: pageId, heftPageId: heftPageId))?.texts.first { $0.id == id }
+        }
+
+        private func editText(_ id: String) {
+            guard let t = text(id) else { return }
+            link?.textEdit = HeftTextEdit(textId: t.id, text: t.text)
+        }
+
+        /// Lasso-Strich entfernen, die umkreisten Striche als Bild an Apple Vision geben.
+        private func recognizeLasso(_ stroke: PKStroke, in canvas: PKCanvasView) {
+            applying = true
+            canvas.drawing = PKDrawing(strokes: canvas.drawing.strokes.filter { $0.randomSeed != stroke.randomSeed })
+            applying = false
+            link?.lassoText = false
+            var polygon: [Float] = []
+            for p in stroke.path {
+                let loc = p.location.applying(stroke.transform)
+                polygon += [Float(loc.x), Float(loc.y)]
+            }
+            let ids = (try? core.heftSelectByLasso(pageId: pageId, heftPageId: heftPageId, polygon: polygon)) ?? []
+            let want = Set(ids)
+            let picked = canvas.drawing.strokes.filter { s in known[s.randomSeed].map { want.contains($0.id) } ?? false }
+            guard !picked.isEmpty else {
+                link?.ocr = HeftOcrResult(text: "", strokeIds: [], bounds: .zero)
+                return
+            }
+            let bounds = picked.reduce(CGRect.null) { $0.union($1.renderBounds) }.insetBy(dx: -16, dy: -16)
+            var ink: UIImage?
+            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+                ink = PKDrawing(strokes: picked).image(from: bounds, scale: 2)
+            }
+            // Vision braucht dunkle Schrift auf hellem Grund, nicht auf Transparenz.
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 2
+            format.opaque = true
+            let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { ctx in
+                UIColor.white.setFill()
+                ctx.fill(CGRect(origin: .zero, size: bounds.size))
+                ink?.draw(in: CGRect(origin: .zero, size: bounds.size))
+            }
+            guard let cg = image.cgImage else { return }
+            Task { [weak self] in
+                let text = await HeftOcr.recognize(cg)
+                self?.link?.ocr = HeftOcrResult(text: text, strokeIds: ids, bounds: bounds)
+            }
+        }
+
+        /// Striche des Lassos durch ein Textfeld an ihrer Stelle ersetzen.
+        func replaceWithText(_ result: HeftOcrResult, text: String, color: String) {
+            _ = try? core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: result.strokeIds)
+            let w = max(160, result.bounds.width)
+            _ = try? core.heftAddText(pageId: pageId, heftPageId: heftPageId, text: text,
+                                      x: result.bounds.minX, y: result.bounds.minY, w: w, color: color, size: 30)
+            reload()
+            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
         }
 
         // MARK: Farbe (Palette ↔ Werkzeugpicker)
@@ -309,6 +484,7 @@ struct HeftCanvas: UIViewRepresentable {
                 transform: stroke.transform,
                 bounds: stroke.renderBounds
             )
+            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
         }
     }
 }

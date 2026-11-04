@@ -40,6 +40,15 @@ private struct ReviewBody: View {
                     VStack(alignment: .leading, spacing: Space.s3) {
                         CardMeta(card: card)
                         FlipCard(card: card, showBack: model.showBack, reduceMotion: reduceMotion)
+                        if shell.cards.feynman, !model.showBack {
+                            FeynmanInput(text: $model.feynText, checking: model.checking) {
+                                withAnimation(.smooth) { model.checkFeynman(chat: shell.chat) }
+                            }
+                            .transition(.opacity)
+                        }
+                        if model.showBack, let v = model.verdict, v.cardId == card.id {
+                            FeynmanFeedback(verdict: v).transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
                     }
                     .frame(maxWidth: 680)
                     .padding(.horizontal, Space.s6)
@@ -88,7 +97,7 @@ private struct ReviewBody: View {
                         Button {
                             withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.showBack = true }
                         } label: {
-                            Text("Antwort zeigen")
+                            Text(shell.cards.feynman ? "Ohne Erklärung aufdecken" : "Antwort zeigen")
                                 .font(.system(size: TextSize.md, weight: .semibold))
                                 .foregroundStyle(Impala.onAccent)
                                 .frame(minWidth: 220, minHeight: 52)
@@ -97,7 +106,7 @@ private struct ReviewBody: View {
                         .buttonStyle(.plain)
                         .glassEffect(.regular.tint(Impala.accent).interactive(), in: Capsule())
                         .glassEffectID(3, in: glass)
-                        .keyboardShortcut(.space, modifiers: [])
+                        .keyboardShortcut(shell.cards.feynman ? nil : KeyboardShortcut(.space, modifiers: []))
                     }
                 }
             }

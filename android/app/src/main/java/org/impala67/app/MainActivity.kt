@@ -110,12 +110,14 @@ class MainActivity : ComponentActivity() {
         val app = application as ImpalaApp
         app.cloudSync.onForeground()
         app.drive.onForeground()
+        app.scope.launch { org.impala67.app.heft.ink.HeftIndexer.startBackgroundScan(app.store.await(), app.scope) }
     }
 
     /** Start-Schnappschuss beim Wechsel in den Hintergrund: der nächste Start spielt weniger Events ab. */
     override fun onStop() {
         super.onStop()
         org.impala67.app.diag.Profiler.setRunning(false)
+        org.impala67.app.heft.ink.HeftIndexer.stopBackgroundScan()
         val app = application as ImpalaApp
         app.cloudSync.onBackground()
         app.drive.onBackground()

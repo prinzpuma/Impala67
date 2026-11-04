@@ -94,8 +94,9 @@ pub enum HeftOp {
     PageOrder { order: Vec<String> },
     /// `pgp`
     PagePaper { page: String, paper: Paper },
-    /// `ocr`: Handschrift-Text der Seite.
-    Ocr { page: String, text: String },
+    /// `ocr`: Handschrift-Text der Seite, mit Quelle (`src`) und Fingerabdruck (`key`) der
+    /// Erkennung; ältere Operationen haben beide nicht (leer). Regel: [`crate::ocr::accepts`].
+    Ocr { page: String, text: String, src: String, key: String },
     /// `s+`/`i+`/`x+`: fügt hinzu, wenn die ID noch fehlt.
     Add { page: String, item: Item },
     /// `s=`/`i=`/`x=`: ersetzt den Inhalt (Position bleibt) oder hängt an.
@@ -126,7 +127,8 @@ impl HeftOp {
             "pgo" => HeftOp::PageOrder { order: str_list(v.get("order")) },
             "pgp" => HeftOp::PagePaper { page: page()?, paper: Paper::parse(v.get("paper")) },
             "ocr" => {
-                HeftOp::Ocr { page: page()?, text: v.get("text").and_then(Value::as_str).unwrap_or("").to_owned() }
+                let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
+                HeftOp::Ocr { page: page()?, text: s("text"), src: s("src"), key: s("key") }
             }
             _ => {
                 let b = t.as_bytes();
@@ -191,10 +193,16 @@ impl Serialize for HeftOp {
                 m.serialize_entry("p", page)?;
                 m.serialize_entry("paper", paper)?;
             }
-            HeftOp::Ocr { page, text } => {
+            HeftOp::Ocr { page, text, src, key } => {
                 m.serialize_entry("t", "ocr")?;
                 m.serialize_entry("p", page)?;
                 m.serialize_entry("text", text)?;
+                if !src.is_empty() {
+                    m.serialize_entry("src", src)?;
+                }
+                if !key.is_empty() {
+                    m.serialize_entry("key", key)?;
+                }
             }
             HeftOp::Add { page, item } | HeftOp::Set { page, item } => {
                 let c = if matches!(self, HeftOp::Add { .. }) { '+' } else { '=' };
@@ -314,9 +322,13 @@ impl HeftDoc {
                     pg.paper = paper;
                 }
             }
-            HeftOp::Ocr { page, text } => {
-                if let Some(pg) = self.page_mut(&page) {
+            HeftOp::Ocr { page, text, src, key } => {
+                if let Some(pg) = self.page_mut(&page)
+                    && crate::ocr::accepts(&pg.ocr_src, &pg.ocr_key, &src, &key)
+                {
                     pg.ocr_text = text;
+                    pg.ocr_src = src;
+                    pg.ocr_key = key;
                 }
             }
             HeftOp::Add { page, item } if !item.id().is_empty() => {
@@ -365,8 +377,13 @@ impl HeftDoc {
         }
         for p in &self.pages {
             let page = || p.id.clone();
-            if !p.ocr_text.is_empty() {
-                ops.push(HeftOp::Ocr { page: page(), text: p.ocr_text.clone() });
+            if !p.ocr_text.is_empty() || !p.ocr_key.is_empty() {
+                ops.push(HeftOp::Ocr {
+                    page: page(),
+                    text: p.ocr_text.clone(),
+                    src: p.ocr_src.clone(),
+                    key: p.ocr_key.clone(),
+                });
             }
             ops.extend(p.strokes.iter().map(|s| HeftOp::Add { page: page(), item: Item::Stroke(s.clone()) }));
             ops.extend(p.images.iter().map(|s| HeftOp::Add { page: page(), item: Item::Image(s.clone()) }));

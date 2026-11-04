@@ -30,7 +30,7 @@ export const S = {
 	highlightedDiff: null, // Diff-Array für die Hervorhebung geänderter Blöcke
 	currentPageId: null,
 	currentWorkspaceId: "default",
-	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "noten" | "daily" | "trash"
+	view: "home", // "home" | "page" | "library" | "chat" | "anki" | "noten" | "trash"
 	pendingImage: null,
 	pendingAttachmentTarget: null, // "side" | "full" — Chat, dem der ausgewählte Anhang gehört
 	attachTarget: "side", // zuletzt geöffneter Datei-Dialog; erst nach Dateiauswahl wird der Anhang zugeordnet
@@ -71,7 +71,6 @@ export const S = {
 	ankiSortDir: 1, // 1 = aufsteigend, -1 = absteigend
 	ankiSearch: "", // Suchtext im Karten-Browser
 	ankiBrowserLimit: 200, // Karten-Browser: max. gerenderte Zeilen („mehr anzeigen“ erhöht)
-	dailyMonth: null, // "YYYY-MM" im Daily-Notes-Kalender (null = aktueller Monat)
 };
 
 // Offener Chat: Der Kern lässt seinen Tab gelten, auch bevor die Sitzung gespeichert ist.

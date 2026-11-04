@@ -3426,6 +3426,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftMoveToFolder(heftId: String, folderId: String?, order: Double?) throws 
     
     /**
+     * Alle Heftseiten (nicht im Papierkorb), die für die Plattform `src` (`pwa`, `android`,
+     * `apple`) noch erkannt oder aufgewertet werden sollten.
+     */
+    func heftOcrJobs(src: String)  -> [HeftOcrJob]
+    
+    /**
      * Eine Heftseite zum Zeichnen.
      */
     func heftPage(pageId: String, heftPageId: String) throws  -> HeftPageData
@@ -3446,6 +3452,14 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Arbeitskopie einer Seite mit noch nicht gespeicherten Änderungen (Gestenvorschau; schreibt nichts).
      */
     func heftPreview(pageId: String, heftPageId: String, changes: [HeftChange]) throws  -> HeftPageData
+    
+    /**
+     * Speichert das Ergebnis der Handschrift-Erkennung (`stroke_text`) der Plattform `src`
+     * (`pwa`, `android`, `apple`) unter Beachtung der Rangfolge und hängt den Text der Scan-Bilder
+     * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
+     * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
+     */
+    func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, src: String, expectedKey: String?) throws  -> Bool
     
     func heftRemoveImages(pageId: String, heftPageId: String, ids: [String]) throws  -> HeftEdit
     
@@ -4746,6 +4760,18 @@ open func heftMoveToFolder(heftId: String, folderId: String?, order: Double?)thr
 }
     
     /**
+     * Alle Heftseiten (nicht im Papierkorb), die für die Plattform `src` (`pwa`, `android`,
+     * `apple`) noch erkannt oder aufgewertet werden sollten.
+     */
+open func heftOcrJobs(src: String) -> [HeftOcrJob]  {
+    return try!  FfiConverterSequenceTypeHeftOcrJob.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(self.uniffiClonePointer(),
+        FfiConverterString.lower(src),$0
+    )
+})
+}
+    
+    /**
      * Eine Heftseite zum Zeichnen.
      */
 open func heftPage(pageId: String, heftPageId: String)throws  -> HeftPageData  {
@@ -4792,6 +4818,24 @@ open func heftPreview(pageId: String, heftPageId: String, changes: [HeftChange])
         FfiConverterString.lower(pageId),
         FfiConverterString.lower(heftPageId),
         FfiConverterSequenceTypeHeftChange.lower(changes),$0
+    )
+})
+}
+    
+    /**
+     * Speichert das Ergebnis der Handschrift-Erkennung (`stroke_text`) der Plattform `src`
+     * (`pwa`, `android`, `apple`) unter Beachtung der Rangfolge und hängt den Text der Scan-Bilder
+     * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
+     * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
+     */
+open func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, src: String, expectedKey: String?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterString.lower(strokeText),
+        FfiConverterString.lower(src),
+        FfiConverterOptionString.lower(expectedKey),$0
     )
 })
 }
@@ -10637,6 +10681,87 @@ public func FfiConverterTypeHeftLassoHandle_lower(_ value: HeftLassoHandle) -> R
 }
 
 
+/**
+ * Eine Heftseite, die auf dieser Plattform (`src`) noch erkannt oder aufgewertet werden sollte.
+ */
+public struct HeftOcrJob {
+    public var pageId: String
+    public var heftPageId: String
+    public var contentKey: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pageId: String, heftPageId: String, contentKey: String) {
+        self.pageId = pageId
+        self.heftPageId = heftPageId
+        self.contentKey = contentKey
+    }
+}
+
+#if compiler(>=6)
+extension HeftOcrJob: Sendable {}
+#endif
+
+
+extension HeftOcrJob: Equatable, Hashable {
+    public static func ==(lhs: HeftOcrJob, rhs: HeftOcrJob) -> Bool {
+        if lhs.pageId != rhs.pageId {
+            return false
+        }
+        if lhs.heftPageId != rhs.heftPageId {
+            return false
+        }
+        if lhs.contentKey != rhs.contentKey {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pageId)
+        hasher.combine(heftPageId)
+        hasher.combine(contentKey)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftOcrJob: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftOcrJob {
+        return
+            try HeftOcrJob(
+                pageId: FfiConverterString.read(from: &buf), 
+                heftPageId: FfiConverterString.read(from: &buf), 
+                contentKey: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftOcrJob, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.pageId, into: &buf)
+        FfiConverterString.write(value.heftPageId, into: &buf)
+        FfiConverterString.write(value.contentKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftOcrJob_lift(_ buf: RustBuffer) throws -> HeftOcrJob {
+    return try FfiConverterTypeHeftOcrJob.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftOcrJob_lower(_ value: HeftOcrJob) -> RustBuffer {
+    return FfiConverterTypeHeftOcrJob.lower(value)
+}
+
+
 public struct HeftPageData {
     public var id: String
     /**
@@ -10652,6 +10777,18 @@ public struct HeftPageData {
      * Erkannter Handschrift-Text.
      */
     public var ocrText: String
+    /**
+     * Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte).
+     */
+    public var ocrSrc: String
+    /**
+     * Fingerabdruck der Seite beim Erkennen.
+     */
+    public var ocrKey: String
+    /**
+     * Aktueller Fingerabdruck der Seite (`impala_heft::ocr::content_key`).
+     */
+    public var contentKey: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -10661,7 +10798,16 @@ public struct HeftPageData {
          */paper: String, width: Double, height: Double, strokes: [HeftStroke], images: [HeftImage], texts: [HeftText], 
         /**
          * Erkannter Handschrift-Text.
-         */ocrText: String) {
+         */ocrText: String, 
+        /**
+         * Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte).
+         */ocrSrc: String, 
+        /**
+         * Fingerabdruck der Seite beim Erkennen.
+         */ocrKey: String, 
+        /**
+         * Aktueller Fingerabdruck der Seite (`impala_heft::ocr::content_key`).
+         */contentKey: String) {
         self.id = id
         self.paper = paper
         self.width = width
@@ -10670,6 +10816,9 @@ public struct HeftPageData {
         self.images = images
         self.texts = texts
         self.ocrText = ocrText
+        self.ocrSrc = ocrSrc
+        self.ocrKey = ocrKey
+        self.contentKey = contentKey
     }
 }
 
@@ -10704,6 +10853,15 @@ extension HeftPageData: Equatable, Hashable {
         if lhs.ocrText != rhs.ocrText {
             return false
         }
+        if lhs.ocrSrc != rhs.ocrSrc {
+            return false
+        }
+        if lhs.ocrKey != rhs.ocrKey {
+            return false
+        }
+        if lhs.contentKey != rhs.contentKey {
+            return false
+        }
         return true
     }
 
@@ -10716,6 +10874,9 @@ extension HeftPageData: Equatable, Hashable {
         hasher.combine(images)
         hasher.combine(texts)
         hasher.combine(ocrText)
+        hasher.combine(ocrSrc)
+        hasher.combine(ocrKey)
+        hasher.combine(contentKey)
     }
 }
 
@@ -10735,7 +10896,10 @@ public struct FfiConverterTypeHeftPageData: FfiConverterRustBuffer {
                 strokes: FfiConverterSequenceTypeHeftStroke.read(from: &buf), 
                 images: FfiConverterSequenceTypeHeftImage.read(from: &buf), 
                 texts: FfiConverterSequenceTypeHeftText.read(from: &buf), 
-                ocrText: FfiConverterString.read(from: &buf)
+                ocrText: FfiConverterString.read(from: &buf), 
+                ocrSrc: FfiConverterString.read(from: &buf), 
+                ocrKey: FfiConverterString.read(from: &buf), 
+                contentKey: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -10748,6 +10912,9 @@ public struct FfiConverterTypeHeftPageData: FfiConverterRustBuffer {
         FfiConverterSequenceTypeHeftImage.write(value.images, into: &buf)
         FfiConverterSequenceTypeHeftText.write(value.texts, into: &buf)
         FfiConverterString.write(value.ocrText, into: &buf)
+        FfiConverterString.write(value.ocrSrc, into: &buf)
+        FfiConverterString.write(value.ocrKey, into: &buf)
+        FfiConverterString.write(value.contentKey, into: &buf)
     }
 }
 
@@ -18337,6 +18504,31 @@ fileprivate struct FfiConverterSequenceTypeHeftLassoHandle: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHeftOcrJob: FfiConverterRustBuffer {
+    typealias SwiftType = [HeftOcrJob]
+
+    public static func write(_ value: [HeftOcrJob], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHeftOcrJob.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HeftOcrJob] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HeftOcrJob]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHeftOcrJob.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHeftPdfPage: FfiConverterRustBuffer {
     typealias SwiftType = [HeftPdfPage]
 
@@ -19858,6 +20050,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_move_to_folder() != 45165) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_ocr_jobs() != 11057) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_page() != 40116) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -19868,6 +20063,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_preview() != 62299) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 35369) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_remove_images() != 45588) {

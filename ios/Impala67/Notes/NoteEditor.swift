@@ -78,6 +78,15 @@ private struct NoteBody: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        // Bilder aus anderen Apps hineinziehen: hinter den aktiven Block bzw. ans Ende.
+        .onDrop(of: [.image], isTargeted: nil) { providers in
+            let after = model.activeId
+            Task {
+                let images = await Self.loadImages(providers)
+                model.insertImages(images, after: after)
+            }
+            return true
+        }
         .background(Impala.panel)
         .safeAreaInset(edge: .bottom) {
             if editing {
@@ -224,6 +233,24 @@ private struct NoteBody: View {
             model.showToast("Datei konnte nicht gelesen werden.")
             return
         }
+    }
+
+    /// Gezogene Bilder lesen: PNG und JPEG unverändert, alles andere (HEIC …) als JPEG.
+    private static func loadImages(_ providers: [NSItemProvider]) async -> [(data: Data, mime: String)] {
+        var out: [(data: Data, mime: String)] = []
+        for p in providers {
+            let png = p.hasItemConformingToTypeIdentifier(UTType.png.identifier)
+            let jpeg = p.hasItemConformingToTypeIdentifier(UTType.jpeg.identifier)
+            let type = png ? UTType.png : jpeg ? UTType.jpeg : UTType.image
+            let data: Data? = await withCheckedContinuation { c in
+                _ = p.loadDataRepresentation(forTypeIdentifier: type.identifier) { d, _ in c.resume(returning: d) }
+            }
+            guard let data else { continue }
+            if png { out.append((data, "image/png")) }
+            else if jpeg { out.append((data, "image/jpeg")) }
+            else if let j = UIImage(data: data)?.jpegData(compressionQuality: 0.85) { out.append((j, "image/jpeg")) }
+        }
+        return out
     }
 
     private func importPhotos(_ items: [PhotosPickerItem]) async {

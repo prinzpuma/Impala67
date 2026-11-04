@@ -273,7 +273,6 @@ function localAiGroup() {
 				'<small>Modell auf Basis von de-htr-web-v2 (naeyn, Apache-2.0); Trainingsdaten: ScaDS.AI German Handwriting (CC BY 4.0), fhswf/german_handwriting (AFL-3.0), Google MathWriting (CC BY 4.0)</small>' +
 			'</span>' +
 			'<span id="handwritingActions">' +
-				button("Abschreiben", "btnOpenAbschreiben", "secondary", false, "pen") + ' ' +
 				button("Alle Handschrift exportieren", "btnExportAllInk", "secondary", false, "upload") + ' ' +
 				(samplesCount > 0
 					? button("Exportieren", "btnExportHandwritingSamples", "secondary", false, "upload") + ' ' + button("Leeren", "btnClearHandwritingSamples", "secondary danger-text", false, "trash")

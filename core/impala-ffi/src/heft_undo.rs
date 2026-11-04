@@ -32,8 +32,13 @@ fn find(pg: &HeftPage, kind: ItemKind, id: &str) -> Option<Item> {
 fn restore_page(at: usize, pg: &HeftPage) -> Vec<HeftOp> {
     let page = || pg.id.clone();
     let mut ops = vec![HeftOp::PageAdd { at: Some(at as f64), page: page(), paper: Some(pg.paper.clone()) }];
-    if !pg.ocr_text.is_empty() {
-        ops.push(HeftOp::Ocr { page: page(), text: pg.ocr_text.clone() });
+    if !pg.ocr_text.is_empty() || !pg.ocr_key.is_empty() {
+        ops.push(HeftOp::Ocr {
+            page: page(),
+            text: pg.ocr_text.clone(),
+            src: pg.ocr_src.clone(),
+            key: pg.ocr_key.clone(),
+        });
     }
     ops.extend(pg.strokes.iter().map(|s| HeftOp::Add { page: page(), item: Item::Stroke(s.clone()) }));
     ops.extend(pg.images.iter().map(|s| HeftOp::Add { page: page(), item: Item::Image(s.clone()) }));
@@ -56,9 +61,16 @@ fn inverse_one(doc: &HeftDoc, op: &HeftOp) -> Vec<HeftOp> {
             .map(|p| HeftOp::PagePaper { page: page.clone(), paper: p.paper.clone() })
             .into_iter()
             .collect(),
-        HeftOp::Ocr { page, .. } => {
-            doc.page(page).map(|p| HeftOp::Ocr { page: page.clone(), text: p.ocr_text.clone() }).into_iter().collect()
-        }
+        HeftOp::Ocr { page, .. } => doc
+            .page(page)
+            .map(|p| HeftOp::Ocr {
+                page: page.clone(),
+                text: p.ocr_text.clone(),
+                src: p.ocr_src.clone(),
+                key: p.ocr_key.clone(),
+            })
+            .into_iter()
+            .collect(),
         HeftOp::Add { page, item } if !item.id().is_empty() => match doc.page(page) {
             Some(pg) if find(pg, item.kind(), item.id()).is_none() => {
                 vec![HeftOp::Remove { page: page.clone(), kind: item.kind(), ids: vec![item.id().to_owned()] }]

@@ -109,8 +109,12 @@ kennt nur die Bedien-Operationen (`NoteModel`, `NoteCommands.swift`):
   Mermaid vom CDN (gleiche Versionen und Prüfsummen wie die PWA, beim ersten Mal Internet nötig;
   `RichView.swift`), beim Bearbeiten mit Live-Vorschau. Tabellen werden direkt in Zellen bearbeitet
   (`TableEditor`, „+ Zeile“/„+ Spalte“). Bilder (Fotos), PDFs und Dateien kommen über das Slash-Menü in
-  den Kern (`addFile`); Dateien öffnen in Quick Look. Callouts, Toggles und Spalten zeigen ihre Kinder;
-  ändern über „Als Markdown bearbeiten“.
+  den Kern (`addFile`); Dateien öffnen in Quick Look. Bilder lassen sich auch aus der Zwischenablage einfügen
+  (nur Bild, kein Text) oder aus anderen Apps hineinziehen (hinter den aktiven Block bzw. ans Ende).
+- **Callouts, Toggles und Spalten**: Kinder sind normale Blöcke – antippen, tippen, Enter teilt, Rücktaste
+  verschmilzt, Blockmenü und Slash-Menü wirken in der jeweiligen Liste (`siblings`/`withSiblings` in
+  `BlockOps.swift`). Enter im leeren letzten Absatz schreibt hinter dem Kasten weiter; eine Kind-Liste
+  bleibt nie leer.
 - **Rund um die Seite**: „N Rückverweise“ unter dem Titel (aufklappbar), Unterseiten am Ende.
 
 ## Startseite
@@ -166,10 +170,24 @@ Karten-Tabs `anki:main` (Übersicht/Lernen/Kartenliste), Dialoge und Editor lieg
 
 - **Seitenleiste** (Pille „Karten“): Stapelbaum mit Unterstapeln (einklappbar), Zählern für fällig
   (Akzent) und neu (Grün), „Übersicht“ und „+“ für neue Stapel. Antippen lernt den Stapel, Halten öffnet
-  das Stapelmenü: Lernen, Neue Karte, Karten ansehen, Unterstapel, Umbenennen, Duplizieren, Archivieren,
-  In Papierkorb (Standard-Stapel nicht umbenenn-/löschbar).
-- **Übersicht**: Satz „N Karten warten auf dich, etwa X Minuten“ (Zahl startet das Lernen), „Gemischt“,
-  Kacheln „Heute fällig“ und „Neue Karten“, Stapel-Liste mit Zählern, „Lernen“ und ⋯-Menü.
+  das Stapelmenü: Lernen, Feynman-Modus, Neue Karte, Karten ansehen, Unterstapel, Umbenennen, Optionen,
+  Duplizieren, Archivieren, In Papierkorb (Standard-Stapel nicht umbenenn-/löschbar).
+- **Übersicht**: Kopf wie die PWA mit „Statistik“, „Optionen“ und „＋ Neu“ (Neue Karte, Neuer Stapel,
+  Import, Export). Satz „N Karten warten auf dich, etwa X Minuten“ (Zahl startet das Lernen), „Gemischt“
+  und „Feynman-Modus“, Kacheln „Heute fällig“ und „Neue Karten“, Stapel-Liste mit Zählern, „Lernen“ und ⋯-Menü.
+- **Stapel-Optionen** (`DeckOptionsSheet`, wie `openDeckConf`): neue Karten und Wiederholungen pro Tag,
+  Leech-Schwelle und -Aktion; „*“ für alle Stapel, Unterstapel erben (`deckConfig`/`setDeckConfig`/
+  `resetDeckConfig` im Kern).
+- **Statistik** (`StatsScreen`, wie anki-stats.js/`StatsData.kt` aus `learningStatsJson`): Satz mit Trend,
+  Trefferquote, Wiederholungen pro Tag, Serie, reife Karten, Swift-Charts für die letzten 30 Tage und die
+  Prognose der nächsten 7 Tage, Lernbestand, Behalten nach Abstand, Stapel-Tabelle, schwierigste Karten.
+- **Import/Export** (`CardIoSheet`, `CardText.swift` wie extras.js/`CardText.kt`): Impala-TXT (empfohlen),
+  CSV/TSV und Anki-Text mit Prüfansicht (Format, Karten, Stapel, Duplikate, Probleme, Vorschau) und
+  „KI-Anweisung kopieren“; Export als TXT oder CSV über das Teilen-Blatt. Anki-Pakete (.apkg) noch nicht.
+- **Feynman-Modus** (`Feynman.swift`, wie experimente.js `checkFeynman`): unter der Frage ein Erklär-Feld
+  (tippen oder diktieren, ⌘↩), „Prüfen & aufdecken“ lässt die KI gegen die Rückseite prüfen (gleicher
+  Prompt wie die PWA) und zeigt die Rubrik samt Notenvorschlag über den Bewertungen; „Ohne Erklärung
+  aufdecken“ statt „Antwort zeigen“.
 - **Lernen**: Fortschrittsbalken, Stapel/Stufe, Karte dreht sich bei „Antwort zeigen“ über die Y-Achse
   (Feder, Wechsel genau auf der Kante; „Bewegung reduzieren“: Überblenden). Vorder- und Rückseite zeigt
   `MarkdownView` mit den Blöcken des Notiz-Editors (Formeln, Code, Tabellen, Bilder, Lückentext-Fett).
@@ -200,8 +218,11 @@ neue Einträge) und setzt `AiPlatform` um: Rückfragen blockieren den Lauf-Threa
   Notiz-Editors, auch der gestreamte Entwurf), „Kopieren“ und „Anpassen“ (Länger/Gleich/Kürzer über
   `refine`), Gedankengang ein-/ausklappbar, Werkzeug-Chips mit Texten wie `TOOL_LABELS`, Änderungs-Karten
   mit „↺ Rückgängig“, Rückfrage-Karten, Fehler mit Weg zu den Einstellungen. Eingabeleiste in Liquid
-  Glass: Modellmenü (Modelle je Quelle, Gedankengang), Senden ↔ Stopp morphen (`glassEffectID`),
-  Enter sendet, Shift+Enter bricht um, ⌘↩ / ⌘. .
+  Glass: 📎 (Foto, Datei oder PDF, „Heftseite anhängen“ im offenen Heft), Diktat (🎤, `Dictation.swift`:
+  Speech auf dem Gerät, Text landet im Feld), Modellmenü (Modelle je Quelle, Gedankengang), Senden ↔ Stopp
+  morphen (`glassEffectID`), Enter sendet, Shift+Enter bricht um, ⌘↩ / ⌘. . Anhänge (`ChatAttach.swift`)
+  gehen wie in der PWA als `image` (JPEG-Data-URL, 1600 px), `textFile` bzw. `pdfFile` (PDF-Text über
+  PDFKit, höchstens 120 000 Zeichen) an den Kern; die eigene Blase zeigt Bild bzw. Dateiname.
 - **Seitenleiste** (Pille „Chat“): „Neuer Chat“, gespeicherte Chats mit gleitender Markierung; Halten: In
   eigenem Tab öffnen, Umbenennen, Löschen. Tab `chat:<id>` zeigt den Chat breit (Titel im Tab).
 - **Einstellungen → KI**: aktives Modell (Liste aller Quellen, Suche, manuelle Modell-ID), Quellen (Name,
@@ -230,9 +251,23 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
 - **Farben** der PWA-Palette (heft-tools.js `COLORS`) als schwebende Glas-Leiste mit gleitendem Ring;
   die Wahl landet über `PKToolPicker.selectedTool` im Werkzeugpicker, Farbwechsel im Picker kommen zurück.
   Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`, Dicke 3. In schmalen Fenstern nur der Picker.
-- **Bilder und Textfelder** (`HeftObjects.swift`, nur Anzeige): Bilder unter, Textfelder über den
+- **Bilder und Textfelder** (`HeftObjects.swift`): Bilder unter, Textfelder über den
   Strichen wie `renderPageTo`; Bilder über `heftImageData`, per ImageIO verkleinert und zwischengespeichert,
   Text wie `drawTextBox` (gerundete Schrift 500, Zeilenhöhe 1,4, Innenabstand 10).
+- **Leiste „Bilder“** (wie `imgPopHtml`): „Bilder & Texte auswählen & bearbeiten“ (`HeftSelectLayer`:
+  Zeichnen ruht, Antippen wählt, Ziehen verschiebt, Griff skaliert – Bilder mit Seitenverhältnis,
+  Textfelder in der Breite –, Doppeltipp bearbeitet Text, Leiste mit Löschen/Fertig; `heftSetImageFrame`,
+  `heftSetText`, `heftRemoveImages`/`heftRemoveTexts`), „Text schreiben“ (`heftAddText` in der Mitte des
+  Ausschnitts), „Bild hinzufügen“ (Fotos), „Bild aufnehmen“ (Kamera) – eingefügte Bilder sind danach
+  gewählt – und „Handschrift → Text“ (statt „In Text“ im Lasso der PWA, `HeftOcr.swift`): der nächste
+  Strich umkreist die Handschrift, Apple Vision liest sie (Deutsch/Englisch, auf dem Gerät), danach
+  Kopieren oder „Als Textfeld ersetzen“.
+- **„+“ halten** (wie `plusPopHtml`): neue Seite mit Papier, „Papier dieser Seite“, „Bild als Seite“,
+  „PDF oder Bild importieren“ (PDFKit rendert jede Seite randlos mit 1800 px, eingebetteter Text wird
+  Texterkennung der Seite) und „Dokument scannen“ (VisionKit-Dokumentenkamera, mehrere Seiten, entzerrt);
+  neue Seiten landen hinter der aktuellen (`HeftImport.swift`).
+- **Teilen** (Pfeil-Knopf): „Als PDF exportieren“ (jede Seite mit 2480 px als JPEG, PDF-Gerüst aus dem Kern
+  `heftBuildPdf`, Dateiname `heftExportFileName`), „Seite als SVG“ (`heftPageSvg`), „Internen Link kopieren“.
 - **Formerkennung**: Wird der Stift am Strichende ~0,45 s gehalten (`HoldWatcher`), erkennt der Kern
   eine Form (`heftFitShape`: Linie, Rechteck, Dreieck, Pfeil, Ellipse); der Strich wird dann durch die
   Form ersetzt (`heftAddShape`, gespeichert wie in PWA/Android als `shape` ohne Punkte). Formen anderer
@@ -305,19 +340,16 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   (`DriveAutoSync` im Kern), Hinweis „nicht gesichert“ auf der Startseite (`driveBackupView`), Drive im
   Hintergrund-Durchgang, Kopplungs-Link (`#cf-pair=`) als Universal Link öffnen, Verdichten, weitere
   Einstellungen.
-- KI-Chat: Anhänge (Bilder, PDF/Text, Heftseite anhängen), Diktat, semantische Suche/RAG (lokales
-  Embedding-Modell, `SemanticSearch`), Karteikarten-Kontext (`AiAnki`), ★-Favoriten im Modellmenü,
-  Mehrfachauswahl in der Chat-Liste, `calculate`.
-- Notiz-Editor: Kinder von Callouts, Toggles und Spalten direkt bearbeiten (bisher als Markdown),
-  Datenbank-Ansicht, „Verwandt“-Leiste, Mehrfachauswahl von Blöcken, Einfügen von Bildern aus der
-  Zwischenablage bzw. per Drag & Drop von außen.
-- Heft: Bilder und Textfelder bearbeiten (anlegen, verschieben, löschen), Import von PDFs/Fotos,
-  Export, Verlauf, Handschrift → Text, Formvorschau während des Haltens, Dicken der PWA (`SIZES`).
+- KI-Chat: Karteikarten-Kontext (`AiAnki`), ★-Favoriten im Modellmenü, Mehrfachauswahl in der
+  Chat-Liste, `calculate`. Später: semantische Suche/RAG (lokales Embedding-Modell, `SemanticSearch`).
+- Notiz-Editor: Datenbank-Ansicht, Mehrfachauswahl von Blöcken, Kopfzeile „Teilen ★ ⋯“ der PWA
+  (Markdown/PDF-Export der Notiz). Später: „Verwandt“-Leiste (braucht den semantischen Index).
+- Heft: Verlauf, Rückgängig für Bild-/Textfeld-Änderungen (PencilKit kennt nur Striche), Formvorschau
+  während des Haltens, Dicken der PWA (`SIZES`), PNG-Export einzelner Seiten.
 - Startseite: „Weißt du's noch?“, Lernanalyse (lernanalyse.js), Backup-Hinweis; Lernzeit auch in Notizen,
   Heft und Chat erfassen (bisher nur beim Kartenlernen), Pausen-Erinnerung nach 40 min.
-- Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Stapel-Optionen (Tageslimits, Leech),
-  Feynman-Modus, Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
-  Import/Export, Statistik.
+- Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb
+  für Karten, Anki-Pakete (.apkg), Heatmap und Lernanalyse der Statistik.
 - Bibliothek: Heft-Regal mit Ordnern und Covern, Smart-Filter (Alle/Favoriten/Vorlagen), PDF-KI-Zusammenfassung.
 - Wissensgraph: Skill-Graph der PWA aus Karteikarten (`knowledgeGraph` in den Einstellungen, synchronisiert)
   anzeigen. Gemini Notebook: Download-Import/Inbox.

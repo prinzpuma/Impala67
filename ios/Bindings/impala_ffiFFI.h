@@ -1192,6 +1192,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_move_strokes(void*_Nonnul
 void uniffi_impala_ffi_fn_method_impalacore_heft_move_to_folder(void*_Nonnull ptr, RustBuffer heft_id, RustBuffer folder_id, RustBuffer order, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_OCR_JOBS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_OCR_JOBS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(void*_Nonnull ptr, RustBuffer src, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_page(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustCallStatus *_Nonnull out_status
@@ -1210,6 +1215,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_page_svg(void*_Nonnull pt
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PREVIEW
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PREVIEW
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_preview(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer changes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_RECORD_OCR
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_RECORD_OCR
+int8_t uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_text, RustBuffer src, RustBuffer expected_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_REMOVE_IMAGES
@@ -3177,6 +3187,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_move_to_folder(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_OCR_JOBS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_OCR_JOBS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_ocr_jobs(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_page(void
@@ -3198,6 +3214,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_page_svg(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PREVIEW
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PREVIEW
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_preview(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_RECORD_OCR
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_RECORD_OCR
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr(void
     
 );
 #endif

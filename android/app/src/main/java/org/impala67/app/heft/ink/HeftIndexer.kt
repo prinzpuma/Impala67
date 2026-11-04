@@ -9,10 +9,11 @@ import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
 
 /**
- * Macht Heftseiten durchsuchbar (Gegenstück zu `heft-indexer.js`): Nach Strich-Änderungen wird die Seite
- * verzögert erkannt und der Text über `heftSetPageText` gespeichert. Eine Seite mit Scan-Text
- * (`images[].ocr`) wird übersprungen, weil der Zusammenbau „Striche + Scan-Text“ bisher nur im Rust-Kern
- * (`compose_page_text`) liegt und dort nicht über die FFI erreichbar ist. Sonst ginge der Scan-Text verloren.
+ * Macht Heftseiten durchsuchbar (Gegenstück zu `heft-indexer.js`, Quelle `"android"`):
+ * - Nach Strich-Änderungen wird die Seite verzögert erkannt und über `heftRecordOcr` gespeichert.
+ *   Der Kern hängt den Text vorhandener Scan-Bilder an und beachtet die Rangfolge (`apple > android > pwa`).
+ * - [startBackgroundScan] wertet im Leerlauf Seiten auf, die noch keinen Text haben oder bisher nur
+ *   von der PWA erkannt wurden (`heftOcrJobs("android")`).
  */
 class HeftIndexer(
     private val store: ImpalaStore,
@@ -28,7 +29,7 @@ class HeftIndexer(
         jobs[heftPageId] = scope.launch {
             delay(DEBOUNCE_MS)
             try {
-                indexPage(heftPageId)
+                indexOne(store, recognizer, heftId, heftPageId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -37,22 +38,63 @@ class HeftIndexer(
         }
     }
 
-    private suspend fun indexPage(heftPageId: String) {
-        val page = store.write { it.heftPage(heftId, heftPageId) }
-        if (page.images.any { !it.ocr.isNullOrEmpty() }) return
-        // Ein leeres Ergebnis ersetzt keinen vorhandenen Text; „keine Striche“ leert ihn dagegen.
-        val text = if (page.strokes.isEmpty()) "" else recognizer.recognize(page.strokes) ?: return
-        if (text == page.ocrText) return
-        store.write { it.heftSetPageText(heftId, heftPageId, text) }
-    }
-
     override fun close() {
         recognizer.close()
     }
 
-    private companion object {
-        const val TAG = "HeftIndexer"
-        // Wie in der PWA: 3,5 s nach dem letzten Strich.
-        const val DEBOUNCE_MS = 3500L
+    companion object {
+        private const val TAG = "HeftIndexer"
+        private const val SRC = "android"
+        // Akkuschonend: 15 s nach dem letzten Strich, 6 s Pause zwischen Hintergrund-Seiten.
+        private const val DEBOUNCE_MS = 15_000L
+        private const val BG_START_DELAY_MS = 8_000L
+        private const val BG_PAUSE_MS = 6_000L
+
+        @Volatile
+        private var bgJob: Job? = null
+
+        private suspend fun indexOne(
+            store: ImpalaStore,
+            recognizer: HandwritingRecognizer,
+            heftId: String,
+            heftPageId: String,
+        ) {
+            val page = store.write { it.heftPage(heftId, heftPageId) }
+            val strokeText = if (page.strokes.isEmpty()) "" else recognizer.recognize(page.strokes) ?: ""
+            store.write { it.heftRecordOcr(heftId, heftPageId, strokeText, SRC, page.contentKey) }
+        }
+
+        /**
+         * Wertet im Leerlauf ungescannte oder nur von der PWA erkannte Heftseiten mit ML Kit auf.
+         * Läuft höchstens einmal gleichzeitig und merkt sich in dieser Sitzung versuchte Seiten.
+         */
+        fun startBackgroundScan(store: ImpalaStore, scope: CoroutineScope) {
+            if (bgJob?.isActive == true) return
+            bgJob = scope.launch {
+                delay(BG_START_DELAY_MS)
+                val tried = HashSet<String>()
+                HandwritingRecognizer().use { rec ->
+                    while (true) {
+                        val next = store.write { it.heftOcrJobs(SRC) }
+                            .firstOrNull { tried.add("${it.pageId}:${it.heftPageId}:${it.contentKey}") }
+                            ?: break
+                        try {
+                            indexOne(store, rec, next.pageId, next.heftPageId)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Hintergrund-Erkennung übersprungen", e)
+                            break
+                        }
+                        delay(BG_PAUSE_MS)
+                    }
+                }
+            }
+        }
+
+        fun stopBackgroundScan() {
+            bgJob?.cancel()
+            bgJob = null
+        }
     }
 }

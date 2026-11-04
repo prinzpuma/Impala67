@@ -37,7 +37,6 @@ import {
 	newPageFlow,
 	setAnkiZen,
 	openAnki,
-	openDailyNote,
 	rateAndReviewCard,
 	showStudyAnswer,
 	gradeStudyCard,
@@ -310,7 +309,7 @@ function wireEvents() {
 		"[data-answerq],[data-refinetoggle],[data-refine],[data-inserttoggle],[data-insertmark]," +
 		"[data-ankitab],[data-ankistudy],[data-ankigrade],[data-ankishowback],[data-ankiwaitrefresh],[data-ankisort],[data-ankimore],[data-ankideckfilter],[data-ankizen]," +
 		"[data-ankisuspend],[data-ankiarchive],[data-ankiunarchive],[data-ankidel],[data-ankiedit],[data-ankinewcard],[data-cardeditorsave]," +
-		"[data-dailyday],[data-dailynav],[data-zipws]," +
+		"[data-zipws]," +
 		"[data-deckopen],[data-decknew],[data-decksub],[data-deckrename],[data-deckdel],[data-deckarchive],[data-deckunarchive],[data-deckmenu],[data-deckduplicate]," +
 		"[data-pagemenu],[data-pageopennew],[data-pagerename],[data-pageduplicate],[data-pagearchive],[data-pageunarchive],[data-pagetrash],[data-pagerestore],[data-pagepurge],[data-cardrestore],[data-cardpurge],[data-deckrestore],[data-deckpurge]," +
 		"[data-pagetemplate],[data-pagedb],[data-tplblank],[data-tplheft],[data-tpluse],[data-histversion],[data-renamename],[data-deckrenamename]," +
@@ -442,7 +441,6 @@ function wireEvents() {
 				case "chats": S.sidebarMode = "chats"; render(); break;
 				case "library": S.view = "library"; S.libFolder = null; render(); break;
 				case "cards": openAnki("study", null); break;
-				case "daily": await openDailyNote(localDayKey(new Date())); break;
 				case "backup": await SETTINGS.handleBackupNow(); break;
 				case "backup-now": await backupFromHome(t); break;
 				case "backup-setup": SETTINGS.openSettings("sync"); break;
@@ -806,7 +804,6 @@ export const APP = {
 	wireEvents,
 	closeOverlay,
 	newPageFlow,
-	openDailyNote,
 	startNewChat,
 	createPageInNewTab,
 	// Für Strg+K-Aktionen (search.js) — „Karten verwalten“ & Co.

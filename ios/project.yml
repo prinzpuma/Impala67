@@ -26,11 +26,14 @@ targets:
         BGTaskSchedulerPermittedIdentifiers: [org.impala67.app.sync]
         # Google-Drive-Backup: iOS-OAuth-Client-ID (siehe GOOGLE_IOS_CLIENT_ID unten).
         ImpalaGoogleClientID: $(GOOGLE_IOS_CLIENT_ID)
+        # Diktat im KI-Chat und im Feynman-Modus (Speech, auf dem Gerät).
+        NSMicrophoneUsageDescription: Zum Diktieren von Nachrichten und Erklärungen.
+        NSSpeechRecognitionUsageDescription: Wandelt dein Diktat in Text um.
     settings:
       base:
-        # PLATZHALTER: OAuth-Client vom Typ „iOS“ (Bundle-ID org.impala67.app) im selben Google-Cloud-
-        # Projekt wie die Web-Client-ID der PWA, z. B. 1234-abcd.apps.googleusercontent.com. Kein Geheimnis.
-        GOOGLE_IOS_CLIENT_ID: DEINE_IOS_CLIENT_ID.apps.googleusercontent.com
+        # OAuth-Client vom Typ „iOS“ (Bundle-ID org.impala67.app) im selben Google-Cloud-
+        # Projekt wie die Web-Client-ID der PWA. Kein Geheimnis.
+        GOOGLE_IOS_CLIENT_ID: 100283147644-k2jjbfr212jlsbrth3m6n54lhjktjv2e.apps.googleusercontent.com
         PRODUCT_BUNDLE_IDENTIFIER: org.impala67.app
         PRODUCT_NAME: Impala67
         # iPad zuerst; auf dem iPhone läuft dieselbe Oberfläche (NavigationSplitView klappt zusammen).
@@ -40,8 +43,8 @@ targets:
         # App-Icon aus web/icon.svg (npm run ios:app-icon → Assets.xcassets/AppIcon.appiconset).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        # QR-Kopplung (VisionKit-Scanner).
-        INFOPLIST_KEY_NSCameraUsageDescription: Zum Scannen des Kopplungs-QR-Codes eines anderen Geräts.
+        # QR-Kopplung, Dokumentenscanner und „Bild aufnehmen“ im Heft (VisionKit, Kamera).
+        INFOPLIST_KEY_NSCameraUsageDescription: Zum Scannen von Dokumenten und Kopplungs-QR-Codes und für Fotos im Heft.
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

@@ -28,8 +28,7 @@ import {
 	updateLassoBarUI,
 	duplicateLassoStrokes,
 	deleteLassoStrokes,
-	recognizeLassoText,
-	trainLassoSample
+	recognizeLassoText
 } from "./heft-lasso.js";
 import { loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { TRAY_DOCK_PX, trayCss, toolbarHtml as buildToolbarHtml, plusPopHtml as buildPlusPopHtml, imgPopHtml } from "./heft-toolbar-ui.js";
@@ -1134,10 +1133,6 @@ export const HEFT = (() => {
 		recognizeLassoText(lassoSel, HANDSCHRIFT, U.toast, PERF_PROFILER);
 	}
 
-	function trainLassoSelection() {
-		trainLassoSample(lassoSel, HANDSCHRIFT, U.toast);
-	}
-
 	function duplicateLassoSelection() {
 		const next = duplicateLassoStrokes(lassoSel, doc, pushUndo);
 		if (!next) return;
@@ -1409,7 +1404,6 @@ export const HEFT = (() => {
 		if (d.henavback) { BUS.emit("tabs:nav-back"); return; }
 		if (d.henavforward) { BUS.emit("tabs:nav-forward"); return; }
 		if (d.helassotext) { recognizeLassoSelection(); return; }
-		if (d.helassotrain) { trainLassoSelection(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
 		if (d.helassodel) { deleteLassoSelection(); return; }
 		if (d.helassoclear) { dropLasso(); updateChrome(); return; }

@@ -12,6 +12,7 @@ pub mod geometry;
 pub mod ink;
 mod json;
 pub mod lasso;
+pub mod ocr;
 pub mod ops;
 pub mod pages;
 

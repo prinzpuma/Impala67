@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Eingabefeld des aktiven Blocks. `UITextView`, weil SwiftUI weder die Rücktaste am Anfang noch Auswahl
 /// und Tastenkürzel meldet; wächst mit dem Text (kein eigenes Scrollen). Enter landet als Zeilenumbruch
@@ -20,6 +21,8 @@ struct BlockTextView: UIViewRepresentable {
     /// Ob die Taste hier etwas tut (sonst normales Verhalten des Textfelds), und was sie tut.
     let wants: (BlockKey, String) -> Bool
     let onKey: (BlockKey) -> Void
+    /// Bilder in der Zwischenablage (ohne Text) werden nicht in den Text, sondern als Bildblock eingefügt.
+    let onPasteImages: ([(data: Data, mime: String)]) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -35,6 +38,7 @@ struct BlockTextView: UIViewRepresentable {
         v.onBackspaceAtStart = { c?.parent.onBackspaceAtStart() }
         v.wants = { key, text in c?.parent.wants(key, text) ?? false }
         v.onKey = { c?.parent.onKey($0) }
+        v.onPasteImages = { c?.parent.onPasteImages($0) }
         return v
     }
 
@@ -110,6 +114,23 @@ final class BlockUITextView: UITextView {
     var onBackspaceAtStart: (() -> Void)?
     var wants: ((BlockKey, String) -> Bool)?
     var onKey: ((BlockKey) -> Void)?
+    var onPasteImages: (([(data: Data, mime: String)]) -> Void)?
+
+    /// Nur Bilder in der Zwischenablage: als Bildblöcke einfügen (PNG bleibt PNG, sonst JPEG).
+    override func paste(_ sender: Any?) {
+        let pb = UIPasteboard.general
+        guard pb.hasImages, !pb.hasStrings, !pb.hasURLs, let onPasteImages else { return super.paste(sender) }
+        let images: [(data: Data, mime: String)] = pb.itemProviders.indices.compactMap { i in
+            if let png = pb.data(forPasteboardType: UTType.png.identifier, inItemSet: IndexSet(integer: i))?.first { return (png, "image/png") }
+            return pb.images.flatMap { $0.indices.contains(i) ? $0[i].jpegData(compressionQuality: 0.85) : nil }.map { ($0, "image/jpeg") }
+        }
+        if !images.isEmpty { onPasteImages(images) }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), UIPasteboard.general.hasImages { return true }
+        return super.canPerformAction(action, withSender: sender)
+    }
 
     override func deleteBackward() {
         if selectedRange.location == 0, selectedRange.length == 0 {

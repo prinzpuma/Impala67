@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Chatverlauf mit Eingabe (`ChatView.kt`, `web/chat-*.js`): im KI-Panel rechts und als Tab `chat:<id>`.
 /// `activePageId`: geöffnete Seite als Kontext (im Tab keiner).
@@ -109,7 +111,8 @@ private struct EmptyChat: View {
     }
 }
 
-/// Eingabeleiste in Liquid Glass: Seitenkontext-Chip, Textfeld, Modellmenü, Senden bzw. Stopp.
+/// Eingabeleiste in Liquid Glass: Seitenkontext-Chip, Anhang, Textfeld, Anhängen (📎), Diktat,
+/// Modellmenü, Senden bzw. Stopp.
 private struct Composer: View {
     @Binding var input: String
     var focused: FocusState<Bool>.Binding
@@ -117,13 +120,29 @@ private struct Composer: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @Namespace private var glass
+    @State private var dictation = Dictation()
+    @State private var photo: PhotosPickerItem?
+    @State private var pickPhoto = false
+    @State private var pickFile = false
+    @State private var attachError: String?
 
     var body: some View {
         let chat = shell.chat
         let canSend = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let heft = activePageId.flatMap { store.core.page(id: $0)?.summary }.flatMap { $0.kind == .heft ? $0 : nil }
         VStack(alignment: .leading, spacing: Space.s2) {
             if let id = activePageId, let page = store.core.page(id: id)?.summary {
                 ContextChip(page: page)
+            }
+            if let att = chat.attachment {
+                AttachmentChip(attachment: att) { withAnimation(.snappy) { chat.attachment = nil } }
+                    .transition(.scale(scale: 0.9, anchor: .leading).combined(with: .opacity))
+            }
+            if dictation.listening {
+                Text(dictation.partial.isEmpty ? "Ich höre zu …" : dictation.partial)
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+                    .lineLimit(2)
             }
             TextField("Frag deinen KI-Coach…", text: $input, axis: .vertical)
                 .font(.system(size: TextSize.base))
@@ -136,6 +155,27 @@ private struct Composer: View {
                     return .handled
                 }
             HStack(spacing: Space.s2) {
+                Menu {
+                    Button { pickPhoto = true } label: { Label { Text("Foto") } icon: { Icon("image") } }
+                    Button { pickFile = true } label: { Label { Text("Datei oder PDF") } icon: { Icon("file") } }
+                    if let heft {
+                        Button {
+                            attach(ChatAttachment.heftPage(core: store.core, pageId: heft.id), fail: "Heftseite konnte nicht gelesen werden.")
+                        } label: { Label { Text("Heftseite anhängen") } icon: { Icon("pen-tool") } }
+                    }
+                } label: {
+                    Icon("paperclip", size: 15).foregroundStyle(Impala.text2).frame(width: 30, height: 30).contentShape(Rectangle())
+                }
+                .accessibilityLabel("Anhängen")
+                Button { dictation.toggle() } label: {
+                    Icon("mic", size: 15)
+                        .foregroundStyle(dictation.listening ? Impala.accent : Impala.text2)
+                        .symbolEffect(.pulse, isActive: dictation.listening)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(dictation.listening ? "Diktat beenden" : "Diktieren")
                 ModelMenu()
                 Spacer(minLength: 0)
                 GlassEffectContainer {
@@ -155,13 +195,68 @@ private struct Composer: View {
         .padding(.vertical, Space.s2)
         .impalaGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .sensoryFeedback(.impact(weight: .light), trigger: chat.running) { _, now in now }
+        .animation(.snappy, value: chat.attachment?.id)
+        .animation(.snappy, value: dictation.listening)
+        .onAppear {
+            dictation.onFinal = { said in
+                let base = input.trimmingCharacters(in: .whitespaces)
+                input = base.isEmpty ? said : base + " " + said
+            }
+        }
+        .photosPicker(isPresented: $pickPhoto, selection: $photo, matching: .images)
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            photo = nil
+            Task {
+                let img = (try? await item.loadTransferable(type: Data.self)).flatMap(UIImage.init(data:))
+                attach(img.flatMap { ChatAttachment.image($0, name: "Foto") }, fail: "Foto konnte nicht gelesen werden.")
+            }
+        }
+        .fileImporter(isPresented: $pickFile, allowedContentTypes: [.pdf, .image, .plainText, .text, .commaSeparatedText, .json, .sourceCode, .data]) { result in
+            guard case .success(let url) = result else { return }
+            attach(ChatAttachment.file(url), fail: "Datei konnte nicht gelesen werden (PDF ohne Text oder kein Textformat).")
+        }
+        .alert("Anhang", isPresented: Binding(get: { attachError != nil || dictation.error != nil },
+                                              set: { if !$0 { attachError = nil; dictation.error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(attachError ?? dictation.error ?? "") }
+    }
+
+    private func attach(_ att: ChatAttachment?, fail: String) {
+        if let att { shell.chat.attachment = att } else { attachError = fail }
     }
 
     private func submit() {
         let chat = shell.chat
+        if dictation.listening { dictation.stop() }
         guard !chat.running, !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         chat.send(input, activePageId: activePageId)
         input = ""
+    }
+}
+
+/// Anhang über dem Textfeld: Vorschau bzw. Dateisymbol, Name, ✕ entfernt ihn.
+private struct AttachmentChip: View {
+    let attachment: ChatAttachment
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: Space.s2) {
+            if let img = attachment.preview {
+                Image(uiImage: img).resizable().scaledToFill().frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+            } else {
+                Icon("file", size: 14).foregroundStyle(Impala.text2).frame(width: 34, height: 34)
+                    .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+            }
+            Text(attachment.name).font(.system(size: TextSize.xs, weight: .medium)).foregroundStyle(Impala.text).lineLimit(1)
+            Button(action: onRemove) { Icon("x", size: 10).foregroundStyle(Impala.text2).frame(width: 24, height: 24) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Anhang entfernen")
+        }
+        .padding(.trailing, Space.s1)
+        .padding(Space.s1)
+        .background(Impala.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
     }
 }
 

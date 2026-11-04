@@ -153,7 +153,6 @@ function renderTopbar() {
 	set("btnChatTab", mode === "chats");
 	set("btnAnki", mode === "anki");
 	set("btnLibrary", S.view === "library");
-	set("btnDaily", S.view === "daily");
 }
 
 function aiStatusMeta() {
@@ -648,7 +647,7 @@ function renderMain() {
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
-	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), daily: renderDaily, trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
+	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
 	if (views[S.view]) {
 		// Fremde Renderer verwalten #main selbst. Ihr DOM darf nie mit einem alten
 		// Seitenshell-Cache verwechselt werden, wenn man später zur Seite zurückkehrt.
@@ -1107,29 +1106,6 @@ function hydrateImages(root) {
 function localDayKey(x) {
 	const d = new Date(x);
 	return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-}
-
-// Daily Notes (📅): Monatskalender, jeder Tag eine eigene Seite
-function renderDaily(main) {
-	const now = new Date();
-	const cur = S.dailyMonth ? new Date(S.dailyMonth + "-01T12:00:00") : new Date(now.getFullYear(), now.getMonth(), 1);
-	const y = cur.getFullYear(), mo = cur.getMonth();
-	const todayKey = localDayKey(now);
-	const notes = {};
-	STATE.activePages().forEach((p) => { if (p.daily) notes[p.daily] = p; });
-	const startOffset = (new Date(y, mo, 1).getDay() + 6) % 7; // Montag = 0
-	let cells = '<div class="cal-day other"></div>'.repeat(startOffset);
-	for (let d = 1, days = new Date(y, mo + 1, 0).getDate(); d <= days; d++) {
-		const key = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-		const pg = notes[key];
-		const snippet = pg ? ((pg.content || "").split("\n").find((l) => l.trim()) || "") : "";
-		cells += `<div class="cal-day${key === todayKey ? " today" : ""}${pg ? " has-note" : ""}" data-dailyday="${key}" title="${key}"><span class="cal-num">${d}</span>${pg ? `<span class="cal-snippet">${esc(snippet.slice(0, 70))}</span>` : ""}</div>`;
-	}
-	U.morph(main, '<div class="library daily"><div class="lib-head"><h1>' + lead("calendar") + 'Daily Notes</h1>' +
-		'<div class="mode-btns"><button data-dailynav="-1" title="Voriger Monat">‹</button><button id="btnDailyToday">Heute</button><button data-dailynav="1" title="Nächster Monat">›</button></div>' +
-		`<span class="hint">${cur.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} — Tag anklicken öffnet (oder erstellt) die Tagesseite</span></div>` +
-		'<div class="cal-grid cal-head-row">' + ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((d) => `<div class="cal-dow">${d}</div>`).join("") + "</div>" +
-		'<div class="cal-grid">' + cells + "</div></div>");
 }
 
 // Anlege-Dialog: Notion-Seite oder GoodNotes-Heft, Vorlagen darunter

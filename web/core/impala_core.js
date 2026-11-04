@@ -3073,6 +3073,93 @@ export function heftNearPoint(px, py, x, y, radius) {
 }
 
 /**
+ * Braucht `page` eine (erneute) Erkennung durch Quelle `src` (`pwa`, `android`, `apple`)?
+ * @param {any} page
+ * @param {string} src
+ * @returns {boolean}
+ */
+export function heftNeedsOcr(page, src) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.heftNeedsOcr(retptr, addBorrowedObject(page), ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return r0 !== 0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Fingerabdruck der Striche und Scan-Texte einer Seite.
+ * @param {any} page
+ * @returns {string}
+ */
+export function heftOcrKey(page) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftOcrKey(retptr, addBorrowedObject(page));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr1 = r0;
+        var len1 = r1;
+        if (r3) {
+            ptr1 = 0; len1 = 0;
+            throw takeObject(r2);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * `ocr`-Operation für `page` (oder `null`, wenn veraltet/überflüssig/niedrigerer Rang).
+ * @param {any} page
+ * @param {string} stroke_text
+ * @param {string} src
+ * @param {string | null} [expected_key]
+ * @returns {any}
+ */
+export function heftOcrOp(page, stroke_text, src, expected_key) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(stroke_text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(src, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        var ptr2 = isLikeNone(expected_key) ? 0 : passStringToWasm0(expected_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len2 = WASM_VECTOR_LEN;
+        wasm.heftOcrOp(retptr, addBorrowedObject(page), ptr0, len0, ptr1, len1, ptr2, len2);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Punkt im Polygon (`poly` flach `[x, y, …]`).
  * @param {number} x
  * @param {number} y
@@ -3994,7 +4081,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4720(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4734(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4040,7 +4127,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4720(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4734(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4133,7 +4220,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 187, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4665);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4679);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -4160,14 +4247,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4720(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4720(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4734(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4734(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4665(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4679(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4665(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4679(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

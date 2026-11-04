@@ -99,6 +99,14 @@ pub struct HeftEdit {
     pub undo: String,
 }
 
+/// Eine Heftseite, die auf dieser Plattform (`src`) noch erkannt oder aufgewertet werden sollte.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftOcrJob {
+    pub page_id: String,
+    pub heft_page_id: String,
+    pub content_key: String,
+}
+
 /// Rechteck in Seitenkoordinaten.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct HeftRect {
@@ -330,8 +338,8 @@ impl Inner {
                 Some(HeftOp::PagePaper { page, paper: parse_paper(&paper)? })
             }
             HeftChange::SetPageText { page, text } => {
-                self.heft_page(page_id, &page)?;
-                Some(HeftOp::Ocr { page, text })
+                let pg = self.heft_page(page_id, &page)?;
+                Some(HeftOp::Ocr { page, text, src: String::new(), key: impala_heft::ocr::content_key(pg) })
             }
         })
     }
@@ -765,6 +773,50 @@ impl ImpalaCore {
         text: String,
     ) -> Result<HeftEdit, CoreError> {
         self.heft_apply(page_id, vec![HeftChange::SetPageText { page: heft_page_id, text }])
+    }
+
+    /// Speichert das Ergebnis der Handschrift-Erkennung (`stroke_text`) der Plattform `src`
+    /// (`pwa`, `android`, `apple`) unter Beachtung der Rangfolge und hängt den Text der Scan-Bilder
+    /// an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
+    /// ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
+    pub fn heft_record_ocr(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_text: String,
+        src: String,
+        expected_key: Option<String>,
+    ) -> Result<bool, CoreError> {
+        let mut inner = self.lock();
+        let pg = inner.heft_page(&page_id, &heft_page_id)?;
+        let Some(op) = impala_heft::ocr::ocr_op(pg, &stroke_text, &src, expected_key.as_deref()) else {
+            return Ok(false);
+        };
+        inner.heft_ops(&page_id, vec![op])?;
+        Ok(true)
+    }
+
+    /// Alle Heftseiten (nicht im Papierkorb), die für die Plattform `src` (`pwa`, `android`,
+    /// `apple`) noch erkannt oder aufgewertet werden sollten.
+    pub fn heft_ocr_jobs(&self, src: String) -> Vec<HeftOcrJob> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let mut out = Vec::new();
+        for (page_id, doc) in state.hefte.iter() {
+            if state.pages.get(page_id).is_some_and(|p| p.trashed.is_some()) {
+                continue;
+            }
+            for pg in &doc.pages {
+                if impala_heft::ocr::needs_ocr(pg, &src) {
+                    out.push(HeftOcrJob {
+                        page_id: page_id.clone(),
+                        heft_page_id: pg.id.clone(),
+                        content_key: impala_heft::ocr::content_key(pg),
+                    });
+                }
+            }
+        }
+        out
     }
 }
 

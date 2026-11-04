@@ -142,6 +142,12 @@ pub struct HeftPageData {
     pub texts: Vec<HeftText>,
     /// Erkannter Handschrift-Text.
     pub ocr_text: String,
+    /// Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte).
+    pub ocr_src: String,
+    /// Fingerabdruck der Seite beim Erkennen.
+    pub ocr_key: String,
+    /// Aktueller Fingerabdruck der Seite (`impala_heft::ocr::content_key`).
+    pub content_key: String,
 }
 
 pub(crate) fn paper_name(p: &Paper) -> String {
@@ -202,6 +208,9 @@ pub(crate) fn page_data(pg: &HeftPage) -> HeftPageData {
             })
             .collect(),
         ocr_text: pg.ocr_text.clone(),
+        ocr_src: pg.ocr_src.clone(),
+        ocr_key: pg.ocr_key.clone(),
+        content_key: impala_heft::ocr::content_key(pg),
     }
 }
 

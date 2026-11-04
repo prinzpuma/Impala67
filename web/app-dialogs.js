@@ -167,24 +167,6 @@ export function openAnki(tab, deck) {
 	openPage("anki:main");
 }
 
-// Daily Note öffnen — Seite (und 📅-Sammelordner) bei Bedarf anlegen
-export async function openDailyNote(key) {
-	let pg = STATE.activePages().find((p) => p.daily === key);
-	if (!pg) {
-		let root = STATE.activePages().find((p) => p.dailyRoot);
-		if (!root) {
-			const rid = U.uid();
-			await STATE.dispatch("pageCreate", { id: rid, title: "Daily Notes", icon: null, workspaceId: "default", dailyRoot: true });
-			root = S.pages[rid];
-		}
-		const id = U.uid();
-		const title = new Date(key + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-		await STATE.dispatch("pageCreate", { id, title, parentId: root.id, workspaceId: root.workspaceId || "default", icon: null, daily: key, content: "" });
-		pg = S.pages[id];
-	}
-	if (pg) openPage(pg.id);
-}
-
 // Seitenverlauf öffnen (Versionen aus dem Event-Log rekonstruiert)
 export async function openHistory(pageId) {
 	S.histVersions = await STATE.pageHistory(pageId);

@@ -81,7 +81,9 @@ final class ShellModel {
     }
 
     /// Karten-Tab öffnen (wie `data-ankistudy` bzw. Klick auf einen Stapel in der Seitenleiste).
-    func openCards(_ view: CardsView) {
+    /// Karten-Tab zeigen; `feynman` lernt im Feynman-Modus (erst erklären, dann aufdecken).
+    func openCards(_ view: CardsView, feynman: Bool = false) {
+        cards.feynman = feynman
         cards.view = view
         open(Self.cardsTab)
     }

@@ -18,6 +18,8 @@ struct CardsScreen: View {
                 CardBrowser(deck: deck)
                     .id("browse:\(deck)")
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
+            case .stats:
+                StatsScreen().transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
         .animation(.smooth(duration: 0.32), value: view)
@@ -48,12 +50,22 @@ private struct DeckOverview: View {
                         Text("Karteikarten").font(.system(size: TextSize.xl, weight: .bold, design: .rounded)).foregroundStyle(Impala.text)
                     }
                     Spacer()
+                    // Wie die Kopfzeile der PWA: Statistik, Optionen (Tageslimits & Leech), ＋ Neu.
+                    HeaderButton(icon: "chart", label: "Statistik") { withAnimation(.smooth) { cards.view = .stats } }
+                    HeaderButton(icon: "gear", label: "Optionen") { cards.options = DeckOptionsTarget(deck: nil) }
                     Menu {
                         Button { cards.editor = CardEditorTarget(cardId: nil, deck: nil) } label: {
                             Label { Text("Neue Karte") } icon: { Icon("cards") }
                         }
                         Button { cards.dialog = .new } label: {
                             Label { Text("Neuer Stapel") } icon: { Icon("plus") }
+                        }
+                        Divider()
+                        Button { cards.io = .importing } label: {
+                            Label { Text("Import") } icon: { Icon("download") }
+                        }
+                        Button { cards.io = .exporting } label: {
+                            Label { Text("Export") } icon: { Icon("upload") }
                         }
                     } label: {
                         Text("＋ Neu")
@@ -85,17 +97,10 @@ private struct DeckOverview: View {
                 .foregroundStyle(Impala.text)
                 .riseIn(1)
                 if total > 0 {
-                    Button { shell.openCards(.review(deck: nil, mix: true)) } label: {
-                        HStack(spacing: 6) {
-                            Icon("shuffle", size: 15)
-                            Text("Gemischt").font(.system(size: TextSize.sm, weight: .medium))
-                        }
-                        .foregroundStyle(Impala.text)
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 36)
-                        .background(Impala.surface, in: Capsule())
+                    HStack(spacing: Space.s2) {
+                        ChipButton(icon: "shuffle", label: "Gemischt") { shell.openCards(.review(deck: nil, mix: true)) }
+                        ChipButton(icon: "explain", label: "Feynman-Modus") { shell.openCards(.review(deck: nil, mix: false), feynman: true) }
                     }
-                    .pressable()
                     .riseIn(2)
                 }
                 HStack(alignment: .top, spacing: Space.s3) {
@@ -139,6 +144,49 @@ private struct DeckOverview: View {
             .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+    }
+}
+
+/// Runder Knopf der Kopfzeile (Statistik, Optionen).
+private struct HeaderButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Icon(icon, size: 16)
+                Text(label).font(.system(size: TextSize.sm, weight: .medium))
+            }
+            .foregroundStyle(Impala.text2)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .contentShape(Capsule())
+        }
+        .pressable()
+        .accessibilityLabel(label)
+    }
+}
+
+/// Kapsel unter dem Satz („Gemischt“, „Feynman-Modus“).
+private struct ChipButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Icon(icon, size: 15)
+                Text(label).font(.system(size: TextSize.sm, weight: .medium))
+            }
+            .foregroundStyle(Impala.text)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
+            .background(Impala.surface, in: Capsule())
+        }
+        .pressable()
     }
 }
 

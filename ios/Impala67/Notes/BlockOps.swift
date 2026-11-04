@@ -179,27 +179,78 @@ extension MdBlock {
     }
 }
 
+extension MdBlock {
+    /// Kind-Listen: Kinder von Callout bzw. Toggle oder je Spalte eine Liste.
+    var childLists: [[MdBlock]] {
+        switch kind {
+        case .callout(_, let children), .toggle(_, _, let children): [children]
+        case .columns(let columns): columns
+        default: []
+        }
+    }
+
+    /// Dieselbe Struktur mit `f` auf jede Kind-Liste angewendet.
+    func mapChildLists(_ f: ([MdBlock]) -> [MdBlock]) -> MdBlock {
+        var c = self
+        switch kind {
+        case .callout(let color, let children): c.kind = .callout(color: color, children: f(children))
+        case .toggle(let summary, let isOpen, let children): c.kind = .toggle(summary: summary, open: isOpen, children: f(children))
+        case .columns(let columns): c.kind = .columns(columns: columns.map(f))
+        default: break
+        }
+        return c
+    }
+}
+
 extension Array where Element == MdBlock {
     /// Wendet `f` auf den Block mit `id` an, auch wenn er in Callout, Toggle oder Spalten steckt.
     func mapDeep(_ id: String, _ f: (MdBlock) -> MdBlock) -> [MdBlock] {
-        map { b in
-            if b.id == id { return f(b) }
-            var c = b
-            switch b.kind {
-            case .callout(let color, let children):
-                c.kind = .callout(color: color, children: children.mapDeep(id, f))
-            case .toggle(let summary, let isOpen, let children):
-                c.kind = .toggle(summary: summary, open: isOpen, children: children.mapDeep(id, f))
-            case .columns(let columns):
-                c.kind = .columns(columns: columns.map { $0.mapDeep(id, f) })
-            default: break
+        map { b in b.id == id ? f(b) : b.mapChildLists { $0.mapDeep(id, f) } }
+    }
+
+    /// Block mit `id`, auch verschachtelt.
+    func deep(_ id: String) -> MdBlock? {
+        for b in self {
+            if b.id == id { return b }
+            for list in b.childLists { if let hit = list.deep(id) { return hit } }
+        }
+        return nil
+    }
+
+    /// Die Liste, in der `id` steht: oberste Ebene, Kinder eines Callouts/Toggles oder eine Spalte.
+    func siblings(of id: String) -> [MdBlock]? {
+        if contains(where: { $0.id == id }) { return self }
+        for b in self {
+            for list in b.childLists { if let hit = list.siblings(of: id) { return hit } }
+        }
+        return nil
+    }
+
+    /// Callout, Toggle bzw. Spalten, in deren Kindern `id` direkt steht (nil auf oberster Ebene).
+    func container(of id: String) -> MdBlock? {
+        for b in self {
+            for list in b.childLists {
+                if list.contains(where: { $0.id == id }) { return b }
+                if let hit = list.container(of: id) { return hit }
             }
-            return c
+        }
+        return nil
+    }
+
+    /// Ersetzt die Liste, in der `id` steht, durch `f(liste)`. Kind-Listen bleiben nie leer (ein leerer
+    /// Absatz bleibt stehen), sonst verschwände der Callout bzw. die Spalte beim Speichern.
+    func withSiblings(of id: String, _ f: ([MdBlock]) -> [MdBlock]) -> [MdBlock] {
+        if contains(where: { $0.id == id }) { return f(self) }
+        return map { b in
+            b.mapChildLists { list in
+                guard list.siblings(of: id) != nil else { return list }
+                let next = list.withSiblings(of: id, f)
+                return next.isEmpty ? [.paragraph()] : next
+            }
         }
     }
 }
 
-/// Laufende Nummern nummerierter Listen je Ebene (wie `listNums` in editor.js).
 func listNumbers(_ blocks: [MdBlock]) -> [String: Int] {
     var out: [String: Int] = [:]
     var counters = Array(repeating: 0, count: 8)

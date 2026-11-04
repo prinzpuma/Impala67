@@ -5,8 +5,10 @@ import UIKit
 /// `HeftThumbnail.kt`): Papier, Bilder, Striche, Textfelder – alles aus dem Kernformat.
 @MainActor
 enum HeftThumbnail {
-    /// Bild mit `width` Punkten Breite; `nil`, wenn die Seite nicht lesbar ist.
-    static func render(core: ImpalaCore, pageId: String, heftPageId: String, width: CGFloat, scale: CGFloat) -> UIImage? {
+    /// Bild mit `width` Punkten Breite; `nil`, wenn die Seite nicht lesbar ist. `imagePixels`: Auflösung der
+    /// eingefügten Bilder (Vorschau klein, Export groß).
+    static func render(core: ImpalaCore, pageId: String, heftPageId: String, width: CGFloat, scale: CGFloat,
+                       imagePixels: Int = 512) -> UIImage? {
         guard let data = try? core.heftPage(pageId: pageId, heftPageId: heftPageId), data.width > 0 else { return nil }
         let size = CGSize(width: data.width, height: data.height)
         let k = width / size.width
@@ -23,7 +25,7 @@ enum HeftThumbnail {
             ctx.cgContext.scaleBy(x: k, y: k)
             HeftPaperView.draw(in: ctx.cgContext, size: size, paper: data.paper)
             for im in data.images {
-                HeftImages.image(core: core, pageId: pageId, heftPageId: heftPageId, image: im, maxPixels: 512)?
+                HeftImages.image(core: core, pageId: pageId, heftPageId: heftPageId, image: im, maxPixels: imagePixels)?
                     .draw(in: CGRect(x: im.x, y: im.y, width: im.w, height: im.h))
             }
             ink?.draw(in: CGRect(origin: .zero, size: size))

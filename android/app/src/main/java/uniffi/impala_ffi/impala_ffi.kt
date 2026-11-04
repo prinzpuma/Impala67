@@ -1502,6 +1502,10 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1825,6 +1829,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_move_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_move_to_folder(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_ocr_jobs(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids(
@@ -1832,6 +1838,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_svg(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_preview(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_remove_images(
 ): Short
@@ -2384,6 +2392,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_move_strokes(`ptr`: Pointer,`pag
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_move_to_folder(`ptr`: Pointer,`heftId`: RustBuffer.ByValue,`folderId`: RustBuffer.ByValue,`order`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(`ptr`: Pointer,`src`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_page_ids(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2392,6 +2402,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_page_svg(`ptr`: Pointer,`pageId`
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_preview(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`changes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeText`: RustBuffer.ByValue,`src`: RustBuffer.ByValue,`expectedKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_images(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3282,6 +3294,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_move_to_folder() != 45165.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_ocr_jobs() != 11057.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_page() != 40116.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3292,6 +3307,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_preview() != 62299.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 35369.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_remove_images() != 45588.toShort()) {
@@ -8011,6 +8029,12 @@ public interface ImpalaCoreInterface {
     fun `heftMoveToFolder`(`heftId`: kotlin.String, `folderId`: kotlin.String?, `order`: kotlin.Double?)
     
     /**
+     * Alle Heftseiten (nicht im Papierkorb), die für die Plattform `src` (`pwa`, `android`,
+     * `apple`) noch erkannt oder aufgewertet werden sollten.
+     */
+    fun `heftOcrJobs`(`src`: kotlin.String): List<HeftOcrJob>
+    
+    /**
      * Eine Heftseite zum Zeichnen.
      */
     fun `heftPage`(`pageId`: kotlin.String, `heftPageId`: kotlin.String): HeftPageData
@@ -8031,6 +8055,14 @@ public interface ImpalaCoreInterface {
      * Arbeitskopie einer Seite mit noch nicht gespeicherten Änderungen (Gestenvorschau; schreibt nichts).
      */
     fun `heftPreview`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `changes`: List<HeftChange>): HeftPageData
+    
+    /**
+     * Speichert das Ergebnis der Handschrift-Erkennung (`stroke_text`) der Plattform `src`
+     * (`pwa`, `android`, `apple`) unter Beachtung der Rangfolge und hängt den Text der Scan-Bilder
+     * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
+     * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
+     */
+    fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean
     
     fun `heftRemoveImages`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit
     
@@ -9614,6 +9646,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Alle Heftseiten (nicht im Papierkorb), die für die Plattform `src` (`pwa`, `android`,
+     * `apple`) noch erkannt oder aufgewertet werden sollten.
+     */override fun `heftOcrJobs`(`src`: kotlin.String): List<HeftOcrJob> {
+            return FfiConverterSequenceTypeHeftOcrJob.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(
+        it, FfiConverterString.lower(`src`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Eine Heftseite zum Zeichnen.
      */
     @Throws(CoreException::class)override fun `heftPage`(`pageId`: kotlin.String, `heftPageId`: kotlin.String): HeftPageData {
@@ -9671,6 +9719,25 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_preview(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceTypeHeftChange.lower(`changes`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Speichert das Ergebnis der Handschrift-Erkennung (`stroke_text`) der Plattform `src`
+     * (`pwa`, `android`, `apple`) unter Beachtung der Rangfolge und hängt den Text der Scan-Bilder
+     * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
+     * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
+     */
+    @Throws(CoreException::class)override fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterString.lower(`strokeText`),FfiConverterString.lower(`src`),FfiConverterOptionalString.lower(`expectedKey`),_status)
 }
     }
     )
@@ -14073,6 +14140,45 @@ public object FfiConverterTypeHeftLassoHandle: FfiConverterRustBuffer<HeftLassoH
 
 
 
+/**
+ * Eine Heftseite, die auf dieser Plattform (`src`) noch erkannt oder aufgewertet werden sollte.
+ */
+data class HeftOcrJob (
+    var `pageId`: kotlin.String, 
+    var `heftPageId`: kotlin.String, 
+    var `contentKey`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftOcrJob: FfiConverterRustBuffer<HeftOcrJob> {
+    override fun read(buf: ByteBuffer): HeftOcrJob {
+        return HeftOcrJob(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftOcrJob) = (
+            FfiConverterString.allocationSize(value.`pageId`) +
+            FfiConverterString.allocationSize(value.`heftPageId`) +
+            FfiConverterString.allocationSize(value.`contentKey`)
+    )
+
+    override fun write(value: HeftOcrJob, buf: ByteBuffer) {
+            FfiConverterString.write(value.`pageId`, buf)
+            FfiConverterString.write(value.`heftPageId`, buf)
+            FfiConverterString.write(value.`contentKey`, buf)
+    }
+}
+
+
+
 data class HeftPageData (
     var `id`: kotlin.String, 
     /**
@@ -14087,7 +14193,19 @@ data class HeftPageData (
     /**
      * Erkannter Handschrift-Text.
      */
-    var `ocrText`: kotlin.String
+    var `ocrText`: kotlin.String, 
+    /**
+     * Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte).
+     */
+    var `ocrSrc`: kotlin.String, 
+    /**
+     * Fingerabdruck der Seite beim Erkennen.
+     */
+    var `ocrKey`: kotlin.String, 
+    /**
+     * Aktueller Fingerabdruck der Seite (`impala_heft::ocr::content_key`).
+     */
+    var `contentKey`: kotlin.String
 ) {
     
     companion object
@@ -14107,6 +14225,9 @@ public object FfiConverterTypeHeftPageData: FfiConverterRustBuffer<HeftPageData>
             FfiConverterSequenceTypeHeftImage.read(buf),
             FfiConverterSequenceTypeHeftText.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -14118,7 +14239,10 @@ public object FfiConverterTypeHeftPageData: FfiConverterRustBuffer<HeftPageData>
             FfiConverterSequenceTypeHeftStroke.allocationSize(value.`strokes`) +
             FfiConverterSequenceTypeHeftImage.allocationSize(value.`images`) +
             FfiConverterSequenceTypeHeftText.allocationSize(value.`texts`) +
-            FfiConverterString.allocationSize(value.`ocrText`)
+            FfiConverterString.allocationSize(value.`ocrText`) +
+            FfiConverterString.allocationSize(value.`ocrSrc`) +
+            FfiConverterString.allocationSize(value.`ocrKey`) +
+            FfiConverterString.allocationSize(value.`contentKey`)
     )
 
     override fun write(value: HeftPageData, buf: ByteBuffer) {
@@ -14130,6 +14254,9 @@ public object FfiConverterTypeHeftPageData: FfiConverterRustBuffer<HeftPageData>
             FfiConverterSequenceTypeHeftImage.write(value.`images`, buf)
             FfiConverterSequenceTypeHeftText.write(value.`texts`, buf)
             FfiConverterString.write(value.`ocrText`, buf)
+            FfiConverterString.write(value.`ocrSrc`, buf)
+            FfiConverterString.write(value.`ocrKey`, buf)
+            FfiConverterString.write(value.`contentKey`, buf)
     }
 }
 
@@ -20036,6 +20163,34 @@ public object FfiConverterSequenceTypeHeftLassoHandle: FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeHeftLassoHandle.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeHeftOcrJob: FfiConverterRustBuffer<List<HeftOcrJob>> {
+    override fun read(buf: ByteBuffer): List<HeftOcrJob> {
+        val len = buf.getInt()
+        return List<HeftOcrJob>(len) {
+            FfiConverterTypeHeftOcrJob.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HeftOcrJob>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHeftOcrJob.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HeftOcrJob>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHeftOcrJob.write(it, buf)
         }
     }
 }

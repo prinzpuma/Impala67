@@ -23,6 +23,10 @@ final class ReviewModel {
     private(set) var graded = 0
     private(set) var lastGrade = 0
     var error: String?
+    /// Feynman-Modus: eigene Erklärung, Prüfung läuft, Rubrik der KI (gilt nur für die angezeigte Karte).
+    var feynText = ""
+    private(set) var checking = false
+    private(set) var verdict: FeynmanVerdict?
 
     @ObservationIgnored private var pinned: String?
     @ObservationIgnored private var busy = false
@@ -44,7 +48,11 @@ final class ReviewModel {
         let q = core.studyQueue(deck: deck, utcOffsetMinutes: Deck.utcOffset, mix: mix)
         let keep = pinned.flatMap { core.card(id: $0) }.flatMap { $0.trashed || $0.suspended || $0.archived ? nil : $0 }
         let next = keep ?? q.dueNow.first
-        if unpin || next?.id != card?.id { showBack = false }
+        if unpin || next?.id != card?.id {
+            showBack = false
+            feynText = ""
+            verdict = nil
+        }
         pinned = next?.id
         queue = q
         card = next
@@ -65,6 +73,28 @@ final class ReviewModel {
             refresh(unpin: true)
         } catch {
             self.error = CardsModel.reason(error)
+        }
+    }
+
+    /// Erklärung von der KI prüfen lassen, danach aufdecken (die Note wählt weiter der Lernende).
+    func checkFeynman(chat: ChatModel) {
+        guard let card, !checking else { return }
+        guard !feynText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            error = "Erst erklären — tippen oder diktieren."
+            return
+        }
+        checking = true
+        let text = feynText
+        Task {
+            defer { checking = false }
+            do {
+                let v = try await FeynmanVerdict.check(chat: chat, card: card, explanation: text)
+                guard self.card?.id == card.id else { return }
+                verdict = v
+                showBack = true
+            } catch {
+                self.error = "KI nicht erreichbar — später erneut versuchen."
+            }
         }
     }
 

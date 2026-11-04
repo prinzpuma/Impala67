@@ -60,6 +60,8 @@ final class ChatModel {
     var notice: String?
     /// Rechtes KI-Panel aufgeklappt (Sparkles-Knopf unten rechts).
     var panelOpen = false
+    /// Anhang der nächsten Nachricht (Bild, Datei, PDF, Heftseite).
+    var attachment: ChatAttachment?
 
     /// Live-Modelle aller Quellen (`S.availableModels`), 30 s zwischengespeichert wie in ai.js.
     private(set) var models: [AiModel] = []
@@ -86,16 +88,28 @@ final class ChatModel {
         let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !running else { return }
         error = nil
-        messages.append(Self.message(role: "user", content: prompt))
+        let att = attachment
+        attachment = nil
+        var image: String?, textFile: AiFile?, pdfFile: AiFile?
+        switch att?.kind {
+        case .image(let url)?: image = url
+        case .text(let f)?: textFile = f
+        case .pdf(let f)?: pdfFile = f
+        case nil: break
+        }
+        var mine = Self.message(role: "user", content: prompt)
+        mine.image = image
+        if let att { mine.extraJson = att.extraJson }
+        messages.append(mine)
         resetLive()
         running = true
         runPageId = activePageId
         let request = AiRunRequest(
             chatId: chatId,
             text: prompt,
-            image: nil,
-            textFile: nil,
-            pdfFile: nil,
+            image: image,
+            textFile: textFile,
+            pdfFile: pdfFile,
             activePageId: activePageId,
             heftPageIndex: activePageId.flatMap { HeftLastPage.index[$0] }.map { UInt32($0) },
             sendPageContext: activePageId.map { !contextOff.contains($0) } ?? false,

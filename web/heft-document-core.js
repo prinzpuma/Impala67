@@ -13,6 +13,10 @@ export const emptyHeftPage = (id, paper) => CORE.heftEmptyPage(String(id), paper
 // EINZIGE Stelle, die den durchsuchbaren Seitentext zusammensetzt: Stricherkennung,
 // danach der Text aller Scan-Bilder (in Reihenfolge), mit Zeilenumbruch verbunden.
 export const composePageText = (strokeText, page) => CORE.heftComposePageText(String(strokeText || ""), page || {});
+export const ocrKey = (page) => CORE.heftOcrKey(page || {});
+export const needsOcr = (page, src = "pwa") => CORE.heftNeedsOcr(page || {}, String(src));
+export const ocrOp = (page, strokeText, src = "pwa", expectedKey = undefined) =>
+	CORE.heftOcrOp(page || {}, String(strokeText || ""), String(src), expectedKey || undefined);
 
 // Schatten (je Element nur eine Signatur) eines Dokuments; ein Objekt im Kern.
 export const documentShadow = (document) => CORE.HeftShadow.of(document);

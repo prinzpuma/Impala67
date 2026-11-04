@@ -71,8 +71,6 @@ const APP_FILES = [
 	"./ai.js",
 	"./embedding.js",
 	"./handschrift.js",
-	"./abschreiben.js",
-	"./abschreiben-texte.js",
 	"./handwriting-model-version.js",
 	"./handwriting-worker.js",
 	"./rag.js",

@@ -53,7 +53,9 @@ final class NoteModel {
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
-    var activeBlock: MdBlock? { activeId.flatMap { id in blocks.first { $0.id == id } } }
+    var activeBlock: MdBlock? { activeId.flatMap { blocks.deep($0) } }
+    /// Nur Anzeige (Lernkarten, Chat): kein Antippen zum Bearbeiten, kein Blockmenü.
+    var isReadOnly: Bool { readOnly }
 
     init(core: ImpalaCore, pageId: String) {
         self.core = core
@@ -168,7 +170,7 @@ final class NoteModel {
         dirtyContent = true
         scheduleSave()
         if let a = activeId {
-            if list.contains(where: { $0.id == a }) { activate(a, at: nil) } else { activeId = nil }
+            if list.deep(a) != nil { activate(a, at: nil) } else { activeId = nil }
         }
     }
 
@@ -221,7 +223,7 @@ final class NoteModel {
     /// bzw. übernimmt den gewählten Menüeintrag; ein Kürzel am Anfang eines Absatzes („# “, „- “, „[] “ …)
     /// wandelt ihn um; „/“ und „[[“ öffnen die Menüs.
     func edit(_ id: String, text: String, caret: Int) {
-        guard let b = blocks.first(where: { $0.id == id }) else { return }
+        guard let b = blocks.deep(id) else { return }
         selection = NSRange(location: caret, length: 0)
         let ns = text as NSString
         let at = min(caret, ns.length)
@@ -231,7 +233,7 @@ final class NoteModel {
                 let before = ns.substring(to: at - 1), after = ns.substring(from: at)
                 if menu != nil, menu?.blockId == id {
                     // Enter im offenen Menü: Eintrag übernehmen statt teilen.
-                    mutate(structural: false) { list in list.map { $0.id == id ? $0.withText(before + after) : $0 } }
+                    mutate(structural: false) { list in list.mapDeep(id) { $0.withText(before + after) } }
                     selection = NSRange(location: at - 1, length: 0)
                     pickMenuItem()
                     return
@@ -244,11 +246,11 @@ final class NoteModel {
         }
         if b.type == .text, let t = shortcutType(ns.substring(to: at)) {
             let rest = ns.substring(from: at)
-            mutate(structural: true) { list in list.map { $0.id == id ? $0.withText(rest).converted(to: t) : $0 } }
+            mutate(structural: true) { list in list.mapDeep(id) { $0.withText(rest).converted(to: t) } }
             activate(id, at: 0)
             return
         }
-        mutate(structural: false) { list in list.map { $0.id == id ? $0.withText(text) : $0 } }
+        mutate(structural: false) { list in list.mapDeep(id) { $0.withText(text) } }
         if !b.keepsNewlines { updateMenu(id, text: text, caret: at) }
     }
 
@@ -256,13 +258,26 @@ final class NoteModel {
 
     /// Enter (oder eingefügte Zeilen): der Text des Blocks wird auf `lines` aufgeteilt.
     func split(_ id: String, lines: [String]) {
-        guard let i = blocks.firstIndex(where: { $0.id == id }), let firstLine = lines.first else { return }
-        let b = blocks[i]
-        if lines.count == 2, lines[0].isEmpty, lines[1].isEmpty, b.isListOrQuote {
+        guard let (sib, i) = place(id), let firstLine = lines.first else { return }
+        let b = sib[i]
+        let emptyEnter = lines.count == 2 && lines[0].isEmpty && lines[1].isEmpty
+        if emptyEnter, b.isListOrQuote {
             // Enter in leerer Zeile beendet die Liste bzw. rückt aus.
             let outdent = b.indent > 0
             mutate(structural: true) { list in
-                list.map { $0.id == id ? (outdent ? $0.indented(-1) : $0.converted(to: .text)) : $0 }
+                list.mapDeep(id) { outdent ? $0.indented(-1) : $0.converted(to: .text) }
+            }
+            activate(id, at: 0)
+            return
+        }
+        if emptyEnter, b.type == .text, sib.count > 1, i == sib.count - 1, let box = blocks.container(of: id) {
+            // Enter im leeren letzten Absatz eines Callouts/Toggles bzw. einer Spalte: dahinter weiterschreiben.
+            mutate(structural: true) { list in
+                list.withSiblings(of: id) { l in l.filter { $0.id != id } }
+                    .withSiblings(of: box.id) { l in
+                        guard let j = l.firstIndex(where: { $0.id == box.id }) else { return l }
+                        return Array(l[...j]) + [b] + Array(l[(j + 1)...])
+                    }
             }
             activate(id, at: 0)
             return
@@ -276,41 +291,44 @@ final class NoteModel {
             prev = next
         }
         guard let last = tail.last else { return }
-        mutate(structural: true) { list in Array(list[..<i]) + [head] + tail + Array(list[(i + 1)...]) }
+        mutateSiblings(of: id) { list in Array(list[..<i]) + [head] + tail + Array(list[(i + 1)...]) }
         activate(last.id, at: lines.count == 2 ? 0 : last.text.utf16.count)
     }
 
     /// Rücktaste am Blockanfang: erst ausrücken bzw. zum Absatz machen, dann mit dem vorigen verschmelzen.
     func backspaceAtStart(_ id: String) {
-        guard let i = blocks.firstIndex(where: { $0.id == id }) else { return }
-        let b = blocks[i]
+        guard let (sib, i) = place(id) else { return }
+        let b = sib[i]
         guard b.isText else { return }
         if b.indent > 0 {
-            mutate(structural: true) { list in list.map { $0.id == id ? $0.indented(-1) : $0 } }
+            mutate(structural: true) { list in list.mapDeep(id) { $0.indented(-1) } }
         } else if b.type != .text {
-            mutate(structural: true) { list in list.map { $0.id == id ? $0.converted(to: .text) : $0 } }
+            mutate(structural: true) { list in list.mapDeep(id) { $0.converted(to: .text) } }
             activate(id, at: 0)
         } else if i > 0 {
-            let prev = blocks[i - 1]
+            let prev = sib[i - 1]
             if prev.isText {
                 let join = prev.text.utf16.count
                 let merged = prev.withText(prev.text + b.text)
-                mutate(structural: true) { list in Array(list[..<(i - 1)]) + [merged] + Array(list[(i + 1)...]) }
+                mutateSiblings(of: id) { list in Array(list[..<(i - 1)]) + [merged] + Array(list[(i + 1)...]) }
                 activate(prev.id, at: join)
             } else if b.text.isEmpty {
                 delete(id)
             }
+        } else if b.text.isEmpty, sib.count > 1 {
+            // Leerer erster Kind-Absatz: entfernen, weiter im nächsten.
+            delete(id)
         }
     }
 
     func indent(_ delta: Int) {
         guard let id = activeId else { return }
-        mutate(structural: true) { list in list.map { $0.id == id ? $0.indented(delta) : $0 } }
+        mutate(structural: true) { list in list.mapDeep(id) { $0.indented(delta) } }
     }
 
     func convert(_ type: BlockType) {
         guard let id = activeId else { return }
-        mutate(structural: true) { list in list.map { $0.id == id && $0.isText ? $0.converted(to: type) : $0 } }
+        mutate(structural: true) { list in list.mapDeep(id) { $0.isText ? $0.converted(to: type) : $0 } }
         activate(id, at: caret)
     }
 
@@ -328,15 +346,13 @@ final class NoteModel {
     }
 
     func delete(_ id: String) {
-        guard let i = blocks.firstIndex(where: { $0.id == id }) else { return }
-        mutate(structural: true) { list in
-            var l = list
-            l.remove(at: i)
-            return l
-        }
+        guard let (sib, i) = place(id) else { return }
+        mutateSiblings(of: id) { list in list.filter { $0.id != id } }
         guard activeId == id else { return }
-        if i > 0, blocks[i - 1].isText {
-            activate(blocks[i - 1].id, at: nil)
+        if i > 0, sib[i - 1].isText {
+            activate(sib[i - 1].id, at: nil)
+        } else if i + 1 < sib.count, sib[i + 1].isText {
+            activate(sib[i + 1].id, at: 0)
         } else {
             activeId = nil
         }
@@ -347,10 +363,22 @@ final class NoteModel {
 
     /// Rohtext fertig: wieder in Blöcke umwandeln (0, 1 oder mehrere).
     func commitRaw(_ id: String, markdown: String) {
-        guard let i = blocks.firstIndex(where: { $0.id == id }),
-              markdown != blocksToMarkdown(blocks: [blocks[i]]) else { return }
+        guard let (sib, i) = place(id), markdown != blocksToMarkdown(blocks: [sib[i]]) else { return }
         var parsed = markdownToBlocks(markdown: markdown)
         if parsed.count == 1 { parsed[0].id = id }
-        mutate(structural: true) { list in Array(list[..<i]) + parsed + Array(list[(i + 1)...]) }
+        mutateSiblings(of: id) { list in Array(list[..<i]) + parsed + Array(list[(i + 1)...]) }
+    }
+
+    // MARK: Verschachtelte Blöcke
+
+    /// Liste, in der `id` steht (auch Kinder von Callout, Toggle und Spalten), und seine Stelle darin.
+    func place(_ id: String) -> (list: [MdBlock], index: Int)? {
+        guard let list = blocks.siblings(of: id), let i = list.firstIndex(where: { $0.id == id }) else { return nil }
+        return (list, i)
+    }
+
+    /// Strukturänderung an der Liste, in der `id` steht.
+    func mutateSiblings(of id: String, _ change: ([MdBlock]) -> [MdBlock]) {
+        mutate(structural: true) { $0.withSiblings(of: id, change) }
     }
 }

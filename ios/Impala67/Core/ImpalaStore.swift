@@ -45,7 +45,10 @@ final class ImpalaStore {
         if c.everything || c.chatsAll || !c.chats.isEmpty { chatsRevision += 1 }
         if c.everything || c.settings { settingsRevision += 1 }
         if c.everything || c.learningSessions || c.homeArticles || c.settings { homeRevision += 1 }
-        if c.remote || c.everything { lastRemote = c }
+        if c.remote || c.everything {
+            lastRemote = c
+            if c.everything || !c.hefte.isEmpty { HeftOcr.startBackgroundScan(core: core) }
+        }
     }
 
     /// Ob eine fremde Änderung die Seite `id` betrifft (Notiz oder Heft).

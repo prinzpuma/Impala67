@@ -8,10 +8,12 @@ enum CardsView: Equatable {
     /// `deck` nil = alle Stapel; `mix` mischt die fälligen Karten aller Stapel.
     case review(deck: String?, mix: Bool)
     case browse(deck: String)
+    /// Statistik-Tab (`ankiStatsHtml`).
+    case stats
 
     var deck: String? {
         switch self {
-        case .decks: nil
+        case .decks, .stats: nil
         case .review(let d, _): d
         case .browse(let d): d
         }
@@ -105,6 +107,12 @@ final class CardsModel {
     var dialog: DeckDialog?
     /// Karten-Editor: `.some(nil)` = neue Karte.
     var editor: CardEditorTarget?
+    /// Stapel-Optionen offen (`deck` nil = Standardwerte aller Stapel).
+    var options: DeckOptionsTarget?
+    /// Import- bzw. Export-Blatt offen.
+    var io: CardIoMode?
+    /// Lernen im Feynman-Modus (beim Start gewählt, wie `S.ankiFeyn`).
+    var feynman = false
     /// Fehlertext des Kerns (z. B. Name schon vergeben).
     var error: String?
 
@@ -123,6 +131,12 @@ final class CardsModel {
         case nil: e.localizedDescription
         }
     }
+}
+
+/// Stapel für die Stapel-Optionen (`deck` nil = „*“, alle Stapel).
+struct DeckOptionsTarget: Identifiable {
+    let deck: String?
+    var id: String { deck ?? "*" }
 }
 
 /// Karte zum Bearbeiten (`id` nil = neue Karte, Stapel-Vorgabe `deck`).

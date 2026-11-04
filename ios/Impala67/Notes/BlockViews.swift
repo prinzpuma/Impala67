@@ -4,17 +4,16 @@ import UIKit
 
 /// Ein Block, wie ihn die PWA zeigt (editor.css). Textblöcke und Formeln werden beim Antippen zum
 /// Eingabefeld, Tabellen zum Raster aus Zellen; alles andere lässt sich über Halten → „Als Markdown
-/// bearbeiten“ ändern. `nested` = in Callout, Toggle oder Spalten (dort nur Anzeige, Checkboxen und
-/// Toggles bleiben bedienbar).
+/// bearbeiten“ ändern – auch in Callout, Toggle und Spalten. Nur in reinen Anzeigen
+/// (`NoteModel.isReadOnly`: Lernkarten, Chat) bleibt alles außer Checkboxen und Toggles stehen.
 struct BlockRow: View {
     let block: MdBlock
     let number: Int?
     let first: Bool
     let model: NoteModel
-    var nested = false
     @State private var raw: String?
 
-    private var editing: Bool { !nested && model.activeId == block.id }
+    private var editing: Bool { model.activeId == block.id }
 
     var body: some View {
         content
@@ -24,7 +23,7 @@ struct BlockRow: View {
                     RoundedRectangle(cornerRadius: Radius.xs).fill(noteColor(bg).opacity(0.28))
                 }
             }
-            .blockMenu(!nested && !editing, block: block, model: model) { raw = model.rawOf(block) }
+            .blockMenu(!model.isReadOnly && !editing, block: block, model: model) { raw = model.rawOf(block) }
             .sheet(isPresented: Binding(get: { raw != nil }, set: { if !$0 { raw = nil } })) {
                 RawMarkdownSheet(text: raw ?? "") { model.commitRaw(block.id, markdown: $0) }
             }
@@ -33,34 +32,34 @@ struct BlockRow: View {
     @ViewBuilder private var content: some View {
         switch block.kind {
         case .paragraph:
-            BlockText(block: block, editing: editing, model: model, nested: nested)
+            BlockText(block: block, editing: editing, model: model)
                 .padding(.vertical, 3).padding(.horizontal, 2)
         case .heading(let level, _):
-            BlockText(block: block, editing: editing, model: model, nested: nested)
+            BlockText(block: block, editing: editing, model: model)
                 .padding(.top, first ? 0 : level.topSpace).padding(.bottom, 2).padding(.horizontal, 2)
         case .listItem(let style, let indent, _):
             HStack(alignment: .top, spacing: 0) {
                 ListMarker(style: style, number: number) { model.toggleTodo(block.id) }
-                BlockText(block: block, editing: editing, model: model, nested: nested)
+                BlockText(block: block, editing: editing, model: model)
                     .padding(.vertical, 3).padding(.horizontal, 2)
             }
             .padding(.leading, CGFloat(indent) * 24)
         case .quote:
-            BlockText(block: block, editing: editing, model: model, nested: nested)
+            BlockText(block: block, editing: editing, model: model)
                 .padding(.leading, 14).padding(.vertical, 2)
                 .overlay(alignment: .leading) { Rectangle().fill(Impala.text).frame(width: 3) }
                 .padding(.leading, 3)
         case .code(let language, let text):
-            CodeBlockView(block: block, language: language, text: text, editing: editing, model: model, nested: nested)
+            CodeBlockView(block: block, language: language, text: text, editing: editing, model: model)
         case .math(let text):
-            MathBlockView(block: block, text: text, editing: editing, model: model, nested: nested)
+            MathBlockView(block: block, text: text, editing: editing, model: model)
         case .table(let rows):
             if editing {
                 TableEditor(rows: rows) { model.setTable(block.id, $0) }
             } else {
                 TableBlock(rows: rows)
                     .contentShape(Rectangle())
-                    .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+                    .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
             }
         case .divider:
             Rectangle().fill(Impala.edge).frame(height: 1).padding(.vertical, 13)
@@ -154,7 +153,6 @@ private struct BlockText: View {
     let block: MdBlock
     let editing: Bool
     let model: NoteModel
-    let nested: Bool
 
     var body: some View {
         let font = BlockFont.of(block)
@@ -167,7 +165,7 @@ private struct BlockText: View {
                       source: inlineHTML(block.text))
                 .opacity(block.isChecked ? 0.6 : 1)
                 .contentShape(Rectangle())
-                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
         } else {
             Group {
                 if block.text.isEmpty {
@@ -185,7 +183,7 @@ private struct BlockText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             // Gleichzeitig, damit Links im Text antippbar bleiben.
-            .simultaneousGesture(TapGesture().onEnded { if !nested { model.activate(block.id, at: nil) } })
+            .simultaneousGesture(TapGesture().onEnded { if !model.isReadOnly { model.activate(block.id, at: nil) } })
         }
     }
 }
@@ -206,7 +204,8 @@ private struct BlockInput: View {
             onBackspaceAtStart: { model.backspaceAtStart(id) },
             onBlur: { model.blurred(id, token: $0) },
             wants: { model.wants($0, id: id, text: $1) },
-            onKey: { model.handle($0, id: id) }
+            onKey: { model.handle($0, id: id) },
+            onPasteImages: { model.insertImages($0, after: id) }
         )
     }
 }
@@ -249,7 +248,6 @@ private struct CodeBlockView: View {
     let text: String
     let editing: Bool
     let model: NoteModel
-    let nested: Bool
     @State private var copied = false
 
     var body: some View {
@@ -258,7 +256,7 @@ private struct CodeBlockView: View {
             RichBlock(kind: diagram, source: text)
                 .padding(.vertical, Space.s1)
                 .contentShape(Rectangle())
-                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
         } else {
             panel(diagram)
         }
@@ -299,7 +297,7 @@ private struct CodeBlockView: View {
                         .fixedSize()
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
             }
         }
         .padding(.horizontal, Space.s4).padding(.vertical, 10)
@@ -320,7 +318,6 @@ private struct MathBlockView: View {
     let text: String
     let editing: Bool
     let model: NoteModel
-    let nested: Bool
 
     var body: some View {
         if editing {
@@ -337,7 +334,7 @@ private struct MathBlockView: View {
             RichBlock(kind: .math, source: text)
                 .padding(.vertical, Space.s1)
                 .contentShape(Rectangle())
-                .onTapGesture { if !nested { model.activate(block.id, at: nil) } }
+                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
         }
     }
 }
@@ -392,7 +389,7 @@ private struct NestedBlocks: View {
         let numbers = listNumbers(blocks)
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(blocks.enumerated()), id: \.element.id) { i, b in
-                BlockRow(block: b, number: numbers[b.id], first: i == 0, model: model, nested: true)
+                BlockRow(block: b, number: numbers[b.id], first: i == 0, model: model)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

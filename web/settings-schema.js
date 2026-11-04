@@ -40,7 +40,7 @@ export const SETTINGS_ITEMS = [
 	{ id: "ai-models", section: "ai", group: "Aktives Modell", label: "Chat-Modell", description: "Aktives Modell suchen und auswählen", keywords: "llm modell provider quelle" },
 	{ id: "ai-sources", section: "ai", group: "Quellen", label: "KI-Quellen", description: "OpenAI, Gemini, LM Studio und eigene Endpunkte", keywords: "api key schlüssel token url endpoint anbieter" },
 	{ id: "ai-embedding", section: "ai", group: "Lokale KI", label: "Embedding-Modell", description: "Modell für semantische Suche", keywords: "rag vektor suche bekko" },
-	{ id: "ai-handwriting", section: "ai", group: "Lokale KI", label: "Handschrifterkennung", description: "Lokales Modell, Trainingsbeispiele und Handschrift-Export", keywords: "handschrift ink stift heft training abschreiben onnx" },
+	{ id: "ai-handwriting", section: "ai", group: "Lokale KI", label: "Handschrifterkennung", description: "Lokales Modell, Trainingsbeispiele und Handschrift-Export", keywords: "handschrift ink stift heft training onnx" },
 	{ id: "ai-tools", section: "ai", group: "Verhalten", label: "Tools mitsenden", description: "Der KI die App-Werkzeuge zur Verfügung stellen", keywords: "werkzeuge tools funktionen" },
 	{ id: "ai-instructions", section: "ai", group: "Verhalten", label: "Eigene Anweisungen", description: "Tonfall und dauerhafte Vorgaben", keywords: "prompt system text" },
 	{ id: "learning-options", section: "learning", group: "Lernverhalten", label: "Lernverhalten", description: "Overlearning, Selbsteinschätzung und Lernanalyse", keywords: "karten telemetrie sicherheit confidence statistik" },

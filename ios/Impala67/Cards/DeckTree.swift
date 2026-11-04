@@ -157,11 +157,13 @@ struct DeckMenuItems: View {
         let cards = shell.cards
         let standard = name == Deck.standard
         MenuItem("Lernen", icon: "cards") { shell.openCards(.review(deck: name, mix: false)) }
+        MenuItem("Feynman-Modus", icon: "explain") { shell.openCards(.review(deck: name, mix: false), feynman: true) }
         MenuItem("Neue Karte", icon: "plus") { cards.editor = CardEditorTarget(cardId: nil, deck: name) }
         MenuItem("Karten ansehen", icon: "search") { shell.openCards(.browse(deck: name)) }
         Divider()
         MenuItem("Unterstapel anlegen", icon: "plus") { cards.dialog = .sub(parent: name) }
         if !standard { MenuItem("Umbenennen", icon: "pen") { cards.dialog = .rename(name) } }
+        MenuItem("Optionen", icon: "gear") { cards.options = DeckOptionsTarget(deck: name) }
         MenuItem("Duplizieren", icon: "copy") { cards.run { _ = try store.core.duplicateDeck(name: name) } }
         MenuItem("Archivieren", icon: "archive") {
             cards.run { try store.core.archiveDeck(name: name) }
@@ -205,6 +207,12 @@ struct DeckDialogsModifier: ViewModifier {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(cards.error ?? "")
+            }
+            .sheet(item: Binding(get: { cards.options }, set: { cards.options = $0 })) { t in
+                DeckOptionsSheet(deck: t.deck).presentationSizing(.form)
+            }
+            .sheet(item: Binding(get: { cards.io }, set: { cards.io = $0 })) { mode in
+                CardIoSheet(mode: mode).presentationSizing(.form)
             }
             .onChange(of: cards.dialog) {
                 if case .rename(let n) = cards.dialog { text = Deck.label(n) } else { text = "" }

@@ -263,7 +263,7 @@ extension NoteModel {
 
     /// Slash-Befehl gewählt: „/suchbegriff“ vor dem Caret entfällt, dann wirkt der Befehl.
     func applySlash(_ cmd: SlashCmd) {
-        guard let q = menu, q.kind == .slash, let b = blocks.first(where: { $0.id == q.blockId }) else { return }
+        guard let q = menu, q.kind == .slash, let b = blocks.deep(q.blockId) else { return }
         menu = nil
         let id = b.id
         let full = b.text as NSString
@@ -273,15 +273,15 @@ extension NoteModel {
         let rest = cut ? full.replacingCharacters(in: NSRange(location: start, length: end - start), with: "") : b.text
         let caret = cut ? start : end
         if let type = cmd.type {
-            mutate(structural: true) { list in list.map { $0.id == id ? $0.withText(rest).converted(to: type) : $0 } }
+            mutate(structural: true) { list in list.mapDeep(id) { $0.withText(rest).converted(to: type) } }
             activate(id, at: caret)
             return
         }
         switch cmd {
         case .divider:
-            guard let i = index(id) else { return }
+            guard let (_, i) = place(id) else { return }
             let after = MdBlock.paragraph(rest)
-            mutate(structural: true) { list in Array(list[..<i]) + [MdBlock.make(.divider), after] + Array(list[(i + 1)...]) }
+            mutateSiblings(of: id) { list in Array(list[..<i]) + [MdBlock.make(.divider), after] + Array(list[(i + 1)...]) }
             activate(after.id, at: 0)
         case .link:
             // „[[“ an die Caret-Stelle, dann sofort das Link-Menü.
@@ -304,7 +304,7 @@ extension NoteModel {
     /// Strukturblock (`newBlock` in editor.js): Callout und Toggle nehmen den Resttext auf, sonst bleibt
     /// er als eigener Block davor. Danach wird der neue Block bearbeitet, soweit er ein Eingabefeld hat.
     private func insertStructure(_ id: String, rest: String, cmd: SlashCmd) {
-        guard let i = index(id) else { return }
+        guard let (sib, i) = place(id) else { return }
         let kind: MdBlockKind = switch cmd {
         case .toggle: .toggle(summary: rest, open: true, children: [.paragraph()])
         case .callout: .callout(color: "blue", children: [.paragraph(rest)])
@@ -316,8 +316,8 @@ extension NoteModel {
         }
         let nb = MdBlock.make(kind)
         let keep = !rest.isEmpty && cmd != .toggle && cmd != .callout
-        let current = blocks[i]
-        mutate(structural: true) { list in
+        let current = sib[i]
+        mutateSiblings(of: id) { list in
             Array(list[..<i]) + (keep ? [current.withText(rest), nb] : [nb]) + Array(list[(i + 1)...])
         }
         if nb.isEditable || cmd == .table { activate(nb.id, at: 0) } else { endEditing() }
@@ -325,7 +325,7 @@ extension NoteModel {
 
     /// `applyLink` (editor-menus.js): „[[suche“ vor dem Caret wird zu `[Titel](#id)`.
     func applyLink(_ page: PageSummary) {
-        guard let q = menu, q.kind == .link, let b = blocks.first(where: { $0.id == q.blockId }) else { return }
+        guard let q = menu, q.kind == .link, let b = blocks.deep(q.blockId) else { return }
         menu = nil
         let full = b.text as NSString
         let end = min(q.end, full.length)
@@ -342,7 +342,7 @@ extension NoteModel {
     }
 
     func setTextAt(_ id: String, _ text: String, _ caret: Int) {
-        mutate(structural: true) { list in list.map { $0.id == id ? $0.withText(text) : $0 } }
+        mutate(structural: true) { list in list.mapDeep(id) { $0.withText(text) } }
         activate(id, at: caret)
     }
 
@@ -362,7 +362,7 @@ extension NoteModel {
     func finishLink(_ url: String?) {
         guard let p = linkPrompt else { return }
         linkPrompt = nil
-        guard let full = blocks.first(where: { $0.id == p.id })?.text else { return }
+        guard let full = blocks.deep(p.id)?.text else { return }
         let len = (full as NSString).length
         let href = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if href.isEmpty {
@@ -385,7 +385,7 @@ extension NoteModel {
 
     /// Ob eine Taste hier etwas tut; sonst bleibt sie beim Textfeld (Cursor bewegen, Tab …).
     func wants(_ key: BlockKey, id: String, text: String) -> Bool {
-        guard let b = blocks.first(where: { $0.id == id }) else { return false }
+        guard let b = blocks.deep(id) else { return false }
         let menuOpen = menu?.blockId == id
         let ns = text as NSString
         let at = min(selection.location, ns.length)
@@ -394,7 +394,7 @@ extension NoteModel {
         case .shiftTab: return b.indent > 0
         case .up: return menuOpen || (selection.length == 0 && !ns.substring(to: at).contains("\n"))
         case .down: return menuOpen || (selection.length == 0 && !ns.substring(from: at).contains("\n"))
-        case .deleteForward: return selection.length == 0 && at == ns.length && blocks.after(id)?.isText == true
+        case .deleteForward: return selection.length == 0 && at == ns.length && place(id).flatMap { $0.list[safe: $0.index + 1] }?.isText == true
         case .softBreak: return !b.keepsNewlines
         case .format, .link: return b.isText && !b.isCode
         default: return true
@@ -406,7 +406,7 @@ extension NoteModel {
         switch key {
         case .tab:
             if menuOpen { pickMenuItem() }
-            else if let b = blocks.first(where: { $0.id == id }), b.isCode { insertAtCaret(id, "  ") }
+            else if let b = blocks.deep(id), b.isCode { insertAtCaret(id, "  ") }
             else { indent(1) }
         case .shiftTab: indent(-1)
         case .up: if menuOpen { moveMenuSelection(-1) } else { focusNeighbor(id, -1) }
@@ -426,7 +426,7 @@ extension NoteModel {
 
     /// Text an der Auswahl einsetzen, ohne zu teilen (Shift+Enter, Tab im Code).
     private func insertAtCaret(_ id: String, _ s: String) {
-        guard let b = blocks.first(where: { $0.id == id }) else { return }
+        guard let b = blocks.deep(id) else { return }
         let ns = b.text as NSString
         let start = min(selection.location, ns.length)
         let end = min(NSMaxRange(selection), ns.length)
@@ -436,17 +436,17 @@ extension NoteModel {
 
     /// ↑ am Anfang bzw. ↓ am Ende: in den Nachbarblock wechseln.
     private func focusNeighbor(_ id: String, _ dir: Int) {
-        guard let i = index(id), let n = blocks[safe: i + dir], n.isEditable else { return }
+        guard let (sib, i) = place(id), let n = sib[safe: i + dir], n.isEditable else { return }
         activate(n.id, at: dir < 0 ? (n.text as NSString).length : 0)
     }
 
     /// Entf am Blockende: den nächsten Textblock anhängen.
     private func joinNext(_ id: String) {
-        guard let i = index(id), let next = blocks[safe: i + 1], next.isText else { return }
-        let b = blocks[i]
+        guard let (sib, i) = place(id), let next = sib[safe: i + 1], next.isText else { return }
+        let b = sib[i]
         let join = (b.text as NSString).length
         let merged = b.withText(b.text + next.text)
-        mutate(structural: true) { list in Array(list[..<i]) + [merged] + Array(list[(i + 2)...]) }
+        mutateSiblings(of: id) { list in Array(list[..<i]) + [merged] + Array(list[(i + 2)...]) }
         activate(id, at: join)
     }
 
@@ -454,16 +454,16 @@ extension NoteModel {
 
     /// Block um eine Stelle verschieben (Strg+Shift+↑/↓, Kontextmenü).
     func moveBlock(_ id: String, _ delta: Int) {
-        guard let i = index(id) else { return }
+        guard let (_, i) = place(id) else { return }
         move(id, to: i + delta + (delta > 0 ? 1 : 0))
     }
 
-    /// Block vor die Stelle `target` setzen (0…count; Ziehen mit dem Griff).
+    /// Block vor die Stelle `target` seiner Liste setzen (0…count; Ziehen mit dem Griff).
     func move(_ id: String, to target: Int) {
-        guard let i = index(id) else { return }
-        let t = min(max(target, 0), blocks.count)
+        guard let (sib, i) = place(id) else { return }
+        let t = min(max(target, 0), sib.count)
         guard t != i, t != i + 1 else { return }
-        mutate(structural: true) { list in
+        mutateSiblings(of: id) { list in
             var l = list
             let b = l.remove(at: i)
             l.insert(b, at: t > i ? t - 1 : t)
@@ -474,16 +474,15 @@ extension NoteModel {
 
     /// Kopie direkt darunter; über Markdown, damit auch verschachtelte Blöcke neue IDs bekommen.
     func duplicate(_ id: String) {
-        guard let i = index(id) else { return }
-        let copy = markdownToBlocks(markdown: blocksToMarkdown(blocks: [blocks[i]]))
-        mutate(structural: true) { list in Array(list[...i]) + copy + Array(list[(i + 1)...]) }
+        guard let (sib, i) = place(id) else { return }
+        let copy = markdownToBlocks(markdown: blocksToMarkdown(blocks: [sib[i]]))
+        mutateSiblings(of: id) { list in Array(list[...i]) + copy + Array(list[(i + 1)...]) }
     }
 
     /// Farbe setzen: Text- und Hintergrundfarbe schließen sich aus; nil entfernt beide.
     func setColor(_ id: String, _ name: String?, background: Bool) {
         mutate(structural: true) { list in
-            list.map { b in
-                guard b.id == id else { return b }
+            list.mapDeep(id) { b in
                 var c = b
                 c.textColor = name != nil && !background ? name : nil
                 c.bgColor = name != nil && background ? name : nil
@@ -494,7 +493,7 @@ extension NoteModel {
 
     /// `turnInto` (editor.js): Textblöcke behalten ihren Text, Toggle/Callout Kinder bzw. Klartext.
     func turnInto(_ id: String, _ to: TurnInto) {
-        guard let b = blocks.first(where: { $0.id == id }) else { return }
+        guard let b = blocks.deep(id) else { return }
         let texty = b.isText && !b.isCode
         var nb = b
         if let type = to.type {
@@ -509,13 +508,13 @@ extension NoteModel {
             nb = b.withKind(.callout(color: "blue", children: [.paragraph(texty ? b.text : b.plainText)]))
         }
         let result = nb
-        mutate(structural: true) { list in list.map { $0.id == id ? result : $0 } }
+        mutate(structural: true) { list in list.mapDeep(id) { _ in result } }
         if result.isEditable { activate(id, at: (result.text as NSString).length) } else if activeId == id { endEditing() }
     }
 
     /// „Lernkarte erstellen“: Klartext des Blocks als Vorderseite, mit Verweis auf die Seite.
     func cardFromBlock(_ id: String) -> Bool {
-        guard let b = blocks.first(where: { $0.id == id }) else { return false }
+        guard let b = blocks.deep(id) else { return false }
         return (try? core.createCard(front: markdownPlainText(markdown: b.plainText), back: "", deck: nil, pageId: pageId)) != nil
     }
 
@@ -523,9 +522,9 @@ extension NoteModel {
 
     /// Tabellenzellen geändert; neue Zeilen/Spalten zählen als eigener Verlaufsschritt.
     func setTable(_ id: String, _ rows: [[String]]) {
-        guard let b = blocks.first(where: { $0.id == id }), case .table(let old) = b.kind else { return }
+        guard let b = blocks.deep(id), case .table(let old) = b.kind else { return }
         let structural = old.count != rows.count || old.first?.count != rows.first?.count
-        mutate(structural: structural) { list in list.map { $0.id == id ? $0.withKind(.table(rows: rows)) : $0 } }
+        mutate(structural: structural) { list in list.mapDeep(id) { $0.withKind(.table(rows: rows)) } }
     }
 
     /// Datei im Kern ablegen und als Bild- bzw. Dateiblock hinter `mediaAfter` einfügen.
@@ -536,13 +535,16 @@ extension NoteModel {
             : .file(src: fileId, name: name)
         let nb = MdBlock.make(kind)
         let after = mediaAfter
-        mutate(structural: true) { list in
-            guard let i = list.firstIndex(where: { $0.id == after }) else { return list + [nb] }
-            let b = list[i]
-            if b.isText, !b.isCode, b.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                return Array(list[..<i]) + [nb] + Array(list[(i + 1)...])
+        mutate(structural: true) { all in
+            guard let after, all.deep(after) != nil else { return all + [nb] }
+            return all.withSiblings(of: after) { list in
+                guard let i = list.firstIndex(where: { $0.id == after }) else { return list + [nb] }
+                let b = list[i]
+                if b.isText, !b.isCode, b.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    return Array(list[..<i]) + [nb] + Array(list[(i + 1)...])
+                }
+                return Array(list[...i]) + [nb] + Array(list[(i + 1)...])
             }
-            return Array(list[...i]) + [nb] + Array(list[(i + 1)...])
         }
         mediaAfter = nb.id
         return true
@@ -553,13 +555,25 @@ extension NoteModel {
         endEditing()
     }
 
-    /// Slash „Heft“: neues Heft als Unterseite anlegen und dahinter einbetten.
-    private func insertHeft(after id: String) {
-        guard let heftId = try? core.createHeft(title: "Heft", parentId: pageId, workspaceId: nil), let i = index(id) else { return }
-        mutate(structural: true) { list in Array(list[...i]) + [MdBlock.make(.heft(heftId: heftId))] + Array(list[(i + 1)...]) }
+    /// Bilder aus der Zwischenablage oder per Drag & Drop hinter `after` einfügen (ohne: am Ende), als
+    /// PNG bzw. JPEG wie beim Foto-Import. Ein leerer Absatz an der Stelle wird durch das Bild ersetzt.
+    func insertImages(_ images: [(data: Data, mime: String)], after id: String?) {
+        mediaAfter = id ?? blocks.last?.id
+        var n = 0
+        for (i, im) in images.enumerated() {
+            let ext = im.mime == "image/png" ? "png" : "jpg"
+            if addMedia(im.data, mime: im.mime, name: images.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)") { n += 1 }
+        }
+        mediaAfter = nil
+        if let a = activeId, blocks.deep(a) == nil { endEditing() }
+        if n > 0 { showToast(n == 1 ? "Bild eingefügt" : "\(n) Bilder eingefügt") } else { showToast("Bild konnte nicht eingefügt werden.") }
     }
 
-    private func index(_ id: String) -> Int? { blocks.firstIndex { $0.id == id } }
+    /// Slash „Heft“: neues Heft als Unterseite anlegen und dahinter einbetten.
+    private func insertHeft(after id: String) {
+        guard let (_, i) = place(id), let heftId = try? core.createHeft(title: "Heft", parentId: pageId, workspaceId: nil) else { return }
+        mutateSiblings(of: id) { list in Array(list[...i]) + [MdBlock.make(.heft(heftId: heftId))] + Array(list[(i + 1)...]) }
+    }
 }
 
 extension MdBlock {

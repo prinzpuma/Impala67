@@ -1,7 +1,7 @@
 import ImageIO
 import UIKit
 
-/// Bilder und Textfelder einer Heftseite (bisher nur Anzeige), gezeichnet wie `renderPageTo` in heft.js:
+/// Bilder und Textfelder einer Heftseite (bearbeitet über `HeftSelectLayer`), gezeichnet wie `renderPageTo` in heft.js:
 /// Papier → Bilder → Striche → Textfelder. Bilder liegen deshalb unter, Textfelder über der PencilKit-Ebene.
 /// Wie `HeftPaperView` in Seitenkoordinaten und per Transform mit dem Zoom skaliert.
 final class HeftObjectsView: UIView {
@@ -9,6 +9,8 @@ final class HeftObjectsView: UIView {
 
     private let kind: Kind
     private var boxes: [HeftTextBox] = []
+    /// Ebene bzw. Feld je Element-ID, für die Vorschau beim Verschieben und Skalieren.
+    private var views: [String: Any] = [:]
     private var zoom: CGFloat = 1
 
     init(_ kind: Kind) {
@@ -28,6 +30,7 @@ final class HeftObjectsView: UIView {
         subviews.forEach { $0.removeFromSuperview() }
         layer.sublayers?.forEach { $0.removeFromSuperlayer() }
         boxes.removeAll()
+        views.removeAll()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         switch kind {
@@ -40,16 +43,27 @@ final class HeftObjectsView: UIView {
                 l.contentsGravity = .resize
                 l.minificationFilter = .trilinear
                 layer.addSublayer(l)
+                views[im.id] = l
             }
         case .texts:
             for t in data.texts where !t.text.isEmpty {
                 let box = HeftTextBox(t)
                 addSubview(box)
                 boxes.append(box)
+                views[t.id] = box
             }
         }
         CATransaction.commit()
         follow(zoom: zoom)
+    }
+
+    /// Element `id` vorläufig an `frame` zeigen (bis zum Neuladen aus dem Kern).
+    func preview(_ id: String, frame: CGRect) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let l = views[id] as? CALayer { l.frame = frame }
+        if let v = views[id] as? HeftTextBox { v.frame = CGRect(origin: frame.origin, size: CGSize(width: frame.width, height: v.frame.height)) }
+        CATransaction.commit()
     }
 
     func follow(zoom: CGFloat) {

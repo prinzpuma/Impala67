@@ -12,7 +12,7 @@ import { PLATFORM_NATIVE } from "./platform-native.js";
 import { focusRenameInput } from "./app-sidebar-events.js";
 import { PLATFORM } from "./platform.js";
 import { closestOf, blurActive } from "./app-ui.js";
-import { closeOverlay, openPromptDialog, setAnkiZen, resetStudyCard, openDailyNote, rateAndReviewCard, showStudyAnswer } from "./app-dialogs.js";
+import { closeOverlay, openPromptDialog, setAnkiZen, resetStudyCard, rateAndReviewCard, showStudyAnswer } from "./app-dialogs.js";
 
 // Spät gebunden ((...a) =>) wegen Modul-Zyklen — wie in app.js.
 const render = (...a) => RENDER.render(...a);
@@ -214,17 +214,5 @@ export async function handleAnkiClick(t, e) {
 		});
 		return true;
 	}
-
-	// ---------- Daily Notes: Tag anklicken / Monat blättern ----------
-	if (t.dataset.dailyday) { await openDailyNote(t.dataset.dailyday); return true; }
-	if (t.dataset.dailynav) {
-		const base = S.dailyMonth ? new Date(S.dailyMonth + "-01T12:00:00") : new Date();
-		const d = new Date(base.getFullYear(), base.getMonth() + Number(t.dataset.dailynav), 1);
-		S.dailyMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
-		renderMain();
-		return true;
-	}
-
-	// Workspace als Markdown-ZIP exportieren (Einstellungen → Backup)
 	return false;
 }

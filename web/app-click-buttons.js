@@ -17,7 +17,7 @@ import { HEFT } from "./heft.js";
 import { PDFS } from "./pdfs.js";
 import { PLATFORM } from "./platform.js";
 import { blurActive, closeTopMenu } from "./app-ui.js";
-import { closeOverlay, openAnki, openDailyNote, openHistory, startNewChat } from "./app-dialogs.js";
+import { closeOverlay, openAnki, openHistory, startNewChat } from "./app-dialogs.js";
 
 // Spät gebunden ((...a) =>) wegen Modul-Zyklen — wie in app.js.
 const render = (...a) => RENDER.render(...a);
@@ -26,7 +26,6 @@ const navBack = (...a) => TABS.navBack(...a);
 const navForward = (...a) => TABS.navForward(...a);
 const renderTabs = (...a) => RENDER.renderTabs(...a);
 const openReview = (...a) => RENDER.openReview(...a);
-const localDayKey = (...a) => RENDER.localDayKey(...a);
 const $ = (id) => U.el(id);
 
 
@@ -40,8 +39,8 @@ export async function handleButtonClick(t) {
 			break;
 		case "btnHome":
 			S.sidebarMode = "files";
-			// Aus Anki/Daily/Bibliothek/Papierkorb führt Home auch inhaltlich zurück
-			if (S.view === "anki" || S.view === "daily" || S.view === "library" || S.view === "trash") {
+			// Aus Anki/Bibliothek/Papierkorb führt Home auch inhaltlich zurück
+			if (S.view === "anki" || S.view === "library" || S.view === "trash") {
 				S.view = S.currentPageId ? "page" : "home";
 			}
 			render();
@@ -198,9 +197,6 @@ export async function handleButtonClick(t) {
 		case "btnDeleteLocalEmbedding":
 			await SETTINGS.handleDeleteLocalEmbedding();
 			break;
-		case "btnOpenAbschreiben":
-			(await import("./abschreiben.js")).open();
-			break;
 		case "btnExportHandwritingSamples":
 			SETTINGS.handleExportHandwritingSamples();
 			break;
@@ -256,13 +252,6 @@ export async function handleButtonClick(t) {
 		case "btnShowBack": S.reviewShowBack = true; openReview(); break;
 		case "btnReviewRefresh": openReview(); break;
 		case "btnCards": openAnki("browser"); break;
-		case "btnDaily":
-			S.view = "daily";
-			S.dailyMonth = null;
-			blurActive();
-			render();
-			break;
-		case "btnDailyToday": await openDailyNote(localDayKey(new Date())); break;
 		case "btnHistory":
 			closeTopMenu(); // sonst bleibt das ⋯-Menü hinter dem Verlauf-Dialog offen
 			if (S.currentPageId) await openHistory(S.currentPageId);
@@ -278,9 +267,6 @@ export async function handleButtonClick(t) {
 			}
 			break;
 		}
-		case "btnDailyHome":
-			await openDailyNote(localDayKey(new Date()));
-			break;
 		case "btnBackupNow":
 		case "btnExport":
 			await SETTINGS.handleBackupNow(t);
