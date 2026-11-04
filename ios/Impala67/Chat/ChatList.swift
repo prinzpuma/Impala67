@@ -10,6 +10,7 @@ struct ChatList: View {
     @State private var renaming: ChatInfo?
     @State private var title = ""
     @State private var deleting: ChatInfo?
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
         let _ = store.chatsRevision
@@ -81,7 +82,8 @@ struct ChatList: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Space.s2)
-            .padding(.vertical, 6)
+            .padding(.vertical, density == AppDensity.compact.rawValue ? 4 : 8)
+            .frame(minHeight: density == AppDensity.compact.rawValue ? 32 : 40)
             .background {
                 if active {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
@@ -104,7 +106,7 @@ struct ChatList: View {
                 Label { Text("Löschen") } icon: { Icon("trash") }
             }
         }
-        .sensoryFeedback(.selection, trigger: active) { _, now in now }
+        .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
     }
 
     /// „vor 5 Minuten“ aus dem ISO-Zeitstempel des Kerns.

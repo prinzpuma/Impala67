@@ -9,7 +9,8 @@ struct WeekStat: View {
     let streak: Int
     let onCycleGoal: () -> Void
     @State private var grown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || AppMotion.isReduced }
 
     private var weekMin: Double { Double(week.reduce(0, +)) / 60 }
     private var pct: Int { min(100, Int((weekMin / Double(goalMin) * 100).rounded())) }

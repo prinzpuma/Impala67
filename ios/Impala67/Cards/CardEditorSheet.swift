@@ -98,7 +98,7 @@ struct CardEditorSheet: View {
             }
         }
         .presentationDetents([.large])
-        .sensoryFeedback(.error, trigger: error) { _, now in now != nil }
+        .sensoryFeedback(.error, trigger: error) { _, now in AppHaptics.isEnabled && now != nil }
         .onAppear(perform: load)
     }
 

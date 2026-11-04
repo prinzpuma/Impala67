@@ -99,7 +99,8 @@ enum HeftOcr {
     /// erkannt wurden (`heftOcrJobs(src: "apple")`).
     @MainActor
     static func startBackgroundScan(core: ImpalaCore) {
-        if bgTask != nil { return }
+        // Performance-Modus: keine Hintergrund-Erkennung (wie `motion` in der PWA).
+        if bgTask != nil || AppMotion.isReduced { return }
         bgTask = Task { @MainActor in
             defer { bgTask = nil }
             try? await Task.sleep(nanoseconds: bgStartNs)

@@ -298,7 +298,7 @@ struct HeftCanvas: UIViewRepresentable {
             applying = true
             canvas.drawing = PKDrawing(strokes: all)
             applying = false
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if AppHaptics.isEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             return true
         }
 

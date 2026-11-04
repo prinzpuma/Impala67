@@ -84,8 +84,7 @@ private struct SettingsDetail: View {
             switch section {
             case .overview: OverviewSection(open: open)
             case .appearance:
-                ThemeSection()
-                HomeSettingsSections()
+                AppearanceSettingsSections()
             case .ai: AiSettingsSections()
             case .learning: WeekGoalSection()
             case .sync:
@@ -152,19 +151,108 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
-private struct ThemeSection: View {
+/// Darstellung wie die PWA (settings-renderer.js `renderAppearance`):
+/// Design (Theme, Akzent, Dichte), Lesbarkeit (Schriftgröße, Performance-Modus, Haptik),
+/// Oberfläche (Tab-Anordnung, Begrüßungsname, Tagesartikel, Verwandte Seiten, Themen).
+private struct AppearanceSettingsSections: View {
     @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
+    @AppStorage(AppAccent.key) private var accent = AppAccent.blue.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppFontSize.key) private var fontSize = AppFontSize.medium.rawValue
+    @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
+    @AppStorage(AppHaptics.key) private var haptics = true
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
 
     var body: some View {
         Section {
             Picker("Erscheinungsbild", selection: $theme) {
                 ForEach(AppTheme.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
             }
+            AccentPickerRow(selected: $accent)
+            Picker("Darstellungsdichte", selection: $density) {
+                ForEach(AppDensity.allCases) { Text($0.label).tag($0.rawValue) }
+            }
         } header: {
             Text("Design")
         } footer: {
-            Text("System, Hell oder Dunkel")
+            Text("Bestimmt Farben, Kontraste und Informationsdichte")
         }
+
+        Section {
+            Picker("Schriftgröße", selection: $fontSize) {
+                ForEach(AppFontSize.allCases) { Text($0.label).tag($0.rawValue) }
+            }
+            Toggle("Performance-Modus", isOn: Binding(
+                get: { motion == AppMotion.reduced.rawValue },
+                set: { motion = $0 ? AppMotion.reduced.rawValue : AppMotion.full.rawValue }
+            ))
+            Toggle("Haptisches Feedback", isOn: $haptics)
+        } header: {
+            Text("Lesbarkeit")
+        } footer: {
+            Text("Performance-Modus: für ältere Geräte ohne Animationen, Milchglas-Effekte und Hintergrund-Handschrifterkennung.")
+        }
+
+        Section {
+            Picker("Tab-Anordnung", selection: $tabsPosition) {
+                ForEach(AppTabsPosition.allCases) { Text($0.label).tag($0.rawValue) }
+            }
+        } header: {
+            Text("Oberfläche")
+        } footer: {
+            Text(tabsPosition == AppTabsPosition.sidebar.rawValue
+                 ? "Vertikale Tabs in der linken Seitenleiste."
+                 : "Horizontale Leiste oben (Standard).")
+        }
+
+        HomeSettingsSections()
+    }
+}
+
+/// Farbwahl der Akzente mit runden Farbtupfern wie in der PWA.
+private struct AccentPickerRow: View {
+    @Binding var selected: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Akzentfarbe")
+            Text("Für Auswahl, Fokus und wichtige Aktionen")
+                .font(.system(size: TextSize.sm))
+                .foregroundStyle(Impala.text2)
+            HStack(spacing: 14) {
+                ForEach(AppAccent.allCases) { a in
+                    Button {
+                        selected = a.rawValue
+                    } label: {
+                        Circle()
+                            .fill(a.color)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                if selected == a.rawValue {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(Impala.onAccent)
+                                }
+                            }
+                            .overlay {
+                                if selected == a.rawValue {
+                                    Circle()
+                                        .strokeBorder(Impala.text, lineWidth: 2)
+                                        .padding(-3)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(a.label)
+                }
+                Spacer()
+                Text(AppAccent(rawValue: selected)?.label ?? "")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+            }
+            .padding(.vertical, 4)
+        }
+        .padding(.vertical, 2)
     }
 }
 

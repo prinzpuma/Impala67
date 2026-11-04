@@ -8,7 +8,13 @@ enum Impala {
     static let bg0 = dynamic(light: 0xF2EFE9, dark: 0x05070D)
     static let text = dynamic(light: 0x292926, dark: 0xFFFFFF, darkAlpha: 0.92)
     static let text2 = dynamic(light: 0x5C5A54, dark: 0xFFFFFF, darkAlpha: 0.68)
-    static let accent = dynamic(light: 0x2478C7, dark: 0x6B8CAE)
+    /// Folgt der gewählten Akzentfarbe (Einstellungen → Darstellung).
+    static var accent: Color {
+        Color(uiColor: UIColor { traits in
+            let cur = AppAccent.current
+            return traits.userInterfaceStyle == .dark ? UIColor(hex: cur.darkHex) : UIColor(hex: cur.lightHex)
+        })
+    }
     static let danger = dynamic(light: 0xD84D43, dark: 0xE97366)
     static let success = dynamic(light: 0x37845A, dark: 0x72BC8F)
     static let warn = dynamic(light: 0xE8C65A, dark: 0xE8C65A)
@@ -30,6 +36,161 @@ enum Impala {
         Color(uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark ? UIColor(hex: dark, alpha: darkAlpha) : UIColor(hex: light)
         })
+    }
+}
+
+/// Akzentfarben wie `ACCENT_THEMES` in `settings.js` der PWA.
+enum AppAccent: String, CaseIterable, Identifiable {
+    case blue, violet, green, orange
+
+    static let key = "impala67Accent"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .blue: "Blau"
+        case .violet: "Violett"
+        case .green: "Grün"
+        case .orange: "Orange"
+        }
+    }
+
+    var lightHex: UInt32 {
+        switch self {
+        case .blue: 0x2478C7
+        case .violet: 0x7C7193
+        case .green: 0x627D69
+        case .orange: 0x976D4D
+        }
+    }
+
+    var darkHex: UInt32 {
+        switch self {
+        case .blue: 0x6B8CAE
+        case .violet: 0x8F82A9
+        case .green: 0x6E8C75
+        case .orange: 0xB07F59
+        }
+    }
+
+    var color: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(hex: darkHex) : UIColor(hex: lightHex)
+        })
+    }
+
+    static var current: AppAccent {
+        let raw = UserDefaults.standard.string(forKey: key) ?? "blue"
+        return AppAccent(rawValue: raw) ?? .blue
+    }
+}
+
+/// Darstellungsdichte wie `impala67Density` der PWA (Kompakt vs. Komfortabel).
+enum AppDensity: String, CaseIterable, Identifiable {
+    case compact, comfortable
+
+    static let key = "impala67Density"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .compact: "Kompakt"
+        case .comfortable: "Komfortabel"
+        }
+    }
+
+    var isCompact: Bool { self == .compact }
+
+    static var current: AppDensity {
+        let raw = UserDefaults.standard.string(forKey: key) ?? "compact"
+        return AppDensity(rawValue: raw) ?? .compact
+    }
+}
+
+/// Schriftgröße wie `impala67FontSize` der PWA (s, m, l).
+enum AppFontSize: String, CaseIterable, Identifiable {
+    case small = "s"
+    case medium = "m"
+    case large = "l"
+
+    static let key = "impala67FontSize"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .small: "Klein"
+        case .medium: "Normal"
+        case .large: "Groß"
+        }
+    }
+
+    var dynamicTypeSize: DynamicTypeSize {
+        switch self {
+        case .small: .medium
+        case .medium: .large
+        case .large: .xLarge
+        }
+    }
+
+    static var current: AppFontSize {
+        let raw = UserDefaults.standard.string(forKey: key) ?? "m"
+        return AppFontSize(rawValue: raw) ?? .medium
+    }
+}
+
+/// Performance-Modus / Bewegung reduzieren wie `impala67Motion` der PWA.
+enum AppMotion: String, CaseIterable, Identifiable {
+    case full, reduced
+
+    static let key = "impala67Motion"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .full: "Voll"
+        case .reduced: "Reduziert"
+        }
+    }
+
+    static var isReduced: Bool {
+        let raw = UserDefaults.standard.string(forKey: key) ?? "full"
+        return raw == "reduced"
+    }
+}
+
+/// Haptisches Feedback wie `impala67NativeHaptics` in PWA und Android.
+enum AppHaptics {
+    static let key = "impala67NativeHaptics"
+
+    static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+}
+
+/// Tab-Anordnung wie `impala67TabsPosition` der PWA (Oben vs. Seitenleiste).
+enum AppTabsPosition: String, CaseIterable, Identifiable {
+    case top, sidebar
+
+    static let key = "impala67TabsPosition"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .top: "Oben"
+        case .sidebar: "Seitenleiste"
+        }
+    }
+
+    var isSidebar: Bool { self == .sidebar }
+
+    static var current: AppTabsPosition {
+        let raw = UserDefaults.standard.string(forKey: key) ?? "top"
+        return AppTabsPosition(rawValue: raw) ?? .top
     }
 }
 
@@ -58,6 +219,9 @@ enum Space {
     static let s3: CGFloat = 12
     static let s4: CGFloat = 16
     static let s6: CGFloat = 24
+
+    /// Dichte-abhängiger vertikaler Abstand (Kompakt vs. Komfortabel wie in der PWA).
+    static var rowPadding: CGFloat { AppDensity.current.isCompact ? 5 : 9 }
 }
 
 extension UIColor {

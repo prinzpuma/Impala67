@@ -6,13 +6,15 @@ struct HomeSettings {
     var name = ""
     var article = true
     var topics = ""
+    var relatedPages = true
 
     static func read(_ core: ImpalaCore) -> HomeSettings {
         let s = (try? JSONSerialization.jsonObject(with: Data(core.settingsJson().utf8))) as? [String: Any] ?? [:]
         return HomeSettings(
             name: (s["homeUserName"] as? String ?? "").trimmingCharacters(in: .whitespaces),
             article: s["homeArticle"] as? Bool ?? true,
-            topics: s["homeArticleTopics"] as? String ?? ""
+            topics: s["homeArticleTopics"] as? String ?? "",
+            relatedPages: s["relatedPages"] as? Bool ?? true
         )
     }
 }
@@ -58,6 +60,7 @@ struct HomeSettingsSections: View {
     @State private var name = ""
     @State private var article = true
     @State private var topics = ""
+    @State private var relatedPages = true
     @State private var loaded = false
 
     var body: some View {
@@ -78,11 +81,40 @@ struct HomeSettingsSections: View {
                 if article {
                     TextField("Automatisch", text: $topics, axis: .vertical)
                         .onSubmit(saveTopics)
+                    if !suggestions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(suggestions.prefix(6), id: \.self) { s in
+                                    Button {
+                                        let trimmed = topics.trimmingCharacters(in: .whitespaces)
+                                        topics = trimmed.isEmpty ? s : "\(trimmed), \(s)"
+                                        saveTopics()
+                                    } label: {
+                                        Text("+ \(s)")
+                                            .font(.system(size: TextSize.xs, weight: .medium))
+                                            .foregroundStyle(Impala.accent)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Impala.activeTint, in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                 }
             } footer: {
                 Text(article
                      ? "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen. Themen kommagetrennt, sie wechseln täglich; leer = aus allen Notizen."
                      : "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen.")
+            }
+            Section {
+                Toggle("Verwandte Seiten", isOn: $relatedPages)
+                    .tint(Impala.accent)
+                    .onChange(of: relatedPages) { _, on in if loaded { AiSettings.patch(store.core, ["relatedPages": on]) } }
+            } footer: {
+                Text("Zeigt unter jeder Notiz bis zu drei inhaltlich ähnliche Seiten (braucht das Embedding-Modell unter KI).")
             }
         }
         .animation(.smooth, value: article)
@@ -91,12 +123,19 @@ struct HomeSettingsSections: View {
             name = s.name
             article = s.article
             topics = s.topics
+            relatedPages = s.relatedPages
             Task { loaded = true }
         }
         .onDisappear {
             saveName()
             saveTopics()
         }
+    }
+
+    private var suggestions: [String] {
+        let own = Set(topics.components(separatedBy: CharacterSet(charactersIn: ",;\n")).map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
+        let ws = store.core.workspaces().map(\.name)
+        return ws.filter { !own.contains($0.lowercased()) && !$0.isEmpty }
     }
 
     private func saveName() {

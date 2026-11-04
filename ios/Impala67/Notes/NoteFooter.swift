@@ -109,3 +109,88 @@ struct ChildPagesList: View {
         }
     }
 }
+
+/// „Verwandt“: bis zu drei inhaltlich ähnliche Seiten aus dem semantischen Index (related-pages.js / PageFooter.kt).
+/// Ohne Index, bei Datenbank-Seiten oder mit Einstellung `relatedPages = false` bleibt die Leiste weg;
+/// das × schaltet sie aus.
+struct RelatedPagesRow: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+    let pageId: String
+    @State private var related: [PageSummary] = []
+
+    var body: some View {
+        if !related.isEmpty {
+            VStack(alignment: .leading, spacing: Space.s2) {
+                Rectangle().fill(Impala.edgeSoft).frame(height: 1).padding(.bottom, 4)
+                HStack(spacing: Space.s2) {
+                    Text("Verwandt")
+                        .font(.system(size: TextSize.sm, weight: .semibold))
+                        .foregroundStyle(Impala.text2)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Space.s2) {
+                            ForEach(related) { p in
+                                Button { shell.open(p.id) } label: {
+                                    HStack(spacing: 5) {
+                                        PageIcon(page: p, size: 13)
+                                        Text(PageStyle.title(p)).lineLimit(1)
+                                    }
+                                    .font(.system(size: TextSize.sm))
+                                    .foregroundStyle(Impala.text)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                                .hoverEffect(.highlight)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        AiSettings.patch(store.core, ["relatedPages": false])
+                    } label: {
+                        Icon("x", size: 12)
+                            .foregroundStyle(Impala.text2)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Verwandte Seiten ausblenden")
+                }
+            }
+            .padding(.top, 14)
+        }
+        .task(id: "\(pageId)|\(store.settingsRevision)") { await loadRelated() }
+    }
+
+    /// Suche im Hintergrund – der Index kann bei vielen Seiten dauern und darf die Notiz nicht anhalten.
+    private func loadRelated() async {
+        guard HomeSettings.read(store.core).relatedPages, store.core.pageDb(id: pageId) == nil else {
+            related = []
+            return
+        }
+        let core = store.core
+        let id = pageId
+        let ids = await Task.detached(priority: .utility) { RelatedSearch.pageIds(core: core, pageId: id) }.value
+        guard !Task.isCancelled else { return }
+        related = ids.compactMap { store.core.page(id: $0)?.summary }
+    }
+}
+
+/// Ein semantischer Index für die App (`SemanticSearch` des Kerns wie `SemanticIndex.kt` in Android; der
+/// Kern hält die Vektoren zwischengespeichert). Ohne Embedding-Modell oder gespeicherte Vektoren: leer.
+enum RelatedSearch {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var search: SemanticSearch?
+
+    static func pageIds(core: ImpalaCore, pageId: String) -> [String] {
+        lock.withLock {
+            // `try?`: Fehlt das Embedding-Modell oder gibt es noch keine Vektoren, ist das kein Fehler,
+            // sondern der Normalfall am iPad – nichts für den Profiler.
+            if search == nil { search = try? SemanticSearch.withCloudEmbeddings(core: core) }
+            guard let search else { return [] }
+            return ((try? search.relatedPages(pageId: pageId, k: 3)) ?? []).map(\.pageId)
+        }
+    }
+}

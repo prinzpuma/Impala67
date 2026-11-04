@@ -5,6 +5,7 @@ import SwiftUI
 struct TabBar: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     @Namespace private var highlight
 
     var body: some View {
@@ -18,18 +19,63 @@ struct TabBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Linke Spalte ein-/ausklappen")
-            ScrollView(.horizontal) {
-                HStack(spacing: Space.s1) {
-                    ForEach(shell.tabs, id: \.self) { tab in
-                        TabChip(info: info(tab), active: !shell.libraryOpen && tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
-                            .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.9))))
+
+            Button { shell.goBack() } label: {
+                Icon("chevron-left", size: 15)
+                    .foregroundStyle(shell.canGoBack ? Impala.text : Impala.text2.opacity(0.35))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!shell.canGoBack)
+            .accessibilityLabel("Zurück")
+
+            Button { shell.goForward() } label: {
+                Icon("chevron-right", size: 15)
+                    .foregroundStyle(shell.canGoForward ? Impala.text : Impala.text2.opacity(0.35))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!shell.canGoForward)
+            .accessibilityLabel("Vor")
+
+            if tabsPosition == AppTabsPosition.sidebar.rawValue {
+                HStack(spacing: 6) {
+                    if let a = shell.active {
+                        let inf = info(a)
+                        if let emoji = inf.emoji { Text(emoji).font(.system(size: TextSize.sm)) }
+                        else { Icon(inf.icon, size: 15).foregroundStyle(Impala.text2) }
+                        Text(inf.title)
+                            .font(.system(size: TextSize.sm, weight: .medium))
+                            .foregroundStyle(Impala.text)
+                            .lineLimit(1)
+                    } else if shell.libraryOpen {
+                        Text("Bibliothek")
+                            .font(.system(size: TextSize.sm, weight: .medium))
+                            .foregroundStyle(Impala.text)
+                    } else {
+                        Text("Startseite")
+                            .font(.system(size: TextSize.sm, weight: .medium))
+                            .foregroundStyle(Impala.text)
                     }
                 }
-                .padding(.vertical, 2)
-                .animation(.bouncy(duration: 0.35), value: shell.tabs)
-                .animation(.smooth(duration: 0.3), value: shell.active)
+                .padding(.leading, Space.s1)
+                Spacer()
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Space.s1) {
+                        ForEach(shell.tabs, id: \.self) { tab in
+                            TabChip(info: info(tab), active: !shell.libraryOpen && tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                                .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.9))))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                    .animation(.bouncy(duration: 0.35), value: shell.tabs)
+                    .animation(.smooth(duration: 0.3), value: shell.active)
+                }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
             Menu {
                 MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
                 MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }

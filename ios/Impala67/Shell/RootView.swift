@@ -6,6 +6,10 @@ struct RootView: View {
     @Environment(ImpalaStore.self) private var store
     @State private var shell: ShellModel?
     @Namespace private var namespace
+    @AppStorage(AppAccent.key) private var accent = AppAccent.blue.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
 
     var body: some View {
         if let shell {
@@ -42,6 +46,7 @@ struct RootView: View {
                 }
             }
             .navigationSplitViewStyle(.balanced)
+            .tint(AppAccent(rawValue: accent)?.color ?? Impala.accent)
             .environment(shell)
             .environment(\.shellNamespace, namespace)
             .sheet(item: $shell.sheet) { sheet in
@@ -89,7 +94,7 @@ private struct MainContent: View {
         .animation(.smooth(duration: 0.22), value: shell.libraryOpen)
         // Ansicht als Kontext für den Profiler (welche Ansicht hing bzw. scheiterte).
         .onChange(of: screenName, initial: true) { Profiler.shared.setScreen(screenName) }
-        .sensoryFeedback(.selection, trigger: shell.active)
+        .sensoryFeedback(trigger: shell.active) { _, _ in AppHaptics.isEnabled ? .selection : nil }
     }
 
     /// Art der Ansicht ohne Inhalte (keine Titel im Protokoll).

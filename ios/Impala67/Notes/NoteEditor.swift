@@ -44,7 +44,8 @@ private struct NoteBody: View {
     let model: NoteModel
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || AppMotion.isReduced }
     @State private var frames = BlockFrames()
     @State private var dragId: String?
     @State private var dragOffset: CGFloat = 0
@@ -52,11 +53,13 @@ private struct NoteBody: View {
     @State private var rawBlock: MdBlock?
     @State private var linkURL = ""
     @State private var photos: [PhotosPickerItem] = []
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
         let editing = model.activeId != nil
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.s3) {
+            VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
+                ArchivedBanner(pageId: model.pageId) { model.showToast($0) }
                 NoteHeader(pageId: model.pageId)
                 TextField("Ohne Titel", text: Binding(get: { model.title }, set: { model.setTitle($0) }), axis: .vertical)
                     .font(.system(size: 34, weight: .bold))
@@ -66,6 +69,7 @@ private struct NoteBody: View {
                 blockList
                     .riseIn(1)
                 ChildPagesList(pageId: model.pageId, blocks: model.blocks)
+                RelatedPagesRow(pageId: model.pageId)
                 // Tippen unter dem letzten Block schreibt weiter (wie der Klick unter die Blöcke in der PWA).
                 Color.clear
                     .frame(height: 160)
@@ -266,6 +270,44 @@ private struct NoteBody: View {
         }
         photos = []
         model.finishMedia()
+    }
+}
+
+/// „Diese Seite ist archiviert.“ mit „Wiederherstellen“ (render.js `.archived-banner`, PageFooter.kt).
+private struct ArchivedBanner: View {
+    @Environment(ImpalaStore.self) private var store
+    let pageId: String
+    let onToast: (String) -> Void
+
+    var body: some View {
+        let _ = store.pagesRevision
+        if store.core.page(id: pageId)?.archived == true {
+            HStack(spacing: 8) {
+                Icon("archive", size: 16).foregroundStyle(Impala.text2)
+                Text("Diese Seite ist archiviert.")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+                Spacer()
+                Button {
+                    attempt("unarchivePage", { try store.core.unarchivePage(id: pageId) })
+                    onToast("Wiederhergestellt.")
+                } label: {
+                    HStack(spacing: 4) {
+                        Icon("undo", size: 13)
+                        Text("Wiederherstellen")
+                    }
+                    .font(.system(size: TextSize.sm, weight: .medium))
+                    .foregroundStyle(Impala.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Impala.activeTint, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, Space.s3)
+            .padding(.vertical, 8)
+            .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        }
     }
 }
 

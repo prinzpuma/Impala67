@@ -7,6 +7,7 @@ struct Sidebar: View {
     @Environment(ShellModel.self) private var shell
     @Environment(SyncController.self) private var sync
     @Environment(\.shellNamespace) private var zoom
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     @Namespace private var pills
 
     var body: some View {
@@ -21,6 +22,9 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
                 Pill(icon: "search", label: "Suchen", active: false, ns: pills) { shell.sheet = .search }
                     .zoomSource(ShellSheet.search, zoom)
+            }
+            if tabsPosition == AppTabsPosition.sidebar.rawValue {
+                SidebarTabs()
             }
             Group {
                 switch shell.sidebarMode {
@@ -78,7 +82,7 @@ private struct Pill: View {
         }
         .pressable()
         .accessibilityLabel(label)
-        .sensoryFeedback(.selection, trigger: active) { _, now in now }
+        .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
     }
 }
 
@@ -114,5 +118,95 @@ extension View {
     @ViewBuilder
     func zoomSource(_ sheet: ShellSheet, _ ns: Namespace.ID?) -> some View {
         if let ns { matchedTransitionSource(id: sheet.id, in: ns) } else { self }
+    }
+}
+
+/// Offene Tabs in der Seitenleiste (`sidebarTabsHtml` der PWA, `SidebarTabs` in `DeskSidebar.kt`).
+private struct SidebarTabs: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+
+    var body: some View {
+        let _ = store.pagesRevision
+        if !shell.tabs.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Offene Tabs")
+                        .font(.system(size: TextSize.xs, weight: .semibold))
+                        .foregroundStyle(Impala.text2)
+                    Spacer()
+                    Menu {
+                        MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
+                        MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
+                        TemplateMenuSection(create: newPage)
+                        MenuItem("Seite suchen", icon: "search") { shell.sheet = .search }
+                    } label: {
+                        Icon("plus", size: 13)
+                            .foregroundStyle(Impala.text2)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Neuen Tab öffnen")
+                }
+                .padding(.horizontal, Space.s1)
+
+                VStack(spacing: 2) {
+                    ForEach(shell.tabs, id: \.self) { tab in
+                        let active = !shell.libraryOpen && tab == shell.active
+                        let inf = info(tab)
+                        HStack(spacing: 6) {
+                            Button {
+                                shell.open(tab)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if let emoji = inf.emoji { Text(emoji).font(.system(size: TextSize.xs)) }
+                                    else { Icon(inf.icon, size: 14) }
+                                    Text(inf.title)
+                                        .font(.system(size: TextSize.sm))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                shell.close(tab)
+                            } label: {
+                                Icon("x", size: 12)
+                                    .foregroundStyle(Impala.text2)
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Tab schließen")
+                        }
+                        .foregroundStyle(active ? Impala.text : Impala.text2)
+                        .padding(.horizontal, 8)
+                        .frame(minHeight: density == AppDensity.compact.rawValue ? 30 : 36)
+                        .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    }
+                }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func info(_ tab: String) -> (title: String, icon: String, emoji: String?) {
+        if tab.hasPrefix("chat:") {
+            let _ = store.chatsRevision
+            let title = store.core.chat(id: String(tab.dropFirst(5)))?.title ?? ""
+            return (title.isEmpty ? "Chat" : title, "sparkles", nil)
+        }
+        if tab == "anki:main" { return ("Karteikarten", "cards", nil) }
+        if tab == "nlm:main" { return ("Gemini Notebook", "book", nil) }
+        guard let p = store.core.page(id: tab)?.summary else { return ("Ohne Titel", "file", nil) }
+        return (PageStyle.title(p), PageStyle.iconName(p), PageStyle.emoji(p))
+    }
+
+    private func newPage(_ choice: NewPageChoice) {
+        if let id = store.core.createNew(choice, parent: nil, workspace: nil) { shell.openNewTab(id) }
     }
 }

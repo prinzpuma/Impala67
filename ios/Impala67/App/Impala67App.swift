@@ -8,6 +8,10 @@ struct Impala67App: App {
     @State private var app = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
+    @AppStorage(AppAccent.key) private var accent = AppAccent.blue.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppFontSize.key) private var fontSize = AppFontSize.medium.rawValue
+    @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
 
     var body: some Scene {
         WindowGroup {
@@ -20,8 +24,9 @@ struct Impala67App: App {
                     ProgressView()
                 }
             }
-            .tint(Impala.accent)
+            .tint(AppAccent(rawValue: accent)?.color ?? Impala.accent)
             .preferredColorScheme(AppTheme(rawValue: theme)?.scheme)
+            .dynamicTypeSize(AppFontSize(rawValue: fontSize)?.dynamicTypeSize ?? .large)
             .task {
                 await app.open()
                 if scenePhase == .active { app.onForeground() }

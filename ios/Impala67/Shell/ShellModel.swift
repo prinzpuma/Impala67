@@ -29,7 +29,7 @@ final class ShellModel {
     private(set) var libraryOpen = false
 
     func openLibrary() {
-        libraryOpen = true
+        navigateTarget("library", push: true)
     }
     /// Karteikarten: Ansicht des Tabs `anki:main`, Stapel-Dialoge, Karten-Editor.
     let cards = CardsModel()
@@ -43,6 +43,53 @@ final class ShellModel {
     }
 
     private static let maxTabs = 12
+
+    // Navigations-Verlauf wie die PWA (`tabs.js` / `btnNavBack` / `btnNavForward`):
+    private var history: [String] = []
+    private var historyIndex = -1
+
+    var canGoBack: Bool { historyIndex > 0 }
+    var canGoForward: Bool { historyIndex >= 0 && historyIndex < history.count - 1 }
+
+    func goBack() {
+        guard canGoBack else { return }
+        historyIndex -= 1
+        navigateTarget(history[historyIndex], push: false)
+    }
+
+    func goForward() {
+        guard canGoForward else { return }
+        historyIndex += 1
+        navigateTarget(history[historyIndex], push: false)
+    }
+
+    private func pushHistory(_ target: String) {
+        if historyIndex >= 0 && historyIndex < history.count && history[historyIndex] == target { return }
+        if historyIndex < history.count - 1 {
+            history.removeSubrange((historyIndex + 1)...)
+        }
+        history.append(target)
+        if history.count > 30 { history.removeFirst() }
+        historyIndex = history.count - 1
+    }
+
+    private func navigateTarget(_ target: String, push: Bool) {
+        if target == "home" {
+            libraryOpen = false
+            active = nil
+            save()
+        } else if target == "library" {
+            libraryOpen = true
+        } else {
+            libraryOpen = false
+            if !tabs.contains(target) {
+                if let a = active, let i = tabs.firstIndex(of: a) { tabs[i] = target } else { append(target) }
+            }
+            active = target
+            save()
+        }
+        if push { pushHistory(target) }
+    }
 
     /// KI-Panel rechts ein-/ausklappen (bleibt über Neustarts gemerkt, nur dieses Gerät).
     func setAiPanel(_ open: Bool) {
@@ -62,16 +109,14 @@ final class ShellModel {
         let ui = store.core.uiTabs()
         tabs = ui.tabs
         active = ui.activeTabId.flatMap { tabs.contains($0) ? $0 : nil } ?? tabs.first
+        if history.isEmpty {
+            pushHistory(active ?? "home")
+        }
     }
 
     /// Wie `activateTab`: Ist das Ziel schon offen, wird sein Tab aktiv; sonst ersetzt es den aktiven Tab.
     func open(_ tab: String) {
-        libraryOpen = false
-        if !tabs.contains(tab) {
-            if let a = active, let i = tabs.firstIndex(of: a) { tabs[i] = tab } else { append(tab) }
-        }
-        active = tab
-        save()
+        navigateTarget(tab, push: true)
     }
 
     /// „In neuem Tab öffnen“ bzw. „＋“.
@@ -80,6 +125,7 @@ final class ShellModel {
         if !tabs.contains(tab) { append(tab) }
         active = tab
         save()
+        pushHistory(tab)
     }
 
     func close(_ tab: String) {
@@ -101,9 +147,7 @@ final class ShellModel {
 
     /// Startseite: kein aktiver Tab (wie `TopLevel.Home`).
     func goHome() {
-        libraryOpen = false
-        active = nil
-        save()
+        navigateTarget("home", push: true)
     }
 
     private func append(_ tab: String) {

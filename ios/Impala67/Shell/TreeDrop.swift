@@ -21,21 +21,23 @@ extension ImpalaCore {
     func dropPage(_ movedId: String, onto target: PageSummary, zone: DropZone) {
         guard let moved = page(id: movedId)?.summary, moved.id != target.id else { return }
         if zone == .into {
-            try? movePage(id: moved.id, parentId: target.id, index: nil)
+            _ = attempt("movePage", { try self.movePage(id: moved.id, parentId: target.id, index: nil) })
             return
         }
         if target.parentId == nil && target.workspaceId != moved.workspaceId {
-            try? movePageToWorkspace(id: moved.id, workspaceId: target.workspaceId)
+            _ = attempt("movePageToWorkspace", { try self.movePageToWorkspace(id: moved.id, workspaceId: target.workspaceId) })
         }
         let siblings = childrenOf(parentId: target.parentId, workspaceId: target.workspaceId).filter { $0.id != moved.id }
         guard let i = siblings.firstIndex(where: { $0.id == target.id }) else { return }
-        try? movePage(id: moved.id, parentId: target.parentId, index: UInt32(zone == .before ? i : i + 1))
+        _ = attempt("movePage", { try self.movePage(id: moved.id, parentId: target.parentId, index: UInt32(zone == .before ? i : i + 1)) })
     }
 
     /// Auf einen Arbeitsbereich-Kopf (oder „Keine Seiten“) ablegen = Wurzel dieses Bereichs.
     func dropPage(_ movedId: String, toWorkspace ws: String) {
         guard let moved = page(id: movedId)?.summary else { return }
-        if ws != moved.workspaceId || moved.parentId != nil { try? movePageToWorkspace(id: moved.id, workspaceId: ws) }
+        if ws != moved.workspaceId || moved.parentId != nil {
+            _ = attempt("movePageToWorkspace", { try self.movePageToWorkspace(id: moved.id, workspaceId: ws) })
+        }
     }
 }
 

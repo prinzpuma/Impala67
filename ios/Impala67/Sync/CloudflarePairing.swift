@@ -184,7 +184,7 @@ private struct QrScanner: UIViewControllerRepresentable {
             for item in added {
                 if case .barcode(let code) = item, let text = code.payloadStringValue, onCode(text) {
                     done = true
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    if AppHaptics.isEnabled { UINotificationFeedbackGenerator().notificationOccurred(.success) }
                     scanner.stopScanning()
                     return
                 }

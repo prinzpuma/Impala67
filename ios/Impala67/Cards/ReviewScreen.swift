@@ -25,7 +25,8 @@ private struct ReviewBody: View {
     @Bindable var model: ReviewModel
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || AppMotion.isReduced }
     @Namespace private var glass
 
     var body: some View {
@@ -70,9 +71,10 @@ private struct ReviewBody: View {
         }
         .background(Impala.panel)
         .animation(.smooth(duration: 0.38), value: model.card?.id)
-        .sensoryFeedback(.impact(weight: .light), trigger: model.showBack) { _, now in now }
+        .sensoryFeedback(.impact(weight: .light), trigger: model.showBack) { _, now in AppHaptics.isEnabled && now }
         .sensoryFeedback(trigger: model.graded) { _, _ in
-            model.lastGrade == 1 ? SensoryFeedback.warning : SensoryFeedback.impact(flexibility: .solid, intensity: 0.7)
+            guard AppHaptics.isEnabled else { return nil }
+            return model.lastGrade == 1 ? SensoryFeedback.warning : SensoryFeedback.impact(flexibility: .solid, intensity: 0.7)
         }
         .alert("Das hat nicht geklappt", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) {}

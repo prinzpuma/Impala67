@@ -198,6 +198,8 @@ private struct TreePageRow<MenuContent: View>: View {
     @ViewBuilder let menu: () -> MenuContent
     let onAddChild: (NewPageChoice) -> Void
 
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+
     var body: some View {
         HStack(spacing: Space.s1) {
             Group {
@@ -217,7 +219,7 @@ private struct TreePageRow<MenuContent: View>: View {
         }
         .padding(.leading, CGFloat(depth) * 16)
         .padding(.trailing, 2)
-        .frame(minHeight: 34)
+        .frame(minHeight: density == AppDensity.compact.rawValue ? 32 : 40)
         .background {
             // Die Markierung der aktiven Seite gleitet zur neuen Zeile.
             if active {

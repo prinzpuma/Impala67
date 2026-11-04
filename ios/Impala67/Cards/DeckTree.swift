@@ -96,6 +96,8 @@ private struct DeckTreeRow<MenuContent: View>: View {
     let onToggle: () -> Void
     @ViewBuilder let menu: () -> MenuContent
 
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+
     var body: some View {
         HStack(spacing: Space.s1) {
             Group {
@@ -112,7 +114,7 @@ private struct DeckTreeRow<MenuContent: View>: View {
         }
         .padding(.leading, CGFloat(entry.depth) * 16)
         .padding(.trailing, 4)
-        .frame(minHeight: 34)
+        .frame(minHeight: density == AppDensity.compact.rawValue ? 32 : 40)
         .background {
             if active {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
