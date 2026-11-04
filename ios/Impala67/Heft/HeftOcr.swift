@@ -50,8 +50,15 @@ enum HeftOcr {
 
     /// Erkennt die Striche einer Heftseite mit Apple Vision und übergibt das Ergebnis an `heftRecordOcr`
     /// (der Kern hängt den Text vorhandener Scan-Bilder an und prüft Fingerabdruck + Rangfolge).
-    @MainActor
+    /// Läuft ganz im Hintergrund: Seite laden und als Bild rendern dauert bei vollen Seiten Sekunden –
+    /// auf dem Hauptthread waren das die Hänger, die der Profiler zeigte.
     static func indexPage(core: ImpalaCore, pageId: String, heftPageId: String) async {
+        await Task.detached(priority: .utility) {
+            await indexPageInBackground(core: core, pageId: pageId, heftPageId: heftPageId)
+        }.value
+    }
+
+    private static func indexPageInBackground(core: ImpalaCore, pageId: String, heftPageId: String) async {
         guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return }
         if page.strokes.isEmpty {
             _ = attempt("heftRecordOcr", { try core.heftRecordOcr(
@@ -68,7 +75,7 @@ enum HeftOcr {
     }
 
     /// Rendert die Striche einer Seite dunkel auf weißem Grund (ohne Papierlinien, optimal für Vision).
-    @MainActor
+    /// PencilKit-Zeichnungen und `UIGraphicsImageRenderer` dürfen außerhalb des Hauptthreads rendern.
     private static func renderStrokes(_ strokes: [HeftStroke]) -> CGImage? {
         let pkStrokes = strokes.compactMap { HeftInk.pkStroke($0, seed: HeftInk.seed($0.id)) }
         guard !pkStrokes.isEmpty else { return nil }
@@ -98,7 +105,8 @@ enum HeftOcr {
             try? await Task.sleep(nanoseconds: bgStartNs)
             var tried = Set<String>()
             while !Task.isCancelled {
-                let jobs = core.heftOcrJobs(src: src)
+                // Geht alle Hefte durch – nicht auf dem Hauptthread.
+                let jobs = await Task.detached(priority: .utility) { core.heftOcrJobs(src: src) }.value
                 guard let next = jobs.first(where: { tried.insert("\($0.pageId):\($0.heftPageId):\($0.contentKey)").inserted }) else {
                     break
                 }
