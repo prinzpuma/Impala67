@@ -15,11 +15,25 @@ struct RootView: View {
                 Sidebar()
                     .navigationSplitViewColumnWidth(min: 236, ideal: 260, max: 320)
             } detail: {
-                VStack(spacing: 0) {
-                    TabBar()
-                    MainContent()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        TabBar()
+                        MainContent()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    if showsAiPanel(shell) {
+                        AiPanel(activePageId: activePage(shell))
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    if !showsAiPanel(shell) && !isChatTab(shell) {
+                        AiOrbButton()
+                            .padding(Space.s4)
+                            .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(duration: 0.4, bounce: 0.15), value: showsAiPanel(shell))
                 .background(Impala.panel)
                 .toolbar(.hidden, for: .navigationBar)
                 .modifier(DeckDialogsModifier(cards: cards, core: store.core))
@@ -36,9 +50,23 @@ struct RootView: View {
                     .navigationTransition(.zoom(sourceID: sheet.id, in: namespace))
             }
             .onChange(of: store.uiRevision) { shell.reload() }
+            .onChange(of: store.chatsRevision) { shell.chat.reloadIfIdle() }
         } else {
             Color.clear.onAppear { shell = ShellModel(store: store) }
         }
+    }
+}
+
+extension RootView {
+    private func isChatTab(_ shell: ShellModel) -> Bool { shell.active?.hasPrefix("chat:") == true }
+
+    /// Das KI-Panel steht rechts, solange es aufgeklappt ist und kein Chat-Tab vorne liegt.
+    private func showsAiPanel(_ shell: ShellModel) -> Bool { shell.chat.panelOpen && !isChatTab(shell) }
+
+    /// Geöffnete Notiz bzw. Heft als Kontext für die KI.
+    private func activePage(_ shell: ShellModel) -> String? {
+        guard let id = shell.active, let page = store.core.page(id: id), !page.trashed else { return nil }
+        return id
     }
 }
 
@@ -63,7 +91,7 @@ private struct MainContent: View {
             if let page = store.core.page(id: tab), !page.trashed {
                 PageScreen(summary: page.summary).id(tab)
             } else if tab.hasPrefix("chat:") {
-                Placeholder(icon: "chat", title: "KI-Chat", text: "Chats folgen in der iPad-App.")
+                ChatScreen(chatId: String(tab.dropFirst(5)))
             } else if tab == ShellModel.cardsTab {
                 CardsScreen()
             } else if tab == "nlm:main" {

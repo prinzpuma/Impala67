@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Einstellungen (erster Abschnitt: Cloudflare Live-Sync, Texte wie `SettingsCloudflare.kt` bzw. die PWA).
+/// Einstellungen (Cloudflare Live-Sync und KI, Texte wie `SettingsCloudflare.kt` bzw. die PWA).
 struct SettingsSheet: View {
     var body: some View {
         Form {
             CloudflareSection()
+            AiSettingsSections()
         }
         .formStyle(.grouped)
         .navigationTitle("Einstellungen")

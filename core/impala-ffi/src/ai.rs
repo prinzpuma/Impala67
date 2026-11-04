@@ -718,9 +718,17 @@ impl ImpalaCore {
     /// Modelle aller abfragbaren KI-Quellen (`aiListModels` der PWA). Blockiert (Netz): aus einem
     /// Hintergrund-Thread rufen. Fehler nur, wenn alle Quellen scheitern.
     pub fn ai_list_models(&self) -> Result<Vec<AiModel>, AiFailure> {
+        self.ai_list_models_with(String::new())
+    }
+
+    /// Wie `ai_list_models`, aber mit eigenen Quellen (JSON wie `AiOptions.providers_json`; leer oder
+    /// ungültig = gespeicherte Quellen). Für Apps, die API-Schlüssel nur auf dem Gerät halten (iPad:
+    /// Schlüsselbund) und nicht in die Einstellungen schreiben.
+    pub fn ai_list_models_with(&self, providers_json: String) -> Result<Vec<AiModel>, AiFailure> {
         let (providers, sync_url) = {
             let inner = self.lock();
-            (ai_providers(&inner), setting_text(&inner, "cfUrl"))
+            let own = serde_json::from_str::<Vec<Provider>>(&providers_json).ok().filter(|p| !p.is_empty());
+            (own.unwrap_or_else(|| ai_providers(&inner)), setting_text(&inner, "cfUrl"))
         };
         let found = block_on(impala_ai::list_models(
             &models_client(),

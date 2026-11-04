@@ -26,6 +26,8 @@ final class ShellModel {
     var sheet: ShellSheet?
     /// Karteikarten: Ansicht des Tabs `anki:main`, Stapel-Dialoge, Karten-Editor.
     let cards = CardsModel()
+    /// KI-Chat (KI-Panel rechts, Tabs `chat:<id>`, Chat-Liste der Seitenleiste).
+    let chat: ChatModel
     /// Seitenleiste ein-/ausgeklappt (☰ wie `#btnSidebarToggle`).
     var columns: NavigationSplitViewVisibility = .all
 
@@ -35,8 +37,16 @@ final class ShellModel {
 
     private static let maxTabs = 12
 
+    /// KI-Panel rechts ein-/ausklappen (bleibt über Neustarts gemerkt, nur dieses Gerät).
+    func setAiPanel(_ open: Bool) {
+        withAnimation(.spring(duration: 0.4, bounce: 0.15)) { chat.panelOpen = open }
+        UserDefaults.standard.set(open, forKey: "aiPanelOpen")
+    }
+
     init(store: ImpalaStore) {
         self.store = store
+        chat = ChatModel(core: store.core)
+        chat.panelOpen = UserDefaults.standard.bool(forKey: "aiPanelOpen")
         reload()
     }
 

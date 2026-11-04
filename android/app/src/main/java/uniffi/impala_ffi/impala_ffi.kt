@@ -1498,6 +1498,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1688,6 +1690,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_add_file(
 fun uniffi_impala_ffi_checksum_method_impalacore_add_grade(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_ai_list_models(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_ai_list_models_with(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_ai_ping_provider(
 ): Short
@@ -2243,6 +2247,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_add_file(`ptr`: Pointer,`bytes`: Rust
 fun uniffi_impala_ffi_fn_method_impalacore_add_grade(`ptr`: Pointer,`subject`: RustBuffer.ByValue,`grade`: Double,`weight`: RustBuffer.ByValue,`date`: RustBuffer.ByValue,`comment`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_ai_list_models(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_ai_list_models_with(`ptr`: Pointer,`providersJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_ai_ping_provider(`ptr`: Pointer,`base`: RustBuffer.ByValue,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3070,6 +3076,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_ai_list_models() != 36417.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_ai_list_models_with() != 40465.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_ai_ping_provider() != 55509.toShort()) {
@@ -7648,6 +7657,13 @@ public interface ImpalaCoreInterface {
     fun `aiListModels`(): List<AiModel>
     
     /**
+     * Wie `ai_list_models`, aber mit eigenen Quellen (JSON wie `AiOptions.providers_json`; leer oder
+     * ungültig = gespeicherte Quellen). Für Apps, die API-Schlüssel nur auf dem Gerät halten (iPad:
+     * Schlüsselbund) und nicht in die Einstellungen schreiben.
+     */
+    fun `aiListModelsWith`(`providersJson`: kotlin.String): List<AiModel>
+    
+    /**
      * Verbindungstest einer (auch ungespeicherten) Quelle (`aiPingProvider`). Blockiert (Netz).
      */
     fun `aiPingProvider`(`base`: kotlin.String, `key`: kotlin.String): AiPing
@@ -8542,6 +8558,24 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(AiFailure) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_ai_list_models(
         it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Wie `ai_list_models`, aber mit eigenen Quellen (JSON wie `AiOptions.providers_json`; leer oder
+     * ungültig = gespeicherte Quellen). Für Apps, die API-Schlüssel nur auf dem Gerät halten (iPad:
+     * Schlüsselbund) und nicht in die Einstellungen schreiben.
+     */
+    @Throws(AiFailure::class)override fun `aiListModelsWith`(`providersJson`: kotlin.String): List<AiModel> {
+            return FfiConverterSequenceTypeAiModel.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AiFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_ai_list_models_with(
+        it, FfiConverterString.lower(`providersJson`),_status)
 }
     }
     )

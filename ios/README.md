@@ -42,7 +42,8 @@ ios/
    ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
    ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
    ├─ Sync/SyncController.swift Cloudflare Live-Sync: WebSocket, Ping, Neuaufbau (Ablauf im Kern)
-   ├─ Settings/                Einstellungen (bisher: Cloudflare Live-Sync)
+   ├─ Chat/                    KI-Chat: ChatModel (Rückrufe des Rust-Assistenten), Panel, Chat-Liste, KI-Einstellungen
+   ├─ Settings/                Einstellungen (Cloudflare Live-Sync, KI)
    └─ Heft/                    PencilKit-Heft
 ```
 
@@ -105,6 +106,34 @@ Karten-Tabs `anki:main` (Übersicht/Lernen/Kartenliste), Dialoge und Editor lieg
 - **Startseite**: Satz zu den Karten wie `homeViewHtml` und Kachel „Heute fällig“ (fällig / alles gelernt
   / keine Karten), im breiten Fenster rechts neben „Weitermachen“.
 
+## KI-Chat
+
+Wie `android/…/ai/`: Agent-Schleife, Werkzeuge, Rückfragen, Rückgängig und Speichern der Chats macht der
+Kern (`AiAssistant.runAsync`, `undoAiChange`, `chats`/`chat`/`saveChat`). `ChatModel` sammelt nur die
+Rückrufe (`AiListener`: Entwurf und Gedankengang je Durchlauf der Haupt-Queue zusammengefasst, Werkzeug,
+neue Einträge) und setzt `AiPlatform` um: Rückfragen blockieren den Lauf-Thread bis zur Antwort im Chat,
+`view_heft_page` bekommt die Heftseite als JPEG (`HeftThumbnail`, Seite aus `HeftLastPage`).
+
+- **KI-Panel rechts** („KI-Coach“, 340 pt): Status-Chip „KI online/offline“, Verlauf, Neuer Chat, In
+  eigenem Tab öffnen, Einklappen. Eingeklappt: Sparkles-Knopf unten rechts in Liquid Glass (⌘J), Panel
+  federt von rechts herein; Zustand gemerkt (nur dieses Gerät). Die offene Notiz bzw. das Heft geht als
+  Kontext mit (Chip, ✕ schaltet ab; „Anfang mitgesendet (x von y Zeichen)“).
+- **Chat**: Begrüßung mit Vorschlägen, Nutzerblasen mit Stift (Text zurück ins Feld, Verlauf ab dort weg;
+  gesperrt bei nicht zurückgenommenen Änderungen), Antworten als Markdown über `MarkdownView` (Blöcke des
+  Notiz-Editors, auch der gestreamte Entwurf), „Kopieren“ und „Anpassen“ (Länger/Gleich/Kürzer über
+  `refine`), Gedankengang ein-/ausklappbar, Werkzeug-Chips mit Texten wie `TOOL_LABELS`, Änderungs-Karten
+  mit „↺ Rückgängig“, Rückfrage-Karten, Fehler mit Weg zu den Einstellungen. Eingabeleiste in Liquid
+  Glass: Modellmenü (Modelle je Quelle, Gedankengang), Senden ↔ Stopp morphen (`glassEffectID`),
+  Enter sendet, Shift+Enter bricht um, ⌘↩ / ⌘. .
+- **Seitenleiste** (Pille „Chat“): „Neuer Chat“, gespeicherte Chats mit gleitender Markierung; Halten: In
+  eigenem Tab öffnen, Umbenennen, Löschen. Tab `chat:<id>` zeigt den Chat breit (Titel im Tab).
+- **Einstellungen → KI**: aktives Modell (Liste aller Quellen, Suche, manuelle Modell-ID), Quellen (Name,
+  Server-URL, API-Key, „Verbindung testen“, Voreinstellungen Impala AI/LM Studio/Gemini/OpenAI),
+  Verhalten (Tools mitsenden, Gedankengang, eigene Anweisungen). **API-Schlüssel nur im Schlüsselbund**
+  (`AiKeychain`, `…ThisDeviceOnly`); in die Kern-Einstellungen gehen Quellen ohne `key` (der Kern behält
+  dann einen von anderen Geräten synchronisierten). Der Assistent und `aiListModelsWith` bekommen die
+  Quellen samt Schlüssel als JSON; „Impala AI“ nutzt den Sync-Schlüssel.
+
 ## Heft und Sync
 
 PencilKit zeichnet nur. Gespeichert wird ausschließlich das Strichformat des Kerns (`HeftStroke`:
@@ -159,7 +188,10 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
 - Sync: QR-Kopplung, automatisches Koppeln bei neuem Schlüssel aus den Einstellungen, Konflikt-Ansicht,
-  Hintergrund-Sync (BGTaskScheduler). Drive, Karten, KI, weitere Einstellungen.
+  Hintergrund-Sync (BGTaskScheduler). Drive, weitere Einstellungen.
+- KI-Chat: Anhänge (Bilder, PDF/Text, Heftseite anhängen), Diktat, semantische Suche/RAG (lokales
+  Embedding-Modell, `SemanticSearch`), Karteikarten-Kontext (`AiAnki`), ★-Favoriten im Modellmenü,
+  Mehrfachauswahl in der Chat-Liste, `calculate`.
 - Notiz-Editor: Kinder von Callouts, Toggles und Spalten direkt bearbeiten (bisher als Markdown),
   Datenbank-Ansicht, „Verwandt“-Leiste, Mehrfachauswahl von Blöcken, Einfügen von Bildern aus der
   Zwischenablage bzw. per Drag & Drop von außen.
@@ -169,5 +201,5 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 - Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Stapel-Optionen (Tageslimits, Leech),
   Feynman-Modus, Lernzeit-Messung und Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
   Import/Export, Statistik.
-- Chat, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
+- Bibliothek, Wissensgraph, Gemini Notebook (Fußleiste zeigt Platzhalter).
 - Seitenbaum: Ziehen zum Verschieben, Duplizieren, Verschieben nach…, Vorlagenwahl bei „Neu“.

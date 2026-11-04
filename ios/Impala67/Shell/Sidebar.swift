@@ -25,7 +25,7 @@ struct Sidebar: View {
             Group {
                 switch shell.sidebarMode {
                 case .files: PageTree()
-                case .chats: SidebarPlaceholder(text: "Chats folgen mit der KI.")
+                case .chats: ChatList()
                 case .cards: DeckTree()
                 }
             }
@@ -103,16 +103,6 @@ private struct FootButton: View {
             .frame(minHeight: 40)
         }
         .pressable()
-    }
-}
-
-private struct SidebarPlaceholder: View {
-    let text: String
-    var body: some View {
-        Text(text)
-            .font(.system(size: TextSize.sm))
-            .foregroundStyle(Impala.text2)
-            .padding(Space.s2)
     }
 }
 

@@ -41,6 +41,8 @@ struct HeftScreen: View {
         }
         .clipped()
         .sensoryFeedback(.selection, trigger: currentId)
+        // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`).
+        .onChange(of: currentId, initial: true) { HeftLastPage.index[pageId] = index }
         .background(Impala.bg0)
         .onAppear(perform: loadPages)
         .onChange(of: store.lastRemote) {

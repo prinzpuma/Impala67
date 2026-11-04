@@ -862,6 +862,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_add_grade(void*_Nonnull ptr, R
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_ai_list_models(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_AI_LIST_MODELS_WITH
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_AI_LIST_MODELS_WITH
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_ai_list_models_with(void*_Nonnull ptr, RustBuffer providers_json, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_AI_PING_PROVIDER
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_AI_PING_PROVIDER
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_ai_ping_provider(void*_Nonnull ptr, RustBuffer base, RustBuffer key, RustCallStatus *_Nonnull out_status
@@ -2768,6 +2773,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_add_grade(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_AI_LIST_MODELS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_AI_LIST_MODELS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_ai_list_models(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_AI_LIST_MODELS_WITH
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_AI_LIST_MODELS_WITH
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_ai_list_models_with(void
     
 );
 #endif

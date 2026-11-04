@@ -15,6 +15,10 @@ final class ImpalaStore {
     private(set) var uiRevision = 0
     /// Karten, Stapel und Bewertungen (Stapelbaum, Lernen, „Heute fällig“).
     private(set) var cardsRevision = 0
+    /// Chat-Liste und Chats (Seitenleiste, offener Chat).
+    private(set) var chatsRevision = 0
+    /// Einstellungen (KI-Quellen, Modell).
+    private(set) var settingsRevision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
     private(set) var lastRemote: Changes?
 
@@ -33,6 +37,8 @@ final class ImpalaStore {
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
         if c.everything || c.ui { uiRevision += 1 }
         if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }
+        if c.everything || c.chatsAll || !c.chats.isEmpty { chatsRevision += 1 }
+        if c.everything || c.settings { settingsRevision += 1 }
         if c.remote || c.everything { lastRemote = c }
     }
 

@@ -49,7 +49,11 @@ struct TabBar: View {
     }
 
     private func info(_ tab: String) -> (title: String, icon: String, emoji: String?) {
-        if tab.hasPrefix("chat:") { return ("Chat", "sparkles", nil) }
+        if tab.hasPrefix("chat:") {
+            let _ = store.chatsRevision
+            let title = store.core.chat(id: String(tab.dropFirst(5)))?.title ?? ""
+            return (title.isEmpty ? "Chat" : title, "sparkles", nil)
+        }
         if tab == "anki:main" { return ("Karteikarten", "cards", nil) }
         if tab == "nlm:main" { return ("Gemini Notebook", "book", nil) }
         guard let p = store.core.page(id: tab)?.summary else { return ("Ohne Titel", "file", nil) }

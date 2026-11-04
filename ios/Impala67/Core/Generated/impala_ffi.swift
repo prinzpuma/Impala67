@@ -3081,6 +3081,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func aiListModels() throws  -> [AiModel]
     
     /**
+     * Wie `ai_list_models`, aber mit eigenen Quellen (JSON wie `AiOptions.providers_json`; leer oder
+     * ungültig = gespeicherte Quellen). Für Apps, die API-Schlüssel nur auf dem Gerät halten (iPad:
+     * Schlüsselbund) und nicht in die Einstellungen schreiben.
+     */
+    func aiListModelsWith(providersJson: String) throws  -> [AiModel]
+    
+    /**
      * Verbindungstest einer (auch ungespeicherten) Quelle (`aiPingProvider`). Blockiert (Netz).
      */
     func aiPingProvider(base: String, key: String)  -> AiPing
@@ -3956,6 +3963,19 @@ open func addGrade(subject: String, grade: Double, weight: Double?, date: String
 open func aiListModels()throws  -> [AiModel]  {
     return try  FfiConverterSequenceTypeAiModel.lift(try rustCallWithError(FfiConverterTypeAiFailure_lift) {
     uniffi_impala_ffi_fn_method_impalacore_ai_list_models(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Wie `ai_list_models`, aber mit eigenen Quellen (JSON wie `AiOptions.providers_json`; leer oder
+     * ungültig = gespeicherte Quellen). Für Apps, die API-Schlüssel nur auf dem Gerät halten (iPad:
+     * Schlüsselbund) und nicht in die Einstellungen schreiben.
+     */
+open func aiListModelsWith(providersJson: String)throws  -> [AiModel]  {
+    return try  FfiConverterSequenceTypeAiModel.lift(try rustCallWithError(FfiConverterTypeAiFailure_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_ai_list_models_with(self.uniffiClonePointer(),
+        FfiConverterString.lower(providersJson),$0
     )
 })
 }
@@ -19512,6 +19532,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_ai_list_models() != 36417) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_ai_list_models_with() != 40465) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_ai_ping_provider() != 55509) {
