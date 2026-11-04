@@ -10,6 +10,7 @@ struct RootView: View {
     var body: some View {
         if let shell {
             @Bindable var shell = shell
+            @Bindable var cards = shell.cards
             NavigationSplitView(columnVisibility: $shell.columns) {
                 Sidebar()
                     .navigationSplitViewColumnWidth(min: 236, ideal: 260, max: 320)
@@ -21,6 +22,10 @@ struct RootView: View {
                 }
                 .background(Impala.panel)
                 .toolbar(.hidden, for: .navigationBar)
+                .modifier(DeckDialogsModifier(cards: cards, core: store.core))
+                .sheet(item: $cards.editor) { target in
+                    CardEditorSheet(target: target).environment(shell)
+                }
             }
             .navigationSplitViewStyle(.balanced)
             .environment(shell)
@@ -59,8 +64,8 @@ private struct MainContent: View {
                 PageScreen(summary: page.summary).id(tab)
             } else if tab.hasPrefix("chat:") {
                 Placeholder(icon: "chat", title: "KI-Chat", text: "Chats folgen in der iPad-App.")
-            } else if tab == "anki:main" {
-                Placeholder(icon: "cards", title: "Karteikarten", text: "Karteikarten folgen in der iPad-App.")
+            } else if tab == ShellModel.cardsTab {
+                CardsScreen()
             } else if tab == "nlm:main" {
                 Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")
             } else {

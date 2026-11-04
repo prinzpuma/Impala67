@@ -13,6 +13,8 @@ final class ImpalaStore {
     private(set) var pagesRevision = 0
     /// Offene Tabs und Aufklapp-Zustand des Seitenbaums (geräteübergreifend gespeichert).
     private(set) var uiRevision = 0
+    /// Karten, Stapel und Bewertungen (Stapelbaum, Lernen, „Heute fällig“).
+    private(set) var cardsRevision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
     private(set) var lastRemote: Changes?
 
@@ -30,6 +32,7 @@ final class ImpalaStore {
     private func apply(_ c: Changes) {
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
         if c.everything || c.ui { uiRevision += 1 }
+        if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }
         if c.remote || c.everything { lastRemote = c }
     }
 

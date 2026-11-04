@@ -48,6 +48,8 @@ final class NoteModel {
     @ObservationIgnored private var dirtyContent = false
     @ObservationIgnored private var lastEdit = Date.distantPast
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    /// Nur Anzeige (Lernkarten): Änderungen bleiben im Speicher, nichts geht in den Kern.
+    @ObservationIgnored private var readOnly = false
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -61,6 +63,14 @@ final class NoteModel {
         savedTitle = title
         savedMarkdown = page.content
         blocks = markdownToBlocks(markdown: page.content)
+    }
+
+    /// Markdown ohne Seite anzeigen (Vorder-/Rückseite einer Lernkarte über `MarkdownView`).
+    init(core: ImpalaCore, markdown: String) {
+        self.core = core
+        pageId = ""
+        readOnly = true
+        blocks = markdownToBlocks(markdown: markdown)
     }
 
     // MARK: Laden und Speichern
@@ -94,6 +104,7 @@ final class NoteModel {
     }
 
     private func scheduleSave() {
+        guard !readOnly else { return }
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(600))

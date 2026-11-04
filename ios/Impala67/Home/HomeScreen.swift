@@ -1,17 +1,23 @@
 import SwiftUI
 
 /// Startseite, erster Teil der PWA-Startseite (`homeViewHtml` in home-view.js): Datum, „+ Neue Seite“,
-/// Begrüßung, „Weitermachen“ mit der zuletzt bearbeiteten Seite und angeheftete Seiten.
-/// Lernzeit, Karten und Tagesartikel folgen (siehe `android/app/…/home/` als Vorlage).
+/// Begrüßung mit dem Satz zu den Karten, „Weitermachen“ mit der zuletzt bearbeiteten Seite, angeheftete
+/// Seiten und „Heute fällig“. Lernzeit und Tagesartikel folgen (siehe `android/app/…/home/` als Vorlage).
 struct HomeScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = (store.pagesRevision, store.cardsRevision)
         let recent = store.core.recentPages(limit: 40)
         let last = recent.first
         let pins = recent.filter(\.favorite).prefix(6)
+        let study = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
+        let open = Int(study.new + study.learn + study.review)
+        let hasCards = store.core.cardTotals().cards > 0
+        // Ohne eigene Messwerte 20 s je Karte (`secPerCard` in home-view.js), mindestens 1 Minute.
+        let estMin = max(1, Int((Double(open) * 20 / 60).rounded()))
         ScrollView {
             VStack(alignment: .leading, spacing: Space.s6) {
                 HStack {
@@ -37,19 +43,32 @@ struct HomeScreen: View {
                     Text("\(Self.greeting()).")
                         .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
                         .foregroundStyle(Impala.text)
-                    Text(last == nil ? "Leg deine erste Seite an. Sobald du lernst, füllt sich diese Seite." : "Schön, dass du da bist.")
+                    lead(fresh: last == nil && !hasCards, open: open, hasCards: hasCards, estMin: estMin)
                         .font(.system(size: TextSize.md))
                         .foregroundStyle(Impala.text2)
                 }
                 .riseIn(1)
-                if let last {
-                    Button { shell.open(last.id) } label: { ContinueCard(page: last) }
-                        .pressable()
-                        .riseIn(2)
+                let main = VStack(alignment: .leading, spacing: Space.s6) {
+                    if let last {
+                        Button { shell.open(last.id) } label: { ContinueCard(page: last) }
+                            .pressable()
+                            .riseIn(2)
+                    }
+                    if !pins.isEmpty {
+                        FlowRow(pins: Array(pins)) { shell.open($0) }
+                            .riseIn(3)
+                    }
                 }
-                if !pins.isEmpty {
-                    FlowRow(pins: Array(pins)) { shell.open($0) }
-                        .riseIn(3)
+                let due = dueCard(open: open, hasCards: hasCards, estMin: estMin).riseIn(3)
+                // `.hv-grid`: breit zwei Spalten (Kennzahlen rechts), schmal untereinander.
+                if sizeClass == .regular {
+                    HStack(alignment: .top, spacing: Space.s4) {
+                        main.frame(maxWidth: .infinity, alignment: .leading)
+                        due.frame(width: 280)
+                    }
+                } else {
+                    main
+                    due
                 }
             }
             .padding(Space.s6)
@@ -57,6 +76,43 @@ struct HomeScreen: View {
             .frame(maxWidth: .infinity)
         }
         .background(Impala.panel)
+    }
+
+    /// Satz nach der Begrüßung (`sum` in home-view.js); die Kartenzahl startet das Lernen.
+    @ViewBuilder
+    private func lead(fresh: Bool, open: Int, hasCards: Bool, estMin: Int) -> some View {
+        if fresh {
+            Text("Leg deine erste Seite an. Sobald du lernst, füllt sich diese Seite.")
+        } else if open > 0 {
+            HStack(spacing: 0) {
+                Button { shell.openCards(.review(deck: nil, mix: false)) } label: {
+                    Text(Deck.cardsText(open)).foregroundStyle(Impala.accent).underline(color: Impala.accent.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                Text(" \(open == 1 ? "wartet" : "warten"), etwa \(estMin) \(estMin == 1 ? "Minute" : "Minuten").")
+            }
+        } else {
+            Text(hasCards ? "Für heute ist alles gelernt." : "Noch keine Karteikarten angelegt.")
+        }
+    }
+
+    /// „Heute fällig“ (`.hv-cards`): fällig → Lernen starten, alles gelernt, oder Karten anlegen.
+    private func dueCard(open: Int, hasCards: Bool, estMin: Int) -> some View {
+        Group {
+            if open > 0 {
+                StatCard(label: "Heute fällig", value: Deck.cardsText(open), note: "etwa \(estMin) Min · Lernen starten", tone: .due) {
+                    shell.openCards(.review(deck: nil, mix: false))
+                }
+            } else if hasCards {
+                StatCard(label: "Heute fällig", value: "Alles gelernt", note: "Morgen geht's weiter", tone: .done) {
+                    shell.openCards(.decks)
+                }
+            } else {
+                StatCard(label: "Heute fällig", value: "Keine Karten", note: "Karten anlegen", tone: .plain) {
+                    shell.cards.editor = CardEditorTarget(cardId: nil, deck: nil)
+                }
+            }
+        }
     }
 
     /// Wie render.js: Nacht bis 5, Morgen bis 11, Tag bis 18.

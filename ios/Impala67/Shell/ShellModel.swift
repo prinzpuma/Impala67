@@ -24,6 +24,8 @@ final class ShellModel {
     private(set) var active: String?
     var sidebarMode: SidebarMode = .files
     var sheet: ShellSheet?
+    /// Karteikarten: Ansicht des Tabs `anki:main`, Stapel-Dialoge, Karten-Editor.
+    let cards = CardsModel()
     /// Seitenleiste ein-/ausgeklappt (☰ wie `#btnSidebarToggle`).
     var columns: NavigationSplitViewVisibility = .all
 
@@ -67,6 +69,14 @@ final class ShellModel {
         if active == tab { active = tabs.indices.contains(i) ? tabs[i] : tabs.last }
         save()
     }
+
+    /// Karten-Tab öffnen (wie `data-ankistudy` bzw. Klick auf einen Stapel in der Seitenleiste).
+    func openCards(_ view: CardsView) {
+        cards.view = view
+        open(Self.cardsTab)
+    }
+
+    static let cardsTab = "anki:main"
 
     /// Startseite: kein aktiver Tab (wie `TopLevel.Home`).
     func goHome() {

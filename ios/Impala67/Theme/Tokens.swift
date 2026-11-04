@@ -10,6 +10,10 @@ enum Impala {
     static let text2 = dynamic(light: 0x5C5A54, dark: 0xFFFFFF, darkAlpha: 0.68)
     static let accent = dynamic(light: 0x2478C7, dark: 0x6B8CAE)
     static let danger = dynamic(light: 0xD84D43, dark: 0xE97366)
+    static let success = dynamic(light: 0x37845A, dark: 0x72BC8F)
+    static let warn = dynamic(light: 0xE8C65A, dark: 0xE8C65A)
+    /// Schrift auf Akzentflächen.
+    static let onAccent = dynamic(light: 0xFFFFFF, dark: 0x081018)
     static let edge = dynamic(light: 0xC9C1B2, dark: 0xFFFFFF, darkAlpha: 0.14)
     static let edgeSoft = dynamic(light: 0xDDD6CA, dark: 0xFFFFFF, darkAlpha: 0.06)
     /// Seitenleiste: im Hellen 3 % Schwarz über dem Panel, dunkel #202020.
@@ -17,6 +21,8 @@ enum Impala {
     static let surface = dynamic(light: 0xF0EDE6, dark: 0xFFFFFF, darkAlpha: 0.04)
     /// --b-tint-2: aktive Zeile, aktive Pille, aktiver Tab.
     static var activeTint: Color { accent.opacity(0.14) }
+    /// --accent-border (Rückseite der Lernkarte, „Heute fällig“).
+    static var accentBorder: Color { accent.opacity(0.36) }
     /// Heftpapier (in beiden Modi hell, wie in der PWA).
     static let paper = Color(uiColor: UIColor(hex: 0xFBF9F4))
 

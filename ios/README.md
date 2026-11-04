@@ -39,7 +39,8 @@ ios/
    ├─ Theme/                   Farben, Maße, Icon, Liquid Glass (impalaGlass)
    ├─ Shell/                   Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb (ShellModel: Tabs)
    ├─ Home/                    Startseite (erster Teil)
-   ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern)
+   ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
+   ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
    ├─ Sync/SyncController.swift Cloudflare Live-Sync: WebSocket, Ping, Neuaufbau (Ablauf im Kern)
    ├─ Settings/                Einstellungen (bisher: Cloudflare Live-Sync)
    └─ Heft/                    PencilKit-Heft
@@ -76,6 +77,33 @@ kennt nur die Bedien-Operationen (`NoteModel`, `NoteCommands.swift`):
   den Kern (`addFile`); Dateien öffnen in Quick Look. Callouts, Toggles und Spalten zeigen ihre Kinder;
   ändern über „Als Markdown bearbeiten“.
 - **Rund um die Seite**: „N Rückverweise“ unter dem Titel (aufklappbar), Unterseiten am Ende.
+
+## Karteikarten
+
+Wie `android/…/study/` und `web/render-anki.js`. Planung, Intervalle und FSRS macht der Kern
+(`studyQueue`, `reviewPreview`, `reviewCard`, `deckOverview`); die App merkt sich nur, welche Karte liegt
+und ob sie umgedreht ist (`ReviewModel`, Karte bleibt bis zur Bewertung festgepinnt). Zustand des
+Karten-Tabs `anki:main` (Übersicht/Lernen/Kartenliste), Dialoge und Editor liegen in `CardsModel`
+(`ShellModel.cards`); Änderungen meldet der Kern über `ImpalaStore.cardsRevision`.
+
+- **Seitenleiste** (Pille „Karten“): Stapelbaum mit Unterstapeln (einklappbar), Zählern für fällig
+  (Akzent) und neu (Grün), „Übersicht“ und „+“ für neue Stapel. Antippen lernt den Stapel, Halten öffnet
+  das Stapelmenü: Lernen, Neue Karte, Karten ansehen, Unterstapel, Umbenennen, Duplizieren, Archivieren,
+  In Papierkorb (Standard-Stapel nicht umbenenn-/löschbar).
+- **Übersicht**: Satz „N Karten warten auf dich, etwa X Minuten“ (Zahl startet das Lernen), „Gemischt“,
+  Kacheln „Heute fällig“ und „Neue Karten“, Stapel-Liste mit Zählern, „Lernen“ und ⋯-Menü.
+- **Lernen**: Fortschrittsbalken, Stapel/Stufe, Karte dreht sich bei „Antwort zeigen“ über die Y-Achse
+  (Feder, Wechsel genau auf der Kante; „Bewegung reduzieren“: Überblenden). Vorder- und Rückseite zeigt
+  `MarkdownView` mit den Blöcken des Notiz-Editors (Formeln, Code, Tabellen, Bilder, Lückentext-Fett).
+  Bewertungen Nochmal/Schwer/Gut/Einfach mit Intervallen als getönte Liquid-Glass-Knöpfe; „Antwort
+  zeigen“ verwandelt sich in „Gut“ (`glassEffectID`). Nächste Karte schiebt herein, Haptik beim Umdrehen
+  und Bewerten. Tastatur: ␣ Antwort/Gut, 1–4, ⌘Z rückgängig. Bearbeiten, Aussetzen, Ende-Ansichten
+  „Gratulation!“/„Geschafft!“ (mit „Erneut prüfen“).
+- **Karten**: Editor-Sheet (Stapel wählen oder neu, Vorder-/Rückseite mit Vorschau, „［…］ Lücke
+  einfügen“ an der Markierung, „Als Lückentext speichern“ → `createClozeCards`, Löschen in den
+  Papierkorb). „Karten ansehen“: Liste mit Suche, Wischen/Halten zum Aussetzen und Löschen.
+- **Startseite**: Satz zu den Karten wie `homeViewHtml` und Kachel „Heute fällig“ (fällig / alles gelernt
+  / keine Karten), im breiten Fenster rechts neben „Weitermachen“.
 
 ## Heft und Sync
 
@@ -137,6 +165,9 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   Zwischenablage bzw. per Drag & Drop von außen.
 - Heft: Bilder und Textfelder bearbeiten (anlegen, verschieben, löschen), Import von PDFs/Fotos,
   Export, Verlauf, Handschrift → Text, Formvorschau während des Haltens, Dicken der PWA (`SIZES`).
-- App-Icon; Startseite: Lernzeit, Karten, Tagesartikel.
-- Chat, Karteikarten, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
+- App-Icon; Startseite: Lernzeit/Wochenziel, „Weißt du's noch?“, Tagesartikel.
+- Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Stapel-Optionen (Tageslimits, Leech),
+  Feynman-Modus, Lernzeit-Messung und Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
+  Import/Export, Statistik.
+- Chat, Bibliothek, Wissensgraph, Gemini Notebook (Pillen/Fußleiste zeigen Platzhalter).
 - Seitenbaum: Ziehen zum Verschieben, Duplizieren, Verschieben nach…, Vorlagenwahl bei „Neu“.

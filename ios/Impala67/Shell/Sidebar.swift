@@ -26,7 +26,7 @@ struct Sidebar: View {
                 switch shell.sidebarMode {
                 case .files: PageTree()
                 case .chats: SidebarPlaceholder(text: "Chats folgen mit der KI.")
-                case .cards: SidebarPlaceholder(text: "Karteikarten folgen.")
+                case .cards: DeckTree()
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
