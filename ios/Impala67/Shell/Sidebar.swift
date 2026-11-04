@@ -12,7 +12,7 @@ struct Sidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 2) {
-                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil, ns: pills) {
+                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil && !shell.libraryOpen, ns: pills) {
                     shell.sidebarMode = .files
                     shell.goHome()
                 }
@@ -35,7 +35,7 @@ struct Sidebar: View {
             VStack(spacing: 2) {
                 FootButton(icon: "book", label: "Gemini Notebook") { shell.sheet = .notebook }.zoomSource(ShellSheet.notebook, zoom)
                 FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }.zoomSource(ShellSheet.graph, zoom)
-                FootButton(icon: "library", label: "Bibliothek") { shell.sheet = .library }.zoomSource(ShellSheet.library, zoom)
+                FootButton(icon: "library", label: "Bibliothek", active: shell.libraryOpen) { shell.openLibrary() }
                 FootButton(icon: "trash", label: "Papierkorb") { shell.sheet = .trash }.zoomSource(ShellSheet.trash, zoom)
                 FootButton(icon: "sliders", label: "Einstellungen", status: sync.isPaired ? sync.state : nil) { shell.sheet = .settings }
                     .zoomSource(ShellSheet.settings, zoom)
@@ -88,6 +88,8 @@ private struct FootButton: View {
     let label: String
     /// Sync-Zustand als Punkt (nur am Einstellungen-Knopf, wenn gekoppelt).
     var status: SyncController.State?
+    /// Angezeigte Hauptansicht (Bibliothek), wie `btnLibrary.active`.
+    var active = false
     let action: () -> Void
 
     var body: some View {
@@ -98,9 +100,10 @@ private struct FootButton: View {
                 Spacer(minLength: 0)
                 if let status { StatusDot(state: status) }
             }
-            .foregroundStyle(Impala.text2)
+            .foregroundStyle(active ? Impala.text : Impala.text2)
             .padding(.horizontal, Space.s2)
             .frame(minHeight: 40)
+            .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
         .pressable()
     }

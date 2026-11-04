@@ -21,7 +21,7 @@ struct TabBar: View {
             ScrollView(.horizontal) {
                 HStack(spacing: Space.s1) {
                     ForEach(shell.tabs, id: \.self) { tab in
-                        TabChip(info: info(tab), active: tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                        TabChip(info: info(tab), active: !shell.libraryOpen && tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
                             .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.9))))
                     }
                 }

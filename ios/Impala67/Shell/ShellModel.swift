@@ -11,7 +11,7 @@ extension EnvironmentValues {
 
 /// Overlays der Shell (Suche, Papierkorb …).
 enum ShellSheet: String, Identifiable {
-    case search, trash, settings, library, graph, notebook, conflicts
+    case search, trash, settings, graph, notebook, conflicts
     var id: String { rawValue }
 }
 
@@ -24,6 +24,13 @@ final class ShellModel {
     private(set) var active: String?
     var sidebarMode: SidebarMode = .files
     var sheet: ShellSheet?
+    /// Bibliothek statt des aktiven Tabs im Hauptbereich (wie `S.view = "library"` der PWA); jedes
+    /// Öffnen eines Tabs oder der Startseite schließt sie wieder.
+    private(set) var libraryOpen = false
+
+    func openLibrary() {
+        libraryOpen = true
+    }
     /// Karteikarten: Ansicht des Tabs `anki:main`, Stapel-Dialoge, Karten-Editor.
     let cards = CardsModel()
     /// KI-Chat (KI-Panel rechts, Tabs `chat:<id>`, Chat-Liste der Seitenleiste).
@@ -59,6 +66,7 @@ final class ShellModel {
 
     /// Wie `activateTab`: Ist das Ziel schon offen, wird sein Tab aktiv; sonst ersetzt es den aktiven Tab.
     func open(_ tab: String) {
+        libraryOpen = false
         if !tabs.contains(tab) {
             if let a = active, let i = tabs.firstIndex(of: a) { tabs[i] = tab } else { append(tab) }
         }
@@ -68,6 +76,7 @@ final class ShellModel {
 
     /// „In neuem Tab öffnen“ bzw. „＋“.
     func openNewTab(_ tab: String) {
+        libraryOpen = false
         if !tabs.contains(tab) { append(tab) }
         active = tab
         save()
@@ -92,6 +101,7 @@ final class ShellModel {
 
     /// Startseite: kein aktiver Tab (wie `TopLevel.Home`).
     func goHome() {
+        libraryOpen = false
         active = nil
         save()
     }

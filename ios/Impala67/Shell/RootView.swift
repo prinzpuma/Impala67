@@ -79,9 +79,14 @@ private struct MainContent: View {
         let _ = store.pagesRevision
         // Tabwechsel blendet weich über (wie der Seitenwechsel der PWA), Haptik beim Wechsel.
         ZStack {
-            content.id(shell.active ?? "home").transition(.opacity.combined(with: .scale(scale: 0.995)))
+            if shell.libraryOpen {
+                LibraryScreen().transition(.opacity.combined(with: .scale(scale: 0.995)))
+            } else {
+                content.id(shell.active ?? "home").transition(.opacity.combined(with: .scale(scale: 0.995)))
+            }
         }
         .animation(.smooth(duration: 0.22), value: shell.active)
+        .animation(.smooth(duration: 0.22), value: shell.libraryOpen)
         .sensoryFeedback(.selection, trigger: shell.active)
     }
 

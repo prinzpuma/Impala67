@@ -39,7 +39,7 @@ ios/
    ├─ Theme/                   Farben, Maße, Icon, Liquid Glass (impalaGlass)
    ├─ Shell/                   Seitenleiste, Seitenbaum (Ziehen: TreeDrop), Tab-Leiste, Suche, Papierkorb,
    │                           PageOps (Neu/Vorlage, Duplizieren, Verschieben, PDF-Import), ShellModel: Tabs
-   ├─ Library/                 Bibliothek: PDF-Liste, PDFKit-Ansicht
+   ├─ Library/                 Bibliothek wie die PWA (Notion, GoodNotes, Archiv, Gemini Notebook), PDFKit-Ansicht
    ├─ Home/                    Startseite, Lernzeit (Auswertung + Erfassung), Tagesartikel, „Startseite anpassen“
    ├─ Graph/                   Wissensgraph (Canvas, Kraftmodell), Gemini Notebook
    ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
@@ -68,8 +68,14 @@ Wie `DeskTree.kt`/`TreeDrag.kt`: Reihenfolge, Zyklen und Arbeitsbereiche prüft 
 
 ## Bibliothek
 
-Wie `android/…/library/` (Bereich „Dokumente“): Seiten mit `pdfId`, neueste zuerst, Stern für Favoriten,
-Halten: PDF öffnen, Als Seite öffnen, Favorit, Papierkorb. Antippen öffnet das PDF **nativ mit PDFKit**
+Wie web/library.js eine **Hauptansicht** (kein Fenster; `ShellModel.libraryOpen` wie `S.view = "library"`,
+jedes Öffnen eines Tabs schließt sie). Oben Titel und Ansichten (`LibraryMode`): **Notion** (Seitenbaum je
+Arbeitsbereich, Filter Alle/Favoriten/PDFs/Vorlagen mit Anzahl, Klappzustand wie die Seitenleiste),
+**GoodNotes** (Heft-Regal mit Covern `COVER_PRESETS`, „Neu“ mit Name und Cover, ••• Heftoptionen: Cover,
+Archivieren, Papierkorb), **Archiv** (Filter Alle/Seiten/Hefte, „Aus Archiv holen“), **Gemini Notebook**.
+Darunter immer dieselbe Werkzeugzeile: links Filter, rechts Suche. Ordner des Heft-Regals (`gnFolders`)
+fehlen noch in der UniFFI-Schnittstelle; die Hefte stehen deshalb flach.
+Halten: Öffnen, Als Seite öffnen (PDF), Favorit, Archivieren, Papierkorb. Antippen öffnet das PDF **nativ mit PDFKit**
 (zoomt aus der Zeile; fortlaufend, an die Breite angepasst, Seitenzahl „n / m“ in Liquid Glass, Teilen,
 „Als Seite öffnen“). Fehlt die Datei noch (Sync), steht „PDF nicht gefunden“. „PDF hinzufügen“ nimmt
 mehrere PDFs über den Dateiimporter: Datei in den Kern (`addFile`), Seite mit `pdfId` (`pageCreate`,
@@ -354,7 +360,7 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   Heft und Chat erfassen (bisher nur beim Kartenlernen), Pausen-Erinnerung nach 40 min.
 - Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb
   für Karten, Anki-Pakete (.apkg), Heatmap und Lernanalyse der Statistik.
-- Bibliothek: Heft-Regal mit Ordnern und Covern, Smart-Filter (Alle/Favoriten/Vorlagen), PDF-KI-Zusammenfassung.
+- Bibliothek: Ordner im Heft-Regal (braucht `gnFolders` in `core/impala-ffi`), eigene Cover-Bilder, PDF-KI-Zusammenfassung.
 - Wissensgraph: Skill-Graph der PWA aus Karteikarten (`knowledgeGraph` in den Einstellungen, synchronisiert)
   anzeigen. Gemini Notebook: Download-Import/Inbox.
 - Seitenbaum: Stapel (Karteikarten) ziehen, Mehrfachauswahl; Duplizieren ist App-Logik wie in Android

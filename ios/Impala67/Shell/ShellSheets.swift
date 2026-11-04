@@ -1,14 +1,11 @@
 import SwiftUI
 
-/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Bibliothek, Sync-Konflikte, Wissensgraph, Gemini Notebook.
+/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Sync-Konflikte, Wissensgraph, Gemini Notebook.
 struct ShellSheetView: View {
     let sheet: ShellSheet
 
     var body: some View {
-        if sheet == .library {
-            // Eigener Stapel: PDFs werden darin geöffnet (Zoom aus der Zeile).
-            LibrarySheet().presentationDetents([.large])
-        } else if sheet == .settings {
+        if sheet == .settings {
             // Eigene geteilte Ansicht (Bereiche links, Inhalt rechts) wie die PWA.
             SettingsSheet().presentationSizing(.page)
         } else {
@@ -24,7 +21,6 @@ struct ShellSheetView: View {
                 case .trash: TrashSheet()
                 case .settings: EmptyView()
                 case .conflicts: ConflictsSheet()
-                case .library: EmptyView()
                 case .graph: GraphView()
                 case .notebook: NotebookView()
                 }
