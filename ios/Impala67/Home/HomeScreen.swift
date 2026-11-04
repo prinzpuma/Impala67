@@ -7,9 +7,11 @@ struct HomeScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.shellNamespace) private var zoom
 
     var body: some View {
-        let _ = (store.pagesRevision, store.cardsRevision)
+        let _ = (store.pagesRevision, store.cardsRevision, store.revision)
+        let conflicts = Int(store.core.conflictCount())
         let recent = store.core.recentPages(limit: 40)
         let last = recent.first
         let pins = recent.filter(\.favorite).prefix(6)
@@ -40,6 +42,12 @@ struct HomeScreen: View {
                     }
                 }
                 .riseIn(0)
+                if conflicts > 0 {
+                    ConflictAlert(count: conflicts) { shell.sheet = .conflicts }
+                        .zoomSource(ShellSheet.conflicts, zoom)
+                        .riseIn(1)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 VStack(alignment: .leading, spacing: Space.s2) {
                     Text("\(Self.greeting()).")
                         .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
@@ -73,6 +81,7 @@ struct HomeScreen: View {
                 }
             }
             .padding(Space.s6)
+            .animation(.smooth, value: conflicts)
             .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -124,6 +133,28 @@ struct HomeScreen: View {
 
     private func create(_ choice: NewPageChoice) {
         if let id = store.core.createNew(choice, parent: nil, workspace: nil) { shell.openNewTab(id) }
+    }
+}
+
+/// `.hv-alert`: gelbe Pille „N Sync-Konflikte warten auf deine Entscheidung.“ mit „Lösen“.
+private struct ConflictAlert: View {
+    let count: Int
+    let onSolve: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: Space.s4) {
+            Text(ConflictText.homeAlert(count)).contentTransition(.numericText())
+            Spacer(minLength: 0)
+            Button("Lösen", action: onSolve)
+                .underline()
+                .buttonStyle(.plain)
+        }
+        .font(.system(size: TextSize.sm))
+        .foregroundStyle(scheme == .dark ? Impala.warn : Color(uiColor: UIColor(hex: 0x8A6412)))
+        .padding(.horizontal, Space.s4)
+        .padding(.vertical, Space.s2)
+        .background(scheme == .dark ? Impala.warn.opacity(0.12) : Color(uiColor: UIColor(hex: 0xF8EECF)), in: Capsule())
     }
 }
 

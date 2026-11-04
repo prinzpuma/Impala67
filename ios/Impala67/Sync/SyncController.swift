@@ -32,8 +32,15 @@ final class SyncController {
     @ObservationIgnored private var pending = false
     @ObservationIgnored private var forceAll = false
     @ObservationIgnored private var listener: Listener?
+    /// Zählt beendete Durchgänge (für `backgroundPass`).
+    @ObservationIgnored private var passes = 0
+    /// Laufender Verbindungsaufbau; gleichzeitige Aufrufe warten darauf statt einen zweiten zu starten.
+    @ObservationIgnored private var connecting: Task<String?, Never>?
 
     private static let keyDefaults = "cfSyncKey"
+    /// Zuletzt gesehener Schlüssel aus den Einstellungen (wie `DevicePrefs.cfSeenKey`).
+    private static let seenKeyDefaults = "cfSeenKey"
+    private static let backgroundTimeout: Duration = .seconds(25)
     private static let debounce: Duration = .milliseconds(1500)
     private static let maxRetries: UInt32 = 5
 
@@ -52,6 +59,8 @@ final class SyncController {
         self.store = store
         usage = formatSyncUsage(bytes: 0)
         listener = Listener(owner: self)
+        settingsChanged()
+        watchSettings()
     }
 
     // MARK: - Lebenszyklus
@@ -116,6 +125,50 @@ final class SyncController {
 
     func newKey() -> String { (try? generateSyncKey()) ?? "" }
 
+    /// Ein Durchgang aus dem Hintergrund (`BGTaskScheduler`), ohne WebSocket: nur wenn dieses Gerät
+    /// gekoppelt ist. Wartet, bis der Durchgang fertig ist; `false` bei Fehler oder Zeitablauf.
+    func backgroundPass() async -> Bool {
+        guard isPaired else { return true }
+        let before = passes
+        if await connect(key: deviceKey, url: settings.url) != nil { return false }
+        syncNow()
+        let deadline = ContinuousClock.now + Self.backgroundTimeout
+        while passes == before && ContinuousClock.now < deadline && !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return passes > before && state != .error
+    }
+
+    /// Hintergrundzeit abgelaufen: laufenden Durchgang abbrechen; im Vordergrund verbindet die App neu.
+    func cancelBackgroundPass() {
+        guard !foreground else { return }
+        disconnectInternal()
+    }
+
+    // MARK: - Automatisch koppeln
+
+    private func watchSettings() {
+        withObservationTracking { _ = store.settingsRevision } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.settingsChanged()
+                self?.watchSettings()
+            }
+        }
+    }
+
+    /// Wie `autoConnect` in Android: Neuer Schlüssel in den Einstellungen (z. B. über Drive von einem
+    /// anderen Gerät), dieses Gerät ist aber nicht gekoppelt → gleich verbinden. Ein schon bekannter
+    /// Schlüssel (nach „Trennen“ oder beim ersten Start) verbindet nicht von selbst.
+    private func settingsChanged() {
+        let s = settings
+        let defaults = UserDefaults.standard
+        let seen = defaults.string(forKey: Self.seenKeyDefaults)
+        guard seen != s.key else { return }
+        defaults.set(s.key, forKey: Self.seenKeyDefaults)
+        guard seen != nil, !s.key.isEmpty, !isPaired else { return }
+        Task { _ = await configure(url: s.url, key: s.key) }
+    }
+
     // MARK: - Intern
 
     /// Leitet den Schlüssel ab (PBKDF2, bis ~1 s, im Hintergrund), erster Durchgang, dann WebSocket.
@@ -125,6 +178,14 @@ final class SyncController {
             if foreground && socket == nil { openSocket() }
             return nil
         }
+        if let connecting { return await connecting.value }
+        let task = Task { await createSync(key: key, url: url) }
+        connecting = task
+        defer { connecting = nil }
+        return await task.value
+    }
+
+    private func createSync(key: String, url: String) async -> String? {
         state = .connecting
         label = "Verbinde …"
         progress = nil
@@ -175,6 +236,7 @@ final class SyncController {
                     detail = report.conflicts > 0 ? "\(report.conflicts) Konflikt(e) – siehe Konflikte" : "Alle Geräte auf demselben Stand"
                     progress = nil
                     usage = current.status().usageText
+                    passes += 1
                     break
                 } catch SyncFailure.Stopped {
                     break
@@ -185,9 +247,11 @@ final class SyncController {
                         continue
                     }
                     fail(quota ? "Cloud-Speicher voll – Cloud-Stand leeren oder verdichten" : reason)
+                    passes += 1
                     break
                 } catch {
                     fail(Self.message(error))
+                    passes += 1
                     break
                 }
             }

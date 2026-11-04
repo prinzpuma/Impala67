@@ -30,6 +30,7 @@ ios/Frameworks/
 ios/build/
 ios/*.xcodeproj/
 ios/DerivedData/
+ios/Info.plist
 *.ipa
 # Handwriting ML
 handwriting/.venv/

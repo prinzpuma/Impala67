@@ -16,8 +16,21 @@ targets:
     platform: iOS
     sources:
       - path: Impala67
+    # Einträge, die es nicht als INFOPLIST_KEY_* gibt (Listen, eigene Schlüssel). XcodeGen schreibt die
+    # Datei beim Generieren; Xcode ergänzt sie um die INFOPLIST_KEY_*-Werte unten.
+    info:
+      path: Info.plist
+      properties:
+        # Hintergrund-Sync (BGTaskScheduler, `AppModel.refreshTask`).
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [org.impala67.app.sync]
+        # Google-Drive-Backup: iOS-OAuth-Client-ID (siehe GOOGLE_IOS_CLIENT_ID unten).
+        ImpalaGoogleClientID: $(GOOGLE_IOS_CLIENT_ID)
     settings:
       base:
+        # PLATZHALTER: OAuth-Client vom Typ „iOS“ (Bundle-ID org.impala67.app) im selben Google-Cloud-
+        # Projekt wie die Web-Client-ID der PWA, z. B. 1234-abcd.apps.googleusercontent.com. Kein Geheimnis.
+        GOOGLE_IOS_CLIENT_ID: DEINE_IOS_CLIENT_ID.apps.googleusercontent.com
         PRODUCT_BUNDLE_IDENTIFIER: org.impala67.app
         PRODUCT_NAME: Impala67
         # iPad zuerst; auf dem iPhone läuft dieselbe Oberfläche (NavigationSplitView klappt zusammen).
@@ -27,6 +40,8 @@ targets:
         # App-Icon aus web/icon.svg (npm run ios:app-icon → Assets.xcassets/AppIcon.appiconset).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # QR-Kopplung (VisionKit-Scanner).
+        INFOPLIST_KEY_NSCameraUsageDescription: Zum Scannen des Kopplungs-QR-Codes eines anderen Geräts.
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

@@ -19,6 +19,8 @@ final class ImpalaStore {
     private(set) var chatsRevision = 0
     /// Einstellungen (KI-Quellen, Modell).
     private(set) var settingsRevision = 0
+    /// Jede Änderung (Sync-Konflikte entstehen und verschwinden bei beliebigen Änderungen).
+    private(set) var revision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
     private(set) var lastRemote: Changes?
 
@@ -34,6 +36,7 @@ final class ImpalaStore {
     }
 
     private func apply(_ c: Changes) {
+        revision += 1
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
         if c.everything || c.ui { uiRevision += 1 }
         if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }

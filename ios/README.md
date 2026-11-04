@@ -32,7 +32,7 @@ ios/
 ├─ Bindings/                   C-Header + module.modulemap des Kerns (erzeugt)
 ├─ Frameworks/libimpala_ffi.a  Kern fürs Gerät (erzeugt, nur macOS/CI, nicht committet)
 └─ Impala67/
-   ├─ App/                     Einstieg, Kern öffnen, Checkpoint im Hintergrund
+   ├─ App/                     Einstieg (AppModel: Kern, Sync, Drive), Checkpoint, Hintergrund-Sync
    ├─ Core/ImpalaStore.swift   Änderungs-Meldungen des Kerns → Revisionen für die Ansichten
    ├─ Core/Generated/          Swift-Bindings (erzeugt, nie von Hand ändern)
    ├─ Assets.xcassets/         Icons aus web/icons.svg (npm run ios:icons), AppIcon aus web/icon.svg (npm run ios:app-icon)
@@ -43,9 +43,9 @@ ios/
    ├─ Home/                    Startseite (erster Teil)
    ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
    ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
-   ├─ Sync/SyncController.swift Cloudflare Live-Sync: WebSocket, Ping, Neuaufbau (Ablauf im Kern)
+   ├─ Sync/                    Cloudflare Live-Sync (SyncController), QR-Kopplung, Konflikte, Drive-Backup
    ├─ Chat/                    KI-Chat: ChatModel (Rückrufe des Rust-Assistenten), Panel, Chat-Liste, KI-Einstellungen
-   ├─ Settings/                Einstellungen (Cloudflare Live-Sync, KI)
+   ├─ Settings/                Einstellungen (Cloudflare Live-Sync, Google Drive, KI)
    └─ Heft/                    PencilKit-Heft
 ```
 
@@ -203,6 +203,43 @@ Neuaufbau mit wachsender Pause und Wiederholversuche, verbindet im Vordergrund u
 Socket im Hintergrund. Schlüssel und URL stehen wie in der PWA in den Kern-Einstellungen
 (`cfUrl`, `cfSyncKey`); gekoppelt ist das Gerät, wenn der Schlüssel zusätzlich in `UserDefaults` liegt.
 
+- **QR-Kopplung** (`CloudflarePairing.swift`): gleiches Format wie PWA/Android
+  (`https://prinzpuma.github.io/Impala67/#cf-pair=<Base64(JSON {url, key})>`; gelesen werden auch rohes
+  JSON und reines Base64). „QR-Code scannen“ öffnet den VisionKit-Scanner (`DataScannerViewController`,
+  Kamera-Hinweis in `project.yml`) und verbindet sofort; „Gerät koppeln (QR-Code)“ zeigt den Code
+  (CoreImage) und „Kopplungs-Link kopieren“.
+- **Automatisch koppeln** wie `autoConnect` in Android: Kommt ein neuer Schlüssel in die Einstellungen
+  (z. B. über Drive) und ist das iPad nicht gekoppelt, verbindet es sofort. Ein schon bekannter Schlüssel
+  (`cfSeenKey`, nach „Trennen“ oder beim ersten Start) verbindet nicht von selbst.
+- **Konflikte** (`ConflictsSheet`, Texte aus conflict-ui.js wie `ConflictText.kt`): Liste, Empfehlung,
+  Zeilenvergleich (`conflictDiffRows`) und Entscheidungen kommen aus dem Kern (`conflicts`,
+  `resolveConflict`, `resolveConflictsRecommended`). Breit: Liste links mit gleitender Markierung, schmal:
+  ‹ n / m › unten; „Nächste Änderung“, „Alle N Konflikte mit Empfehlung lösen“, Haptik beim Lösen. Auf der
+  Startseite die gelbe Pille „N Sync-Konflikte warten auf deine Entscheidung. Lösen“ (zoomt ins Sheet),
+  dazu ein Eintrag in den Einstellungen.
+- **Hintergrund** wie `BackgroundSyncWorker`: `BGAppRefreshTask` `org.impala67.app.sync` (SwiftUI
+  `.backgroundTask`, `UIBackgroundModes: fetch` und `BGTaskSchedulerPermittedIdentifiers` über `info:` in
+  `project.yml`), frühestens stündlich, ein Durchgang ohne WebSocket (`backgroundPass`, höchstens 25 s),
+  danach Checkpoint. Wann iOS ihn wirklich startet, entscheidet das System.
+
+## Google-Drive-Backup
+
+Wie `DriveController.kt`/web/drive.js: Ablauf, Formate und Konflikte im Kern (`DriveSync`). Die App
+meldet sich mit OAuth 2.0 + PKCE über `ASWebAuthenticationSession` an (Bereich `drive.appdata`),
+tauscht den Code selbst gegen Tokens und erneuert das Zugriffstoken still (`DriveTokens`). Das
+Refresh-Token liegt nur im Schlüsselbund (`…AfterFirstUnlockThisDeviceOnly`), das Zugriffstoken nur im
+Speicher; „Abmelden“ zieht den Zugriff bei Google zurück. Anderes Konto → `resetState`. Im Vordergrund
+Sync beim Start und im Intervall (`driveAutoSyncMinutes`, Auswahl aus `driveSyncIntervalOptions`), beim
+Wechsel in den Hintergrund wird das eigene Änderungspaket noch hochgeladen (`flushUpload`).
+
+**Einrichtung (einmalig, Google Cloud Console)**: Im **selben Projekt** wie die Web-Client-ID der PWA
+unter „APIs & Dienste → Anmeldedaten“ einen OAuth-Client vom Typ **iOS** mit Bundle-ID
+`org.impala67.app` anlegen (Drive-API und Bereich `…/auth/drive.appdata` sind dort schon freigegeben).
+Die Client-ID (`….apps.googleusercontent.com`, kein Geheimnis) in `ios/project.yml` bei
+`GOOGLE_IOS_CLIENT_ID` eintragen. Solange dort der Platzhalter `DEINE_IOS_CLIENT_ID…` steht, ist
+„Mit Google verbinden“ gesperrt und die Einstellungen sagen, was fehlt. Ein eigenes URL-Schema ist nicht
+nötig (`ASWebAuthenticationSession` fängt `com.googleusercontent.apps.<id>:/oauth2redirect` selbst ab).
+
 ## Bauen ohne Mac
 
 ```bash
@@ -220,8 +257,10 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 ## Offen
 
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
-- Sync: QR-Kopplung, automatisches Koppeln bei neuem Schlüssel aus den Einstellungen, Konflikt-Ansicht,
-  Hintergrund-Sync (BGTaskScheduler). Drive, weitere Einstellungen.
+- Sync/Drive: Drive braucht noch die iOS-Client-ID (siehe oben). „Nach jeder Änderung synchronisieren“
+  (`DriveAutoSync` im Kern), Hinweis „nicht gesichert“ auf der Startseite (`driveBackupView`), Drive im
+  Hintergrund-Durchgang, Kopplungs-Link (`#cf-pair=`) als Universal Link öffnen, Verdichten, weitere
+  Einstellungen.
 - KI-Chat: Anhänge (Bilder, PDF/Text, Heftseite anhängen), Diktat, semantische Suche/RAG (lokales
   Embedding-Modell, `SemanticSearch`), Karteikarten-Kontext (`AiAnki`), ★-Favoriten im Modellmenü,
   Mehrfachauswahl in der Chat-Liste, `calculate`.

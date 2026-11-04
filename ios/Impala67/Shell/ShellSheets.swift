@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Bibliothek; Graph und Notebook folgen.
+/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Bibliothek, Sync-Konflikte; Graph und Notebook folgen.
 struct ShellSheetView: View {
     let sheet: ShellSheet
 
@@ -20,6 +20,7 @@ struct ShellSheetView: View {
                 case .search: SearchSheet()
                 case .trash: TrashSheet()
                 case .settings: SettingsSheet()
+                case .conflicts: ConflictsSheet()
                 case .library: EmptyView()
                 case .graph: Placeholder(icon: "graph", title: "Wissensgraph", text: "Folgt in der iPad-App.")
                 case .notebook: Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")
@@ -27,7 +28,7 @@ struct ShellSheetView: View {
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { CloseButton() } }
         }
-        .presentationDetents(sheet == .search ? [.large] : [.medium, .large])
+        .presentationDetents(sheet == .search || sheet == .conflicts ? [.large] : [.medium, .large])
     }
 }
 

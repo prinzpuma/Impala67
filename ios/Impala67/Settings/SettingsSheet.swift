@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Einstellungen (Cloudflare Live-Sync und KI, Texte wie `SettingsCloudflare.kt` bzw. die PWA).
+/// Einstellungen (Cloudflare Live-Sync, Google Drive und KI, Texte wie `SettingsCloudflare.kt` bzw. die PWA).
 struct SettingsSheet: View {
     var body: some View {
         Form {
             CloudflareSection()
+            DriveSections()
             AiSettingsSections()
         }
         .formStyle(.grouped)
@@ -15,11 +16,15 @@ struct SettingsSheet: View {
 
 private struct CloudflareSection: View {
     @Environment(SyncController.self) private var sync
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
     @State private var url = ""
     @State private var key = ""
     @State private var busy = false
     @State private var message: String?
     @State private var confirmReset = false
+    @State private var scanning = false
+    @State private var showPairing = false
 
     var body: some View {
         Section {
@@ -80,8 +85,30 @@ private struct CloudflareSection: View {
                     .labelStyle(.iconOnly)
                 }
             }
+            // QR-Kopplung wie settings.js (`handleCfScanPairing`, `handleCfPairing`).
+            HStack {
+                Button { scanning = true } label: { Label("QR-Code scannen", image: "i-camera") }
+                    .buttonStyle(.glass)
+                    .disabled(busy || sync.state == .connecting || sync.state == .syncing)
+                if !url.trimmingCharacters(in: .whitespaces).isEmpty && !key.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button { showPairing = true } label: { Label("Gerät koppeln (QR-Code)", image: "i-phone") }
+                        .buttonStyle(.glass)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .animation(.smooth, value: key.isEmpty)
+            let _ = store.revision
+            let conflicts = Int(store.core.conflictCount())
+            if conflicts > 0 {
+                // Neues Sheet-Ziel: SwiftUI schließt die Einstellungen und öffnet die Konflikte.
+                Button { shell.sheet = .conflicts } label: {
+                    Label(ConflictText.homeAlert(conflicts), image: "i-alert")
+                        .foregroundStyle(Impala.text)
+                }
+            }
             if let message {
                 Text(message).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+                    .transition(.opacity)
             }
         } header: {
             Text("Cloudflare Live-Sync")
@@ -93,7 +120,29 @@ private struct CloudflareSection: View {
             url = s.url
             key = s.key
         }
+        .onChange(of: store.settingsRevision) {
+            // Automatisch gekoppelt oder von einem anderen Gerät geändert.
+            let s = sync.settings
+            if !s.key.isEmpty { url = s.url; key = s.key }
+        }
         .animation(.smooth, value: sync.isPaired)
+        .animation(.smooth, value: message)
+        .sheet(isPresented: $scanning) {
+            CfScannerSheet { scannedUrl, scannedKey in
+                url = scannedUrl
+                key = scannedKey
+                message = "Kopplungscode erkannt. Verbinde…"
+                Task {
+                    busy = true
+                    let error = await sync.configure(url: scannedUrl, key: scannedKey)
+                    busy = false
+                    message = error == nil ? "Cloudflare-Sync erfolgreich gekoppelt!" : "Verbindung fehlgeschlagen. Bitte URL und Schlüssel prüfen."
+                }
+            }
+        }
+        .sheet(isPresented: $showPairing) {
+            CfPairingSheet(url: url.trimmingCharacters(in: .whitespaces), key: key.trimmingCharacters(in: .whitespaces))
+        }
 
         Section {
             LabeledContent("Verwendeter Speicherplatz", value: sync.usage)

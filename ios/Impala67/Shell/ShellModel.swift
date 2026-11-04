@@ -11,7 +11,7 @@ extension EnvironmentValues {
 
 /// Overlays der Shell (Suche, Papierkorb …).
 enum ShellSheet: String, Identifiable {
-    case search, trash, settings, library, graph, notebook
+    case search, trash, settings, library, graph, notebook, conflicts
     var id: String { rawValue }
 }
 
