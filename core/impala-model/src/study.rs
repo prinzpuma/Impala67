@@ -3,8 +3,11 @@
 //! 2. fällige Wiederholungen (Tageslimit je Stapel),
 //! 3. neue Karten (Tageslimit; gesperrt, wenn das Wiederholungslimit voll ist).
 //!
-//! Ist sonst nichts da, werden Lernschritte bis 20 Minuten vorgezogen. Tagesgrenzen (lokale
-//! Mitternacht) und Einstellungen kommen vom Aufrufer – der Kern kennt weder Zeitzone noch localStorage.
+//! Ist sonst nichts da, werden Lernschritte bis 20 Minuten vorgezogen. Wiederholungen planen nach
+//! Lerntagen (wie Anki): fällig ist, was vor dem Ende des heutigen Lerntags fällig wird – egal zu
+//! welcher Uhrzeit gestern bewertet wurde. Ein Lerntag beginnt um [`DAY_CUTOFF_HOURS`] Uhr Ortszeit,
+//! damit Lernen nach Mitternacht noch zum Vortag zählt. Tagesgrenzen und Einstellungen kommen vom
+//! Aufrufer – der Kern kennt weder Zeitzone noch localStorage.
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,13 +21,15 @@ use crate::types::{Card, State};
 pub const LEARN_AHEAD_MS: i64 = 20 * 60_000;
 /// Frisch bewertete Karten nicht vorzeitig per Learn-Ahead zeigen.
 pub const OVERLEARN_LOCK_MS: i64 = 10 * 60_000;
+/// Beginn des Lerntags (Stunde Ortszeit, wie Ankis „Nächster Tag beginnt um“).
+pub const DAY_CUTOFF_HOURS: i64 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StudyOptions<'a> {
     /// Stapel-Teilbaum (`None`: alle).
     pub deck: Option<&'a str>,
     pub now: Timestamp,
-    /// Lokale Mitternacht heute bzw. morgen.
+    /// Beginn des heutigen bzw. morgigen Lerntags (Ortszeit, [`DAY_CUTOFF_HOURS`] Uhr).
     pub day_start: Timestamp,
     pub day_end: Timestamp,
     /// „Gemischt lernen“: Wiederholungen und neue Karten stapelübergreifend mischen.
@@ -34,10 +39,10 @@ pub struct StudyOptions<'a> {
 }
 
 impl<'a> StudyOptions<'a> {
-    /// Tagesgrenzen für einen festen UTC-Versatz in Minuten (z. B. +60 für MEZ).
+    /// Lerntag-Grenzen für einen festen UTC-Versatz in Minuten (z. B. +60 für MEZ).
     pub fn with_offset(deck: Option<&'a str>, now: Timestamp, offset_minutes: i64) -> Self {
         let day = impala_srs::MS_PER_DAY;
-        let off = offset_minutes * 60_000;
+        let off = offset_minutes * 60_000 - DAY_CUTOFF_HOURS * 3_600_000;
         let start = (now.millis() + off).div_euclid(day) * day - off;
         StudyOptions {
             deck,
@@ -149,10 +154,12 @@ impl State {
         let learn_ahead: Vec<&Card> = learn_waiting.iter().copied().filter(|c| le(&due(c), &ahead_iso)).collect();
         let learn_later: Vec<&Card> =
             learn_waiting.iter().copied().filter(|c| js::value_lt(&ahead_iso, &due(c))).collect();
-        let due_in = |s: &str| {
-            sorted(all.iter().copied().filter(|c| state(c).as_deref() == Some(s) && le(&due(c), &t_iso)).collect())
+        // Wiederholungen nach Lerntag (alles bis Tagesende), neue Karten ab ihrem Zeitpunkt.
+        let due_in = |s: &str, is_due: &dyn Fn(&Value) -> bool| {
+            sorted(all.iter().copied().filter(|c| state(c).as_deref() == Some(s) && is_due(&due(c))).collect())
         };
-        let (reviews_raw, new_raw) = (due_in("review"), due_in("new"));
+        let reviews_raw = due_in("review", &|d| js::value_lt(d, &eod_iso));
+        let new_raw = due_in("new", &|d| le(d, &t_iso));
 
         // Tagesverbrauch aus dem Protokoll (Lernschritte zählen nicht). Nicht chronologisch:
         // Sync hängt ältere Einträge hinten an, darum ganz durchlaufen.
@@ -261,5 +268,15 @@ mod tests {
             h = (((h << 5) - h + i64::from(u)) as i32).into();
         }
         assert_eq!(mix_key("a", "2026-01-01") as i64, h);
+    }
+
+    #[test]
+    fn lerntag_beginnt_um_vier() {
+        let t = |s| Timestamp::parse_iso(s).unwrap();
+        // MEZ (+60): 02:30 Ortszeit zählt noch zum Vortag
+        let o = StudyOptions::with_offset(None, t("2026-11-04T01:30:00Z"), 60);
+        assert_eq!((o.day_start, o.day_end), (t("2026-11-03T03:00:00Z"), t("2026-11-04T03:00:00Z")));
+        let o = StudyOptions::with_offset(None, t("2026-11-04T09:00:00Z"), 60);
+        assert_eq!((o.day_start, o.day_end), (t("2026-11-04T03:00:00Z"), t("2026-11-05T03:00:00Z")));
     }
 }

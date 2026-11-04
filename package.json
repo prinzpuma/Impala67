@@ -18,6 +18,7 @@
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run",
     "build:core": "node core/tools/build.mjs",
     "build:android-core": "node tools/android-core.mjs",
+    "build:ios-core": "node tools/ios-core.mjs",
     "android:icons": "node tools/android-icons.mjs",
     "check:core": "node .github/scripts/check-core-build.mjs"
   },

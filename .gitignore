@@ -24,6 +24,13 @@ android/key.properties
 *.key
 !android/app/release.keystore
 Impala67.apk
+
+# iOS
+ios/Frameworks/
+ios/build/
+ios/*.xcodeproj/
+ios/DerivedData/
+*.ipa
 # Handwriting ML
 handwriting/.venv/
 handwriting/data/

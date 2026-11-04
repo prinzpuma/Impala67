@@ -539,8 +539,10 @@ export const STATE = (() => {
 	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") !== "off"; } catch { return true; } };
 	function computeStudySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
-		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1, 0, 0, 0, 0);
+		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).
+		const back = t.getHours() < 4 ? 1 : 0;
+		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4);
+		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 1, 4);
 		const s = JSON.parse(M.studySnapshot(deck || undefined, t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock()));
 		return {
 			dueNow: cardsOf(s.dueNow),
