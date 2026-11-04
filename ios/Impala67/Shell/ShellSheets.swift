@@ -8,6 +8,9 @@ struct ShellSheetView: View {
         if sheet == .library {
             // Eigener Stapel: PDFs werden darin geöffnet (Zoom aus der Zeile).
             LibrarySheet().presentationDetents([.large])
+        } else if sheet == .settings {
+            // Eigene geteilte Ansicht (Bereiche links, Inhalt rechts) wie die PWA.
+            SettingsSheet().presentationSizing(.page)
         } else {
             stack
         }
@@ -19,7 +22,7 @@ struct ShellSheetView: View {
                 switch sheet {
                 case .search: SearchSheet()
                 case .trash: TrashSheet()
-                case .settings: SettingsSheet()
+                case .settings: EmptyView()
                 case .conflicts: ConflictsSheet()
                 case .library: EmptyView()
                 case .graph: GraphView()

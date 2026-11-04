@@ -7,6 +7,7 @@ import SwiftUI
 struct Impala67App: App {
     @State private var app = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +21,7 @@ struct Impala67App: App {
                 }
             }
             .tint(Impala.accent)
+            .preferredColorScheme(AppTheme(rawValue: theme)?.scheme)
             .task {
                 await app.open()
                 if scenePhase == .active { app.onForeground() }

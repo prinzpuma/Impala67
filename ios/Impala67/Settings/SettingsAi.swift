@@ -83,7 +83,7 @@ private struct AiModelSection: View {
                 .disabled(manualModel.trimmingCharacters(in: .whitespaces).isEmpty || manualProvider.isEmpty)
             }
         } header: {
-            Text("KI · Aktives Modell")
+            Text("Aktives Modell")
         } footer: {
             Text("Nur wenn die Quelle das Modell nicht auflistet, die Modell-ID von Hand eingeben.")
         }
@@ -264,7 +264,7 @@ private struct AiBehaviorSection: View {
                 }
             }
         } header: {
-            Text("KI · Verhalten")
+            Text("Verhalten")
         }
         .onAppear { instructions = s.customInstructions }
     }

@@ -46,7 +46,8 @@ ios/
    ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
    ├─ Sync/                    Cloudflare Live-Sync (SyncController), QR-Kopplung, Konflikte, Drive-Backup
    ├─ Chat/                    KI-Chat: ChatModel (Rückrufe des Rust-Assistenten), Panel, Chat-Liste, KI-Einstellungen
-   ├─ Settings/                Einstellungen (Cloudflare Live-Sync, Google Drive, KI)
+   ├─ Settings/                Einstellungen wie die PWA: Bereiche links (Übersicht, Darstellung, KI, Lernen,
+  │                           Sync & Backup, App & Speicher), Inhalt rechts (NavigationSplitView)
    └─ Heft/                    PencilKit-Heft
 ```
 

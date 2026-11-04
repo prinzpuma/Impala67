@@ -1,16 +1,206 @@
 import SwiftUI
 
-/// Einstellungen (Cloudflare Live-Sync, Google Drive und KI, Texte wie `SettingsCloudflare.kt` bzw. die PWA).
+/// Bereiche der Einstellungen wie `SETTINGS_SECTIONS` in settings-schema.js (gleiche Reihenfolge,
+/// Namen und Beschreibungen). Es erscheint nur, was es am iPad wirklich gibt.
+enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
+    case overview, appearance, ai, learning, sync, app
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .overview: "Übersicht"
+        case .appearance: "Darstellung"
+        case .ai: "KI"
+        case .learning: "Lernen"
+        case .sync: "Sync & Backup"
+        case .app: "App & Speicher"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .overview: "home"
+        case .appearance: "sun"
+        case .ai: "sparkles"
+        case .learning: "graduation"
+        case .sync: "sync"
+        case .app: "gear"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .overview: "KI, Sync, Backup, Speicher und Version auf einen Blick"
+        case .appearance: "Design, Lesbarkeit und Oberfläche"
+        case .ai: "Modelle, Quellen und lokale KI"
+        case .learning: "Lernverhalten, Pausen und Controller"
+        case .sync: "Live-Sync, Google Drive und Backups"
+        case .app: "Speicher, Updates und Experimente"
+        }
+    }
+}
+
+/// Einstellungen wie in der PWA: links die Bereiche, rechts ihr Inhalt – als geteilte Ansicht wie die
+/// Einstellungen-App von iPadOS. Der zuletzt offene Bereich bleibt gemerkt (`impala67SettingsLastSection`).
 struct SettingsSheet: View {
+    @AppStorage("impala67SettingsLastSection") private var last = SettingsSection.overview.rawValue
+    @State private var selection: SettingsSection?
+
+    var body: some View {
+        NavigationSplitView {
+            List(SettingsSection.allCases, selection: $selection) { s in
+                NavigationLink(value: s) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.label).font(.system(size: TextSize.md, weight: .medium))
+                            Text(s.description).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+                        }
+                    } icon: {
+                        Icon(s.icon, size: 18).foregroundStyle(Impala.accent)
+                    }
+                }
+            }
+            .navigationTitle("Einstellungen")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseButton() } }
+        } detail: {
+            NavigationStack {
+                SettingsDetail(section: selection ?? .overview) { selection = $0 }
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onAppear { selection = SettingsSection(rawValue: last) ?? .overview }
+        .onChange(of: selection) { if let selection { last = selection.rawValue } }
+    }
+}
+
+/// Inhalt eines Bereichs; Gruppen wie `SETTINGS_ITEMS` (`group`).
+private struct SettingsDetail: View {
+    let section: SettingsSection
+    let open: (SettingsSection) -> Void
+
     var body: some View {
         Form {
-            CloudflareSection()
-            DriveSections()
-            AiSettingsSections()
+            switch section {
+            case .overview: OverviewSection(open: open)
+            case .appearance:
+                ThemeSection()
+                HomeSettingsSections()
+            case .ai: AiSettingsSections()
+            case .learning: WeekGoalSection()
+            case .sync:
+                CloudflareSection()
+                DriveSections()
+            case .app: AppSection()
+            }
         }
         .formStyle(.grouped)
-        .navigationTitle("Einstellungen")
+        .navigationTitle(section.label)
         .navigationBarTitleDisplayMode(.inline)
+        .id(section)
+    }
+}
+
+/// „App-Status“: KI, Sync, Backup, Speicher und Version; Antippen öffnet den Bereich.
+private struct OverviewSection: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(SyncController.self) private var sync
+    @Environment(DriveController.self) private var drive
+    let open: (SettingsSection) -> Void
+
+    var body: some View {
+        let _ = store.settingsRevision
+        Section("Status") {
+            row("KI", AiSettings.read(store.core).label, .ai)
+            row("Cloudflare Live-Sync", sync.label, .sync)
+            row("Google Drive", drive.connected ? (drive.needsLogin ? "Anmeldung nötig" : "Verbunden") : "Nicht verbunden", .sync)
+            row("Lokaler Speicher", AppInfo.storage, .app)
+            row("Version", AppInfo.version, .app)
+        }
+    }
+
+    private func row(_ title: String, _ value: String, _ target: SettingsSection) -> some View {
+        Button { open(target) } label: {
+            LabeledContent(title, value: value)
+                .foregroundStyle(Impala.text)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Erscheinungsbild wie die PWA: System, Hell oder Dunkel (nur dieses Gerät).
+enum AppTheme: String, CaseIterable {
+    case system, light, dark
+
+    static let key = "impala67Theme"
+
+    var label: String {
+        switch self {
+        case .system: "System"
+        case .light: "Hell"
+        case .dark: "Dunkel"
+        }
+    }
+
+    var scheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
+private struct ThemeSection: View {
+    @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
+
+    var body: some View {
+        Section {
+            Picker("Erscheinungsbild", selection: $theme) {
+                ForEach(AppTheme.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
+            }
+        } header: {
+            Text("Design")
+        } footer: {
+            Text("System, Hell oder Dunkel")
+        }
+    }
+}
+
+/// „App & Speicher“: lokaler Speicher und Version.
+private struct AppSection: View {
+    var body: some View {
+        Section {
+            LabeledContent("Lokaler Speicher", value: AppInfo.storage)
+        } header: {
+            Text("Speicher")
+        } footer: {
+            Text("Verwendeter Gerätespeicher der Datenbank dieses iPads.")
+        }
+        Section("App") {
+            LabeledContent("Version", value: AppInfo.version)
+        }
+    }
+}
+
+enum AppInfo {
+    static var version: String {
+        let info = Bundle.main.infoDictionary
+        let v = info?["CFBundleShortVersionString"] as? String ?? "–"
+        let b = info?["CFBundleVersion"] as? String ?? "–"
+        return "\(v) (\(b))"
+    }
+
+    /// Größe der Kern-Datenbank samt Schreib-Log (`impala67.db`, `-wal`).
+    static var storage: String {
+        guard let dir = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        else { return "–" }
+        let bytes = ["impala67.db", "impala67.db-wal"].reduce(Int64(0)) { sum, name in
+            let size = (try? FileManager.default.attributesOfItem(atPath: dir.appendingPathComponent(name).path)[.size]) as? NSNumber
+            return sum + (size?.int64Value ?? 0)
+        }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
 

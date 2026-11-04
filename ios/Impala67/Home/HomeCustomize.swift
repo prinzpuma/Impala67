@@ -17,67 +17,86 @@ struct HomeSettings {
     }
 }
 
-/// „Startseite anpassen“ (Zahnrad, wie `data-set="home"`): Begrüßungsname, Tagesartikel an/aus, Themen
-/// und Wochenziel. Texte wie settings-renderer.js.
+/// „Startseite anpassen“ (Zahnrad, wie `data-set="home"`): dieselben Felder wie in den Einstellungen
+/// unter Darstellung → Oberfläche und Lernen → Wochenziel.
 struct HomeCustomizeSheet: View {
-    @Environment(ImpalaStore.self) private var store
+    var body: some View {
+        NavigationStack {
+            Form {
+                HomeSettingsSections()
+                WeekGoalSection()
+            }
+            .navigationTitle("Startseite anpassen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { CloseButton() } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// Wochenziel der Lernzeit (nur dieses Gerät, wie in der PWA).
+struct WeekGoalSection: View {
     @AppStorage(WeekGoal.key) private var goal = 300
+
+    var body: some View {
+        Section {
+            Picker("Wochenziel", selection: $goal) {
+                ForEach(WeekGoal.presets, id: \.self) { Text(HomeFormat.dur(Double($0))).tag($0) }
+            }
+        } header: {
+            Text("Lernzeit")
+        } footer: {
+            Text("Lernzeit pro Woche (nur dieses Gerät, wie in der PWA).")
+        }
+        .onAppear { goal = WeekGoal.normalized(goal) }
+    }
+}
+
+/// Begrüßungsname und Tagesartikel (settings-renderer.js, Gruppe „Oberfläche“).
+struct HomeSettingsSections: View {
+    @Environment(ImpalaStore.self) private var store
     @State private var name = ""
     @State private var article = true
     @State private var topics = ""
     @State private var loaded = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Optional", text: $name)
-                        .textContentType(.givenName)
-                        .onSubmit(saveName)
-                } header: {
-                    Text("Begrüßungsname")
-                } footer: {
-                    Text("Erscheint in der Begrüßung auf der Startseite")
-                }
-                Section {
-                    Toggle("Tagesartikel", isOn: $article)
-                        .tint(Impala.accent)
-                        .onChange(of: article) { _, on in if loaded { AiSettings.patch(store.core, ["homeArticle": on]) } }
-                    if article {
-                        TextField("Automatisch", text: $topics, axis: .vertical)
-                            .onSubmit(saveTopics)
-                    }
-                } footer: {
-                    Text(article
-                         ? "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen. Themen kommagetrennt, sie wechseln täglich; leer = aus allen Notizen."
-                         : "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen.")
-                }
-                Section {
-                    Picker("Wochenziel", selection: $goal) {
-                        ForEach(WeekGoal.presets, id: \.self) { Text(HomeFormat.dur(Double($0))).tag($0) }
-                    }
-                } footer: {
-                    Text("Lernzeit pro Woche (nur dieses Gerät, wie in der PWA).")
-                }
+        Group {
+            Section {
+                TextField("Optional", text: $name)
+                    .textContentType(.givenName)
+                    .onSubmit(saveName)
+            } header: {
+                Text("Begrüßungsname")
+            } footer: {
+                Text("Erscheint in der Begrüßung auf der Startseite")
             }
-            .animation(.smooth, value: article)
-            .navigationTitle("Startseite anpassen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { CloseButton() } }
-            .onAppear {
-                let s = HomeSettings.read(store.core)
-                name = s.name
-                article = s.article
-                topics = s.topics
-                goal = WeekGoal.normalized(goal)
-                Task { loaded = true }
-            }
-            .onDisappear {
-                saveName()
-                saveTopics()
+            Section {
+                Toggle("Tagesartikel", isOn: $article)
+                    .tint(Impala.accent)
+                    .onChange(of: article) { _, on in if loaded { AiSettings.patch(store.core, ["homeArticle": on]) } }
+                if article {
+                    TextField("Automatisch", text: $topics, axis: .vertical)
+                        .onSubmit(saveTopics)
+                }
+            } footer: {
+                Text(article
+                     ? "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen. Themen kommagetrennt, sie wechseln täglich; leer = aus allen Notizen."
+                     : "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen.")
             }
         }
-        .presentationDetents([.medium, .large])
+        .animation(.smooth, value: article)
+        .onAppear {
+            let s = HomeSettings.read(store.core)
+            name = s.name
+            article = s.article
+            topics = s.topics
+            Task { loaded = true }
+        }
+        .onDisappear {
+            saveName()
+            saveTopics()
+        }
     }
 
     private func saveName() {
