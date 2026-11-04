@@ -310,6 +310,12 @@ final class ChatModel {
         _ = try? core.saveChat(chat: chat)
     }
 
+    /// Einfache Antwort ohne Werkzeuge und Chat (`AI.complete` der PWA: Tagesartikel); läuft im Hintergrund.
+    func complete(_ prompt: String, system: String?) async throws -> String {
+        let a = makeAssistant()
+        return try await Task.detached { try a.complete(prompt: prompt, system: system) }.value
+    }
+
     /// Der Assistent hält Zustand je Chat (Zusammenfassung, Werkzeuge); neu gebaut wird er nur, wenn sich
     /// Quellen, Schlüssel oder der Sync-Schlüssel ändern. Modell und Verhalten liest der Kern bei jedem Lauf.
     private func makeAssistant() -> AiAssistant {

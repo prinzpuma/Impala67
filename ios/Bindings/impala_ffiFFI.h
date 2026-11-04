@@ -1387,6 +1387,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_db(void*_Nonnull ptr, Rus
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_history(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_LINKS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_LINKS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_links(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PROPS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PROPS
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_props(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -3403,6 +3408,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_db(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_HISTORY
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_HISTORY
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_history(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_LINKS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_LINKS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_links(void
     
 );
 #endif

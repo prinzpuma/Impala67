@@ -3611,6 +3611,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func pageHistory(id: String) throws  -> [PageVersion]
     
     /**
+     * Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie
+     * `backlinks`, dazu Eltern → Kind. Jede Kante höchstens einmal; Inhalte werden nur einmal klein
+     * geschrieben. Bei vielen Seiten aus einem Hintergrund-Thread rufen.
+     */
+    func pageLinks()  -> [PageLink]
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */
     func pageProps(id: String)  -> [String: String]
@@ -5194,6 +5201,18 @@ open func pageHistory(id: String)throws  -> [PageVersion]  {
     return try  FfiConverterSequenceTypePageVersion.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_impala_ffi_fn_method_impalacore_page_history(self.uniffiClonePointer(),
         FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie
+     * `backlinks`, dazu Eltern → Kind. Jede Kante höchstens einmal; Inhalte werden nur einmal klein
+     * geschrieben. Bei vielen Seiten aus einem Hintergrund-Thread rufen.
+     */
+open func pageLinks() -> [PageLink]  {
+    return try!  FfiConverterSequenceTypePageLink.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_page_links(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -12381,6 +12400,88 @@ public func FfiConverterTypePageDetail_lower(_ value: PageDetail) -> RustBuffer 
 
 
 /**
+ * Kante des Wissensgraphen: `from` erwähnt den Titel von `to` (Regel der Rückverweise) bzw. ist
+ * bei `child` deren Elternseite.
+ */
+public struct PageLink {
+    public var from: String
+    public var to: String
+    public var child: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(from: String, to: String, child: Bool) {
+        self.from = from
+        self.to = to
+        self.child = child
+    }
+}
+
+#if compiler(>=6)
+extension PageLink: Sendable {}
+#endif
+
+
+extension PageLink: Equatable, Hashable {
+    public static func ==(lhs: PageLink, rhs: PageLink) -> Bool {
+        if lhs.from != rhs.from {
+            return false
+        }
+        if lhs.to != rhs.to {
+            return false
+        }
+        if lhs.child != rhs.child {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(from)
+        hasher.combine(to)
+        hasher.combine(child)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePageLink: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PageLink {
+        return
+            try PageLink(
+                from: FfiConverterString.read(from: &buf), 
+                to: FfiConverterString.read(from: &buf), 
+                child: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PageLink, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.from, into: &buf)
+        FfiConverterString.write(value.to, into: &buf)
+        FfiConverterBool.write(value.child, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePageLink_lift(_ buf: RustBuffer) throws -> PageLink {
+    return try FfiConverterTypePageLink.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePageLink_lower(_ value: PageLink) -> RustBuffer {
+    return FfiConverterTypePageLink.lower(value)
+}
+
+
+/**
  * Seite ohne Inhalt: Listen, Seitenbaum, Brotkrumen.
  */
 public struct PageSummary {
@@ -18386,6 +18487,31 @@ fileprivate struct FfiConverterSequenceTypeMdBlock: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePageLink: FfiConverterRustBuffer {
+    typealias SwiftType = [PageLink]
+
+    public static func write(_ value: [PageLink], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePageLink.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PageLink] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PageLink]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePageLink.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePageSummary: FfiConverterRustBuffer {
     typealias SwiftType = [PageSummary]
 
@@ -19847,6 +19973,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_history() != 42129) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_page_links() != 31208) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506) {

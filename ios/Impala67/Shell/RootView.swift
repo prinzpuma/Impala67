@@ -95,7 +95,7 @@ private struct MainContent: View {
             } else if tab == ShellModel.cardsTab {
                 CardsScreen()
             } else if tab == "nlm:main" {
-                Placeholder(icon: "book", title: "Gemini Notebook", text: "Folgt in der iPad-App.")
+                NotebookView()
             } else {
                 Placeholder(icon: "file", title: "Seite nicht gefunden", text: "Die Seite wurde gelöscht oder ist noch nicht synchronisiert.")
             }

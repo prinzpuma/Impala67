@@ -19,6 +19,8 @@ final class ImpalaStore {
     private(set) var chatsRevision = 0
     /// Einstellungen (KI-Quellen, Modell).
     private(set) var settingsRevision = 0
+    /// Lernzeit und Tagesartikel (Startseite); auch Einstellungen (Name, Tagesartikel an/aus).
+    private(set) var homeRevision = 0
     /// Jede Änderung (Sync-Konflikte entstehen und verschwinden bei beliebigen Änderungen).
     private(set) var revision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
@@ -42,6 +44,7 @@ final class ImpalaStore {
         if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }
         if c.everything || c.chatsAll || !c.chats.isEmpty { chatsRevision += 1 }
         if c.everything || c.settings { settingsRevision += 1 }
+        if c.everything || c.learningSessions || c.homeArticles || c.settings { homeRevision += 1 }
         if c.remote || c.everything { lastRemote = c }
     }
 

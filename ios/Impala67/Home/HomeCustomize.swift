@@ -1,0 +1,119 @@
+import SwiftUI
+
+/// Einstellungen der Startseite aus den Kern-Einstellungen (synchronisiert wie in der PWA):
+/// `homeUserName`, `homeArticle`, `homeArticleTopics`.
+struct HomeSettings {
+    var name = ""
+    var article = true
+    var topics = ""
+
+    static func read(_ core: ImpalaCore) -> HomeSettings {
+        let s = (try? JSONSerialization.jsonObject(with: Data(core.settingsJson().utf8))) as? [String: Any] ?? [:]
+        return HomeSettings(
+            name: (s["homeUserName"] as? String ?? "").trimmingCharacters(in: .whitespaces),
+            article: s["homeArticle"] as? Bool ?? true,
+            topics: s["homeArticleTopics"] as? String ?? ""
+        )
+    }
+}
+
+/// „Startseite anpassen“ (Zahnrad, wie `data-set="home"`): Begrüßungsname, Tagesartikel an/aus, Themen
+/// und Wochenziel. Texte wie settings-renderer.js.
+struct HomeCustomizeSheet: View {
+    @Environment(ImpalaStore.self) private var store
+    @AppStorage(WeekGoal.key) private var goal = 300
+    @State private var name = ""
+    @State private var article = true
+    @State private var topics = ""
+    @State private var loaded = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Optional", text: $name)
+                        .textContentType(.givenName)
+                        .onSubmit(saveName)
+                } header: {
+                    Text("Begrüßungsname")
+                } footer: {
+                    Text("Erscheint in der Begrüßung auf der Startseite")
+                }
+                Section {
+                    Toggle("Tagesartikel", isOn: $article)
+                        .tint(Impala.accent)
+                        .onChange(of: article) { _, on in if loaded { AiSettings.patch(store.core, ["homeArticle": on]) } }
+                    if article {
+                        TextField("Automatisch", text: $topics, axis: .vertical)
+                            .onSubmit(saveTopics)
+                    }
+                } footer: {
+                    Text(article
+                         ? "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen. Themen kommagetrennt, sie wechseln täglich; leer = aus allen Notizen."
+                         : "Die KI fasst deine Notizen einmal am Tag als kurzen Artikel auf der Startseite zusammen.")
+                }
+                Section {
+                    Picker("Wochenziel", selection: $goal) {
+                        ForEach(WeekGoal.presets, id: \.self) { Text(HomeFormat.dur(Double($0))).tag($0) }
+                    }
+                } footer: {
+                    Text("Lernzeit pro Woche (nur dieses Gerät, wie in der PWA).")
+                }
+            }
+            .animation(.smooth, value: article)
+            .navigationTitle("Startseite anpassen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { CloseButton() } }
+            .onAppear {
+                let s = HomeSettings.read(store.core)
+                name = s.name
+                article = s.article
+                topics = s.topics
+                goal = WeekGoal.normalized(goal)
+                Task { loaded = true }
+            }
+            .onDisappear {
+                saveName()
+                saveTopics()
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func saveName() {
+        let v = name.trimmingCharacters(in: .whitespaces)
+        if v != HomeSettings.read(store.core).name { AiSettings.patch(store.core, ["homeUserName": v]) }
+    }
+
+    private func saveTopics() {
+        let v = topics.trimmingCharacters(in: .whitespacesAndNewlines)
+        if v != HomeSettings.read(store.core).topics { AiSettings.patch(store.core, ["homeArticleTopics": v]) }
+    }
+}
+
+/// Texte und Zeitangaben wie home-view.js.
+enum HomeFormat {
+    static let days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+    /// `dur()`: „45 Min“, „2 h“, „1 h 30“.
+    static func dur(_ minutes: Double) -> String {
+        let m = Int(minutes.rounded())
+        let h = m / 60, r = m % 60
+        return h > 0 ? "\(h) h" + (r > 0 ? " \(r)" : "") : "\(m) Min"
+    }
+
+    static func days(_ n: Int, _ one: String = "Tag", _ many: String = "Tagen") -> String { "\(n) " + (n == 1 ? one : many) }
+
+    /// Ein Satz, was heute zählt: Streak in Gefahr > Ziel in Reichweite > Ziel geschafft > heutige Zeit.
+    static func nudge(streak: Int, todaySeconds: Int, weekMin: Double, goalMin: Int, now: Date = .now) -> String {
+        let todayMin = Int((Double(todaySeconds) / 60).rounded())
+        let left = Double(goalMin) - weekMin
+        if streak > 0 && todayMin == 0 && Calendar.current.component(.hour, from: now) >= 14 {
+            return " Dein Streak von \(days(streak)) wartet noch auf heute."
+        }
+        if left > 0 && left <= 60 { return " Nur noch \(dur(left)) bis zum Wochenziel." }
+        if left <= 0 && weekMin > 0 { return " Das Wochenziel hast du schon geschafft." }
+        if todayMin > 0 { return " Heute schon \(dur(Double(todayMin))) gelernt." }
+        return ""
+    }
+}

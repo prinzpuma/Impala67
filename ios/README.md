@@ -40,7 +40,8 @@ ios/
    ├─ Shell/                   Seitenleiste, Seitenbaum (Ziehen: TreeDrop), Tab-Leiste, Suche, Papierkorb,
    │                           PageOps (Neu/Vorlage, Duplizieren, Verschieben, PDF-Import), ShellModel: Tabs
    ├─ Library/                 Bibliothek: PDF-Liste, PDFKit-Ansicht
-   ├─ Home/                    Startseite (erster Teil)
+   ├─ Home/                    Startseite, Lernzeit (Auswertung + Erfassung), Tagesartikel, „Startseite anpassen“
+   ├─ Graph/                   Wissensgraph (Canvas, Kraftmodell), Gemini Notebook
    ├─ Notes/                   Notiz-Editor mit Blöcken (NoteModel: Block-Operationen, Speichern), MarkdownView
    ├─ Cards/                   Karteikarten: Stapelbaum, Übersicht, Lernen (ReviewModel), Karten-Editor
    ├─ Sync/                    Cloudflare Live-Sync (SyncController), QR-Kopplung, Konflikte, Drive-Backup
@@ -111,6 +112,49 @@ kennt nur die Bedien-Operationen (`NoteModel`, `NoteCommands.swift`):
   den Kern (`addFile`); Dateien öffnen in Quick Look. Callouts, Toggles und Spalten zeigen ihre Kinder;
   ändern über „Als Markdown bearbeiten“.
 - **Rund um die Seite**: „N Rückverweise“ unter dem Titel (aufklappbar), Unterseiten am Ende.
+
+## Startseite
+
+Wie `homeViewHtml` (home-view.js) und `android/…/home/`:
+
+- **Kopf**: Datum, „+ Neue Seite“ und Zahnrad „Startseite anpassen“ (Sheet: Begrüßungsname, Tagesartikel
+  an/aus, Themen – in den Kern-Einstellungen `homeUserName`/`homeArticle`/`homeArticleTopics`, also
+  synchronisiert –, dazu das Wochenziel).
+- **Begrüßung** mit Namen, Satz zu den Karten (Kartenzahl als Link startet das Lernen) und dem Lernzeit-Satz
+  wie `nudge` (Streak in Gefahr > Ziel in Reichweite > Ziel geschafft > heute gelernt).
+- **Rechts** (schmal darunter): „Heute fällig“ und „Diese Woche gelernt“ (`WeekStat`): Summe „von 5 h“ bzw.
+  „· Ziel geschafft“, Zielbalken, Tagesbalken Mo–So (heute Akzent, spätere Tage blass), Streak-Satz
+  („3 Tage am Stück“ / „Heute lernen startet einen Streak“), „Ziel ändern“ schaltet 2/5/8/12 h. Balken wachsen
+  beim Erscheinen gestaffelt mit Feder, Zahlen zählen (`numericText`). Wochenziel nur auf diesem Gerät
+  (`weekGoalMinutes`, wie localStorage der PWA).
+- **Lernzeit** (`LearningTime.swift`): Auswertung wie lernzeit.js (überlappende Abschnitte mehrerer Geräte
+  zählen einmal, Streak ab 5 Minuten am Tag) über `learningSessions` des Kerns. Erfasst wird beim
+  **Kartenlernen** (`.learningTime(...)` an `ReviewScreen`, Kategorie `cards`, Quelle Stapel): Abschnitte
+  beim Öffnen/Verlassen und im Hintergrund, nach 60 s ohne Eingabe Pause mit Glas-Pille „Lernst du
+  noch?“, nach 15 min Pause neue Sitzung; gespeichert über `saveLearningSession` (synchronisiert).
+- **Tagesartikel** (`HomeArticle.swift`, wie home-article.js): ungelesen als aufklappbare Karte (Thema, Titel,
+  Anriss `markdownTeaser`, Text über `MarkdownView`, Quellen-Pillen, „Gelesen“ → `markHomeArticleRead`),
+  gelesen nur der Hinweis mit „Nochmal lesen“, Verlauf als Sheet. Fehlt der heutige Artikel, schreibt das
+  iPad einmal je App-Start einen über den Rust-Assistenten (`AiAssistant.complete`, Anweisung wörtlich wie
+  die PWA) und speichert ihn mit `saveHomeArticle`; „Kein Tagesartikel: … Erneut versuchen“ bei Fehlern.
+  Die Notiz-Auswahl ist vereinfacht (ohne Fach-Erkennung `FACH`: Thema aus den Einstellungen, sonst alle
+  Notizen; unbenutzte und neueste zuerst) – Kandidat für den Kern.
+
+## Wissensgraph und Gemini Notebook
+
+- **Wissensgraph** (Fußleiste, Sheet, `Graph/`): Seiten als Punkte, Kanten aus dem Kern (`pageLinks`: Seite
+  erwähnt den Titel einer anderen – Regel der Rückverweise – bzw. Eltern → Unterseite, gestrichelt). Layout
+  in der App als Kraftmodell wie d3-force (Abstoßung, Federn, Zug zur Mitte, Abkühlung), das sichtbar
+  aufblüht und sich danach einpasst. Gezeichnet mit `Canvas`; Pinch zoomt um die Finger, Ziehen verschiebt,
+  Ziehen auf einem Punkt zieht den Punkt (Modell wärmt kurz an), Antippen öffnet die Seite, Trackpad-Zeigen
+  hebt Seite und Nachbarn hervor. Punktgröße nach Verbindungen, Notizen Akzent, Hefte Grün, Beschriftung je
+  nach Zoom. Glas-Pille unten mit „N Seiten · M Verbindungen“, Menü: Unterseiten verbinden, Seiten ohne
+  Verbindung, Einpassen. Hinweis: Der „Wissensgraph“ der PWA (graph.js) ist ein Skill-Graph aus Karteikarten
+  (Embeddings + KI); den gibt es auf dem iPad noch nicht.
+- **Gemini Notebook** (Fußleiste und Tab `nlm:main`, wie `renderPane`): Erklärung, „Seiten als Quelle
+  kopieren…“ (Auswahl mit Suche und Häkchen → ein Text `# Titel` + Inhalt, getrennt durch `---`, in die
+  Zwischenablage, dann öffnet Gemini Notebook), „Gemini Notebook öffnen“ (extern). Die Download-Inbox der
+  PWA (IndexedDB, nicht synchronisiert) gibt es nicht; Dateien kommen über „/Datei“ in eine Notiz.
 
 ## Karteikarten
 
@@ -269,12 +313,14 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   Zwischenablage bzw. per Drag & Drop von außen.
 - Heft: Bilder und Textfelder bearbeiten (anlegen, verschieben, löschen), Import von PDFs/Fotos,
   Export, Verlauf, Handschrift → Text, Formvorschau während des Haltens, Dicken der PWA (`SIZES`).
-- Startseite: Lernzeit/Wochenziel, „Weißt du's noch?“, Tagesartikel.
+- Startseite: „Weißt du's noch?“, Lernanalyse (lernanalyse.js), Backup-Hinweis; Lernzeit auch in Notizen,
+  Heft und Chat erfassen (bisher nur beim Kartenlernen), Pausen-Erinnerung nach 40 min.
 - Karteikarten: Stapel ziehen zum Sortieren/Verschieben, Stapel-Optionen (Tageslimits, Leech),
-  Feynman-Modus, Lernzeit-Messung und Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
+  Feynman-Modus, Lern-Telemetrie (`teleEvent`), Archiv/Papierkorb für Karten,
   Import/Export, Statistik.
 - Bibliothek: Heft-Regal mit Ordnern und Covern, Smart-Filter (Alle/Favoriten/Vorlagen), PDF-KI-Zusammenfassung.
-  Wissensgraph, Gemini Notebook (Fußleiste zeigt Platzhalter).
+- Wissensgraph: Skill-Graph der PWA aus Karteikarten (`knowledgeGraph` in den Einstellungen, synchronisiert)
+  anzeigen. Gemini Notebook: Download-Import/Inbox.
 - Seitenbaum: Stapel (Karteikarten) ziehen, Mehrfachauswahl; Duplizieren ist App-Logik wie in Android
   (Kandidat für den Kern).
 - App-Icon: dunkle/getönte Varianten (iOS 18+). Die Körnung in `web/icon.svg` färbt den ganzen

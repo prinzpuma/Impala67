@@ -11,6 +11,15 @@ use crate::{CoreError, ImpalaCore, Inner, PageSummary, invalid, summaries, summa
 /// Abstand neuer Sortierschlüssel am Rand der Geschwister (wie die Seitenleiste der PWA).
 const ORDER_STEP: f64 = 60_000.0;
 
+/// Kante des Wissensgraphen: `from` erwähnt den Titel von `to` (Regel der Rückverweise) bzw. ist
+/// bei `child` deren Elternseite.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct PageLink {
+    pub from: String,
+    pub to: String,
+    pub child: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct PageVersion {
     /// Zeitpunkt der Version (ISO).
@@ -154,6 +163,37 @@ impl ImpalaCore {
         summaries(self.lock().model.state().backlinks_of(&id))
     }
 
+    /// Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie
+    /// `backlinks`, dazu Eltern → Kind. Jede Kante höchstens einmal; Inhalte werden nur einmal klein
+    /// geschrieben. Bei vielen Seiten aus einem Hintergrund-Thread rufen.
+    pub fn page_links(&self) -> Vec<PageLink> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let pages = state.active_pages();
+        let lower: Vec<String> = pages.iter().map(|p| p.content().to_lowercase()).collect();
+        let mut out = Vec::new();
+        for target in &pages {
+            let title = target.title();
+            if title.is_empty() || title == "Ohne Titel" {
+                continue;
+            }
+            let t = title.to_lowercase();
+            for (i, src) in pages.iter().enumerate() {
+                if src.id() != target.id() && lower[i].contains(&t) {
+                    out.push(PageLink { from: src.id().to_owned(), to: target.id().to_owned(), child: false });
+                }
+            }
+        }
+        for p in &pages {
+            if let Some(parent) = p.parent().filter(|id| pages.iter().any(|q| q.id() == *id)) {
+                if !out.iter().any(|l| l.from == parent && l.to == p.id()) {
+                    out.push(PageLink { from: parent.to_owned(), to: p.id().to_owned(), child: true });
+                }
+            }
+        }
+        out
+    }
+
     /// `[[Wiki-Link]]` auflösen: exakter Titel vor Teilstring, aktive vor archivierten.
     pub fn find_page_by_title(&self, title: String) -> Option<PageSummary> {
         self.lock().model.state().find_page(&title, true).map(summary)
@@ -225,6 +265,11 @@ mod tests {
         let a = core.create_page("Ziel".into(), "x".into(), None, None).unwrap();
         let b = core.create_page("Quelle".into(), "siehe [[Ziel]]".into(), None, None).unwrap();
         assert_eq!(core.backlinks(a.clone())[0].id, b);
+        let c = core.create_page("Kind".into(), "".into(), Some(a.clone()), None).unwrap();
+        let links = core.page_links();
+        assert!(links.iter().any(|l| l.from == b && l.to == a && !l.child));
+        assert!(links.iter().any(|l| l.from == a && l.to == c && l.child));
+        assert_eq!(links.len(), 2);
         assert_eq!(core.find_page_by_title("zie".into()).unwrap().id, a);
 
         core.archive_page(a.clone()).unwrap();

@@ -14,6 +14,8 @@ struct ReviewScreen: View {
             if let model { ReviewBody(model: model) } else { Color.clear }
         }
         .onAppear { if model == nil { model = ReviewModel(core: store.core, deck: deck, mix: mix) } }
+        // Lernzeit wie lernzeit.js (Kategorie `cards`, Quelle: Stapel).
+        .learningTime(LearnContext(category: "cards", sourceId: deck))
         // Fremde oder eigene Änderungen (Bearbeiten, Sync): neu lesen, angezeigte Karte bleibt liegen.
         .onChange(of: store.cardsRevision) { model?.refresh() }
     }

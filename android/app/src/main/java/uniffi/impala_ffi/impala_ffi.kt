@@ -1500,6 +1500,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1900,6 +1902,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_page(
 fun uniffi_impala_ffi_checksum_method_impalacore_page_db(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_history(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_links(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_props(
 ): Short
@@ -2457,6 +2461,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_page(`ptr`: Pointer,`id`: RustBuffer.
 fun uniffi_impala_ffi_fn_method_impalacore_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_history(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_links(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_props(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3391,6 +3397,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_history() != 42129.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_links() != 31208.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506.toShort()) {
@@ -8187,6 +8196,13 @@ public interface ImpalaCoreInterface {
     fun `pageHistory`(`id`: kotlin.String): List<PageVersion>
     
     /**
+     * Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie
+     * `backlinks`, dazu Eltern → Kind. Jede Kante höchstens einmal; Inhalte werden nur einmal klein
+     * geschrieben. Bei vielen Seiten aus einem Hintergrund-Thread rufen.
+     */
+    fun `pageLinks`(): List<PageLink>
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */
     fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String>
@@ -10187,6 +10203,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_history(
         it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie
+     * `backlinks`, dazu Eltern → Kind. Jede Kante höchstens einmal; Inhalte werden nur einmal klein
+     * geschrieben. Bei vielen Seiten aus einem Hintergrund-Thread rufen.
+     */override fun `pageLinks`(): List<PageLink> {
+            return FfiConverterSequenceTypePageLink.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_links(
+        it, _status)
 }
     }
     )
@@ -14883,6 +14916,46 @@ public object FfiConverterTypePageDetail: FfiConverterRustBuffer<PageDetail> {
             FfiConverterString.write(value.`content`, buf)
             FfiConverterBoolean.write(value.`trashed`, buf)
             FfiConverterBoolean.write(value.`archived`, buf)
+    }
+}
+
+
+
+/**
+ * Kante des Wissensgraphen: `from` erwähnt den Titel von `to` (Regel der Rückverweise) bzw. ist
+ * bei `child` deren Elternseite.
+ */
+data class PageLink (
+    var `from`: kotlin.String, 
+    var `to`: kotlin.String, 
+    var `child`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePageLink: FfiConverterRustBuffer<PageLink> {
+    override fun read(buf: ByteBuffer): PageLink {
+        return PageLink(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PageLink) = (
+            FfiConverterString.allocationSize(value.`from`) +
+            FfiConverterString.allocationSize(value.`to`) +
+            FfiConverterBoolean.allocationSize(value.`child`)
+    )
+
+    override fun write(value: PageLink, buf: ByteBuffer) {
+            FfiConverterString.write(value.`from`, buf)
+            FfiConverterString.write(value.`to`, buf)
+            FfiConverterBoolean.write(value.`child`, buf)
     }
 }
 
@@ -20131,6 +20204,34 @@ public object FfiConverterSequenceTypeMdBlock: FfiConverterRustBuffer<List<MdBlo
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMdBlock.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePageLink: FfiConverterRustBuffer<List<PageLink>> {
+    override fun read(buf: ByteBuffer): List<PageLink> {
+        val len = buf.getInt()
+        return List<PageLink>(len) {
+            FfiConverterTypePageLink.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PageLink>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePageLink.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PageLink>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePageLink.write(it, buf)
         }
     }
 }

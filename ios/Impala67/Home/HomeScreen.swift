@@ -1,16 +1,31 @@
 import SwiftUI
 
-/// Startseite, erster Teil der PWA-Startseite (`homeViewHtml` in home-view.js): Datum, „+ Neue Seite“,
-/// Begrüßung mit dem Satz zu den Karten, „Weitermachen“ mit der zuletzt bearbeiteten Seite, angeheftete
-/// Seiten und „Heute fällig“. Lernzeit und Tagesartikel folgen (siehe `android/app/…/home/` als Vorlage).
+/// Startseite wie `homeViewHtml` (home-view.js): Datum, „+ Neue Seite“ und „Startseite anpassen“, Begrüßung
+/// mit Namen und dem Satz zu Karten und Lernzeit, „Weitermachen“, angeheftete Seiten, rechts „Heute fällig“
+/// und „Diese Woche gelernt“, darunter der Tagesartikel. Vorlage auch `android/app/…/home/`.
 struct HomeScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.shellNamespace) private var zoom
+    @AppStorage(WeekGoal.key) private var storedGoal = 300
+    @State private var sheet: HomeSheet?
+    private var writer: HomeArticleWriter { .shared }
+
+    private enum HomeSheet: String, Identifiable {
+        case customize, history
+        var id: String { rawValue }
+    }
 
     var body: some View {
-        let _ = (store.pagesRevision, store.cardsRevision, store.revision)
+        let _ = (store.pagesRevision, store.cardsRevision, store.homeRevision, store.revision)
+        let settings = HomeSettings.read(store.core)
+        let time = LearningTime(store.core.learningSessions())
+        let week = time.week()
+        let streak = time.streakDays()
+        let goal = WeekGoal.normalized(storedGoal)
+        let nudge = HomeFormat.nudge(streak: streak, todaySeconds: time.seconds(.now), weekMin: Double(week.reduce(0, +)) / 60, goalMin: goal)
+        let articles = settings.article ? store.core.homeArticles(limit: 30) : []
         let conflicts = Int(store.core.conflictCount())
         let recent = store.core.recentPages(limit: 40)
         let last = recent.first
@@ -40,6 +55,12 @@ struct HomeScreen: View {
                             .background(Impala.accent.opacity(0.09), in: Capsule())
                             .overlay(Capsule().stroke(Impala.accent.opacity(0.36), lineWidth: 1))
                     }
+                    Button { sheet = .customize } label: {
+                        Icon("gear", size: 17).foregroundStyle(Impala.text2).frame(width: 36, height: 36).contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Startseite anpassen")
                 }
                 .riseIn(0)
                 if conflicts > 0 {
@@ -49,10 +70,10 @@ struct HomeScreen: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 VStack(alignment: .leading, spacing: Space.s2) {
-                    Text("\(Self.greeting()).")
+                    Text("\(Self.greeting())\(settings.name.isEmpty ? "" : ", " + settings.name).")
                         .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
                         .foregroundStyle(Impala.text)
-                    lead(fresh: last == nil && !hasCards, open: open, hasCards: hasCards, estMin: estMin)
+                    lead(fresh: last == nil && !hasCards, open: open, hasCards: hasCards, estMin: estMin, nudge: nudge)
                         .font(.system(size: TextSize.md))
                         .foregroundStyle(Impala.text2)
                 }
@@ -68,41 +89,69 @@ struct HomeScreen: View {
                             .riseIn(3)
                     }
                 }
-                let due = dueCard(open: open, hasCards: hasCards, estMin: estMin).riseIn(3)
+                let stats = VStack(spacing: Space.s4) {
+                    dueCard(open: open, hasCards: hasCards, estMin: estMin)
+                    WeekStat(week: week, goalMin: goal, streak: streak) { storedGoal = WeekGoal.next(after: goal) }
+                }
+                .riseIn(3)
                 // `.hv-grid`: breit zwei Spalten (Kennzahlen rechts), schmal untereinander.
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: Space.s4) {
                         main.frame(maxWidth: .infinity, alignment: .leading)
-                        due.frame(width: 280)
+                        stats.frame(width: 280)
                     }
                 } else {
                     main
-                    due
+                    stats
                 }
+                ArticleSection(
+                    articles: articles, writer: writer,
+                    onRetry: { writer.retry(core: store.core, chat: shell.chat) },
+                    onHistory: { sheet = .history }
+                )
+                .riseIn(4)
             }
             .padding(Space.s6)
             .animation(.smooth, value: conflicts)
+            .animation(.smooth, value: writer.phase == .busy)
             .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .background(Impala.panel)
+        .sheet(item: $sheet) { s in
+            switch s {
+            case .customize: HomeCustomizeSheet().environment(store)
+            case .history: ArticleHistorySheet().environment(store).environment(shell)
+            }
+        }
+        .task {
+            // Tagesartikel: ein Versuch je App-Start, automatisch nur bei erreichbarer KI.
+            shell.chat.refreshModels()
+            writer.ensure(core: store.core, chat: shell.chat)
+        }
     }
 
     /// Satz nach der Begrüßung (`sum` in home-view.js); die Kartenzahl startet das Lernen.
     @ViewBuilder
-    private func lead(fresh: Bool, open: Int, hasCards: Bool, estMin: Int) -> some View {
+    private func lead(fresh: Bool, open: Int, hasCards: Bool, estMin: Int, nudge: String) -> some View {
         if fresh {
             Text("Leg deine erste Seite an. Sobald du lernst, füllt sich diese Seite.")
         } else if open > 0 {
-            HStack(spacing: 0) {
-                Button { shell.openCards(.review(deck: nil, mix: false)) } label: {
-                    Text(Deck.cardsText(open)).foregroundStyle(Impala.accent).underline(color: Impala.accent.opacity(0.4))
-                }
-                .buttonStyle(.plain)
-                Text(" \(open == 1 ? "wartet" : "warten"), etwa \(estMin) \(estMin == 1 ? "Minute" : "Minuten").")
-            }
+            // Ein Text, damit der Satz samt Lernzeit-Hinweis umbricht; die Kartenzahl ist ein Link.
+            let cards: AttributedString = {
+                var a = AttributedString(Deck.cardsText(open))
+                a.link = URL(string: "impala://home/cards")
+                a.swiftUI.foregroundColor = Impala.accent
+                a.swiftUI.underlineStyle = .single
+                return a
+            }()
+            Text(cards + AttributedString(" \(open == 1 ? "wartet" : "warten"), etwa \(estMin) \(estMin == 1 ? "Minute" : "Minuten").\(nudge)"))
+                .environment(\.openURL, OpenURLAction { _ in
+                    shell.openCards(.review(deck: nil, mix: false))
+                    return .handled
+                })
         } else {
-            Text(hasCards ? "Für heute ist alles gelernt." : "Noch keine Karteikarten angelegt.")
+            Text((hasCards ? "Für heute ist alles gelernt." : "Noch keine Karteikarten angelegt.") + nudge)
         }
     }
 
