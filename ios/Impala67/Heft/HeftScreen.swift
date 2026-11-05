@@ -397,6 +397,16 @@ struct HeftScreen: View {
     }
 
     /// Längere Hintergrundarbeit ausführen; Aktualisierungen des Hinweistextes laufen auf dem MainActor.
+    /// Längere Arbeit nach dem nächsten Bild ausführen, damit der Hinweis vorher erscheint (Import).
+    private func run(_ status: String, _ work: @escaping () -> Void) {
+        busy = status
+        Task {
+            try? await Task.sleep(for: .milliseconds(60))
+            work()
+            busy = nil
+        }
+    }
+
     private func runExport(_ initialStatus: String, _ work: @escaping (@escaping @Sendable (String) -> Void) async -> Void) {
         busy = initialStatus
         exportTask?.cancel()

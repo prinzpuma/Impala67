@@ -38,7 +38,7 @@ enum HeftPaperDraw {
     static func draw(in ctx: CGContext, size: CGSize, paper: String, background: HeftBackground = .paper) {
         switch background {
         case .paper:
-            ctx.setFillColor(paper.cgColor)
+            ctx.setFillColor(Self.paper.cgColor)
             ctx.fill(CGRect(origin: .zero, size: size))
         case .white:
             ctx.setFillColor(UIColor.white.cgColor)
