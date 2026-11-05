@@ -29,7 +29,7 @@ struct NoteEditor: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model?.flush() }
         }
-        .onChange(of: store.lastRemote) {
+        .onChange(of: store.remoteRevision) {
             if store.remoteTouches(pageId) { model?.applyRemote() }
         }
     }

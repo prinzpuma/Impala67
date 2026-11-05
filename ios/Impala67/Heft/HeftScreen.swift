@@ -70,7 +70,7 @@ struct HeftScreen: View {
         }
         .background(Impala.bg0)
         .onAppear(perform: loadPages)
-        .onChange(of: store.lastRemote) {
+        .onChange(of: store.remoteRevision) {
             guard store.remoteTouches(pageId) else { return }
             loadPages()
             revision += 1

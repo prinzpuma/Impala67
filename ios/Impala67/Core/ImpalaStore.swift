@@ -25,6 +25,9 @@ final class ImpalaStore {
     private(set) var revision = 0
     /// Letzte Änderung von einem anderen Gerät (Editor und Heft laden dann nach).
     private(set) var lastRemote: Changes?
+    /// Zählt jede fremde Änderung. Ansichten beobachten diesen Zähler statt `lastRemote`: zwei gleiche
+    /// `Changes` hintereinander (z. B. zweimal neue Striche im selben Heft) lösen sonst kein `onChange` aus.
+    private(set) var remoteRevision = 0
 
     @ObservationIgnored private var listener: Listener?
 
@@ -47,6 +50,7 @@ final class ImpalaStore {
         if c.everything || c.learningSessions || c.homeArticles || c.settings { homeRevision += 1 }
         if c.remote || c.everything {
             lastRemote = c
+            remoteRevision += 1
             if c.everything || !c.hefte.isEmpty { HeftOcr.startBackgroundScan(core: core) }
         }
     }
