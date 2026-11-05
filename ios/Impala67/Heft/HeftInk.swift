@@ -40,7 +40,9 @@ enum HeftInk {
                 location: CGPoint(x: CGFloat(p[i * 3]), y: CGFloat(p[i * 3 + 1])),
                 timeOffset: TimeInterval(i) * 0.008,
                 size: CGSize(width: w, height: w),
-                opacity: 1, force: CGFloat(pr), azimuth: 0, altitude: .pi / 2
+                // Feste, normale Kraft: Der Druck steckt schon in `size`. Als Kraft weitergereicht machte ein
+                // niedriger Druck (Stifte ohne Druckstufen speichern 0,12) die Striche blass bis unsichtbar.
+                opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
             ))
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date())
