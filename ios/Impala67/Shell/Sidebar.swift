@@ -17,19 +17,29 @@ struct Sidebar: View {
         let isHome = shell.sidebarMode == .files
 
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 2) {
-                // Tipp: Seitenbaum (`btnHome`); Doppeltipp: Startseite (app.js `dblclick` → `openHomeOverview`).
-                Pill(icon: "home", label: "Home", active: isHome, ns: pills) { shell.homePill() }
-                Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
-                    shell.sidebarMode = .chats
+            // Die Pillen schweben als Liquid Glass über der Seitenleiste (wie die Leisten über dem Inhalt).
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        // Tipp: Seitenbaum (`btnHome`); Doppeltipp: Startseite (app.js `dblclick` → `openHomeOverview`).
+                        Pill(icon: "home", label: "Home", active: isHome, ns: pills,
+                             doubleTap: { shell.goHome() }) { shell.homePill() }
+                        Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
+                            shell.sidebarMode = .chats
+                        }
+                        // `btnAnki` → `openAnki()`: Karten-Tab mit Stapelübersicht.
+                        Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) { shell.openCards(.decks) }
+                    }
+                    .padding(3)
+                    .impalaGlass(interactive: true)
+                    Spacer(minLength: 0)
+                    Pill(icon: "search", label: "Suchen", active: false, ns: pills) {
+                        shell.sheet = .search
+                    }
+                    .padding(3)
+                    .impalaGlass(interactive: true)
+                    .zoomSource(ShellSheet.search, zoom)
                 }
-                // `btnAnki` → `openAnki()`: Karten-Tab mit Stapelübersicht.
-                Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) { shell.openCards(.decks) }
-                Spacer(minLength: 0)
-                Pill(icon: "search", label: "Suchen", active: false, ns: pills) {
-                    shell.sheet = .search
-                }
-                .zoomSource(ShellSheet.search, zoom)
             }
             if tabsPosition == AppTabsPosition.sidebar.rawValue {
                 SidebarTabs()
@@ -61,38 +71,59 @@ struct Sidebar: View {
 }
 
 /// Pille der Kopfzeile (`.topbar .tab`): aktiv mit Akzent-Tönung und Label, sonst nur das Symbol.
+/// Mit `doubleTap` erkennt das System Einzel- und Doppeltipp an den Berührungen selbst (Einzeltipp wartet
+/// kurz ab); eine eigene Zeitmessung in der Aktion verpasste den zweiten Tipp, sobald die Oberfläche nach
+/// dem ersten kurz beschäftigt war.
 private struct Pill: View {
     let icon: String
     let label: String
     let active: Bool
     let ns: Namespace.ID
+    var doubleTap: (() -> Void)? = nil
     let action: () -> Void
 
     var body: some View {
-        Button {
-            withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) { action() }
-        } label: {
-            HStack(spacing: 6) {
-                Icon(icon, size: 16)
-                if active {
-                    Text(label)
-                        .font(.system(size: TextSize.sm, weight: .medium))
-                        .transition(.blurReplace)
-                }
+        if let doubleTap {
+            content
+                .onTapGesture(count: 2) { run(doubleTap) }
+                .onTapGesture { run(action) }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { run(action) }
+                .accessibilityAction(named: "Startseite") { run(doubleTap) }
+                .hoverEffect(.highlight)
+                .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
+        } else {
+            Button { run(action) } label: { content }
+                .contentShape(Capsule())
+                .pressable()
+                .accessibilityLabel(label)
+                .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
+        }
+    }
+
+    private func run(_ f: () -> Void) {
+        withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) { f() }
+    }
+
+    private var content: some View {
+        HStack(spacing: 6) {
+            Icon(icon, size: 16)
+            if active {
+                Text(label)
+                    .font(.system(size: TextSize.sm, weight: .medium))
+                    .transition(.blurReplace)
             }
-            .foregroundStyle(active ? Impala.text : Impala.text2)
-            .padding(.horizontal, 10)
-            .frame(minWidth: 38, minHeight: 36)
-            .background {
-                // Die Tönung gleitet von Pille zu Pille.
-                if active { Capsule().fill(Impala.activeTint).matchedGeometryEffect(id: "pill", in: ns) }
-            }
-            .contentShape(Capsule())
+        }
+        .foregroundStyle(active ? Impala.text : Impala.text2)
+        .padding(.horizontal, 10)
+        .frame(minWidth: 38, minHeight: 36)
+        .background {
+            // Die Tönung gleitet von Pille zu Pille.
+            if active { Capsule().fill(Impala.activeTint).matchedGeometryEffect(id: "pill", in: ns) }
         }
         .contentShape(Capsule())
-        .pressable()
-        .accessibilityLabel(label)
-        .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
     }
 }
 
