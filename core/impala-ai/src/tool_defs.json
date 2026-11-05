@@ -131,7 +131,7 @@
 								},
 								"cards": {
 									"type": "array",
-									"description": "Die Karten selbst (Pflicht bei card.create). Format: Vorderseite = eine konkrete Frage (8–20 Wörter). Rückseite = Kernantwort in 1–2 Zeilen, optional max. 4 Stichpunkte; keine Überschrift ‚Antwort:', keine Skript-Absätze. LaTeX für Formeln. Eine Karte = ein Fakt.",
+									"description": "Die Karten selbst (Pflicht bei card.create). Format: Vorderseite = konkrete Frage, Begriff oder Vokabel. Rückseite = präzise Kernantwort. LaTeX für Formeln. Eine Karte = ein Fakt.",
 									"items": {
 										"type": "object",
 										"properties": {

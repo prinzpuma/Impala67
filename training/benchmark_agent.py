@@ -364,8 +364,10 @@ def card_format_issues(cards):
     issues = []
     for c in cards:
         n = len(str(c.get("front", "")).split())
-        if n < 6 or n > 28:
-            issues.append(f"Vorderseite {n} Wörter: '{str(c.get('front'))[:60]}'")
+        if not str(c.get("front", "")).strip():
+            issues.append("Vorderseite ist leer")
+        elif n > 60:
+            issues.append(f"Vorderseite zu lang ({n} Wörter): '{str(c.get('front'))[:60]}'")
         outside_math = re.sub(r"\$[^$]*\$", "", str(c.get("back", "")))
         if any(ch in outside_math for ch in "ℏψΨ∂∫∑√≤≥"):
             issues.append(f"Unicode-Formel statt LaTeX: '{str(c.get('back'))[:60]}'")
