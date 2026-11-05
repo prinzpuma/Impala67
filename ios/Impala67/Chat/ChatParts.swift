@@ -278,7 +278,11 @@ struct LiveBlock: View {
         VStack(alignment: .leading, spacing: Space.s2) {
             if !thinking.isEmpty { ThinkBox(text: thinking, live: true) }
             if !draft.isEmpty {
-                MarkdownView(draft, core: store.core)
+                Text(LocalizedStringKey(draft))
+                    .font(.system(size: 16))
+                    .foregroundStyle(Impala.text)
+                    .lineSpacing(5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(tool.map { toolLabel($0) + " …" } ?? "Denkt nach…")
                     .font(.system(size: TextSize.sm).italic())

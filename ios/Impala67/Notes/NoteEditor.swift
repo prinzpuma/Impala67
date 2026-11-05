@@ -33,6 +33,7 @@ struct NoteEditor: View {
         .onChange(of: store.remoteRevision) {
             if store.remoteTouches(pageId) { model?.applyRemote() }
         }
+        .learningTime(LearnContext(category: "notes", sourceId: pageId))
     }
 }
 

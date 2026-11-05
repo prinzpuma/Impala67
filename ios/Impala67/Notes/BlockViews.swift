@@ -159,13 +159,6 @@ private struct BlockText: View {
         let color = block.textColor.map(noteColor) ?? Impala.text
         if editing {
             BlockInput(block: block, color: color, model: model)
-        } else if !block.isCode, hasInlineMath(block.text) {
-            RichBlock(kind: .inline(size: font.size, weight: font.weight == .regular ? 400 : 600,
-                                    lineHeight: font.size + font.lineSpacing + 3),
-                      source: inlineHTML(block.text))
-                .opacity(block.isChecked ? 0.6 : 1)
-                .contentShape(Rectangle())
-                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
         } else {
             Group {
                 if block.text.isEmpty {
@@ -406,21 +399,31 @@ private struct ToggleBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Button {
-                withAnimation(.spring(duration: 0.35, bounce: 0.15)) { model.toggleOpen(id) }
-            } label: {
-                HStack(alignment: .top, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                Button {
+                    withAnimation(.spring(duration: 0.35, bounce: 0.15)) { model.toggleOpen(id) }
+                } label: {
                     Icon("chevron-right", size: 14).foregroundStyle(Impala.text2)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
-                        .frame(width: 24, height: 25)
-                    Text(inlineMarkdown(summary)).font(.system(size: 16)).lineSpacing(6).foregroundStyle(Impala.text)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: 24, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .padding(.vertical, 3)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(isOpen ? "Zuklappen" : "Aufklappen")
+                if model.isReadOnly {
+                    Text(inlineMarkdown(summary))
+                        .font(.system(size: 16))
+                        .lineSpacing(6)
+                        .foregroundStyle(Impala.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 3)
+                } else {
+                    TextField("Umschalter…", text: Binding(get: { summary }, set: { model.setToggleSummary(id, summary: $0) }))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Impala.text)
+                        .padding(.vertical, 3)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isOpen ? "Zuklappen" : "Aufklappen")
             if isOpen {
                 NestedBlocks(blocks: children, model: model)
                     .padding(.leading, 24)

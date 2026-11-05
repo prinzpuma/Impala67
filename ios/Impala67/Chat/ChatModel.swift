@@ -62,6 +62,8 @@ final class ChatModel {
     var panelOpen = false
     /// Anhang der nächsten Nachricht (Bild, Datei, PDF, Heftseite).
     var attachment: ChatAttachment?
+    /// Entwurf der Benutzereingabe (bleibt beim Tabwechsel erhalten).
+    var inputDraft = ""
 
     /// Live-Modelle aller Quellen (`S.availableModels`), 30 s zwischengespeichert wie in ai.js.
     private(set) var models: [AiModel] = []

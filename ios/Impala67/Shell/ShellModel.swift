@@ -152,6 +152,38 @@ final class ShellModel {
         save()
     }
 
+    func closeActive() {
+        if let a = active { close(a) }
+    }
+
+    func closeOthers(_ tab: String) {
+        guard tabs.contains(tab) else { return }
+        tabs = [tab]
+        active = tab
+        save()
+    }
+
+    func selectTab(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        open(tabs[index])
+    }
+
+    func openSearch() {
+        sheet = .search
+    }
+
+    func newNote() {
+        if let id = store.core.createNew(.note, parent: nil, workspace: nil) {
+            openNewTab(id)
+        }
+    }
+
+    func newHeft() {
+        if let id = store.core.createNew(.heft, parent: nil, workspace: nil) {
+            openNewTab(id)
+        }
+    }
+
     /// Karten-Tab öffnen (wie `data-ankistudy` bzw. Klick auf einen Stapel in der Seitenleiste).
     /// Karten-Tab zeigen; `feynman` lernt im Feynman-Modus (erst erklären, dann aufdecken).
     func openCards(_ view: CardsView, feynman: Bool = false) {

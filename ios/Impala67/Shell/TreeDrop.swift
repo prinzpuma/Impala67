@@ -76,7 +76,7 @@ private struct TreeDropDelegate: DropDelegate {
     private func zoneAt(_ info: DropInfo) -> DropZone {
         guard zones else { return .into }
         let y = info.location.y
-        return y < height / 4 ? .before : y > height * 3 / 4 ? .after : .into
+        return y < height * 0.33 ? .before : y > height * 0.67 ? .after : .into
     }
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }

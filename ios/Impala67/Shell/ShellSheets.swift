@@ -46,25 +46,94 @@ private struct SearchSheet: View {
     @State private var query = ""
 
     var body: some View {
-        let hits = query.trimmingCharacters(in: .whitespaces).isEmpty ? [] : store.core.search(query: query, includeArchived: false)
-        List(hits, id: \.pageId) { hit in
-            Button {
-                shell.open(hit.pageId)
-                dismiss()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hit.title.isEmpty ? "Ohne Titel" : hit.title).font(.system(size: TextSize.md, weight: .medium)).foregroundStyle(Impala.text)
-                    if !hit.snippet.isEmpty {
-                        Text(hit.snippet).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2).lineLimit(2)
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let hits = trimmed.isEmpty ? [] : store.core.search(query: query, includeArchived: false)
+        List {
+            if trimmed.isEmpty {
+                Section("Schnellaktionen") {
+                    Button {
+                        dismiss()
+                        if let id = store.core.createNew(.note, parent: nil, workspace: nil) { shell.open(id) }
+                    } label: {
+                        HStack(spacing: Space.s2) {
+                            Icon("note", size: 16).foregroundStyle(Impala.accent)
+                            Text("Neue Notiz").font(.system(size: TextSize.base)).foregroundStyle(Impala.text)
+                        }
+                    }
+                    Button {
+                        dismiss()
+                        if let id = store.core.createNew(.heft, parent: nil, workspace: nil) { shell.open(id) }
+                    } label: {
+                        HStack(spacing: Space.s2) {
+                            Icon("notebook", size: 16).foregroundStyle(Impala.success)
+                            Text("Neues Heft").font(.system(size: TextSize.base)).foregroundStyle(Impala.text)
+                        }
+                    }
+                    Button {
+                        dismiss()
+                        shell.openCards(.decks)
+                    } label: {
+                        HStack(spacing: Space.s2) {
+                            Icon("cards", size: 16).foregroundStyle(Impala.warn)
+                            Text("Karteikarten lernen").font(.system(size: TextSize.base)).foregroundStyle(Impala.text)
+                        }
+                    }
+                    Button {
+                        dismiss()
+                        shell.openNewTab("chat:")
+                    } label: {
+                        HStack(spacing: Space.s2) {
+                            Icon("chat", size: 16).foregroundStyle(Impala.accent)
+                            Text("Neuer KI-Chat").font(.system(size: TextSize.base)).foregroundStyle(Impala.text)
+                        }
+                    }
+                }
+
+                let recent = store.core.recentPages(limit: 8)
+                if !recent.isEmpty {
+                    Section("Zuletzt bearbeitet") {
+                        ForEach(recent, id: \.id) { page in
+                            Button {
+                                shell.open(page.id)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: Space.s2) {
+                                    Icon(page.kind == .heft ? "notebook" : "note", size: 16)
+                                        .foregroundStyle(Impala.text2)
+                                    Text(page.title.isEmpty ? "Ohne Titel" : page.title)
+                                        .font(.system(size: TextSize.base))
+                                        .foregroundStyle(Impala.text)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                ForEach(hits, id: \.pageId) { hit in
+                    Button {
+                        shell.open(hit.pageId)
+                        dismiss()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(hit.title.isEmpty ? "Ohne Titel" : hit.title)
+                                .font(.system(size: TextSize.md, weight: .medium))
+                                .foregroundStyle(Impala.text)
+                            if !hit.snippet.isEmpty {
+                                Text(hit.snippet)
+                                    .font(.system(size: TextSize.sm))
+                                    .foregroundStyle(Impala.text2)
+                                    .lineLimit(2)
+                            }
+                        }
                     }
                 }
             }
         }
         .overlay {
-            if !query.isEmpty && hits.isEmpty { ContentUnavailableView.search(text: query) }
+            if !trimmed.isEmpty && hits.isEmpty { ContentUnavailableView.search(text: query) }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Notizen durchsuchen")
-        .navigationTitle("Suchen")
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Notizen durchsuchen oder Aktion wählen")
+        .navigationTitle("Befehlspalette & Suche")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

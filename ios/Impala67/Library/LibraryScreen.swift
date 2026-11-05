@@ -428,8 +428,7 @@ enum HeftCover {
     }
 }
 
-/// Heft-Regal wie `renderHefteShelf`: Hefte als Notizbücher mit Cover, neueste zuerst, „+ Neu“.
-/// Ordner des Regals kennt die iPad-Schnittstelle des Kerns noch nicht; Hefte stehen deshalb flach.
+/// Heft-Regal wie `renderHefteShelf`: Hefte als Notizbücher mit Cover, Ordner-Hierarchie und „+ Neu“.
 private struct HeftShelf: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(\.libraryZoom) private var zoom
@@ -438,21 +437,79 @@ private struct HeftShelf: View {
     let onNew: () -> Void
     @State private var options: PageSummary?
     @State private var filter = "all"
+    @State private var folderId: String? = nil
+    @State private var showNewFolder = false
+    @State private var newFolderTitle = ""
 
     var body: some View {
         let _ = store.pagesRevision
-        let hefte = store.core.recentPages(limit: UInt32.max).filter { $0.kind == .heft }
-        let shown = hefte.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
+        let folders = query.isEmpty ? store.core.heftFolders(parentId: folderId) : []
+        let rawHefte = query.isEmpty ? store.core.heftInFolder(folderId: folderId) : store.core.recentPages(limit: UInt32.max).filter { $0.kind == .heft }
+        let shown = rawHefte.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
+        let crumbs = folderId.map { store.core.heftFolderPath(folderId: $0) } ?? []
+
         VStack(spacing: Space.s3) {
             LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle Hefte", count: hefte.count),
-                LibFilter(id: "fav", label: "Favoriten", count: hefte.filter(\.favorite).count),
+                LibFilter(id: "all", label: "Alle Hefte", count: rawHefte.count),
+                LibFilter(id: "fav", label: "Favoriten", count: rawHefte.filter(\.favorite).count),
             ], selection: $filter, query: $query, prompt: "Suchen") {
-                LibAction(title: "Neu", icon: "plus", action: onNew)
+                Menu {
+                    Button(action: onNew) {
+                        Label("Neues Heft", systemImage: "book")
+                    }
+                    Button {
+                        newFolderTitle = ""
+                        showNewFolder = true
+                    } label: {
+                        Label("Neuer Ordner", systemImage: "folder.badge.plus")
+                    }
+                } label: {
+                    HStack(spacing: Space.s1) {
+                        Icon("plus", size: 14)
+                        Text("Neu")
+                    }
+                    .font(.system(size: TextSize.sm, weight: .semibold))
+                    .padding(.horizontal, Space.s3)
+                    .frame(height: 32)
+                    .foregroundStyle(Impala.onAccent)
+                    .background(Impala.accent, in: RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+                }
             }
+
+            if !crumbs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Space.s2) {
+                        Button("Dokumente") { folderId = nil }
+                            .font(.system(size: TextSize.sm, weight: .medium))
+                            .foregroundStyle(Impala.accent)
+                        ForEach(crumbs, id: \.id) { f in
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Impala.text2)
+                            Button(f.title) { folderId = f.id }
+                                .font(.system(size: TextSize.sm, weight: f.id == folderId ? .bold : .medium))
+                                .foregroundStyle(f.id == folderId ? Impala.text : Impala.accent)
+                        }
+                    }
+                    .padding(.horizontal, Space.s6)
+                }
+            }
+
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: Space.s6, alignment: .top)],
                           alignment: .leading, spacing: Space.s6) {
+                    if query.isEmpty {
+                        ForEach(folders, id: \.id) { f in
+                            let count = store.core.heftInFolder(folderId: f.id).count
+                            FolderCard(folder: f, count: count)
+                                .onTapGesture { folderId = f.id }
+                                .contextMenu {
+                                    Button("Löschen", role: .destructive) {
+                                        _ = attempt("heftFolderDelete", { try store.core.heftFolderDelete(id: f.id) })
+                                    }
+                                }
+                        }
+                    }
                     ForEach(shown) { p in
                         HeftCard(page: p, pages: store.core.heftPageIds(pageId: p.id).count) { options = p }
                             .onTapGesture { onOpen(p) }
@@ -465,16 +522,59 @@ private struct HeftShelf: View {
                 .animation(.snappy(duration: 0.28), value: store.pagesRevision)
             }
             .overlay {
-                if shown.isEmpty {
+                if folders.isEmpty && shown.isEmpty {
                     ContentUnavailableView {
-                        Label { Text(hefte.isEmpty ? "Noch keine Hefte" : "Keine Hefte für diese Suche") } icon: { Icon("notebook", size: 40).foregroundStyle(Impala.text2) }
+                        Label { Text(rawHefte.isEmpty ? "Noch keine Hefte" : "Keine Hefte für diese Suche") } icon: { Icon("notebook", size: 40).foregroundStyle(Impala.text2) }
                     } actions: {
-                        if hefte.isEmpty { Button("Neues Heft", action: onNew).buttonStyle(.glassProminent) }
+                        if rawHefte.isEmpty { Button("Neues Heft", action: onNew).buttonStyle(.glassProminent) }
                     }
                 }
             }
         }
+        .alert("Neuer Ordner", isPresented: $showNewFolder) {
+            TextField("Ordnername", text: $newFolderTitle)
+            Button("Abbrechen", role: .cancel) { newFolderTitle = "" }
+            Button("Erstellen") {
+                let title = newFolderTitle.trimmingCharacters(in: .whitespaces)
+                if !title.isEmpty {
+                    _ = attempt("heftFolderCreate", { try store.core.heftFolderCreate(title: title, parentId: folderId) })
+                }
+                newFolderTitle = ""
+            }
+        }
         .sheet(item: $options) { HeftOptionsSheet(page: $0) }
+    }
+}
+
+/// Ordnerkarte im GoodNotes-Regal.
+private struct FolderCard: View {
+    let folder: HeftFolder
+    let count: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.s2) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .fill(Impala.surface)
+                    .frame(height: 140)
+                    .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Impala.edge))
+                VStack(spacing: Space.s2) {
+                    Icon("archive", size: 36)
+                        .foregroundStyle(Impala.accent)
+                    if count > 0 {
+                        Text("\(count) Objekte")
+                            .font(.system(size: TextSize.xs))
+                            .foregroundStyle(Impala.text2)
+                    }
+                }
+            }
+            Text(folder.title)
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .lineLimit(1)
+        }
+        .frame(width: 150)
+        .contentShape(Rectangle())
     }
 }
 
@@ -603,6 +703,19 @@ private struct HeftOptionsSheet: View {
                     Button("Cover entfernen") { cover = "" }.disabled(page.cover.isEmpty && cover.isEmpty)
                 } header: {
                     Text("Cover")
+                }
+                Section("Ordner") {
+                    let folders = store.core.heftFolders(parentId: nil)
+                    Picker("In Ordner verschieben", selection: Binding(get: { "" }, set: { target in
+                        if !target.isEmpty {
+                            _ = attempt("heftMoveToFolder", { try store.core.heftMoveToFolder(heftId: page.id, folderId: target == "root" ? nil : target, order: nil) })
+                            dismiss()
+                        }
+                    })) {
+                        Text("Auswählen…").tag("")
+                        Text("Hauptbereich (kein Ordner)").tag("root")
+                        ForEach(folders, id: \.id) { f in Text(f.title).tag(f.id) }
+                    }
                 }
                 Section {
                     Button { archive() } label: { Label { Text("Archivieren") } icon: { Image("i-archive").renderingMode(.template) } }

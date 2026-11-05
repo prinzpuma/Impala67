@@ -8,19 +8,19 @@ struct ChatView: View {
     let activePageId: String?
     var wide = false
     @Environment(ShellModel.self) private var shell
-    @State private var input = ""
     @FocusState private var focused: Bool
 
     var body: some View {
         let chat = shell.chat
+        let input = Binding(get: { chat.inputDraft }, set: { chat.inputDraft = $0 })
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Space.s3) {
                     if chat.messages.isEmpty && !chat.running {
-                        EmptyChat { prompt in input = prompt; focused = true }
+                        EmptyChat { prompt in chat.inputDraft = prompt; focused = true }
                     }
                     ForEach(Array(chat.messages.enumerated()), id: \.offset) { _, m in
-                        ChatMessageRow(message: m) { text in input = text; focused = true }
+                        ChatMessageRow(message: m) { text in chat.inputDraft = text; focused = true }
                             .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
                     }
                     if chat.running { LiveBlock(thinking: chat.thinking, draft: chat.draft, tool: chat.tool).transition(.opacity) }
@@ -39,7 +39,7 @@ struct ChatView: View {
             .onChange(of: chat.messages.count) { withAnimation(.smooth) { proxy.scrollTo("end", anchor: .bottom) } }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Composer(input: $input, focused: $focused, activePageId: activePageId)
+            Composer(input: input, focused: $focused, activePageId: activePageId)
                 .padding(.horizontal, wide ? Space.s6 : Space.s2)
                 .padding(.bottom, Space.s2)
                 .frame(maxWidth: wide ? 760 : .infinity)
@@ -57,6 +57,7 @@ struct ChatView: View {
             }
         }
         .animation(.bouncy(duration: 0.35), value: chat.notice)
+        .learningTime(LearnContext(category: "ai", sourceId: shell.chat.chatId.isEmpty ? nil : shell.chat.chatId))
     }
 }
 

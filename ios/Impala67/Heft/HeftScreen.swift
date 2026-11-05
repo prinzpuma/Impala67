@@ -50,6 +50,7 @@ struct HeftScreen: View {
                 // Links Seiten, rechts Bilder, „+“ und Teilen. Zeichenwerkzeuge kommen nur aus Apples Leiste.
                 HStack(alignment: .top, spacing: Space.s2) {
                     pageNav
+                    QuickPenPill(link: link)
                     Spacer(minLength: 0)
                     corner
                 }
@@ -94,6 +95,7 @@ struct HeftScreen: View {
             loadPages()
             revision += 1
         }
+        .learningTime(LearnContext(category: "notebook", sourceId: pageId))
         .sheet(isPresented: $showPages) {
             HeftPagesSheet(
                 pageId: pageId, pageIds: pageIds, currentId: currentId, revision: revision,
@@ -361,9 +363,17 @@ struct HeftScreen: View {
             }
             canvas.reload()
         } else if !trimmed.isEmpty {
-            let c = canvas.visibleCenter()
+            let (targetX, targetY): (Double, Double) = {
+                if let pos = edit.position {
+                    let x = max(24, min(Double(pos.x), 794 - 424))
+                    return (x, Double(pos.y))
+                } else {
+                    let c = canvas.visibleCenter()
+                    return (Double(c.x) - 200, Double(c.y) - 30)
+                }
+            }()
             let new = attempt("heftAddText", { try store.core.heftAddText(pageId: pageId, heftPageId: id, text: text,
-                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: canvas.currentColor, size: 30) })
+                                                  x: targetX, y: targetY, w: 400, color: canvas.currentColor, size: 30) })
             link.selecting = true
             canvas.reload()
             if let tid = new?.ids.first { canvas.selectAfterReload(.text(tid)) }
@@ -548,5 +558,69 @@ private struct AddPageMenu: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Seite hinzufügen")
+    }
+}
+
+/// Schnellauswahl der wichtigsten Stift- und Markerfarben mit einem Fingertipp.
+private struct QuickPenPill: View {
+    let link: HeftCanvasLink
+    @State private var activePreset = 0 // 0: Schwarz, 1: Blau, 2: Rot, 3: Marker
+
+    var body: some View {
+        GlassEffectContainer {
+            HStack(spacing: Space.s2) {
+                // Schwarz
+                ColorPresetButton(color: Color(uiColor: UIColor(css: HeftPalette.colors[0].css)), isMarker: false, active: activePreset == 0) {
+                    activePreset = 0
+                    link.selectPen(color: HeftPalette.colors[0].css, width: 2.8)
+                }
+                // Blau
+                ColorPresetButton(color: Color(uiColor: UIColor(css: HeftPalette.colors[1].css)), isMarker: false, active: activePreset == 1) {
+                    activePreset = 1
+                    link.selectPen(color: HeftPalette.colors[1].css, width: 2.8)
+                }
+                // Rot
+                ColorPresetButton(color: Color(uiColor: UIColor(css: HeftPalette.colors[2].css)), isMarker: false, active: activePreset == 2) {
+                    activePreset = 2
+                    link.selectPen(color: HeftPalette.colors[2].css, width: 2.8)
+                }
+                // Marker (Gelb)
+                ColorPresetButton(color: Color(uiColor: UIColor(css: HeftPalette.colors[4].css)), isMarker: true, active: activePreset == 3) {
+                    activePreset = 3
+                    link.selectPen(color: HeftPalette.colors[4].css, width: 9.0, isMarker: true)
+                }
+            }
+            .padding(.horizontal, Space.s2)
+            .frame(height: 48)
+            .impalaGlass(interactive: true)
+        }
+    }
+}
+
+private struct ColorPresetButton: View {
+    let color: Color
+    let isMarker: Bool
+    let active: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isMarker {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(color.opacity(0.85))
+                        .frame(width: 18, height: 14)
+                } else {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 16, height: 16)
+                }
+            }
+            .frame(width: 32, height: 32)
+            .background(active ? Impala.accent.opacity(0.18) : Color.clear, in: Circle())
+            .overlay(Circle().stroke(active ? Impala.accent : Color.clear, lineWidth: 2))
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 }

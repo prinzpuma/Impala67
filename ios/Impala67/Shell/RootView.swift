@@ -49,6 +49,7 @@ struct RootView: View {
             .tint(AppAccent(rawValue: accent)?.color ?? Impala.accent)
             .environment(shell)
             .environment(\.shellNamespace, namespace)
+            .modifier(ShellShortcuts(shell: shell))
             .sheet(item: $shell.sheet) { sheet in
                 ShellSheetView(sheet: sheet)
                     .environment(shell)
@@ -87,7 +88,7 @@ private struct MainContent: View {
             if shell.libraryOpen {
                 LibraryScreen().transition(.opacity.combined(with: .scale(scale: 0.995)))
             } else {
-                content.id(shell.active ?? "home").transition(.opacity.combined(with: .scale(scale: 0.995)))
+                content.transition(.opacity.combined(with: .scale(scale: 0.995)))
             }
         }
         .animation(.smooth(duration: 0.22), value: shell.active)
@@ -152,5 +153,43 @@ struct Placeholder: View {
             Text(text)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Globale Hardware-Tastaturkürzel der Shell (iPad Magic Keyboard).
+private struct ShellShortcuts: ViewModifier {
+    let shell: ShellModel
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                Group {
+                    Button("") { shell.openSearch() }.keyboardShortcut("k", modifiers: .command)
+                    Button("") { shell.newNote() }.keyboardShortcut("n", modifiers: .command)
+                    Button("") { shell.newHeft() }.keyboardShortcut("h", modifiers: [.command, .shift])
+                    Button("") { shell.openNewTab("home") }.keyboardShortcut("t", modifiers: .command)
+                    Button("") { shell.closeActive() }.keyboardShortcut("w", modifiers: .command)
+                    Button("") { shell.toggleSidebar() }.keyboardShortcut("\\", modifiers: .command)
+                    Button("") { shell.goBack() }.keyboardShortcut("[", modifiers: .command)
+                    Button("") { shell.goForward() }.keyboardShortcut("]", modifiers: .command)
+                    Button("") { shell.setAiPanel(!shell.chat.panelOpen) }.keyboardShortcut("j", modifiers: .command)
+                    Button("") { shell.sheet = .settings }.keyboardShortcut(",", modifiers: .command)
+                }
+                .hidden()
+            }
+            .background {
+                Group {
+                    Button("") { shell.selectTab(at: 0) }.keyboardShortcut("1", modifiers: .command)
+                    Button("") { shell.selectTab(at: 1) }.keyboardShortcut("2", modifiers: .command)
+                    Button("") { shell.selectTab(at: 2) }.keyboardShortcut("3", modifiers: .command)
+                    Button("") { shell.selectTab(at: 3) }.keyboardShortcut("4", modifiers: .command)
+                    Button("") { shell.selectTab(at: 4) }.keyboardShortcut("5", modifiers: .command)
+                    Button("") { shell.selectTab(at: 5) }.keyboardShortcut("6", modifiers: .command)
+                    Button("") { shell.selectTab(at: 6) }.keyboardShortcut("7", modifiers: .command)
+                    Button("") { shell.selectTab(at: 7) }.keyboardShortcut("8", modifiers: .command)
+                    Button("") { shell.selectTab(at: 8) }.keyboardShortcut("9", modifiers: .command)
+                }
+                .hidden()
+            }
     }
 }

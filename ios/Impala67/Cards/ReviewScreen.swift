@@ -41,6 +41,25 @@ private struct ReviewBody: View {
                     VStack(alignment: .leading, spacing: Space.s3) {
                         CardMeta(card: card)
                         FlipCard(card: card, showBack: model.showBack, reduceMotion: reduceMotion)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if !model.showBack {
+                                    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.flip() }
+                                }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 40)
+                                    .onEnded { value in
+                                        guard abs(value.translation.width) > max(abs(value.translation.height), 50) else { return }
+                                        if !model.showBack {
+                                            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.flip() }
+                                        } else if value.translation.width < -50 {
+                                            withAnimation(.smooth(duration: 0.38)) { model.grade(1) }
+                                        } else if value.translation.width > 50 {
+                                            withAnimation(.smooth(duration: 0.38)) { model.grade(3) }
+                                        }
+                                    }
+                            )
                         if shell.cards.feynman, !model.showBack {
                             FeynmanInput(text: $model.feynText, checking: model.checking) {
                                 withAnimation(.smooth) { model.checkFeynman(chat: shell.chat) }
@@ -109,6 +128,13 @@ private struct ReviewBody: View {
                         .glassEffect(.regular.tint(Impala.accent).interactive(), in: Capsule())
                         .glassEffectID(3, in: glass)
                         .keyboardShortcut(shell.cards.feynman ? nil : KeyboardShortcut(.space, modifiers: []))
+                        .background {
+                            if !shell.cards.feynman {
+                                Button("", action: {
+                                    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.flip() }
+                                }).keyboardShortcut(.return, modifiers: []).hidden()
+                            }
+                        }
                     }
                 }
             }
@@ -329,8 +355,11 @@ private struct GradeButton: View {
         .glassEffectID(grade.value, in: ns)
         .keyboardShortcut(KeyEquivalent(Character("\(grade.value)")), modifiers: [])
         .background {
-            // ␣ = Gut (wie in der PWA).
-            if grade.value == 3 { Button("", action: action).keyboardShortcut(.space, modifiers: []).hidden() }
+            // ␣ oder ⏎ = Gut (wie in der PWA).
+            if grade.value == 3 {
+                Button("", action: action).keyboardShortcut(.space, modifiers: []).hidden()
+                Button("", action: action).keyboardShortcut(.return, modifiers: []).hidden()
+            }
         }
         .accessibilityLabel("\(grade.label), \(interval)")
     }

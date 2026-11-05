@@ -1,26 +1,58 @@
 import AuthenticationServices
 import SwiftUI
 
-/// Google-Drive-Backup (settings-renderer.js `driveContent`, Texte wie `SettingsDrive.kt`). Ablauf im
-/// Kern; hier nur Anzeige, Anmeldung und das Intervall.
+/// Google-Drive-Backup (settings-renderer.js `driveContent`, Texte wie `SettingsDrive.kt`).
+/// Ablauf im Kern; hier Anzeige, Anmeldung, Intervall und erweiterte Optionen.
 struct DriveSections: View {
     @Environment(DriveController.self) private var drive
+    @Environment(ImpalaStore.self) private var store
     @Environment(\.webAuthenticationSession) private var webAuth
     @State private var message: String?
     @State private var busy = false
     @State private var interval: UInt32 = 0
+    @State private var syncAfterChange = false
+    @State private var syncSecrets = false
+    @State private var clientId = ""
+    @State private var showAdvanced = false
 
     var body: some View {
-        Section {
-            HStack(spacing: Space.s3) {
-                Circle().fill(dotColor).frame(width: 10, height: 10).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: TextSize.md, weight: .semibold)).contentTransition(.interpolate)
-                    Text(detail).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+        let _ = store.settingsRevision
+
+        // MARK: - Google Drive Status
+        SettingsCardGroup(
+            title: "Google Drive",
+            footnote: "Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal."
+        ) {
+            SettingsRow(
+                title: title,
+                description: detail,
+                leading: { StatusIndicator(tone: statusTone) },
+                trailing: {
+                    HStack(spacing: Space.s2) {
+                        Button {
+                            action()
+                        } label: {
+                            if busy {
+                                ProgressView()
+                            } else {
+                                Text(buttonLabel).contentTransition(.interpolate)
+                            }
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(busy || drive.running || (!drive.hasClient && !(drive.connected && !drive.needsLogin)))
+
+                        if drive.connected {
+                            Button("Abmelden", role: .destructive) {
+                                Task { await drive.logout() }
+                            }
+                            .buttonStyle(.glass)
+                        }
+                    }
                 }
-            }
-            .animation(.smooth, value: title)
+            )
+
             if drive.running {
+                SettingsDivider()
                 VStack(alignment: .leading, spacing: Space.s1) {
                     let loaded = drive.loadedBytes > 0 ? String(format: "%.1f MB geladen", Double(drive.loadedBytes) / 1_000_000) : ""
                     let line = [drive.progress, loaded].filter { !$0.isEmpty }.joined(separator: " · ")
@@ -30,62 +62,125 @@ struct DriveSections: View {
                         ProgressView { Text(line.isEmpty ? "Synchronisiere …" : line).font(.system(size: TextSize.sm)) }
                     }
                 }
-                .transition(.opacity)
+                .padding(.horizontal, Space.s4)
+                .padding(.vertical, Space.s2)
             } else if !drive.message.isEmpty {
-                Text(drive.message).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2).transition(.opacity)
+                SettingsDivider()
+                SettingsRow(title: "Status", description: drive.message)
             }
-            HStack {
-                Button { action() } label: {
-                    if busy { ProgressView() } else { Text(buttonLabel).contentTransition(.interpolate) }
-                }
-                .buttonStyle(.glassProminent)
-                .disabled(busy || drive.running || (!drive.hasClient && !(drive.connected && !drive.needsLogin)))
-                if drive.connected {
-                    Button("Abmelden", role: .destructive) { Task { await drive.logout() } }
-                        .buttonStyle(.glass)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                }
-            }
+
             if !drive.hasClient {
-                Text("Für die Google-Anmeldung fehlt in dieser App-Version die iOS-Client-ID (GOOGLE_IOS_CLIENT_ID in ios/project.yml).")
-                    .font(.system(size: TextSize.sm)).foregroundStyle(Impala.danger)
+                SettingsDivider()
+                SettingsRow(
+                    title: "Google Client-ID fehlt",
+                    description: "Für die Google-Anmeldung fehlt in dieser App-Version die iOS-Client-ID (GOOGLE_IOS_CLIENT_ID in project.yml)."
+                )
             }
-            if let message {
-                Text(message).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2).transition(.opacity)
-            }
+
             if let s = drive.storage, drive.connected {
-                Text("Speicher: \(bytes(s.appBytes)) im App-Ordner · \(bytes(s.usedBytes)) von \(s.limitBytes > 0 ? bytes(s.limitBytes) : "unbegrenzt") belegt")
-                    .font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+                SettingsDivider()
+                SettingsRow(
+                    title: "Verwendeter Drive-Speicher",
+                    description: "\(bytes(s.appBytes)) im App-Ordner · \(bytes(s.usedBytes)) von \(s.limitBytes > 0 ? bytes(s.limitBytes) : "unbegrenzt") belegt"
+                )
             }
-        } header: {
-            Text("Google Drive")
-        } footer: {
-            Text("Drive verwendet den privaten App-Speicher. OAuth-Zugriffstokens bleiben immer gerätelokal.")
+
+            if let message {
+                SettingsDivider()
+                SettingsRow(title: "Hinweis", description: message)
+            }
         }
-        .animation(.smooth, value: drive.running)
-        .animation(.smooth, value: drive.connected)
-        .animation(.smooth, value: message)
         .sensoryFeedback(.success, trigger: drive.lastOk)
 
-        Section {
-            Picker(selection: $interval) {
-                ForEach(drive.intervalOptions, id: \.minutes) { Text($0.label).tag($0.minutes) }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sync-Intervall")
-                    Text("Holt und sichert Daten regelmäßig, solange die App geöffnet ist")
-                        .font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
+        // MARK: - Automatische Synchronisierung
+        SettingsCardGroup(
+            title: "Automatische Synchronisierung",
+            footnote: "Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus."
+        ) {
+            SettingsRow(
+                title: "Sync-Intervall",
+                description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist"
+            ) {
+                Picker("Intervall", selection: $interval) {
+                    ForEach(drive.intervalOptions, id: \.minutes) { Text($0.label).tag($0.minutes) }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
             }
             .onChange(of: interval) { _, minutes in
                 if minutes != drive.intervalMinutes { drive.intervalMinutes = minutes }
             }
-        } header: {
-            Text("Automatische Synchronisierung")
-        } footer: {
-            Text("Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus.")
+
+            SettingsDivider()
+
+            SettingsSwitchRow(
+                title: "Nach jeder Änderung synchronisieren",
+                description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall",
+                isOn: Binding(
+                    get: { syncAfterChange },
+                    set: { val in
+                        syncAfterChange = val
+                        AiSettings.patch(store.core, ["driveSyncAfterChange": val])
+                    }
+                )
+            )
+
+            SettingsDivider()
+
+            SettingsSwitchRow(
+                title: "Tokens über Drive synchronisieren",
+                description: syncSecrets
+                    ? "KI-Keys werden an deine eigenen Geräte übertragen"
+                    : "Tokens bleiben ausschließlich auf diesem Gerät",
+                isOn: Binding(
+                    get: { syncSecrets },
+                    set: { val in
+                        syncSecrets = val
+                        AiSettings.patch(store.core, ["syncSecrets": val])
+                    }
+                )
+            )
         }
-        .onAppear { interval = drive.intervalMinutes }
+
+        // MARK: - Erweitert
+        SettingsCardGroup(title: "Erweitert") {
+            DisclosureGroup("Google Client-ID", isExpanded: $showAdvanced) {
+                VStack(alignment: .leading, spacing: Space.s2) {
+                    Text("OAuth-Webclient-ID für benutzerdefinierte Google-Integrationen")
+                        .font(.system(size: TextSize.sm))
+                        .foregroundStyle(Impala.text2)
+                    TextField("OAuth-Webclient-ID", text: $clientId)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    HStack {
+                        Spacer()
+                        Button("Speichern") {
+                            AiSettings.patch(store.core, ["driveClientId": clientId.trimmingCharacters(in: .whitespacesAndNewlines)])
+                        }
+                        .buttonStyle(.glassProminent)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .padding(.horizontal, Space.s4)
+            .padding(.vertical, Space.s2 + 2)
+        }
+        .onAppear {
+            interval = drive.intervalMinutes
+            loadSettings()
+        }
+        .onChange(of: store.settingsRevision) {
+            loadSettings()
+        }
+    }
+
+    private func loadSettings() {
+        interval = drive.intervalMinutes
+        let s = (try? JSONSerialization.jsonObject(with: Data(store.core.settingsJson().utf8))) as? [String: Any] ?? [:]
+        syncAfterChange = s["driveSyncAfterChange"] as? Bool ?? false
+        syncSecrets = s["syncSecrets"] as? Bool ?? false
+        clientId = s["driveClientId"] as? String ?? ""
     }
 
     private var title: String {
@@ -107,10 +202,10 @@ struct DriveSections: View {
         return drive.connected ? "Jetzt synchronisieren" : "Mit Google verbinden"
     }
 
-    private var dotColor: Color {
-        if drive.running { return Impala.accent }
-        if drive.needsLogin { return Impala.warn }
-        return drive.connected ? Impala.success : Impala.text2.opacity(0.4)
+    private var statusTone: StatusTone {
+        if drive.running { return .syncing }
+        if drive.needsLogin { return .warn }
+        return drive.connected ? .ok : .idle
     }
 
     private func action() {
@@ -146,7 +241,6 @@ struct DriveSections: View {
         ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .file)
     }
 
-    /// „dd.MM.yyyy, HH:mm“ wie `formatSaved`.
     private static func saved(_ iso: String?) -> String? {
         guard let iso, !iso.isEmpty else { return nil }
         let f = ISO8601DateFormatter()

@@ -66,7 +66,10 @@ struct TabBar: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: Space.s1) {
                         ForEach(shell.tabs, id: \.self) { tab in
-                            TabChip(info: info(tab), active: !shell.libraryOpen && tab == shell.active, ns: highlight, onOpen: { shell.open(tab) }, onClose: { shell.close(tab) })
+                            TabChip(info: info(tab), active: !shell.libraryOpen && tab == shell.active, ns: highlight,
+                                    onOpen: { shell.open(tab) },
+                                    onClose: { shell.close(tab) },
+                                    onCloseOthers: { shell.closeOthers(tab) })
                                 .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.9))))
                         }
                     }
@@ -118,6 +121,7 @@ private struct TabChip: View {
     let ns: Namespace.ID
     let onOpen: () -> Void
     let onClose: () -> Void
+    let onCloseOthers: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -147,5 +151,9 @@ private struct TabChip: View {
         .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
         .onTapGesture(perform: onOpen)
         .hoverEffect(.highlight)
+        .contextMenu {
+            Button("Tab schließen", action: onClose)
+            Button("Andere Tabs schließen", action: onCloseOthers)
+        }
     }
 }

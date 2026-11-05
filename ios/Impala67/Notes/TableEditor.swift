@@ -37,12 +37,24 @@ struct TableEditor: View {
                 }
                 .overlay(Rectangle().strokeBorder(Impala.edge))
             }
-            HStack(spacing: Space.s1) {
+            HStack(spacing: Space.s2) {
                 Button("+ Zeile") { addRow(g, focusAt: 0) }
+                if g.count > 1 {
+                    Button("- Zeile") {
+                        var next = g
+                        next.removeLast()
+                        onChange(next)
+                    }
+                }
                 Button("+ Spalte") {
                     let c = cols
                     onChange(g.map { $0 + [""] })
                     DispatchQueue.main.async { focus = Cell(r: 0, c: c) }
+                }
+                if cols > 1 {
+                    Button("- Spalte") {
+                        onChange(g.map { Array($0.dropLast()) })
+                    }
                 }
             }
             .font(.system(size: TextSize.sm))

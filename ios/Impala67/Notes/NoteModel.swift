@@ -47,6 +47,8 @@ final class NoteModel {
     @ObservationIgnored private var dirtyTitle = false
     @ObservationIgnored private var dirtyContent = false
     @ObservationIgnored private var lastEdit = Date.distantPast
+    @ObservationIgnored private var lastCheckpoint = Date.distantPast
+    @ObservationIgnored private var editsSinceCheckpoint = 0
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     /// Nur Anzeige (Lernkarten): Änderungen bleiben im Speicher, nichts geht in den Kern.
     @ObservationIgnored private var readOnly = false
@@ -87,8 +89,8 @@ final class NoteModel {
         }
         if page.content != savedMarkdown {
             savedMarkdown = page.content
+            undoStack.append(blocks)
             blocks = markdownToBlocks(markdown: page.content)
-            undoStack = []
             redoStack = []
             if let a = activeId, !blocks.contains(where: { $0.id == a }) { activeId = nil }
         }
@@ -141,9 +143,12 @@ final class NoteModel {
         let next = change(blocks)
         guard next != blocks else { return }
         let now = Date()
-        if structural || now.timeIntervalSince(lastEdit) > 0.9 {
+        editsSinceCheckpoint += 1
+        if structural || now.timeIntervalSince(lastCheckpoint) > 1.4 || editsSinceCheckpoint >= 20 {
             undoStack.append(blocks)
             if undoStack.count > 100 { undoStack.removeFirst() }
+            lastCheckpoint = now
+            editsSinceCheckpoint = 0
         }
         redoStack.removeAll()
         blocks = next
@@ -339,6 +344,20 @@ final class NoteModel {
     /// Toggle auf-/zuklappen; der Zustand wird mitgespeichert (editor.js: `b.open = !b.open`).
     func toggleOpen(_ id: String) {
         mutate(structural: false) { list in list.mapDeep(id) { b in b.toggledOpen() } }
+    }
+
+    /// Toggle-Titel ändern.
+    func setToggleSummary(_ id: String, summary: String) {
+        mutate(structural: false) { list in
+            list.mapDeep(id) { b in
+                if case .toggle(_, let isOpen, let children) = b.kind {
+                    var copy = b
+                    copy.kind = .toggle(summary: summary, open: isOpen, children: children)
+                    return copy
+                }
+                return b
+            }
+        }
     }
 
     func deleteActive() {
