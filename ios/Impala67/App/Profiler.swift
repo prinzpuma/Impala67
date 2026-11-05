@@ -91,6 +91,20 @@ final class Profiler: @unchecked Sendable {
 
     fileprivate var currentMainOp: String? { lock.withLock { mainOp } }
 
+    /// Benannter Abschnitt eigener Arbeit (ohne Kern), z. B. `heft.reload`: Hängt der Hauptthread darin,
+    /// trägt der Hänger diesen Namen; ab `thresholdMs` wird der Abschnitt selbst als `operation` gemeldet.
+    /// Aufruf: `let done = Profiler.shared.begin("heft.reload"); defer { done() }`.
+    func begin(_ name: String, thresholdMs: Double = 100) -> () -> Void {
+        let main = Thread.isMainThread
+        let previous = main ? enterMain(name) : nil
+        let start = DispatchTime.now()
+        return { [self] in
+            if main { _ = enterMain(previous) }
+            let ms = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+            operation(name, durationMs: ms, thresholdMs: thresholdMs)
+        }
+    }
+
     /// HÃ¤nger mit Zuordnung: `op` lief auf dem Hauptthread (nil: kein Kern-Aufruf Ã¼ber `attempt`, also
     /// OberflÃ¤che oder ein direkter Kern-Aufruf); `holder` hielt dabei die Kern-Sperre.
     fileprivate func stall(_ durationMs: Double, op: String?, holder: CoreLockHold?) {
@@ -101,7 +115,7 @@ final class Profiler: @unchecked Sendable {
         } else {
             parts.append("Kern-Sperre frei")
         }
-        record(kind: "main-thread-stall", name: op ?? "ohne attempt-Aufruf",
+        record(kind: "main-thread-stall", name: op ?? "Oberfläche (kein benannter Abschnitt)",
                message: parts.joined(separator: "; "), durationMs: durationMs,
                source: holder.map { Self.shortSite($0.site) } ?? "")
     }

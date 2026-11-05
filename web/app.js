@@ -632,6 +632,10 @@ function wireEvents() {
 			await SETTINGS.handleDriveAutoSyncMinutes(e.target.value);
 			return;
 		}
+		if (e.target.id === "inpDriveMode") {
+			await SETTINGS.handleDriveMode(e.target.value);
+			return;
+		}
 		if (e.target.id === "inpDriveSyncAfterChange") {
 			await SETTINGS.handleDriveSyncAfterChange(!!e.target.checked);
 			return;

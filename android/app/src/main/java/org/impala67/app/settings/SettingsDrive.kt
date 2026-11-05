@@ -115,6 +115,18 @@ fun DriveSyncGroup(toast: (String) -> Unit) {
             ) { Text(label) }
         }
 
+        if (live) {
+            SettingsRow(
+                "Aus Drive wiederherstellen",
+                "Holt alles aus dem Drive-Backup, was diesem Gerät fehlt. Löscht nichts.",
+                trailing = {
+                    OutlinedButton(enabled = !ui.running, onClick = { scope.launch { drive.sync(restore = true) } }) {
+                        Text("Wiederherstellen")
+                    }
+                },
+            )
+        }
+
         val limit = ui.limitBytes
         if (ui.connected && limit != null) {
             fun fmt(bytes: Double?): String = Formatter.formatShortFileSize(context, (bytes ?: 0.0).toLong())
@@ -139,10 +151,44 @@ fun DriveAutomationGroup(vm: SettingsViewModel) {
     val current = options.firstOrNull { it.minutes.toInt() == s?.driveAutoSyncMinutes }
         ?: options.firstOrNull { it.minutes == 30u } ?: options.first()
 
+    // Neu gelesen bei jeder Einstellungsänderung (`values`): Mit Cloudflare-Schlüssel sichert Drive nur.
+    val context = LocalContext.current
+    val modeInfo = remember(values) { (context.applicationContext as ImpalaApp).drive.modeInfo() }
+    var modeMenuOpen by remember { mutableStateOf(false) }
+
     SettingsGroup(
         "Automatische Synchronisierung",
         footnote = "Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus.",
     ) {
+        modeInfo?.let { info ->
+            val description = when {
+                !info.selectable -> "Cloudflare synchronisiert deine Geräte; Drive lädt nur hoch und holt nichts ab"
+                info.mode == "sync" -> "Drive holt auch Änderungen anderer Geräte"
+                else -> "Drive lädt nur hoch; Wiederherstellen unter Google Drive"
+            }
+            SettingsRow(
+                "Drive-Modus",
+                description,
+                trailing = {
+                    Box {
+                        TextButton(enabled = info.selectable, onClick = { modeMenuOpen = true }) {
+                            Text(if (info.mode == "sync") "Synchronisieren" else "Nur sichern")
+                        }
+                        DropdownMenu(expanded = modeMenuOpen, onDismissRequest = { modeMenuOpen = false }) {
+                            listOf("backup" to "Nur sichern (Backup)", "sync" to "Synchronisieren").forEach { (mode, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        modeMenuOpen = false
+                                        vm.setDriveMode(mode)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+        }
         SettingsRow(
             "Sync-Intervall",
             "Holt und sichert Daten regelmäßig, solange die App geöffnet ist",

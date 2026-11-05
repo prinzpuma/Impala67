@@ -104,6 +104,8 @@ pub struct DriveReport {
     pub files_uploaded: u64,
     /// Sync-Stand in Drive wurde zu einem Snapshot verdichtet.
     pub compacted: bool,
+    /// Fremde Änderungen wurden geholt (Sync-Modus, erster Durchgang, Wiederherstellen).
+    pub pulled: bool,
     /// Geräteuhr weicht so weit von Drive ab, dass gewarnt werden soll (Minuten).
     pub clock_warning_minutes: Option<u64>,
     /// „Synchronisiert“ oder „Aktuell“.
@@ -119,9 +121,19 @@ fn report(r: &impala_drive::SyncReport) -> DriveReport {
         files_downloaded: r.blobs_downloaded as u64,
         files_uploaded: r.blobs_uploaded as u64,
         compacted: r.compacted,
+        pulled: r.pulled,
         clock_warning_minutes: r.clock_warning_minutes,
         label: r.label().to_owned(),
     }
+}
+
+/// Geltender Drive-Modus ([`DriveSync::mode`]).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct DriveModeInfo {
+    /// `backup` (nur hochladen) oder `sync` (auch abholen).
+    pub mode: String,
+    /// „Sync“ ist wählbar – nur ohne Cloudflare-Schlüssel.
+    pub selectable: bool,
 }
 
 /// Speicheranzeige (Bytes): Anteil des App-Ordners und Belegung des Google-Kontos.
@@ -222,6 +234,10 @@ impl DriveStore for NativeDriveStore {
         })
     }
 
+    async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError> {
+        crate::lock(&self.core).storage.known_ids(ids).map(|s| s.into_iter().collect()).map_err(store_err)
+    }
+
     async fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError> {
         let opts = ExportOptions { include_blobs: false, redact_secrets, exported_at: exported_at.to_owned() };
         crate::lock(&self.core).storage.export_all(&opts).map_err(store_err)
@@ -316,7 +332,8 @@ impl<H: HttpClient> HttpClient for Stoppable<H> {
 type Reply<T> = Sender<Result<T, DriveError>>;
 
 enum Cmd {
-    Sync(Option<Arc<dyn DriveProgress>>, Reply<impala_drive::SyncReport>),
+    /// `true`: Wiederherstellen ([`DriveSync::restore`]).
+    Sync(bool, Option<Arc<dyn DriveProgress>>, Reply<impala_drive::SyncReport>),
     Flush(Reply<usize>),
     Storage(Reply<Option<StorageInfo>>),
     Email(Reply<Option<String>>),
@@ -331,6 +348,13 @@ struct Published {
 
 type Backup<H> = DriveBackup<Stoppable<H>, Tokens, NativeDriveStore, NativeClock>;
 
+/// Optionen aus den Einstellungen: Geheimnisse und Modus ([`impala_drive::policy::drive_mode`]).
+fn options(inner: &Inner) -> DriveOptions {
+    let settings = &inner.model.state().settings;
+    let mode = impala_drive::policy::drive_mode(settings.get("cfSyncKey").as_ref(), settings.get("driveMode").as_ref());
+    DriveOptions { allow_secrets: allow_secrets(inner), mode }
+}
+
 fn run<H: HttpClient>(
     mut backup: Backup<H>,
     rx: Receiver<Cmd>,
@@ -343,9 +367,9 @@ fn run<H: HttpClient>(
         // Ein Durchgang zur Zeit; `stop()` gilt nur für den laufenden.
         stop.store(false, Ordering::Relaxed);
         out.loaded.store(0, Ordering::Relaxed);
-        backup.set_options(DriveOptions { allow_secrets: allow_secrets(&crate::lock(&shared)) });
+        backup.set_options(options(&crate::lock(&shared)));
         match cmd {
-            Cmd::Sync(listener, reply) => {
+            Cmd::Sync(restore, listener, reply) => {
                 let mut on_phase = |p: Phase| {
                     let label = p.label();
                     set_progress(&label);
@@ -353,7 +377,7 @@ fn run<H: HttpClient>(
                         l.on_progress(label, p.fraction());
                     }
                 };
-                let r = block_on(backup.sync(&mut on_phase));
+                let r = if restore { block_on(backup.restore(&mut on_phase)) } else { block_on(backup.sync(&mut on_phase)) };
                 settle_remote(&shared);
                 set_progress("");
                 let _ = reply.send(r);
@@ -416,6 +440,14 @@ impl DriveSync {
         Arc::new(DriveSync { core: shared, tx, out, stop })
     }
 
+    fn run_pass(&self, restore: bool, progress: Option<Arc<dyn DriveProgress>>) -> Result<DriveReport, DriveFailure> {
+        // `running` meint nur Durchgänge – nicht Speicheranzeige oder Konto-Abfrage.
+        self.out.running.store(true, Ordering::Release);
+        let r = self.pass(|r| Cmd::Sync(restore, progress, r));
+        self.out.running.store(false, Ordering::Release);
+        Ok(report(&r?))
+    }
+
     /// Schickt einen Auftrag und wartet auf die Antwort.
     fn pass<T>(&self, cmd: impl FnOnce(Reply<T>) -> Cmd) -> Result<T, DriveFailure> {
         let (reply, rx) = mpsc::channel();
@@ -434,14 +466,27 @@ impl DriveSync {
         DriveSync::start(&core, http, tokens)
     }
 
-    /// Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
-    /// ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
+    /// Ein Durchgang. Im Backup-Modus (Standard, immer mit Cloudflare-Schlüssel) nur hochladen; im
+    /// Sync-Modus auch fremde Änderungen übernehmen. Der erste Durchgang eines Geräts stellt immer
+    /// wieder her (Notizen und Einstellungen samt Cloudflare-Schlüssel).
     pub fn sync(&self, progress: Option<Arc<dyn DriveProgress>>) -> Result<DriveReport, DriveFailure> {
-        // `running` meint nur Durchgänge – nicht Speicheranzeige oder Konto-Abfrage.
-        self.out.running.store(true, Ordering::Release);
-        let r = self.pass(|r| Cmd::Sync(progress, r));
-        self.out.running.store(false, Ordering::Release);
-        Ok(report(&r?))
+        self.run_pass(false, progress)
+    }
+
+    /// „Aus Backup wiederherstellen“: holt alles, was diesem Gerät fehlt, und sichert danach.
+    /// Löscht nichts.
+    pub fn restore(&self, progress: Option<Arc<dyn DriveProgress>>) -> Result<DriveReport, DriveFailure> {
+        self.run_pass(true, progress)
+    }
+
+    /// Modus, der gerade gilt (`backup` oder `sync`), und ob „Sync“ wählbar ist (nur ohne Cloudflare).
+    pub fn mode(&self) -> DriveModeInfo {
+        let inner = crate::lock(&self.core);
+        let cf = inner.model.state().settings.get("cfSyncKey");
+        DriveModeInfo {
+            mode: options(&inner).mode.as_str().to_owned(),
+            selectable: impala_drive::policy::drive_mode_selectable(cf.as_ref()),
+        }
     }
 
     /// Kurzweg beim Schließen/Hintergrund: nur das eigene Änderungspaket hochladen (kein Ziehen,
@@ -1035,6 +1080,13 @@ mod tests {
         device_with(net, Tok::ok())
     }
 
+    /// Gerät mit Drive als zweitem Sync-Weg (`driveMode: sync`; ein `settingsSet`-Event mehr im Log).
+    fn sync_device(net: &Net) -> (Arc<ImpalaCore>, Arc<DriveSync>) {
+        let (core, drive) = device(net);
+        core.update_settings(r#"{"driveMode":"sync"}"#.into()).unwrap();
+        (core, drive)
+    }
+
     fn net() -> Net {
         Net(Arc::new(Mutex::new(Drive::new())))
     }
@@ -1050,15 +1102,16 @@ mod tests {
     #[test]
     fn zwei_geraete_ueber_dasselbe_drive() {
         let net = net();
-        let (a, da) = device(&net);
-        let (b, db) = device(&net);
+        let (a, da) = sync_device(&net);
+        let (b, db) = sync_device(&net);
         let pa = a.create_page("Von A".into(), "Inhalt A".into(), None, None).unwrap();
         b.create_page("Von B".into(), "Inhalt B".into(), None, None).unwrap();
 
+        // Je Gerät die Seite und die Modus-Einstellung.
         let ra = da.sync(None).unwrap();
-        assert_eq!((ra.uploaded, ra.imported, ra.label.as_str()), (1, 0, "Synchronisiert"));
+        assert_eq!((ra.uploaded, ra.imported, ra.label.as_str()), (2, 0, "Synchronisiert"));
         let rb = db.sync(None).unwrap();
-        assert_eq!((rb.imported, rb.uploaded), (1, 1));
+        assert_eq!((rb.imported, rb.uploaded), (2, 2));
         da.sync(None).unwrap();
         assert_eq!(titles(&a), ["Von A", "Von B"]);
         assert_eq!(titles(&b), titles(&a));
@@ -1082,8 +1135,8 @@ mod tests {
     #[test]
     fn konflikt_beim_gleichzeitigen_aendern() {
         let net = net();
-        let (a, da) = device(&net);
-        let (b, db) = device(&net);
+        let (a, da) = sync_device(&net);
+        let (b, db) = sync_device(&net);
         let p = a.create_page("Seite".into(), "Basis".into(), None, None).unwrap();
         da.sync(None).unwrap();
         db.sync(None).unwrap();
@@ -1099,6 +1152,36 @@ mod tests {
         assert!(rb.conflicts + rb.merged > 0, "Konflikt nicht erkannt: {rb:?}");
         assert_eq!(titles(&a), titles(&b));
         assert_eq!(a.page(p.clone()).unwrap().content, b.page(p).unwrap().content);
+    }
+
+    #[test]
+    fn backup_modus_holt_nur_beim_ersten_mal_und_beim_wiederherstellen() {
+        let net = net();
+        let (a, da) = device(&net);
+        let (b, db) = device(&net);
+        a.create_page("Erste".into(), "1".into(), None, None).unwrap();
+        // Erster Durchgang von A: Wiederherstellung (leer) und Hochladen.
+        assert!(da.sync(None).unwrap().pulled);
+        // B ist neu: der erste Durchgang stellt wieder her.
+        let first = db.sync(None).unwrap();
+        assert!(first.pulled && first.imported == 1, "{first:?}");
+        assert_eq!(db.mode().mode, "backup");
+
+        a.create_page("Zweite".into(), "2".into(), None, None).unwrap();
+        let backed = da.sync(None).unwrap();
+        assert_eq!((backed.pulled, backed.uploaded, backed.label.as_str()), (false, 1, "Gesichert"));
+        let later = db.sync(None).unwrap();
+        assert!(!later.pulled && later.imported == 0, "{later:?}");
+        assert_eq!(titles(&b), ["Erste"]);
+
+        let restored = db.restore(None).unwrap();
+        assert_eq!(restored.imported, 1);
+        assert_eq!(titles(&b), ["Erste", "Zweite"]);
+
+        // Mit Cloudflare-Schlüssel bleibt es beim Backup, auch wenn „sync“ eingestellt ist.
+        b.update_settings(r#"{"driveMode":"sync","cfSyncKey":"impala-test"}"#.into()).unwrap();
+        let info = db.mode();
+        assert_eq!((info.mode.as_str(), info.selectable), ("backup", false));
     }
 
     #[test]

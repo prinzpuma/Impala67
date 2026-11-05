@@ -146,6 +146,11 @@ export const DB = (() => {
 		}
 	}
 	const forgetKnownEventIds = () => { _knownEventIds = null; _knownMaxSeq = 0; };
+	// Welche dieser Event-ids liegen schon im Log? (Drive-Backup prüft vor dem Verdichten.)
+	async function knownIds(list) {
+		const ids = await ensureKnownEventIds();
+		return (list || []).filter((id) => ids.has(id));
+	}
 
 	// Viele Events in EINER Transaktion — beim Import/Sync um Größenordnungen schneller.
 	async function addEvents(evs) {
@@ -606,5 +611,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, knownIds, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

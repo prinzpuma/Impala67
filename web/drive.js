@@ -249,6 +249,7 @@ export const DRIVE = (() => {
 			if (r.importedEvents?.length) await STATE.applyRemoteEventsCooperative(r.importedEvents);
 			return { added: r.added, conflicts: r.conflictDetails || [], merged: r.mergedDetails || [] };
 		},
+		knownIds: (ids) => DB.knownIds(ids),
 		exportSnapshot: (redactSecrets) => DB.exportAll({ includeBlobs: false, redactSecrets }),
 		blobIds: () => DB.allBlobKeys(),
 		async getBlob(id) {
@@ -268,9 +269,12 @@ export const DRIVE = (() => {
 		return run;
 	}
 	const allowSecrets = () => SETTINGS_SYNC.allowsSecrets(S.settings);
+	// Mit Cloudflare-Schlüssel synchronisiert nur Cloudflare; Drive sichert (Standard: Backup).
+	const mode = () => CORE.driveMode(String(S.settings.cfSyncKey || ""), String(S.settings.driveMode || ""));
+	const modeSelectable = () => CORE.driveModeSelectable(String(S.settings.cfSyncKey || ""));
 
-	async function syncRaw(onStatus) {
-		const report = await withCore((core) => core.sync(allowSecrets(), (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }));
+	async function syncRaw(onStatus, restore = false) {
+		const report = await withCore((core) => core.sync(allowSecrets(), mode(), restore, (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }));
 		if (report.clockWarningMinutes) {
 			U.toast("Die Geräteuhr weicht ~" + report.clockWarningMinutes + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
 		}
@@ -301,13 +305,14 @@ export const DRIVE = (() => {
 	const withSyncLock = (fn) => navigator.locks?.request
 		? navigator.locks.request("impala67-drive-sync", fn)
 		: fn();
-	function sync(onStatus) {
+	// `restore`: „Aus Backup wiederherstellen“ – holt alles Fehlende, auch im Backup-Modus.
+	function sync(onStatus, { restore = false } = {}) {
 		// Laufenden Sync zurückgeben statt Fehler werfen: Doppelklick auf den Sync-Knopf
 		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
 		if (syncInFlight) return syncInFlight;
-		const finishProfile = PERF_PROFILER.start("drive.sync", {}, 40);
-		syncInFlight = withSyncLock(() => syncRaw(onStatus))
+		const finishProfile = PERF_PROFILER.start("drive.sync", { restore }, 40);
+		syncInFlight = withSyncLock(() => syncRaw(onStatus, restore))
 			.then((result) => {
 				finishProfile({ imported: result?.imported || 0, uploaded: result?.uploaded || 0 });
 				return result;
@@ -439,5 +444,5 @@ export const DRIVE = (() => {
 		return withCore((core) => core.storageInfo());
 	}
 
-	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync, storageInfo };
+	return { login, renewFromUserGesture, logout, sync, isConnected, status, refreshStatus, startAutoSync, storageInfo, mode, modeSelectable };
 })();

@@ -65,13 +65,6 @@ enum HeftExport {
         guard let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }), data.width > 0 else { return nil }
         let size = CGSize(width: data.width, height: data.height)
         let k = width / size.width
-        let strokes = data.strokes.compactMap { HeftInk.pkStroke($0, seed: HeftInk.seed($0.id)) }
-
-        var ink: UIImage?
-        UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
-            ink = PKDrawing(strokes: strokes).image(from: CGRect(origin: .zero, size: size), scale: k * scale)
-        }
-
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         format.opaque = background != .transparent
@@ -83,7 +76,8 @@ enum HeftExport {
                 loadPageImage(core: core, pageId: pageId, heftPageId: heftPageId, image: im, maxPixels: imagePixels)?
                     .draw(in: CGRect(x: im.x, y: im.y, width: im.w, height: im.h))
             }
-            ink?.draw(in: CGRect(origin: .zero, size: size))
+            // Selbst gezeichnet wie die PWA: PencilKit ließ dicht gespeicherte Striche fast verschwinden.
+            HeftInk.draw(data.strokes, in: ctx.cgContext)
             for t in data.texts where !t.text.isEmpty { HeftTextStyle.draw(t, at: CGPoint(x: t.x, y: t.y)) }
         }
     }

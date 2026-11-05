@@ -270,6 +270,8 @@ struct HeftScreen: View {
     // MARK: Seiten
 
     private func loadPages() {
+        let done = Profiler.shared.begin("heft.loadPages")
+        defer { done() }
         let old = index
         pageIds = store.core.heftPageIds(pageId: pageId)
         if !(currentId.map { pageIds.contains($0) } ?? false) {

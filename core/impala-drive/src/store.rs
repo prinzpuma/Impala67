@@ -38,6 +38,8 @@ pub trait DriveStore {
         unsynced_after_seq: u64,
         allow_secrets: bool,
     ) -> Result<ImportOutcome, StoreError>;
+    /// Welche dieser Event-IDs liegen schon im lokalen Log? (Verdichten im Backup-Modus.)
+    async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError>;
     /// `exportAll` ohne Blobs als JSON-Text (Drive-Snapshot).
     async fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError>;
     /// Alle Blob-Schlüssel (ohne Checkpoint-Einträge).
@@ -107,6 +109,10 @@ impl<S: Storage> DriveStore for StorageStore<S> {
             imported: report.imported.into_iter().map(Value::Object).collect(),
             ..Default::default()
         })
+    }
+
+    async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError> {
+        self.storage.known_ids(ids).map(|s| s.into_iter().collect()).map_err(err)
     }
 
     async fn export_snapshot(&self, redact_secrets: bool, exported_at: &str) -> Result<String, StoreError> {

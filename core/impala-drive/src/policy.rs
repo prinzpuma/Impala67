@@ -40,6 +40,38 @@ pub fn sync_interval_ms(setting: Option<&Value>) -> u64 {
     u64::from(sync_minutes(setting)) * 60_000
 }
 
+/// Was ein Drive-Durchgang tut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriveMode {
+    /// Nur sichern: eigene Änderungen und Dateien hochladen, nichts in die App holen (außer beim
+    /// allerersten Durchgang eines Geräts – das ist die Wiederherstellung).
+    Backup,
+    /// Zweiter Sync-Weg neben Cloudflare: auch fremde Änderungen abholen.
+    Sync,
+}
+
+impl DriveMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DriveMode::Backup => "backup",
+            DriveMode::Sync => "sync",
+        }
+    }
+}
+
+/// Modus aus den Einstellungen: Mit Cloudflare-Schlüssel (`cfSyncKey`, auch aus einem Drive-Backup
+/// übernommen) synchronisiert nur Cloudflare, Drive sichert. Sonst gilt `driveMode`; Standard ist
+/// `backup`, `sync` nur ausdrücklich.
+pub fn drive_mode(cf_sync_key: Option<&Value>, setting: Option<&Value>) -> DriveMode {
+    let has_key = cf_sync_key.and_then(Value::as_str).is_some_and(|k| !k.trim().is_empty());
+    if !has_key && setting.and_then(Value::as_str) == Some("sync") { DriveMode::Sync } else { DriveMode::Backup }
+}
+
+/// Darf der Nutzer „Sync“ wählen? Nur ohne Cloudflare-Schlüssel.
+pub fn drive_mode_selectable(cf_sync_key: Option<&Value>) -> bool {
+    !cf_sync_key.and_then(Value::as_str).is_some_and(|k| !k.trim().is_empty())
+}
+
 /// `driveSyncAfterChange`: nur ausdrücklich `true`.
 pub fn sync_after_change(setting: Option<&Value>) -> bool {
     setting == Some(&Value::Bool(true))
@@ -166,6 +198,17 @@ mod tests {
         assert_eq!(t.on_change(62_000.0, true, "x"), ChangeStep::Schedule(3000));
         assert_eq!(t.on_timer(65_000.0, false), TimerStep::Sync { force: false });
         assert_eq!(t.on_change(0.0, false, "x"), ChangeStep::Cancel);
+    }
+
+    #[test]
+    fn mode() {
+        let key = json!("impala-abcd");
+        assert_eq!(drive_mode(None, None), DriveMode::Backup);
+        assert_eq!(drive_mode(None, Some(&json!("sync"))), DriveMode::Sync);
+        assert_eq!(drive_mode(Some(&key), Some(&json!("sync"))), DriveMode::Backup);
+        assert_eq!(drive_mode(Some(&json!("  ")), Some(&json!("sync"))), DriveMode::Sync);
+        assert!(!drive_mode_selectable(Some(&key)));
+        assert!(drive_mode_selectable(Some(&json!(""))));
     }
 
     #[test]

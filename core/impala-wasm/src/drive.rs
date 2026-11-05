@@ -10,6 +10,7 @@ use impala_drive::{
     Clock, DriveBackup, DriveError, DriveOptions, DriveState, DriveStore, ImportOutcome, LocalBlob, StoreError,
     SyncReport, TokenSource,
 };
+use impala_drive::policy::DriveMode;
 use js_sys::{Function, Object, Promise, Uint8Array};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
@@ -99,6 +100,11 @@ impl DriveStore for JsIo {
         })
     }
 
+    async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError> {
+        let v = call(&self.0, "knownIds", &[to_js(&json!(ids))]).await.map_err(store_err)?;
+        Ok(js_sys::Array::from(&v).iter().filter_map(|id| id.as_string()).collect())
+    }
+
     async fn export_snapshot(&self, redact_secrets: bool, _exported_at: &str) -> Result<String, StoreError> {
         let v = call(&self.0, "exportSnapshot", &[redact_secrets.into()]).await.map_err(store_err)?;
         v.as_string().ok_or_else(|| StoreError("Export lieferte keinen Text.".into()))
@@ -148,9 +154,27 @@ fn report_json(r: &SyncReport) -> Value {
         "blobsDownloaded": r.blobs_downloaded,
         "blobsUploaded": r.blobs_uploaded,
         "compacted": r.compacted,
+        "compactionDeferred": r.compaction_deferred,
+        "pulled": r.pulled,
         "label": r.label(),
         "clockWarningMinutes": r.clock_warning_minutes,
     })
+}
+
+fn parse_mode(mode: &str) -> DriveMode {
+    if mode == "sync" { DriveMode::Sync } else { DriveMode::Backup }
+}
+
+/// Geltender Drive-Modus (`backup` | `sync`) aus `cfSyncKey` und `driveMode` der Einstellungen.
+#[wasm_bindgen(js_name = driveMode)]
+pub fn drive_mode(cf_sync_key: &str, setting: &str) -> String {
+    impala_drive::policy::drive_mode(Some(&Value::from(cf_sync_key)), Some(&Value::from(setting))).as_str().to_owned()
+}
+
+/// Darf „Sync“ gewählt werden? Nur ohne Cloudflare-Schlüssel.
+#[wasm_bindgen(js_name = driveModeSelectable)]
+pub fn drive_mode_selectable(cf_sync_key: &str) -> bool {
+    impala_drive::policy::drive_mode_selectable(Some(&Value::from(cf_sync_key)))
 }
 
 /// Ein Gerät, ein Kern. Ein Durchgang zur Zeit (JS reiht alle Aufrufe ein).
@@ -188,18 +212,20 @@ impl DriveCore {
         DriveCore { backup: Rc::new(RefCell::new(Some(backup))) }
     }
 
-    /// Voller Durchgang. `on_status(label)` meldet die Etappen (darf `undefined` sein).
-    /// Ergebnis: `{ imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, label, … }`.
-    pub fn sync(&self, allow_secrets: bool, on_status: JsValue) -> Promise {
+    /// Ein Durchgang. `mode`: `backup` (nur hochladen) oder `sync`, aus [`drive_mode`]; `restore`:
+    /// alles Fehlende holen („Aus Backup wiederherstellen“). `on_status(label)` meldet die Etappen
+    /// (darf `undefined` sein). Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label }`.
+    pub fn sync(&self, allow_secrets: bool, mode: String, restore: bool, on_status: JsValue) -> Promise {
         with_backup(&self.backup, move |mut b| async move {
-            b.set_options(DriveOptions { allow_secrets });
+            b.set_options(DriveOptions { allow_secrets, mode: parse_mode(&mode) });
             let f = on_status.dyn_into::<Function>().ok();
             let mut on_phase = |p: impala_drive::Phase| {
                 if let Some(f) = &f {
                     let _ = f.call1(&JsValue::NULL, &p.label().into());
                 }
             };
-            let result = b.sync(&mut on_phase).await.map(|r| to_js(&report_json(&r))).map_err(drive_err);
+            let run = if restore { b.restore(&mut on_phase).await } else { b.sync(&mut on_phase).await };
+            let result = run.map(|r| to_js(&report_json(&r))).map_err(drive_err);
             (b, result)
         })
     }
@@ -208,7 +234,7 @@ impl DriveCore {
     #[wasm_bindgen(js_name = flushUpload)]
     pub fn flush_upload(&self, allow_secrets: bool) -> Promise {
         with_backup(&self.backup, move |mut b| async move {
-            b.set_options(DriveOptions { allow_secrets });
+            b.set_options(DriveOptions { allow_secrets, ..DriveOptions::default() });
             let result = b.flush_upload().await.map(|n| JsValue::from(n as f64)).map_err(drive_err);
             (b, result)
         })

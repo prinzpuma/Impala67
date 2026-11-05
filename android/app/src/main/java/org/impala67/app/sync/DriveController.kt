@@ -29,6 +29,7 @@ import org.impala67.app.core.ImpalaStore
 import org.impala67.app.settings.DevicePrefs
 import org.json.JSONObject
 import uniffi.impala_ffi.DriveFailure
+import uniffi.impala_ffi.DriveModeInfo
 import uniffi.impala_ffi.DriveProgress
 import uniffi.impala_ffi.DriveSync
 import uniffi.impala_ffi.DriveTokens
@@ -168,8 +169,17 @@ class DriveController(
         _ui.value = DriveUi()
     }
 
-    /** „Jetzt synchronisieren“ bzw. ein Timer-Durchgang. Läuft schon einer, passiert nichts. */
-    suspend fun sync() {
+    /**
+     * Geltender Modus (`backup`: nur hochladen, `sync`: auch abholen) und ob „Sync“ wählbar ist (nur ohne
+     * Cloudflare-Schlüssel). `null` ohne Drive-Verbindung.
+     */
+    fun modeInfo(): DriveModeInfo? = drive?.mode()
+
+    /**
+     * „Jetzt synchronisieren“ bzw. ein Timer-Durchgang. Läuft schon einer, passiert nichts.
+     * [restore]: „Aus Drive wiederherstellen“ – holt alles Fehlende, auch im Backup-Modus.
+     */
+    suspend fun sync(restore: Boolean = false) {
         val current = lock.withLock { ensureDrive() } ?: return
         if (_ui.value.running) return
         _ui.update { it.copy(running = true, progress = "", fraction = null, loadedBytes = 0, message = "") }
@@ -182,7 +192,7 @@ class DriveController(
             }
         }
         try {
-            val report = withContext(Dispatchers.IO) { current.sync(progress) }
+            val report = withContext(Dispatchers.IO) { if (restore) current.restore(progress) else current.sync(progress) }
             val clock = report.clockWarningMinutes?.let { " · Geräteuhr weicht $it Minuten ab" }.orEmpty()
             val conflicts = if (report.conflicts > 0uL) " · ${report.conflicts} Konflikt(e)" else ""
             _ui.update { it.copy(needsLogin = false, message = report.label + conflicts + clock) }

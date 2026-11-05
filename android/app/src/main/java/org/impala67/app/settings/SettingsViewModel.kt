@@ -78,6 +78,7 @@ class SettingsViewModel(private val store: ImpalaStore, private val prefs: Devic
         patch(mapOf("driveAutoSyncMinutes" to min), "Automatischer Sync: alle $min Minuten.")
 
     fun setDriveSyncAfterChange(on: Boolean) = patch(mapOf("driveSyncAfterChange" to on))
+    fun setDriveMode(mode: String) = patch(mapOf("driveMode" to if (mode == "sync") "sync" else "backup"))
 
     // ---------- KI: Modelle und Quellen ----------
 

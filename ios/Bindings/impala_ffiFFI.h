@@ -776,9 +776,19 @@ RustBuffer uniffi_impala_ffi_fn_method_drivesync_account_email(void*_Nonnull ptr
 uint64_t uniffi_impala_ffi_fn_method_drivesync_flush_upload(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_MODE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_MODE
+RustBuffer uniffi_impala_ffi_fn_method_drivesync_mode(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_RESET_STATE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_RESET_STATE
 void uniffi_impala_ffi_fn_method_drivesync_reset_state(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_RESTORE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_RESTORE
+RustBuffer uniffi_impala_ffi_fn_method_drivesync_restore(void*_Nonnull ptr, RustBuffer progress, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DRIVESYNC_STATUS
@@ -2765,9 +2775,21 @@ uint16_t uniffi_impala_ffi_checksum_method_drivesync_flush_upload(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_MODE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_MODE
+uint16_t uniffi_impala_ffi_checksum_method_drivesync_mode(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_RESET_STATE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_RESET_STATE
 uint16_t uniffi_impala_ffi_checksum_method_drivesync_reset_state(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_RESTORE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DRIVESYNC_RESTORE
+uint16_t uniffi_impala_ffi_checksum_method_drivesync_restore(void
     
 );
 #endif

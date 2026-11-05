@@ -144,7 +144,8 @@ final class SyncController {
                 ? "\(r.added) fehlende Änderungen nachgeholt (von \(r.fetched) abgerufenen)."
                 : "Nichts gefehlt: alle \(r.fetched) Änderungen vom Server waren schon da."
             // Gehört in den Bericht: Fehlten Events, ist das ein Sync-Fehler, den man nachverfolgen muss.
-            Profiler.shared.error("sync-refetch", message, name: r.added > 0 ? "missing-events" : "complete")
+            let detail = r.addedEvents.isEmpty ? "" : " Fehlend: " + r.addedEvents.joined(separator: "; ")
+            Profiler.shared.error("sync-refetch", message + detail, name: r.added > 0 ? "missing-events" : "complete")
             return message
         } catch {
             fail(Self.message(error))

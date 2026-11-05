@@ -101,6 +101,8 @@ pub struct RefetchReport {
     pub fetched: u64,
     /// Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
     pub added: u64,
+    /// Die ersten neu übernommenen Events (`Typ · Zeit · ID`).
+    pub added_events: Vec<String>,
     pub sync: SyncReport,
 }
 
@@ -593,12 +595,25 @@ impl CloudSync {
     /// fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
     /// dem Server. Liefert, wie viele Events neu ins Log kamen.
     pub fn refetch_all(&self) -> Result<RefetchReport, SyncFailure> {
-        let count = || crate::lock(&self.core).storage.log_info().map_or(0, |i| i.count);
-        let before = count();
+        let info = || crate::lock(&self.core).storage.log_info().map_or((0, 0), |i| (i.count, i.max_seq));
+        let (before, before_seq) = info();
         let pass = self.pass(Cmd::Refetch)?;
+        // Was neu kam (höchstens 20, Typ · Zeit · ID): Hinweis, warum es diesem Gerät fehlte.
+        let added_events = crate::lock(&self.core)
+            .storage
+            .events_after(before_seq, None, Some(20))
+            .unwrap_or_default()
+            .iter()
+            .filter(|e| e.get("_remote").is_some_and(|v| v.as_bool() == Some(true)))
+            .map(|e| {
+                let s = |k: &str| e.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
+                format!("{} · {} · {}", s("type"), s("t"), s("id"))
+            })
+            .collect();
         Ok(RefetchReport {
             fetched: pass.received as u64,
-            added: count().saturating_sub(before),
+            added: info().0.saturating_sub(before),
+            added_events,
             sync: report(&pass, self.take_conflicts()),
         })
     }

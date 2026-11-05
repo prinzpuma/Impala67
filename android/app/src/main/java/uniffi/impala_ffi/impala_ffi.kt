@@ -1514,6 +1514,10 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1689,7 +1693,11 @@ fun uniffi_impala_ffi_checksum_method_drivesync_account_email(
 ): Short
 fun uniffi_impala_ffi_checksum_method_drivesync_flush_upload(
 ): Short
+fun uniffi_impala_ffi_checksum_method_drivesync_mode(
+): Short
 fun uniffi_impala_ffi_checksum_method_drivesync_reset_state(
+): Short
+fun uniffi_impala_ffi_checksum_method_drivesync_restore(
 ): Short
 fun uniffi_impala_ffi_checksum_method_drivesync_status(
 ): Short
@@ -2242,8 +2250,12 @@ fun uniffi_impala_ffi_fn_method_drivesync_account_email(`ptr`: Pointer,uniffi_ou
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_drivesync_flush_upload(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
+fun uniffi_impala_ffi_fn_method_drivesync_mode(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_drivesync_reset_state(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_drivesync_restore(`ptr`: Pointer,`progress`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_drivesync_status(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_drivesync_stop(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -3096,7 +3108,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_drivesync_flush_upload() != 3797.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_drivesync_mode() != 58456.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_drivesync_reset_state() != 31015.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_drivesync_restore() != 30524.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_drivesync_status() != 41357.toShort()) {
@@ -3108,7 +3126,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_drivesync_storage_info() != 56859.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_drivesync_sync() != 58586.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_drivesync_sync() != 39079.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_drivetokens_access_token() != 18850.toShort()) {
@@ -7005,10 +7023,21 @@ public interface DriveSyncInterface {
     fun `flushUpload`(): kotlin.ULong
     
     /**
+     * Modus, der gerade gilt (`backup` oder `sync`), und ob „Sync“ wählbar ist (nur ohne Cloudflare).
+     */
+    fun `mode`(): DriveModeInfo
+    
+    /**
      * Vergisst den lokalen Drive-Stand (Dateiindex, Wasserstände, Geräte-ID). Beim Wechsel des
      * Google-Kontos aufrufen, sonst gälte alles als schon hochgeladen. Die Daten bleiben.
      */
     fun `resetState`()
+    
+    /**
+     * „Aus Backup wiederherstellen“: holt alles, was diesem Gerät fehlt, und sichert danach.
+     * Löscht nichts.
+     */
+    fun `restore`(`progress`: DriveProgress?): DriveReport
     
     fun `status`(): DriveStatus
     
@@ -7023,8 +7052,9 @@ public interface DriveSyncInterface {
     fun `storageInfo`(): DriveStorage?
     
     /**
-     * Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
-     * ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
+     * Ein Durchgang. Im Backup-Modus (Standard, immer mit Cloudflare-Schlüssel) nur hochladen; im
+     * Sync-Modus auch fremde Änderungen übernehmen. Der erste Durchgang eines Geräts stellt immer
+     * wieder her (Notizen und Einstellungen samt Cloudflare-Schlüssel).
      */
     fun `sync`(`progress`: DriveProgress?): DriveReport
     
@@ -7162,6 +7192,21 @@ open class DriveSync: Disposable, AutoCloseable, DriveSyncInterface
 
     
     /**
+     * Modus, der gerade gilt (`backup` oder `sync`), und ob „Sync“ wählbar ist (nur ohne Cloudflare).
+     */override fun `mode`(): DriveModeInfo {
+            return FfiConverterTypeDriveModeInfo.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_drivesync_mode(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Vergisst den lokalen Drive-Stand (Dateiindex, Wasserstände, Geräte-ID). Beim Wechsel des
      * Google-Kontos aufrufen, sonst gälte alles als schon hochgeladen. Die Daten bleiben.
      */
@@ -7174,6 +7219,23 @@ open class DriveSync: Disposable, AutoCloseable, DriveSyncInterface
 }
     }
     
+    
+
+    
+    /**
+     * „Aus Backup wiederherstellen“: holt alles, was diesem Gerät fehlt, und sichert danach.
+     * Löscht nichts.
+     */
+    @Throws(DriveFailure::class)override fun `restore`(`progress`: DriveProgress?): DriveReport {
+            return FfiConverterTypeDriveReport.lift(
+    callWithPointer {
+    uniffiRustCallWithError(DriveFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_drivesync_restore(
+        it, FfiConverterOptionalTypeDriveProgress.lower(`progress`),_status)
+}
+    }
+    )
+    }
     
 
     override fun `status`(): DriveStatus {
@@ -7220,8 +7282,9 @@ open class DriveSync: Disposable, AutoCloseable, DriveSyncInterface
 
     
     /**
-     * Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
-     * ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
+     * Ein Durchgang. Im Backup-Modus (Standard, immer mit Cloudflare-Schlüssel) nur hochladen; im
+     * Sync-Modus auch fremde Änderungen übernehmen. Der erste Durchgang eines Geräts stellt immer
+     * wieder her (Notizen und Einstellungen samt Cloudflare-Schlüssel).
      */
     @Throws(DriveFailure::class)override fun `sync`(`progress`: DriveProgress?): DriveReport {
             return FfiConverterTypeDriveReport.lift(
@@ -13718,6 +13781,47 @@ public object FfiConverterTypeDriveIntervalOption: FfiConverterRustBuffer<DriveI
 
 
 
+/**
+ * Geltender Drive-Modus ([`DriveSync::mode`]).
+ */
+data class DriveModeInfo (
+    /**
+     * `backup` (nur hochladen) oder `sync` (auch abholen).
+     */
+    var `mode`: kotlin.String, 
+    /**
+     * „Sync“ ist wählbar – nur ohne Cloudflare-Schlüssel.
+     */
+    var `selectable`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDriveModeInfo: FfiConverterRustBuffer<DriveModeInfo> {
+    override fun read(buf: ByteBuffer): DriveModeInfo {
+        return DriveModeInfo(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DriveModeInfo) = (
+            FfiConverterString.allocationSize(value.`mode`) +
+            FfiConverterBoolean.allocationSize(value.`selectable`)
+    )
+
+    override fun write(value: DriveModeInfo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`mode`, buf)
+            FfiConverterBoolean.write(value.`selectable`, buf)
+    }
+}
+
+
+
 data class DriveReport (
     /**
      * Neu übernommene Events.
@@ -13741,6 +13845,10 @@ data class DriveReport (
      * Sync-Stand in Drive wurde zu einem Snapshot verdichtet.
      */
     var `compacted`: kotlin.Boolean, 
+    /**
+     * Fremde Änderungen wurden geholt (Sync-Modus, erster Durchgang, Wiederherstellen).
+     */
+    var `pulled`: kotlin.Boolean, 
     /**
      * Geräteuhr weicht so weit von Drive ab, dass gewarnt werden soll (Minuten).
      */
@@ -13767,6 +13875,7 @@ public object FfiConverterTypeDriveReport: FfiConverterRustBuffer<DriveReport> {
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalULong.read(buf),
             FfiConverterString.read(buf),
         )
@@ -13780,6 +13889,7 @@ public object FfiConverterTypeDriveReport: FfiConverterRustBuffer<DriveReport> {
             FfiConverterULong.allocationSize(value.`filesDownloaded`) +
             FfiConverterULong.allocationSize(value.`filesUploaded`) +
             FfiConverterBoolean.allocationSize(value.`compacted`) +
+            FfiConverterBoolean.allocationSize(value.`pulled`) +
             FfiConverterOptionalULong.allocationSize(value.`clockWarningMinutes`) +
             FfiConverterString.allocationSize(value.`label`)
     )
@@ -13792,6 +13902,7 @@ public object FfiConverterTypeDriveReport: FfiConverterRustBuffer<DriveReport> {
             FfiConverterULong.write(value.`filesDownloaded`, buf)
             FfiConverterULong.write(value.`filesUploaded`, buf)
             FfiConverterBoolean.write(value.`compacted`, buf)
+            FfiConverterBoolean.write(value.`pulled`, buf)
             FfiConverterOptionalULong.write(value.`clockWarningMinutes`, buf)
             FfiConverterString.write(value.`label`, buf)
     }
@@ -15375,6 +15486,10 @@ data class RefetchReport (
      * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
      */
     var `added`: kotlin.ULong, 
+    /**
+     * Die ersten neu übernommenen Events (`Typ · Zeit · ID`).
+     */
+    var `addedEvents`: List<kotlin.String>, 
     var `sync`: SyncReport
 ) {
     
@@ -15389,6 +15504,7 @@ public object FfiConverterTypeRefetchReport: FfiConverterRustBuffer<RefetchRepor
         return RefetchReport(
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
+            FfiConverterSequenceString.read(buf),
             FfiConverterTypeSyncReport.read(buf),
         )
     }
@@ -15396,12 +15512,14 @@ public object FfiConverterTypeRefetchReport: FfiConverterRustBuffer<RefetchRepor
     override fun allocationSize(value: RefetchReport) = (
             FfiConverterULong.allocationSize(value.`fetched`) +
             FfiConverterULong.allocationSize(value.`added`) +
+            FfiConverterSequenceString.allocationSize(value.`addedEvents`) +
             FfiConverterTypeSyncReport.allocationSize(value.`sync`)
     )
 
     override fun write(value: RefetchReport, buf: ByteBuffer) {
             FfiConverterULong.write(value.`fetched`, buf)
             FfiConverterULong.write(value.`added`, buf)
+            FfiConverterSequenceString.write(value.`addedEvents`, buf)
             FfiConverterTypeSyncReport.write(value.`sync`, buf)
     }
 }

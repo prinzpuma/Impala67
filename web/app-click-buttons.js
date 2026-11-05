@@ -149,6 +149,9 @@ export async function handleButtonClick(t) {
 		case "btnDrivePrimaryAction":
 			await SETTINGS.handleDrivePrimaryAction(t);
 			break;
+		case "btnDriveRestore":
+			await SETTINGS.handleDriveRestore(t);
+			break;
 		case "btnCfConnect":
 			await SETTINGS.handleCfConnect(t);
 			break;

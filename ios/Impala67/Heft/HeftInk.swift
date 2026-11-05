@@ -20,9 +20,20 @@ enum HeftInk {
         return Float(min(1, max(0, (Double(width) / size - 0.4) / 1.2)))
     }
 
+    /// Deckkraft der Tinte gespeicherter Striche im Canvas: PencilKit macht aus dicht gespeicherten Punkten
+    /// (ältere PWA-Striche: 0,1–0,2 pt Abstand, viele doppelt) blasse bis unsichtbare Linien. Sichtbar zeichnet
+    /// sie deshalb [HeftInkView] wie die PWA; PencilKit behält sie fast durchsichtig für Radierer und Lasso.
+    static let hiddenAlpha: CGFloat = 0.01
+
+    /// Gespeicherter (von [HeftInkView] gezeichneter) Strich statt frischer Stifteingabe?
+    static func isHidden(_ stroke: PKStroke) -> Bool {
+        stroke.ink.color.cgColor.alpha < 0.05
+    }
+
     /// Zeichenfähiger PencilKit-Strich aus Kerndaten; `nil` ohne Punkte. Der `randomSeed` ist aus der
-    /// Strich-ID abgeleitet und dient beim Vergleichen als Schlüssel (`HeftCanvas`).
-    static func pkStroke(_ s: HeftStroke, seed: UInt32) -> PKStroke? {
+    /// Strich-ID abgeleitet und dient beim Vergleichen als Schlüssel (`HeftCanvas`). `hidden`: fast
+    /// durchsichtig (Canvas, sichtbar über [HeftInkView]).
+    static func pkStroke(_ s: HeftStroke, seed: UInt32, hidden: Bool = false) -> PKStroke? {
         let p = points(s)
         let n = p.count / 3
         guard n > 0 else { return nil }
@@ -31,7 +42,8 @@ enum HeftInk {
         // Gleichmäßige Linie wie die PWA (`drawStroke`: Segmente mit runder Kappe). Die Füller-Tinte formt
         // Striche nach Tempo und Kraft – bei gespeicherten Strichen (feste Zeitabstände, doppelte Punkte)
         // sah ältere Schrift damit verzerrt aus.
-        let ink = PKInk(marker ? .marker : .monoline, color: marker ? color.withAlphaComponent(markerAlpha) : color)
+        let alpha = hidden ? hiddenAlpha : (marker ? markerAlpha : 1)
+        let ink = PKInk(marker ? .marker : .monoline, color: color.withAlphaComponent(alpha))
         var points: [PKStrokePoint] = []
         points.reserveCapacity(n + 1)
         var last: CGPoint?
@@ -89,6 +101,70 @@ enum HeftInk {
             out.append(marker ? 0.5 : pressure(width: point.size.width, size: size))
         }
         return (marker ? "marker" : "pen", stroke.ink.color.cssHex, (size * 100).rounded() / 100, out)
+    }
+
+    // MARK: Zeichnen wie die PWA (`drawStroke` in web/heft.js)
+
+    /// Striche in einen Grafikkontext zeichnen (Seitenkoordinaten): Segmente als Kurven durch die
+    /// Mittelpunkte mit runder Kappe, Breite je Segment aus dem Druck; Marker halbtransparent und
+    /// dreifach breit; Formen als Umriss in Werkzeugbreite. Für Vorschau, Export und Handschrift-Erkennung.
+    static func draw(_ strokes: [HeftStroke], in ctx: CGContext) {
+        ctx.saveGState()
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        for s in strokes {
+            let p = points(s)
+            let n = p.count / 3
+            guard n > 0 else { continue }
+            let color = UIColor(css: s.color)
+            let pt = { (i: Int) in CGPoint(x: CGFloat(p[i * 3]), y: CGFloat(p[i * 3 + 1])) }
+            let pr = { (i: Int) -> Double in
+                let v = Double(p[i * 3 + 2])
+                return v.isNaN || v <= 0 ? 0.5 : min(1, v)
+            }
+            if s.tool == "marker" || s.tool == "shape" {
+                let marker = s.tool == "marker"
+                ctx.setStrokeColor(color.withAlphaComponent(marker ? markerAlpha : 1).cgColor)
+                ctx.setLineWidth(CGFloat(marker ? s.size * 3 : s.size))
+                ctx.beginPath()
+                ctx.move(to: pt(0))
+                for i in 1..<max(n, 1) { ctx.addLine(to: pt(i)) }
+                if n == 1 { ctx.addLine(to: pt(0)) }
+                ctx.strokePath()
+                continue
+            }
+            ctx.setStrokeColor(color.cgColor)
+            if n == 1 {
+                let r = width(size: s.size, pressure: pr(0)) / 2
+                ctx.setFillColor(color.cgColor)
+                ctx.fillEllipse(in: CGRect(x: pt(0).x - r, y: pt(0).y - r, width: 2 * r, height: 2 * r))
+                continue
+            }
+            var from = pt(0)
+            for i in 1..<n {
+                let cur = pt(i)
+                let to = i < n - 1 ? CGPoint(x: (cur.x + pt(i + 1).x) / 2, y: (cur.y + pt(i + 1).y) / 2) : cur
+                ctx.setLineWidth(width(size: s.size, pressure: (pr(i - 1) + pr(i)) / 2))
+                ctx.beginPath()
+                ctx.move(to: from)
+                ctx.addQuadCurve(to: to, control: cur)
+                ctx.strokePath()
+                from = to
+            }
+        }
+        ctx.restoreGState()
+    }
+
+    /// Umgebendes Rechteck der Punkte (ohne Strichbreite).
+    static func bounds(_ strokes: [HeftStroke]) -> CGRect {
+        var r = CGRect.null
+        for s in strokes {
+            let p = points(s)
+            for i in stride(from: 0, to: p.count - 2, by: 3) {
+                r = r.union(CGRect(x: CGFloat(p[i]), y: CGFloat(p[i + 1]), width: 0, height: 0))
+            }
+        }
+        return r
     }
 
     /// Fester Schlüssel aus der Strich-ID (FNV-1a), damit derselbe Strich nach dem Neuladen gleich bleibt.

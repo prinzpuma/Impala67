@@ -21,6 +21,7 @@ use serde_json::{Map, Value};
 
 use crate::DriveError;
 use crate::api::{self, Change, Outcome, Upload};
+use crate::policy::DriveMode;
 use crate::clock::{Clock, ClockSkew, retry_delay_ms};
 use crate::format::{
     BLOB_PREFIX, DriveFile, Encoding, FileKind, SNAPSHOT_NAME, SNAPSHOT_NAMES, blob_hash, blob_name, blob_payload,
@@ -60,11 +61,13 @@ pub struct DriveOptions {
     /// Einstellung „Tokens synchronisieren“ (`syncSecrets !== false`). Aus: Geheimnisse werden
     /// vor dem Upload entfernt, und ein gesetzter Scrub-Auftrag räumt alte Kopien weg.
     pub allow_secrets: bool,
+    /// Sichern oder synchronisieren ([`crate::policy::drive_mode`]).
+    pub mode: DriveMode,
 }
 
 impl Default for DriveOptions {
     fn default() -> Self {
-        DriveOptions { allow_secrets: true }
+        DriveOptions { allow_secrets: true, mode: DriveMode::Sync }
     }
 }
 
@@ -141,6 +144,11 @@ pub struct SyncReport {
     /// Blob-Dateien ohne ID oder mit kaputtem Inhalt (übergangen).
     pub skipped_blob_files: usize,
     pub compacted: bool,
+    /// Backup-Modus: Verdichten ausgelassen, weil Drive Änderungen enthält, die diesem Gerät fehlen
+    /// (ein Snapshot nur aus dem lokalen Stand würde sie löschen).
+    pub compaction_deferred: bool,
+    /// Fremde Änderungen wurden geholt (Sync-Modus, erste Verbindung oder Wiederherstellen).
+    pub pulled: bool,
     pub scrubbed: bool,
     /// Versatz der Geräteuhr gegen Drive; die Plattform setzt [`DriveBackup::clock_offset_ms`].
     pub clock_skew_ms: f64,
@@ -151,7 +159,13 @@ pub struct SyncReport {
 impl SyncReport {
     /// Abschluss-Beschriftung.
     pub fn label(&self) -> &'static str {
-        if self.imported > 0 || self.uploaded > 0 { "Synchronisiert" } else { "Aktuell" }
+        if self.imported > 0 || (self.uploaded > 0 && self.pulled) {
+            "Synchronisiert"
+        } else if self.uploaded > 0 {
+            "Gesichert"
+        } else {
+            "Aktuell"
+        }
     }
 }
 
@@ -222,9 +236,23 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     // ---- Durchgänge ----------------------------------------------------------------
 
-    /// Voller Sync. Fehler lassen alle bis dahin gespeicherten Marken stehen; der nächste
+    /// Voller Durchgang. Fehler lassen alle bis dahin gespeicherten Marken stehen; der nächste
     /// Durchgang setzt dort fort (alle Importe sind idempotent).
+    ///
+    /// Im Backup-Modus ([`DriveMode::Backup`]) wird nur hochgeladen; geholt wird nur beim ersten
+    /// Durchgang dieses Geräts (Wiederherstellung, z. B. samt Cloudflare-Schlüssel) – danach
+    /// ausdrücklich über [`Self::restore`].
     pub async fn sync(&mut self, on_phase: &mut dyn FnMut(Phase)) -> Result<SyncReport, DriveError> {
+        self.pass(false, on_phase).await
+    }
+
+    /// Wiederherstellen: holt alles aus Drive, was diesem Gerät fehlt, und sichert dann wie gewohnt.
+    /// Löscht nichts; schon Bekanntes überspringt der Import.
+    pub async fn restore(&mut self, on_phase: &mut dyn FnMut(Phase)) -> Result<SyncReport, DriveError> {
+        self.pass(true, on_phase).await
+    }
+
+    async fn pass(&mut self, restore: bool, on_phase: &mut dyn FnMut(Phase)) -> Result<SyncReport, DriveError> {
         on_phase(Phase::Start);
         self.take_token().await?;
         let mut st = self.store.load_state().await?;
@@ -234,9 +262,21 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         // [F4] Wasserstand klemmen: über maxSeq (Kompaktierung/Restore) würde er die
         // Konflikterkennung abschalten.
         let uploaded_seq = st.uploaded_seq.unwrap_or(0).min(self.store.max_seq().await?);
+        let backup = self.options.mode == DriveMode::Backup;
+        // Erster Durchgang dieses Geräts mit Drive: nie etwas gesichert oder gelesen.
+        let first = st.uploaded_seq.is_none() && st.snapshot_stamp.is_none() && st.known_deltas.is_empty();
+        let pull = !backup || restore || first;
+        if restore {
+            // Alles neu lesen: auch Snapshot und Deltas, die als gelesen gelten.
+            st.snapshot_stamp = None;
+            st.known_deltas.clear();
+        }
 
-        self.pull(&mut st, &files, uploaded_seq, &mut report, on_phase).await?;
-        self.sync_blobs(&mut st, &files, &mut report, on_phase).await?;
+        if pull {
+            self.pull(&mut st, &files, uploaded_seq, &mut report, on_phase).await?;
+            report.pulled = true;
+        }
+        self.sync_blobs(&mut st, &files, pull, &mut report, on_phase).await?;
 
         let scrub = st.secret_scrub && !self.options.allow_secrets;
         if scrub {
@@ -251,21 +291,31 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         }
         let listed: Vec<&DriveFile> = files.iter().filter(|f| f.kind() == FileKind::Delta).collect();
         if !scrub && listed.len() >= COMPACT_AFTER_DELTAS {
-            on_phase(Phase::Compact);
-            self.compact(&mut st, &files, &listed).await?;
-            report.compacted = true;
+            // Der neue Snapshot entsteht aus dem lokalen Stand und ersetzt alle Deltas. Im Backup-Modus
+            // liest das Gerät fremde Deltas nicht ein – verdichtet wird dann nur, wenn es trotzdem
+            // alles kennt (über Cloudflare), sonst gingen Änderungen im Backup verloren.
+            let safe = !backup || self.knows_all(&files, on_phase).await?;
+            if safe {
+                on_phase(Phase::Compact);
+                self.compact(&mut st, &files, &listed).await?;
+                report.compacted = true;
+            } else {
+                report.compaction_deferred = true;
+            }
         }
 
         // Späte Deltas: was andere Geräte WÄHREND dieses Durchgangs hochgeladen haben.
         // [A2] Wasserstand vorher nachziehen, sonst gälten eigene Merge-Events als ungesynct.
-        let unsynced = st.uploaded_seq.unwrap_or(uploaded_seq).min(self.store.max_seq().await?);
-        let files_after = self.list_sync_files(&mut st).await?;
-        let late = unseen_deltas(&files_after, &st);
-        if !late.is_empty() {
-            on_phase(Phase::LateDeltas(late.len()));
-            self.import_files(&late.iter().collect::<Vec<_>>(), unsynced, &mut report, &mut |_| {}).await?;
-            late.iter().for_each(|f| st.add_known_delta(&f.id));
-            self.store.save_state(&st).await?;
+        if pull {
+            let unsynced = st.uploaded_seq.unwrap_or(uploaded_seq).min(self.store.max_seq().await?);
+            let files_after = self.list_sync_files(&mut st).await?;
+            let late = unseen_deltas(&files_after, &st);
+            if !late.is_empty() {
+                on_phase(Phase::LateDeltas(late.len()));
+                self.import_files(&late.iter().collect::<Vec<_>>(), unsynced, &mut report, &mut |_| {}).await?;
+                late.iter().for_each(|f| st.add_known_delta(&f.id));
+                self.store.save_state(&st).await?;
+            }
         }
         st.synced_seq = Some(self.store.max_seq().await?);
         st.last_ok = iso_from_ms(self.clock.now_ms());
@@ -357,12 +407,14 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         Ok(())
     }
 
-    /// Unveränderliche Blobs (PDFs, Bilder): fehlende holen, eigene ohne Drive-Kopie hochladen.
-    /// Gleiche Inhalte liegen nur einmal in Drive (Dateiname = Hash des Inhalts).
+    /// Unveränderliche Blobs (PDFs, Bilder): fehlende holen (nur mit `download`, sonst Backup-Modus),
+    /// eigene ohne Drive-Kopie hochladen. Gleiche Inhalte liegen nur einmal in Drive (Dateiname = Hash
+    /// des Inhalts).
     async fn sync_blobs(
         &mut self,
         st: &mut DriveState,
         files: &[DriveFile],
+        download: bool,
         report: &mut SyncReport,
         on_phase: &mut dyn FnMut(Phase),
     ) -> Result<(), DriveError> {
@@ -380,6 +432,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         let wanted = |id: &str, local: &HashSet<String>| !is_local_only(id) && !local.contains(id);
         let missing: Vec<&DriveFile> = remote_blobs
             .into_iter()
+            .filter(|_| download)
             .filter(|file| match file.app_property("blobId") {
                 Some(id) => wanted(id, &local),
                 None => !blob_file_hash(file).is_some_and(|h| cached_hashes.contains(&h)),
@@ -585,6 +638,37 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         report.conflicts.extend(out.conflicts);
         report.merged.extend(out.merged);
         Ok(())
+    }
+
+    /// Kennt dieses Gerät jedes Event aus Snapshot und Deltas in Drive? Lädt dafür alle Dateien
+    /// (nur beim seltenen Verdichten im Backup-Modus) und vergleicht die Event-IDs mit dem lokalen Log.
+    async fn knows_all(&mut self, files: &[DriveFile], on_phase: &mut dyn FnMut(Phase)) -> Result<bool, DriveError> {
+        let remote: Vec<RemoteFile> = files.iter().map(DriveFile::remote).collect();
+        let snapshot = newest_file(&remote, &SNAPSHOT_NAMES)
+            .and_then(|r| remote.iter().position(|x| std::ptr::eq(x, r)))
+            .map(|i| &files[i]);
+        let wanted: Vec<&DriveFile> =
+            snapshot.into_iter().chain(files.iter().filter(|f| f.kind() == FileKind::Delta)).collect();
+        for (i, file) in wanted.iter().enumerate() {
+            on_phase(Phase::Fetch { done: i, total: wanted.len() });
+            let body = self.call(|t| api::download(t, &file.id)).await?.body;
+            let mut reader = EventReader::new(&body, file.encoding());
+            loop {
+                let batch = reader.next_batch(BATCH_BYTES)?;
+                let ids: Vec<String> = batch
+                    .events
+                    .iter()
+                    .filter_map(|e| e.get("id").and_then(Value::as_str).map(str::to_owned))
+                    .collect();
+                if !ids.is_empty() && self.store.known_ids(&ids).await?.len() < ids.len() {
+                    return Ok(false);
+                }
+                if batch.last {
+                    break;
+                }
+            }
+        }
+        Ok(true)
     }
 
     /// Lädt `files` nacheinander und importiert ihre Events gesammelt – große Dateien in Portionen

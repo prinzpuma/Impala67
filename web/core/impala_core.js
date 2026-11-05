@@ -122,14 +122,19 @@ export class DriveCore {
         return takeObject(ret);
     }
     /**
-     * Voller Durchgang. `on_status(label)` meldet die Etappen (darf `undefined` sein).
-     * Ergebnis: `{ imported, uploaded, conflicts, conflictDetails, merged, mergedDetails, label, … }`.
+     * Ein Durchgang. `mode`: `backup` (nur hochladen) oder `sync`, aus [`drive_mode`]; `restore`:
+     * alles Fehlende holen („Aus Backup wiederherstellen“). `on_status(label)` meldet die Etappen
+     * (darf `undefined` sein). Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label }`.
      * @param {boolean} allow_secrets
+     * @param {string} mode
+     * @param {boolean} restore
      * @param {any} on_status
      * @returns {Promise<any>}
      */
-    sync(allow_secrets, on_status) {
-        const ret = wasm.drivecore_sync(this.__wbg_ptr, allow_secrets, addHeapObject(on_status));
+    sync(allow_secrets, mode, restore, on_status) {
+        const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.drivecore_sync(this.__wbg_ptr, allow_secrets, ptr0, len0, restore, addHeapObject(on_status));
         return takeObject(ret);
     }
 }
@@ -2604,6 +2609,45 @@ export function deckInTree(deck, root) {
 }
 
 /**
+ * Geltender Drive-Modus (`backup` | `sync`) aus `cfSyncKey` und `driveMode` der Einstellungen.
+ * @param {string} cf_sync_key
+ * @param {string} setting
+ * @returns {string}
+ */
+export function driveMode(cf_sync_key, setting) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(cf_sync_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(setting, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.driveMode(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Darf „Sync“ gewählt werden? Nur ohne Cloudflare-Schlüssel.
+ * @param {string} cf_sync_key
+ * @returns {boolean}
+ */
+export function driveModeSelectable(cf_sync_key) {
+    const ptr0 = passStringToWasm0(cf_sync_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.driveModeSelectable(ptr0, len0);
+    return ret !== 0;
+}
+
+/**
  * Speicheranzeige wie der Client sie meldet (für den Zustand vor dem ersten Abruf).
  * @param {number} bytes
  * @param {number | null} [limit]
@@ -4081,7 +4125,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4689(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4706(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4127,7 +4171,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4689(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4706(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4220,7 +4264,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 187, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4633);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4650);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -4247,14 +4291,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4689(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4689(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4706(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4706(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4633(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4650(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4633(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4650(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

@@ -573,7 +573,7 @@ function finishDriveSync({ imported, conflicts, conflictDetails }) {
 
 // Der Seitenleisten-Knopf enthält ein SVG-Icon, der Einstellungen-Knopf nur Text —
 // innerHTML sichert die Beschriftung in beiden Fällen verlustfrei.
-async function runDriveSync(t, prefix) {
+async function runDriveSync(t, prefix, options = {}) {
 	t.disabled = true;
 	const old = t.innerHTML;
 	try {
@@ -581,7 +581,7 @@ async function runDriveSync(t, prefix) {
 			t.textContent = prefix + "Google-Verbindung…";
 			await DRIVE.renewFromUserGesture();
 		}
-		finishDriveSync(await DRIVE.sync((st) => { t.textContent = prefix + st; }));
+		finishDriveSync(await DRIVE.sync((st) => { t.textContent = prefix + st; }, options));
 	} catch (err) {
 		U.toast("Sync fehlgeschlagen: " + err.message, "error");
 	}
@@ -592,6 +592,18 @@ async function runDriveSync(t, prefix) {
 
 export async function handleDriveSyncSettings(t) {
 	await runDriveSync(t, "");
+}
+
+// „Aus Drive wiederherstellen“: holt Fehlendes auch im Backup-Modus; löscht nichts.
+export async function handleDriveRestore(t) {
+	await runDriveSync(t, "", { restore: true });
+}
+
+export async function handleDriveMode(value) {
+	const mode = value === "sync" ? "sync" : "backup";
+	await STATE.dispatch("settingsSet", { driveMode: mode });
+	U.toast(DRIVE.mode() === "sync" ? "Drive synchronisiert jetzt mit anderen Geräten." : "Drive sichert jetzt nur.", "success");
+	openSettings("sync");
 }
 
 export async function handleDrivePrimaryAction(t) {
@@ -1224,6 +1236,8 @@ export const SETTINGS = {
 	handleSyncSecretsToggle,
 	handleDriveAutoSyncMinutes,
 	handleDriveSyncAfterChange,
+	handleDriveMode,
+	handleDriveRestore,
 	handleResetAll,
 	handleBackupNow,
 	handleThemeSelect,

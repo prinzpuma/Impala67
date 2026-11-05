@@ -358,13 +358,22 @@ function cloudflareContent() {
 function renderSync(vm) {
 	const syncMinutes = normalizeDriveSyncMinutes(S.settings);
 	const intervalOptions = DRIVE_SYNC_INTERVAL_OPTIONS.map(({ value, label }) => '<option value="' + value + '"' + (value === syncMinutes ? " selected" : "") + '>' + e(label) + "</option>").join("");
-	const automation = UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
+	// Mit Cloudflare-Schlüssel sichert Drive nur (fest); ohne ist „Sync“ wählbar.
+	const driveMode = DRIVE.mode(), modeLocked = !DRIVE.modeSelectable();
+	const modeOptions = [["backup", "Nur sichern (Backup)"], ["sync", "Synchronisieren"]]
+		.map(([value, label]) => '<option value="' + value + '"' + (value === driveMode ? " selected" : "") + ">" + e(label) + "</option>").join("");
+	const modeDescription = modeLocked
+		? "Cloudflare synchronisiert deine Geräte; Drive lädt nur hoch und holt nichts ab"
+		: driveMode === "sync" ? "Drive holt auch Änderungen anderer Geräte" : "Drive lädt nur hoch; Wiederherstellen unter „Backup & Wiederherstellung“";
+	const automation = UI.row({ title: "Drive-Modus", description: modeDescription, trailing: '<select id="inpDriveMode" aria-label="Drive-Modus"' + (modeLocked ? " disabled" : "") + ">" + modeOptions + "</select>" }) +
+		UI.row({ title: "Sync-Intervall", description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist", trailing: '<select id="inpDriveAutoSyncMinutes" aria-label="Intervall für automatische Synchronisierung">' + intervalOptions + "</select>" }) +
 		UI.row({ title: "Nach jeder Änderung synchronisieren", description: "Sichert Änderungen nach kurzer Bündelung zusätzlich zum Intervall", trailing: switchControl("inpDriveSyncAfterChange", "Nach jeder Änderung synchronisieren", driveSyncAfterChange(S.settings)) }) +
 		UI.row({ id: "token-sync", title: "Tokens über Drive synchronisieren", description: SETTINGS_SYNC.allowsSecrets(S.settings) ? "KI-Keys werden an deine eigenen Geräte übertragen" : "Tokens bleiben ausschließlich auf diesem Gerät", trailing: switchControl("inpSyncSecrets", "Tokens über Drive synchronisieren", SETTINGS_SYNC.allowsSecrets(S.settings)) });
 	const lastBackup = localStorage.getItem("impala67LastBackup");
 	const backupAction = backupActionState({ hasBackup: !!lastBackup });
 	const backupDescription = (lastBackup ? "Zuletzt " + U.fmtDate(lastBackup) + " · " : "") + "Event-Log und Dateien als JSON; Importe werden konfliktfrei zusammengeführt";
-	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) });
+	const backup = UI.row({ title: "Vollständiges Backup", description: backupDescription, trailing: UI.actions([{ label: backupAction.label, id: "btnExport", live: true }, { label: "Importieren", id: "btnImport", className: "secondary" }]) }) +
+		UI.row({ title: "Aus Drive wiederherstellen", description: "Holt alles aus dem Drive-Backup, was diesem Gerät fehlt. Löscht nichts.", trailing: button("Wiederherstellen", "btnDriveRestore", "secondary") });
 	const exports = UI.row({ title: "Lerndaten", description: "Lernanalyse-Daten als JSON", trailing: button("Exportieren", "btnTeleExport", "secondary") }) + UI.row({ title: "Workspace als Markdown", description: "Seitenbaum als Markdown-ZIP", trailing: '<span class="settings-workspace-actions">' + Object.values(S.workspaces).map((workspace) => '<button type="button" data-zipws="' + e(workspace.id) + '">' + e(workspace.name) + "</button>").join("") + "</span>" });
 	const advanced = UI.field("Google Client-ID", "inpDrive", S.settings.driveClientId || "", { explicit: true, placeholder: "OAuth-Webclient-ID" });
 	return UI.page("Sync & Backup", "Halte deine Geräte synchron und sichere deine Daten.",

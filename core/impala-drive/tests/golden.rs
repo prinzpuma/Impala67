@@ -252,6 +252,9 @@ impl DriveStore for MockStore {
         }
         Ok(out)
     }
+    async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError> {
+        Ok(ids.iter().filter(|id| self.events.iter().any(|e| e.get("id").and_then(Value::as_str) == Some(id.as_str()))).cloned().collect())
+    }
     async fn export_snapshot(&self, redact: bool, _at: &str) -> Result<String, StoreError> {
         let events: Vec<Value> = self
             .events
@@ -365,7 +368,11 @@ fn flows_match_js() {
         let mut backup =
             DriveBackup::new(Net(replay.clone()), tokens, store, FixedClock { now, sleeps: sleeps.clone() })
                 .with_rng(Box::new(Half))
-                .with_options(DriveOptions { allow_secrets: case["allowSecrets"].as_bool().unwrap() });
+                // Die Abläufe stammen aus dem früheren JS-Sync: zwei Wege, also Sync-Modus.
+                .with_options(DriveOptions {
+                    allow_secrets: case["allowSecrets"].as_bool().unwrap(),
+                    mode: impala_drive::policy::DriveMode::Sync,
+                });
 
         let mut check = |what: &str, ok: bool, detail: String| {
             if !ok {

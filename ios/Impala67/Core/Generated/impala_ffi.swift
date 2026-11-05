@@ -2593,10 +2593,21 @@ public protocol DriveSyncProtocol: AnyObject, Sendable {
     func flushUpload() throws  -> UInt64
     
     /**
+     * Modus, der gerade gilt (`backup` oder `sync`), und ob „Sync“ wählbar ist (nur ohne Cloudflare).
+     */
+    func mode()  -> DriveModeInfo
+    
+    /**
      * Vergisst den lokalen Drive-Stand (Dateiindex, Wasserstände, Geräte-ID). Beim Wechsel des
      * Google-Kontos aufrufen, sonst gälte alles als schon hochgeladen. Die Daten bleiben.
      */
     func resetState() throws 
+    
+    /**
+     * „Aus Backup wiederherstellen“: holt alles, was diesem Gerät fehlt, und sichert danach.
+     * Löscht nichts.
+     */
+    func restore(progress: DriveProgress?) throws  -> DriveReport
     
     func status()  -> DriveStatus
     
@@ -2611,8 +2622,9 @@ public protocol DriveSyncProtocol: AnyObject, Sendable {
     func storageInfo() throws  -> DriveStorage?
     
     /**
-     * Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
-     * ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
+     * Ein Durchgang. Im Backup-Modus (Standard, immer mit Cloudflare-Schlüssel) nur hochladen; im
+     * Sync-Modus auch fremde Änderungen übernehmen. Der erste Durchgang eines Geräts stellt immer
+     * wieder her (Notizen und Einstellungen samt Cloudflare-Schlüssel).
      */
     func sync(progress: DriveProgress?) throws  -> DriveReport
     
@@ -2707,6 +2719,16 @@ open func flushUpload()throws  -> UInt64  {
 }
     
     /**
+     * Modus, der gerade gilt (`backup` oder `sync`), und ob „Sync“ wählbar ist (nur ohne Cloudflare).
+     */
+open func mode() -> DriveModeInfo  {
+    return try!  FfiConverterTypeDriveModeInfo_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_drivesync_mode(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
      * Vergisst den lokalen Drive-Stand (Dateiindex, Wasserstände, Geräte-ID). Beim Wechsel des
      * Google-Kontos aufrufen, sonst gälte alles als schon hochgeladen. Die Daten bleiben.
      */
@@ -2714,6 +2736,18 @@ open func resetState()throws   {try rustCallWithError(FfiConverterTypeCoreError_
     uniffi_impala_ffi_fn_method_drivesync_reset_state(self.uniffiClonePointer(),$0
     )
 }
+}
+    
+    /**
+     * „Aus Backup wiederherstellen“: holt alles, was diesem Gerät fehlt, und sichert danach.
+     * Löscht nichts.
+     */
+open func restore(progress: DriveProgress?)throws  -> DriveReport  {
+    return try  FfiConverterTypeDriveReport_lift(try rustCallWithError(FfiConverterTypeDriveFailure_lift) {
+    uniffi_impala_ffi_fn_method_drivesync_restore(self.uniffiClonePointer(),
+        FfiConverterOptionTypeDriveProgress.lower(progress),$0
+    )
+})
 }
     
 open func status() -> DriveStatus  {
@@ -2743,8 +2777,9 @@ open func storageInfo()throws  -> DriveStorage?  {
 }
     
     /**
-     * Voller Durchgang: Remote-Stand übernehmen → Dateien → eigene Änderungen hochladen →
-     * ggf. verdichten. Auf einem leeren Gerät ist das zugleich die Wiederherstellung.
+     * Ein Durchgang. Im Backup-Modus (Standard, immer mit Cloudflare-Schlüssel) nur hochladen; im
+     * Sync-Modus auch fremde Änderungen übernehmen. Der erste Durchgang eines Geräts stellt immer
+     * wieder her (Notizen und Einstellungen samt Cloudflare-Schlüssel).
      */
 open func sync(progress: DriveProgress?)throws  -> DriveReport  {
     return try  FfiConverterTypeDriveReport_lift(try rustCallWithError(FfiConverterTypeDriveFailure_lift) {
@@ -9666,6 +9701,91 @@ public func FfiConverterTypeDriveIntervalOption_lower(_ value: DriveIntervalOpti
 }
 
 
+/**
+ * Geltender Drive-Modus ([`DriveSync::mode`]).
+ */
+public struct DriveModeInfo {
+    /**
+     * `backup` (nur hochladen) oder `sync` (auch abholen).
+     */
+    public var mode: String
+    /**
+     * „Sync“ ist wählbar – nur ohne Cloudflare-Schlüssel.
+     */
+    public var selectable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * `backup` (nur hochladen) oder `sync` (auch abholen).
+         */mode: String, 
+        /**
+         * „Sync“ ist wählbar – nur ohne Cloudflare-Schlüssel.
+         */selectable: Bool) {
+        self.mode = mode
+        self.selectable = selectable
+    }
+}
+
+#if compiler(>=6)
+extension DriveModeInfo: Sendable {}
+#endif
+
+
+extension DriveModeInfo: Equatable, Hashable {
+    public static func ==(lhs: DriveModeInfo, rhs: DriveModeInfo) -> Bool {
+        if lhs.mode != rhs.mode {
+            return false
+        }
+        if lhs.selectable != rhs.selectable {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(mode)
+        hasher.combine(selectable)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDriveModeInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DriveModeInfo {
+        return
+            try DriveModeInfo(
+                mode: FfiConverterString.read(from: &buf), 
+                selectable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DriveModeInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mode, into: &buf)
+        FfiConverterBool.write(value.selectable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDriveModeInfo_lift(_ buf: RustBuffer) throws -> DriveModeInfo {
+    return try FfiConverterTypeDriveModeInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDriveModeInfo_lower(_ value: DriveModeInfo) -> RustBuffer {
+    return FfiConverterTypeDriveModeInfo.lower(value)
+}
+
+
 public struct DriveReport {
     /**
      * Neu übernommene Events.
@@ -9689,6 +9809,10 @@ public struct DriveReport {
      * Sync-Stand in Drive wurde zu einem Snapshot verdichtet.
      */
     public var compacted: Bool
+    /**
+     * Fremde Änderungen wurden geholt (Sync-Modus, erster Durchgang, Wiederherstellen).
+     */
+    public var pulled: Bool
     /**
      * Geräteuhr weicht so weit von Drive ab, dass gewarnt werden soll (Minuten).
      */
@@ -9717,6 +9841,9 @@ public struct DriveReport {
          * Sync-Stand in Drive wurde zu einem Snapshot verdichtet.
          */compacted: Bool, 
         /**
+         * Fremde Änderungen wurden geholt (Sync-Modus, erster Durchgang, Wiederherstellen).
+         */pulled: Bool, 
+        /**
          * Geräteuhr weicht so weit von Drive ab, dass gewarnt werden soll (Minuten).
          */clockWarningMinutes: UInt64?, 
         /**
@@ -9729,6 +9856,7 @@ public struct DriveReport {
         self.filesDownloaded = filesDownloaded
         self.filesUploaded = filesUploaded
         self.compacted = compacted
+        self.pulled = pulled
         self.clockWarningMinutes = clockWarningMinutes
         self.label = label
     }
@@ -9762,6 +9890,9 @@ extension DriveReport: Equatable, Hashable {
         if lhs.compacted != rhs.compacted {
             return false
         }
+        if lhs.pulled != rhs.pulled {
+            return false
+        }
         if lhs.clockWarningMinutes != rhs.clockWarningMinutes {
             return false
         }
@@ -9779,6 +9910,7 @@ extension DriveReport: Equatable, Hashable {
         hasher.combine(filesDownloaded)
         hasher.combine(filesUploaded)
         hasher.combine(compacted)
+        hasher.combine(pulled)
         hasher.combine(clockWarningMinutes)
         hasher.combine(label)
     }
@@ -9800,6 +9932,7 @@ public struct FfiConverterTypeDriveReport: FfiConverterRustBuffer {
                 filesDownloaded: FfiConverterUInt64.read(from: &buf), 
                 filesUploaded: FfiConverterUInt64.read(from: &buf), 
                 compacted: FfiConverterBool.read(from: &buf), 
+                pulled: FfiConverterBool.read(from: &buf), 
                 clockWarningMinutes: FfiConverterOptionUInt64.read(from: &buf), 
                 label: FfiConverterString.read(from: &buf)
         )
@@ -9813,6 +9946,7 @@ public struct FfiConverterTypeDriveReport: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.filesDownloaded, into: &buf)
         FfiConverterUInt64.write(value.filesUploaded, into: &buf)
         FfiConverterBool.write(value.compacted, into: &buf)
+        FfiConverterBool.write(value.pulled, into: &buf)
         FfiConverterOptionUInt64.write(value.clockWarningMinutes, into: &buf)
         FfiConverterString.write(value.label, into: &buf)
     }
@@ -13096,6 +13230,10 @@ public struct RefetchReport {
      * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
      */
     public var added: UInt64
+    /**
+     * Die ersten neu übernommenen Events (`Typ · Zeit · ID`).
+     */
+    public var addedEvents: [String]
     public var sync: SyncReport
 
     // Default memberwise initializers are never public by default, so we
@@ -13106,9 +13244,13 @@ public struct RefetchReport {
          */fetched: UInt64, 
         /**
          * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
-         */added: UInt64, sync: SyncReport) {
+         */added: UInt64, 
+        /**
+         * Die ersten neu übernommenen Events (`Typ · Zeit · ID`).
+         */addedEvents: [String], sync: SyncReport) {
         self.fetched = fetched
         self.added = added
+        self.addedEvents = addedEvents
         self.sync = sync
     }
 }
@@ -13126,6 +13268,9 @@ extension RefetchReport: Equatable, Hashable {
         if lhs.added != rhs.added {
             return false
         }
+        if lhs.addedEvents != rhs.addedEvents {
+            return false
+        }
         if lhs.sync != rhs.sync {
             return false
         }
@@ -13135,6 +13280,7 @@ extension RefetchReport: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(fetched)
         hasher.combine(added)
+        hasher.combine(addedEvents)
         hasher.combine(sync)
     }
 }
@@ -13150,6 +13296,7 @@ public struct FfiConverterTypeRefetchReport: FfiConverterRustBuffer {
             try RefetchReport(
                 fetched: FfiConverterUInt64.read(from: &buf), 
                 added: FfiConverterUInt64.read(from: &buf), 
+                addedEvents: FfiConverterSequenceString.read(from: &buf), 
                 sync: FfiConverterTypeSyncReport.read(from: &buf)
         )
     }
@@ -13157,6 +13304,7 @@ public struct FfiConverterTypeRefetchReport: FfiConverterRustBuffer {
     public static func write(_ value: RefetchReport, into buf: inout [UInt8]) {
         FfiConverterUInt64.write(value.fetched, into: &buf)
         FfiConverterUInt64.write(value.added, into: &buf)
+        FfiConverterSequenceString.write(value.addedEvents, into: &buf)
         FfiConverterTypeSyncReport.write(value.sync, into: &buf)
     }
 }
@@ -20143,7 +20291,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_drivesync_flush_upload() != 3797) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_drivesync_mode() != 58456) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_drivesync_reset_state() != 31015) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_drivesync_restore() != 30524) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_drivesync_status() != 41357) {
@@ -20155,7 +20309,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_drivesync_storage_info() != 56859) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_drivesync_sync() != 58586) {
+    if (uniffi_impala_ffi_checksum_method_drivesync_sync() != 39079) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_drivetokens_access_token() != 18850) {

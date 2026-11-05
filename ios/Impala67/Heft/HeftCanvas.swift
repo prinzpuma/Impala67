@@ -62,6 +62,8 @@ struct HeftCanvas: UIViewRepresentable {
         private weak var canvas: PKCanvasView?
         private let paper = HeftPaperView()
         private let images = HeftObjectsView(.images)
+        /// Sichtbare gespeicherte Striche (wie die PWA); PencilKit hält sie fast durchsichtig.
+        private let ink = HeftInkView()
         private let texts = HeftObjectsView(.texts)
         private let select = HeftSelectLayer()
         private let hold = HoldWatcher(target: nil, action: nil)
@@ -130,6 +132,7 @@ struct HeftCanvas: UIViewRepresentable {
             self.canvas = canvas
             canvas.insertSubview(paper, at: 0)
             canvas.insertSubview(images, at: 1)
+            canvas.insertSubview(ink, at: 2)
             canvas.addSubview(texts)
             canvas.addSubview(select)
             // Ziehen auf der Auswahl verschiebt sie; sonst scrollt die Seite.
@@ -165,6 +168,8 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Seite aus dem Kern neu aufbauen (auch nach Änderungen an Bildern und Textfeldern).
         func reload() {
+            let done = Profiler.shared.begin("heft.reload")
+            defer { done() }
             // Erst Gesammeltes schreiben und abwarten, sonst verschwänden diese Striche kurz von der Seite.
             flush()
             if writesPending > 0 {
@@ -175,6 +180,7 @@ struct HeftCanvas: UIViewRepresentable {
             guard let canvas, let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return }
             pageSize = CGSize(width: data.width, height: data.height)
             paper.configure(size: pageSize, paper: data.paper)
+            ink.configure(size: pageSize)
             let maxSide = canvas.traitCollection.displayScale * 2
             images.configure(size: pageSize, data: data) { im in
                 HeftImages.image(core: core, pageId: pageId, heftPageId: heftPageId, image: im,
@@ -187,17 +193,39 @@ struct HeftCanvas: UIViewRepresentable {
                 DispatchQueue.main.async { [weak self] in self?.link?.selection = kept }
             }
             pending.removeAll()
+            // Unveränderte Striche weiterverwenden und PencilKit nur neu zeichnen lassen, wenn sich die
+            // Striche wirklich geändert haben: Fremde Änderungen (OCR-Text, Bilder, andere Seiten des Hefts)
+            // bauten sonst jedes Mal alle Striche neu auf und zeichneten die ganze Seite neu (Hänger bis 1 s).
+            let current = canvas.drawing.strokes
+            var existing: [UInt32: PKStroke] = [:]
+            existing.reserveCapacity(current.count)
+            for pk in current where pk.transform == .identity { existing[pk.randomSeed] = pk }
+            let old = known
             var strokes: [PKStroke] = []
-            known.removeAll()
+            strokes.reserveCapacity(data.strokes.count)
+            var next: [UInt32: Known] = [:]
+            var reused = 0
             for s in data.strokes {
                 let seed = HeftInk.seed(s.id)
-                guard let pk = HeftInk.pkStroke(s, seed: seed) else { continue }
+                if let k = old[seed], k.data == s, k.transform == .identity, let pk = existing[seed] {
+                    strokes.append(pk)
+                    next[seed] = k
+                    reused += 1
+                    continue
+                }
+                guard let pk = HeftInk.pkStroke(s, seed: seed, hidden: true) else { continue }
                 strokes.append(pk)
-                known[seed] = Known(id: s.id, data: s, transform: .identity, bounds: pk.renderBounds)
+                next[seed] = Known(id: s.id, data: s, transform: .identity, bounds: pk.renderBounds)
             }
-            applying = true
-            canvas.drawing = PKDrawing(strokes: strokes)
-            applying = false
+            known = next
+            let unchanged = reused == strokes.count && strokes.count == current.count
+                && zip(strokes, current).allSatisfy { $0.randomSeed == $1.randomSeed }
+            if !unchanged {
+                applying = true
+                canvas.drawing = PKDrawing(strokes: strokes)
+                applying = false
+            }
+            ink.update(canvas.drawing.strokes)
             canvas.contentSize = CGSize(width: pageSize.width * canvas.zoomScale, height: pageSize.height * canvas.zoomScale)
             fitWidth()
             layoutPage()
@@ -222,6 +250,7 @@ struct HeftCanvas: UIViewRepresentable {
             let z = canvas.zoomScale
             paper.follow(zoom: z)
             images.follow(zoom: z)
+            ink.follow(zoom: z)
             texts.follow(zoom: z)
             select.follow(zoom: z)
             let w = pageSize.width * z
@@ -232,12 +261,16 @@ struct HeftCanvas: UIViewRepresentable {
         func scrollViewDidZoom(_ scrollView: UIScrollView) { layoutPage() }
 
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
+            // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung.
+            ink.update(canvas.drawing.strokes)
             guard !applying else { return }
             sync(canvas)
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
         private func sync(_ canvas: PKCanvasView) {
+            let done = Profiler.shared.begin("heft.drawing-diff")
+            defer { done() }
             let strokes = canvas.drawing.strokes
             var lasso: PKStroke?
             var seen = Set<UInt32>()
@@ -307,6 +340,8 @@ struct HeftCanvas: UIViewRepresentable {
         /// Wartende Stiftstriche schreiben; wurde ein einzelner Strich am Ende gehalten und erkennt der Kern
         /// darin eine Form (`heftFitShape`), wird er durch die Form ersetzt (`heftAddShape`, wie PWA/Android).
         private func commitPending() {
+            let done = Profiler.shared.begin("heft.commit")
+            defer { done() }
             let strokes = pending
             pending.removeAll()
             guard let canvas, !strokes.isEmpty else { return }
@@ -326,7 +361,7 @@ struct HeftCanvas: UIViewRepresentable {
             else { return false }
             let data = HeftStroke(id: id, tool: "shape", color: c.color, size: c.size, points: [], shape: shape)
             let seed = HeftInk.seed(id)
-            guard let pk = HeftInk.pkStroke(data, seed: seed) else { return false }
+            guard let pk = HeftInk.pkStroke(data, seed: seed, hidden: true) else { return false }
             // Erst merken, dann tauschen: so bleibt der Abgleich richtig, egal wann PencilKit die Änderung meldet.
             known[seed] = Known(id: id, data: data, transform: .identity, bounds: pk.renderBounds)
             var all = canvas.drawing.strokes
@@ -334,6 +369,7 @@ struct HeftCanvas: UIViewRepresentable {
             applying = true
             canvas.drawing = PKDrawing(strokes: all)
             applying = false
+            ink.update(canvas.drawing.strokes)
             if AppHaptics.isEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             return true
         }
@@ -436,24 +472,24 @@ struct HeftCanvas: UIViewRepresentable {
             flushAndWait()
             let ids = (attempt("heftSelectByLasso", { try core.heftSelectByLasso(pageId: pageId, heftPageId: heftPageId, polygon: polygon) })) ?? []
             let want = Set(ids)
-            let picked = canvas.drawing.strokes.filter { s in known[s.randomSeed].map { want.contains($0.id) } ?? false }
-            guard !picked.isEmpty else {
+            // Die umkreisten Striche im aktuellen Stand des Kerns (nach `flushAndWait`).
+            let picked = (attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }))?
+                .strokes.filter { want.contains($0.id) } ?? []
+            let raw = HeftInk.bounds(picked)
+            guard !picked.isEmpty, !raw.isNull else {
                 link?.ocr = HeftOcrResult(text: "", strokeIds: [], bounds: .zero)
                 return
             }
-            let bounds = picked.reduce(CGRect.null) { $0.union($1.renderBounds) }.insetBy(dx: -16, dy: -16)
-            var ink: UIImage?
-            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
-                ink = PKDrawing(strokes: picked).image(from: bounds, scale: 2)
-            }
-            // Vision braucht dunkle Schrift auf hellem Grund, nicht auf Transparenz.
+            let bounds = raw.insetBy(dx: -16, dy: -16)
+            // Vision braucht dunkle Schrift auf hellem Grund, nicht auf Transparenz; gezeichnet wie die PWA.
             let format = UIGraphicsImageRendererFormat()
             format.scale = 2
             format.opaque = true
             let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { ctx in
                 UIColor.white.setFill()
                 ctx.fill(CGRect(origin: .zero, size: bounds.size))
-                ink?.draw(in: CGRect(origin: .zero, size: bounds.size))
+                ctx.cgContext.translateBy(x: -bounds.minX, y: -bounds.minY)
+                HeftInk.draw(picked, in: ctx.cgContext)
             }
             guard let cg = image.cgImage else { return }
             Task { [weak self] in

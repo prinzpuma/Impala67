@@ -46,6 +46,8 @@ final class ImpalaStore {
     }
 
     private func apply(_ c: Changes) {
+        let done = Profiler.shared.begin("store.changes")
+        defer { done() }
         revision += 1
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
         if c.everything || c.pagesAll || c.pagesMeta || c.workspaces { pageMetaRevision += 1 }

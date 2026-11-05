@@ -125,8 +125,18 @@ final class DriveController {
 
     // MARK: - Sync
 
+    /// Geltender Modus (`backup`: nur hochladen, `sync`: auch abholen) und ob „Sync“ wählbar ist
+    /// (nur ohne Cloudflare-Schlüssel). `nil` ohne Drive-Verbindung.
+    var modeInfo: DriveModeInfo? { drive?.mode() }
+
+    /// Modus wählen (`driveMode` in den Einstellungen; mit Cloudflare-Schlüssel bleibt es beim Backup).
+    func setMode(_ mode: String) {
+        AiSettings.patch(store.core, ["driveMode": mode == "sync" ? "sync" : "backup"])
+    }
+
     /// „Jetzt synchronisieren“ bzw. ein Timer-Durchgang. Läuft schon einer, passiert nichts.
-    func sync() async {
+    /// `restore`: „Aus Drive wiederherstellen“ – holt alles Fehlende, auch im Backup-Modus.
+    func sync(restore: Bool = false) async {
         guard let current = ensureDrive(), !running else { return }
         running = true
         progress = ""
@@ -143,7 +153,9 @@ final class DriveController {
         }
         let listener = self.listener
         do {
-            let report = try await Task.detached(priority: .userInitiated) { try current.sync(progress: listener) }.value
+            let report = try await Task.detached(priority: .userInitiated) {
+                try restore ? current.restore(progress: listener) : current.sync(progress: listener)
+            }.value
             let clock = report.clockWarningMinutes.map { " · Geräteuhr weicht \($0) Minuten ab" } ?? ""
             let conflicts = report.conflicts > 0 ? " · \(report.conflicts) Konflikt(e)" : ""
             needsLogin = false

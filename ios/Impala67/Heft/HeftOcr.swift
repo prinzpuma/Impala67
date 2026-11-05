@@ -91,21 +91,19 @@ enum HeftOcr {
     /// Rendert die Striche einer Seite dunkel auf weißem Grund (ohne Papierlinien, optimal für Vision).
     /// PencilKit-Zeichnungen und `UIGraphicsImageRenderer` dürfen außerhalb des Hauptthreads rendern.
     private static func renderStrokes(_ strokes: [HeftStroke]) -> CGImage? {
-        let pkStrokes = strokes.compactMap { HeftInk.pkStroke($0, seed: HeftInk.seed($0.id)) }
-        guard !pkStrokes.isEmpty else { return nil }
-        let bounds = pkStrokes.reduce(CGRect.null) { $0.union($1.renderBounds) }.insetBy(dx: -16, dy: -16)
-        guard !bounds.isNull, bounds.width > 1, bounds.height > 1 else { return nil }
-        var ink: UIImage?
-        UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
-            ink = PKDrawing(strokes: pkStrokes).image(from: bounds, scale: 2)
-        }
+        let raw = HeftInk.bounds(strokes)
+        guard !raw.isNull else { return nil }
+        let bounds = raw.insetBy(dx: -16, dy: -16)
+        guard bounds.width > 1, bounds.height > 1 else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 2
         format.opaque = true
+        // Selbst gezeichnet wie die PWA: PencilKit-Bilder älterer Striche waren fast leer, Vision las nichts.
         return UIGraphicsImageRenderer(size: bounds.size, format: format).image { ctx in
             UIColor.white.setFill()
             ctx.fill(CGRect(origin: .zero, size: bounds.size))
-            ink?.draw(in: CGRect(origin: .zero, size: bounds.size))
+            ctx.cgContext.translateBy(x: -bounds.minX, y: -bounds.minY)
+            HeftInk.draw(strokes, in: ctx.cgContext)
         }.cgImage
     }
 

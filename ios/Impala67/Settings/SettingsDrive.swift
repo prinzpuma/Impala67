@@ -85,6 +85,18 @@ struct DriveSections: View {
                 )
             }
 
+            if drive.connected && !drive.needsLogin {
+                SettingsDivider()
+                SettingsRow(
+                    title: "Aus Drive wiederherstellen",
+                    description: "Holt alles aus dem Drive-Backup, was diesem iPad fehlt. Löscht nichts."
+                ) {
+                    Button("Wiederherstellen") { Task { await drive.sync(restore: true) } }
+                        .buttonStyle(.glass)
+                        .disabled(drive.running)
+                }
+            }
+
             if let message {
                 SettingsDivider()
                 SettingsRow(title: "Hinweis", description: message)
@@ -97,6 +109,23 @@ struct DriveSections: View {
             title: "Automatische Synchronisierung",
             footnote: "Tipp: Bei aktivem Cloudflare-Sync reicht das tägliche Backup-Intervall völlig aus."
         ) {
+            if let info = drive.modeInfo {
+                SettingsRow(
+                    title: "Drive-Modus",
+                    description: !info.selectable
+                        ? "Cloudflare synchronisiert deine Geräte; Drive lädt nur hoch und holt nichts ab"
+                        : info.mode == "sync" ? "Drive holt auch Änderungen anderer Geräte" : "Drive lädt nur hoch; Wiederherstellen oben unter Google Drive"
+                ) {
+                    Picker("Drive-Modus", selection: Binding(get: { info.mode }, set: { drive.setMode($0) })) {
+                        Text("Nur sichern (Backup)").tag("backup")
+                        Text("Synchronisieren").tag("sync")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .disabled(!info.selectable)
+                }
+                SettingsDivider()
+            }
             SettingsRow(
                 title: "Sync-Intervall",
                 description: "Holt und sichert Daten regelmäßig, solange die App geöffnet ist"
