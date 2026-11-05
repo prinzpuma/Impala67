@@ -9,9 +9,8 @@ struct DeckTree: View {
     @Namespace private var highlight
 
     var body: some View {
-        let _ = store.cardsRevision
         let cards = shell.cards
-        let entries = DeckEntry.flatten(store.core.deckOverview(utcOffsetMinutes: Deck.utcOffset, mix: false), collapsed: cards.collapsed)
+        let entries = DeckEntry.flatten(cards.overview, collapsed: cards.collapsed)
         let activeDeck = shell.active == ShellModel.cardsTab ? cards.view.deck : nil
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {
@@ -69,7 +68,7 @@ struct DeckTree: View {
                     ) { DeckMenuItems(name: e.name) }
                 }
             }
-            .animation(.snappy(duration: 0.28), value: store.cardsRevision)
+            .animation(.snappy(duration: 0.28), value: entries.map(\.id))
             .animation(.smooth(duration: 0.3), value: activeDeck)
         }
         .scrollIndicators(.hidden)

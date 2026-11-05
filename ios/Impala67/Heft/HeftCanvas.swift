@@ -81,6 +81,13 @@ struct HeftCanvas: UIViewRepresentable {
         private var removed: [UInt32: HeftStroke] = [:]
         /// Neue Stiftstriche, die erst nach dem Loslassen geschrieben werden (Formerkennung braucht das Halten).
         private var pending: [PKStroke] = []
+        /// Striche, die gerade im Hintergrund in den Kern geschrieben werden (noch ohne Kern-ID).
+        private var inFlight: Set<UInt32> = []
+        /// Neuladen wartet, bis alle Striche geschrieben sind (sonst verschwänden sie kurz von der Seite).
+        private var reloadWanted = false
+        /// Strich-Schreiben in fester Reihenfolge im Hintergrund: Der Stift wartet nie auf die Kern-Sperre,
+        /// die Sync, Checkpoint oder Handschrift-Scan gerade halten können.
+        private let writer = DispatchQueue(label: "impala.heft.write", qos: .userInitiated)
 
         /// Apples Werkzeugleiste ist die einzige Werkzeug- und Farbwahl im Heft (Stift, Marker, Radierer,
         /// Lasso, Lineal; Standardfarben wie die PWA). Rückgängig/Wiederholen und „Mit Finger zeichnen“
@@ -139,6 +146,11 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Seite aus dem Kern neu aufbauen (auch nach Änderungen an Bildern und Textfeldern).
         func reload() {
+            if !inFlight.isEmpty {
+                reloadWanted = true
+                return
+            }
+            reloadWanted = false
             guard let canvas, let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return }
             pageSize = CGSize(width: data.width, height: data.height)
             paper.configure(size: pageSize, paper: data.paper)
@@ -234,7 +246,7 @@ struct HeftCanvas: UIViewRepresentable {
                     }
                 } else if let original = removed.removeValue(forKey: seed) {
                     addStroke(stroke, original: original)
-                } else if pending.contains(where: { $0.randomSeed == seed }) {
+                } else if inFlight.contains(seed) || pending.contains(where: { $0.randomSeed == seed }) {
                     continue
                 } else if lassoText {
                     lasso = stroke
@@ -254,12 +266,13 @@ struct HeftCanvas: UIViewRepresentable {
                 removed[seed] = k.data
                 known[seed] = nil
             }
+            let (core, pageId, heftPageId) = (core, pageId, heftPageId)
             if !toRemove.isEmpty {
-                attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove) })
+                writer.async { attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove) }) }
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             for move in moves.values {
-                _ = attempt("heftMoveStrokes", { try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy) })
+                writer.async { _ = attempt("heftMoveStrokes", { try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy) }) }
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             // Erst nach dem Loslassen entscheiden, ob der Stift am Ende gehalten wurde (`HoldWatcher`).
@@ -447,16 +460,38 @@ struct HeftCanvas: UIViewRepresentable {
                 c.color = original.color
                 c.size = original.size
             }
-            guard !c.points.isEmpty,
-                  let id = attempt("heftAddStroke", { try core.heftAddStroke(pageId: pageId, heftPageId: heftPageId, tool: c.tool, color: c.color, size: c.size, points: c.points) })
-            else { return }
-            known[stroke.randomSeed] = Known(
-                id: id,
-                data: HeftStroke(id: id, tool: c.tool, color: c.color, size: c.size, points: c.points, shape: nil),
-                transform: stroke.transform,
-                bounds: stroke.renderBounds
-            )
-            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
+            guard !c.points.isEmpty else { return }
+            let seed = stroke.randomSeed
+            let (transform, bounds) = (stroke.transform, stroke.renderBounds)
+            let (core, pageId, heftPageId, input) = (core, pageId, heftPageId, c)
+            inFlight.insert(seed)
+            writer.async {
+                let id = attempt("heftAddStroke", { try core.heftAddStroke(pageId: pageId, heftPageId: heftPageId, tool: input.tool, color: input.color, size: input.size, points: input.points) })
+                DispatchQueue.main.async { [weak self] in
+                    self?.stored(seed: seed, id: id, stroke: input, transform: transform, bounds: bounds)
+                }
+            }
+        }
+
+        /// Strich ist im Kern. Wurde er inzwischen wieder entfernt (Rückgängig, Radierer), dort ebenfalls
+        /// löschen und für „Wiederholen“ merken.
+        private func stored(seed: UInt32, id: String?, stroke c: (tool: String, color: String, size: Double, points: [Float]),
+                            transform: CGAffineTransform, bounds: CGRect) {
+            inFlight.remove(seed)
+            if let id {
+                let data = HeftStroke(id: id, tool: c.tool, color: c.color, size: c.size, points: c.points, shape: nil)
+                if canvas?.drawing.strokes.contains(where: { $0.randomSeed == seed }) == true {
+                    known[seed] = Known(id: id, data: data, transform: transform, bounds: bounds)
+                } else {
+                    removed[seed] = data
+                    let (core, pageId, heftPageId) = (core, pageId, heftPageId)
+                    writer.async { attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: [id]) }) }
+                }
+                HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
+            }
+            if inFlight.isEmpty {
+                if reloadWanted { reload() } else if let canvas { sync(canvas) }
+            }
         }
     }
 }

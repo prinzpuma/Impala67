@@ -20,7 +20,6 @@ struct Sidebar: View {
             HStack(spacing: 2) {
                 // Tipp: Seitenbaum (`btnHome`); Doppeltipp: Startseite (app.js `dblclick` → `openHomeOverview`).
                 Pill(icon: "home", label: "Home", active: isHome, ns: pills) { shell.homePill() }
-                    .simultaneousGesture(TapGesture(count: 2).onEnded { shell.goHome() })
                 Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
                     shell.sidebarMode = .chats
                 }

@@ -36,11 +36,9 @@ private struct DeckOverviewScreen: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let _ = store.cardsRevision
         let cards = shell.cards
-        let q = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
-        let entries = DeckEntry.flatten(store.core.deckOverview(utcOffsetMinutes: Deck.utcOffset, mix: false), collapsed: cards.collapsed)
-        let total = Int(q.new + q.learn + q.review)
+        let entries = DeckEntry.flatten(cards.overview, collapsed: cards.collapsed)
+        let total = cards.openCount
         // Grobe Schätzung wie die PWA: ~2,5 Karten pro Minute, mindestens 1 Minute.
         let minutes = max(1, Int((Double(total) / 2.5).rounded()))
         let minText = minutes == 1 ? "1 Minute" : "\(minutes) Minuten"
@@ -121,7 +119,7 @@ private struct DeckOverviewScreen: View {
                             if entries.isEmpty { cards.dialog = .new }
                         }
                     }
-                    StatCard(label: "Neue Karten", value: "\(q.new)", note: "im heutigen Tageslimit", tone: .plain, action: nil)
+                    StatCard(label: "Neue Karten", value: "\(cards.queue?.new ?? 0)", note: "im heutigen Tageslimit", tone: .plain, action: nil)
                 }
                 .riseIn(3)
                 VStack(alignment: .leading, spacing: Space.s1) {
@@ -144,7 +142,7 @@ private struct DeckOverviewScreen: View {
                     }
                 }
                 .riseIn(4)
-                .animation(.snappy(duration: 0.28), value: store.cardsRevision)
+                .animation(.snappy(duration: 0.28), value: entries.map(\.id))
             }
             .padding(Space.s6)
             .frame(maxWidth: 860, alignment: .leading)

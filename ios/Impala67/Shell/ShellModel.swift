@@ -165,13 +165,26 @@ final class ShellModel {
 
     /// Home-Pille, einfacher Tipp (`btnHome` in app-click-buttons.js): Seitenleiste auf den Seitenbaum;
     /// aus Karten bzw. Bibliothek zurück zur zuletzt offenen Seite, ohne Seite zur Startseite.
-    /// Die Startseite selbst öffnet der Doppeltipp ([goHome], app.js `dblclick` auf `#btnHome`).
+    /// Die Startseite selbst öffnet der Doppeltipp ([goHome], app.js `dblclick` auf `#btnHome`): Wie der
+    /// Browser zählt ein zweiter Tipp kurz nach dem ersten als Doppelklick. (Eine zweite Tipp-Geste neben
+    /// dem Knopf kam oft nicht an, weil der Knopf den Tipp schon selbst verarbeitet.)
     func homePill() {
+        let now = Date()
+        if let last = lastHomeTap, now.timeIntervalSince(last) < Self.doubleTapInterval {
+            lastHomeTap = nil
+            goHome()
+            return
+        }
+        lastHomeTap = now
         sidebarMode = .files
         guard libraryOpen || active == Self.cardsTab else { return }
         let page = history.reversed().first { $0 != "home" && $0 != "library" && $0 != Self.cardsTab && tabs.contains($0) }
         navigateTarget(page ?? "home", push: true)
     }
+
+    @ObservationIgnored private var lastHomeTap: Date?
+    /// Abstand zweier Tipps für einen Doppeltipp (System-Doppelklick ≈ 0,4 s).
+    private static let doubleTapInterval: TimeInterval = 0.4
 
     /// Startseite: kein aktiver Tab (wie `openHomeOverview` in tabs.js).
     func goHome() {

@@ -133,6 +133,25 @@ final class CardsModel {
     var feynman = false
     /// Fehlertext des Kerns (z. B. Name schon vergeben).
     var error: String?
+    /// Stapel mit Zählern und die heutige Lernschlange (alle Stapel). Einmal je Kartenänderung im
+    /// Hintergrund gelesen ([refresh]) und von Stapelbaum, Übersicht und Suche geteilt.
+    private(set) var overview: [DeckOverview] = []
+    private(set) var queue: StudyQueue?
+
+    /// Heute offene Karten aller Stapel (neu + lernen + wiederholen).
+    var openCount: Int { queue.map { Int($0.new + $0.learn + $0.review) } ?? 0 }
+
+    /// Stapel und Lernschlange neu lesen, ohne den Hauptthread auf die Kern-Sperre warten zu lassen.
+    func refresh(core: ImpalaCore) async {
+        let (overview, queue) = await Task.detached(priority: .userInitiated) {
+            let offset = Deck.utcOffset
+            return (core.deckOverview(utcOffsetMinutes: offset, mix: false),
+                    core.studyQueue(deck: nil, utcOffsetMinutes: offset, mix: false))
+        }.value
+        guard !Task.isCancelled else { return }
+        self.overview = overview
+        self.queue = queue
+    }
 
     func toggle(_ name: String) {
         if collapsed.contains(name) { collapsed.remove(name) } else { collapsed.insert(name) }

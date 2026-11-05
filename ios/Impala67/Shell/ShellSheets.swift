@@ -117,7 +117,7 @@ private struct SearchSheet: View {
 
     /// `actionItems()` in search.js.
     private func actions() -> [Action] {
-        let due = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false).dueNow.count
+        let due = shell.cards.queue?.dueNow.count ?? 0
         let light = theme == AppTheme.light.rawValue
         return [
             Action(icon: "plus", label: "Neue Seite") {

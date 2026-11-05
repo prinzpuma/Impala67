@@ -9,7 +9,7 @@ struct Recall: Sendable, Equatable {
 }
 
 /// Wählt täglich eine gelernte Karte für „Weißt du's noch?“ (wie home-view.js / HomeViewModel.kt).
-@MainActor
+/// Geht alle Karten durch: nur im Hintergrund aufrufen.
 enum HomeRecall {
     private static let clozeRegex = try? NSRegularExpression(pattern: #"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}"#)
 

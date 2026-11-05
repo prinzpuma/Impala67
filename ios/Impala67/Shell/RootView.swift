@@ -56,6 +56,8 @@ struct RootView: View {
                     .navigationTransition(.zoom(sourceID: sheet.id, in: namespace))
             }
             .onChange(of: store.uiRevision) { shell.reload() }
+            // Stapel und Lernschlange einmal je Kartenänderung, im Hintergrund (Stapelbaum, Übersicht, Suche).
+            .task(id: store.cardsRevision) { await shell.cards.refresh(core: store.core) }
             .onChange(of: store.chatsRevision) { shell.chat.reloadIfIdle() }
         } else {
             Color.clear.onAppear { shell = ShellModel(store: store) }
@@ -112,7 +114,7 @@ private struct MainContent: View {
     private var content: some View {
         if let tab = shell.active {
             if let page = store.core.page(id: tab), !page.trashed {
-                PageScreen(summary: page.summary).id(tab)
+                PageScreen(pageId: tab, kind: page.summary.kind).id(tab)
             } else if tab.hasPrefix("chat:") {
                 ChatScreen(chatId: String(tab.dropFirst(5)))
             } else if tab == ShellModel.cardsTab {
@@ -128,14 +130,17 @@ private struct MainContent: View {
     }
 }
 
-/// Notiz oder Heft, je nach Seitenart.
-struct PageScreen: View {
-    let summary: PageSummary
+/// Notiz oder Heft, je nach Seitenart. Nur ID und Art: Ändert sich bloß Titel oder Zeitstempel
+/// der Seite (jedes Speichern), bleiben die Eingaben gleich und Editor bzw. Heft werden nicht neu
+/// aufgebaut.
+struct PageScreen: View, Equatable {
+    let pageId: String
+    let kind: PageKind
 
     var body: some View {
-        switch summary.kind {
-        case .note: NoteEditor(pageId: summary.id)
-        case .heft: HeftScreen(pageId: summary.id)
+        switch kind {
+        case .note: NoteEditor(pageId: pageId)
+        case .heft: HeftScreen(pageId: pageId)
         }
     }
 }

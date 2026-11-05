@@ -11,10 +11,11 @@ struct PageTree: View {
     @State private var moving: PageSummary?
     @State private var drops = 0
     @Namespace private var highlight
+    /// Sichtbare Zeilen; im Hintergrund gelesen, denn `TreeRows.read` fragt den Kern je Zeile ab und
+    /// lief sonst bei jedem Speichern einer Notiz auf dem Hauptthread.
+    @State private var rows = TreeRows()
 
     var body: some View {
-        let _ = (store.pagesRevision, store.uiRevision)
-        let rows = TreeRows.read(store.core)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {
                 ForEach(rows) { row in
@@ -63,11 +64,15 @@ struct PageTree: View {
                 }
             }
             // Auf-/Zuklappen und neue Seiten: Zeilen gleiten statt zu springen (der Kern meldet asynchron).
-            .animation(.snappy(duration: 0.28), value: store.uiRevision)
-            .animation(.snappy(duration: 0.28), value: store.pagesRevision)
+            .animation(.snappy(duration: 0.28), value: rows.map(\.id))
             .animation(.smooth(duration: 0.3), value: shell.active)
         }
         .scrollIndicators(.hidden)
+        .task(id: [store.pagesRevision, store.uiRevision]) {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) { TreeRows.read(core) }.value
+            if !Task.isCancelled { rows = next }
+        }
         .sensoryFeedback(.impact(weight: .medium), trigger: drops)
         .sheet(item: $moving) { MovePageSheet(page: $0) }
         .alert("Umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -105,7 +110,7 @@ struct PageTree: View {
     }
 
     private func toggle(_ key: String) {
-        let open = TreeRows.read(store.core).isCollapsed(key)
+        let open = rows.isCollapsed(key)
         attempt("setTreeOpen", { try store.core.setTreeOpen(key: key, open: open) })
     }
 

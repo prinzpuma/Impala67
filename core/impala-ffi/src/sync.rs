@@ -159,9 +159,15 @@ pub(crate) fn allow_secrets(inner: &Inner) -> bool {
     inner.model.state().settings.get("syncSecrets") != Some(Value::Bool(false))
 }
 
+/// Ab so vielen Events seit dem letzten Checkpoint schreibt [`settle_remote`] einen neuen.
+const SETTLE_CHECKPOINT_TAIL: u64 = 500;
+
 /// Nach einem Durchgang mit Importen: falls Events außer der Reihe angewandt wurden, den Zustand
-/// sortiert neu laden – einmal je Durchgang, nicht je Portion –, dann einen Checkpoint schreiben.
-/// Sonst spielt der nächste Start (oder das nächste Neuladen) alles Übernommene erneut ab.
+/// sortiert neu laden – einmal je Durchgang, nicht je Portion – und einen Checkpoint schreiben,
+/// damit das nächste Neuladen kurz bleibt. Sonst nur bei langem Log-Rest: Der Checkpoint
+/// serialisiert den ganzen Zustand und hält dabei die Sperre, an der jeder Aufruf der Oberfläche
+/// wartet (wie `checkpoint-scheduler.js` der PWA nicht nach jedem Sync). Den Rest schreibt die
+/// App beim Wechsel in den Hintergrund ([`ImpalaCore::save_checkpoint`]).
 pub(crate) fn settle_remote(shared: &Shared) {
     let reloaded = {
         let mut guard = crate::lock(shared);
@@ -173,8 +179,11 @@ pub(crate) fn settle_remote(shared: &Shared) {
         if reload && inner.reload().is_err() {
             return;
         }
-        // Scheitert nur der Checkpoint, lädt der nächste Start eben aus dem Log.
-        let _ = inner.model.save_checkpoint(&mut inner.storage);
+        let tail = inner.storage.log_info().map_or(u64::MAX, |i| i.max_seq.saturating_sub(inner.model.base_seq()));
+        if reload || tail >= SETTLE_CHECKPOINT_TAIL {
+            // Scheitert nur der Checkpoint, lädt der nächste Start eben aus dem Log.
+            let _ = inner.model.save_checkpoint(&mut inner.storage);
+        }
         if reload {
             inner.note_everything(true);
         }

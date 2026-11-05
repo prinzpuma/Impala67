@@ -23,25 +23,46 @@ struct HomeScreen: View {
         var id: String { rawValue }
     }
 
+    /// Kern-Daten der Startseite; im Hintergrund gelesen (`HomeData.load`), damit der Hauptthread nie
+    /// auf die Kern-Sperre wartet, solange Sync oder Checkpoint laufen.
+    @State private var data: HomeData?
+
+    /// Neu lesen nur bei Änderungen, die die Startseite zeigt (nicht bei jedem Strich im Heft).
+    private var dataKey: [Int] {
+        [store.pagesRevision, store.cardsRevision, store.homeRevision, store.remoteRevision]
+    }
+
     var body: some View {
-        let _ = (store.pagesRevision, store.cardsRevision, store.homeRevision, store.revision)
-        let settings = HomeSettings.read(store.core)
-        let time = LearningTime(store.core.learningSessions())
+        Group {
+            if let data { content(data) } else { Impala.panel }
+        }
+        .background(Impala.panel)
+        .task(id: dataKey) {
+            // Kurz sammeln: Ein Sync meldet oft mehrere Änderungen hintereinander.
+            if data != nil { try? await Task.sleep(for: .milliseconds(150)) }
+            guard !Task.isCancelled else { return }
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) { HomeData.load(core) }.value
+            if !Task.isCancelled { data = loaded }
+        }
+    }
+
+    private func content(_ data: HomeData) -> some View {
+        let settings = data.settings
+        let time = data.time
         let week = time.week()
         let streak = time.streakDays()
         let goal = WeekGoal.normalized(storedGoal)
         let nudge = HomeFormat.nudge(streak: streak, todaySeconds: time.seconds(.now), weekMin: Double(week.reduce(0, +)) / 60, goalMin: goal)
-        let articles = settings.article ? store.core.homeArticles(limit: 30) : []
-        let conflicts = Int(store.core.conflictCount())
-        let recent = store.core.recentPages(limit: 40)
-        let last = recent.first
-        let pins = recent.filter(\.favorite).prefix(6)
-        let study = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
-        let open = Int(study.new + study.learn + study.review)
-        let hasCards = store.core.cardTotals().cards > 0
+        let articles = data.articles
+        let conflicts = data.conflicts
+        let last = data.recent.first
+        let pins = data.recent.filter(\.favorite).prefix(6)
+        let open = data.open
+        let hasCards = data.hasCards
         // Ohne eigene Messwerte 20 s je Karte (`secPerCard` in home-view.js), mindestens 1 Minute.
         let estMin = max(1, Int((Double(open) * 20 / 60).rounded()))
-        ScrollView {
+        return ScrollView {
             VStack(alignment: .leading, spacing: Space.s6) {
                 HStack {
                     Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "de_DE"))))
@@ -165,7 +186,11 @@ struct HomeScreen: View {
                 try? await Task.sleep(for: .seconds(60))
             }
         }
-        .task(id: store.cardsRevision) { recall = HomeRecall.compute(core: store.core) }
+        .task(id: store.cardsRevision) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) { HomeRecall.compute(core: core) }.value
+            if !Task.isCancelled { recall = next }
+        }
         // Nicht bei jeder Änderung (jeder Strich, jeder Buchstabe): Minutentakt und Sync-/Drive-Wechsel reichen.
         .onChange(of: sync?.state) { _, _ in Task { await refreshBackupStatus() } }
         .onChange(of: drive?.connected) { _, _ in Task { await refreshBackupStatus() } }
@@ -234,6 +259,32 @@ struct HomeScreen: View {
 
     private func create(_ choice: NewPageChoice) {
         if let id = store.core.createNew(choice, parent: nil, workspace: nil) { shell.openNewTab(id) }
+    }
+}
+
+/// Was die Startseite aus dem Kern liest (ein Hintergrund-Aufruf statt sechs im `body`).
+struct HomeData {
+    let settings: HomeSettings
+    let time: LearningTime
+    let articles: [HomeArticleInfo]
+    let conflicts: Int
+    let recent: [PageSummary]
+    /// Heute offene Karten (neu + lernen + wiederholen).
+    let open: Int
+    let hasCards: Bool
+
+    static func load(_ core: ImpalaCore) -> HomeData {
+        let settings = HomeSettings.read(core)
+        let study = core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
+        return HomeData(
+            settings: settings,
+            time: LearningTime(core.learningSessions()),
+            articles: settings.article ? core.homeArticles(limit: 30) : [],
+            conflicts: Int(core.conflictCount()),
+            recent: core.recentPages(limit: 40),
+            open: Int(study.new + study.learn + study.review),
+            hasCards: core.cardTotals().cards > 0
+        )
     }
 }
 
