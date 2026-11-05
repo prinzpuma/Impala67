@@ -78,7 +78,7 @@ Sortiert nach Nutzen.
 
 | Punkt | Status | Notiz |
 |---|---|---|
-| Doppeltipp auf die Home-Pille öffnet die Startseite (PWA: `dblclick` auf `#btnHome`, `web/app.js:260`) | ✅ | Seit 05.11. wie der Browser: zweiter Tipp innerhalb 0,4 s öffnet die Startseite (`Shell/ShellModel.swift` `homePill`); vorher eine konkurrierende Zweit-Geste am Knopf · am Gerät ungeprüft |
+| Home-Pille öffnet die Startseite (PWA: Doppelklick auf `#btnHome`, `web/app.js:260`) | ⚠️ | Bewusst abweichend seit 06.11.: am iPad öffnet schon ein Tipp die Startseite (Doppeltipp kam oft nicht an); Wischen über Home · Chat · Karten wählt die Pille (`Shell/Sidebar.swift` `NavPills`) · am Gerät ungeprüft |
 | Klick auf den Arbeitsbereich in den Brotkrumen öffnet die Startseite (`data-crumbws`, `web/app.js:486`) | ✅ | `Notes/NoteEditor.swift:580`, einfacher Tipp wie in der PWA; nur in Notizen, nicht im Heft |
 | Befehlspalette/Tastatur: Startseite | ❌ | In der PWA ebenfalls nur über Pille und Brotkrumen erreichbar; kein Ersatzweg für Hefte |
 

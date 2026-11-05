@@ -12,25 +12,11 @@ struct Sidebar: View {
     @State private var controlsInset: CGFloat = 0
 
     var body: some View {
-        // Genau eine Pille aktiv (render.js `renderTopbar`).
-        let isChat = shell.sidebarMode == .chats
-        let isCards = shell.sidebarMode == .cards
-        let isHome = shell.sidebarMode == .files
-
         VStack(alignment: .leading, spacing: 10) {
             // Die Pillen schweben als Liquid Glass über der Seitenleiste (wie die Leisten über dem Inhalt).
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 2) {
-                    HStack(spacing: 2) {
-                        // Tipp: Seitenbaum (`btnHome`); Doppeltipp: Startseite (app.js `dblclick` → `openHomeOverview`).
-                        Pill(icon: "home", label: "Home", active: isHome, ns: pills,
-                             doubleTap: { shell.goHome() }) { shell.homePill() }
-                        Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
-                            shell.sidebarMode = .chats
-                        }
-                        // `btnAnki` → `openAnki()`: Karten-Tab mit Stapelübersicht.
-                        Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) { shell.openCards(.decks) }
-                    }
+                    NavPills(ns: pills)
                     .padding(3)
                     .impalaGlass(interactive: true)
                     Spacer(minLength: 0)
@@ -76,41 +62,80 @@ struct Sidebar: View {
     }
 }
 
+/// Home · Chat · Karten (`.topbar`, genau eine aktiv wie render.js `renderTopbar`). Antippen wählt;
+/// Wischen über die Leiste zieht die Markierung mit dem Finger mit und wählt beim Loslassen.
+private struct NavPills: View {
+    @Environment(ShellModel.self) private var shell
+    let ns: Namespace.ID
+    @State private var frames: [Int: CGRect] = [:]
+    @State private var dragging: Int?
+
+    private static let items = [("home", "Home"), ("chat", "Chat"), ("cards", "Karten")]
+
+    private var current: Int {
+        switch shell.sidebarMode {
+        case .files: 0
+        case .chats: 1
+        case .cards: 2
+        }
+    }
+
+    var body: some View {
+        let shown = dragging ?? current
+        HStack(spacing: 2) {
+            ForEach(Self.items.indices, id: \.self) { i in
+                Pill(icon: Self.items[i].0, label: Self.items[i].1, active: shown == i, ns: ns) { select(i) }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("navPills")) } action: { frames[i] = $0 }
+            }
+        }
+        .coordinateSpace(.named("navPills"))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 8, coordinateSpace: .named("navPills"))
+                .onChanged { v in
+                    let i = index(at: v.location.x)
+                    if i != dragging { withAnimation(.bouncy(duration: 0.3)) { dragging = i } }
+                }
+                .onEnded { v in
+                    let i = index(at: v.location.x)
+                    dragging = nil
+                    select(i)
+                }
+        )
+    }
+
+    /// Pille unter dem Finger, außerhalb die nächstgelegene.
+    private func index(at x: CGFloat) -> Int {
+        if let hit = frames.first(where: { x >= $0.value.minX && x <= $0.value.maxX }) { return hit.key }
+        return frames.min(by: { abs($0.value.midX - x) < abs($1.value.midX - x) })?.key ?? current
+    }
+
+    private func select(_ i: Int) {
+        withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) {
+            switch i {
+            // Ein Tipp öffnet die Startseite (am iPad statt Doppelklick wie in der PWA).
+            case 0: shell.goHome()
+            case 1: shell.sidebarMode = .chats
+            // `btnAnki` → `openAnki()`: Karten-Tab mit Stapelübersicht.
+            default: shell.openCards(.decks)
+            }
+        }
+    }
+}
+
 /// Pille der Kopfzeile (`.topbar .tab`): aktiv mit Akzent-Tönung und Label, sonst nur das Symbol.
-/// Mit `doubleTap` erkennt das System Einzel- und Doppeltipp an den Berührungen selbst (Einzeltipp wartet
-/// kurz ab); eine eigene Zeitmessung in der Aktion verpasste den zweiten Tipp, sobald die Oberfläche nach
-/// dem ersten kurz beschäftigt war.
 private struct Pill: View {
     let icon: String
     let label: String
     let active: Bool
     let ns: Namespace.ID
-    var doubleTap: (() -> Void)? = nil
     let action: () -> Void
 
     var body: some View {
-        if let doubleTap {
-            content
-                .onTapGesture(count: 2) { run(doubleTap) }
-                .onTapGesture { run(action) }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(label)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { run(action) }
-                .accessibilityAction(named: "Startseite") { run(doubleTap) }
-                .hoverEffect(.highlight)
-                .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
-        } else {
-            Button { run(action) } label: { content }
-                .contentShape(Capsule())
-                .pressable()
-                .accessibilityLabel(label)
-                .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
-        }
-    }
-
-    private func run(_ f: () -> Void) {
-        withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) { f() }
+        Button(action: action) { content }
+            .contentShape(Capsule())
+            .pressable()
+            .accessibilityLabel(label)
+            .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
     }
 
     private var content: some View {

@@ -109,6 +109,7 @@ final class ShellModel {
     /// Vom Kern neu lesen (Start, Änderung auf einem anderen Gerät).
     func reload() {
         let ui = store.core.uiTabs()
+        let before = active
         tabs = ui.tabs
         // Kein aktiver Tab = Startseite (wie in der PWA). Nur ein verwaister Tab fällt auf den ersten zurück –
         // sonst sprang jeder Tipp auf „Home“ sofort zurück, weil das eigene Speichern dieses reload() auslöst.
@@ -117,7 +118,9 @@ final class ShellModel {
         } else {
             active = nil
         }
-        if active == Self.cardsTab {
+        // Nur wenn der Karten-Tab dadurch erst vorne liegt: Jeder Sync und jedes eigene Speichern lädt hier
+        // neu, und sonst sprang die gewählte Pille (Home, Chat) bei offenem Karten-Tab zurück auf „Karten“.
+        if active == Self.cardsTab && before != Self.cardsTab {
             sidebarMode = .cards
         }
         if history.isEmpty {
@@ -163,18 +166,8 @@ final class ShellModel {
 
     static let cardsTab = "anki:main"
 
-    /// Home-Pille, einfacher Tipp (`btnHome` in app-click-buttons.js): Seitenleiste auf den Seitenbaum;
-    /// aus Karten bzw. Bibliothek zurück zur zuletzt offenen Seite, ohne Seite zur Startseite.
-    /// Die Startseite selbst öffnet der Doppeltipp ([goHome], app.js `dblclick` auf `#btnHome`); Einzel-
-    /// und Doppeltipp unterscheidet die Pille über die System-Tippgesten (Sidebar.swift `Pill`).
-    func homePill() {
-        sidebarMode = .files
-        guard libraryOpen || active == Self.cardsTab else { return }
-        let page = history.reversed().first { $0 != "home" && $0 != "library" && $0 != Self.cardsTab && tabs.contains($0) }
-        navigateTarget(page ?? "home", push: true)
-    }
-
-    /// Startseite: kein aktiver Tab (wie `openHomeOverview` in tabs.js).
+    /// Startseite: kein aktiver Tab (wie `openHomeOverview` in tabs.js). Bewusste Abweichung von der PWA:
+    /// Am iPad öffnet schon ein Tipp auf die Home-Pille die Startseite (kein Doppeltipp nötig).
     func goHome() {
         sidebarMode = .files
         navigateTarget("home", push: true)
