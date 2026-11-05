@@ -120,7 +120,14 @@ struct RelatedPagesRow: View {
     @State private var related: [PageSummary] = []
 
     var body: some View {
-        if !related.isEmpty {
+        // Äußerer Stapel, damit `.task` auch läuft, solange die Leiste noch leer ist.
+        VStack(alignment: .leading, spacing: 0) {
+            if !related.isEmpty { row }
+        }
+        .task(id: "\(pageId)|\(store.settingsRevision)") { await loadRelated() }
+    }
+
+    private var row: some View {
             VStack(alignment: .leading, spacing: Space.s2) {
                 Rectangle().fill(Impala.edgeSoft).frame(height: 1).padding(.bottom, 4)
                 HStack(spacing: Space.s2) {
@@ -160,8 +167,6 @@ struct RelatedPagesRow: View {
                 }
             }
             .padding(.top, 14)
-        }
-        .task(id: "\(pageId)|\(store.settingsRevision)") { await loadRelated() }
     }
 
     /// Suche im Hintergrund – der Index kann bei vielen Seiten dauern und darf die Notiz nicht anhalten.
