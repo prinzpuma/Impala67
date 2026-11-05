@@ -13,6 +13,8 @@ struct HomeScreen: View {
     @AppStorage(WeekGoal.key) private var storedGoal = 300
     @AppStorage("impala67_backup_snooze_until") private var backupSnoozeUntil: Double = 0
     @State private var backupView: DriveBackupView?
+    /// „Weißt du's noch?“: geht alle Karten durch, daher nur bei Kartenänderungen neu (`.task(id:)`).
+    @State private var recall: Recall?
     @State private var sheet: HomeSheet?
     private var writer: HomeArticleWriter { .shared }
 
@@ -37,7 +39,6 @@ struct HomeScreen: View {
         let study = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
         let open = Int(study.new + study.learn + study.review)
         let hasCards = store.core.cardTotals().cards > 0
-        let recall = HomeRecall.compute(core: store.core)
         // Ohne eigene Messwerte 20 s je Karte (`secPerCard` in home-view.js), mindestens 1 Minute.
         let estMin = max(1, Int((Double(open) * 20 / 60).rounded()))
         ScrollView {
@@ -164,6 +165,7 @@ struct HomeScreen: View {
                 try? await Task.sleep(for: .seconds(60))
             }
         }
+        .task(id: store.cardsRevision) { recall = HomeRecall.compute(core: store.core) }
         // Nicht bei jeder Änderung (jeder Strich, jeder Buchstabe): Minutentakt und Sync-/Drive-Wechsel reichen.
         .onChange(of: sync?.state) { _, _ in Task { await refreshBackupStatus() } }
         .onChange(of: drive?.connected) { _, _ in Task { await refreshBackupStatus() } }

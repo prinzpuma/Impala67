@@ -17,13 +17,7 @@ struct Sidebar: View {
 
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 2) {
-                Pill(icon: "home", label: "Home", active: isHome, ns: pills) {
-                    if shell.sidebarMode != .files {
-                        shell.sidebarMode = .files
-                    } else {
-                        shell.goHome()
-                    }
-                }
+                Pill(icon: "home", label: "Home", active: isHome, ns: pills) { shell.goHome() }
                 Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
                     shell.sidebarMode = .chats
                 }

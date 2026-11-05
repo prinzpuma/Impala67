@@ -111,7 +111,13 @@ final class ShellModel {
     func reload() {
         let ui = store.core.uiTabs()
         tabs = ui.tabs
-        active = ui.activeTabId.flatMap { tabs.contains($0) ? $0 : nil } ?? tabs.first
+        // Kein aktiver Tab = Startseite (wie in der PWA). Nur ein verwaister Tab fällt auf den ersten zurück –
+        // sonst sprang jeder Tipp auf „Home“ sofort zurück, weil das eigene Speichern dieses reload() auslöst.
+        if let id = ui.activeTabId {
+            active = tabs.contains(id) ? id : tabs.first
+        } else {
+            active = nil
+        }
         if active == Self.cardsTab {
             sidebarMode = .cards
         }

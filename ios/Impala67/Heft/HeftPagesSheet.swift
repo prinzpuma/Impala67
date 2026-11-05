@@ -21,6 +21,8 @@ struct HeftPagesSheet: View {
     let onChanged: () -> Void
 
     @State private var thumbs: [String: UIImage] = [:]
+    /// Papierart je Seite (für das Häkchen im Menü), mit dem Vorschaubild im Hintergrund gelesen.
+    @State private var papers: [String: String] = [:]
     @State private var picking = false
     @State private var selected: Set<String> = []
     @State private var deleting: [String] = []
@@ -118,10 +120,16 @@ struct HeftPagesSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Seite \(index + 1)")
         .task(id: "\(id)|\(revision)") {
-            await Task.yield()
-            if let img = HeftThumbnail.render(core: store.core, pageId: pageId, heftPageId: id, width: Self.tileWidth, scale: displayScale) {
-                thumbs[id] = img
-            }
+            // Seite laden und rendern dauert bei vollen Seiten lange – im Hintergrund, nie auf dem Hauptthread.
+            let core = store.core, pid = pageId, width = Self.tileWidth, scale = displayScale
+            let (img, paper) = await Task.detached(priority: .utility) { () -> (UIImage?, String?) in
+                let paper = attempt("heftPage", { try core.heftPage(pageId: pid, heftPageId: id) })?.paper
+                let img = HeftExport.renderPage(core: core, pageId: pid, heftPageId: id, width: width, scale: scale, imagePixels: 512)
+                return (img, paper)
+            }.value
+            guard !Task.isCancelled else { return }
+            if let img { thumbs[id] = img }
+            if let paper { papers[id] = paper }
         }
         .draggable(id) {
             thumbnail(id, highlighted: false).frame(width: 110)
@@ -175,7 +183,7 @@ struct HeftPagesSheet: View {
 
     @ViewBuilder
     private func menu(_ id: String) -> some View {
-        let paper = (attempt("heftPage", { try store.core.heftPage(pageId: pageId, heftPageId: id) })?.paper) ?? ""
+        let paper = papers[id] ?? ""
         Menu {
             ForEach(HeftPaperKind.allCases) { kind in
                 Button {

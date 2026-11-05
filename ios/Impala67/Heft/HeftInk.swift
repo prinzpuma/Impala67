@@ -28,21 +28,36 @@ enum HeftInk {
         guard n > 0 else { return nil }
         let marker = s.tool == "marker"
         let color = UIColor(css: s.color)
-        let ink = PKInk(marker ? .marker : .pen, color: marker ? color.withAlphaComponent(markerAlpha) : color)
+        // Gleichmäßige Linie wie die PWA (`drawStroke`: Segmente mit runder Kappe). Die Füller-Tinte formt
+        // Striche nach Tempo und Kraft – bei gespeicherten Strichen (feste Zeitabstände, doppelte Punkte)
+        // sah ältere Schrift damit verzerrt aus.
+        let ink = PKInk(marker ? .marker : .monoline, color: marker ? color.withAlphaComponent(markerAlpha) : color)
         var points: [PKStrokePoint] = []
-        points.reserveCapacity(n)
+        points.reserveCapacity(n + 1)
+        var last: CGPoint?
         for i in 0..<n {
+            let loc = CGPoint(x: CGFloat(p[i * 3]), y: CGFloat(p[i * 3 + 1]))
+            // Doppelte Punkte (Stift steht still) weglassen; PencilKit glättet sonst Knoten hinein.
+            if let last, i < n - 1, abs(loc.x - last.x) < 0.05, abs(loc.y - last.y) < 0.05 { continue }
+            last = loc
             var pr = Double(p[i * 3 + 2])
             if pr.isNaN { pr = 0.5 }
             pr = s.tool == "shape" ? 0.5 : min(1, max(0, pr))
             let w = marker ? CGFloat(s.size * 3) : width(size: s.size, pressure: pr)
             points.append(PKStrokePoint(
-                location: CGPoint(x: CGFloat(p[i * 3]), y: CGFloat(p[i * 3 + 1])),
-                timeOffset: TimeInterval(i) * 0.008,
+                location: loc,
+                timeOffset: TimeInterval(points.count) * 0.008,
                 size: CGSize(width: w, height: w),
                 // Feste, normale Kraft: Der Druck steckt schon in `size`. Als Kraft weitergereicht machte ein
                 // niedriger Druck (Stifte ohne Druckstufen speichern 0,12) die Striche blass bis unsichtbar.
                 opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
+            ))
+        }
+        // Ein einzelner Punkt (Tupfer, i-Punkt) braucht einen zweiten, sonst zeichnet PencilKit nichts.
+        if points.count == 1, let only = points.first {
+            points.append(PKStrokePoint(
+                location: CGPoint(x: only.location.x + 0.01, y: only.location.y), timeOffset: 0.008,
+                size: only.size, opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
             ))
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date())

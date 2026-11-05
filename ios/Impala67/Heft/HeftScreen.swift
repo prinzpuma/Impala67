@@ -26,6 +26,7 @@ struct HeftScreen: View {
     @State private var share: SharedFile?
     @State private var busy: String?
     @State private var showExportDialog = false
+    @State private var currentPaper: String?
     @State private var exportTask: Task<Void, Never>?
     @Namespace private var namespace
 
@@ -78,6 +79,16 @@ struct HeftScreen: View {
         }
         .background(Impala.bg0)
         .onAppear(perform: loadPages)
+        // Papierart der Seite nur bei Seitenwechsel/Änderung lesen, im Hintergrund: `heftPage` lädt alle
+        // Striche – bisher bei jedem Neuzeichnen der Leiste auf dem Hauptthread (Hänger bei vollen Seiten).
+        .task(id: "\(currentId ?? "")|\(revision)") {
+            guard let hid = currentId else { currentPaper = nil; return }
+            let core = store.core, pid = pageId
+            let paper = await Task.detached(priority: .userInitiated) {
+                attempt("heftPage", { try core.heftPage(pageId: pid, heftPageId: hid) })?.paper
+            }.value
+            if !Task.isCancelled { currentPaper = paper }
+        }
         .onChange(of: store.remoteRevision) {
             guard store.remoteTouches(pageId) else { return }
             loadPages()
@@ -179,7 +190,7 @@ struct HeftScreen: View {
             HStack(spacing: 2) {
                 imageMenu
                 AddPageMenu(
-                    currentPaper: currentId.flatMap { hid in attempt("heftPage", { try store.core.heftPage(pageId: pageId, heftPageId: hid) })?.paper },
+                    currentPaper: currentPaper,
                     onAdd: addPage, onPaper: setPaper,
                     onImagePage: { photos = []; photoTarget = .page },
                     onImport: { showImporter = true },
