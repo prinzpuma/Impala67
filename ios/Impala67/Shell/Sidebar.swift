@@ -9,6 +9,7 @@ struct Sidebar: View {
     @Environment(\.shellNamespace) private var zoom
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     @Namespace private var pills
+    @State private var controlsInset: CGFloat = 0
 
     var body: some View {
         // Genau eine Pille aktiv (render.js `renderTopbar`).
@@ -40,6 +41,11 @@ struct Sidebar: View {
                     .impalaGlass(interactive: true)
                     .zoomSource(ShellSheet.search, zoom)
                 }
+                // Platz für die Fensterknöpfe oben links; die Messung sitzt auf der ganzen Zeile, damit
+                // der Abstand sie nicht selbst verschiebt.
+                .padding(.leading, controlsInset)
+                .background(WindowControlsInset(leading: $controlsInset))
+                .animation(.smooth(duration: 0.2), value: controlsInset)
             }
             if tabsPosition == AppTabsPosition.sidebar.rawValue {
                 SidebarTabs()
