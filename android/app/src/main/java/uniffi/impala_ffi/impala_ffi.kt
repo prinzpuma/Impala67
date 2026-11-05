@@ -1508,6 +1508,12 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1526,6 +1532,10 @@ internal interface IntegrityCheckingUniffiLib : Library {
     fun uniffi_impala_ffi_checksum_func_blocks_to_markdown(
 ): Short
 fun uniffi_impala_ffi_checksum_func_conflict_diff_rows(
+): Short
+fun uniffi_impala_ffi_checksum_func_core_lock_holder(
+): Short
+fun uniffi_impala_ffi_checksum_func_core_long_lock_holds(
 ): Short
 fun uniffi_impala_ffi_checksum_func_download_local_embedding_model(
 ): Short
@@ -1652,6 +1662,8 @@ fun uniffi_impala_ffi_checksum_method_changelistener_on_changed(
 fun uniffi_impala_ffi_checksum_method_cloudsync_compact_cloud(
 ): Short
 fun uniffi_impala_ffi_checksum_method_cloudsync_handle_server_message(
+): Short
+fun uniffi_impala_ffi_checksum_method_cloudsync_refetch_all(
 ): Short
 fun uniffi_impala_ffi_checksum_method_cloudsync_reset_cloud(
 ): Short
@@ -2180,6 +2192,8 @@ fun uniffi_impala_ffi_fn_method_cloudsync_compact_cloud(`ptr`: Pointer,`bypassCo
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_cloudsync_handle_server_message(`ptr`: Pointer,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_cloudsync_refetch_all(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_cloudsync_reset_cloud(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_cloudsync_status(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2626,6 +2640,10 @@ fun uniffi_impala_ffi_fn_func_blocks_to_markdown(`blocks`: RustBuffer.ByValue,un
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_conflict_diff_rows(`left`: RustBuffer.ByValue,`right`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_core_lock_holder(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_core_long_lock_holds(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_download_local_embedding_model(`modelDir`: RustBuffer.ByValue,`listener`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_func_drive_action_state(`hasClient`: Byte,`connected`: Byte,`needsLogin`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -2844,6 +2862,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_conflict_diff_rows() != 3952.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_core_lock_holder() != 32435.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_download_local_embedding_model() != 22098.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3031,6 +3055,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_cloudsync_handle_server_message() != 63962.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_cloudsync_refetch_all() != 1881.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_cloudsync_reset_cloud() != 29703.toShort()) {
@@ -5708,6 +5735,13 @@ public interface CloudSyncInterface {
     fun `handleServerMessage`(`text`: kotlin.String): ServerAction
     
     /**
+     * Reparatur: ruft alle Pakete dieser Generation noch einmal ab und übernimmt, was diesem Gerät
+     * fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
+     * dem Server. Liefert, wie viele Events neu ins Log kamen.
+     */
+    fun `refetchAll`(): RefetchReport
+    
+    /**
      * Löscht alle Pakete und Dateien auf dem Server (neue Generation); danach `sync(true)`.
      */
     fun `resetCloud`()
@@ -5861,6 +5895,24 @@ open class CloudSync: Disposable, AutoCloseable, CloudSyncInterface
     uniffiRustCallWithError(SyncFailure) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_cloudsync_handle_server_message(
         it, FfiConverterString.lower(`text`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Reparatur: ruft alle Pakete dieser Generation noch einmal ab und übernimmt, was diesem Gerät
+     * fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
+     * dem Server. Liefert, wie viele Events neu ins Log kamen.
+     */
+    @Throws(SyncFailure::class)override fun `refetchAll`(): RefetchReport {
+            return FfiConverterTypeRefetchReport.lift(
+    callWithPointer {
+    uniffiRustCallWithError(SyncFailure) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_cloudsync_refetch_all(
+        it, _status)
 }
     }
     )
@@ -13276,6 +13328,51 @@ public object FfiConverterTypeConflictInfo: FfiConverterRustBuffer<ConflictInfo>
 
 
 
+data class CoreLockHold (
+    /**
+     * Aufrufende Stelle in `impala-ffi` (`Datei:Zeile`).
+     */
+    var `site`: kotlin.String, 
+    /**
+     * Thread-Name (`impala-sync`, …), leer bei namenlosen Threads der Plattform.
+     */
+    var `thread`: kotlin.String, 
+    /**
+     * Bisherige bzw. gesamte Dauer.
+     */
+    var `ms`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCoreLockHold: FfiConverterRustBuffer<CoreLockHold> {
+    override fun read(buf: ByteBuffer): CoreLockHold {
+        return CoreLockHold(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CoreLockHold) = (
+            FfiConverterString.allocationSize(value.`site`) +
+            FfiConverterString.allocationSize(value.`thread`) +
+            FfiConverterDouble.allocationSize(value.`ms`)
+    )
+
+    override fun write(value: CoreLockHold, buf: ByteBuffer) {
+            FfiConverterString.write(value.`site`, buf)
+            FfiConverterString.write(value.`thread`, buf)
+            FfiConverterDouble.write(value.`ms`, buf)
+    }
+}
+
+
+
 /**
  * Eine vorhandene Tagesseite.
  */
@@ -15261,6 +15358,51 @@ public object FfiConverterTypePageVersion: FfiConverterRustBuffer<PageVersion> {
             FfiConverterString.write(value.`time`, buf)
             FfiConverterString.write(value.`title`, buf)
             FfiConverterString.write(value.`content`, buf)
+    }
+}
+
+
+
+/**
+ * Ergebnis von [`CloudSync::refetch_all`].
+ */
+data class RefetchReport (
+    /**
+     * Vom Server abgerufene Events (auch schon bekannte).
+     */
+    var `fetched`: kotlin.ULong, 
+    /**
+     * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
+     */
+    var `added`: kotlin.ULong, 
+    var `sync`: SyncReport
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRefetchReport: FfiConverterRustBuffer<RefetchReport> {
+    override fun read(buf: ByteBuffer): RefetchReport {
+        return RefetchReport(
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterTypeSyncReport.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RefetchReport) = (
+            FfiConverterULong.allocationSize(value.`fetched`) +
+            FfiConverterULong.allocationSize(value.`added`) +
+            FfiConverterTypeSyncReport.allocationSize(value.`sync`)
+    )
+
+    override fun write(value: RefetchReport, buf: ByteBuffer) {
+            FfiConverterULong.write(value.`fetched`, buf)
+            FfiConverterULong.write(value.`added`, buf)
+            FfiConverterTypeSyncReport.write(value.`sync`, buf)
     }
 }
 
@@ -19139,6 +19281,38 @@ public object FfiConverterOptionalTypeChatData: FfiConverterRustBuffer<ChatData?
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeCoreLockHold: FfiConverterRustBuffer<CoreLockHold?> {
+    override fun read(buf: ByteBuffer): CoreLockHold? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeCoreLockHold.read(buf)
+    }
+
+    override fun allocationSize(value: CoreLockHold?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeCoreLockHold.allocationSize(value)
+        }
+    }
+
+    override fun write(value: CoreLockHold?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeCoreLockHold.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeDriveStatusView: FfiConverterRustBuffer<DriveStatusView?> {
     override fun read(buf: ByteBuffer): DriveStatusView? {
         if (buf.get().toInt() == 0) {
@@ -19953,6 +20127,34 @@ public object FfiConverterSequenceTypeConflictInfo: FfiConverterRustBuffer<List<
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeConflictInfo.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeCoreLockHold: FfiConverterRustBuffer<List<CoreLockHold>> {
+    override fun read(buf: ByteBuffer): List<CoreLockHold> {
+        val len = buf.getInt()
+        return List<CoreLockHold>(len) {
+            FfiConverterTypeCoreLockHold.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<CoreLockHold>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeCoreLockHold.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<CoreLockHold>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeCoreLockHold.write(it, buf)
         }
     }
 }
@@ -20894,6 +21096,30 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_conflict_diff_rows(
         FfiConverterString.lower(`left`),FfiConverterString.lower(`right`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Wer hält die Kern-Sperre gerade (und seit wann)? `None`: frei. Wartet nie auf die Sperre.
+         */ fun `coreLockHolder`(): CoreLockHold? {
+            return FfiConverterOptionalTypeCoreLockHold.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_core_lock_holder(
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * Alle Sperren ab 100 ms seit dem letzten Aufruf (älteste zuerst); leert die Liste.
+         */ fun `coreLongLockHolds`(): List<CoreLockHold> {
+            return FfiConverterSequenceTypeCoreLockHold.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_core_long_lock_holds(
+        _status)
 }
     )
     }

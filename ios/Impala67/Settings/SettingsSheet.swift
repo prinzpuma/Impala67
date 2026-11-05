@@ -958,6 +958,23 @@ private struct CloudflareSection: View {
             footnote: "Löscht den synchronisierten Datenstand auf dem Cloudflare-Server. Deine lokalen Daten auf diesem iPad bleiben vollständig erhalten."
         ) {
             SettingsRow(
+                title: "Alles neu vom Server abrufen",
+                description: "Holt Änderungen nach, die diesem iPad fehlen (z. B. Heft-Schrift, die nur die PWA zeigt). Löscht nichts."
+            ) {
+                Button {
+                    Task {
+                        busy = true
+                        message = await sync.refetchAll()
+                        busy = false
+                    }
+                } label: {
+                    if busy { ProgressView() } else { Text("Abrufen") }
+                }
+                .buttonStyle(.glass)
+                .disabled(!sync.isPaired || busy)
+            }
+            SettingsDivider()
+            SettingsRow(
                 title: "Verwendeter Speicherplatz",
                 description: sync.usage
             ) {

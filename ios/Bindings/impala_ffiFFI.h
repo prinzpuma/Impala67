@@ -650,6 +650,11 @@ RustBuffer uniffi_impala_ffi_fn_method_cloudsync_compact_cloud(void*_Nonnull ptr
 RustBuffer uniffi_impala_ffi_fn_method_cloudsync_handle_server_message(void*_Nonnull ptr, RustBuffer text, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_REFETCH_ALL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_REFETCH_ALL
+RustBuffer uniffi_impala_ffi_fn_method_cloudsync_refetch_all(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_RESET_CLOUD
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_RESET_CLOUD
 void uniffi_impala_ffi_fn_method_cloudsync_reset_cloud(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -1767,6 +1772,18 @@ RustBuffer uniffi_impala_ffi_fn_func_blocks_to_markdown(RustBuffer blocks, RustC
 RustBuffer uniffi_impala_ffi_fn_func_conflict_diff_rows(RustBuffer left, RustBuffer right, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CORE_LOCK_HOLDER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CORE_LOCK_HOLDER
+RustBuffer uniffi_impala_ffi_fn_func_core_lock_holder(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CORE_LONG_LOCK_HOLDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CORE_LONG_LOCK_HOLDS
+RustBuffer uniffi_impala_ffi_fn_func_core_long_lock_holds(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 void uniffi_impala_ffi_fn_func_download_local_embedding_model(RustBuffer model_dir, void*_Nonnull listener, RustCallStatus *_Nonnull out_status
@@ -2280,6 +2297,18 @@ uint16_t uniffi_impala_ffi_checksum_func_conflict_diff_rows(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LOCK_HOLDER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LOCK_HOLDER
+uint16_t uniffi_impala_ffi_checksum_func_core_lock_holder(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LONG_LOCK_HOLDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LONG_LOCK_HOLDS
+uint16_t uniffi_impala_ffi_checksum_func_core_long_lock_holds(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 uint16_t uniffi_impala_ffi_checksum_func_download_local_embedding_model(void
@@ -2655,6 +2684,12 @@ uint16_t uniffi_impala_ffi_checksum_method_cloudsync_compact_cloud(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_CLOUDSYNC_HANDLE_SERVER_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_CLOUDSYNC_HANDLE_SERVER_MESSAGE
 uint16_t uniffi_impala_ffi_checksum_method_cloudsync_handle_server_message(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_CLOUDSYNC_REFETCH_ALL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_CLOUDSYNC_REFETCH_ALL
+uint16_t uniffi_impala_ffi_checksum_method_cloudsync_refetch_all(void
     
 );
 #endif

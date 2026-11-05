@@ -129,6 +129,36 @@ final class SyncController {
         }
     }
 
+    /// „Alles neu vom Server abrufen“: holt Events nach, die diesem Gerät fehlen (z. B. Heft-Striche,
+    /// die die PWA zeigt, das iPad nicht). Löscht nichts. Liefert die Meldung für die Anzeige.
+    func refetchAll() async -> String {
+        guard let sync else { return "Bitte zuerst verbinden." }
+        state = .syncing
+        label = "Rufe alles neu ab …"
+        do {
+            let r = try await Task.detached { try sync.refetchAll() }.value
+            state = socket != nil ? .connected : .connecting
+            label = socket != nil ? "Verbunden" : "Synchronisiert"
+            progress = nil
+            let message = r.added > 0
+                ? "\(r.added) fehlende Änderungen nachgeholt (von \(r.fetched) abgerufenen)."
+                : "Nichts gefehlt: alle \(r.fetched) Änderungen vom Server waren schon da."
+            // Gehört in den Bericht: Fehlten Events, ist das ein Sync-Fehler, den man nachverfolgen muss.
+            Profiler.shared.error("sync-refetch", message, name: r.added > 0 ? "missing-events" : "complete")
+            return message
+        } catch {
+            fail(Self.message(error))
+            return Self.message(error)
+        }
+    }
+
+    /// Sync-Stand für den Profiler-Bericht.
+    func diagnostics() -> [String: Any] {
+        guard let s = sync?.status() else { return ["paired": isPaired, "connected": false] }
+        return ["paired": isPaired, "connected": true, "state": "\(state)", "generation": s.generation,
+                "lastSyncedSeq": s.lastSyncedSeq, "lastUploadedSeq": s.lastUploadedSeq, "detail": detail]
+    }
+
     func newKey() -> String { (try? generateSyncKey()) ?? "" }
 
     /// Ein Durchgang aus dem Hintergrund (`BGTaskScheduler`), ohne WebSocket: nur wenn dieses Gerät

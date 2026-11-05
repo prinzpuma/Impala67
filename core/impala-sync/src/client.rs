@@ -363,6 +363,15 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
         Ok(PassReport { received, blobs, push })
     }
 
+    /// Ein Durchgang, der alle Pakete dieser Generation noch einmal abruft: holt Events nach, die
+    /// dem Gerät fehlen, obwohl der Abruf-Stand weiter ist. Nichts wird gelöscht; Bekanntes
+    /// überspringt der Import (`received` zählt alle abgerufenen Events, auch bekannte).
+    pub async fn refetch_all(&mut self) -> Result<PassReport, SyncError> {
+        self.state.last_synced_seq = 0;
+        self.save().await?;
+        self.run_pass(false).await
+    }
+
     /// Holt alle neuen Pakete. Liefert die Zahl übernommener Events.
     pub async fn pull(&mut self) -> Result<usize, SyncError> {
         let (mut received, progress_start) = (0, self.state.last_synced_seq);

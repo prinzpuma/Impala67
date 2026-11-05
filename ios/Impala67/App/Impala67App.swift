@@ -74,8 +74,10 @@ final class AppModel {
                 Profiler.shared.operation("boot.core-open", durationMs: Date().timeIntervalSince(started) * 1000, thresholdMs: 1500)
                 let store = ImpalaStore(core: core)
                 self.store = store
-                self.sync = SyncController(store: store)
+                let sync = SyncController(store: store)
+                self.sync = sync
                 self.drive = DriveController(store: store)
+                Profiler.shared.context = { [weak sync] in Self.reportContext(core: core, sync: sync) }
             } catch {
                 Profiler.shared.error("boot-error", String(describing: error), name: "boot.core-open")
                 startError = String(describing: error)
@@ -113,6 +115,25 @@ final class AppModel {
             Task { @MainActor in sync.cancelBackgroundPass() }
         }
         saveCheckpoint()
+    }
+
+    /// Zusatzangaben im Profiler-Bericht: Kern-Start, Sync-Stand und die Strichzahl je Seite des zuletzt
+    /// geöffneten Hefts – dieselben Zahlen liefert die PWA (`impala_heft_page_image`), so fällt sofort auf,
+    /// wenn diesem Gerät Striche fehlen.
+    private static func reportContext(core: ImpalaCore, sync: SyncController?) -> [String: Any] {
+        let load = core.loadInfo()
+        var out: [String: Any] = [
+            "core": ["eventCount": load.eventCount, "maxSeq": load.maxSeq, "replayed": load.replayed,
+                     "checkpointUsed": load.checkpointUsed, "checkpointReject": load.checkpointReject ?? ""],
+            "sync": sync?.diagnostics() ?? [:],
+        ]
+        if let id = HeftLastPage.open {
+            let pages = core.heftPageIds(pageId: id).map { hid in
+                attempt("heftPage", { try core.heftPage(pageId: id, heftPageId: hid) })?.strokes.count ?? -1
+            }
+            out["openHeft"] = ["pageId": id, "title": core.page(id: id)?.summary.title ?? "", "strokesPerPage": pages]
+        }
+        return out
     }
 
     private func saveCheckpoint() {

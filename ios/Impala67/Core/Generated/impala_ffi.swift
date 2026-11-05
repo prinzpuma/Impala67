@@ -1775,6 +1775,13 @@ public protocol CloudSyncProtocol: AnyObject, Sendable {
     func handleServerMessage(text: String) throws  -> ServerAction
     
     /**
+     * Reparatur: ruft alle Pakete dieser Generation noch einmal ab und übernimmt, was diesem Gerät
+     * fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
+     * dem Server. Liefert, wie viele Events neu ins Log kamen.
+     */
+    func refetchAll() throws  -> RefetchReport
+    
+    /**
      * Löscht alle Pakete und Dateien auf dem Server (neue Generation); danach `sync(true)`.
      */
     func resetCloud() throws 
@@ -1892,6 +1899,18 @@ open func handleServerMessage(text: String)throws  -> ServerAction  {
     return try  FfiConverterTypeServerAction_lift(try rustCallWithError(FfiConverterTypeSyncFailure_lift) {
     uniffi_impala_ffi_fn_method_cloudsync_handle_server_message(self.uniffiClonePointer(),
         FfiConverterString.lower(text),$0
+    )
+})
+}
+    
+    /**
+     * Reparatur: ruft alle Pakete dieser Generation noch einmal ab und übernimmt, was diesem Gerät
+     * fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
+     * dem Server. Liefert, wie viele Events neu ins Log kamen.
+     */
+open func refetchAll()throws  -> RefetchReport  {
+    return try  FfiConverterTypeRefetchReport_lift(try rustCallWithError(FfiConverterTypeSyncFailure_lift) {
+    uniffi_impala_ffi_fn_method_cloudsync_refetch_all(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -8826,6 +8845,102 @@ public func FfiConverterTypeConflictInfo_lower(_ value: ConflictInfo) -> RustBuf
 }
 
 
+public struct CoreLockHold {
+    /**
+     * Aufrufende Stelle in `impala-ffi` (`Datei:Zeile`).
+     */
+    public var site: String
+    /**
+     * Thread-Name (`impala-sync`, …), leer bei namenlosen Threads der Plattform.
+     */
+    public var thread: String
+    /**
+     * Bisherige bzw. gesamte Dauer.
+     */
+    public var ms: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Aufrufende Stelle in `impala-ffi` (`Datei:Zeile`).
+         */site: String, 
+        /**
+         * Thread-Name (`impala-sync`, …), leer bei namenlosen Threads der Plattform.
+         */thread: String, 
+        /**
+         * Bisherige bzw. gesamte Dauer.
+         */ms: Double) {
+        self.site = site
+        self.thread = thread
+        self.ms = ms
+    }
+}
+
+#if compiler(>=6)
+extension CoreLockHold: Sendable {}
+#endif
+
+
+extension CoreLockHold: Equatable, Hashable {
+    public static func ==(lhs: CoreLockHold, rhs: CoreLockHold) -> Bool {
+        if lhs.site != rhs.site {
+            return false
+        }
+        if lhs.thread != rhs.thread {
+            return false
+        }
+        if lhs.ms != rhs.ms {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(site)
+        hasher.combine(thread)
+        hasher.combine(ms)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCoreLockHold: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CoreLockHold {
+        return
+            try CoreLockHold(
+                site: FfiConverterString.read(from: &buf), 
+                thread: FfiConverterString.read(from: &buf), 
+                ms: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CoreLockHold, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.site, into: &buf)
+        FfiConverterString.write(value.thread, into: &buf)
+        FfiConverterDouble.write(value.ms, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCoreLockHold_lift(_ buf: RustBuffer) throws -> CoreLockHold {
+    return try FfiConverterTypeCoreLockHold.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCoreLockHold_lower(_ value: CoreLockHold) -> RustBuffer {
+    return FfiConverterTypeCoreLockHold.lower(value)
+}
+
+
 /**
  * Eine vorhandene Tagesseite.
  */
@@ -12966,6 +13081,99 @@ public func FfiConverterTypePageVersion_lift(_ buf: RustBuffer) throws -> PageVe
 #endif
 public func FfiConverterTypePageVersion_lower(_ value: PageVersion) -> RustBuffer {
     return FfiConverterTypePageVersion.lower(value)
+}
+
+
+/**
+ * Ergebnis von [`CloudSync::refetch_all`].
+ */
+public struct RefetchReport {
+    /**
+     * Vom Server abgerufene Events (auch schon bekannte).
+     */
+    public var fetched: UInt64
+    /**
+     * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
+     */
+    public var added: UInt64
+    public var sync: SyncReport
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Vom Server abgerufene Events (auch schon bekannte).
+         */fetched: UInt64, 
+        /**
+         * Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
+         */added: UInt64, sync: SyncReport) {
+        self.fetched = fetched
+        self.added = added
+        self.sync = sync
+    }
+}
+
+#if compiler(>=6)
+extension RefetchReport: Sendable {}
+#endif
+
+
+extension RefetchReport: Equatable, Hashable {
+    public static func ==(lhs: RefetchReport, rhs: RefetchReport) -> Bool {
+        if lhs.fetched != rhs.fetched {
+            return false
+        }
+        if lhs.added != rhs.added {
+            return false
+        }
+        if lhs.sync != rhs.sync {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(fetched)
+        hasher.combine(added)
+        hasher.combine(sync)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRefetchReport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RefetchReport {
+        return
+            try RefetchReport(
+                fetched: FfiConverterUInt64.read(from: &buf), 
+                added: FfiConverterUInt64.read(from: &buf), 
+                sync: FfiConverterTypeSyncReport.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RefetchReport, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.fetched, into: &buf)
+        FfiConverterUInt64.write(value.added, into: &buf)
+        FfiConverterTypeSyncReport.write(value.sync, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefetchReport_lift(_ buf: RustBuffer) throws -> RefetchReport {
+    return try FfiConverterTypeRefetchReport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefetchReport_lower(_ value: RefetchReport) -> RustBuffer {
+    return FfiConverterTypeRefetchReport.lower(value)
 }
 
 
@@ -17661,6 +17869,30 @@ fileprivate struct FfiConverterOptionTypeChatData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCoreLockHold: FfiConverterRustBuffer {
+    typealias SwiftType = CoreLockHold?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCoreLockHold.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCoreLockHold.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeDriveStatusView: FfiConverterRustBuffer {
     typealias SwiftType = DriveStatusView?
 
@@ -18311,6 +18543,31 @@ fileprivate struct FfiConverterSequenceTypeConflictInfo: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeConflictInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeCoreLockHold: FfiConverterRustBuffer {
+    typealias SwiftType = [CoreLockHold]
+
+    public static func write(_ value: [CoreLockHold], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeCoreLockHold.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CoreLockHold] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [CoreLockHold]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeCoreLockHold.read(from: &buf))
         }
         return seq
     }
@@ -19140,6 +19397,24 @@ public func conflictDiffRows(left: String, right: String) -> [DiffRow]?  {
 })
 }
 /**
+ * Wer hält die Kern-Sperre gerade (und seit wann)? `None`: frei. Wartet nie auf die Sperre.
+ */
+public func coreLockHolder() -> CoreLockHold?  {
+    return try!  FfiConverterOptionTypeCoreLockHold.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_core_lock_holder($0
+    )
+})
+}
+/**
+ * Alle Sperren ab 100 ms seit dem letzten Aufruf (älteste zuerst); leert die Liste.
+ */
+public func coreLongLockHolds() -> [CoreLockHold]  {
+    return try!  FfiConverterSequenceTypeCoreLockHold.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_core_long_lock_holds($0
+    )
+})
+}
+/**
  * Lädt das lokale Modell von Hugging Face nach `model_dir` (blockierend, Hintergrund-Thread).
  * Vorhandene Dateien bleiben; halbe Downloads (`*.part`) werden verworfen.
  */
@@ -19634,6 +19909,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_conflict_diff_rows() != 3952) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_core_lock_holder() != 32435) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_download_local_embedding_model() != 22098) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -19821,6 +20102,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_cloudsync_handle_server_message() != 63962) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_cloudsync_refetch_all() != 1881) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_cloudsync_reset_cloud() != 29703) {

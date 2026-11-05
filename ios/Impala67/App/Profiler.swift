@@ -1,10 +1,10 @@
 import Foundation
 import UIKit
 
-/// Performance-Profiler wie web/performance-profiler.js (Einstellungen → App & Speicher → Für Entwickler):
-/// protokolliert nur Auffälligkeiten – Hänger des Hauptthreads, Fehler des Rust-Kerns, Sync- und KI-Fehler,
-/// langsamer Start. Gleiche Auffälligkeiten werden zusammengefasst (Anzahl, längste/mittlere Dauer), höchstens
-/// 180 Einträge, gespeichert nur auf diesem Gerät. Aus jedem Thread aufrufbar.
+/// Performance-Profiler wie web/performance-profiler.js (Einstellungen â†’ App & Speicher â†’ FÃ¼r Entwickler):
+/// protokolliert nur AuffÃ¤lligkeiten â€“ HÃ¤nger des Hauptthreads, Fehler des Rust-Kerns, Sync- und KI-Fehler,
+/// langsamer Start. Gleiche AuffÃ¤lligkeiten werden zusammengefasst (Anzahl, lÃ¤ngste/mittlere Dauer), hÃ¶chstens
+/// 180 EintrÃ¤ge, gespeichert nur auf diesem GerÃ¤t. Aus jedem Thread aufrufbar.
 final class Profiler: @unchecked Sendable {
     static let shared = Profiler()
 
@@ -19,7 +19,7 @@ final class Profiler: @unchecked Sendable {
         var maxDurationMs: Double
         var totalDurationMs: Double
         var version: String
-        /// Angezeigte Ansicht beim (längsten) Auftreten, z. B. „heft“, „library“.
+        /// Angezeigte Ansicht beim (lÃ¤ngsten) Auftreten, z. B. â€žheftâ€œ, â€žlibraryâ€œ.
         var screen: String
         /// Stelle im Code (`Datei:Zeile`) bei Kern-Fehlern.
         var source: String
@@ -37,12 +37,16 @@ final class Profiler: @unchecked Sendable {
     private var loaded = false
     private let queue = DispatchQueue(label: "org.impala67.profiler", qos: .utility)
     private var watchdog: HangWatchdog?
-    /// Ansicht für den Kontext (setzt die Shell).
+    /// Ansicht fÃ¼r den Kontext (setzt die Shell).
     private var currentScreen = "home"
+    /// Kern-Aufruf, der gerade auf dem Hauptthread lÃ¤uft (`attempt`), fÃ¼r die Zuordnung von HÃ¤ngern.
+    private var mainOp: String?
+    /// Zusatzangaben fÃ¼r den Bericht (Sync-Stand, Kern, offenes Heft); setzt die App.
+    var context: (@MainActor () -> [String: Any])?
 
     var isEnabled: Bool { UserDefaults.standard.bool(forKey: Self.enabledKey) }
 
-    /// Beim Start: gespeicherte Einträge laden und bei aktivem Profiler die Hänger-Erkennung starten.
+    /// Beim Start: gespeicherte EintrÃ¤ge laden und bei aktivem Profiler die HÃ¤nger-Erkennung starten.
     func start() {
         lock.withLock { loadIfNeeded() }
         updateWatchdog()
@@ -59,7 +63,7 @@ final class Profiler: @unchecked Sendable {
 
     // MARK: Aufzeichnen
 
-    /// Fehler des Rust-Kerns (über `attempt`).
+    /// Fehler des Rust-Kerns (Ã¼ber `attempt`).
     func coreError(_ error: Error, op: String, file: String, line: Int) {
         record(kind: "core-error", name: op, message: String(describing: error), durationMs: 0,
                source: "\((file as NSString).lastPathComponent):\(line)")
@@ -76,8 +80,41 @@ final class Profiler: @unchecked Sendable {
         record(kind: "operation", name: name, message: "", durationMs: durationMs, source: "")
     }
 
-    fileprivate func stall(_ durationMs: Double) {
-        record(kind: "main-thread-stall", name: "", message: "", durationMs: durationMs, source: "")
+    /// Kern-Aufruf auf dem Hauptthread beginnt bzw. endet (`attempt`).
+    fileprivate func enterMain(_ op: String?) -> String? {
+        lock.withLock {
+            let previous = mainOp
+            mainOp = op
+            return previous
+        }
+    }
+
+    fileprivate var currentMainOp: String? { lock.withLock { mainOp } }
+
+    /// HÃ¤nger mit Zuordnung: `op` lief auf dem Hauptthread (nil: kein Kern-Aufruf Ã¼ber `attempt`, also
+    /// OberflÃ¤che oder ein direkter Kern-Aufruf); `holder` hielt dabei die Kern-Sperre.
+    fileprivate func stall(_ durationMs: Double, op: String?, holder: CoreLockHold?) {
+        var parts: [String] = []
+        if let holder {
+            let thread = holder.thread.isEmpty ? "" : " auf \(holder.thread)"
+            parts.append("Kern-Sperre gehalten von \(Self.shortSite(holder.site))\(thread) (seit \(Int(holder.ms)) ms)")
+        } else {
+            parts.append("Kern-Sperre frei")
+        }
+        record(kind: "main-thread-stall", name: op ?? "ohne attempt-Aufruf",
+               message: parts.joined(separator: "; "), durationMs: durationMs,
+               source: holder.map { Self.shortSite($0.site) } ?? "")
+    }
+
+    /// Die Kern-Sperre wurde lange gehalten (egal auf welchem Thread).
+    fileprivate func longLock(_ h: CoreLockHold) {
+        record(kind: "core-lock", name: Self.shortSite(h.site), message: h.thread.isEmpty ? "Plattform-Thread" : h.thread,
+               durationMs: h.ms, source: Self.shortSite(h.site))
+    }
+
+    /// `â€¦/impala-ffi/src/heft.rs:274` â†’ `heft.rs:274`.
+    private static func shortSite(_ site: String) -> String {
+        site.split(separator: "/").last.map(String.init) ?? site
     }
 
     private func record(kind: String, name: String, message: String, durationMs: Double, source: String) {
@@ -88,10 +125,13 @@ final class Profiler: @unchecked Sendable {
         lock.withLock {
             loadIfNeeded()
             let screen = currentScreen
-            // Wie `anomalySignature`: Fehler nach Art, Name und Meldungsanfang; Hänger nach Ansicht.
-            let sig = kind == "main-thread-stall"
-                ? "stall:" + screen
-                : kind + ":" + name + ":" + String(clean.prefix(45))
+            // Wie `anomalySignature`: Fehler nach Art, Name und Meldungsanfang; HÃ¤nger nach Ansicht,
+            // Hauptthread-Aufruf und Sperren-Halter (verschiedene Ursachen bleiben getrennt).
+            let sig: String = switch kind {
+            case "main-thread-stall": "stall:" + screen + ":" + name + ":" + source
+            case "core-lock": "lock:" + name + ":" + clean
+            default: kind + ":" + name + ":" + String(clean.prefix(45))
+            }
             if let i = records.firstIndex(where: { $0.sig == sig && $0.version == version }) {
                 var r = records.remove(at: i)
                 r.count += 1
@@ -112,7 +152,7 @@ final class Profiler: @unchecked Sendable {
         }
     }
 
-    // MARK: Lesen, Bericht, Löschen
+    // MARK: Lesen, Bericht, LÃ¶schen
 
     /// Neueste zuerst.
     func snapshot() -> [Record] {
@@ -129,13 +169,16 @@ final class Profiler: @unchecked Sendable {
         }
     }
 
-    /// Bericht als JSON zum Kopieren/Teilen (ähnlich `PERF_PROFILER.report()`).
+    /// Bericht als JSON zum Kopieren/Teilen (Ã¤hnlich `PERF_PROFILER.report()`).
     func report() -> String {
         let device = UIDevice.current
+        var extra: [String: Any] = [:]
+        if Thread.isMainThread, let context { extra = MainActor.assumeIsolated { context() } }
         let body: [String: Any] = [
+            "context": extra,
             "app": "ipad",
             "version": Self.version,
-            "device": device.model + " · " + device.systemName + " " + device.systemVersion,
+            "device": device.model + " Â· " + device.systemName + " " + device.systemVersion,
             "createdAt": ISO8601DateFormatter().string(from: Date()),
             "records": snapshot().map { r -> [String: Any] in
                 [
@@ -152,7 +195,7 @@ final class Profiler: @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// Bericht als Datei für das Teilen-Blatt.
+    /// Bericht als Datei fÃ¼r das Teilen-Blatt.
     func reportFile() -> URL {
         let day = ISO8601DateFormatter().string(from: Date()).prefix(10)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("impala67-performance-ipad-\(day).json")
@@ -181,7 +224,7 @@ final class Profiler: @unchecked Sendable {
         records = saved
     }
 
-    /// Nur unter `lock` aufrufen; schreibt gebündelt nach einer Sekunde.
+    /// Nur unter `lock` aufrufen; schreibt gebÃ¼ndelt nach einer Sekunde.
     private func scheduleSave() {
         guard !saveScheduled else { return }
         saveScheduled = true
@@ -199,7 +242,11 @@ final class Profiler: @unchecked Sendable {
     private func updateWatchdog() {
         lock.withLock {
             if isEnabled, watchdog == nil {
-                let w = HangWatchdog { [weak self] ms in self?.stall(ms) }
+                let w = HangWatchdog(
+                    mainOp: { [weak self] in self?.currentMainOp },
+                    report: { [weak self] ms, op, holder in self?.stall(ms, op: op, holder: holder) },
+                    longLock: { [weak self] h in self?.longLock(h) }
+                )
                 watchdog = w
                 w.start()
             } else if !isEnabled, let w = watchdog {
@@ -210,13 +257,22 @@ final class Profiler: @unchecked Sendable {
     }
 }
 
-/// Prüft alle 250 ms, ob der Hauptthread antwortet (wie `LAG_INTERVAL_MS` der PWA); hängt er länger als
-/// 100 ms, wird nach seiner Rückkehr die ganze Dauer als `main-thread-stall` gemeldet.
+/// PrÃ¼ft alle 250 ms, ob der Hauptthread antwortet (wie `LAG_INTERVAL_MS` der PWA); hÃ¤ngt er lÃ¤nger als
+/// 100 ms, wird nach seiner RÃ¼ckkehr die ganze Dauer als `main-thread-stall` gemeldet â€“ mit dem Kern-Aufruf,
+/// der auf dem Hauptthread lief, und dem Halter der Kern-Sperre (beide wÃ¤hrend des HÃ¤ngers abgefragt, ohne
+/// selbst auf die Sperre zu warten). Lange gehaltene Kern-Sperren (â‰¥ 100 ms, jeder Thread) kommen als
+/// `core-lock` dazu.
 private final class HangWatchdog: Thread, @unchecked Sendable {
-    private let report: @Sendable (Double) -> Void
+    private let mainOp: @Sendable () -> String?
+    private let report: @Sendable (Double, String?, CoreLockHold?) -> Void
+    private let longLock: @Sendable (CoreLockHold) -> Void
 
-    init(report: @escaping @Sendable (Double) -> Void) {
+    init(mainOp: @escaping @Sendable () -> String?,
+         report: @escaping @Sendable (Double, String?, CoreLockHold?) -> Void,
+         longLock: @escaping @Sendable (CoreLockHold) -> Void) {
+        self.mainOp = mainOp
         self.report = report
+        self.longLock = longLock
         super.init()
         name = "impala67.hang-watchdog"
         qualityOfService = .utility
@@ -228,10 +284,17 @@ private final class HangWatchdog: Thread, @unchecked Sendable {
             let pong = DispatchSemaphore(value: 0)
             DispatchQueue.main.async { pong.signal() }
             if pong.wait(timeout: start + .milliseconds(100)) == .timedOut {
-                pong.wait()
+                // Mitten im HÃ¤nger nachsehen; der Halter zÃ¤hlt, solange der Hauptthread noch hÃ¤ngt.
+                var op = mainOp()
+                var holder = coreLockHolder()
+                while pong.wait(timeout: .now() + .milliseconds(250)) == .timedOut {
+                    if op == nil { op = mainOp() }
+                    if let now = coreLockHolder(), now.ms > (holder?.ms ?? 0) { holder = now }
+                }
                 let ms = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
-                report(ms)
+                report(ms, op, holder)
             }
+            for h in coreLongLockHolds() { longLock(h) }
             Thread.sleep(forTimeInterval: 0.25)
         }
     }
@@ -239,11 +302,21 @@ private final class HangWatchdog: Thread, @unchecked Sendable {
 
 
 /// Wie `try?`, aber ein Fehler landet im Profiler (Art `core-error`, mit Aufrufstelle), statt still zu
-/// verschwinden. Aufruf: `attempt("trashPage", { try core.trashPage(id: id) })`. Ausdrückliche Closure statt
-/// `@autoclosure`: Ein `try` im Argument würde sonst die umgebende Closure zur werfenden machen. Liefert der
+/// verschwinden. Aufruf: `attempt("trashPage", { try core.trashPage(id: id) })`. AusdrÃ¼ckliche Closure statt
+/// `@autoclosure`: Ein `try` im Argument wÃ¼rde sonst die umgebende Closure zur werfenden machen. Liefert der
 /// Kern selbst schon optional, mit `?? nil` flach machen.
 @discardableResult
 func attempt<T>(_ op: String, _ body: () throws -> T, file: String = #fileID, line: Int = #line) -> T? {
+    // Auf dem Hauptthread merken, welcher Kern-Aufruf lÃ¤uft: HÃ¤ngt er, nennt der Profiler ihn.
+    if Thread.isMainThread {
+        let previous = Profiler.shared.enterMain(op)
+        defer { _ = Profiler.shared.enterMain(previous) }
+        return attemptBody(op, body, file: file, line: line)
+    }
+    return attemptBody(op, body, file: file, line: line)
+}
+
+private func attemptBody<T>(_ op: String, _ body: () throws -> T, file: String, line: Int) -> T? {
     do {
         return try body()
     } catch {

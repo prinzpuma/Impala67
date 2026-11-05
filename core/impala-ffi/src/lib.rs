@@ -5,6 +5,7 @@
 
 mod ai;
 mod ai_tools;
+mod busy;
 mod card_ops;
 mod cards;
 mod changes;
@@ -209,9 +210,35 @@ struct Inner {
 /// Zustand, den [`ImpalaCore`] und ein [`sync::CloudSync`] teilen.
 type Shared = Arc<Mutex<Inner>>;
 
-fn lock(shared: &Shared) -> MutexGuard<'_, Inner> {
+/// Genommene Kern-Sperre; merkt sich für den Profiler, wer sie hält ([`busy`]).
+struct Locked<'a>(MutexGuard<'a, Inner>);
+
+impl std::ops::Deref for Locked<'_> {
+    type Target = Inner;
+    fn deref(&self) -> &Inner {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Locked<'_> {
+    fn deref_mut(&mut self) -> &mut Inner {
+        &mut self.0
+    }
+}
+
+impl Drop for Locked<'_> {
+    fn drop(&mut self) {
+        busy::released();
+    }
+}
+
+#[track_caller]
+fn lock(shared: &Shared) -> Locked<'_> {
+    let site = std::panic::Location::caller();
     // Ein Panic in einem frÃ¼heren Aufruf lÃ¤sst den Zustand stehen; weiterarbeiten statt abstÃ¼rzen.
-    shared.lock().unwrap_or_else(|e| e.into_inner())
+    let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
+    busy::acquired(site);
+    Locked(guard)
 }
 
 /// Meta-SchlÃ¼ssel der GerÃ¤te-ID (Sync-Client-ID, unterdrÃ¼ckt das eigene Echo).
@@ -286,7 +313,7 @@ pub struct ImpalaCore {
 
 /// Sperre auf den Zustand; meldet beim Freigeben gesammelte Ã„nderungen ([`changes::notify`]).
 struct CoreGuard<'a> {
-    guard: Option<MutexGuard<'a, Inner>>,
+    guard: Option<Locked<'a>>,
     shared: &'a Shared,
 }
 
@@ -317,6 +344,7 @@ impl ImpalaCore {
         Arc::new(ImpalaCore { inner: Arc::new(Mutex::new(inner)) })
     }
 
+    #[track_caller]
     fn lock(&self) -> CoreGuard<'_> {
         CoreGuard { guard: Some(lock(&self.inner)), shared: &self.inner }
     }

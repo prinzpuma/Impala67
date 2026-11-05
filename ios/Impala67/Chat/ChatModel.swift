@@ -33,6 +33,8 @@ enum Refine: String, CaseIterable, Identifiable {
 @MainActor
 enum HeftLastPage {
     static var index: [String: Int] = [:]
+    /// Zuletzt geöffnetes Heft (Seiten-ID), für den Profiler-Bericht.
+    static var open: String?
 }
 
 /// KI-Chat (wie `AiChatViewModel.kt`). Der Rust-Assistent (`AiAssistant.runAsync`) fährt die

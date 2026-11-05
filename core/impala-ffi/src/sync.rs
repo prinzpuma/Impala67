@@ -94,6 +94,16 @@ pub struct SyncReport {
     pub conflicts: u64,
 }
 
+/// Ergebnis von [`CloudSync::refetch_all`].
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct RefetchReport {
+    /// Vom Server abgerufene Events (auch schon bekannte).
+    pub fetched: u64,
+    /// Davon neu ins Log übernommen – vorher fehlten sie diesem Gerät.
+    pub added: u64,
+    pub sync: SyncReport,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct SyncStatus {
     pub last_synced_seq: u64,
@@ -379,6 +389,8 @@ pub(crate) enum Cmd {
     Sync(bool, Reply<PassReport>),
     Compact(bool, Reply<CompactReport>),
     Reset(Reply<()>),
+    /// Alle Pakete der Generation noch einmal abrufen ([`CloudSync::refetch_all`]).
+    Refetch(Reply<PassReport>),
     /// WebSocket-Nachricht; ohne Antwortkanal nur den Zustand nachziehen.
     Message(String, Option<Reply<WsAction>>),
     /// Ein gerade gespeichertes lokales Event.
@@ -417,6 +429,13 @@ fn run<H: HttpClient>(
             Cmd::Compact(bypass, reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.compact_cloud(bypass));
+                publish(&mut client);
+                out.busy.store(false, Ordering::Release);
+                let _ = reply.send(r);
+            }
+            Cmd::Refetch(reply) => {
+                stop.store(false, Ordering::Relaxed);
+                let r = block_on(client.refetch_all());
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);
@@ -568,6 +587,20 @@ impl CloudSync {
     pub fn compact_cloud(&self, bypass_cooldown: bool) -> Result<SyncReport, SyncFailure> {
         let r = self.pass(|r| Cmd::Compact(bypass_cooldown, r))?;
         Ok(report(&r.pass, self.take_conflicts()))
+    }
+
+    /// Reparatur: ruft alle Pakete dieser Generation noch einmal ab und übernimmt, was diesem Gerät
+    /// fehlt (z. B. Heft-Striche, die nur andere Geräte zeigen). Löscht nichts, weder hier noch auf
+    /// dem Server. Liefert, wie viele Events neu ins Log kamen.
+    pub fn refetch_all(&self) -> Result<RefetchReport, SyncFailure> {
+        let count = || crate::lock(&self.core).storage.log_info().map_or(0, |i| i.count);
+        let before = count();
+        let pass = self.pass(Cmd::Refetch)?;
+        Ok(RefetchReport {
+            fetched: pass.received as u64,
+            added: count().saturating_sub(before),
+            sync: report(&pass, self.take_conflicts()),
+        })
     }
 
     /// Löscht alle Pakete und Dateien auf dem Server (neue Generation); danach `sync(true)`.

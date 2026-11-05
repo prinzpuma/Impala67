@@ -71,6 +71,8 @@ struct HeftScreen: View {
         .sensoryFeedback(.selection, trigger: currentId)
         // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`).
         .onChange(of: currentId, initial: true) { HeftLastPage.index[pageId] = index }
+        // Für den Profiler-Bericht: Strichzahlen dieses Hefts (Vergleich mit PWA/Android).
+        .onAppear { HeftLastPage.open = pageId }
         // Neue Seite: Auswahl und Lasso gelten nur für die Seite, auf der sie begonnen wurden.
         .onChange(of: currentId) {
             link.selecting = false
