@@ -90,17 +90,17 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
-| 1. Shell & Navigation | 60 | 25 | 17 | 59 % |
-| 2. Seiten & Editor | 25 | 13 | 12 | 50 % |
-| 3. Heft | 16 | 10 | 11 | 43 % |
-| 4. KI-Chat & Karten/Lernen | 18 | 10 | 16 | 41 % |
+| 1. Shell & Navigation | 65 | 24 | 13 | 64 % |
+| 2. Seiten & Editor | 29 | 11 | 10 | 58 % |
+| 3. Heft | 17 | 10 | 10 | 46 % |
+| 4. KI-Chat & Karten/Lernen | 22 | 10 | 12 | 50 % |
 | 5. Einstellungen, Sync, Backup | 16 | 5 | 7 | 57 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
 Größte Lücken neben der Leistung: Seitenverlauf (Notiz und Heft), Seiten-Icon/Cover,
 Datenbankansicht/Vorlesungsübersicht, Fächer, Schulnoten, Lernanalyse, Daily-Notizen,
-Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
+Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ---
 
@@ -218,9 +218,9 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 ### 1.13 Papierkorb und Archiv
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| Papierkorb mit Seiten, Stapeln und Karten | 🟡 | Nur Seiten (`Shell/ShellSheets.swift:146-179`) |
-| Filter Alle/Seiten/Stapel/Karten | ❌ | fehlt |
-| Wiederherstellen, endgültig löschen | ✅ | `ShellSheets.swift:158-160` (ohne Rückfrage) |
+| Papierkorb mit Seiten, Stapeln und Karten | ✅ | `Shell/ShellSheets.swift` `TrashSheet`; Karten gelöschter Stapel nur beim Stapel (wie `orphanTrashedCards`) |
+| Filter Alle/Seiten/Stapel/Karten | ✅ | Segment-Filter in TrashSheet (ShellSheets.swift) |
+| Wiederherstellen, endgültig löschen | ✅ | Wischen in `TrashSheet`; Seiten ohne Rückfrage, Stapel/Karten mit Rückfrage wie die PWA |
 | Papierkorb leeren mit Rückfrage | ✅ | `ShellSheets.swift:169-176` |
 | Archiv mit Filter, „Aus Archiv holen“ | ✅ | `Library/LibraryScreen.swift:770-800` |
 
@@ -245,14 +245,14 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Toast unten, kurz sichtbar | 🟡 | Nur im Editor (`Notes/NoteModel.swift:33-42`) |
-| Erfolgs-/Fehlerfarbe | ❌ | fehlt |
+| Erfolgs-/Fehlerfarbe | ✅ | Randfarbe nach `ToastStyle` wie `.toast.success/.error` (`NoteEditor.swift`) |
 | Toast mit Aktion (z. B. Rückgängig) | ❌ | fehlt |
 
 ### 1.17 Tastaturkürzel
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | ⌘K Befehlspalette | ✅ | `Shell/RootView.swift:164-169` |
-| ⌥Leertaste Diktat | ❌ | fehlt |
+| ⌥Leertaste Diktat | ✅ | `Shell/RootView.swift` `ShellShortcuts`: öffnet das KI-Panel und schaltet dort das Diktat (wie `VOICE.toggle("side")`) |
 | Escape-Kaskade | 🟡 | nur Sheet |
 | Chat: Enter / ⇧Enter | ✅ | `Chat/ChatView.swift:146-151` |
 | Editor ⌘Z / ⇧⌘Z | ✅ | `Notes/BlockTextView.swift:158-159` |
@@ -265,7 +265,7 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 | Eingabe, Seiten mit Auszug, Chats | ✅ | `ShellSheets.swift:60-113` |
 | Aktionen: Neue Seite, Karten, Hell/Dunkel, Archiv, Papierkorb, Sync, Einstellungen, Gemini | ✅ | `ShellSheets.swift:122-141` |
 | Präfix „Archiv · “ | 🟡 | fehlt |
-| „In neuem Tab öffnen“ | ❌ | fehlt |
+| „In neuem Tab öffnen“ | ✅ | Kontextmenü an Suchtreffern (`ShellSheets.swift`); PWA: Palette des „+“-Tabs |
 | Daily-Notiz heute / Daily-Kalender | ❌ | fehlt |
 
 ### 1.19 Bibliothek, PDF, Graph, Gemini Notebook
@@ -302,8 +302,8 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 | Cover (Vorlagen, eigenes Bild) | ❌ | fehlt für Notizen |
 | Platzhalter „Unbenannt“ | 🟡 | „Ohne Titel“ |
 | Teilen-Menü (PDF, MD, Link) | 🟡 | teilt nur Markdown |
-| Als Vorlage im ⋯ | 🟡 | nur im Seitenbaum |
-| Verschieben im ⋯ | 🟡 | nur Seitenbaum |
+| Als Vorlage im ⋯ | ✅ | `NoteEditor.swift` (`PageChrome`) & Seitenbaum |
+| Verschieben im ⋯ | ✅ | `NoteEditor.swift` (`TreeMoveSheet`) & Seitenbaum |
 | Verlauf (Seitenversionen) | ❌ | fehlt |
 
 ### 2.2 Grundlagen
@@ -341,7 +341,7 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | #, ##, ###, Listen, To-do, Zitat live | ✅ | `Notes/BlockOps.swift:276-287` |
-| „---“, „```“, „$$“ live | ❌ | nur über Slash |
+| „---“, „```“, „$$“ live | ✅ | `Notes/NoteModel.swift` `edit` (wie `web/editor.js:1064-1085`) |
 | Enter, ⇧Enter, Tab/⇧Tab, Entf, ↑ ↓ | ✅ | `BlockTextView.swift:144-150` |
 | ⌘D, ⇧⌘↑/↓, Esc | ✅ | `BlockTextView.swift:160-162` |
 | ⌘A zweistufig, ⇧⌘0–8 | ❌ | fehlt |
@@ -353,7 +353,7 @@ Papierkorb für Stapel/Karten, Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per
 | Text, Überschriften, Listen, Zitat, Trennlinie | ✅ | `BlockViews.swift:54-70` |
 | Tabelle | ✅ | `TableEditor.swift` |
 | Callout | ✅ | `BlockViews.swift:357-366` |
-| Callout-Farbe wechseln | ❌ | feste Farbe |
+| Callout-Farbe wechseln | ✅ | Tipp auf den Punkt schaltet reihum wie die PWA (`NoteModel.cycleCalloutColor`) |
 | Toggle | ✅ | `BlockViews.swift:429` |
 | Spalten, Umbruch bei schmaler Breite | 🟡 | feste Zeile |
 | Code: Sprache, Kopieren | ✅ | `BlockViews.swift:244-285` |
@@ -416,7 +416,7 @@ Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilK
 | Formerkennung nach Halten | 🟡 | 450 statt 550 ms |
 | Finger scrollt, Stift zeichnet | ✅ | `HeftCanvas.swift:29` |
 | Pinch-Zoom | 🟡 | Grenzen 0,25–5 statt 0,4–6 |
-| Doppeltipp zoomt 2,2× | ❌ | fehlt |
+| Doppeltipp zoomt 2,2× | ✅ | `Heft/HeftCanvas.swift` `handleDoubleTap` (Finger; Faktoren relativ zur Passbreite wie `heft-viewport.js`) |
 | Trackpad-Scrollen blättert, ⌘+Scrollen zoomt | ❌ | fehlt |
 | Am Ende hochziehen = neue Seite | ❌ | fehlt |
 
@@ -451,7 +451,7 @@ Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilK
 |---|---|---|
 | Enter sendet, Stopp, Teilantwort bleibt | ✅ | `Chat/ChatView.swift:146-185` |
 | Anhänge (Foto/Datei/Heftseite), Seitenkontext | ✅ | `ChatView.swift:162-318` |
-| Langer Text → Anhang „geklebter-text.txt“ | ❌ | fehlt |
+| Langer Text → Anhang „geklebter-text.txt“ | ✅ | `Chat/ChatView.swift` `typed` (nur Einfügen über die Tastatur, nicht Bearbeiten/Diktat) |
 | Bearbeiten, Kopieren, Länger/Kürzer | ✅ | `Chat/ChatParts.swift:88-97` |
 | Markdown mit Formeln | 🟡 | Formeln unbelegt |
 | Gedankengang (live mit Vorschau) | 🟡 | Vorschau fehlt |
@@ -486,8 +486,8 @@ Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilK
 | Speichern verlangt Vorderseite | 🟡 | auch nur Rückseite erlaubt |
 | Lückentext aus Seiten-Markierungen | ❌ | fehlt |
 | Lernen: Antwort zeigen, 1–4, Zähler, Bearbeiten, Aussetzen, Rückgängig | ✅ | `Cards/ReviewScreen.swift` |
-| Optionen im Lernen | ❌ | nur im Stapelbaum |
-| Selbsteinschätzung Sicher/Unsicher/Geraten | ❌ | fehlt (Schalter existiert) |
+| Optionen im Lernen | ✅ | `ReviewScreen.swift` (Fußleiste) |
+| Selbsteinschätzung Sicher/Unsicher/Geraten | ✅ | `ReviewScreen.swift`: Chips vor dem Aufdecken, decken wie in der PWA nicht selbst auf |
 | Feynman: erklären, Diktat, prüfen | ✅ | `Cards/Feynman.swift` |
 
 ### 4.5 Browser, Import/Export, Archiv
@@ -495,7 +495,7 @@ Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilK
 |---|---|---|
 | Suche, Bearbeiten, Aussetzen, Löschen | ✅ | `CardsScreen.swift:337-363` |
 | Sortierbare Spalten, Intervall/Fehler | ❌ | fehlt |
-| Zeilenaktion Archivieren | ❌ | fehlt |
+| Zeilenaktion Archivieren | ✅ | `CardsScreen.swift:355` |
 | Export TXT/CSV | 🟡 | kein Anki-Paket |
 | Import mit Vorschau und Duplikaten | ✅ | `Cards/CardTransfer.swift:155-193` |
 | Archiv: Stapel/Karten wiederherstellen | ✅ | `Cards/CardArchiveScreen.swift` |

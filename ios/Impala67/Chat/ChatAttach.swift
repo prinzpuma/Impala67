@@ -46,6 +46,13 @@ struct ChatAttachment: Identifiable {
         return ChatAttachment(kind: .text(AiFile(name: name, content: String(text.prefix(maxChars)))), name: name, preview: nil)
     }
 
+    /// Eingefügter langer Text als Datei-Anhang („geklebter-text.txt“ wie in der PWA).
+    static func pastedText(_ text: String) -> ChatAttachment {
+        let content = String(text.prefix(maxChars))
+        return ChatAttachment(kind: .text(AiFile(name: "geklebter-text.txt", content: content)),
+                              name: "geklebter-text.txt", preview: nil)
+    }
+
     /// Die angezeigte Seite eines Hefts als Bild („Heftseite anhängen“).
     @MainActor
     static func heftPage(core: ImpalaCore, pageId: String) -> ChatAttachment? {

@@ -357,7 +357,12 @@ private struct ComplexBlockView: View {
         case .callout(let color, let children):
             let tone = noteColor(color)
             HStack(alignment: .top, spacing: 10) {
-                Circle().fill(tone).frame(width: 18, height: 18).padding(.top, 3)
+                // Tipp auf den Punkt schaltet die Farbe weiter (`data-bcalloutcolor`, web/editor.js).
+                Button { model.cycleCalloutColor(block.id) } label: {
+                    Circle().fill(tone).frame(width: 18, height: 18).padding(.top, 3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Farbe")
                 NestedBlocks(blocks: children, model: model)
             }
             .padding(14)

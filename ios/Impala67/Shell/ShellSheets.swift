@@ -139,6 +139,14 @@ private struct SearchSheet: View {
                                 }
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                dismiss()
+                                shell.openNewTab(p.id)
+                            } label: {
+                                Label { Text("In neuem Tab öffnen") } icon: { Icon("external") }
+                            }
+                        }
                     }
                 }
             }
@@ -207,36 +215,144 @@ private struct SearchSheet: View {
 }
 /// Papierkorb: wiederherstellen oder endgültig löschen.
 private struct TrashSheet: View {
+    private enum TrashFilter: String, CaseIterable, Identifiable {
+        case all = "Alle"
+        case pages = "Seiten"
+        case decks = "Stapel"
+        case cards = "Karten"
+        var id: String { rawValue }
+    }
+
+    /// Endgültig zu löschender Stapel oder Karte (Rückfrage wie `data-deckpurge`/`data-cardpurge` der PWA).
+    private enum Purge: Identifiable {
+        case deck(DeckInfo), card(CardInfo)
+        var id: String { switch self { case .deck(let d): "d:" + d.name; case .card(let c): "c:" + c.id } }
+    }
+
     @Environment(ImpalaStore.self) private var store
+    @State private var filter: TrashFilter = .all
     @State private var confirmEmpty = false
+    @State private var purge: Purge?
 
     var body: some View {
         let _ = store.pageMetaRevision
+        let _ = store.cardsRevision
         let pages = store.core.trashedPages()
-        List(pages) { p in
-            HStack(spacing: Space.s2) {
-                PageIcon(page: p).foregroundStyle(Impala.text2)
-                Text(PageStyle.title(p)).foregroundStyle(Impala.text)
-            }
-            .swipeActions(edge: .trailing) {
-                Button("Löschen", role: .destructive) { attempt("deletePageForever", { try store.core.deletePageForever(id: p.id) }) }
-                Button("Wiederherstellen") { attempt("restorePage", { try store.core.restorePage(id: p.id) }) }.tint(Impala.accent)
-            }
+        let decks = store.core.trashedDecks()
+        // Wie `orphanTrashedCards` der PWA: Karten eines gelöschten Stapels stehen nur beim Stapel.
+        let cards = store.core.trashedCards().filter { c in
+            !decks.contains { c.deck == $0.name || c.deck.hasPrefix($0.name + Deck.sep) }
         }
-        .overlay {
-            if pages.isEmpty { Placeholder(icon: "trash", title: "Papierkorb ist leer", text: "Gelöschte Seiten landen hier.") }
+
+        let showPages = (filter == .all || filter == .pages) && !pages.isEmpty
+        let showDecks = (filter == .all || filter == .decks) && !decks.isEmpty
+        let showCards = (filter == .all || filter == .cards) && !cards.isEmpty
+        let isEmpty = !showPages && !showDecks && !showCards
+        let hasAnyTrash = !pages.isEmpty || !decks.isEmpty || !cards.isEmpty
+
+        VStack(spacing: Space.s2) {
+            Picker("Filter", selection: $filter) {
+                ForEach(TrashFilter.allCases) { f in
+                    Text(f.rawValue).tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
+            List {
+                if showPages {
+                    Section("Seiten") {
+                        ForEach(pages) { p in
+                            HStack(spacing: Space.s2) {
+                                PageIcon(page: p).foregroundStyle(Impala.text2)
+                                Text(PageStyle.title(p)).foregroundStyle(Impala.text)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button("Löschen", role: .destructive) { attempt("deletePageForever", { try store.core.deletePageForever(id: p.id) }) }
+                                Button("Wiederherstellen") { attempt("restorePage", { try store.core.restorePage(id: p.id) }) }.tint(Impala.accent)
+                            }
+                        }
+                    }
+                }
+                if showDecks {
+                    Section("Stapel") {
+                        ForEach(decks, id: \.name) { d in
+                            HStack(spacing: Space.s2) {
+                                Icon("cards").foregroundStyle(Impala.text2)
+                                Text(Deck.label(d.name)).foregroundStyle(Impala.text)
+                                if d.cards > 0 {
+                                    Spacer()
+                                    Text(Deck.cardsText(Int(d.cards)))
+                                        .font(.system(size: TextSize.sm))
+                                        .foregroundStyle(Impala.text2)
+                                }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button("Löschen", role: .destructive) { purge = .deck(d) }
+                                Button("Wiederherstellen") { attempt("restoreDeck", { try store.core.restoreDeck(name: d.name) }) }.tint(Impala.accent)
+                            }
+                        }
+                    }
+                }
+                if showCards {
+                    Section("Karten") {
+                        ForEach(cards, id: \.id) { c in
+                            HStack(spacing: Space.s2) {
+                                Icon("cards").foregroundStyle(Impala.text2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    let preview = markdownPlainText(markdown: c.front).trimmingCharacters(in: .whitespacesAndNewlines)
+                                    Text(preview.isEmpty ? "(leer)" : preview)
+                                        .font(.system(size: TextSize.md))
+                                        .foregroundStyle(Impala.text)
+                                        .lineLimit(2)
+                                    Text(Deck.label(c.deck))
+                                        .font(.system(size: TextSize.sm))
+                                        .foregroundStyle(Impala.text2)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button("Löschen", role: .destructive) { purge = .card(c) }
+                                Button("Wiederherstellen") { attempt("restoreCard", { try store.core.restoreCard(id: c.id) }) }.tint(Impala.accent)
+                            }
+                        }
+                    }
+                }
+            }
+            .overlay {
+                if isEmpty { Placeholder(icon: "trash", title: "Der Papierkorb ist leer.", text: "Gelöschte Seiten, Stapel und Karten landen hier.") }
+            }
         }
         .navigationTitle("Papierkorb")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !pages.isEmpty {
+            if hasAnyTrash {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Leeren", role: .destructive) { confirmEmpty = true }
                 }
             }
         }
         .confirmationDialog("Papierkorb endgültig leeren?", isPresented: $confirmEmpty, titleVisibility: .visible) {
-            Button("Endgültig löschen", role: .destructive) { _ = attempt("emptyPageTrash", { try store.core.emptyPageTrash() }) }
+            Button("Endgültig löschen", role: .destructive) {
+                _ = attempt("emptyPageTrash", { try store.core.emptyPageTrash() })
+                _ = attempt("emptyCardTrash", { try store.core.emptyCardTrash() })
+            }
+        }
+        .confirmationDialog("Endgültig löschen?", isPresented: Binding(get: { purge != nil }, set: { if !$0 { purge = nil } }),
+                            titleVisibility: .visible, presenting: purge) { p in
+            Button("Löschen", role: .destructive) {
+                switch p {
+                case .deck(let d): attempt("deleteDeck", { try store.core.deleteDeck(name: d.name) })
+                case .card(let c): attempt("deleteCard", { try store.core.deleteCard(id: c.id) })
+                }
+            }
+        } message: { p in
+            switch p {
+            case .deck(let d):
+                Text("Stapel „\(Deck.label(d.name))“" + (d.cards > 0 ? " samt \(Deck.cardsText(Int(d.cards)))" : "") + " wird unwiderruflich entfernt.")
+            case .card:
+                Text("Die Karte wird unwiderruflich entfernt.")
+            }
         }
     }
 }

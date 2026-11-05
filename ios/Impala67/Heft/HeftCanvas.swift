@@ -36,6 +36,11 @@ struct HeftCanvas: UIViewRepresentable {
         canvas.minimumZoomScale = 0.25
         canvas.maximumZoomScale = 5
         canvas.bouncesZoom = true
+        // Doppeltipp mit dem Finger zoomt (der Stift zeichnet weiter).
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        canvas.addGestureRecognizer(doubleTap)
         context.coordinator.attach(canvas)
         canvas.onLayout = { [weak coordinator = context.coordinator] in coordinator?.fitWidth() }
         return canvas
@@ -229,6 +234,23 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.contentSize = CGSize(width: pageSize.width * canvas.zoomScale, height: pageSize.height * canvas.zoomScale)
             fitWidth()
             layoutPage()
+        }
+
+        /// Doppeltipp wie `heft-viewport.js`: ab 1,9× zurück auf Passbreite, sonst auf mindestens 2,2×
+        /// (bzw. 1,8× des jetzigen Zooms) um den getippten Punkt. Die Faktoren gelten wie in der PWA
+        /// relativ zur Passbreite (dort `view.k = 1`).
+        @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+            guard let canvas, pageSize.width > 0, canvas.bounds.width > 0, canvas.bounds.height > 0 else { return }
+            let fit = (canvas.bounds.width - 2 * Self.gutter) / pageSize.width
+            guard fit > 0 else { return }
+            let current = canvas.zoomScale
+            let k = current / fit
+            let target = k >= 1.9 ? fit : min(canvas.maximumZoomScale, fit * max(2.2, k * 1.8))
+            // `zoom(to:)` erwartet Seitenkoordinaten (ungezoomt); der Tipp liegt in gezoomten Inhaltskoordinaten.
+            let p = gesture.location(in: canvas)
+            let pt = CGPoint(x: p.x / current, y: p.y / current)
+            let w = canvas.bounds.width / target, h = canvas.bounds.height / target
+            canvas.zoom(to: CGRect(x: pt.x - w / 2, y: pt.y - h / 2, width: w, height: h), animated: true)
         }
 
         /// Beim ersten Anzeigen die Seitenbreite einpassen (mit Rand wie die Arbeitsfläche der PWA).

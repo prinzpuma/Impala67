@@ -152,7 +152,7 @@ private struct Composer: View {
                     .foregroundStyle(Impala.text2)
                     .lineLimit(2)
             }
-            TextField("Frag deinen KI-Coach…", text: $input, axis: .vertical)
+            TextField("Frag deinen KI-Coach…", text: typed, axis: .vertical)
                 .font(.system(size: TextSize.base))
                 .lineLimit(1...8)
                 .focused(focused)
@@ -216,7 +216,10 @@ private struct Composer: View {
                 let base = input.trimmingCharacters(in: .whitespaces)
                 input = base.isEmpty ? said : base + " " + said
             }
+            takeDictationRequest()
         }
+        // ⌥Leertaste (`ShellShortcuts`): Diktat starten/beenden wie `VOICE.toggle("side")` der PWA.
+        .onChange(of: chat.dictationRequest) { takeDictationRequest() }
         .photosPicker(isPresented: $pickPhoto, selection: $photo, matching: .images)
         .onChange(of: photo) { _, item in
             guard let item else { return }
@@ -234,6 +237,32 @@ private struct Composer: View {
                                               set: { if !$0 { attachError = nil; dictation.error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(attachError ?? dictation.error ?? "") }
+    }
+
+    /// Eingabe über die Tastatur. Eine sehr lange Einfügung (> 600 Zeichen oder > 15 Zeilen) wird wie
+    /// `handlePaste` in web/chat-fullscreen.js zum Anhang „geklebter-text.txt“ statt das Feld zu fluten.
+    /// Programmatisch gesetzter Text (Bearbeiten, Vorschläge, Diktat) läuft nicht hier durch.
+    private var typed: Binding<String> {
+        Binding(get: { input }, set: { next in
+            let old = input
+            if next.count >= old.count + 16 {
+                let head = next.commonPrefix(with: old)
+                let newRest = next.dropFirst(head.count), oldRest = old.dropFirst(head.count)
+                let tail = String(newRest.reversed()).commonPrefix(with: String(oldRest.reversed())).count
+                let inserted = String(newRest.dropLast(tail))
+                if inserted.count > 600 || inserted.split(separator: "\n", omittingEmptySubsequences: false).count > 15 {
+                    shell.chat.attachment = ChatAttachment.pastedText(inserted)
+                    return
+                }
+            }
+            input = next
+        })
+    }
+
+    private func takeDictationRequest() {
+        guard shell.chat.dictationRequest else { return }
+        shell.chat.dictationRequest = false
+        dictation.toggle()
     }
 
     private func attach(_ att: ChatAttachment?, fail: String) {

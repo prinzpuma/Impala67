@@ -171,6 +171,13 @@ private struct ShellShortcuts: ViewModifier {
             Button("") { shell.sheet = shell.sheet == .search ? nil : .search }
                 .keyboardShortcut("k", modifiers: .command)
                 .hidden()
+            // ⌥Leertaste: Diktat im KI-Panel (web/shortcuts.js → `VOICE.toggle("side")`).
+            Button("") {
+                shell.setAiPanel(true)
+                shell.chat.dictationRequest = true
+            }
+            .keyboardShortcut(.space, modifiers: .option)
+            .hidden()
         }
     }
 }

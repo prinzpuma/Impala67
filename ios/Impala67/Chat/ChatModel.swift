@@ -66,6 +66,8 @@ final class ChatModel {
     var attachment: ChatAttachment?
     /// Entwurf der Benutzereingabe (bleibt beim Tabwechsel erhalten).
     var inputDraft = ""
+    /// ⌥Leertaste gedrückt: die sichtbare Eingabeleiste startet bzw. beendet das Diktat.
+    var dictationRequest = false
 
     /// Live-Modelle aller Quellen (`S.availableModels`), 30 s zwischengespeichert wie in ai.js.
     private(set) var models: [AiModel] = []

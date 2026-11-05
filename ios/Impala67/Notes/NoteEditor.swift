@@ -62,7 +62,7 @@ private struct NoteBody: View {
         ScrollView {
             VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
                 PageChrome(model: model)
-                ArchivedBanner(pageId: model.pageId) { model.showToast($0) }
+                ArchivedBanner(pageId: model.pageId) { model.showToast($0, style: .success) }
                 NoteEmoji(pageId: model.pageId)
                 TextField("Ohne Titel", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
                     .font(.system(size: 34, weight: .bold))
@@ -112,13 +112,19 @@ private struct NoteBody: View {
         }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
-                Text(toast)
+                Text(toast.text)
                     .font(.system(size: TextSize.base))
                     .foregroundStyle(Impala.text)
                     .padding(.horizontal, Space.s4).padding(.vertical, 10)
                     .impalaGlass()
-                    .padding(.bottom, editing ? 72 : 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .overlay {
+                        // Wie die PWA: nur der Rand zeigt Erfolg (grün) oder Fehler (rot).
+                        if toast.style != .info {
+                            Capsule().stroke((toast.style == .error ? Impala.danger : Impala.success).opacity(0.55), lineWidth: 1)
+                        }
+                    }
+                .padding(.bottom, editing ? 72 : 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2), value: editing)
@@ -248,7 +254,7 @@ private struct NoteBody: View {
         switch url.host() {
         case "page": shell.open(rest)
         case "wiki":
-            if let p = store.core.findPageByTitle(title: rest) { shell.open(p.id) } else { model.showToast("Seite nicht gefunden") }
+            if let p = store.core.findPageByTitle(title: rest) { shell.open(p.id) } else { model.showToast("Seite nicht gefunden", style: .error) }
         default: break
         }
         return .handled
@@ -259,7 +265,7 @@ private struct NoteBody: View {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
         guard let data = try? Data(contentsOf: url), model.addMedia(data, mime: mime, name: url.lastPathComponent) else {
-            model.showToast("Datei konnte nicht gelesen werden.")
+            model.showToast("Datei konnte nicht gelesen werden.", style: .error)
             return
         }
     }
@@ -289,7 +295,7 @@ private struct NoteBody: View {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   model.addMedia(data, mime: type.preferredMIMEType ?? "image/jpeg", name: items.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)")
             else {
-                model.showToast("Datei konnte nicht gelesen werden.")
+                model.showToast("Datei konnte nicht gelesen werden.", style: .error)
                 continue
             }
         }
@@ -356,6 +362,7 @@ private struct PageChrome: View {
     @Environment(ShellModel.self) private var shell
     let model: NoteModel
     @State private var shareItem: ShareItem?
+    @State private var movingPage: PageSummary?
 
     var body: some View {
         let _ = store.pageMetaRevision
@@ -426,6 +433,23 @@ private struct PageChrome: View {
 
                     Divider()
 
+                    Button {
+                        if let summary { movingPage = summary }
+                    } label: {
+                        Label { Text("Verschieben nach…") } icon: { Icon("folder-move") }
+                    }
+
+                    let isTemplate = summary?.isTemplate == true
+                    Button {
+                        store.core.patchPage(model.pageId, ["isTemplate": !isTemplate])
+                    } label: {
+                        Label {
+                            Text(isTemplate ? "Vorlage entfernen" : "Als Vorlage festlegen")
+                        } icon: {
+                            Icon("template")
+                        }
+                    }
+
                     let marks = highlightCount(page?.content ?? blocksToMarkdown(blocks: model.blocks))
                     Button(action: cardsFromHighlights) {
                         Label {
@@ -470,6 +494,9 @@ private struct PageChrome: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(items: item.items)
         }
+        .sheet(item: $movingPage) { p in
+            MovePageSheet(page: p)
+        }
     }
 
     private func shareNote() {
@@ -491,7 +518,7 @@ private struct PageChrome: View {
         if let url = renderPdfFile(title: title, html: html) {
             shareItem = ShareItem(items: [url])
         } else {
-            model.showToast("PDF konnte nicht erstellt werden.")
+            model.showToast("PDF konnte nicht erstellt werden.", style: .error)
         }
     }
 
@@ -510,7 +537,7 @@ private struct PageChrome: View {
             try md.write(to: url, atomically: true, encoding: .utf8)
             shareItem = ShareItem(items: [url])
         } catch {
-            model.showToast("Markdown-Datei konnte nicht erstellt werden.")
+            model.showToast("Markdown-Datei konnte nicht erstellt werden.", style: .error)
         }
     }
 
@@ -527,12 +554,12 @@ private struct PageChrome: View {
         do {
             let count = try store.core.cardsFromHighlights(pageId: model.pageId, deck: nil)
             if count > 0 {
-                model.showToast("\(count) Karteikarte(n) erstellt.")
+                model.showToast("\(count) Karteikarte(n) erstellt.", style: .success)
             } else {
                 model.showToast("Keine neuen Markierungen — für alle gibt es schon Karten.")
             }
         } catch {
-            model.showToast("Karten konnten nicht erstellt werden.")
+            model.showToast("Karten konnten nicht erstellt werden.", style: .error)
         }
     }
 
@@ -540,7 +567,7 @@ private struct PageChrome: View {
         model.flush()
         if let newId = store.core.duplicatePage(id: model.pageId) {
             shell.open(newId)
-            model.showToast("Seite dupliziert.")
+            model.showToast("Seite dupliziert.", style: .success)
         }
     }
 
@@ -548,10 +575,10 @@ private struct PageChrome: View {
         model.flush()
         if isArchived {
             attempt("unarchivePage", { try store.core.unarchivePage(id: model.pageId) })
-            model.showToast("Wiederhergestellt.")
+            model.showToast("Wiederhergestellt.", style: .success)
         } else {
             attempt("archivePage", { try store.core.archivePage(id: model.pageId) })
-            model.showToast("Seite archiviert.")
+            model.showToast("Seite archiviert.", style: .success)
         }
     }
 

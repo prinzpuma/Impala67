@@ -29,6 +29,8 @@ final class ReviewModel {
     private(set) var graded = 0
     private(set) var lastGrade = 0
     var error: String?
+    /// Selbsteinschätzung vor dem Aufdecken („sure“, „unsure“, „guess“).
+    var confidence: String?
     /// Feynman-Modus: eigene Erklärung, Prüfung läuft, Rubrik der KI (gilt nur für die angezeigte Karte).
     var feynText = ""
     private(set) var checking = false
@@ -125,6 +127,7 @@ final class ReviewModel {
             showBack = false
             feynText = ""
             verdict = nil
+            confidence = nil
         }
         pinned = next?.id
         queue = loaded.queue
@@ -189,6 +192,9 @@ final class ReviewModel {
         ]
         if verdict?.cardId == card.id {
             data["exp"] = ["feynman"]
+        }
+        if let conf = confidence {
+            data["confidence"] = conf
         }
         let payload: [String: Any] = [
             "id": UUID().uuidString.lowercased(),

@@ -30,12 +30,20 @@ final class NoteModel {
     /// Dateiauswahl für Bild/PDF/Datei ist offen; neue Blöcke folgen hinter `mediaAfter`.
     var mediaRequest: MediaKind?
     @ObservationIgnored var mediaAfter: String?
+    /// Art der Meldung; färbt den Rand wie `.toast.success` / `.toast.error` der PWA.
+    enum ToastStyle: Equatable { case info, success, error }
+
+    struct ToastMessage: Equatable {
+        let text: String
+        let style: ToastStyle
+    }
+
     /// Kurze Meldung unten (wie `toast` der PWA).
-    private(set) var toast: String?
+    private(set) var toast: ToastMessage?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
-    func showToast(_ text: String) {
-        toast = text
+    func showToast(_ text: String, style: ToastStyle = .info) {
+        toast = ToastMessage(text: text, style: style)
         toastTask?.cancel()
         toastTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.2))
@@ -222,8 +230,8 @@ final class NoteModel {
     // MARK: Bearbeiten
 
     /// Text eines Blocks geändert. Ein neuer Zeilenumbruch teilt den Block (außer in Code und Formel)
-    /// bzw. übernimmt den gewählten Menüeintrag; ein Kürzel am Anfang eines Absatzes („# “, „- “, „[] “ …)
-    /// wandelt ihn um; „/“ und „[[“ öffnen die Menüs.
+    /// bzw. übernimmt den gewählten Menüeintrag; ein Kürzel am Anfang eines Absatzes („# “, „- “, „[] “,
+    /// „---“, „```“, „$$“) wandelt ihn um; „/“ und „[[“ öffnen die Menüs.
     func edit(_ id: String, text: String, caret: Int) {
         guard let b = blocks.deep(id) else { return }
         selection = NSRange(location: caret, length: 0)
@@ -246,11 +254,42 @@ final class NoteModel {
             }
             return
         }
-        if b.type == .text, let t = shortcutType(ns.substring(to: at)) {
-            let rest = ns.substring(from: at)
-            mutate(structural: true) { list in list.mapDeep(id) { $0.withText(rest).converted(to: t) } }
-            activate(id, at: 0)
-            return
+        if b.type == .text {
+            // Live-Markdown-Kürzel (wie in web/editor.js:1065-1085)
+            if text == "---" {
+                guard let (_, i) = place(id) else { return }
+                menu = nil
+                let after = MdBlock.paragraph("")
+                mutateSiblings(of: id) { list in
+                    Array(list[..<i]) + [MdBlock.make(.divider), after] + Array(list[(i + 1)...])
+                }
+                activate(after.id, at: 0)
+                return
+            }
+            if text.hasPrefix("```") {
+                menu = nil
+                let lang = String(text.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                let language = lang.isEmpty ? "javascript" : lang
+                mutate(structural: true) { list in
+                    list.mapDeep(id) { $0.withKind(.code(language: language, text: "")) }
+                }
+                activate(id, at: 0)
+                return
+            }
+            if text == "$$" {
+                menu = nil
+                mutate(structural: true) { list in
+                    list.mapDeep(id) { $0.withKind(.math(text: "")) }
+                }
+                activate(id, at: 0)
+                return
+            }
+            if let t = shortcutType(ns.substring(to: at)) {
+                let rest = ns.substring(from: at)
+                mutate(structural: true) { list in list.mapDeep(id) { $0.withText(rest).converted(to: t) } }
+                activate(id, at: 0)
+                return
+            }
         }
         mutate(structural: false) { list in list.mapDeep(id) { $0.withText(text) } }
         if !b.keepsNewlines { updateMenu(id, text: text, caret: at) }
@@ -353,6 +392,18 @@ final class NoteModel {
                     return copy
                 }
                 return b
+            }
+        }
+    }
+
+    /// Kastenfarbe eine weiter schalten, Reihenfolge wie `data-bcalloutcolor` in web/editor.js.
+    func cycleCalloutColor(_ id: String) {
+        let order = ["blue", "green", "yellow", "red", "gray", "purple"]
+        mutate(structural: false) { list in
+            list.mapDeep(id) { b in
+                guard case .callout(let color, let children) = b.kind else { return b }
+                let next = order[((order.firstIndex(of: color.isEmpty ? "blue" : color) ?? -1) + 1) % order.count]
+                return b.withKind(.callout(color: next, children: children))
             }
         }
     }

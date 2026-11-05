@@ -581,7 +581,7 @@ extension NoteModel {
         }
         mediaAfter = nil
         if let a = activeId, blocks.deep(a) == nil { endEditing() }
-        if n > 0 { showToast(n == 1 ? "Bild eingefügt" : "\(n) Bilder eingefügt") } else { showToast("Bild konnte nicht eingefügt werden.") }
+        if n > 0 { showToast(n == 1 ? "Bild eingefügt" : "\(n) Bilder eingefügt", style: .success) } else { showToast("Bild konnte nicht eingefügt werden.", style: .error) }
     }
 
     /// Slash „Heft“: neues Heft als Unterseite anlegen und dahinter einbetten.

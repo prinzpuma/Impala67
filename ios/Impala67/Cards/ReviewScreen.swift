@@ -29,6 +29,7 @@ private struct ReviewBody: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || AppMotion.isReduced }
     @Namespace private var glass
+    @AppStorage("impala67Confidence") private var confidence = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,6 +89,17 @@ private struct ReviewBody: View {
     private func actions(_ card: CardInfo) -> some View {
         VStack(spacing: Space.s3) {
             QueueCounts(queue: model.queue)
+            if !model.showBack, confidence {
+                HStack(spacing: Space.s2) {
+                    Text("Wie sicher bist du?")
+                        .font(.system(size: TextSize.xs))
+                        .foregroundStyle(Impala.text2)
+                    confidenceChip("sure", label: "Sicher", icon: "check-circle")
+                    confidenceChip("unsure", label: "Unsicher", icon: "help")
+                    confidenceChip("guess", label: "Geraten", icon: "dice")
+                }
+                .transition(.opacity)
+            }
             GlassEffectContainer(spacing: Space.s2) {
                 HStack(spacing: Space.s2) {
                     if model.showBack {
@@ -126,12 +138,34 @@ private struct ReviewBody: View {
                     shell.cards.editor = CardEditorTarget(cardId: card.id, deck: card.deck)
                 }
                 Spacer()
+                FooterButton(label: "Optionen", icon: "gear") {
+                    shell.cards.options = DeckOptionsTarget(deck: card.deck)
+                }
                 FooterButton(label: "Aussetzen", icon: "pause") { withAnimation(.smooth) { model.suspend() } }
             }
         }
         .frame(maxWidth: 680)
         .padding(.horizontal, Space.s4)
         .padding(.bottom, Space.s3)
+    }
+
+    private func confidenceChip(_ value: String, label: String, icon: String) -> some View {
+        // Wie `data-confidence` in web/telemetrie.js: merkt die Einschätzung, deckt aber nicht auf.
+        let active = model.confidence == value
+        return Button {
+            model.confidence = value
+        } label: {
+            HStack(spacing: 5) {
+                Icon(icon, size: 13)
+                Text(label).font(.system(size: TextSize.xs, weight: .medium))
+            }
+            .foregroundStyle(active ? Impala.accent : Impala.text2)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .background(active ? Impala.activeTint : Impala.surface, in: Capsule())
+            .overlay(Capsule().stroke(active ? Impala.accentBorder : Impala.edge, lineWidth: 1))
+        }
+        .pressable()
     }
 
     private func exit() { withAnimation(.smooth) { shell.cards.view = .decks } }

@@ -348,6 +348,12 @@ private struct CardBrowser: View {
                             Button(role: .destructive) { cards.run { try store.core.trashCard(id: c.id) } } label: {
                                 Label { Text("Löschen") } icon: { Icon("trash") }
                             }
+                            Button {
+                                cards.run { try store.core.archiveCard(id: c.id) }
+                            } label: {
+                                Label { Text("Archivieren") } icon: { Icon("archive") }
+                            }
+                            .tint(Impala.accent)
                             Button { cards.run { try store.core.setCardSuspended(id: c.id, suspended: !c.suspended) } } label: {
                                 Label { Text(c.suspended ? "Fortsetzen" : "Aussetzen") } icon: { Icon("pause") }
                             }
@@ -355,6 +361,9 @@ private struct CardBrowser: View {
                         }
                         .contextMenu {
                             MenuItem("Bearbeiten", icon: "pen") { cards.editor = CardEditorTarget(cardId: c.id, deck: c.deck) }
+                            MenuItem("Archivieren", icon: "archive") {
+                                cards.run { try store.core.archiveCard(id: c.id) }
+                            }
                             MenuItem(c.suspended ? "Fortsetzen" : "Aussetzen", icon: "pause") {
                                 cards.run { try store.core.setCardSuspended(id: c.id, suspended: !c.suspended) }
                             }
