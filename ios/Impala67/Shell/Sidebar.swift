@@ -11,20 +11,21 @@ struct Sidebar: View {
     @Namespace private var pills
 
     var body: some View {
+        // Genau eine Pille aktiv (render.js `renderTopbar`).
         let isChat = shell.sidebarMode == .chats
-        let isCards = !isChat && (shell.sidebarMode == .cards || (shell.active == ShellModel.cardsTab && shell.sidebarMode != .files))
-        let isHome = shell.sidebarMode == .files && !isCards
+        let isCards = shell.sidebarMode == .cards
+        let isHome = shell.sidebarMode == .files
 
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 2) {
-                Pill(icon: "home", label: "Home", active: isHome, ns: pills) { shell.goHome() }
+                // Tipp: Seitenbaum (`btnHome`); Doppeltipp: Startseite (app.js `dblclick` → `openHomeOverview`).
+                Pill(icon: "home", label: "Home", active: isHome, ns: pills) { shell.homePill() }
+                    .simultaneousGesture(TapGesture(count: 2).onEnded { shell.goHome() })
                 Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
                     shell.sidebarMode = .chats
                 }
-                Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) {
-                    shell.sidebarMode = .cards
-                    shell.openCards(.decks)
-                }
+                // `btnAnki` → `openAnki()`: Karten-Tab mit Stapelübersicht.
+                Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) { shell.openCards(.decks) }
                 Spacer(minLength: 0)
                 Pill(icon: "search", label: "Suchen", active: false, ns: pills) {
                     shell.sheet = .search

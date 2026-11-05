@@ -564,6 +564,7 @@ private struct PageChrome: View {
 /// Brotkrumen über dem Titel (`.page-chrome` / `.crumbs`): Arbeitsbereich / Eltern / Aktuelle Seite.
 private struct Breadcrumbs: View {
     @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
     let pageId: String
     let workspaceId: String?
     let currentTitle: String
@@ -574,11 +575,14 @@ private struct Breadcrumbs: View {
         let ancestors = store.core.ancestorsOf(id: pageId)
 
         HStack(spacing: Space.s1) {
-            // Arbeitsbereich
-            Text(wsName)
-                .font(.system(size: TextSize.sm))
-                .foregroundStyle(Impala.text2)
-                .lineLimit(1)
+            // Arbeitsbereich: öffnet die Startseite (app.js `data-crumbws` → `openHomeOverview`).
+            Button { shell.goHome() } label: {
+                Text(wsName)
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
 
             sep
 

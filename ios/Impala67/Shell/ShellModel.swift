@@ -82,9 +82,8 @@ final class ShellModel {
             libraryOpen = true
         } else {
             libraryOpen = false
-            if target == Self.cardsTab {
-                sidebarMode = .cards
-            }
+            // Wie `openPage` (tabs.js): Karten zeigen den Stapel-Baum, jede andere Seite den Seitenbaum.
+            sidebarMode = target == Self.cardsTab ? .cards : .files
             if !tabs.contains(target) {
                 if let a = active, let i = tabs.firstIndex(of: a) { tabs[i] = target } else { append(target) }
             }
@@ -164,7 +163,17 @@ final class ShellModel {
 
     static let cardsTab = "anki:main"
 
-    /// Startseite: kein aktiver Tab (wie `TopLevel.Home`).
+    /// Home-Pille, einfacher Tipp (`btnHome` in app-click-buttons.js): Seitenleiste auf den Seitenbaum;
+    /// aus Karten bzw. Bibliothek zurück zur zuletzt offenen Seite, ohne Seite zur Startseite.
+    /// Die Startseite selbst öffnet der Doppeltipp ([goHome], app.js `dblclick` auf `#btnHome`).
+    func homePill() {
+        sidebarMode = .files
+        guard libraryOpen || active == Self.cardsTab else { return }
+        let page = history.reversed().first { $0 != "home" && $0 != "library" && $0 != Self.cardsTab && tabs.contains($0) }
+        navigateTarget(page ?? "home", push: true)
+    }
+
+    /// Startseite: kein aktiver Tab (wie `openHomeOverview` in tabs.js).
     func goHome() {
         sidebarMode = .files
         navigateTarget("home", push: true)
