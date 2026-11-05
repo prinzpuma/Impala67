@@ -15,7 +15,13 @@ final class ReviewModel {
     private(set) var card: CardInfo?
     /// Intervall-Texte der vier Knöpfe (Nochmal, Schwer, Gut, Einfach).
     private(set) var preview: [String] = []
-    var showBack = false
+    var showBack = false {
+        didSet {
+            if showBack && revealedAt == 0 {
+                revealedAt = Date().timeIntervalSince1970
+            }
+        }
+    }
     /// Größte offene Kartenzahl dieser Sitzung (für den Fortschritt).
     private(set) var total = 0
     private(set) var canUndo = false
@@ -28,8 +34,16 @@ final class ReviewModel {
     private(set) var checking = false
     private(set) var verdict: FeynmanVerdict?
 
+    /// Zuletzt gemessene Denkzeit (Frage → Aufdecken) in Millisekunden.
+    private(set) var thinkMs: Int64 = 0
+    /// Zuletzt gemessene Bewertungszeit (Aufdecken → Bewertung) in Millisekunden.
+    private(set) var gradeMs: Int64 = 0
+
     @ObservationIgnored private var pinned: String?
     @ObservationIgnored private var busy = false
+    @ObservationIgnored private var shownCardId: String?
+    @ObservationIgnored private var shownAt: TimeInterval = 0
+    @ObservationIgnored private var revealedAt: TimeInterval = 0
 
     init(core: ImpalaCore, deck: String?, mix: Bool) {
         self.core = core
@@ -48,7 +62,10 @@ final class ReviewModel {
         let q = core.studyQueue(deck: deck, utcOffsetMinutes: Deck.utcOffset, mix: mix)
         let keep = pinned.flatMap { core.card(id: $0) }.flatMap { $0.trashed || $0.suspended || $0.archived ? nil : $0 }
         let next = keep ?? q.dueNow.first
-        if unpin || next?.id != card?.id {
+        if unpin || next?.id != shownCardId {
+            shownCardId = next?.id
+            shownAt = Date().timeIntervalSince1970
+            revealedAt = 0
             showBack = false
             feynText = ""
             verdict = nil
@@ -61,18 +78,70 @@ final class ReviewModel {
         canUndo = core.canUndoReview()
     }
 
+    /// Karte aufdecken („Antwort zeigen“); stoppt die Denkzeit (`thinkMs`).
+    func flip() {
+        if !showBack {
+            if revealedAt == 0 {
+                revealedAt = Date().timeIntervalSince1970
+            }
+            showBack = true
+        }
+    }
+
     /// Bewertung 1 = Nochmal … 4 = Einfach.
     func grade(_ grade: Int) {
         guard let card, showBack, !busy else { return }
         busy = true
         defer { busy = false }
+        let now = Date().timeIntervalSince1970
+        let revealed = revealedAt > 0 ? revealedAt : now
+        let think = max(0, min(300_000, Int64(((revealed - shownAt) * 1000).rounded())))
+        let gradeTime = max(0, min(300_000, Int64(((now - revealed) * 1000).rounded())))
+        self.thinkMs = think
+        self.gradeMs = gradeTime
         do {
             try core.reviewCard(cardId: card.id, grade: UInt8(grade))
+            logReview(card: card, grade: grade, thinkMs: think, gradeMs: gradeTime)
             lastGrade = grade
             graded += 1
             refresh(unpin: true)
         } catch {
             self.error = CardsModel.reason(error)
+        }
+    }
+
+    /// Telemetrie für Lernstatistiken erfassen wie `TELE` in der PWA und `ReviewViewModel.kt` auf Android.
+    private func logReview(card: CardInfo, grade: Int, thinkMs: Int64, gradeMs: Int64) {
+        let cal = Calendar.current
+        let now = Date()
+        let hour = cal.component(.hour, from: now)
+        let dow = cal.component(.weekday, from: now) - 1
+        let typed = !feynText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        var data: [String: Any] = [
+            "reviewId": UUID().uuidString.lowercased(),
+            "cardId": card.id,
+            "deck": card.deck,
+            "grade": grade,
+            "thinkMs": thinkMs,
+            "gradeMs": gradeMs,
+            "pos": graded,
+            "hour": hour,
+            "dow": dow,
+            "typed": typed,
+            "distracted": false,
+            "timer": false,
+        ]
+        if verdict?.cardId == card.id {
+            data["exp"] = ["feynman"]
+        }
+        let payload: [String: Any] = [
+            "id": UUID().uuidString.lowercased(),
+            "kind": "review",
+            "data": data,
+        ]
+        if let json = try? JSONSerialization.data(withJSONObject: payload),
+           let jsonStr = String(data: json, encoding: .utf8) {
+            _ = try? core.dispatch(kind: "teleEvent", payloadJson: jsonStr)
         }
     }
 
@@ -91,7 +160,7 @@ final class ReviewModel {
                 let v = try await FeynmanVerdict.check(chat: chat, card: card, explanation: text)
                 guard self.card?.id == card.id else { return }
                 verdict = v
-                showBack = true
+                flip()
             } catch {
                 self.error = "KI nicht erreichbar — später erneut versuchen."
             }
@@ -114,6 +183,7 @@ final class ReviewModel {
             if let id = try core.undoReview() {
                 pinned = id
                 card = nil
+                shownCardId = nil
             }
             refresh()
         } catch {

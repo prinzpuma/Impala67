@@ -25,6 +25,8 @@ struct HeftScreen: View {
     @State private var showImporter = false
     @State private var share: SharedFile?
     @State private var busy: String?
+    @State private var showExportDialog = false
+    @State private var exportTask: Task<Void, Never>?
     @Namespace private var namespace
 
     /// Wohin ausgewählte Fotos gehen: auf die Seite oder je als neue Seite.
@@ -52,7 +54,13 @@ struct HeftScreen: View {
                 }
                 if link.selecting { SelectBar(link: link) }
                 if link.lassoText { hint("Umkreise die Handschrift, die als Text erkannt werden soll.") { link.lassoText = false } }
-                if let busy { hint(busy, onCancel: nil) }
+                if let busy {
+                    hint(busy, onCancel: {
+                        exportTask?.cancel()
+                        exportTask = nil
+                        self.busy = nil
+                    })
+                }
             }
             .padding(Space.s3)
             .animation(.snappy, value: link.selecting)
@@ -93,7 +101,16 @@ struct HeftScreen: View {
             HeftOcrSheet(result: result) { text in link.coordinator?.replaceWithText(result, text: text, color: link.coordinator?.currentColor ?? HeftPalette.colors[0].css) }
                 .presentationSizing(.form)
         }
-        .sheet(item: $share) { ShareSheet(items: [$0.url]) }
+        .sheet(item: $share) { ShareSheet(items: $0.urls) }
+        .sheet(isPresented: $showExportDialog) {
+            HeftExportSheet(
+                pageId: pageId,
+                pageIds: pageIds,
+                currentId: currentId,
+                onShare: { share = $0 }
+            )
+            .presentationSizing(.form)
+        }
         .photosPicker(
             isPresented: Binding(get: { photoTarget != nil }, set: { if !$0 && photos.isEmpty { photoTarget = nil } }),
             selection: $photos, maxSelectionCount: photoTarget == .insert ? 1 : 20, matching: .images
@@ -169,11 +186,40 @@ struct HeftScreen: View {
                     onScan: DocumentScanner.isAvailable ? { showScanner = true } : nil
                 )
                 Menu {
-                    Button { exportPdf() } label: { Label { Text("Als PDF exportieren") } icon: { Icon("printer") } }
-                    Button { exportSvg() } label: { Label { Text("Seite als SVG") } icon: { Icon("download") } }
+                    Button {
+                        exportCurrentPng()
+                    } label: {
+                        Label { Text("Aktuelle Seite als PNG") } icon: { Icon("image") }
+                    }
+                    if pageIds.count > 1 {
+                        Button {
+                            exportAllPng()
+                        } label: {
+                            Label { Text("Alle Seiten als PNG") } icon: { Icon("image") }
+                        }
+                    }
+                    Button {
+                        exportPdf()
+                    } label: {
+                        Label { Text("Alle Seiten als PDF") } icon: { Icon("printer") }
+                    }
+                    Button {
+                        exportSvg()
+                    } label: {
+                        Label { Text("Aktuelle Seite als SVG") } icon: { Icon("download") }
+                    }
+                    Divider()
                     Button {
                         UIPasteboard.general.string = "#" + pageId
-                    } label: { Label { Text("Internen Link kopieren") } icon: { Icon("link") } }
+                    } label: {
+                        Label { Text("Internen Link kopieren") } icon: { Icon("link") }
+                    }
+                    Divider()
+                    Button {
+                        showExportDialog = true
+                    } label: {
+                        Label { Text("Heft exportieren …") } icon: { Icon("upload") }
+                    }
                 } label: {
                     Icon("upload", size: 18)
                         .foregroundStyle(Impala.text)
@@ -322,9 +368,26 @@ struct HeftScreen: View {
 
     // MARK: Export
 
+    private func exportCurrentPng(background: HeftBackground = .paper) {
+        guard let id = currentId else { return }
+        let pageNum = index + 1
+        runExport("Erzeuge Bild …") { _ in
+            let url = await HeftExport.pagePng(core: store.core, pageId: pageId, heftPageId: id, pageNumber: pageNum, background: background)
+            if let url { share = SharedFile(url: url) }
+        }
+    }
+
+    private func exportAllPng(background: HeftBackground = .paper) {
+        runExport("Erzeuge Bilder …") { onStatus in
+            let urls = await HeftExport.pagesPng(core: store.core, pageId: pageId, background: background, onProgress: onStatus)
+            if let urls, !urls.isEmpty { share = SharedFile(urls: urls) }
+        }
+    }
+
     private func exportPdf() {
-        run("Erzeuge PDF …") {
-            if let url = HeftExport.pdf(core: store.core, pageId: pageId) { share = SharedFile(url: url) }
+        runExport("Erzeuge PDF …") { onStatus in
+            let url = await HeftExport.pdf(core: store.core, pageId: pageId, onProgress: onStatus)
+            if let url { share = SharedFile(url: url) }
         }
     }
 
@@ -333,12 +396,15 @@ struct HeftScreen: View {
         share = SharedFile(url: url)
     }
 
-    /// Längere Arbeit nach dem nächsten Bild ausführen, damit der Hinweis vorher erscheint.
-    private func run(_ status: String, _ work: @escaping () -> Void) {
-        busy = status
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            work()
+    /// Längere Hintergrundarbeit ausführen; Aktualisierungen des Hinweistextes laufen auf dem MainActor.
+    private func runExport(_ initialStatus: String, _ work: @escaping (@escaping @Sendable (String) -> Void) async -> Void) {
+        busy = initialStatus
+        exportTask?.cancel()
+        exportTask = Task {
+            await Task.yield()
+            await work { status in
+                Task { @MainActor in busy = status }
+            }
             busy = nil
         }
     }

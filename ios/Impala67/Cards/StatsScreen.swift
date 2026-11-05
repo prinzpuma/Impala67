@@ -31,6 +31,8 @@ struct LearnStats {
     let streakLongest: Int
     let hard: [Card]
     let retention: [Bucket]
+    /// Median der eigenen Denkzeit (letzte 300 Reviews, ab 12 Werten), sonst 0 (`TELE.thinkMedian`).
+    let thinkMs: Int64
 
     var lead: String {
         if reviewsAll == 0 { return "Noch keine Wiederholungen — sobald du lernst, füllt sich diese Seite." }
@@ -160,6 +162,18 @@ struct LearnStats {
             return Bucket(label: label, n: ok.count, rate: ok.isEmpty ? nil : Double(ok.filter { $0.0.grade > 1 }.count) / Double(ok.count))
         }
 
+        // Denkzeit-Median aus der Telemetrie wie `TELE.thinkMedian` / `LearnData.kt`
+        let tel = ((o["telemetry"] as? [[String: Any]]) ?? []).filter {
+            ($0["kind"] as? String) == "review"
+        }
+        let timed: [Int64] = tel.suffix(300).compactMap { item in
+            guard let data = item["data"] as? [String: Any] else { return nil }
+            if (data["typed"] as? Bool) == true || (data["distracted"] as? Bool) == true { return nil }
+            guard let ms = (data["thinkMs"] as? NSNumber)?.int64Value, ms >= 400 && ms <= 120_000 else { return nil }
+            return ms
+        }.sorted()
+        thinkMs = timed.count >= 12 ? timed[timed.count / 2] : 0
+
         reviewsAll = reviews.count
         self.last = last.count
         self.rate = rate
@@ -198,6 +212,10 @@ struct StatsScreen: View {
                 Text(d.lead).font(.system(size: TextSize.lg)).foregroundStyle(Impala.text)
                 HStack(alignment: .top, spacing: Space.s3) {
                     StatCard(label: "Trefferquote", value: d.rate.map(LearnStats.pct) ?? "–", note: d.trendNote, tone: .plain, action: nil)
+                    if d.thinkMs > 0 {
+                        StatCard(label: "Denkzeit", value: String(format: "%.1f s", Double(d.thinkMs) / 1000.0).replacingOccurrences(of: ".", with: ","),
+                                 note: "Median pro Karte", tone: .plain, action: nil)
+                    }
                     StatCard(label: "Pro Tag", value: String(format: "%.1f", d.avg).replacingOccurrences(of: ".", with: ","),
                              note: "Wiederholungen im Schnitt", tone: .plain, action: nil)
                     StatCard(label: "Serie", value: d.streakCurrent == 1 ? "1 Tag" : "\(d.streakCurrent) Tage",
@@ -208,15 +226,26 @@ struct StatsScreen: View {
                     Chart(d.series) { day in
                         BarMark(x: .value("Tag", day.day, unit: .day), y: .value("Wiederholungen", day.n))
                             .foregroundStyle(Impala.accent)
-                            .cornerRadius(3)
                     }
-                    .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
-                    .frame(height: 160)
+                    .chartYAxis {
+                        AxisMarks(position: .leading) { _ in
+                            AxisGridLine().foregroundStyle(Impala.edgeSoft)
+                            AxisTick().foregroundStyle(Impala.edge)
+                            AxisValueLabel().foregroundStyle(Impala.text2)
+                        }
+                    }
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .day, count: 5)) { _ in
+                            AxisGridLine().foregroundStyle(Color.clear)
+                            AxisValueLabel(format: .dateTime.day().month()).foregroundStyle(Impala.text2)
+                        }
+                    }
+                    .frame(height: 180)
                 }
                 section("Prognose · nächste 7 Tage") {
                     Chart(d.forecast) { f in
                         BarMark(x: .value("Tag", f.label), y: .value("Fällig", f.n))
-                            .foregroundStyle(Impala.accent.opacity(0.7))
+                            .foregroundStyle(Impala.accent.opacity(0.85))
                             .cornerRadius(3)
                             .annotation(position: .top) {
                                 if f.n > 0 { Text("\(f.n)").font(.system(size: 11)).foregroundStyle(Impala.text2) }

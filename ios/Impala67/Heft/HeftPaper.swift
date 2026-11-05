@@ -1,61 +1,9 @@
 import UIKit
 
-/// Heftseite hinter den Strichen: Papierfläche mit Schatten und Muster wie `drawPaper` in web/heft.js
-/// (Abstand 28; liniert ab y 96 mit Rand bei x 90, kariert, Punkte, leer). Linien in Akzentfarbe.
-/// Vektor-Ebenen in Seitenkoordinaten, per Transform mit dem Zoom skaliert – bleibt scharf und braucht
-/// keinen großen Bildspeicher.
-final class HeftPaperView: UIView {
-    private let sheet = CALayer()
-    private let lines = CAShapeLayer()
-    private let margin = CAShapeLayer()
-    private let dots = CAShapeLayer()
-    private var size = CGSize.zero
-    private var kind = ""
-
-    /// Wie in der PWA im hellen Modus (das Papier ist immer hell).
-    private static let ink = UIColor(hex: 0x2478C7)
-    private static let paper = UIColor(hex: 0xFBF9F4)
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isUserInteractionEnabled = false
-        backgroundColor = .clear
-        layer.anchorPoint = .zero
-        sheet.backgroundColor = Self.paper.cgColor
-        sheet.cornerRadius = 4
-        sheet.shadowColor = UIColor.black.cgColor
-        sheet.shadowOpacity = 0.12
-        sheet.shadowRadius = 10
-        sheet.shadowOffset = CGSize(width: 0, height: 3)
-        lines.strokeColor = Self.ink.withAlphaComponent(0.22).cgColor
-        lines.fillColor = nil
-        lines.lineWidth = 1
-        margin.strokeColor = Self.ink.withAlphaComponent(0.4 * 0.22).cgColor
-        margin.fillColor = nil
-        margin.lineWidth = 1
-        dots.fillColor = Self.ink.withAlphaComponent(0.35).cgColor
-        for l in [sheet, lines, margin, dots] { layer.addSublayer(l) }
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    /// Muster für Seitengröße und Papierart setzen (`lined`, `grid`, `dots`, `blank`).
-    func configure(size: CGSize, paper: String) {
-        guard size != self.size || paper != kind else { return }
-        self.size = size
-        kind = paper
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for l in [sheet, lines, margin, dots] { l.frame = CGRect(origin: .zero, size: size) }
-        sheet.shadowPath = UIBezierPath(roundedRect: sheet.bounds, cornerRadius: 4).cgPath
-        let (l, m, d) = Self.patterns(size: size, paper: paper)
-        lines.path = l
-        margin.path = m
-        dots.path = d
-        CATransaction.commit()
-        bounds = CGRect(origin: .zero, size: size)
-    }
+/// Zeichnen des Papiermusters unabhängig von UIKit-Views (für Background-Export und Vorschau).
+enum HeftPaperDraw {
+    static let ink = UIColor(hex: 0x2478C7)
+    static let paper = UIColor(hex: 0xFBF9F4)
 
     /// Linien, Randlinie und Punkte des Musters in Seitenkoordinaten (`drawPaper` in heft.js).
     static func patterns(size: CGSize, paper: String) -> (lines: CGPath, margin: CGPath, dots: CGPath) {
@@ -86,10 +34,19 @@ final class HeftPaperView: UIView {
         return (l, m, d)
     }
 
-    /// Papier in einen Grafikkontext zeichnen (Vorschaubilder der Seitenübersicht), Seitenkoordinaten.
-    static func draw(in ctx: CGContext, size: CGSize, paper: String) {
-        ctx.setFillColor(Self.paper.cgColor)
-        ctx.fill(CGRect(origin: .zero, size: size))
+    /// Papier in einen Grafikkontext zeichnen (Vorschaubilder, Export), Seitenkoordinaten.
+    static func draw(in ctx: CGContext, size: CGSize, paper: String, background: HeftBackground = .paper) {
+        switch background {
+        case .paper:
+            ctx.setFillColor(paper.cgColor)
+            ctx.fill(CGRect(origin: .zero, size: size))
+        case .white:
+            ctx.setFillColor(UIColor.white.cgColor)
+            ctx.fill(CGRect(origin: .zero, size: size))
+        case .transparent:
+            // Keine Hintergrundfüllung für transparenten Export
+            break
+        }
         let (l, m, d) = patterns(size: size, paper: paper)
         ctx.setLineWidth(1)
         ctx.setStrokeColor(ink.withAlphaComponent(0.22).cgColor)
@@ -98,6 +55,70 @@ final class HeftPaperView: UIView {
         ctx.addPath(m); ctx.strokePath()
         ctx.setFillColor(ink.withAlphaComponent(0.35).cgColor)
         ctx.addPath(d); ctx.fillPath()
+    }
+}
+
+/// Heftseite hinter den Strichen: Papierfläche mit Schatten und Muster wie `drawPaper` in web/heft.js
+/// (Abstand 28; liniert ab y 96 mit Rand bei x 90, kariert, Punkte, leer). Linien in Akzentfarbe.
+/// Vektor-Ebenen in Seitenkoordinaten, per Transform mit dem Zoom skaliert – bleibt scharf und braucht
+/// keinen großen Bildspeicher.
+final class HeftPaperView: UIView {
+    private let sheet = CALayer()
+    private let lines = CAShapeLayer()
+    private let margin = CAShapeLayer()
+    private let dots = CAShapeLayer()
+    private var size = CGSize.zero
+    private var kind = ""
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.anchorPoint = .zero
+        sheet.backgroundColor = HeftPaperDraw.paper.cgColor
+        sheet.cornerRadius = 4
+        sheet.shadowColor = UIColor.black.cgColor
+        sheet.shadowOpacity = 0.12
+        sheet.shadowRadius = 10
+        sheet.shadowOffset = CGSize(width: 0, height: 3)
+        lines.strokeColor = HeftPaperDraw.ink.withAlphaComponent(0.22).cgColor
+        lines.fillColor = nil
+        lines.lineWidth = 1
+        margin.strokeColor = HeftPaperDraw.ink.withAlphaComponent(0.4 * 0.22).cgColor
+        margin.fillColor = nil
+        margin.lineWidth = 1
+        dots.fillColor = HeftPaperDraw.ink.withAlphaComponent(0.35).cgColor
+        for l in [sheet, lines, margin, dots] { layer.addSublayer(l) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Muster für Seitengröße und Papierart setzen (`lined`, `grid`, `dots`, `blank`).
+    func configure(size: CGSize, paper: String) {
+        guard size != self.size || paper != kind else { return }
+        self.size = size
+        kind = paper
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for l in [sheet, lines, margin, dots] { l.frame = CGRect(origin: .zero, size: size) }
+        sheet.shadowPath = UIBezierPath(roundedRect: sheet.bounds, cornerRadius: 4).cgPath
+        let (l, m, d) = HeftPaperDraw.patterns(size: size, paper: paper)
+        lines.path = l
+        margin.path = m
+        dots.path = d
+        CATransaction.commit()
+        bounds = CGRect(origin: .zero, size: size)
+    }
+
+    /// Linien, Randlinie und Punkte des Musters in Seitenkoordinaten (`drawPaper` in heft.js).
+    static func patterns(size: CGSize, paper: String) -> (lines: CGPath, margin: CGPath, dots: CGPath) {
+        HeftPaperDraw.patterns(size: size, paper: paper)
+    }
+
+    /// Papier in einen Grafikkontext zeichnen (Vorschaubilder der Seitenübersicht), Seitenkoordinaten.
+    static func draw(in ctx: CGContext, size: CGSize, paper: String, background: HeftBackground = .paper) {
+        HeftPaperDraw.draw(in: ctx, size: size, paper: paper, background: background)
     }
 
     /// Dem Zoom des Canvas folgen (Ursprung oben links = Seitenursprung).

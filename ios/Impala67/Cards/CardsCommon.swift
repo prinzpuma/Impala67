@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// Was der Karten-Tab (`anki:main`) zeigt: Stapelübersicht, Lernen oder die Karten eines Stapels
 /// (wie `S.ankiTab`/`S.ankiDeck` der PWA).
@@ -10,13 +11,30 @@ enum CardsView: Equatable {
     case browse(deck: String)
     /// Statistik-Tab (`ankiStatsHtml`).
     case stats
+    /// Archiv-Tab (`ankiArchiveHtml`).
+    case archive
 
     var deck: String? {
         switch self {
-        case .decks, .stats: nil
+        case .decks, .stats, .archive: nil
         case .review(let d, _): d
         case .browse(let d): d
         }
+    }
+}
+
+/// Leech-Pille (`render-anki.js:450`, `ReviewParts.kt:89`): roter Hintergrund, roter Text, Käfer-Icon.
+struct LeechBadge: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Icon("bug", size: 11)
+            Text("Leech")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(Impala.danger)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Impala.danger.opacity(0.12), in: Capsule())
     }
 }
 

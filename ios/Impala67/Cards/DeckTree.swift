@@ -28,6 +28,23 @@ struct DeckTree: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Neuer Stapel")
+
+                    Menu {
+                        Button { cards.dialog = .new } label: {
+                            Label { Text("Neuer Stapel") } icon: { Icon("plus") }
+                        }
+                        Divider()
+                        Button { shell.openCards(.archive) } label: {
+                            Label { Text("Archivierte Karten & Stapel") } icon: { Icon("archive") }
+                        }
+                    } label: {
+                        Icon("dots", size: 14)
+                            .foregroundStyle(Impala.text2)
+                            .frame(width: 26, height: 26)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Weitere Optionen")
                 }
                 .padding(.leading, Space.s1)
                 .padding(.top, Space.s2 + Space.s1)
@@ -64,6 +81,7 @@ private struct AllDecksRow: View {
     let active: Bool
     let ns: Namespace.ID
     let action: () -> Void
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         HStack(spacing: Space.s2) {
@@ -83,6 +101,11 @@ private struct AllDecksRow: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
         .onTapGesture(perform: action)
+        .contextMenu {
+            MenuItem("Archivierte Karten & Stapel", icon: "archive") {
+                shell.openCards(.archive)
+            }
+        }
         .hoverEffect(.highlight)
     }
 }
@@ -170,6 +193,9 @@ struct DeckMenuItems: View {
         MenuItem("Archivieren", icon: "archive") {
             cards.run { try store.core.archiveDeck(name: name) }
             leave(name)
+        }
+        MenuItem("Archivierte Karten & Stapel", icon: "archive") {
+            shell.openCards(.archive)
         }
         if !standard {
             Divider()

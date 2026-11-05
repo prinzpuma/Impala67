@@ -323,6 +323,20 @@ extension NoteModel {
         if nb.isEditable || cmd == .table { activate(nb.id, at: 0) } else { endEditing() }
     }
 
+    /// Plus im Griff: neuer Absatz mit „/“ darunter, das Slash-Menü öffnet sofort (wie in PWA & Android).
+    func insertSlashBelow(_ id: String) {
+        guard let (_, i) = place(id) else { return }
+        let b = MdBlock.paragraph("/")
+        mutateSiblings(of: id) { list in
+            var copy = list
+            let target = list.firstIndex(where: { $0.id == id }).map { $0 + 1 } ?? (i + 1)
+            copy.insert(b, at: min(target, copy.count))
+            return copy
+        }
+        activate(b.id, at: 1)
+        menu = MenuQuery(kind: .slash, blockId: b.id, query: "", end: 1, selected: 0)
+    }
+
     /// `applyLink` (editor-menus.js): „[[suche“ vor dem Caret wird zu `[Titel](#id)`.
     func applyLink(_ page: PageSummary) {
         guard let q = menu, q.kind == .link, let b = blocks.deep(q.blockId) else { return }

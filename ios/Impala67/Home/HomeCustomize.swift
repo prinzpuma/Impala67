@@ -150,6 +150,7 @@ struct HomeSettingsSections: View {
 }
 
 /// Texte und Zeitangaben wie home-view.js.
+@MainActor
 enum HomeFormat {
     static let days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -173,5 +174,42 @@ enum HomeFormat {
         if left <= 0 && weekMin > 0 { return " Das Wochenziel hast du schon geschafft." }
         if todayMin > 0 { return " Heute schon \(dur(Double(todayMin))) gelernt." }
         return ""
+    }
+
+    private static func parseIsoDate(_ iso: String) -> Date? {
+        if let d = try? Date(iso, strategy: .iso8601) { return d }
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: iso) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: iso)
+    }
+
+    /// `when()`: „gerade eben“, „vor 5 Min.“, „heute 14:02“, „gestern …“, Wochentag, Datum.
+    static func whenText(_ iso: String, now: Date = .now) -> String {
+        guard !iso.isEmpty, let date = parseIsoDate(iso) else { return "" }
+        let diffSec = now.timeIntervalSince(date)
+        let min = Int((diffSec / 60.0).rounded())
+        if min < 1 { return "gerade eben" }
+        if min < 60 { return "vor \(min) Min." }
+        let cal = Calendar.current
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "de_DE")
+        timeFormatter.dateFormat = "HH:mm"
+        let time = timeFormatter.string(from: date)
+        if cal.isDateInToday(date) { return "heute \(time)" }
+        if cal.isDateInYesterday(date) { return "gestern \(time)" }
+        let daysAgo = cal.dateComponents([.day], from: cal.startOfDay(for: date), to: cal.startOfDay(for: now)).day ?? 0
+        if daysAgo <= 6 {
+            let weekdayFormatter = DateFormatter()
+            weekdayFormatter.locale = Locale(identifier: "de_DE")
+            weekdayFormatter.dateFormat = "EEEE"
+            return weekdayFormatter.string(from: date)
+        }
+        let shortDateFormatter = DateFormatter()
+        shortDateFormatter.locale = Locale(identifier: "de_DE")
+        shortDateFormatter.dateFormat = "d. MMM"
+        return shortDateFormatter.string(from: date)
     }
 }

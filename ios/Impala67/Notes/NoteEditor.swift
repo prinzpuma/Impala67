@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// Notiz wie die Seitenansicht der PWA: Brotkrumen, Emoji, großer Titel, Rückverweise, darunter die
@@ -59,11 +60,14 @@ private struct NoteBody: View {
         let editing = model.activeId != nil
         ScrollView {
             VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
+                PageChrome(model: model)
                 ArchivedBanner(pageId: model.pageId) { model.showToast($0) }
-                NoteHeader(pageId: model.pageId)
-                TextField("Ohne Titel", text: Binding(get: { model.title }, set: { model.setTitle($0) }), axis: .vertical)
+                NoteEmoji(pageId: model.pageId)
+                TextField("Ohne Titel", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(Impala.text)
+                    .submitLabel(.next)
+                    .onSubmit { model.focusFirst() }
                     .riseIn(0)
                 BacklinksChip(pageId: model.pageId)
                 blockList
@@ -164,7 +168,7 @@ private struct NoteBody: View {
                 BlockRow(block: b, number: numbers[b.id], first: i == 0, model: model)
                     .overlay(alignment: .topLeading) {
                         if dragId == b.id || (dragId == nil && (model.activeId == b.id || hovered == b.id)) {
-                            grip(b).offset(x: -34)
+                            blockGutter(b).offset(x: -48)
                         }
                     }
                     .onHover { inside in
@@ -183,12 +187,32 @@ private struct NoteBody: View {
         .sensoryFeedback(.impact(weight: .light), trigger: dragId) { old, new in old == nil && new != nil }
     }
 
+    /// Griff links am Block: „+“ fügt darunter einen Absatz mit „/“ ein, „⋮⋮“ verschiebt oder öffnet das Menü.
+    private func blockGutter(_ b: MdBlock) -> some View {
+        HStack(spacing: 2) {
+            if dragId == nil {
+                Button {
+                    model.insertSlashBelow(b.id)
+                } label: {
+                    Icon("plus", size: 14)
+                        .foregroundStyle(Impala.text2)
+                        .frame(width: 22, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Block darunter einfügen")
+            }
+            grip(b)
+        }
+    }
+
     /// Griff „⋮⋮“ links vom Block (wie in der PWA): Ziehen verschiebt, Halten zeigt das Blockmenü.
     private func grip(_ b: MdBlock) -> some View {
         Text("⋮⋮")
             .font(.system(size: TextSize.xs, weight: .bold))
             .foregroundStyle(Impala.text2)
-            .frame(width: 28, height: 28)
+            .frame(width: 22, height: 26)
             .contentShape(Rectangle())
             .hoverEffect(.highlight)
             .contextMenu { BlockMenuItems(block: b, model: model) { rawBlock = b } }
@@ -311,19 +335,304 @@ private struct ArchivedBanner: View {
     }
 }
 
-/// Brotkrumen und Emoji; liest nur bei Änderungen am Seitenbaum neu, nicht bei jedem Tastendruck.
-private struct NoteHeader: View {
+/// Emoji-Icon der Notiz über dem Titel.
+private struct NoteEmoji: View {
     @Environment(ImpalaStore.self) private var store
-    @Environment(ShellModel.self) private var shell
     let pageId: String
 
     var body: some View {
         let _ = store.pagesRevision
-        let ancestors = store.core.ancestorsOf(id: pageId)
-        if !ancestors.isEmpty { Breadcrumbs(pages: ancestors) { shell.open($0) } }
         if let summary = store.core.page(id: pageId)?.summary, let emoji = PageStyle.emoji(summary) {
             Text(emoji).font(.system(size: 52))
         }
+    }
+}
+
+/// Kopfzeile der Notiz wie in Android (`DeskPageActions.kt`) und PWA (`render.js:755-763`):
+/// Brotkrumen (Arbeitsbereich / Eltern / Aktuelle Seite), Teilen, Favoriten-Stern und ⋯-Menü.
+private struct PageChrome: View {
+    @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+    let model: NoteModel
+    @State private var shareItem: ShareItem?
+
+    var body: some View {
+        let _ = store.pagesRevision
+        let page = store.core.page(id: model.pageId)
+        let summary = page?.summary
+        let isFavorite = summary?.favorite == true
+        let isArchived = page?.archived == true
+        let currentTitle = model.title.isEmpty ? (summary?.title.isEmpty == false ? summary!.title : "") : model.title
+
+        HStack(alignment: .center, spacing: Space.s2) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                Breadcrumbs(
+                    pageId: model.pageId,
+                    workspaceId: summary?.workspaceId,
+                    currentTitle: currentTitle
+                ) { shell.open($0) }
+            }
+
+            Spacer(minLength: Space.s2)
+
+            HStack(spacing: 4) {
+                // 1. Teilen-Knopf: Öffnet iOS-Share-Sheet mit Titel & Markdown-Inhalt
+                Button(action: shareNote) {
+                    HStack(spacing: 4) {
+                        Icon("upload", size: 14)
+                        Text("Teilen")
+                            .font(.system(size: TextSize.sm, weight: .medium))
+                    }
+                    .foregroundStyle(Impala.text2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Impala.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Teilen")
+
+                // 2. Favoriten-Stern: Schaltet core.setFavorite direkt um mit Haptik
+                Button {
+                    let haptic = UIImpactFeedbackGenerator(style: .medium)
+                    haptic.impactOccurred()
+                    store.core.setFavorite(id: model.pageId, favorite: !isFavorite)
+                } label: {
+                    Icon("star", size: 15)
+                        .foregroundStyle(isFavorite ? Impala.accent : Impala.text2)
+                        .frame(width: 30, height: 30)
+                        .background(isFavorite ? Impala.activeTint : Impala.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(isFavorite ? "Aus Favoriten entfernen" : "Zu Favoriten")
+
+                // 3. ⋯-Aktionsmenü („Weitere Optionen“)
+                Menu {
+                    Button(action: exportPdf) {
+                        Label { Text("Als PDF exportieren / drucken") } icon: { Icon("printer") }
+                    }
+
+                    Button(action: exportMarkdown) {
+                        Label { Text("Als Markdown (.md) speichern / teilen") } icon: { Icon("download") }
+                    }
+
+                    Button(action: copyLink) {
+                        Label { Text("Internen Link kopieren") } icon: { Icon("link") }
+                    }
+
+                    Divider()
+
+                    let marks = highlightCount(page?.content ?? blocksToMarkdown(blocks: model.blocks))
+                    Button(action: cardsFromHighlights) {
+                        Label {
+                            Text(marks > 0 ? "Lernkarten aus Markierungen (\(marks))" : "Lernkarten aus Markierungen")
+                        } icon: {
+                            Icon("cards")
+                        }
+                    }
+
+                    Button(action: duplicate) {
+                        Label { Text("Duplizieren") } icon: { Icon("copy") }
+                    }
+
+                    Button {
+                        toggleArchive(isArchived: isArchived)
+                    } label: {
+                        Label {
+                            Text(isArchived ? "Aus Archiv holen" : "Archivieren")
+                        } icon: {
+                            Icon(isArchived ? "undo" : "archive")
+                        }
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive, action: trash) {
+                        Label { Text("In Papierkorb") } icon: { Icon("trash") }
+                    }
+                } label: {
+                    Icon("dots", size: 16)
+                        .foregroundStyle(Impala.text2)
+                        .frame(width: 30, height: 30)
+                        .background(Impala.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Weitere Optionen")
+            }
+        }
+        .padding(.vertical, 2)
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.items)
+        }
+    }
+
+    private func shareNote() {
+        model.flush()
+        let content = store.core.page(id: model.pageId)?.content ?? blocksToMarkdown(blocks: model.blocks)
+        let title = model.title.trimmingCharacters(in: .whitespaces)
+        let shareText = title.isEmpty ? content : "# \(title)\n\n\(content)"
+        shareItem = ShareItem(items: [shareText])
+    }
+
+    private func exportPdf() {
+        model.flush()
+        let page = store.core.page(id: model.pageId)
+        let title = model.title.trimmingCharacters(in: .whitespaces)
+        let content = page?.content ?? blocksToMarkdown(blocks: model.blocks)
+        let icon = page?.summary.icon
+        let heading = [icon, title].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+        let html = printableHtml(heading: heading.isEmpty ? "Unbenannt" : heading, content: content)
+        if let url = renderPdfFile(title: title, html: html) {
+            shareItem = ShareItem(items: [url])
+        } else {
+            model.showToast("PDF konnte nicht erstellt werden.")
+        }
+    }
+
+    private func exportMarkdown() {
+        model.flush()
+        let page = store.core.page(id: model.pageId)
+        let title = model.title.trimmingCharacters(in: .whitespaces)
+        let content = page?.content ?? blocksToMarkdown(blocks: model.blocks)
+        let safeTitle = title.replacingOccurrences(of: #"[\\/:*?\"<>|#]"#, with: "_", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+            .prefix(80)
+        let fileName = (safeTitle.isEmpty ? "Seite" : String(safeTitle)) + ".md"
+        let md = title.isEmpty ? content : "# \(title)\n\n\(content)"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try md.write(to: url, atomically: true, encoding: .utf8)
+            shareItem = ShareItem(items: [url])
+        } catch {
+            model.showToast("Markdown-Datei konnte nicht erstellt werden.")
+        }
+    }
+
+    private func copyLink() {
+        let link = "#\(model.pageId)"
+        UIPasteboard.general.string = link
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+        model.showToast("Interner Link kopiert: \(link)")
+    }
+
+    private func cardsFromHighlights() {
+        model.flush()
+        do {
+            let count = try store.core.cardsFromHighlights(pageId: model.pageId, deck: nil)
+            if count > 0 {
+                model.showToast("\(count) Karteikarte(n) erstellt.")
+            } else {
+                model.showToast("Keine neuen Markierungen — für alle gibt es schon Karten.")
+            }
+        } catch {
+            model.showToast("Karten konnten nicht erstellt werden.")
+        }
+    }
+
+    private func duplicate() {
+        model.flush()
+        if let newId = store.core.duplicatePage(id: model.pageId) {
+            shell.open(newId)
+            model.showToast("Seite dupliziert.")
+        }
+    }
+
+    private func toggleArchive(isArchived: Bool) {
+        model.flush()
+        if isArchived {
+            attempt("unarchivePage", { try store.core.unarchivePage(id: model.pageId) })
+            model.showToast("Wiederhergestellt.")
+        } else {
+            attempt("archivePage", { try store.core.archivePage(id: model.pageId) })
+            model.showToast("Seite archiviert.")
+        }
+    }
+
+    private func trash() {
+        model.flush()
+        attempt("trashPage", { try store.core.trashPage(id: model.pageId) })
+        shell.close(model.pageId)
+    }
+}
+
+/// Brotkrumen über dem Titel (`.page-chrome` / `.crumbs`): Arbeitsbereich / Eltern / Aktuelle Seite.
+private struct Breadcrumbs: View {
+    @Environment(ImpalaStore.self) private var store
+    let pageId: String
+    let workspaceId: String?
+    let currentTitle: String
+    let open: (String) -> Void
+
+    var body: some View {
+        let wsName = store.core.workspaces().first(where: { $0.id == workspaceId })?.name ?? "Privat"
+        let ancestors = store.core.ancestorsOf(id: pageId)
+
+        HStack(spacing: Space.s1) {
+            // Arbeitsbereich
+            Text(wsName)
+                .font(.system(size: TextSize.sm))
+                .foregroundStyle(Impala.text2)
+                .lineLimit(1)
+
+            sep
+
+            // Elternseiten
+            if ancestors.count > 2 {
+                if let first = ancestors.first {
+                    crumbButton(first)
+                    sep
+                    Text("…")
+                        .font(.system(size: TextSize.sm))
+                        .foregroundStyle(Impala.text2.opacity(0.6))
+                    sep
+                }
+                if let last = ancestors.last {
+                    crumbButton(last)
+                    sep
+                }
+            } else {
+                ForEach(ancestors, id: \.id) { a in
+                    crumbButton(a)
+                    sep
+                }
+            }
+
+            // Aktuelle Seite
+            Text(currentTitle.isEmpty ? "Unbenannt" : currentTitle)
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var sep: some View {
+        Text("/")
+            .font(.system(size: TextSize.sm))
+            .foregroundStyle(Impala.text2.opacity(0.4))
+            .padding(.horizontal, 2)
+    }
+
+    private func crumbButton(_ p: PageSummary) -> some View {
+        Button {
+            open(p.id)
+        } label: {
+            HStack(spacing: 4) {
+                PageIcon(page: p, size: 12)
+                Text(PageStyle.title(p))
+                    .lineLimit(1)
+            }
+            .font(.system(size: TextSize.sm))
+            .foregroundStyle(Impala.text2)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 }
 
@@ -443,25 +752,62 @@ private struct BarIcon: View {
     }
 }
 
-/// Brotkrumen über dem Titel (`.crumbs`): Elternkette, antippen öffnet.
-private struct Breadcrumbs: View {
-    let pages: [PageSummary]
-    let open: (String) -> Void
+private struct ShareItem: Identifiable, @unchecked Sendable {
+    let id = UUID()
+    let items: [Any]
+}
 
-    var body: some View {
-        HStack(spacing: Space.s1) {
-            ForEach(Array(pages.enumerated()), id: \.element.id) { i, p in
-                if i > 0 { Icon("chevron-right", size: 10).foregroundStyle(Impala.text2) }
-                Button { open(p.id) } label: {
-                    HStack(spacing: 4) {
-                        PageIcon(page: p, size: 12)
-                        Text(PageStyle.title(p)).lineLimit(1)
-                    }
-                    .font(.system(size: TextSize.sm))
-                    .foregroundStyle(Impala.text2)
-                }
-                .buttonStyle(.plain)
-            }
-        }
+/// Druckbares HTML mit Absätzen (wie PageOps.kt in Android).
+private func printableHtml(heading: String, content: String) -> String {
+    func esc(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+         .replacingOccurrences(of: "<", with: "&lt;")
+         .replacingOccurrences(of: ">", with: "&gt;")
     }
+    let paragraphs = content.components(separatedBy: "\n\n")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .map { "<p>\(esc($0).replacingOccurrences(of: "\n", with: "<br>"))</p>" }
+        .joined()
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" +
+        "body{font:15px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;color:#111;margin:24px}p{margin:0 0 12px}h1{margin:0 0 16px;font-size:24px}" +
+        "</style></head><body><h1>\(esc(heading))</h1>\(paragraphs)</body></html>"
+}
+
+/// PDF aus druckbarem HTML rendern (DIN A4).
+@MainActor
+private func renderPdfFile(title: String, html: String) -> URL? {
+    let printFormatter = UIMarkupTextPrintFormatter(markupText: html)
+    let renderer = UIPrintPageRenderer()
+    renderer.addPrintFormatter(printFormatter, startingAtPageAt: 0)
+    let paperRect = CGRect(x: 0, y: 0, width: 595.2, height: 841.8)
+    let printableRect = paperRect.insetBy(dx: 36, dy: 36)
+    renderer.setValue(paperRect, forKey: "paperRect")
+    renderer.setValue(printableRect, forKey: "printableRect")
+    let pdfData = NSMutableData()
+    UIGraphicsBeginPDFContextToData(pdfData, paperRect, nil)
+    for i in 0..<renderer.numberOfPages {
+        UIGraphicsBeginPDFPage()
+        renderer.drawPage(at: i, in: UIGraphicsGetPDFContextBounds())
+    }
+    UIGraphicsEndPDFContext()
+    let safeTitle = title.replacingOccurrences(of: #"[\\/:*?\"<>|#]"#, with: "_", options: .regularExpression)
+        .trimmingCharacters(in: .whitespaces)
+        .prefix(80)
+    let fileName = (safeTitle.isEmpty ? "Dokument" : String(safeTitle)) + ".pdf"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    do {
+        try (pdfData as Data).write(to: url, options: .atomic)
+        return url
+    } catch {
+        return nil
+    }
+}
+
+/// Zahl für „Karten aus Markierungen (n)“ wie `moreMenuHtml` und `highlightCount` in DeskPageActions.kt:
+/// `==…==` und `{{cN::`.
+private func highlightCount(_ content: String) -> Int {
+    let hl = (try? NSRegularExpression(pattern: #"==[^=\n]+=="#))?.numberOfMatches(in: content, range: NSRange(content.startIndex..., in: content)) ?? 0
+    let cloze = (try? NSRegularExpression(pattern: #"\{\{c\d+::"#))?.numberOfMatches(in: content, range: NSRange(content.startIndex..., in: content)) ?? 0
+    return hl + cloze
 }

@@ -21,6 +21,11 @@ extension ImpalaCore {
         _ = try? dispatch("pageUpdate", ["id": id, "patch": patch.mapValues { $0 ?? NSNull() }])
     }
 
+    /// Favoritenstatus umschalten (`★` im Page-Chrome wie DeskPageActions.kt / render.js).
+    func setFavorite(id: String, favorite: Bool) {
+        patchPage(id, ["favorite": favorite])
+    }
+
     /// Neue Seite anlegen; eine Vorlage übernimmt Titel, Inhalt, Icon und Schlagwörter (wie `data-tpluse`).
     func createNew(_ choice: NewPageChoice, parent: String?, workspace: String?) -> String? {
         switch choice {
@@ -68,6 +73,11 @@ extension ImpalaCore {
             _ = duplicate(kid.id, newParent: id, workspace: ws)
         }
         return id
+    }
+
+    /// Seite samt Unterseiten duplizieren (wie in DeskPageActions.kt).
+    func duplicatePage(id: String) -> String? {
+        duplicate(id)
     }
 
     /// PDF als Seite (`PDFS.ingest` ohne KI, wie `importPdfPage` in LibraryImport.kt): Datei in den Kern,

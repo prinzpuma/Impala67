@@ -20,6 +20,12 @@ final class SyncController {
     var isPaired: Bool { !deviceKey.isEmpty }
     var isActive: Bool { state != .disconnected && state != .error }
 
+    /// Bis zu welcher lokalen seq alles hochgeladen ist; `nil`, wenn dieses Gerät nicht gekoppelt ist (backup-status.js).
+    func uploadedSeq() -> UInt64? {
+        guard isPaired else { return nil }
+        return sync?.status().lastUploadedSeq ?? 0
+    }
+
     @ObservationIgnored private let store: ImpalaStore
     @ObservationIgnored private var sync: CloudSync?
     @ObservationIgnored private var socket: URLSessionWebSocketTask?

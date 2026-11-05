@@ -6,9 +6,13 @@ import SwiftUI
 struct HomeScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Environment(SyncController.self) private var sync: SyncController?
+    @Environment(DriveController.self) private var drive: DriveController?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.shellNamespace) private var zoom
     @AppStorage(WeekGoal.key) private var storedGoal = 300
+    @AppStorage("impala67_backup_snooze_until") private var backupSnoozeUntil: Double = 0
+    @State private var backupView: DriveBackupView?
     @State private var sheet: HomeSheet?
     private var writer: HomeArticleWriter { .shared }
 
@@ -33,6 +37,7 @@ struct HomeScreen: View {
         let study = store.core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
         let open = Int(study.new + study.learn + study.review)
         let hasCards = store.core.cardTotals().cards > 0
+        let recall = HomeRecall.compute(core: store.core)
         // Ohne eigene Messwerte 20 s je Karte (`secPerCard` in home-view.js), mindestens 1 Minute.
         let estMin = max(1, Int((Double(open) * 20 / 60).rounded()))
         ScrollView {
@@ -69,6 +74,24 @@ struct HomeScreen: View {
                         .riseIn(1)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+                if let backupView, backupView.needsHint, Date().timeIntervalSince1970 * 1000 >= backupSnoozeUntil {
+                    BackupAlert(
+                        view: backupView,
+                        onBackup: {
+                            if backupView.level == .stale {
+                                sync?.syncNow()
+                                if drive?.connected == true { Task { await drive?.sync() } }
+                            }
+                            shell.sheet = .settings
+                        },
+                        onLater: {
+                            let snoozeDuration = backupView.snoozeMs > 0 ? backupView.snoozeMs : 3 * 86_400_000
+                            backupSnoozeUntil = Date().timeIntervalSince1970 * 1000 + snoozeDuration
+                        }
+                    )
+                    .riseIn(1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 VStack(alignment: .leading, spacing: Space.s2) {
                     Text("\(Self.greeting())\(settings.name.isEmpty ? "" : ", " + settings.name).")
                         .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
@@ -87,6 +110,12 @@ struct HomeScreen: View {
                     if !pins.isEmpty {
                         FlowRow(pins: Array(pins)) { shell.open($0) }
                             .riseIn(3)
+                    }
+                    if let recall {
+                        RecallCard(recall: recall) {
+                            shell.openCards(.review(deck: recall.deck.isEmpty ? nil : recall.deck, mix: false))
+                        }
+                        .riseIn(3)
                     }
                 }
                 let stats = VStack(spacing: Space.s4) {
@@ -113,6 +142,8 @@ struct HomeScreen: View {
             }
             .padding(Space.s6)
             .animation(.smooth, value: conflicts)
+            .animation(.smooth, value: backupView?.needsHint)
+            .animation(.smooth, value: backupSnoozeUntil)
             .animation(.smooth, value: writer.phase == .busy)
             .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
@@ -128,7 +159,26 @@ struct HomeScreen: View {
             // Tagesartikel: ein Versuch je App-Start, automatisch nur bei erreichbarer KI.
             shell.chat.refreshModels()
             writer.ensure(core: store.core, chat: shell.chat)
+            while !Task.isCancelled {
+                await refreshBackupStatus()
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
+        // Nicht bei jeder Änderung (jeder Strich, jeder Buchstabe): Minutentakt und Sync-/Drive-Wechsel reichen.
+        .onChange(of: sync?.state) { _, _ in Task { await refreshBackupStatus() } }
+        .onChange(of: drive?.connected) { _, _ in Task { await refreshBackupStatus() } }
+        .onChange(of: drive?.running) { _, _ in Task { await refreshBackupStatus() } }
+    }
+
+    private func refreshBackupStatus() async {
+        let core = store.core
+        let cfSeq = sync?.uploadedSeq()
+        let driveActive = (drive?.connected == true) || (drive?.needsLogin == true)
+        let nowMs = Date().timeIntervalSince1970 * 1000
+        let v = await Task.detached(priority: .utility) {
+            driveBackupView(core: core, cloudflareUploadedSeq: cfSeq, driveActive: driveActive, nowMs: nowMs)
+        }.value
+        self.backupView = v
     }
 
     /// Satz nach der Begrüßung (`sum` in home-view.js); die Kartenzahl startet das Lernen.
@@ -204,29 +254,6 @@ private struct ConflictAlert: View {
         .padding(.horizontal, Space.s4)
         .padding(.vertical, Space.s2)
         .background(scheme == .dark ? Impala.warn.opacity(0.12) : Color(uiColor: UIColor(hex: 0xF8EECF)), in: Capsule())
-    }
-}
-
-/// `.hv-continue`: Karte mit Symbol, „Weitermachen“, Titel und Zeitpunkt.
-private struct ContinueCard: View {
-    let page: PageSummary
-
-    var body: some View {
-        HStack(spacing: Space.s4) {
-            PageIcon(page: page, size: 26)
-                .foregroundStyle(Impala.accent)
-                .frame(width: 64, height: 64)
-                .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Weitermachen").font(.system(size: TextSize.xs, weight: .semibold)).foregroundStyle(Impala.text2)
-                Text(PageStyle.title(page)).font(.system(size: TextSize.lg, weight: .semibold)).foregroundStyle(Impala.text).lineLimit(1)
-                Text(page.kind == .heft ? "Heft" : "Notiz").font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(Space.s3)
-        .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
     }
 }
 

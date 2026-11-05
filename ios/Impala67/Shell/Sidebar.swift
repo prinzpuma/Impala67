@@ -11,17 +11,31 @@ struct Sidebar: View {
     @Namespace private var pills
 
     var body: some View {
+        let isChat = shell.sidebarMode == .chats
+        let isCards = !isChat && (shell.sidebarMode == .cards || (shell.active == ShellModel.cardsTab && shell.sidebarMode != .files))
+        let isHome = shell.sidebarMode == .files && !isCards
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 2) {
-                Pill(icon: "home", label: "Home", active: shell.sidebarMode == .files && shell.active == nil && !shell.libraryOpen, ns: pills) {
-                    shell.sidebarMode = .files
-                    shell.goHome()
+                Pill(icon: "home", label: "Home", active: isHome, ns: pills) {
+                    if shell.sidebarMode != .files {
+                        shell.sidebarMode = .files
+                    } else {
+                        shell.goHome()
+                    }
                 }
-                Pill(icon: "chat", label: "Chat", active: shell.sidebarMode == .chats, ns: pills) { shell.sidebarMode = .chats }
-                Pill(icon: "cards", label: "Karten", active: shell.sidebarMode == .cards, ns: pills) { shell.sidebarMode = .cards }
+                Pill(icon: "chat", label: "Chat", active: isChat, ns: pills) {
+                    shell.sidebarMode = .chats
+                }
+                Pill(icon: "cards", label: "Karten", active: isCards, ns: pills) {
+                    shell.sidebarMode = .cards
+                    shell.openCards(.decks)
+                }
                 Spacer(minLength: 0)
-                Pill(icon: "search", label: "Suchen", active: false, ns: pills) { shell.sheet = .search }
-                    .zoomSource(ShellSheet.search, zoom)
+                Pill(icon: "search", label: "Suchen", active: false, ns: pills) {
+                    shell.sheet = .search
+                }
+                .zoomSource(ShellSheet.search, zoom)
             }
             if tabsPosition == AppTabsPosition.sidebar.rawValue {
                 SidebarTabs()
@@ -74,12 +88,14 @@ private struct Pill: View {
             }
             .foregroundStyle(active ? Impala.text : Impala.text2)
             .padding(.horizontal, 10)
-            .frame(minHeight: 36)
+            .frame(minWidth: 38, minHeight: 36)
             .background {
                 // Die Tönung gleitet von Pille zu Pille.
                 if active { Capsule().fill(Impala.activeTint).matchedGeometryEffect(id: "pill", in: ns) }
             }
+            .contentShape(Capsule())
         }
+        .contentShape(Capsule())
         .pressable()
         .accessibilityLabel(label)
         .sensoryFeedback(.selection, trigger: active) { _, now in AppHaptics.isEnabled && now }
@@ -108,6 +124,7 @@ private struct FootButton: View {
             .padding(.horizontal, Space.s2)
             .frame(minHeight: 40)
             .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
         .pressable()
     }

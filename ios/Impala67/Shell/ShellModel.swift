@@ -82,6 +82,9 @@ final class ShellModel {
             libraryOpen = true
         } else {
             libraryOpen = false
+            if target == Self.cardsTab {
+                sidebarMode = .cards
+            }
             if !tabs.contains(target) {
                 if let a = active, let i = tabs.firstIndex(of: a) { tabs[i] = target } else { append(target) }
             }
@@ -109,6 +112,9 @@ final class ShellModel {
         let ui = store.core.uiTabs()
         tabs = ui.tabs
         active = ui.activeTabId.flatMap { tabs.contains($0) ? $0 : nil } ?? tabs.first
+        if active == Self.cardsTab {
+            sidebarMode = .cards
+        }
         if history.isEmpty {
             pushHistory(active ?? "home")
         }
@@ -116,11 +122,17 @@ final class ShellModel {
 
     /// Wie `activateTab`: Ist das Ziel schon offen, wird sein Tab aktiv; sonst ersetzt es den aktiven Tab.
     func open(_ tab: String) {
+        if tab == Self.cardsTab {
+            sidebarMode = .cards
+        }
         navigateTarget(tab, push: true)
     }
 
     /// „In neuem Tab öffnen“ bzw. „＋“.
     func openNewTab(_ tab: String) {
+        if tab == Self.cardsTab {
+            sidebarMode = .cards
+        }
         libraryOpen = false
         if !tabs.contains(tab) { append(tab) }
         active = tab
@@ -138,6 +150,7 @@ final class ShellModel {
     /// Karten-Tab öffnen (wie `data-ankistudy` bzw. Klick auf einen Stapel in der Seitenleiste).
     /// Karten-Tab zeigen; `feynman` lernt im Feynman-Modus (erst erklären, dann aufdecken).
     func openCards(_ view: CardsView, feynman: Bool = false) {
+        sidebarMode = .cards
         cards.feynman = feynman
         cards.view = view
         open(Self.cardsTab)
@@ -147,6 +160,7 @@ final class ShellModel {
 
     /// Startseite: kein aktiver Tab (wie `TopLevel.Home`).
     func goHome() {
+        sidebarMode = .files
         navigateTarget("home", push: true)
     }
 

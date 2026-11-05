@@ -97,7 +97,7 @@ private struct ReviewBody: View {
                         }
                     } else {
                         Button {
-                            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.showBack = true }
+                            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.22)) { model.flip() }
                         } label: {
                             Text(shell.cards.feynman ? "Ohne Erklärung aufdecken" : "Antwort zeigen")
                                 .font(.system(size: TextSize.md, weight: .semibold))
@@ -176,7 +176,7 @@ private struct CardMeta: View {
                 .foregroundStyle(Impala.text2)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if card.leech { Text("Leech").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.danger) }
+            if card.leech { LeechBadge() }
             Text(stage).font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.accent)
         }
     }

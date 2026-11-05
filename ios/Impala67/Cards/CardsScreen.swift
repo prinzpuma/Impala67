@@ -20,6 +20,8 @@ struct CardsScreen: View {
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
             case .stats:
                 StatsScreen().transition(.opacity.combined(with: .move(edge: .trailing)))
+            case .archive:
+                CardArchiveScreen().transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
         .animation(.smooth(duration: 0.32), value: view)
@@ -66,6 +68,10 @@ private struct DeckOverviewScreen: View {
                         }
                         Button { cards.io = .exporting } label: {
                             Label { Text("Export") } icon: { Icon("upload") }
+                        }
+                        Divider()
+                        Button { withAnimation(.smooth) { cards.view = .archive } } label: {
+                            Label { Text("Archivierte Karten & Stapel") } icon: { Icon("archive") }
                         }
                     } label: {
                         Text("＋ Neu")
@@ -394,12 +400,15 @@ private struct CardListRow: View {
             Spacer(minLength: Space.s2)
             VStack(alignment: .trailing, spacing: 3) {
                 if showDeck { Text(Deck.label(card.deck)).font(.system(size: 11)).foregroundStyle(Impala.text2) }
-                if card.suspended {
-                    Text("ausgesetzt").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.warn)
-                } else if card.leech {
-                    Text("Leech").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.danger)
-                } else if card.stage == .new {
-                    Text("neu").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.success)
+                HStack(spacing: 4) {
+                    if card.leech {
+                        LeechBadge()
+                    }
+                    if card.suspended {
+                        Text("ausgesetzt").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.warn)
+                    } else if card.stage == .new {
+                        Text("neu").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.success)
+                    }
                 }
             }
         }
