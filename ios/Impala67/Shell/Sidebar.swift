@@ -140,7 +140,7 @@ private struct SidebarTabs: View {
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         if !shell.tabs.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {

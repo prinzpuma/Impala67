@@ -304,18 +304,17 @@ private struct SourceRow: View {
 /// „Lokale KI“: Handschrift-Erkennung mit Apple Vision und Semantische Suche.
 private struct AiLocalSection: View {
     @Environment(ImpalaStore.self) private var store
+    /// Offene Erkennungsaufträge; laufen über alle Hefte, daher im Hintergrund gezählt (`.task` unten).
+    @State private var jobCount = 0
 
     var body: some View {
-        let _ = store.revision
-        let jobs = store.core.heftOcrJobs(src: "apple")
-
         SettingsCardGroup(
             title: "Lokale KI",
             footnote: "Handschrifterkennung und semantische Suche laufen direkt auf dem iPad; deine Inhalte verlassen dafür das Gerät nicht."
         ) {
             SettingsRow(
                 title: "Handschrifterkennung (Digital Ink)",
-                description: "100 % lokal (Apple Vision) · \(jobs.isEmpty ? "Alle Notizen erkannt" : "\(jobs.count) Seiten in Bearbeitung")",
+                description: "100 % lokal (Apple Vision) · \(jobCount == 0 ? "Alle Notizen erkannt" : "\(jobCount) Seiten in Bearbeitung")",
                 leading: { StatusIndicator(tone: .ok) }
             )
             SettingsDivider()
@@ -324,6 +323,12 @@ private struct AiLocalSection: View {
                 description: "Vektorsuche und inhaltliche Verknüpfungen direkt auf dem Gerät",
                 leading: { StatusIndicator(tone: .ok) }
             )
+        }
+        // Neue Aufträge entstehen bei Heftänderungen (auch von anderen Geräten), erledigte beim Erkennen.
+        .task(id: [store.pageMetaRevision, store.remoteRevision]) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) { core.heftOcrJobs(src: "apple").count }.value
+            if !Task.isCancelled { jobCount = next }
         }
     }
 }

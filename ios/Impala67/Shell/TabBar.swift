@@ -9,7 +9,7 @@ struct TabBar: View {
     @Namespace private var highlight
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         HStack(spacing: Space.s1) {
             Button { shell.toggleSidebar() } label: {
                 Icon("columns", size: 16)

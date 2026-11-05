@@ -209,11 +209,12 @@ private struct OverviewSection: View {
     @Environment(DriveController.self) private var drive
     @AppStorage("impala67LastBackup") private var lastBackup: String = ""
     let open: (SettingsSection) -> Void
+    /// KI-Einstellungen: JSON-Lesen und Schlüsselbund im Hintergrund (`.task` unten), nicht im Body.
+    @State private var ai: AiSettings?
 
     var body: some View {
-        let _ = (store.settingsRevision, store.pagesRevision)
-        let ai = AiSettings.read(store.core)
-        let aiReady = !ai.model.isEmpty
+        let _ = (store.settingsRevision, store.pageMetaRevision)
+        let aiReady = ai.map { !$0.model.isEmpty } ?? false
 
         VStack(alignment: .leading, spacing: 0) {
             SettingsPageHead(
@@ -225,7 +226,7 @@ private struct OverviewSection: View {
                 // 1. KI
                 SettingsLinkRow(
                     title: "KI",
-                    description: aiReady ? ai.label : "Noch kein Modell gewählt",
+                    description: aiReady ? (ai?.label ?? "") : (ai == nil ? "" : "Noch kein Modell gewählt"),
                     statusDot: aiReady ? .ok : .idle,
                     actionTitle: aiReady ? "Konfigurieren" : "Einrichten",
                     action: { open(.ai) }
@@ -273,6 +274,11 @@ private struct OverviewSection: View {
                     leading: { StatusIndicator(tone: .ok) }
                 )
             }
+        }
+        .task(id: store.settingsRevision) {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) { AiSettings.read(core) }.value
+            if !Task.isCancelled { ai = next }
         }
     }
 
@@ -791,6 +797,8 @@ private struct CloudflareSection: View {
     @State private var confirmReset = false
     @State private var scanning = false
     @State private var showPairing = false
+    /// Offene Sync-Konflikte; im Hintergrund gezählt (`.task` unten).
+    @State private var conflicts = 0
 
     var body: some View {
         SettingsCardGroup(
@@ -896,8 +904,6 @@ private struct CloudflareSection: View {
             .padding(.horizontal, Space.s4)
             .padding(.vertical, Space.s3)
 
-            let _ = store.revision
-            let conflicts = Int(store.core.conflictCount())
             if conflicts > 0 {
                 SettingsDivider()
                 Button {
@@ -914,6 +920,11 @@ private struct CloudflareSection: View {
                 SettingsDivider()
                 SettingsRow(title: "Hinweis", description: message)
             }
+        }
+        .task(id: [store.remoteRevision, store.pageMetaRevision]) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) { Int(core.conflictCount()) }.value
+            if !Task.isCancelled { conflicts = next }
         }
         .onAppear {
             let s = sync.settings

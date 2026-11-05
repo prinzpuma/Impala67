@@ -84,7 +84,7 @@ private struct MainContent: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         // Tabwechsel blendet weich über (wie der Seitenwechsel der PWA), Haptik beim Wechsel.
         ZStack {
             if shell.libraryOpen {

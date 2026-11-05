@@ -124,13 +124,22 @@ private struct Composer: View {
     @State private var pickPhoto = false
     @State private var pickFile = false
     @State private var attachError: String?
+    /// Zusammenfassung der geöffneten Seite (Kontext-Chip, Heft-Anhang); im Hintergrund gelesen, nicht im Body je Token.
+    @State private var contextPage: PageSummary?
+
+    private struct ContextKey: Hashable {
+        let pageId: String?
+        let meta: Int
+    }
 
     var body: some View {
         let chat = shell.chat
         let canSend = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let heft = activePageId.flatMap { store.core.page(id: $0)?.summary }.flatMap { $0.kind == .heft ? $0 : nil }
+        // Beim Seitenwechsel nie die Zusammenfassung der alten Seite zeigen.
+        let page = contextPage.flatMap { $0.id == activePageId ? $0 : nil }
+        let heft = page.flatMap { $0.kind == .heft ? $0 : nil }
         VStack(alignment: .leading, spacing: Space.s2) {
-            if let id = activePageId, let page = store.core.page(id: id)?.summary {
+            if let page {
                 ContextChip(page: page)
             }
             if let att = chat.attachment {
@@ -196,6 +205,12 @@ private struct Composer: View {
         .sensoryFeedback(.impact(weight: .light), trigger: chat.running) { _, now in now }
         .animation(.snappy, value: chat.attachment?.id)
         .animation(.snappy, value: dictation.listening)
+        .task(id: ContextKey(pageId: activePageId, meta: store.pageMetaRevision)) {
+            guard let id = activePageId else { contextPage = nil; return }
+            let core = store.core
+            let summary = await Task.detached(priority: .userInitiated) { core.page(id: id)?.summary }.value
+            if !Task.isCancelled { contextPage = summary }
+        }
         .onAppear {
             dictation.onFinal = { said in
                 let base = input.trimmingCharacters(in: .whitespaces)

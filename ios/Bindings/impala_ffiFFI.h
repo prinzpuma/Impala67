@@ -1137,6 +1137,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_apply(void*_Nonnull ptr, 
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_apply_ops(void*_Nonnull ptr, RustBuffer page_id, RustBuffer ops_json, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_COMMIT_STROKES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_COMMIT_STROKES
+void uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer add, RustBuffer remove, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer ids, RustCallStatus *_Nonnull out_status
@@ -3118,6 +3123,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_apply(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_APPLY_OPS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_APPLY_OPS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_apply_ops(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_COMMIT_STROKES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_COMMIT_STROKES
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes(void
     
 );
 #endif

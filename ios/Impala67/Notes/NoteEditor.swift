@@ -305,7 +305,7 @@ private struct ArchivedBanner: View {
     let onToast: (String) -> Void
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         if store.core.page(id: pageId)?.archived == true {
             HStack(spacing: 8) {
                 Icon("archive", size: 16).foregroundStyle(Impala.text2)
@@ -342,7 +342,7 @@ private struct NoteEmoji: View {
     let pageId: String
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         if let summary = store.core.page(id: pageId)?.summary, let emoji = PageStyle.emoji(summary) {
             Text(emoji).font(.system(size: 52))
         }
@@ -358,7 +358,7 @@ private struct PageChrome: View {
     @State private var shareItem: ShareItem?
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         let page = store.core.page(id: model.pageId)
         let summary = page?.summary
         let isFavorite = summary?.favorite == true

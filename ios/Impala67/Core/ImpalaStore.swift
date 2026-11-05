@@ -9,8 +9,13 @@ import Observation
 final class ImpalaStore {
     let core: ImpalaCore
 
-    /// Seitenbaum, Titel, Arbeitsbereiche.
+    /// Jede Seitenänderung, auch reiner Inhalt (Notiztext, Heft-Striche). Nur für Ansichten, die den
+    /// Inhalt oder „zuletzt bearbeitet“ zeigen (Startseite, Suche).
     private(set) var pagesRevision = 0
+    /// Seitenbaum, Titel, Icons, Ort, Favoriten, Archiv, Arbeitsbereiche – ohne reine Inhaltsänderungen.
+    /// Wie `render.js` der PWA: Speichern im Editor bzw. ein Strich im Heft zeichnet Listen und
+    /// Kopfzeilen nicht neu. Für fast alle Ansichten der richtige Zähler.
+    private(set) var pageMetaRevision = 0
     /// Offene Tabs und Aufklapp-Zustand des Seitenbaums (geräteübergreifend gespeichert).
     private(set) var uiRevision = 0
     /// Karten, Stapel und Bewertungen (Stapelbaum, Lernen, „Heute fällig“).
@@ -43,6 +48,7 @@ final class ImpalaStore {
     private func apply(_ c: Changes) {
         revision += 1
         if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
+        if c.everything || c.pagesAll || c.pagesMeta || c.workspaces { pageMetaRevision += 1 }
         if c.everything || c.ui { uiRevision += 1 }
         if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }
         if c.everything || c.chatsAll || !c.chats.isEmpty { chatsRevision += 1 }

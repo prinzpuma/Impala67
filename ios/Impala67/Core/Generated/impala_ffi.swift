@@ -3369,6 +3369,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftApplyOps(pageId: String, opsJson: String) throws  -> HeftEdit
     
     /**
+     * Gesammelte Strich-Änderungen einer Heftseite als *ein* `heftOps`-Event (wie `scheduleSave` in
+     * heft.js der PWA: 350 ms Ruhe, dann ein Event statt eines je Strich). Erst `remove`, dann `add`;
+     * neue Striche bringen ihre ID mit (die App vergibt sie, damit der Stift nicht auf den Kern wartet).
+     */
+    func heftCommitStrokes(pageId: String, heftPageId: String, add: [HeftStroke], remove: [String]) throws 
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
     func heftDuplicateStrokes(pageId: String, heftPageId: String, ids: [String]) throws  -> HeftEdit
@@ -4622,6 +4629,21 @@ open func heftApplyOps(pageId: String, opsJson: String)throws  -> HeftEdit  {
         FfiConverterString.lower(opsJson),$0
     )
 })
+}
+    
+    /**
+     * Gesammelte Strich-Änderungen einer Heftseite als *ein* `heftOps`-Event (wie `scheduleSave` in
+     * heft.js der PWA: 350 ms Ruhe, dann ein Event statt eines je Strich). Erst `remove`, dann `add`;
+     * neue Striche bringen ihre ID mit (die App vergibt sie, damit der Stift nicht auf den Kern wartet).
+     */
+open func heftCommitStrokes(pageId: String, heftPageId: String, add: [HeftStroke], remove: [String])throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceTypeHeftStroke.lower(add),
+        FfiConverterSequenceString.lower(remove),$0
+    )
+}
 }
     
     /**
@@ -7788,6 +7810,12 @@ public struct Changes {
     public var remote: Bool
     public var pages: [String]
     public var pagesAll: Bool
+    /**
+     * Mehr als der Inhalt einer Seite (Titel, Icon, Ort, Favorit, Archiv, neue oder gelöschte Seite):
+     * Seitenbaum, Tabs und Kopfzeilen neu lesen. Bei reinen Inhaltsänderungen (Notiztext aus dem
+     * Editor, Heft-Striche) `false` – wie `render.js` der PWA, die dann nichts neu zeichnet.
+     */
+    public var pagesMeta: Bool
     public var cards: [String]
     public var cardsAll: Bool
     public var chats: [String]
@@ -7825,7 +7853,12 @@ public struct Changes {
          */everything: Bool, 
         /**
          * Mindestens eine Änderung kam von einem anderen Gerät.
-         */remote: Bool, pages: [String], pagesAll: Bool, cards: [String], cardsAll: Bool, chats: [String], chatsAll: Bool, decks: Bool, reviews: Bool, grades: Bool, learningSessions: Bool, homeArticles: Bool, settings: Bool, workspaces: Bool, heftFolders: Bool, 
+         */remote: Bool, pages: [String], pagesAll: Bool, 
+        /**
+         * Mehr als der Inhalt einer Seite (Titel, Icon, Ort, Favorit, Archiv, neue oder gelöschte Seite):
+         * Seitenbaum, Tabs und Kopfzeilen neu lesen. Bei reinen Inhaltsänderungen (Notiztext aus dem
+         * Editor, Heft-Striche) `false` – wie `render.js` der PWA, die dann nichts neu zeichnet.
+         */pagesMeta: Bool, cards: [String], cardsAll: Bool, chats: [String], chatsAll: Bool, decks: Bool, reviews: Bool, grades: Bool, learningSessions: Bool, homeArticles: Bool, settings: Bool, workspaces: Bool, heftFolders: Bool, 
         /**
          * Offene Tabs oder Aufklapp-Zustand des Seitenbaums ([`ImpalaCore::ui_tabs`], [`ImpalaCore::tree_open`]).
          */ui: Bool, 
@@ -7842,6 +7875,7 @@ public struct Changes {
         self.remote = remote
         self.pages = pages
         self.pagesAll = pagesAll
+        self.pagesMeta = pagesMeta
         self.cards = cards
         self.cardsAll = cardsAll
         self.chats = chats
@@ -7878,6 +7912,9 @@ extension Changes: Equatable, Hashable {
             return false
         }
         if lhs.pagesAll != rhs.pagesAll {
+            return false
+        }
+        if lhs.pagesMeta != rhs.pagesMeta {
             return false
         }
         if lhs.cards != rhs.cards {
@@ -7936,6 +7973,7 @@ extension Changes: Equatable, Hashable {
         hasher.combine(remote)
         hasher.combine(pages)
         hasher.combine(pagesAll)
+        hasher.combine(pagesMeta)
         hasher.combine(cards)
         hasher.combine(cardsAll)
         hasher.combine(chats)
@@ -7968,6 +8006,7 @@ public struct FfiConverterTypeChanges: FfiConverterRustBuffer {
                 remote: FfiConverterBool.read(from: &buf), 
                 pages: FfiConverterSequenceString.read(from: &buf), 
                 pagesAll: FfiConverterBool.read(from: &buf), 
+                pagesMeta: FfiConverterBool.read(from: &buf), 
                 cards: FfiConverterSequenceString.read(from: &buf), 
                 cardsAll: FfiConverterBool.read(from: &buf), 
                 chats: FfiConverterSequenceString.read(from: &buf), 
@@ -7992,6 +8031,7 @@ public struct FfiConverterTypeChanges: FfiConverterRustBuffer {
         FfiConverterBool.write(value.remote, into: &buf)
         FfiConverterSequenceString.write(value.pages, into: &buf)
         FfiConverterBool.write(value.pagesAll, into: &buf)
+        FfiConverterBool.write(value.pagesMeta, into: &buf)
         FfiConverterSequenceString.write(value.cards, into: &buf)
         FfiConverterBool.write(value.cardsAll, into: &buf)
         FfiConverterSequenceString.write(value.chats, into: &buf)
@@ -20015,6 +20055,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_apply_ops() != 13662) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes() != 59468) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes() != 20887) {

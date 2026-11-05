@@ -68,7 +68,7 @@ struct PageTree: View {
             .animation(.smooth(duration: 0.3), value: shell.active)
         }
         .scrollIndicators(.hidden)
-        .task(id: [store.pagesRevision, store.uiRevision]) {
+        .task(id: [store.pageMetaRevision, store.uiRevision]) {
             let core = store.core
             let next = await Task.detached(priority: .userInitiated) { TreeRows.read(core) }.value
             if !Task.isCancelled { rows = next }
@@ -153,7 +153,7 @@ struct TemplateMenuSection: View {
     let create: (NewPageChoice) -> Void
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         let templates = store.core.templates()
         if !templates.isEmpty {
             Section("Aus Vorlage") {

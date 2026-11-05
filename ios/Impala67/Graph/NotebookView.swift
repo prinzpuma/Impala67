@@ -107,9 +107,10 @@ private struct NotebookPicker: View {
     @State private var query = ""
     @State private var picked: [String] = []
     @State private var empty = false
+    /// Einmal beim Öffnen im Hintergrund geladen; das Filtern beim Tippen läuft lokal darauf.
+    @State private var pages: [PageSummary] = []
 
     var body: some View {
-        let pages = store.core.recentPages(limit: 500).filter { $0.kind == .note }
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         let shown = q.isEmpty ? pages : pages.filter { PageStyle.title($0).lowercased().contains(q) }
         NavigationStack {
@@ -144,6 +145,13 @@ private struct NotebookPicker: View {
             .alert("Die gewählten Seiten sind leer.", isPresented: $empty) { Button("OK", role: .cancel) {} }
         }
         .presentationDetents([.large])
+        .task {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) {
+                core.recentPages(limit: 500).filter { $0.kind == .note }
+            }.value
+            if !Task.isCancelled { pages = next }
+        }
     }
 
     private func copy() {

@@ -17,7 +17,8 @@ struct ReviewScreen: View {
         // Lernzeit wie lernzeit.js (Kategorie `cards`, Quelle: Stapel).
         .learningTime(LearnContext(category: "cards", sourceId: deck))
         // Fremde oder eigene Änderungen (Bearbeiten, Sync): neu lesen, angezeigte Karte bleibt liegen.
-        .onChange(of: store.cardsRevision) { model?.refresh() }
+        // Das Lesen läuft im Hintergrund, höchstens alle 300 ms.
+        .onChange(of: store.cardsRevision) { model?.cardsChanged() }
     }
 }
 
@@ -94,6 +95,7 @@ private struct ReviewBody: View {
                             GradeButton(grade: g, interval: model.preview.indices.contains(g.value - 1) ? model.preview[g.value - 1] : "", ns: glass) {
                                 withAnimation(.smooth(duration: 0.38)) { model.grade(g.value) }
                             }
+                            .disabled(model.loading)
                         }
                     } else {
                         Button {
@@ -163,7 +165,7 @@ private struct ReviewHeader: View {
                     .frame(width: 44, height: 44)
             }
             .pressable()
-            .disabled(!model.canUndo)
+            .disabled(!model.canUndo || model.loading)
             .keyboardShortcut("z", modifiers: .command)
             .accessibilityLabel("Letzte Bewertung rückgängig")
         }

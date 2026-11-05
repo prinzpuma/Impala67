@@ -227,16 +227,28 @@ private struct NotionTree: View {
         var id: String { page.id }
     }
 
+    /// Gelesenes Ergebnis: Zähler der Filter und die sichtbaren Zeilen je Arbeitsbereich.
+    struct Loaded {
+        var all = 0, fav = 0, pdf = 0, tpl = 0
+        var sections: [(ws: WorkspaceInfo, rows: [Row])] = []
+    }
+
+    private struct LoadKey: Hashable {
+        let meta: Int, ui: Int, query: String, smart: String
+    }
+
+    /// Im Hintergrund gelesen (Seitenliste und Kinder je Seite), der Body rechnet nur noch aus diesem Zustand.
+    @State private var loaded: Loaded?
+
     var body: some View {
-        let _ = (store.pagesRevision, store.uiRevision)
-        let all = store.core.recentPages(limit: UInt32.max)
-        let sections = build()
+        let l = loaded ?? Loaded()
+        let sections = l.sections
         VStack(spacing: Space.s3) {
             LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle", count: all.count),
-                LibFilter(id: "fav", label: "Favoriten", count: all.filter(\.favorite).count),
-                LibFilter(id: "pdf", label: "PDFs", count: all.filter { $0.pdfId != nil }.count),
-                LibFilter(id: "tpl", label: "Vorlagen", count: all.filter(\.isTemplate).count),
+                LibFilter(id: "all", label: "Alle", count: l.all),
+                LibFilter(id: "fav", label: "Favoriten", count: l.fav),
+                LibFilter(id: "pdf", label: "PDFs", count: l.pdf),
+                LibFilter(id: "tpl", label: "Vorlagen", count: l.tpl),
             ], selection: $smart, query: $query, prompt: "Seiten suchen…") {
                 LibAction(title: "PDF hinzufügen", icon: "upload", action: onImport)
             }
@@ -256,14 +268,26 @@ private struct NotionTree: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .animation(.snappy(duration: 0.28), value: store.uiRevision)
+            // Auf-/Zuklappen und neue Seiten: Zeilen gleiten (Animation an den geladenen Zeilen, wie PageTree).
+            .animation(.snappy(duration: 0.28), value: sections.flatMap { $0.rows.map(\.id) })
             .overlay {
-                if sections.isEmpty { ContentUnavailableView("Keine Seiten für diesen Filter", image: "i-search") }
+                if loaded != nil, sections.isEmpty { ContentUnavailableView("Keine Seiten für diesen Filter", image: "i-search") }
             }
+        }
+        .task(id: LoadKey(meta: store.pageMetaRevision, ui: store.uiRevision, query: query, smart: smart)) {
+            let core = store.core
+            let smart = smart, query = query
+            // Suche entprellt: erst nach kurzer Tipp-Pause lesen.
+            if !query.isEmpty {
+                try? await Task.sleep(for: .milliseconds(150))
+                if Task.isCancelled { return }
+            }
+            let next = await Task.detached(priority: .userInitiated) { Self.load(core: core, smart: smart, query: query) }.value
+            if !Task.isCancelled { loaded = next }
         }
     }
 
-    private func ownMatch(_ p: PageSummary) -> Bool {
+    private nonisolated static func ownMatch(_ p: PageSummary, smart: String, query: String) -> Bool {
         let filter = switch smart {
         case "fav": p.favorite
         case "pdf": p.pdfId != nil
@@ -273,9 +297,19 @@ private struct NotionTree: View {
         return filter && libMatches(p, query)
     }
 
+    private nonisolated static func load(core: ImpalaCore, smart: String, query: String) -> Loaded {
+        let all = core.recentPages(limit: UInt32.max)
+        return Loaded(
+            all: all.count,
+            fav: all.filter(\.favorite).count,
+            pdf: all.filter { $0.pdfId != nil }.count,
+            tpl: all.filter(\.isTemplate).count,
+            sections: build(core: core, smart: smart, query: query)
+        )
+    }
+
     /// Sichtbar = passt selbst oder hat eine passende Unterseite (je Durchlauf gemerkt).
-    private func build() -> [(ws: WorkspaceInfo, rows: [Row])] {
-        let core = store.core
+    private nonisolated static func build(core: ImpalaCore, smart: String, query: String) -> [(ws: WorkspaceInfo, rows: [Row])] {
         let open = core.treeOpen()
         var kidsMemo: [String: [PageSummary]] = [:]
         var visibleMemo: [String: Bool] = [:]
@@ -287,7 +321,7 @@ private struct NotionTree: View {
         }
         func visible(_ p: PageSummary) -> Bool {
             if let v = visibleMemo[p.id] { return v }
-            let v = ownMatch(p) || kids(p).contains(where: visible)
+            let v = ownMatch(p, smart: smart, query: query) || kids(p).contains(where: visible)
             visibleMemo[p.id] = v
             return v
         }
@@ -441,17 +475,29 @@ private struct HeftShelf: View {
     @State private var showNewFolder = false
     @State private var newFolderTitle = ""
 
+    /// Gelesenes Ergebnis: Ordner (mit Inhaltszahl), gefilterte Hefte (mit Seitenzahl), Filterzähler, Brotkrumen.
+    struct Loaded {
+        var folders: [(folder: HeftFolder, count: Int)] = []
+        var shown: [(page: PageSummary, pages: Int)] = []
+        var all = 0, fav = 0
+        var crumbs: [HeftFolder] = []
+    }
+
+    private struct LoadKey: Hashable {
+        let meta: Int, ui: Int, query: String, filter: String, folder: String?
+    }
+
+    /// Im Hintergrund gelesen (Ordner, Hefte, Seitenzahl je Karte); der Body rechnet nur noch aus diesem Zustand.
+    @State private var loaded: Loaded?
+
     var body: some View {
-        let _ = store.pagesRevision
-        let folders = query.isEmpty ? store.core.heftFolders(parentId: folderId) : []
-        let rawHefte = query.isEmpty ? store.core.heftInFolder(folderId: folderId) : store.core.recentPages(limit: UInt32.max).filter { $0.kind == .heft }
-        let shown = rawHefte.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
-        let crumbs = folderId.map { store.core.heftFolderPath(folderId: $0) } ?? []
+        let l = loaded ?? Loaded()
+        let folders = l.folders, shown = l.shown, crumbs = l.crumbs
 
         VStack(spacing: Space.s3) {
             LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle Hefte", count: rawHefte.count),
-                LibFilter(id: "fav", label: "Favoriten", count: rawHefte.filter(\.favorite).count),
+                LibFilter(id: "all", label: "Alle Hefte", count: l.all),
+                LibFilter(id: "fav", label: "Favoriten", count: l.fav),
             ], selection: $filter, query: $query, prompt: "Suchen") {
                 Menu {
                     Button(action: onNew) {
@@ -498,20 +544,19 @@ private struct HeftShelf: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: Space.s6, alignment: .top)],
                           alignment: .leading, spacing: Space.s6) {
-                    if query.isEmpty {
-                        ForEach(folders, id: \.id) { f in
-                            let count = store.core.heftInFolder(folderId: f.id).count
-                            FolderCard(folder: f, count: count)
-                                .onTapGesture { folderId = f.id }
-                                .contextMenu {
-                                    Button("Löschen", role: .destructive) {
-                                        _ = attempt("heftFolderDelete", { try store.core.heftFolderDelete(id: f.id) })
-                                    }
+                    ForEach(folders, id: \.folder.id) { entry in
+                        let f = entry.folder
+                        FolderCard(folder: f, count: entry.count)
+                            .onTapGesture { folderId = f.id }
+                            .contextMenu {
+                                Button("Löschen", role: .destructive) {
+                                    _ = attempt("heftFolderDelete", { try store.core.heftFolderDelete(id: f.id) })
                                 }
-                        }
+                            }
                     }
-                    ForEach(shown) { p in
-                        HeftCard(page: p, pages: store.core.heftPageIds(pageId: p.id).count) { options = p }
+                    ForEach(shown, id: \.page.id) { entry in
+                        let p = entry.page
+                        HeftCard(page: p, pages: entry.pages) { options = p }
                             .onTapGesture { onOpen(p) }
                             .hoverEffect(.lift)
                             .contextMenu { PageMenu(page: p, onOpen: onOpen) }
@@ -519,17 +564,31 @@ private struct HeftShelf: View {
                 }
                 .padding(.horizontal, Space.s6)
                 .padding(.bottom, Space.s6)
-                .animation(.snappy(duration: 0.28), value: store.pagesRevision)
+                // Karten gleiten, wenn sich die geladene Auswahl ändert (wie PageTree an den Zeilen).
+                .animation(.snappy(duration: 0.28), value: folders.map(\.folder.id) + shown.map(\.page.id))
             }
             .overlay {
-                if folders.isEmpty && shown.isEmpty {
+                if loaded != nil, folders.isEmpty && shown.isEmpty {
                     ContentUnavailableView {
-                        Label { Text(rawHefte.isEmpty ? "Noch keine Hefte" : "Keine Hefte für diese Suche") } icon: { Icon("notebook", size: 40).foregroundStyle(Impala.text2) }
+                        Label { Text(l.all == 0 ? "Noch keine Hefte" : "Keine Hefte für diese Suche") } icon: { Icon("notebook", size: 40).foregroundStyle(Impala.text2) }
                     } actions: {
-                        if rawHefte.isEmpty { Button("Neues Heft", action: onNew).buttonStyle(.glassProminent) }
+                        if l.all == 0 { Button("Neues Heft", action: onNew).buttonStyle(.glassProminent) }
                     }
                 }
             }
+        }
+        .task(id: LoadKey(meta: store.pageMetaRevision, ui: store.uiRevision, query: query, filter: filter, folder: folderId)) {
+            let core = store.core
+            let query = query, filter = filter, folderId = folderId
+            // Suche entprellt: erst nach kurzer Tipp-Pause lesen.
+            if !query.isEmpty {
+                try? await Task.sleep(for: .milliseconds(150))
+                if Task.isCancelled { return }
+            }
+            let next = await Task.detached(priority: .userInitiated) {
+                Self.load(core: core, folderId: folderId, filter: filter, query: query)
+            }.value
+            if !Task.isCancelled { loaded = next }
         }
         .alert("Neuer Ordner", isPresented: $showNewFolder) {
             TextField("Ordnername", text: $newFolderTitle)
@@ -543,6 +602,20 @@ private struct HeftShelf: View {
             }
         }
         .sheet(item: $options) { HeftOptionsSheet(page: $0) }
+    }
+
+    private nonisolated static func load(core: ImpalaCore, folderId: String?, filter: String, query: String) -> Loaded {
+        let searching = !query.isEmpty
+        let folders = searching ? [] : core.heftFolders(parentId: folderId)
+        let raw = searching ? core.recentPages(limit: UInt32.max).filter { $0.kind == .heft } : core.heftInFolder(folderId: folderId)
+        let shown = raw.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
+        return Loaded(
+            folders: folders.map { (folder: $0, count: core.heftInFolder(folderId: $0.id).count) },
+            shown: shown.map { (page: $0, pages: core.heftPageIds(pageId: $0.id).count) },
+            all: raw.count,
+            fav: raw.filter(\.favorite).count,
+            crumbs: folderId.map { core.heftFolderPath(folderId: $0) } ?? []
+        )
     }
 }
 
@@ -755,10 +828,11 @@ private struct ArchiveList: View {
     @Binding var query: String
     let onOpen: (PageSummary) -> Void
     @State private var filter = "all"
+    /// Archivierte Seiten; im Hintergrund gelesen (`.task` unten), der Body filtert nur noch lokal.
+    @State private var loaded: [PageSummary]?
 
     var body: some View {
-        let _ = store.pagesRevision
-        let all = store.core.archivedPages()
+        let all = loaded ?? []
         let shown = all.filter { p in
             (filter == "all" || (filter == "heft") == (p.kind == .heft)) && libMatches(p, query)
         }
@@ -791,9 +865,9 @@ private struct ArchiveList: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .animation(.snappy(duration: 0.28), value: store.pagesRevision)
+            .animation(.snappy(duration: 0.28), value: shown.map(\.id))
             .overlay {
-                if shown.isEmpty {
+                if loaded != nil, shown.isEmpty {
                     ContentUnavailableView {
                         Label { Text(all.isEmpty ? "Archiv ist leer" : "Nichts gefunden") } icon: { Icon("archive", size: 40).foregroundStyle(Impala.text2) }
                     } description: {
@@ -801,6 +875,11 @@ private struct ArchiveList: View {
                     }
                 }
             }
+        }
+        .task(id: store.pageMetaRevision) {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) { core.archivedPages() }.value
+            if !Task.isCancelled { loaded = next }
         }
     }
 }

@@ -41,6 +41,11 @@ final class ReviewModel {
 
     @ObservationIgnored private var pinned: String?
     @ObservationIgnored private var busy = false
+    /// Ob gerade im Hintergrund gelesen wird (Bewerten/Rückgängig gesperrt, alte Karte bleibt stehen).
+    private(set) var loading = false
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var unpinWanted = false
+    @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var shownCardId: String?
     @ObservationIgnored private var shownAt: TimeInterval = 0
     @ObservationIgnored private var revealedAt: TimeInterval = 0
@@ -55,13 +60,64 @@ final class ReviewModel {
     var remaining: Int { queue.map { Int($0.new + $0.learn + $0.review) } ?? 0 }
     var progress: Double { total == 0 ? 1 : min(1, max(0, 1 - Double(remaining) / Double(total))) }
 
-    /// Warteschlange neu lesen; `unpin` nimmt die nächste fällige statt der angezeigten Karte.
-    /// Bleibt dieselbe Karte liegen, bleibt sie umgedreht (z. B. nach dem Bearbeiten).
+    /// Ergebnis eines Hintergrund-Lesens (Warteschlange, anzuzeigende Karte, Intervall-Texte, Undo).
+    private struct Loaded: Sendable {
+        let queue: StudyQueue
+        let next: CardInfo?
+        let preview: [String]
+        let canUndo: Bool
+    }
+
+    /// Warteschlange im Hintergrund neu lesen (der Kern hat nur eine Sperre; auf dem Hauptthread würde
+    /// jedes Lesen auf Sync/Checkpoint warten). `unpin` nimmt die nächste fällige statt der angezeigten
+    /// Karte. Bleibt dieselbe Karte liegen, bleibt sie umgedreht (z. B. nach dem Bearbeiten). Bis das
+    /// Ergebnis da ist, bleibt die alte Karte stehen; `loading` sperrt in der Zeit Bewerten und Rückgängig.
     func refresh(unpin: Bool = false) {
-        if unpin { pinned = nil }
-        let q = core.studyQueue(deck: deck, utcOffsetMinutes: Deck.utcOffset, mix: mix)
-        let keep = pinned.flatMap { core.card(id: $0) }.flatMap { $0.trashed || $0.suspended || $0.archived ? nil : $0 }
+        if unpin {
+            pinned = nil
+            unpinWanted = true
+        }
+        debounce?.cancel()
+        debounce = nil
+        generation += 1
+        let gen = generation
+        // Nur eigene Aktionen (Bewerten, Aussetzen, Rückgängig) sperren; ein Lesen durch Sync soll die Knöpfe
+        // nicht aufblitzen lassen (eine Bewertung währenddessen verwirft das laufende Lesen über `generation`).
+        if unpin { loading = true }
+        let core = self.core, deck = self.deck, mix = self.mix, pin = pinned, offset = Deck.utcOffset
+        Task {
+            let loaded = await Task.detached(priority: .userInitiated) {
+                Self.load(core: core, deck: deck, mix: mix, pin: pin, offset: offset)
+            }.value
+            // Ein neueres Lesen hat dieses überholt: Ergebnis verwerfen.
+            guard gen == generation else { return }
+            loading = false
+            apply(loaded)
+        }
+    }
+
+    /// Kartenänderung von außen (Bearbeiten, Sync): höchstens alle 300 ms neu lesen.
+    func cardsChanged() {
+        debounce?.cancel()
+        debounce = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            if Task.isCancelled { return }
+            refresh()
+        }
+    }
+
+    nonisolated private static func load(core: ImpalaCore, deck: String?, mix: Bool, pin: String?, offset: Int32) -> Loaded {
+        let q = core.studyQueue(deck: deck, utcOffsetMinutes: offset, mix: mix)
+        let keep = pin.flatMap { core.card(id: $0) }.flatMap { $0.trashed || $0.suspended || $0.archived ? nil : $0 }
         let next = keep ?? q.dueNow.first
+        let preview = next.flatMap { card in attempt("reviewPreview", { try core.reviewPreview(cardId: card.id) }) } ?? []
+        return Loaded(queue: q, next: next, preview: preview, canUndo: core.canUndoReview())
+    }
+
+    private func apply(_ loaded: Loaded) {
+        let unpin = unpinWanted
+        unpinWanted = false
+        let next = loaded.next
         if unpin || next?.id != shownCardId {
             shownCardId = next?.id
             shownAt = Date().timeIntervalSince1970
@@ -71,11 +127,11 @@ final class ReviewModel {
             verdict = nil
         }
         pinned = next?.id
-        queue = q
+        queue = loaded.queue
         card = next
-        preview = next.flatMap { card in attempt("reviewPreview", { try core.reviewPreview(cardId: card.id) }) } ?? []
+        preview = loaded.preview
         total = max(total, remaining)
-        canUndo = core.canUndoReview()
+        canUndo = loaded.canUndo
     }
 
     /// Karte aufdecken („Antwort zeigen“); stoppt die Denkzeit (`thinkMs`).
@@ -90,7 +146,7 @@ final class ReviewModel {
 
     /// Bewertung 1 = Nochmal … 4 = Einfach.
     func grade(_ grade: Int) {
-        guard let card, showBack, !busy else { return }
+        guard let card, showBack, !busy, !loading else { return }
         busy = true
         defer { busy = false }
         let now = Date().timeIntervalSince1970
@@ -179,11 +235,13 @@ final class ReviewModel {
 
     /// Letzte Bewertung zurücknehmen; die Karte kommt verdeckt wieder.
     func undo() {
+        guard !loading else { return }
         do {
             if let id = try core.undoReview() {
+                // Alte Karte bleibt bis zum Ergebnis stehen; `shownCardId = nil` setzt die Seite beim Anwenden zurück.
                 pinned = id
-                card = nil
                 shownCardId = nil
+                loading = true
             }
             refresh()
         } catch {

@@ -1506,6 +1506,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1806,6 +1808,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_text(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_apply(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_apply_ops(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes(
 ): Short
@@ -2370,6 +2374,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_apply(`ptr`: Pointer,`pageId`: R
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_apply_ops(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`opsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`add`: RustBuffer.ByValue,`remove`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_folder_create(`ptr`: Pointer,`title`: RustBuffer.ByValue,`parentId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3259,6 +3265,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_apply_ops() != 13662.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes() != 59468.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes() != 20887.toShort()) {
@@ -7972,6 +7981,13 @@ public interface ImpalaCoreInterface {
     fun `heftApplyOps`(`pageId`: kotlin.String, `opsJson`: kotlin.String): HeftEdit
     
     /**
+     * Gesammelte Strich-Änderungen einer Heftseite als *ein* `heftOps`-Event (wie `scheduleSave` in
+     * heft.js der PWA: 350 ms Ruhe, dann ein Event statt eines je Strich). Erst `remove`, dann `add`;
+     * neue Striche bringen ihre ID mit (die App vergibt sie, damit der Stift nicht auf den Kern wartet).
+     */
+    fun `heftCommitStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `add`: List<HeftStroke>, `remove`: List<kotlin.String>)
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
     fun `heftDuplicateStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit
@@ -9470,6 +9486,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Gesammelte Strich-Änderungen einer Heftseite als *ein* `heftOps`-Event (wie `scheduleSave` in
+     * heft.js der PWA: 350 ms Ruhe, dann ein Event statt eines je Strich). Erst `remove`, dann `add`;
+     * neue Striche bringen ihre ID mit (die App vergibt sie, damit der Stift nicht auf den Kern wartet).
+     */
+    @Throws(CoreException::class)override fun `heftCommitStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `add`: List<HeftStroke>, `remove`: List<kotlin.String>)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceTypeHeftStroke.lower(`add`),FfiConverterSequenceString.lower(`remove`),_status)
+}
+    }
+    
     
 
     
@@ -12752,6 +12785,12 @@ data class Changes (
     var `remote`: kotlin.Boolean, 
     var `pages`: List<kotlin.String>, 
     var `pagesAll`: kotlin.Boolean, 
+    /**
+     * Mehr als der Inhalt einer Seite (Titel, Icon, Ort, Favorit, Archiv, neue oder gelöschte Seite):
+     * Seitenbaum, Tabs und Kopfzeilen neu lesen. Bei reinen Inhaltsänderungen (Notiztext aus dem
+     * Editor, Heft-Striche) `false` – wie `render.js` der PWA, die dann nichts neu zeichnet.
+     */
+    var `pagesMeta`: kotlin.Boolean, 
     var `cards`: List<kotlin.String>, 
     var `cardsAll`: kotlin.Boolean, 
     var `chats`: List<kotlin.String>, 
@@ -12795,6 +12834,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -12819,6 +12859,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.allocationSize(value.`remote`) +
             FfiConverterSequenceString.allocationSize(value.`pages`) +
             FfiConverterBoolean.allocationSize(value.`pagesAll`) +
+            FfiConverterBoolean.allocationSize(value.`pagesMeta`) +
             FfiConverterSequenceString.allocationSize(value.`cards`) +
             FfiConverterBoolean.allocationSize(value.`cardsAll`) +
             FfiConverterSequenceString.allocationSize(value.`chats`) +
@@ -12842,6 +12883,7 @@ public object FfiConverterTypeChanges: FfiConverterRustBuffer<Changes> {
             FfiConverterBoolean.write(value.`remote`, buf)
             FfiConverterSequenceString.write(value.`pages`, buf)
             FfiConverterBoolean.write(value.`pagesAll`, buf)
+            FfiConverterBoolean.write(value.`pagesMeta`, buf)
             FfiConverterSequenceString.write(value.`cards`, buf)
             FfiConverterBoolean.write(value.`cardsAll`, buf)
             FfiConverterSequenceString.write(value.`chats`, buf)

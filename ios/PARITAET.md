@@ -54,6 +54,26 @@ Vorschlag für die Reihenfolge:
    Checkpoint seltener oder entkoppelt schreiben, wie die PWA mit `checkpoint-scheduler.js`).
 4. **P5**: Striche ohne Warten auf den Hauptthread speichern (Warteschlange im Hintergrund).
 
+### Optimierungen der PWA, die der iPad-App fehlen
+
+Abgleich vom 05.11.2026. Links, was die PWA macht (Fundstelle in `web/`), rechts, was die iPad-App heute tut.
+Sortiert nach Nutzen.
+
+| # | PWA | iPad-App heute | Übernehmen | Status |
+|---|---|---|---|---|
+| O1 | **Heft-Striche gebündelt**: 350 ms nach der letzten Änderung *ein* `heftOps`-Ereignis, sofort beim Verlassen (`heft.js:334-379`) | Ein Kern-Ereignis **je Strich** (Log, Sync, Änderungsmeldung, Neuzeichnen je Strich) | Striche 350 ms sammeln, dann ein `heftApplyOps` (gibt es im Kern schon) | ✅ Code 05.11. · am Gerät ungeprüft (`heftCommitStrokes`, IDs aus der App) |
+| O2 | **Sync wartet beim Schreiben**: 3,5 s Ruhe, solange im Heft geschrieben wird (`sync-cloudflare.js:198, 243`) | 1,5 s nach jeder Änderung, auch mitten im Schreiben | Sync-Pause während des Schreibens | ✅ Code 05.11. · am Gerät ungeprüft |
+| O3 | **Speichern einer Notiz zeichnet nichts neu** (`render.js:113-146`: `pageUpdate` nur mit Inhalt aus dem Editor → kein Render) | Jedes Speichern (600 ms nach der letzten Taste) zählt `pagesRevision` hoch → ~10 Ansichten laufen neu und holen die **ganze Seite samt Inhalt** nur für Titel/Icon (Tab-Leiste, Seitenleiste, Brotkrumen, Seitenkopf, Rückverweise, Unterseiten, Seitenbaum) | Eigener Zähler nur für Titel/Icon/Ort/Favorit/Archiv; reine Inhaltsänderungen zählen ihn nicht hoch | ✅ Code 05.11. · am Gerät ungeprüft (`Changes.pagesMeta` → `pageMetaRevision`) |
+| O4 | **Seitenleiste mit Render-Schlüssel**: baut nur neu, wenn sich Seiten/Arbeitsbereiche wirklich ändern (`render.js:456-473`) | `TreeRows.read` je Speichern: alle Seiten plus ein `childrenOf` **je Zeile** | Mit O3 erledigt; dazu Kinder in einem Kern-Aufruf statt einem je Zeile | 🟡 läuft nur noch bei Meta-Änderungen, im Hintergrund; `childrenOf` je Zeile bleibt |
+| O5 | **Handschrift-Erkennung selten**: geschriebene Seite erst nach 15 s Ruhe; Hintergrund-Scan eine Seite je 5 s, **pausiert beim Schreiben** und im Hintergrund (`heft-indexer.js:31-63, 263-363`) | 3,5 s nach dem Strich; Hintergrund-Scan liest je Seite die Auftragsliste **aller Hefte** neu, 2,5 s Pause, keine Pause beim Schreiben | 15 s, Auftragsliste einmal je Durchlauf, Pause beim Schreiben | ✅ Code 05.11. · am Gerät ungeprüft |
+| O6 | **Abfragen gemerkt** nach Seiten-/Karten-Revision (`state.js:99-108`), Lernschlange je Stapel bis 2 s gecacht (`state.js:537-577`) | Lernansicht liest die Lernschlange über alle Karten synchron bei jeder Kartenänderung, auch durch Sync (`Cards/ReviewModel.swift:60-79`) | Im Hintergrund, nur für den offenen Stapel | ✅ Code 05.11. · am Gerät ungeprüft; Bewerten selbst noch synchron |
+| O7 | **Suche entprellt** (`search.js:321-325`), Chatliste einmal je Sitzung (`search.js:25-91`) | Befehlspalette: Volltextsuche **und alle Chats mit allen Nachrichten** bei jedem Tastendruck auf dem Hauptthread (`Shell/ShellSheets.swift:60-66`) | Entprellen, im Hintergrund, Chats nur nach Titel | ✅ Code 05.11. · am Gerät ungeprüft |
+| O8 | **Graph im Worker** (`graph.js:193`, `graph-worker.js`) | Kraft-Layout O(n²) **alle 16 ms auf dem Hauptthread**, bis zu 5000 Seiten (`Graph/GraphModel.swift:113-130`) | Layout im Hintergrund rechnen | ✅ Code 05.11. · am Gerät ungeprüft (Gitter, Reichweite 200) |
+| O9 | **KI-Antwort gedrosselt**: Neuzeichnen höchstens alle 80 ms (`ai.js:378`) | Je Token: Seite zweimal laden, Bild-Anhänge (Base64) neu dekodieren, Anhang-JSON parsen (`Chat/ChatView.swift:128-133`, `Chat/ChatParts.swift:62-75`) | 80 ms drosseln, Anhänge einmal dekodieren | ✅ Code 05.11. · am Gerät ungeprüft |
+| O10 | „Weißt du's noch?“: einmal je Tag | Bei jeder Kartenänderung alle Stapel und alle Karten (jetzt im Hintergrund) | Einmal je Tag, neu nur, wenn sich die Karte ändert | ✅ Code 05.11. · am Gerät ungeprüft |
+| O11 | Einstellungen lesen nur bei Bedarf | KI-Bereich der Einstellungen scannt bei **jeder** Änderung alle Hefte (`Settings/SettingsAi.swift:305-310`); Übersicht zählt Konflikte bei jeder Änderung | An eigene Zähler hängen, im Hintergrund | ✅ Code 05.11. · am Gerät ungeprüft |
+| O12 | Bibliothek | `recentPages(alle)` plus Kern-Aufruf je Zeile/Heftkarte im `body` (`Library/LibraryScreen.swift:231-307, 445-514`) | Wie Seitenbaum im Hintergrund lesen | ✅ Code 05.11. · am Gerät ungeprüft |
+
 ### Startseite lässt sich nicht öffnen
 
 | Punkt | Status | Notiz |

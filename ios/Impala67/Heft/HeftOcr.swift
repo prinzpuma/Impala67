@@ -9,10 +9,13 @@ import Vision
 ///   höchste Stufe über `"android"` und `"pwa"`).
 enum HeftOcr {
     private static let src = "apple"
-    /// Nach dem letzten Strich kurz warten, bevor die Seite erkannt wird.
-    private static let debounceNs: UInt64 = 3_500_000_000
+    /// Nach dem letzten Strich warten, bevor die Seite erkannt wird (`PRIORITY_DEBOUNCE_MS` in heft-indexer.js).
+    private static let debounceNs: UInt64 = 15_000_000_000
     private static let bgStartNs: UInt64 = 5_000_000_000
-    private static let bgPauseNs: UInt64 = 2_500_000_000
+    /// Pause zwischen zwei Seiten im Hintergrund (`SCAN_PAUSE_MS`).
+    private static let bgPauseNs: UInt64 = 5_000_000_000
+    /// Solange so kurz zuvor geschrieben wurde, ruht die Erkennung (wie `heft:is-writing` der PWA).
+    private static let writingQuiet: TimeInterval = 5
 
     @MainActor private static var pageTasks: [String: Task<Void, Never>] = [:]
     @MainActor private static var bgTask: Task<Void, Never>?
@@ -44,7 +47,18 @@ enum HeftOcr {
         pageTasks[key] = Task { @MainActor in
             try? await Task.sleep(nanoseconds: debounceNs)
             guard !Task.isCancelled else { return }
+            await waitWhileWriting()
+            guard !Task.isCancelled else { return }
             await indexPage(core: core, pageId: pageId, heftPageId: heftPageId)
+        }
+    }
+
+    /// Ruht, solange im Heft geschrieben wird oder die App im Hintergrund ist (heft-indexer.js).
+    @MainActor
+    private static func waitWhileWriting() async {
+        while !Task.isCancelled,
+              HeftActivity.isWriting(within: writingQuiet) || UIApplication.shared.applicationState != .active {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
 
@@ -106,13 +120,17 @@ enum HeftOcr {
             try? await Task.sleep(nanoseconds: bgStartNs)
             var tried = Set<String>()
             while !Task.isCancelled {
-                // Geht alle Hefte durch – nicht auf dem Hauptthread.
+                // Auftragsliste über alle Hefte einmal je Durchlauf (nicht je Seite), im Hintergrund.
                 let jobs = await Task.detached(priority: .utility) { core.heftOcrJobs(src: src) }.value
-                guard let next = jobs.first(where: { tried.insert("\($0.pageId):\($0.heftPageId):\($0.contentKey)").inserted }) else {
-                    break
+                let fresh = jobs.filter { tried.insert("\($0.pageId):\($0.heftPageId):\($0.contentKey)").inserted }
+                guard !fresh.isEmpty else { break }
+                // Eine Seite je 5 s, wie `SCAN_PAUSE_MS` der PWA.
+                for job in fresh {
+                    await waitWhileWriting()
+                    guard !Task.isCancelled else { return }
+                    await indexPage(core: core, pageId: job.pageId, heftPageId: job.heftPageId)
+                    try? await Task.sleep(nanoseconds: bgPauseNs)
                 }
-                await indexPage(core: core, pageId: next.pageId, heftPageId: next.heftPageId)
-                try? await Task.sleep(nanoseconds: bgPauseNs)
             }
         }
     }

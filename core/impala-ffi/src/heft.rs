@@ -326,6 +326,31 @@ impl ImpalaCore {
         inner.heft_ops(&page_id, vec![HeftOp::Remove { page: heft_page_id, kind: ItemKind::Stroke, ids }])
     }
 
+    /// Gesammelte Strich-Änderungen einer Heftseite als *ein* `heftOps`-Event (wie `scheduleSave` in
+    /// heft.js der PWA: 350 ms Ruhe, dann ein Event statt eines je Strich). Erst `remove`, dann `add`;
+    /// neue Striche bringen ihre ID mit (die App vergibt sie, damit der Stift nicht auf den Kern wartet).
+    pub fn heft_commit_strokes(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        add: Vec<HeftStroke>,
+        remove: Vec<String>,
+    ) -> Result<(), CoreError> {
+        if add.is_empty() && remove.is_empty() {
+            return Ok(());
+        }
+        let mut ops = Vec::with_capacity(add.len() + 1);
+        if !remove.is_empty() {
+            ops.push(HeftOp::Remove { page: heft_page_id.clone(), kind: ItemKind::Stroke, ids: remove });
+        }
+        for s in &add {
+            ops.push(HeftOp::Add { page: heft_page_id.clone(), item: Item::Stroke(build_stroke(None, s)?) });
+        }
+        let mut inner = self.lock();
+        inner.heft_page(&page_id, &heft_page_id)?;
+        inner.heft_ops(&page_id, ops)
+    }
+
     /// Striche unter dem Radierer (Kreis um `x`/`y`), oberster zuerst.
     pub fn heft_strokes_at(
         &self,
@@ -374,5 +399,27 @@ mod tests {
         core.heft_remove_page(heft.clone(), second).unwrap();
         assert_eq!(core.heft_page_ids(heft.clone()).len(), 1);
         assert!(core.heft_add_stroke(heft, pages[0].clone(), "pen".into(), "#000".into(), 3.0, vec![1.0]).is_err());
+    }
+
+    #[test]
+    fn striche_gebuendelt_als_ein_event() {
+        use super::HeftStroke;
+        let core = ImpalaCore::open_in_memory().unwrap();
+        let heft = core.create_heft("Skizzen".into(), None, None).unwrap();
+        let hp = core.heft_page_ids(heft.clone())[0].clone();
+        let stroke = |id: &str| HeftStroke {
+            id: id.into(),
+            tool: "pen".into(),
+            color: "#000".into(),
+            size: 3.0,
+            points: vec![10.0, 10.0, 0.5, 40.0, 30.0, 0.5],
+            shape: None,
+        };
+        core.heft_commit_strokes(heft.clone(), hp.clone(), vec![stroke("a"), stroke("b")], vec![]).unwrap();
+        core.heft_commit_strokes(heft.clone(), hp.clone(), vec![stroke("c")], vec!["a".into()]).unwrap();
+        let ids: Vec<String> =
+            core.heft_page(heft.clone(), hp.clone()).unwrap().strokes.into_iter().map(|s| s.id).collect();
+        assert_eq!(ids, ["b", "c"]);
+        core.heft_commit_strokes(heft, hp, vec![], vec![]).unwrap();
     }
 }

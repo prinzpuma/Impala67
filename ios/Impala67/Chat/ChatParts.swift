@@ -32,6 +32,20 @@ private struct UserBubble: View {
     let message: ChatMessage
     let enabled: Bool
     let onEdit: () -> Void
+    /// Dekodiertes Bild und Dateiname, einmal je Nachricht im Hintergrund (nicht im Body je Token der Antwort).
+    @State private var decoded = Decoded(image: nil, name: nil)
+
+    private struct Decoded {
+        let image: UIImage?
+        let name: String?
+    }
+
+    /// Ändert sich nur, wenn die Nachricht selbst eine andere wird (Länge statt Inhalt: die Data-URL ist groß).
+    private struct DecodeKey: Hashable {
+        let mid: String?
+        let imageLength: Int?
+        let extraLength: Int
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.s1) {
@@ -43,10 +57,10 @@ private struct UserBubble: View {
                     .accessibilityLabel("Nachricht bearbeiten")
             }
             VStack(alignment: .leading, spacing: Space.s1) {
-                if let img = attachedImage {
+                if let img = decoded.image {
                     Image(uiImage: img).resizable().scaledToFit().frame(maxWidth: 220, maxHeight: 180)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                } else if let name = attachmentName {
+                } else if let name = decoded.name {
                     Text(name).font(.system(size: TextSize.xs, weight: .medium)).foregroundStyle(Impala.text2)
                 }
                 if let text = message.content, !text.isEmpty {
@@ -57,21 +71,30 @@ private struct UserBubble: View {
             .padding(.vertical, Space.s2)
             .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         }
+        .task(id: DecodeKey(mid: message.mid, imageLength: message.image?.utf8.count, extraLength: message.extraJson.utf8.count)) {
+            let image = message.image, extra = message.extraJson
+            let result = await Task.detached(priority: .userInitiated) { Self.decode(image: image, extraJson: extra) }.value
+            if !Task.isCancelled { decoded = result }
+        }
+    }
+
+    nonisolated private static func decode(image: String?, extraJson: String) -> Decoded {
+        Decoded(image: attachedImage(image), name: attachmentName(image: image, extraJson: extraJson))
     }
 
     /// Angehängtes Bild (Data-URL) als Vorschau.
-    private var attachedImage: UIImage? {
-        guard let url = message.image, let comma = url.firstIndex(of: ","), url.hasPrefix("data:"),
+    nonisolated private static func attachedImage(_ url: String?) -> UIImage? {
+        guard let url, let comma = url.firstIndex(of: ","), url.hasPrefix("data:"),
               let data = Data(base64Encoded: String(url[url.index(after: comma)...])) else { return nil }
         return UIImage(data: data)
     }
 
     /// Angehängte Datei (`extra.pdfFile`/`textFile`), nur als Name.
-    private var attachmentName: String? {
-        let extra = (try? JSONSerialization.jsonObject(with: Data(message.extraJson.utf8))) as? [String: Any] ?? [:]
+    nonisolated private static func attachmentName(image: String?, extraJson: String) -> String? {
+        let extra = (try? JSONSerialization.jsonObject(with: Data(extraJson.utf8))) as? [String: Any] ?? [:]
         if let f = extra["pdfFile"] as? [String: Any] { return "PDF · " + (f["name"] as? String ?? "") }
         if let f = extra["textFile"] as? [String: Any] { return "Datei · " + (f["name"] as? String ?? "") }
-        return message.image != nil ? "Bild" : nil
+        return image != nil ? "Bild" : nil
     }
 }
 

@@ -166,21 +166,21 @@ struct DriveSections: View {
             .padding(.horizontal, Space.s4)
             .padding(.vertical, Space.s2 + 2)
         }
-        .onAppear {
-            interval = drive.intervalMinutes
-            loadSettings()
-        }
-        .onChange(of: store.settingsRevision) {
-            loadSettings()
-        }
+        // Beim Erscheinen und bei jeder Einstellungsänderung genau einmal (Lesen + Parsen im Hintergrund).
+        .task(id: store.settingsRevision) { await loadSettings() }
     }
 
-    private func loadSettings() {
+    private func loadSettings() async {
         interval = drive.intervalMinutes
-        let s = (try? JSONSerialization.jsonObject(with: Data(store.core.settingsJson().utf8))) as? [String: Any] ?? [:]
-        syncAfterChange = s["driveSyncAfterChange"] as? Bool ?? false
-        syncSecrets = s["syncSecrets"] as? Bool ?? false
-        clientId = s["driveClientId"] as? String ?? ""
+        let core = store.core
+        let loaded = await Task.detached(priority: .userInitiated) { () -> (after: Bool, secrets: Bool, client: String) in
+            let s = (try? JSONSerialization.jsonObject(with: Data(core.settingsJson().utf8))) as? [String: Any] ?? [:]
+            return (s["driveSyncAfterChange"] as? Bool ?? false, s["syncSecrets"] as? Bool ?? false, s["driveClientId"] as? String ?? "")
+        }.value
+        if Task.isCancelled { return }
+        syncAfterChange = loaded.after
+        syncSecrets = loaded.secrets
+        clientId = loaded.client
     }
 
     private var title: String {

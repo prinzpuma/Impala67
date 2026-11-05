@@ -76,6 +76,10 @@ final class ChatModel {
     @ObservationIgnored private lazy var listener = RunListener(self)
     @ObservationIgnored private lazy var platform = RunPlatform(core: core)
     @ObservationIgnored private var runPageId: String?
+    private static let draftInterval: TimeInterval = 0.08
+    @ObservationIgnored private var pendingDraft: String?
+    @ObservationIgnored private var draftFlush: Task<Void, Never>?
+    @ObservationIgnored private var draftPublishedAt = Date.distantPast
 
     init(core: ImpalaCore) {
         self.core = core
@@ -169,7 +173,7 @@ final class ChatModel {
         let json = String(decoding: (try? JSONSerialization.data(withJSONObject: history)) ?? Data("[]".utf8), as: UTF8.self)
         running = true
         refining = mid
-        draft = ""
+        clearDraft()
         let assistant = makeAssistant()
         let listener = listener
         let offset = Int32(TimeZone.current.secondsFromGMT() / 60)
@@ -270,13 +274,50 @@ final class ChatModel {
 
     // MARK: Rückrufe des Laufs (Hauptthread)
 
-    fileprivate func onDraft(_ text: String) { draft = text }
+    /// Entwurf höchstens alle 80 ms an die Ansicht geben (ai.js: Stream-Render alle 80 ms); der letzte Stand
+    /// kommt immer an (verzögert nachgereicht, vor einem Fehler/Abbruch sofort).
+    fileprivate func onDraft(_ text: String) {
+        let wait = Self.draftInterval - Date().timeIntervalSince(draftPublishedAt)
+        if wait <= 0 {
+            publishDraft(text)
+            return
+        }
+        pendingDraft = text
+        if draftFlush == nil {
+            draftFlush = Task {
+                try? await Task.sleep(for: .seconds(wait))
+                if Task.isCancelled { return }
+                flushDraft()
+            }
+        }
+    }
+
+    private func publishDraft(_ text: String) {
+        pendingDraft = nil
+        draftFlush?.cancel()
+        draftFlush = nil
+        draftPublishedAt = Date()
+        draft = text
+    }
+
+    /// Wartenden Entwurf sofort veröffentlichen.
+    private func flushDraft() {
+        if let text = pendingDraft { publishDraft(text) }
+    }
+
+    /// Entwurf verwerfen (Antwort fertig oder neuer Lauf): kein nachgereichter Stand darf ihn wieder füllen.
+    private func clearDraft() {
+        pendingDraft = nil
+        draftFlush?.cancel()
+        draftFlush = nil
+        draft = ""
+    }
     fileprivate func onThinking(_ text: String) { thinking = text }
     fileprivate func onTool(_ name: String) { tool = name }
 
     fileprivate func onMessage(_ m: ChatMessage) {
         switch m.role {
-        case "assistant": draft = ""; thinking = ""
+        case "assistant": clearDraft(); thinking = ""
         case "thought": thinking = ""
         case "tool": tool = nil
         default: break
@@ -295,6 +336,7 @@ final class ChatModel {
 
     fileprivate func onFailed(_ message: String, aborted: Bool) {
         if !aborted { Profiler.shared.error("ai-error", message, name: "ai.chat") }
+        flushDraft()
         error = ChatRunError(message: message, aborted: aborted, partial: aborted ? draft : "")
         finishRun()
         reload()
@@ -305,7 +347,7 @@ final class ChatModel {
     private func panelOpenIfNeeded() { panelOpen = true }
 
     private func resetLive() {
-        draft = ""
+        clearDraft()
         thinking = ""
         tool = nil
     }

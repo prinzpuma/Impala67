@@ -13,14 +13,36 @@ struct Recall: Sendable, Equatable {
 enum HomeRecall {
     private static let clozeRegex = try? NSRegularExpression(pattern: #"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}"#)
 
-    static func compute(core: ImpalaCore) -> Recall? {
+    /// Gemerktes Tagesergebnis: Tag, Karte und deren Vorderseite (zum Erkennen von Änderungen).
+    private static let lock = NSLock()
+    private static var cached: (day: Int64, recall: Recall, front: String)?
+
+    private static func today() -> Int64 {
+        let offsetMs = TimeZone.current.secondsFromGMT() * 1000
+        return Int64(Date().timeIntervalSince1970 * 1000 + Double(offsetMs)) / 86_400_000
+    }
+
+    /// Das Tagesergebnis aus dem Zwischenspeicher, solange der Tag gleich ist und die Karte noch gelernt,
+    /// unverändert und nicht archiviert/gelöscht/pausiert ist (ein billiger Einzelzugriff); sonst neu gewählt.
+    static func current(core: ImpalaCore) -> Recall? {
+        lock.lock()
+        let hit = cached
+        lock.unlock()
+        if let hit, hit.day == today(), let card = core.card(id: hit.recall.cardId),
+           !card.suspended, !card.archived, !card.trashed, card.stage == .review, card.front == hit.front {
+            return hit.recall
+        }
+        return compute(core: core)
+    }
+
+    /// Geht alle Karten durch: nur über `current` und im Hintergrund aufrufen.
+    private static func compute(core: ImpalaCore) -> Recall? {
         let allDecks = core.decks()
         let cards = allDecks.flatMap { core.cardsInDeck(deck: $0.name) }
         let pool = cards.filter { !$0.suspended && !$0.archived && !$0.trashed && $0.stage == .review && markdownCardText(markdown: $0.front).count >= 3 }
         guard pool.count >= 5 else { return nil }
 
-        let offsetMs = TimeZone.current.secondsFromGMT() * 1000
-        let day = Int64(Date().timeIntervalSince1970 * 1000 + Double(offsetMs)) / 86_400_000
+        let day = today()
         let hash = (UInt32(truncatingIfNeeded: day) &* 2654435761)
         let index = Int(hash % UInt32(pool.count))
         let card = pool[index]
@@ -51,7 +73,11 @@ enum HomeRecall {
         guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let qCut = String(question.prefix(140))
         let aCut = String(answer.prefix(220))
-        return Recall(cardId: card.id, deck: card.deck, question: qCut, answer: aCut)
+        let result = Recall(cardId: card.id, deck: card.deck, question: qCut, answer: aCut)
+        lock.lock()
+        cached = (day, result, card.front)
+        lock.unlock()
+        return result
     }
 }
 

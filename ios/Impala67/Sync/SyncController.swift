@@ -349,14 +349,21 @@ final class SyncController {
         progress = (label, total > 0 ? min(1, Double(current) / Double(total)) : 0)
     }
 
-    /// Lokale Änderung: kurz bündeln, damit Tippen nicht jeden Buchstaben einzeln sendet.
+    /// Lokale Änderung: kurz bündeln, damit Tippen nicht jeden Buchstaben einzeln sendet. Solange im Heft
+    /// geschrieben wird, wartet der Sync auf 3,5 s Ruhe (wie `sync-cloudflare.js` der PWA), damit er nicht
+    /// mitten im Schreiben die Kern-Sperre belegt.
     fileprivate func changed() {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: Self.debounce)
+            while !Task.isCancelled, HeftActivity.isWriting(within: Self.heftQuiet) {
+                try? await Task.sleep(for: .milliseconds(500))
+            }
             if !Task.isCancelled { self?.syncNow() }
         }
     }
+
+    private static let heftQuiet: TimeInterval = 3.5
 
     private static func message(_ error: Error) -> String {
         switch error {

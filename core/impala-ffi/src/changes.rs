@@ -24,6 +24,10 @@ pub struct Changes {
     pub remote: bool,
     pub pages: Vec<String>,
     pub pages_all: bool,
+    /// Mehr als der Inhalt einer Seite (Titel, Icon, Ort, Favorit, Archiv, neue oder gelöschte Seite):
+    /// Seitenbaum, Tabs und Kopfzeilen neu lesen. Bei reinen Inhaltsänderungen (Notiztext aus dem
+    /// Editor, Heft-Striche) `false` – wie `render.js` der PWA, die dann nichts neu zeichnet.
+    pub pages_meta: bool,
     pub cards: Vec<String>,
     pub cards_all: bool,
     pub chats: Vec<String>,
@@ -73,8 +77,9 @@ impl Changes {
         *self == Changes::default()
     }
 
-    fn add(&mut self, t: Touched, remote: bool) {
+    fn add(&mut self, t: Touched, remote: bool, content_only: bool) {
         self.remote |= remote;
+        self.pages_meta |= t.pages != Ids::None && !content_only;
         add_ids(&mut self.pages, &mut self.pages_all, t.pages);
         add_ids(&mut self.cards, &mut self.cards_all, t.cards);
         add_ids(&mut self.chats, &mut self.chats_all, t.chat_sessions);
@@ -98,8 +103,12 @@ impl Changes {
 impl Inner {
     /// `ev` wurde gerade angewandt.
     pub(crate) fn note(&mut self, ev: &LogEvent, remote: bool) {
+        self.note_as(ev, remote, content_only(ev));
+    }
+
+    fn note_as(&mut self, ev: &LogEvent, remote: bool, content_only: bool) {
         let t = touched(ev, self.model.state());
-        self.pending.add(t, remote);
+        self.pending.add(t, remote, content_only);
     }
 
     /// Gespeicherte Fremd-Events in Zeitreihenfolge anwenden und vormerken.
@@ -114,8 +123,9 @@ impl Inner {
                 }
             }
             let probe = LogEvent::new(ev.id.clone(), ev.t.clone(), ev.kind.clone(), serde_json::Value::Object(p));
+            let content = content_only(&ev);
             self.model.apply_remote_one(ev);
-            self.note(&probe, true);
+            self.note_as(&probe, true, content);
         }
     }
 
@@ -123,6 +133,19 @@ impl Inner {
     pub(crate) fn note_everything(&mut self, remote: bool) {
         self.pending.everything = true;
         self.pending.remote |= remote;
+    }
+}
+
+/// Ändert `ev` nur den Inhalt einer Seite (Heft-Striche, Notiztext), nichts, was Listen zeigen?
+fn content_only(ev: &LogEvent) -> bool {
+    match ev.kind.as_str() {
+        "heftOps" | "heftSnap" => true,
+        "pageUpdate" => ev
+            .payload
+            .get("patch")
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|p| !p.is_empty() && p.keys().all(|k| k == "content")),
+        _ => false,
     }
 }
 
@@ -173,13 +196,20 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         core.set_change_listener(Some(rec.clone()));
         let id = core.create_page("A".into(), "".into(), None, None).unwrap();
+        core.update_page(id.clone(), None, Some("Text".into())).unwrap();
+        core.update_page(id.clone(), Some("B".into()), None).unwrap();
         core.trash_page(id.clone()).unwrap();
         let got = rec.0.lock().unwrap().clone();
-        assert_eq!(got.len(), 2);
+        assert_eq!(got.len(), 4);
         assert_eq!(got[0].pages, std::slice::from_ref(&id));
         assert!(!got[0].remote);
-        assert!(got[1].pages_all);
-        assert_eq!(got[1].closed_pages, [id]);
+        assert!(got[0].pages_meta);
+        // Nur Inhalt: Seite gemeldet, aber nichts für Listen und Kopfzeilen.
+        assert_eq!(got[1].pages, std::slice::from_ref(&id));
+        assert!(!got[1].pages_meta);
+        assert!(got[2].pages_meta);
+        assert!(got[3].pages_all);
+        assert_eq!(got[3].closed_pages, [id]);
     }
 
     #[test]

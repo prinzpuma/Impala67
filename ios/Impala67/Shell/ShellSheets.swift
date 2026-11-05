@@ -47,6 +47,10 @@ private struct SearchSheet: View {
     @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
     @AppStorage("impala67LibMode") private var libMode = LibraryMode.notion.rawValue
     @State private var query = ""
+    /// Ergebnisse der letzten Suche (im Hintergrund gelesen; der Kern hat nur eine Sperre) samt Suchtext.
+    @State private var found = Found(query: "", pages: [], chats: [])
+    /// Chats mit kleingeschriebenem Titel und Text, einmal je Öffnen geladen (`loadChats` in search.js).
+    @State private var chatIndex: [ChatEntry]?
 
     private struct Action: Identifiable {
         let icon: String
@@ -55,15 +59,72 @@ private struct SearchSheet: View {
         var id: String { label }
     }
 
+    private struct PageRow: Identifiable, Sendable {
+        let id: String
+        let title: String
+        let snippet: String
+    }
+
+    private struct ChatEntry: Sendable {
+        let info: ChatInfo
+        let title: String
+        let text: String
+    }
+
+    private struct Found: Sendable {
+        let query: String
+        let pages: [PageRow]
+        let chats: [ChatInfo]
+    }
+
+    /// Alle Chats einmal mit vollen Nachrichten lesen (läuft im Hintergrund).
+    nonisolated private static func buildChatIndex(_ core: ImpalaCore) -> [ChatEntry] {
+        core.chats().map { c in
+            let text = core.chat(id: c.id)?.messages.compactMap { $0.content }.joined(separator: "\n").lowercased() ?? ""
+            return ChatEntry(info: c, title: c.title.lowercased(), text: text)
+        }
+    }
+
+    nonisolated private static func searchPages(_ core: ImpalaCore, query: String, ql: String) -> [PageRow] {
+        ql.isEmpty
+            ? core.recentPages(limit: 6).map { PageRow(id: $0.id, title: $0.title, snippet: "") }
+            : core.search(query: query, includeArchived: true).map { PageRow(id: $0.pageId, title: $0.title, snippet: $0.snippet) }
+    }
+
+    /// Suche entprellt (~150 ms wie die PWA) im Hintergrund; leerer Text zeigt sofort „Zuletzt bearbeitet“.
+    private func runSearch() async {
+        let ql = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let text = query
+        let core = store.core
+        if !ql.isEmpty {
+            try? await Task.sleep(for: .milliseconds(150))
+            if Task.isCancelled { return }
+        }
+        var index = chatIndex
+        if !ql.isEmpty, index == nil {
+            let built = await Task.detached(priority: .userInitiated) { Self.buildChatIndex(core) }.value
+            chatIndex = built
+            index = built
+        }
+        if Task.isCancelled { return }
+        let entries = index ?? []
+        let loaded = await Task.detached(priority: .userInitiated) { () -> Found in
+            let pages = Self.searchPages(core, query: text, ql: ql)
+            let chats: [ChatInfo]
+            if ql.isEmpty {
+                chats = Array(core.chats().prefix(3))
+            } else {
+                chats = Array(entries.filter { $0.title.contains(ql) || $0.text.contains(ql) }.map(\.info).prefix(5))
+            }
+            return Found(query: ql, pages: pages, chats: chats)
+        }.value
+        if !Task.isCancelled { found = loaded }
+    }
+
     var body: some View {
         let ql = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let pages: [(id: String, title: String, snippet: String)] = ql.isEmpty
-            ? store.core.recentPages(limit: 6).map { ($0.id, $0.title, "") }
-            : store.core.search(query: query, includeArchived: true).map { ($0.pageId, $0.title, $0.snippet) }
-        let chats = Array(store.core.chats().filter { c in
-            ql.isEmpty || c.title.lowercased().contains(ql)
-                || (store.core.chat(id: c.id)?.messages.contains { ($0.content ?? "").lowercased().contains(ql) } ?? false)
-        }.prefix(ql.isEmpty ? 3 : 5))
+        let pages = found.pages
+        let chats = found.chats
         let acts = actions().filter { ql.isEmpty || $0.label.lowercased().contains(ql) }
         List {
             if !pages.isEmpty {
@@ -108,8 +169,10 @@ private struct SearchSheet: View {
             }
         }
         .overlay {
-            if !ql.isEmpty && pages.isEmpty && chats.isEmpty && acts.isEmpty { ContentUnavailableView.search(text: query) }
+            // Erst wenn die Ergebnisse zum Suchtext gehören (sonst blitzt „Keine Ergebnisse“ während des Entprellens auf).
+            if !ql.isEmpty && found.query == ql && pages.isEmpty && chats.isEmpty && acts.isEmpty { ContentUnavailableView.search(text: query) }
         }
+        .task(id: query) { await runSearch() }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Suchen oder Befehl …")
         .navigationTitle("Suchen")
         .navigationBarTitleDisplayMode(.inline)
@@ -148,7 +211,7 @@ private struct TrashSheet: View {
     @State private var confirmEmpty = false
 
     var body: some View {
-        let _ = store.pagesRevision
+        let _ = store.pageMetaRevision
         let pages = store.core.trashedPages()
         List(pages) { p in
             HStack(spacing: Space.s2) {

@@ -170,6 +170,9 @@ struct BackupSettingsSections: View {
 struct DangerZoneGroup: View {
     @Environment(ImpalaStore.self) private var store
     @State private var confirmDanger: DangerAction?
+    /// Zähler für die Beschreibungen; im Hintergrund gelesen (`.task` unten), nicht im Body.
+    @State private var chatCount = 0
+    @State private var cardTotals = (cards: UInt64(0), decks: UInt64(0))
 
     private enum DangerAction: Identifiable {
         case pages, chats, cards
@@ -193,9 +196,6 @@ struct DangerZoneGroup: View {
     }
 
     var body: some View {
-        let _ = (store.pagesRevision, store.chatsRevision, store.cardsRevision)
-        let chatCount = store.core.chats().count
-        let cardTotals = store.core.cardTotals()
         let hasCards = cardTotals.cards > 0 || cardTotals.decks > 0
 
         SettingsCardGroup(title: "Gefahrenzone", isDanger: true) {
@@ -237,6 +237,17 @@ struct DangerZoneGroup: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(!hasCards)
+            }
+        }
+        .task(id: [store.chatsRevision, store.cardsRevision]) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) {
+                let totals = core.cardTotals()
+                return (chats: core.chats().count, cards: totals.cards, decks: totals.decks)
+            }.value
+            if !Task.isCancelled {
+                chatCount = next.chats
+                cardTotals = (cards: next.cards, decks: next.decks)
             }
         }
         .confirmationDialog(

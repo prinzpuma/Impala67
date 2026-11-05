@@ -6,10 +6,21 @@ struct BacklinksChip: View {
     @Environment(ShellModel.self) private var shell
     let pageId: String
     @State private var open = false
+    /// Im Hintergrund gesucht (über alle Seiten). Andere Seiten verweisen nur durch Änderungen an
+    /// ihnen selbst neu hierher, also durch fremde Änderungen oder neue/umbenannte Seiten.
+    @State private var links: [PageSummary] = []
 
     var body: some View {
-        let _ = store.pagesRevision
-        let links = store.core.backlinks(id: pageId)
+        content
+            .task(id: [store.pageMetaRevision, store.remoteRevision]) {
+                let (core, id) = (store.core, pageId)
+                let next = await Task.detached(priority: .utility) { core.backlinks(id: id) }.value
+                if !Task.isCancelled { links = next }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if !links.isEmpty {
             VStack(alignment: .leading, spacing: Space.s1) {
                 Button {
@@ -65,10 +76,23 @@ struct ChildPagesList: View {
     @Environment(ShellModel.self) private var shell
     let pageId: String
     let blocks: [MdBlock]
+    /// Unterseiten aus dem Kern; neu nur bei Änderungen an Seitenbaum/Titeln, nicht bei jedem Tastendruck.
+    @State private var all: [PageSummary] = []
 
     var body: some View {
-        let _ = store.pagesRevision
-        let kids = children()
+        var embedded = Set<String>()
+        collectHefte(blocks, into: &embedded)
+        let kids = all.filter { !embedded.contains($0.id) }
+        return list(kids)
+            .task(id: store.pageMetaRevision) {
+                let (core, id) = (store.core, pageId)
+                let next = await Task.detached(priority: .utility) { Self.children(core, id) }.value
+                if !Task.isCancelled { all = next }
+            }
+    }
+
+    @ViewBuilder
+    private func list(_ kids: [PageSummary]) -> some View {
         if !kids.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Rectangle().fill(Impala.edgeSoft).frame(height: 1).padding(.bottom, 6)
@@ -91,11 +115,9 @@ struct ChildPagesList: View {
         }
     }
 
-    private func children() -> [PageSummary] {
-        guard let page = store.core.page(id: pageId), store.core.pageDb(id: pageId) == nil else { return [] }
-        var embedded = Set<String>()
-        collectHefte(blocks, into: &embedded)
-        return store.core.childrenOf(parentId: pageId, workspaceId: page.summary.workspaceId).filter { !embedded.contains($0.id) }
+    private nonisolated static func children(_ core: ImpalaCore, _ pageId: String) -> [PageSummary] {
+        guard let page = core.page(id: pageId), core.pageDb(id: pageId) == nil else { return [] }
+        return core.childrenOf(parentId: pageId, workspaceId: page.summary.workspaceId)
     }
 
     private func collectHefte(_ list: [MdBlock], into set: inout Set<String>) {

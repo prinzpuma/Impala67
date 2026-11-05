@@ -188,7 +188,7 @@ struct HomeScreen: View {
         }
         .task(id: store.cardsRevision) {
             let core = store.core
-            let next = await Task.detached(priority: .utility) { HomeRecall.compute(core: core) }.value
+            let next = await Task.detached(priority: .utility) { HomeRecall.current(core: core) }.value
             if !Task.isCancelled { recall = next }
         }
         // Nicht bei jeder Änderung (jeder Strich, jeder Buchstabe): Minutentakt und Sync-/Drive-Wechsel reichen.

@@ -49,6 +49,7 @@ struct HeftCanvas: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
+        coordinator.flush()
         coordinator.toolPicker.setVisible(false, forFirstResponder: canvas)
         coordinator.toolPicker.removeObserver(canvas)
     }
@@ -81,13 +82,27 @@ struct HeftCanvas: UIViewRepresentable {
         private var removed: [UInt32: HeftStroke] = [:]
         /// Neue Stiftstriche, die erst nach dem Loslassen geschrieben werden (Formerkennung braucht das Halten).
         private var pending: [PKStroke] = []
-        /// Striche, die gerade im Hintergrund in den Kern geschrieben werden (noch ohne Kern-ID).
-        private var inFlight: Set<UInt32> = []
-        /// Neuladen wartet, bis alle Striche geschrieben sind (sonst verschwänden sie kurz von der Seite).
+        /// Noch nicht geschriebene Strich-Änderungen. Wie `scheduleSave` in heft.js der PWA: 350 ms nach
+        /// der letzten Änderung *ein* Event (`heftCommitStrokes`) statt eines je Strich – weniger Log,
+        /// weniger Sync, weniger Änderungsmeldungen. Neue Striche bekommen ihre ID gleich hier.
+        private var batchAdd: [HeftStroke] = []
+        private var batchRemove: [String] = []
+        private var flushTask: Task<Void, Never>?
+        private static let flushDelay: Duration = .milliseconds(350)
+        /// Geschriebene, aber im Hintergrund noch nicht fertige Aufrufe; Neuladen wartet auf sie.
+        private var writesPending = 0
         private var reloadWanted = false
-        /// Strich-Schreiben in fester Reihenfolge im Hintergrund: Der Stift wartet nie auf die Kern-Sperre,
+        /// Kern-Schreiben in fester Reihenfolge im Hintergrund: Der Stift wartet nie auf die Kern-Sperre,
         /// die Sync, Checkpoint oder Handschrift-Scan gerade halten können.
         private let writer = DispatchQueue(label: "impala.heft.write", qos: .userInitiated)
+        private var resignObserver: NSObjectProtocol?
+
+        /// Alles Gesammelte schreiben und warten, bis die Warteschlange leer ist – für die seltenen Stellen,
+        /// die gleich danach Striche aus dem Kern lesen (Lasso, Handschrift → Text).
+        private func flushAndWait() {
+            flush()
+            writer.sync {}
+        }
 
         /// Apples Werkzeugleiste ist die einzige Werkzeug- und Farbwahl im Heft (Stift, Marker, Radierer,
         /// Lasso, Lineal; Standardfarben wie die PWA). Rückgängig/Wiederholen und „Mit Finger zeichnen“
@@ -130,6 +145,10 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.addGestureRecognizer(hold)
             toolPicker.addObserver(canvas)
             toolPicker.setVisible(true, forFirstResponder: canvas)
+            // Wie `visibilitychange`/`pagehide` in heft.js: beim Verlassen der App sofort schreiben.
+            resignObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in MainActor.assumeIsolated { self?.flush() } }
             // Die Seite lädt das gleich folgende `updateUIView` (mit der aktuellen Revision).
             DispatchQueue.main.async { [weak self, weak canvas] in
                 canvas?.becomeFirstResponder()
@@ -146,7 +165,9 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Seite aus dem Kern neu aufbauen (auch nach Änderungen an Bildern und Textfeldern).
         func reload() {
-            if !inFlight.isEmpty {
+            // Erst Gesammeltes schreiben und abwarten, sonst verschwänden diese Striche kurz von der Seite.
+            flush()
+            if writesPending > 0 {
                 reloadWanted = true
                 return
             }
@@ -246,7 +267,7 @@ struct HeftCanvas: UIViewRepresentable {
                     }
                 } else if let original = removed.removeValue(forKey: seed) {
                     addStroke(stroke, original: original)
-                } else if inFlight.contains(seed) || pending.contains(where: { $0.randomSeed == seed }) {
+                } else if pending.contains(where: { $0.randomSeed == seed }) {
                     continue
                 } else if lassoText {
                     lasso = stroke
@@ -266,13 +287,15 @@ struct HeftCanvas: UIViewRepresentable {
                 removed[seed] = k.data
                 known[seed] = nil
             }
-            let (core, pageId, heftPageId) = (core, pageId, heftPageId)
-            if !toRemove.isEmpty {
-                writer.async { attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: toRemove) }) }
-                HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
-            }
-            for move in moves.values {
-                writer.async { _ = attempt("heftMoveStrokes", { try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy) }) }
+            if !toRemove.isEmpty { removeStrokes(toRemove) }
+            if !moves.isEmpty {
+                // Verschieben braucht die Striche im Kern: erst das Gesammelte, dann die Verschiebung.
+                flush()
+                for move in moves.values {
+                    write { core, pageId, heftPageId in
+                        _ = attempt("heftMoveStrokes", { try core.heftMoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: move.ids, dx: move.dx, dy: move.dy) })
+                    }
+                }
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
             }
             // Erst nach dem Loslassen entscheiden, ob der Stift am Ende gehalten wurde (`HoldWatcher`).
@@ -410,6 +433,7 @@ struct HeftCanvas: UIViewRepresentable {
                 let loc = p.location.applying(stroke.transform)
                 polygon += [Float(loc.x), Float(loc.y)]
             }
+            flushAndWait()
             let ids = (attempt("heftSelectByLasso", { try core.heftSelectByLasso(pageId: pageId, heftPageId: heftPageId, polygon: polygon) })) ?? []
             let want = Set(ids)
             let picked = canvas.drawing.strokes.filter { s in known[s.randomSeed].map { want.contains($0.id) } ?? false }
@@ -440,6 +464,7 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Striche des Lassos durch ein Textfeld an ihrer Stelle ersetzen.
         func replaceWithText(_ result: HeftOcrResult, text: String, color: String) {
+            flushAndWait()
             _ = attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: result.strokeIds) })
             let w = max(160, result.bounds.width)
             _ = attempt("heftAddText", { try core.heftAddText(pageId: pageId, heftPageId: heftPageId, text: text,
@@ -461,39 +486,70 @@ struct HeftCanvas: UIViewRepresentable {
                 c.size = original.size
             }
             guard !c.points.isEmpty else { return }
-            let seed = stroke.randomSeed
-            let (transform, bounds) = (stroke.transform, stroke.renderBounds)
-            let (core, pageId, heftPageId, input) = (core, pageId, heftPageId, c)
-            inFlight.insert(seed)
-            writer.async {
-                let id = attempt("heftAddStroke", { try core.heftAddStroke(pageId: pageId, heftPageId: heftPageId, tool: input.tool, color: input.color, size: input.size, points: input.points) })
-                DispatchQueue.main.async { [weak self] in
-                    self?.stored(seed: seed, id: id, stroke: input, transform: transform, bounds: bounds)
-                }
+            // Kern-IDs sind kleingeschriebene UUIDs (wie `uuid::Uuid::new_v4` im Kern).
+            let id = UUID().uuidString.lowercased()
+            let data = HeftStroke(id: id, tool: c.tool, color: c.color, size: c.size, points: c.points, shape: nil)
+            known[stroke.randomSeed] = Known(id: id, data: data, transform: stroke.transform, bounds: stroke.renderBounds)
+            batchAdd.append(data)
+            scheduleFlush()
+        }
+
+        /// Striche entfernen; noch nicht geschriebene fallen einfach aus der Sammlung.
+        private func removeStrokes(_ ids: [String]) {
+            let unwritten = Set(batchAdd.map(\.id))
+            batchAdd.removeAll { ids.contains($0.id) }
+            batchRemove += ids.filter { !unwritten.contains($0) }
+            scheduleFlush()
+        }
+
+        private func scheduleFlush() {
+            HeftActivity.noteWrite()
+            flushTask?.cancel()
+            flushTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.flushDelay)
+                guard !Task.isCancelled else { return }
+                self?.flush()
             }
         }
 
-        /// Strich ist im Kern. Wurde er inzwischen wieder entfernt (Rückgängig, Radierer), dort ebenfalls
-        /// löschen und für „Wiederholen“ merken.
-        private func stored(seed: UInt32, id: String?, stroke c: (tool: String, color: String, size: Double, points: [Float]),
-                            transform: CGAffineTransform, bounds: CGRect) {
-            inFlight.remove(seed)
-            if let id {
-                let data = HeftStroke(id: id, tool: c.tool, color: c.color, size: c.size, points: c.points, shape: nil)
-                if canvas?.drawing.strokes.contains(where: { $0.randomSeed == seed }) == true {
-                    known[seed] = Known(id: id, data: data, transform: transform, bounds: bounds)
-                } else {
-                    removed[seed] = data
-                    let (core, pageId, heftPageId) = (core, pageId, heftPageId)
-                    writer.async { attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: heftPageId, ids: [id]) }) }
-                }
-                HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
+        /// Gesammelte Strich-Änderungen jetzt als ein Event schreiben (im Hintergrund).
+        func flush() {
+            flushTask?.cancel()
+            flushTask = nil
+            guard !batchAdd.isEmpty || !batchRemove.isEmpty else { return }
+            let (add, remove) = (batchAdd, batchRemove)
+            batchAdd.removeAll()
+            batchRemove.removeAll()
+            write { core, pageId, heftPageId in
+                _ = attempt("heftCommitStrokes", { try core.heftCommitStrokes(pageId: pageId, heftPageId: heftPageId, add: add, remove: remove) })
             }
-            if inFlight.isEmpty {
-                if reloadWanted { reload() } else if let canvas { sync(canvas) }
+            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: heftPageId)
+        }
+
+        /// Kern-Aufruf in der Schreib-Warteschlange; ein wartendes Neuladen läuft, sobald alles geschrieben ist.
+        private func write(_ op: @escaping @Sendable (ImpalaCore, String, String) -> Void) {
+            let (core, pageId, heftPageId) = (core, pageId, heftPageId)
+            writesPending += 1
+            writer.async {
+                op(core, pageId, heftPageId)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.writesPending -= 1
+                    if self.writesPending == 0 && self.reloadWanted { self.reload() }
+                }
             }
         }
     }
+}
+
+/// Wann zuletzt im Heft geschrieben wurde (wie `heft:is-writing` der PWA): Sync und Handschrift-Erkennung
+/// warten, solange geschrieben wird, statt mitten im Schreiben die Kern-Sperre zu belegen.
+@MainActor
+enum HeftActivity {
+    private(set) static var lastWrite: Date = .distantPast
+    static func noteWrite() { lastWrite = .now }
+    /// Ob in den letzten `seconds` Sekunden geschrieben wurde.
+    static func isWriting(within seconds: TimeInterval) -> Bool { Date.now.timeIntervalSince(lastWrite) < seconds }
 }
 
 /// Canvas, der nach jedem Layout die Seitenbreite einpassen lässt (erst dann ist die Breite bekannt).
