@@ -406,8 +406,9 @@ extension NoteModel {
         switch key {
         case .tab: return menuOpen || b.indent > 0 || b.isCode || b.type == .bullet || b.type == .number || b.type == .todo
         case .shiftTab: return b.indent > 0
-        case .up: return menuOpen || selection.length == 0
-        case .down: return menuOpen || selection.length == 0
+        // Wie editor-keys.js: ↑ verlässt den Block nur am Textanfang, ↓ nur am Textende.
+        case .up: return menuOpen || (selection.length == 0 && at == 0)
+        case .down: return menuOpen || (selection.length == 0 && at == ns.length)
         case .deleteForward: return selection.length == 0 && at == ns.length && place(id).flatMap { $0.list[safe: $0.index + 1] }?.isText == true
         case .softBreak: return !b.keepsNewlines
         case .format, .link: return b.isText && !b.isCode

@@ -47,8 +47,6 @@ final class NoteModel {
     @ObservationIgnored private var dirtyTitle = false
     @ObservationIgnored private var dirtyContent = false
     @ObservationIgnored private var lastEdit = Date.distantPast
-    @ObservationIgnored private var lastCheckpoint = Date.distantPast
-    @ObservationIgnored private var editsSinceCheckpoint = 0
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     /// Nur Anzeige (Lernkarten): Änderungen bleiben im Speicher, nichts geht in den Kern.
     @ObservationIgnored private var readOnly = false
@@ -89,8 +87,9 @@ final class NoteModel {
         }
         if page.content != savedMarkdown {
             savedMarkdown = page.content
-            undoStack.append(blocks)
+            // Fremder Stand: kein Rückgängig-Schritt – „Rückgängig“ machte sonst die Änderung des anderen Geräts weg.
             blocks = markdownToBlocks(markdown: page.content)
+            undoStack = []
             redoStack = []
             if let a = activeId, !blocks.contains(where: { $0.id == a }) { activeId = nil }
         }
@@ -143,12 +142,10 @@ final class NoteModel {
         let next = change(blocks)
         guard next != blocks else { return }
         let now = Date()
-        editsSinceCheckpoint += 1
-        if structural || now.timeIntervalSince(lastCheckpoint) > 1.4 || editsSinceCheckpoint >= 20 {
+        // Wie `checkpoint` in editor.js: Tippen bis zu einer Pause von 700 ms ist ein Schritt, Struktur sofort.
+        if structural || now.timeIntervalSince(lastEdit) > 0.7 {
             undoStack.append(blocks)
             if undoStack.count > 100 { undoStack.removeFirst() }
-            lastCheckpoint = now
-            editsSinceCheckpoint = 0
         }
         redoStack.removeAll()
         blocks = next

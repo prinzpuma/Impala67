@@ -64,7 +64,6 @@ struct HeftCanvas: UIViewRepresentable {
         private let texts = HeftObjectsView(.texts)
         private let select = HeftSelectLayer()
         private let hold = HoldWatcher(target: nil, action: nil)
-        private let doubleTap = UITapGestureRecognizer()
         weak var link: HeftCanvasLink?
         private var selecting = false
         private var lassoText = false
@@ -122,11 +121,6 @@ struct HeftCanvas: UIViewRepresentable {
             hold.delaysTouchesEnded = false
             hold.delegate = hold
             canvas.addGestureRecognizer(hold)
-            doubleTap.numberOfTapsRequired = 2
-            doubleTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
-            doubleTap.delaysTouchesEnded = false
-            doubleTap.addTarget(self, action: #selector(handleDoubleTap(_:)))
-            canvas.addGestureRecognizer(doubleTap)
             toolPicker.addObserver(canvas)
             toolPicker.setVisible(true, forFirstResponder: canvas)
             // Die Seite lädt das gleich folgende `updateUIView` (mit der aktuellen Revision).
@@ -332,22 +326,6 @@ struct HeftCanvas: UIViewRepresentable {
                     toolBeforeLasso = nil
                 }
             }
-        }
-
-        func selectPen(color: String, width: CGFloat, isMarker: Bool = false) {
-            guard let canvas else { return }
-            let toolType: PKInkingTool.InkType = isMarker ? .marker : .pen
-            let uiColor = UIColor(css: color)
-            canvas.tool = PKInkingTool(toolType, color: uiColor, width: width)
-        }
-
-        @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-            guard let canvas, gesture.state == .ended else { return }
-            let loc = gesture.location(in: canvas)
-            let z = max(canvas.zoomScale, 0.01)
-            let pageX = loc.x / z
-            let pageY = loc.y / z
-            link?.textEdit = HeftTextEdit(textId: nil, text: "", position: CGPoint(x: pageX, y: pageY))
         }
 
         /// Mitte des sichtbaren Ausschnitts in Seitenkoordinaten (dort landen neue Bilder und Texte).

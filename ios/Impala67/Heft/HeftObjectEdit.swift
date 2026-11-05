@@ -235,16 +235,11 @@ final class HeftCanvasLink {
     /// Ergebnis der Handschrifterkennung.
     var ocr: HeftOcrResult?
     @ObservationIgnored weak var coordinator: HeftCanvas.Coordinator?
-
-    func selectPen(color: String, width: CGFloat, isMarker: Bool = false) {
-        coordinator?.selectPen(color: color, width: width, isMarker: isMarker)
-    }
 }
 
 /// Textfeld im Blatt `HeftTextSheet`: `id` nil = neues Feld.
 struct HeftTextEdit: Identifiable {
     var textId: String?
     var text: String
-    var position: CGPoint? = nil
     var id: String { textId ?? "new" }
 }

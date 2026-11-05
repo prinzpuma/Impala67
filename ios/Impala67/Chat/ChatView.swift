@@ -56,9 +56,7 @@ struct ChatView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.bouncy(duration: 0.35), value: chat.notice)
-        .learningTime(LearnContext(category: "ai", sourceId: shell.chat.chatId.isEmpty ? nil : shell.chat.chatId))
-    }
+        .animation(.bouncy(duration: 0.35), value: chat.notice)    }
 }
 
 /// Leerer Chat: Begrüßung und Vorschläge (`ChatView.kt` `EmptyChat`).

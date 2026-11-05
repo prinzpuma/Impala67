@@ -159,6 +159,14 @@ private struct BlockText: View {
         let color = block.textColor.map(noteColor) ?? Impala.text
         if editing {
             BlockInput(block: block, color: color, model: model)
+        } else if !block.isCode, hasInlineMath(block.text) {
+            // Formeln wie in der PWA gesetzt (`hydrateInlineMath`), nicht als roher `$…$`-Text.
+            RichBlock(kind: .inline(size: font.size, weight: font.weight == .regular ? 400 : 600,
+                                    lineHeight: font.size + font.lineSpacing + 3),
+                      source: inlineHTML(block.text))
+                .opacity(block.isChecked ? 0.6 : 1)
+                .contentShape(Rectangle())
+                .onTapGesture { if !model.isReadOnly { model.activate(block.id, at: nil) } }
         } else {
             Group {
                 if block.text.isEmpty {

@@ -162,35 +162,11 @@ final class BlockUITextView: UITextView {
         (UIKeyCommand.inputDownArrow, [.command, .shift], .moveDown, "Nach unten"),
     ]
 
-    private func isOnFirstLine() -> Bool {
-        guard let range = selectedTextRange, range.isEmpty else { return false }
-        let caret = caretRect(for: range.start)
-        let lineH = caret.height > 0 ? caret.height : max(font?.lineHeight ?? 20, 20)
-        let top = textContainerInset.top
-        return caret.minY <= top + lineH * 0.5
-    }
-
-    private func isOnLastLine() -> Bool {
-        guard let range = selectedTextRange, range.isEmpty else { return false }
-        let caret = caretRect(for: range.start)
-        let lineH = caret.height > 0 ? caret.height : max(font?.lineHeight ?? 20, 20)
-        let bottom = contentSize.height - textContainerInset.bottom
-        return caret.maxY >= bottom - lineH * 0.8
-    }
-
     override var keyCommands: [UIKeyCommand]? {
         guard isFirstResponder else { return super.keyCommands }
         let current = text ?? ""
-        let isMenu = current.hasPrefix("/") || current.contains("[[")
         var out: [UIKeyCommand] = []
-        for (i, b) in Self.bindings.enumerated() {
-            if b.2 == .up {
-                guard wants?(b.2, current) == true && (isMenu || isOnFirstLine() || current.isEmpty) else { continue }
-            } else if b.2 == .down {
-                guard wants?(b.2, current) == true && (isMenu || isOnLastLine() || current.isEmpty) else { continue }
-            } else {
-                guard wants?(b.2, current) == true else { continue }
-            }
+        for (i, b) in Self.bindings.enumerated() where wants?(b.2, current) == true {
             let cmd = UIKeyCommand(title: b.3 ?? "", action: #selector(runKey(_:)), input: b.0, modifierFlags: b.1,
                                    propertyList: i)
             cmd.wantsPriorityOverSystemBehavior = true

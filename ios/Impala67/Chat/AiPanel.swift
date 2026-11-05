@@ -60,6 +60,8 @@ struct ChatScreen: View {
             .background(Impala.panel)
             .onAppear { shell.chat.open(chatId, reveal: false) }
             .onChange(of: chatId) { shell.chat.open(chatId, reveal: false) }
+            // Lernzeit „ai“ nur im Chat-Tab wie lernzeit.js (`S.view === "chat"`), nicht im Seitenpanel.
+            .learningTime(LearnContext(category: "ai", sourceId: chatId.isEmpty ? nil : chatId))
     }
 }
 

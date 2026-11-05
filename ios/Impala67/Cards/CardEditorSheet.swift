@@ -37,7 +37,7 @@ struct CardEditorSheet: View {
                 }
                 Section {
                     if preview {
-                        MarkdownView(clozePreview(front.isEmpty ? "*Frage…*" : front), core: store.core)
+                        MarkdownView(front.isEmpty ? "*Frage…*" : front, core: store.core)
                     } else {
                         TextEditor(text: $front, selection: $selection)
                             .frame(minHeight: 96)
@@ -150,19 +150,7 @@ struct CardEditorSheet: View {
         run {
             let n = try store.core.createClozeCards(text: front, deck: targetDeck, pageId: card?.pageId)
             if n == 0 { throw CoreError.Invalid(reason: "Keine Lücke im Text — erst Text markieren und „Lücke einfügen“.") }
-            if let card {
-                _ = try? store.core.deleteCard(id: card.id)
-            }
         }
-    }
-
-    private func clozePreview(_ text: String) -> String {
-        guard text.contains("{{c") else { return text }
-        return text.replacingOccurrences(of: #"\{\{c\d+::(.*?)(?:::([^}]+))?\}\}"#,
-                                         with: "[$2...]",
-                                         options: .regularExpression)
-                   .replacingOccurrences(of: "[]", with: "[...]")
-                   .replacingOccurrences(of: "[...]", with: "**[...]**")
     }
 
     /// Kern-Aufruf; bei Erfolg schließt das Sheet, sonst steht der Fehler darin.
