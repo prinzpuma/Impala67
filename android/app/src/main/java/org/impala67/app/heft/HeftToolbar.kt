@@ -168,7 +168,7 @@ private fun FullCapsule(vm: HeftViewModel, phone: Boolean, media: HeftMediaActio
         Box {
             ToolButton(
                 R.drawable.ic_i_image, "Bilder einfügen oder bearbeiten", btn,
-                active = imgMenu || t.tool == HeftTool.SELECT, open = imgMenu, onClick = { imgMenu = true },
+                active = imgMenu, open = imgMenu, onClick = { imgMenu = true },
             )
             HeftImageMenu(imgMenu, { imgMenu = false }, vm, media)
         }
@@ -201,7 +201,6 @@ private fun MiniCapsule(vm: HeftViewModel) {
             HeftTool.ERASER -> R.drawable.ic_i_eraser
             HeftTool.LASSO -> R.drawable.ic_i_lasso
             HeftTool.LASER -> R.drawable.ic_i_laser
-            HeftTool.SELECT -> R.drawable.ic_i_select
             HeftTool.PEN -> R.drawable.ic_i_pen_tool
         }
         Icon(painterResource(icon), null, Modifier.size(18.dp), c.text)

@@ -1,6 +1,11 @@
 package org.impala67.app.heft
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,13 +89,19 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         )
     }
 
+    val scale = remember { floatArrayOf(1f) }
     BoxWithConstraints(
         modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO)
             // `.heft-canvas`: weicher Schatten (--elev-3) und feiner heller Ring.
             .shadow(10.dp, PageShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.6f))
-            .clip(PageShape).border(1.dp, Color.White.copy(alpha = 0.06f), PageShape),
+            .clip(PageShape).border(1.dp, Color.White.copy(alpha = 0.06f), PageShape)
+            .fingerPicks(objects, k = { scale[0] }) {
+                // Nur wenn der Finger blättert; zeichnet er, erkennt `PageInput` das Halten.
+                vm.tools.onlyPen && !vm.reading && vm.tools.tool != HeftTool.LASSO && vm.tools.tool != HeftTool.LASER
+            },
     ) {
         val k = constraints.maxWidth / HeftPage.WIDTH
+        scale[0] = k
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
         val stored = data?.images.orEmpty()
@@ -173,6 +184,45 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
             update = { input[0]?.let { it.k = k; it.tools = vm.tools; it.reading = vm.reading } },
         )
         editing?.let { HeftTextEditor(vm, it, k) }
+    }
+}
+
+/**
+ * „Nur Stift“ (der Finger blättert): Fingertipp wählt ein Bild/Textfeld (daneben: abwählen), Halten greift
+ * auch seitenfüllende Scans und verschiebt sie mit demselben Finger. Beobachtet im Initial-Durchgang ohne
+ * zu verbrauchen, damit die Liste weiter scrollt; erst nach dem Greifen gehören die Bewegungen dem Element.
+ * Liegt der Finger auf der bestehenden Auswahl, greift sie `PageInput` (dann ist [ObjGesture.busy]).
+ */
+private fun Modifier.fingerPicks(objects: ObjGesture, k: () -> Float, active: () -> Boolean): Modifier = pointerInput(objects) {
+    val slop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (down.type != PointerType.Touch || !active() || penRecently()) return@awaitEachGesture
+        val start = down.position
+        // true = getippt, false = abgebrochen (bewegt, zweiter Finger, lang), null = gehalten.
+        val tapped = withTimeoutOrNull(PICK_HOLD_MS) {
+            while (true) {
+                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                if (ev.changes.count { it.pressed } > 1) return@withTimeoutOrNull false
+                val c = ev.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                if ((c.position - start).getDistance() > slop) return@withTimeoutOrNull false
+                if (!c.pressed) return@withTimeoutOrNull c.uptimeMillis - down.uptimeMillis < 300
+            }
+            @Suppress("UNREACHABLE_CODE") false
+        }
+        if (objects.busy || penRecently()) return@awaitEachGesture
+        val s = k()
+        if (tapped == true) { objects.tap(start.x / s, start.y / s); return@awaitEachGesture }
+        if (tapped == false) return@awaitEachGesture
+        val h = objects.hit(start.x / s, start.y / s) ?: return@awaitEachGesture
+        objects.pick(h, start.x / s, start.y / s)
+        while (true) {
+            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            val c = ev.changes.firstOrNull { it.id == down.id }
+            if (c == null || !c.pressed) { objects.up(); break }
+            objects.move(c.position.x / s, c.position.y / s)
+            ev.changes.forEach { it.consume() }
+        }
     }
 }
 

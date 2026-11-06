@@ -173,18 +173,13 @@ fun HeftImageMenu(expanded: Boolean, onDismiss: () -> Unit, vm: HeftViewModel, m
     ) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MenuHead("BILDER")
-            PopActionRow("Bilder & Texte auswählen & bearbeiten", R.drawable.ic_i_select) {
-                onDismiss()
-                if (vm.tools.tool != HeftTool.SELECT) vm.selectTool(HeftTool.SELECT)
-            }
-            HorizontalDivider(color = c.edgeSoft)
             Column {
                 PopActionRow("Text schreiben", R.drawable.ic_i_pen) { onDismiss(); media.writeText() }
                 PopActionRow("Bild hinzufügen", R.drawable.ic_i_image) { onDismiss(); media.pickImage() }
                 PopActionRow("Bild aufnehmen", R.drawable.ic_i_camera) { onDismiss(); media.takePhoto() }
             }
             Text(
-                "Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.",
+                "Bild oder Text antippen oder halten, dann verschieben, skalieren oder löschen. Ausgewählten Text nochmal antippen zum Bearbeiten.",
                 Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
                 color = c.text2,
                 fontSize = TextSize.xs,

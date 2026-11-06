@@ -13,16 +13,16 @@ object HeftPage {
 }
 
 /**
- * Werkzeuge der Werkzeugleiste. Der Laser zeichnet nur flüchtig, nichts wird gespeichert. [SELECT]
- * greift Bilder und Textfelder (heft.js `tool === "select"`, über das „Bilder“-Menü).
+ * Werkzeuge der Werkzeugleiste. Der Laser zeichnet nur flüchtig, nichts wird gespeichert. Bilder und
+ * Textfelder brauchen kein eigenes Werkzeug: Antippen bzw. Halten wählt sie aus (heft-input.js).
  */
 enum class HeftTool {
-    PEN, MARKER, ERASER, LASSO, LASER, SELECT;
+    PEN, MARKER, ERASER, LASSO, LASER;
 
     /** Stift und Marker schreiben mit Farbe und Dicke. */
     val writes get() = this == PEN || this == MARKER
 
-    /** Ein zweiter Tipp öffnet Optionen (Lasso, Laser und Auswahl haben keine). */
+    /** Ein zweiter Tipp öffnet Optionen (Lasso und Laser haben keine). */
     val hasOptions get() = this == PEN || this == MARKER || this == ERASER
 }
 

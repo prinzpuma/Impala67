@@ -89,92 +89,101 @@ fun contentBottom(pg: HeftPageData): Double {
     return y
 }
 
-/** Doppeltipp auf ein Textfeld bzw. eine leere Stelle (heft-input.js: 400 bzw. 450 ms, 40 Einheiten). */
-private const val TEXT_TAP_MS = 400L
-private const val EMPTY_TAP_MS = 450L
-private const val EMPTY_TAP_SLOP = 40.0
+/** Halten, bis ein Bild/Textfeld gegriffen wird (heft-input.js `PICK_HOLD_MS`). */
+const val PICK_HOLD_MS = 450L
+
+/** Seitenfüllende Bilder (Scans, PDF-Seiten) nur per Halten – sonst griffe jeder Tipp die Seite. */
+private const val PAGE_SIZED = HeftPage.WIDTH * HeftPage.HEIGHT * 0.6
 
 /**
- * Auswahl-Werkzeug einer Seite (heft-input.js, `H.tool === "select"`): Textfelder vor Bildern; am
- * roten Knopf oben rechts löschen, am blauen Griff unten rechts skalieren (Text nur in der Breite),
- * sonst greifen und verschieben. Doppeltipp auf ein Textfeld bearbeitet es, auf eine leere Stelle legt
- * er ein neues an. Koordinaten in Seiteneinheiten.
+ * Bilder und Textfelder einer Seite direkt auswählen (heft-input.js): Mit „Nur Stift“ wählt ein Fingertipp
+ * aus, sonst (Finger zeichnet, Maus) das Halten; der Stift zeichnet immer. Eine bestehende Auswahl greift
+ * jeder Zeiger: roter Knopf oben rechts löscht, blauer Griff unten rechts skaliert (Text nur in der
+ * Breite), die Fläche verschiebt; Antippen eines ausgewählten Textfelds bearbeitet es. Koordinaten in
+ * Seiteneinheiten.
  */
 class ObjGesture(private val vm: HeftViewModel, private val heftPageId: String) {
     private enum class Mode { NONE, MOVE, RESIZE }
 
+    /** Getroffenes Element mit seinem Rahmen. */
+    class Hit(val kind: ObjKind, val id: String, val frame: ObjFrame)
+
     private var mode = Mode.NONE
     private var sx = 0.0
     private var sy = 0.0
+    private var lx = 0.0
+    private var ly = 0.0
     private var orig = ObjFrame(0.0, 0.0, 0.0, 0.0)
-    private var textTap: Pair<String, Long>? = null
-    private var emptyTap: Triple<Double, Double, Long>? = null
+    private var tapEdit = false
+
+    /** Gerade wird ein Element verschoben oder skaliert. */
+    val busy get() = mode != Mode.NONE
 
     /** Rahmen wie er gerade zu sehen ist (Vorschau vor dem gespeicherten Stand). */
     private fun shown(sel: ObjSel, stored: ObjFrame) = sel.live ?: stored
 
-    fun down(xf: Float, yf: Float, finger: Boolean) {
-        val pg = vm.page(heftPageId).value ?: return
+    /** Oberstes Element unter dem Punkt (Textfelder vor Bildern); `tap`: ohne seitenfüllende Bilder. */
+    fun hit(xf: Float, yf: Float, tap: Boolean = false): Hit? {
+        val pg = vm.page(heftPageId).value ?: return null
+        val x = xf.toDouble()
+        val y = yf.toDouble()
+        pg.texts.lastOrNull { it.frame().contains(x, y) }?.let { return Hit(ObjKind.TEXT, it.id, it.frame()) }
+        return pg.images.lastOrNull { i -> i.frame().let { f -> f.contains(x, y) && !(tap && f.w * f.h > PAGE_SIZED) } }
+            ?.let { Hit(ObjKind.IMAGE, it.id, it.frame()) }
+    }
+
+    /** Die bestehende Auswahl dieser Seite greifen (Löschknopf, Griff, Fläche); false = nicht getroffen. */
+    fun grab(xf: Float, yf: Float, finger: Boolean): Boolean {
+        val sel = vm.objSel?.takeIf { it.heftPageId == heftPageId } ?: return false
+        val pg = vm.page(heftPageId).value ?: return false
+        val stored = when (sel.kind) {
+            ObjKind.TEXT -> pg.texts.find { it.id == sel.id }?.frame()
+            ObjKind.IMAGE -> pg.images.find { it.id == sel.id }?.frame()
+        } ?: return false
+        val f = shown(sel, stored)
         val x = xf.toDouble()
         val y = yf.toDouble()
         val r = if (finger) 22.0 else 16.0
-        val now = SystemClock.uptimeMillis()
         fun near(px: Double, py: Double) = hypot(x - px, y - py) <= r
-        val sel = vm.objSel?.takeIf { it.heftPageId == heftPageId }
-
-        val st = sel?.takeIf { it.kind == ObjKind.TEXT }?.let { s -> pg.texts.find { it.id == s.id } }
-        if (sel != null && st != null) {
-            val f = shown(sel, st.frame())
-            if (near(f.x + f.w, f.y)) { vm.removeObject(); return }
-            if (near(f.x + f.w, f.y + f.h)) { grab(Mode.RESIZE, x, y, f); return }
+        when {
+            near(f.x + f.w, f.y) -> vm.removeObject()
+            near(f.x + f.w, f.y + f.h) -> start(Mode.RESIZE, x, y, f)
+            f.contains(x, y) -> { start(Mode.MOVE, x, y, f); tapEdit = sel.kind == ObjKind.TEXT }
+            else -> return false
         }
-        pg.texts.lastOrNull { t -> (if (t.id == sel?.id) shown(sel, t.frame()) else t.frame()).contains(x, y) }?.let { ht ->
-            val last = textTap
-            if (sel?.id == ht.id && last != null && last.first == ht.id && now - last.second < TEXT_TAP_MS) {
-                textTap = null
-                vm.editText(heftPageId, ht)
-                return
-            }
-            textTap = ht.id to now
-            vm.selectObject(heftPageId, ObjKind.TEXT, ht.id)
-            grab(Mode.MOVE, x, y, if (ht.id == sel?.id) shown(sel, ht.frame()) else ht.frame())
-            return
-        }
-
-        val im = sel?.takeIf { it.kind == ObjKind.IMAGE }?.let { s -> pg.images.find { it.id == s.id } }
-        if (sel != null && im != null) {
-            val f = shown(sel, im.frame())
-            if (near(f.x + f.w, f.y)) { vm.removeObject(); return }
-            if (near(f.x + f.w, f.y + f.h)) { grab(Mode.RESIZE, x, y, f); return }
-        }
-        val hit = pg.images.lastOrNull { i -> (if (i.id == sel?.id) shown(sel, i.frame()) else i.frame()).contains(x, y) }
-        if (hit != null) {
-            emptyTap = null
-            vm.selectObject(heftPageId, ObjKind.IMAGE, hit.id)
-            grab(Mode.MOVE, x, y, if (hit.id == sel?.id) shown(sel, hit.frame()) else hit.frame())
-            return
-        }
-
-        val last = emptyTap
-        if (last != null && now - last.third < EMPTY_TAP_MS && hypot(x - last.first, y - last.second) < EMPTY_TAP_SLOP) {
-            emptyTap = null
-            vm.newText(heftPageId, max(20.0, x - 10), max(20.0, y - 20))
-            return
-        }
-        emptyTap = Triple(x, y, now)
-        vm.clearObject()
+        return true
     }
 
-    private fun grab(m: Mode, x: Double, y: Double, f: ObjFrame) {
+    /** Halten hat [h] gegriffen: auswählen und mit demselben Zeiger verschieben. */
+    fun pick(h: Hit, xf: Float, yf: Float) {
+        vm.selectObject(heftPageId, h.kind, h.id)
+        start(Mode.MOVE, xf.toDouble(), yf.toDouble(), h.frame)
+    }
+
+    /** Fingertipp („Nur Stift“): Element wählen, daneben die Auswahl aufheben. */
+    fun tap(xf: Float, yf: Float) {
+        val h = hit(xf, yf, tap = true)
+        if (h != null) vm.selectObject(heftPageId, h.kind, h.id) else vm.clearObject()
+    }
+
+    /** Ein neuer Strich hebt die Auswahl auf. */
+    fun clear() = vm.clearObject()
+
+    private fun start(m: Mode, x: Double, y: Double, f: ObjFrame) {
         mode = m
         sx = x
         sy = y
+        lx = x
+        ly = y
         orig = f
+        tapEdit = false
         vm.objectPreview(f, dragging = true)
     }
 
     fun move(xf: Float, yf: Float) {
         val sel = vm.objSel ?: return
+        lx = xf.toDouble()
+        ly = yf.toDouble()
         val dx = xf - sx
         val dy = yf - sy
         val o = orig
@@ -191,6 +200,15 @@ class ObjGesture(private val vm: HeftViewModel, private val heftPageId: String) 
     }
 
     fun up() {
+        // Kaum bewegt = Antippen: ein ausgewähltes Textfeld öffnet sich zum Bearbeiten.
+        if (mode == Mode.MOVE && tapEdit && hypot(lx - sx, ly - sy) < 4) {
+            mode = Mode.NONE
+            vm.objectPreview(orig, dragging = true)
+            vm.objectRelease(orig)
+            val sel = vm.objSel ?: return
+            vm.page(heftPageId).value?.texts?.find { it.id == sel.id }?.let { vm.editText(heftPageId, it) }
+            return
+        }
         if (mode != Mode.NONE) vm.objectRelease(orig)
         mode = Mode.NONE
     }

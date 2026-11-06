@@ -1301,8 +1301,6 @@ export const HEFT = (() => {
 			pushUndo,
 			onInserted: ({ img, pageIdx }) => {
 				sel = { pageIdx, imgId: img.id };
-				tool = "select";
-				expanded = false;
 				refresh(pageIdx);
 			},
 			toast: U.toast
@@ -1452,7 +1450,7 @@ export const HEFT = (() => {
 		if (d.headdimg) { closePop(); pickImage(false, addImagePageFromFile); return; }
 		if (d.heimport) { closePop(); importFiles(); return; }
 		if (d.hescan) { closePop(); openScanner(); return; }
-		if (d.hetextadd) { closePop(); tool = "select"; expanded = false; openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
+		if (d.hetextadd) { closePop(); openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
 		if (d.hepen != null) {
@@ -1471,15 +1469,13 @@ export const HEFT = (() => {
 				expanded = tool === d.hetool && !expanded;
 				tool = d.hetool;
 			} else {
-
 				tool = d.hetool; expanded = false;
-				if (d.hetool === "select") closePop();
 			}
-			if (tool !== "select" && sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
+			if (sel) { const spi = sel.pageIdx; sel = null; redrawPage(spi); }
 		}
 		else if (d.hecolor) {
 			color = d.hecolor;
-			if (tool === "eraser" || tool === "select") { tool = "pen"; expanded = true; }
+			if (tool === "eraser") { tool = "pen"; expanded = true; }
 			if (tool === "pen") pens[penSlot] = { color, size };
 		}
 		else if (d.hesize) {

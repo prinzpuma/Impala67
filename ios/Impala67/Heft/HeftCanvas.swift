@@ -19,8 +19,6 @@ struct HeftCanvas: UIViewRepresentable {
     let revision: Int
     /// Verbindung zur Leiste (Auswahl, Lasso für Text, Einfügen an der sichtbaren Stelle).
     let link: HeftCanvasLink
-    /// „Bilder & Texte auswählen & bearbeiten“: Finger und Stift wählen statt zu zeichnen.
-    let selecting: Bool
     /// „Handschrift → Text“: der nächste Strich ist ein Lasso und wird nicht gespeichert.
     let lassoText: Bool
     /// Die Seite in der Mitte der Ansicht hat gewechselt (Seitenanzeige „n / m“).
@@ -62,7 +60,7 @@ struct HeftCanvas: UIViewRepresentable {
         c.onCurrentPage = onCurrentPage
         c.onPullAdd = onPullAdd
         c.setPages(pageIds, revision: revision)
-        c.setModes(selecting: selecting, lassoText: lassoText)
+        c.setLassoText(lassoText)
     }
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
@@ -136,7 +134,6 @@ struct HeftCanvas: UIViewRepresentable {
         private var loadedRevision = -1
         private var imageLoad: Task<Void, Never>?
 
-        private var selecting = false
         private var lassoText = false
         /// Werkzeug vor dem Lasso für „Handschrift → Text“.
         private var toolBeforeLasso: PKTool?
@@ -215,6 +212,26 @@ struct HeftCanvas: UIViewRepresentable {
             select.onPreview = { [weak self] item, frame in self?.preview(item, frame) }
             select.onCommit = { [weak self] item, frame in self?.commit(item, frame) }
             select.onEditText = { [weak self] id in self?.editText(id) }
+            // Direkt auswählen: Fingertipp (Finger zeichnet nicht) bzw. Halten; der Stift zeichnet immer.
+            select.drawingRecognizer = canvas.drawingGestureRecognizer
+            select.fingerDraws = { [weak canvas] in
+                guard let canvas else { return false }
+                switch canvas.drawingPolicy {
+                case .anyInput: return true
+                case .pencilOnly: return false
+                default: return !UIPencilInteraction.prefersPencilOnlyDrawing
+                }
+            }
+            select.onHoldBegan = { [weak canvas] in
+                // Ab- und wieder Anschalten bricht den angefangenen Strich bzw. das Scrollen dieses Fingers ab.
+                guard let canvas else { return }
+                for g in [canvas.drawingGestureRecognizer, canvas.panGestureRecognizer] {
+                    g.isEnabled = false
+                    g.isEnabled = true
+                }
+            }
+            canvas.addGestureRecognizer(select.canvasTap)
+            canvas.addGestureRecognizer(select.canvasHold)
             hold.cancelsTouchesInView = false
             hold.delaysTouchesBegan = false
             hold.delaysTouchesEnded = false
@@ -627,6 +644,11 @@ struct HeftCanvas: UIViewRepresentable {
 
         // MARK: Abgleich Zeichnung → Kern
 
+        /// Ein neuer Strich hebt die Auswahl auf (wie ein Stiftstrich in der PWA).
+        func canvasViewDidBeginUsingTool(_ canvas: PKCanvasView) {
+            clearSelection()
+        }
+
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
             if !applying { sync(canvas) }
             // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung (nach dem Abgleich,
@@ -755,18 +777,9 @@ struct HeftCanvas: UIViewRepresentable {
 
         // MARK: Bilder, Textfelder, Handschrift → Text
 
-        /// Auswahlmodus bzw. Lasso für Text ein-/ausschalten (Zeichnen ruht im Auswahlmodus).
-        func setModes(selecting: Bool, lassoText: Bool) {
+        /// Lasso für „Handschrift → Text“ ein-/ausschalten.
+        func setLassoText(_ lassoText: Bool) {
             guard let canvas else { return }
-            if selecting != self.selecting {
-                self.selecting = selecting
-                select.isUserInteractionEnabled = selecting
-                canvas.drawingGestureRecognizer.isEnabled = !selecting
-                if !selecting {
-                    select.select(nil)
-                    DispatchQueue.main.async { [weak self] in self?.link?.selection = nil }
-                }
-            }
             if lassoText != self.lassoText {
                 self.lassoText = lassoText
                 if lassoText {
@@ -792,7 +805,14 @@ struct HeftCanvas: UIViewRepresentable {
             return (heftPageId: id, point: p)
         }
 
-        /// Element nach dem Einfügen auswählen (Auswahlmodus an, wie nach „Bild hinzufügen“ in der PWA).
+        /// Auswahl aufheben (Leiste „Fertig“, neuer Strich).
+        func clearSelection() {
+            guard select.selected != nil else { return }
+            select.select(nil)
+            link?.selection = nil
+        }
+
+        /// Element nach dem Einfügen auswählen (wie nach „Bild hinzufügen“ in der PWA).
         /// Die Seite wird gerade neu geladen; die Auswahl bleibt bestehen, sobald es das Element gibt.
         func selectAfterReload(_ item: HeftSelectLayer.Item) {
             select.select(item)

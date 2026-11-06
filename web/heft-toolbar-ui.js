@@ -135,7 +135,7 @@ export function toolbarHtml({
 					'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>') +
 				'<span class="heft-sep" aria-hidden="true"></span>' +
 				'<button type="button" data-heimgmenu="1" class="heft-main' +
-					(popKind === "img" || tool === "select" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
+					(popKind === "img" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
 				(phone ? "" : '<span class="heft-sep" aria-hidden="true"></span>' +
 				'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig">' + svgUndo + '</button>' +
 				'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen">' + svgRedo + '</button>' +
@@ -171,10 +171,8 @@ export function plusPopHtml({ insertPos, curPaper }, renderIcon = icon) {
 
 export function imgPopHtml(renderIcon = icon) {
 	return '<div class="heft-pop-head">Bilder</div>' +
-		'<button type="button" class="heft-pop-row" data-hetool="select">' + renderIcon("select") + 'Bilder & Texte auswählen & bearbeiten</button>' +
-		'<div class="heft-pop-sep"></div>' +
 		'<button type="button" class="heft-pop-row" data-hetextadd="1">' + renderIcon("pen") + 'Text schreiben</button>' +
 		'<button type="button" class="heft-pop-row" data-heimgadd="1">' + renderIcon("image") + 'Bild hinzufügen</button>' +
 		'<button type="button" class="heft-pop-row" data-heimgcam="1">' + renderIcon("camera") + 'Bild aufnehmen</button>' +
-		'<div class="heft-pop-sub">Ausgewähltes lässt sich verschieben, skalieren oder löschen. Doppeltipp auf eine Text-Box bearbeitet den Text.</div>';
+		'<div class="heft-pop-sub">Bild oder Text antippen oder halten, dann verschieben, skalieren oder löschen. Ausgewählten Text nochmal antippen zum Bearbeiten.</div>';
 }

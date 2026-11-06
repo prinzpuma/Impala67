@@ -901,8 +901,8 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 ### 6. Bilder-Popover („Bilder“)
 
-- [x] **Bilder & Texte auswählen & bearbeiten** – Auswahl-Werkzeug mit Verschieben, Skalieren, Löschen (web/heft-toolbar-ui.js:213; web/heft.js:1481-1482) — Kotlin: ✅ HeftCorners.kt `HeftImageMenu`, HeftObjects.kt `ObjGesture`
-- [x] **Text schreiben** – Textfeld am Seitenende, Doppeltipp zum Bearbeiten (web/heft-toolbar-ui.js:215; web/heft.js:1461; web/heft.js:984-1052) — Kotlin: ✅ HeftViewModel.kt `startText`, HeftObjects.kt `HeftTextEditor`
+- [x] **Bilder & Texte direkt auswählen** – ohne eigenes Werkzeug: Fingertipp bei „Nur Stift“, sonst Halten (auch Maus); Verschieben, Skalieren, Löschen (web/heft-input.js `grabSelection`/`armPick`) — Kotlin: ✅ HeftInput.kt `holdPick`, HeftPageView.kt `fingerPicks`, HeftObjects.kt `ObjGesture`
+- [x] **Text schreiben** – Textfeld am Seitenende, ausgewähltes Feld antippen zum Bearbeiten (web/heft-toolbar-ui.js:215; web/heft.js:1461; web/heft.js:984-1052) — Kotlin: ✅ HeftViewModel.kt `startText`, HeftObjects.kt `HeftTextEditor`
 - [x] **Bild hinzufügen** – Galerie, Bild mit max. 70 % der Seite (web/heft-toolbar-ui.js:216; web/heft.js:1462; web/heft-import.js:101-135) — Kotlin: ✅ HeftImagePick.kt (Photo Picker, längste Kante 1400), HeftViewModel.kt `addImage`
 - [x] **Bild aufnehmen** – Kamera (web/heft-toolbar-ui.js:217; web/heft.js:1463) — Kotlin: ✅ HeftImagePick.kt (`TakePicture`, fragt Kamera-Berechtigung; im Emulator nicht geprüft)
 - [x] **Hinweistext zu Auswahl und Textfeld** (web/heft-toolbar-ui.js:218) — Kotlin: ✅ HeftCorners.kt `HeftImageMenu`

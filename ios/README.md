@@ -262,26 +262,29 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
   Vorschaubildern (`HeftThumbnail`: Papier, Bilder, Striche, Textfelder aus dem Kernformat), aktive Seite
   umrandet. Antippen springt, Ziehen sortiert um (`heftMovePage`, Ziel gestrichelt), Halten: Papier der
   Seite (`heftSetPaper`) und Löschen; „Auswählen“ löscht mehrere (`heftRemovePage`, eine Seite bleibt).
-- **Neue Seite** („+“ in der Leiste bzw. in der Übersicht): Tippen nimmt das Papier der letzten Seite,
-  Halten bietet Liniert/Kariert/Punkte/Blanko (`heftAddPage(paper:)`).
+- **Neue Seite** („+“-Panel bzw. Übersicht): davor, danach oder am Ende, Papier per Vorschau
+  (`heftAddPage(at:paper:)`); Hochziehen am Ende nimmt das Papier der letzten Seite.
 - **Werkzeuge** nur über Apples Werkzeugleiste (`PKToolPicker`: Stift, Marker, Radierer, Lasso, Lineal,
   Farben, Rückgängig, „Mit Finger zeichnen“); Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`,
-  Dicke 3. Keine eigene Farbleiste daneben. Oben links Blättern/Seitenübersicht, rechts „Bilder“, „+“
-  und Teilen. Neue Textfelder nehmen die Farbe des aktuellen Stifts.
+  Dicke 3. Keine eigene Farbleiste daneben. Oben links „n / m“ (Seitenübersicht; geblättert wird durch
+  Scrollen), rechts „+“ und Teilen. Neue Textfelder nehmen die Farbe des aktuellen Stifts.
 - **Papier sichtbar**: Der Canvas ist durchsichtig (`isOpaque = false`), sonst übermalt PencilKit das
   Papier mit seiner Hintergrundfarbe (schwarzes Heft im Dunkelmodus).
 - **Bilder und Textfelder** (`HeftObjects.swift`): Bilder unter, Textfelder über den
   Strichen wie `renderPageTo`; Bilder über `heftImageData`, per ImageIO verkleinert und zwischengespeichert,
   Text wie `drawTextBox` (gerundete Schrift 500, Zeilenhöhe 1,4, Innenabstand 10).
-- **Leiste „Bilder“** (wie `imgPopHtml`): „Bilder & Texte auswählen & bearbeiten“ (`HeftSelectLayer`:
-  Zeichnen ruht, Antippen wählt, Ziehen verschiebt, Griff skaliert – Bilder mit Seitenverhältnis,
-  Textfelder in der Breite –, Doppeltipp bearbeitet Text, Leiste mit Löschen/Fertig; `heftSetImageFrame`,
-  `heftSetText`, `heftRemoveImages`/`heftRemoveTexts`), „Text schreiben“ (`heftAddText` in der Mitte des
+- **Direkt auswählen** (`HeftSelectLayer`, wie heft-input.js): Zeichnet der Finger nicht, wählt ein
+  Fingertipp ein Bild/Textfeld (seitenfüllende Scans nur per Halten); Halten mit dem Finger wählt immer und
+  verschiebt gleich weiter. Der Stift zeichnet immer, ein neuer Strich hebt die Auswahl auf. Auf der
+  Auswahl: Ziehen verschiebt, Griff skaliert (Bilder mit Seitenverhältnis, Textfelder in der Breite),
+  Antippen eines Textfelds bearbeitet es; Leiste mit Löschen/Fertig (`heftSetImageFrame`, `heftSetText`,
+  `heftRemoveImages`/`heftRemoveTexts`).
+- **„+“-Panel** (wie `plusPopHtml` + `imgPopHtml`): „Text schreiben“ (`heftAddText` in der Mitte des
   Ausschnitts), „Bild hinzufügen“ (Fotos), „Bild aufnehmen“ (Kamera) – eingefügte Bilder sind danach
   gewählt – und „Handschrift → Text“ (statt „In Text“ im Lasso der PWA, `HeftOcr.swift`): der nächste
   Strich umkreist die Handschrift, Apple Vision liest sie (Deutsch/Englisch, auf dem Gerät), danach
   Kopieren oder „Als Textfeld ersetzen“.
-- **„+“ halten** (wie `plusPopHtml`): neue Seite mit Papier, „Papier dieser Seite“, „Bild als Seite“,
+- **Seiten aus Dateien** (im „+“-Panel): „Bild als Seite“,
   „PDF oder Bild importieren“ (PDFKit rendert jede Seite randlos mit 1800 px, eingebetteter Text wird
   Texterkennung der Seite) und „Dokument scannen“ (VisionKit-Dokumentenkamera, mehrere Seiten, entzerrt);
   neue Seiten landen hinter der aktuellen (`HeftImport.swift`).

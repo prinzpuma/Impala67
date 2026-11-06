@@ -91,7 +91,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = if (tool == HeftTool.PEN) tools.copy(tool = tool, penSlot = slot, color = tools.pens[slot].color, size = tools.pens[slot].size, expanded = expanded)
         else tools.copy(tool = tool, expanded = expanded)
         if (tool != HeftTool.LASSO) lasso = null
-        if (tool != HeftTool.SELECT) { closeText(commit = true); objSel = null }
+        closeText(commit = true)
+        objSel = null
         saveTools()
     }
 
@@ -172,7 +173,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = when (tools.tool) {
             HeftTool.ERASER -> tools.copy(eraserSize = size)
             HeftTool.PEN, HeftTool.MARKER -> tools.copy(size = size).syncPen()
-            HeftTool.LASSO, HeftTool.LASER, HeftTool.SELECT -> tools
+            HeftTool.LASSO, HeftTool.LASER -> tools
         }
         saveTools()
     }
@@ -478,7 +479,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     private fun openText(edit: TextEdit) {
         closeText(commit = true)
         lasso = null
-        tools = tools.copy(tool = HeftTool.SELECT, expanded = false)
+        tools = tools.copy(expanded = false)
         textDraft = edit.text?.text.orEmpty()
         textEdit = edit
     }
@@ -522,7 +523,6 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         write(after = { e ->
             e.ids.firstOrNull()?.let { id ->
                 lasso = null
-                tools = tools.copy(tool = HeftTool.SELECT, expanded = false)
                 objSel = ObjSel(heftPageId, ObjKind.IMAGE, id)
             }
         }) { it.heftAddImage(pageId, heftPageId, img.jpeg, "image/jpeg", (HeftPage.WIDTH - w) / 2, (HeftPage.HEIGHT - h) / 2, w, h) }

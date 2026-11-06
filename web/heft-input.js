@@ -1,7 +1,8 @@
 "use strict";
 
 // Stift- und Maus-Eingabe im Heft: Zeichnen, Radieren, Laser, Lasso (Auswählen,
-// Verschieben, Skalieren), Bilder/Textfelder greifen und die Formerkennung beim Halten.
+// Verschieben, Skalieren), Bilder/Textfelder direkt antippen bzw. halten und die
+// Formerkennung beim Halten.
 // Aus heft.js herausgelöst. Gemeinsamer Zustand (Dokument, Werkzeug, Auswahl, laufender
 // Strich) bleibt in heft.js und kommt über die Getter/Setter von H herein; was nur die
 // Eingabe braucht (aktive Stifte, Laser-Timer, Doppeltipp, Radierer-Frame) lebt hier.
@@ -18,7 +19,6 @@ export function createHeftInput(H) {
 	const activePenPointers = new Set();
 	let lastPenUpAt = 0, lastStrokeAt = 0;
 	const PEN_GRACE_MS = 400;
-	let lastEmptyTap = null;
 	const laserTimers = new Set();
 
 	// r: optional vorab gemessenes Rechteck — gebündelte Stift-Events teilen sich eine Messung.
@@ -120,7 +120,16 @@ export function createHeftInput(H) {
 			updateChrome();
 			return;
 		}
-		if (rejected(e) && touchLasso !== "interact") return;
+		if (grabSelection(e, cv, pg, pi, p)) return;
+		if (rejected(e) && touchLasso !== "interact") {
+			// „Nur Stift“: Finger blättert; ein Tipp wählt Bild/Text aus, Halten auch Scans.
+			// Ein zweiter Finger (Zoom, Rückgängig) ist kein Tipp.
+			if (e.pointerType === "touch" && !penRecently() && pickable()) {
+				if (pick) cancelPick();
+				else armPick(e, cv, pg, pi, p, objectAt(pg, p), true);
+			}
+			return;
+		}
 		H.idx = pi;
 		e.preventDefault();
 		try { cv.setPointerCapture(e.pointerId); } catch {  }
@@ -168,75 +177,102 @@ export function createHeftInput(H) {
 			H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, laser: true, tool: "pen", color: "#ef4444", size: 7, pts: [p], cv, ctx: x, pageIdx: pi };
 			return;
 		}
-		if (H.tool === "select") {
-
-			const st = H.sel && H.sel.pageIdx === pi && H.sel.txtId ? textsOf(pg).find((t2) => t2.id === H.sel.txtId) : null;
-			if (st && nearPoint(p, st.x + st.w, st.y, 16)) {
-
-				pg.texts = textsOf(pg).filter((t2) => t2 !== st);
-				pushUndo({ kind: "txtDel", txt: st, pageIdx: pi });
-				H.sel = null;
-				refresh(pi);
-				return;
-			}
-			if (st && nearPoint(p, st.x + st.w, st.y + (st.h || 60), 16)) {
-
-				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgResize: true, isText: true, im: st, cv, pageIdx: pi, start: p, orig: { x: st.x, y: st.y, w: st.w, h: st.h } };
-				return;
-			}
-			const ht = hitText(pg, p);
-			if (ht) {
-				const now = Date.now();
-				if (H.sel && H.sel.txtId === ht.id && now - (H.sel.tapAt || 0) < 400) {
-
-					H.sel = { pageIdx: pi, txtId: ht.id, tapAt: 0 };
-					openTextEditor(pi, ht.x, ht.y, ht);
-					return;
-				}
-				H.sel = { pageIdx: pi, txtId: ht.id, tapAt: now };
-				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgMove: true, isText: true, im: ht, cv, pageIdx: pi, start: p, orig: { x: ht.x, y: ht.y, w: ht.w, h: ht.h } };
-				redrawPage(pi);
-				return;
-			}
-
-			const im = H.sel && H.sel.pageIdx === pi ? imagesOf(pg).find((i2) => i2.id === H.sel.imgId) : null;
-			if (im && nearPoint(p, im.x + im.w, im.y, 16)) {
-
-				pg.images = imagesOf(pg).filter((i2) => i2 !== im);
-				pushUndo({ kind: "imgDel", img: im, pageIdx: pi });
-				H.sel = null;
-				refresh(pi);
-				return;
-			}
-			if (im && nearPoint(p, im.x + im.w, im.y + im.h, 16)) {
-
-				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgResize: true, im, cv, pageIdx: pi, start: p, orig: { x: im.x, y: im.y, w: im.w, h: im.h } };
-				return;
-			}
-			const hit = hitImage(pg, p);
-			if (hit) {
-				H.sel = { pageIdx: pi, imgId: hit.id };
-				H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, imgMove: true, im: hit, cv, pageIdx: pi, start: p, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h } };
-				redrawPage(pi);
-				lastEmptyTap = null;
-			} else {
-
-				const now2 = Date.now();
-				if (lastEmptyTap && lastEmptyTap.pi === pi && now2 - lastEmptyTap.t < 450 && Math.hypot(p[0] - lastEmptyTap.p[0], p[1] - lastEmptyTap.p[1]) < 40) {
-					lastEmptyTap = null;
-					openTextEditor(pi, Math.max(20, p[0] - 10), Math.max(20, p[1] - 20), null);
-					return;
-				}
-				lastEmptyTap = { pi, t: now2, p };
-				if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
-			}
-			return;
-		}
 		if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
 		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true, removed: [], eraseList: pg.strokes.slice(), eraser: new CORE.HeftEraser(...packStrokes(pg.strokes), H.eraserSize), cv, ctx: x, pageIdx: pi }; eraseAt(e); }
-		else { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p); }
+		else {
+			H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p);
+			// Finger (wenn er zeichnet) oder Maus: Halten auf Bild/Text wählt es aus statt zu zeichnen.
+			const obj = e.pointerType !== "pen" && (H.tool === "pen" || H.tool === "marker") ? objectAt(pg, p) : null;
+			if (obj) armPick(e, cv, pg, pi, p, obj, false);
+		}
 
 		setWriting(true);
+	}
+
+	// ── Bilder & Texte direkt auswählen ──
+	// Mit „Nur Stift“ wählt ein Fingertipp aus, sonst (Finger zeichnet, Maus) das Halten.
+	// Eine bestehende Auswahl greift jeder Zeiger: Griff oben rechts löscht, unten rechts
+	// skaliert, die Fläche verschiebt; Antippen eines ausgewählten Texts bearbeitet ihn.
+	const PICK_HOLD_MS = 450, PICK_SLOP_PX = 8;
+	let pick = null;
+	const pickable = () => H.tool !== "lasso" && H.tool !== "laser";
+	// Seitenfüllende Bilder (Scans, PDF-Seiten) nur per Halten – sonst griffe jeder Tipp die Seite.
+	const pageSized = (im) => im.w * im.h > PAGE_W * PAGE_H * 0.6;
+	function objectAt(pg, p) {
+		const t = hitText(pg, p);
+		if (t) return { im: t, isText: true };
+		const im = hitImage(pg, p);
+		return im ? { im, isText: false } : null;
+	}
+	function selectObject(pi, obj) {
+		const old = H.sel && H.sel.pageIdx;
+		H.sel = obj.isText ? { pageIdx: pi, txtId: obj.im.id } : { pageIdx: pi, imgId: obj.im.id };
+		if (old != null && old !== pi) redrawPage(old);
+		redrawPage(pi);
+		updateChrome();
+	}
+	function clearSelection() {
+		if (!H.sel) return;
+		const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); updateChrome();
+	}
+	function grabObject(e, cv, pg, pi, start, obj, extra) {
+		const im = obj.im;
+		try { cv.setPointerCapture(e.pointerId); } catch {  }
+		H.idx = pi;
+		H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, byTouch: e.pointerType === "touch", im, isText: obj.isText, cv, pageIdx: pi, start, orig: { x: im.x, y: im.y, w: im.w, h: im.h }, imgMove: true, ...extra };
+	}
+	function grabSelection(e, cv, pg, pi, p) {
+		if (!H.sel || H.sel.pageIdx !== pi || !pickable() || (e.pointerType === "touch" && penRecently())) return false;
+		const isText = !!H.sel.txtId;
+		const im = isText ? textsOf(pg).find((t) => t.id === H.sel.txtId) : imagesOf(pg).find((i) => i.id === H.sel.imgId);
+		if (!im) return false;
+		const tol = e.pointerType === "touch" ? 22 : 16, h = im.h || 60;
+		if (nearPoint(p, im.x + im.w, im.y, tol)) {
+			e.preventDefault();
+			if (isText) { pg.texts = textsOf(pg).filter((t) => t !== im); pushUndo({ kind: "txtDel", txt: im, pageIdx: pi }); }
+			else { pg.images = imagesOf(pg).filter((i) => i !== im); pushUndo({ kind: "imgDel", img: im, pageIdx: pi }); }
+			H.sel = null;
+			refresh(pi);
+			return true;
+		}
+		const resize = nearPoint(p, im.x + im.w, im.y + h, tol);
+		if (!resize && !hitBox([{ x: im.x, y: im.y, w: im.w, h }], p)) return false;
+		e.preventDefault();
+		grabObject(e, cv, pg, pi, p, { im, isText }, resize ? { imgMove: false, imgResize: true } : { tapEdit: isText });
+		return true;
+	}
+	function armPick(e, cv, pg, pi, p, obj, nav) {
+		cancelPick();
+		pick = { pointerId: e.pointerId, pointerType: e.pointerType, cx: e.clientX, cy: e.clientY, t: Date.now(), cv, pg, pi, p, obj, nav };
+		if (obj) pick.timer = setTimeout(() => holdPick(e), PICK_HOLD_MS);
+	}
+	function cancelPick() {
+		if (pick && pick.timer) clearTimeout(pick.timer);
+		pick = null;
+	}
+	function holdPick(e) {
+		const pk = pick; pick = null;
+		if (!pk || !H.doc || H.doc.pages[pk.pi] !== pk.pg) return;
+		if (!pk.nav) {
+			// Angefangenen Strich verwerfen – das Halten war ein Griff, kein Punkt.
+			if (!H.drawing || H.drawing.pointerId !== pk.pointerId || !H.drawing.pts) return;
+			if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+			H.drawing = null;
+			clearLiveInk(pk.pi);
+		}
+		selectObject(pk.pi, pk.obj);
+		grabObject(e, pk.cv, pk.pg, pk.pi, pk.p, pk.obj, {});
+		if (navigator.vibrate) { try { navigator.vibrate(12); } catch {  } }
+	}
+	function movePick(e) {
+		if (pick && e.pointerId === pick.pointerId && Math.hypot(e.clientX - pick.cx, e.clientY - pick.cy) > PICK_SLOP_PX) cancelPick();
+	}
+	function endPick(e) {
+		if (!pick || !e || e.pointerId !== pick.pointerId) return;
+		const pk = pick; cancelPick();
+		if (!pk.nav || e.type !== "pointerup" || Date.now() - pk.t > PICK_HOLD_MS) return;
+		if (pk.obj && !pageSized(pk.obj.im)) selectObject(pk.pi, pk.obj);
+		else clearSelection();
 	}
 
 	let snapTimer = null;
@@ -262,6 +298,7 @@ export function createHeftInput(H) {
 		return fitStrokeShape(pts);
 	}
 	function onMove(e) {
+		movePick(e);
 		// Ein per Finger gegriffenes Lasso (onDown: "interact") darf sich auch per Finger
 		// bewegen — sonst verwarf "Nur Stift" jede Bewegung und die Auswahl blieb stehen.
 		if (!H.drawing || !ownsDrawing(e) || (rejected(e) && !H.drawing.byTouch)) return;
@@ -376,6 +413,7 @@ export function createHeftInput(H) {
 				setTimeout(applyTouchAction, PEN_GRACE_MS + 30);
 			}
 		}
+		endPick(e);
 		// Hebt der Handballen oder ein zweiter Finger ab, läuft der Strich des Stifts weiter.
 		if (H.drawing && e && !ownsDrawing(e)) return;
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
@@ -417,8 +455,15 @@ export function createHeftInput(H) {
 			laserTimers.add(timer); H.drawing = null; return;
 		}
 		if (H.drawing.imgMove || H.drawing.imgResize) {
-			const { im, orig, moved } = H.drawing;
-			if (moved && (im.x !== orig.x || im.y !== orig.y || im.w !== orig.w)) {
+			const { im, orig, tapEdit } = H.drawing;
+			// Kaum bewegt = Antippen: ein ausgewählter Text öffnet sich zum Bearbeiten.
+			if (tapEdit && Math.hypot(im.x - orig.x, im.y - orig.y) < 4) {
+				im.x = orig.x; im.y = orig.y;
+				H.drawing = null;
+				openTextEditor(pi, im.x, im.y, im);
+				return;
+			}
+			if (H.drawing.moved && (im.x !== orig.x || im.y !== orig.y || im.w !== orig.w)) {
 				pushUndo({ kind: "imgMod", im, pageIdx: pi, prev: orig });
 				scheduleSave(); renderThumb(pi);
 			}
@@ -457,6 +502,7 @@ export function createHeftInput(H) {
 		activePenPointers.clear();
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+		cancelPick();
 	}
 	// Schreibt der Nutzer gerade (Strich läuft, Stift auf dem Glas oder Strich vor < 3,5 s)?
 	const isWriting = () => !!(H.drawing || activePenPointers.size > 0 || (Date.now() - lastStrokeAt < 3500));

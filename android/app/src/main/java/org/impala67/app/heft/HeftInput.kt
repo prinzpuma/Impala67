@@ -29,7 +29,7 @@ interface PageInputSink {
     val lasso: LassoGesture
     /** Fingertipp neben die Auswahl: Lasso beenden. */
     fun lassoDismiss()
-    /** Auswahl-Werkzeug: Bilder und Textfelder greifen. */
+    /** Bilder und Textfelder direkt auswählen, verschieben, skalieren. */
     val objects: ObjGesture
     /** Jede angenommene Berührung der Seite (schließt z. B. ein offenes Textfeld). */
     fun touchStart()
@@ -75,7 +75,11 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     private var pointerId = -1
     private var mode = Mode.INK
 
-    private enum class Mode { INK, ERASE, LASSO, SELECT }
+    private enum class Mode { INK, ERASE, LASSO, OBJ }
+
+    /** Finger (wenn er zeichnet) oder Maus liegt auf einem Bild/Textfeld: Halten greift es. */
+    private var pickHit: ObjGesture.Hit? = null
+    private val pick = Runnable { holdPick() }
 
     /** Punkte des laufenden Strichs in Seiteneinheiten `[x, y, druck, …]` (für die Formerkennung). */
     private val pts = ArrayList<Float>()
@@ -120,6 +124,14 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 val type = ev.getToolType(i)
                 val finger = type == MotionEvent.TOOL_TYPE_FINGER
                 val lasso = tools.tool == HeftTool.LASSO && type != MotionEvent.TOOL_TYPE_ERASER
+                val picks = tools.tool != HeftTool.LASSO && tools.tool != HeftTool.LASER && type != MotionEvent.TOOL_TYPE_ERASER
+                // Eine bestehende Auswahl greift jeder Zeiger (auch der Finger bei „Nur Stift“).
+                if (picks && !(finger && penRecently()) && sink.objects.grab(ev.getX(i) / k, ev.getY(i) / k, finger)) {
+                    pointerId = ev.getPointerId(i)
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                    mode = Mode.OBJ
+                    return true
+                }
                 if (lasso) {
                     // Finger im Lasso-Modus (lassoTouchAction): auf der Auswahl greifen, daneben beenden.
                     val x = ev.getX(i) / k
@@ -137,14 +149,21 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 mode = when {
                     lasso -> Mode.LASSO
                     tools.tool == HeftTool.ERASER || type == MotionEvent.TOOL_TYPE_ERASER -> Mode.ERASE
-                    tools.tool == HeftTool.SELECT -> Mode.SELECT
                     else -> Mode.INK
                 }
                 when (mode) {
-                    Mode.ERASE -> { sink.writing(true); erase(ev, i, history = false) }
+                    Mode.ERASE -> { sink.objects.clear(); sink.writing(true); erase(ev, i, history = false) }
                     Mode.LASSO -> sink.lasso.down(ev.getX(i) / k, ev.getY(i) / k, finger)
-                    Mode.SELECT -> sink.objects.down(ev.getX(i) / k, ev.getY(i) / k, finger)
-                    Mode.INK -> begin(ev, i)
+                    Mode.INK -> {
+                        sink.objects.clear()
+                        begin(ev, i)
+                        val x = ev.getX(i) / k
+                        val y = ev.getY(i) / k
+                        if (picks && type != MotionEvent.TOOL_TYPE_STYLUS && tools.tool.writes) {
+                            pickHit = sink.objects.hit(x, y)?.also { view.postDelayed(pick, PICK_HOLD_MS) }
+                        }
+                    }
+                    Mode.OBJ -> Unit
                 }
                 return true
             }
@@ -154,7 +173,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 when (mode) {
                     Mode.ERASE -> erase(ev, i, history = true)
                     Mode.LASSO -> sink.lasso.move(ev.getX(i) / k, ev.getY(i) / k)
-                    Mode.SELECT -> sink.objects.move(ev.getX(i) / k, ev.getY(i) / k)
+                    Mode.OBJ -> sink.objects.move(ev.getX(i) / k, ev.getY(i) / k)
                     Mode.INK -> inkMove(ev, i)
                 }
                 return true
@@ -164,7 +183,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 when (mode) {
                     Mode.ERASE -> sink.eraseEnd()
                     Mode.LASSO -> sink.lasso.up()
-                    Mode.SELECT -> sink.objects.up()
+                    Mode.OBJ -> sink.objects.up()
                     Mode.INK -> inkUp(ev)
                 }
                 if (ev.getToolType(ev.actionIndex) != MotionEvent.TOOL_TYPE_FINGER) lastPenUpAt = SystemClock.uptimeMillis()
@@ -176,7 +195,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 when (mode) {
                     Mode.ERASE -> sink.eraseEnd()
                     Mode.LASSO -> sink.lasso.cancel()
-                    Mode.SELECT -> sink.objects.cancel()
+                    Mode.OBJ -> sink.objects.cancel()
                     Mode.INK -> {
                         current?.let { running.remove(it); view.cancelStroke(it, ev) }
                         if (snapped != null) meta?.let { sink.shapePreview(null, it.color, it.size) }
@@ -228,7 +247,31 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         val x = ev.getX(i) / k
         val y = ev.getY(i) / k
         addPoint(x, y, ev.getPressure(i))
+        if (pickHit != null && pts.size >= 3 && hypot(x - pts[0], y - pts[1]) > SNAP_SLOP) cancelPick()
         if (hypot(x - anchorX, y - anchorY) > SNAP_SLOP) armSnap(x, y)
+    }
+
+    private fun cancelPick() {
+        view.removeCallbacks(pick)
+        pickHit = null
+    }
+
+    /** Halten auf Bild/Textfeld: angefangenen Strich verwerfen, Element greifen und weiter verschieben. */
+    private fun holdPick() {
+        val h = pickHit ?: return
+        pickHit = null
+        if (mode != Mode.INK || snapped != null || pts.size < 3) return
+        val x = pts[0]
+        val y = pts[1]
+        view.removeCallbacks(snap)
+        current?.let { running.remove(it); view.cancelStroke(it, null) }
+        current = null
+        meta = null
+        pts.clear()
+        sink.writing(false)
+        mode = Mode.OBJ
+        sink.objects.pick(h, x, y)
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
 
     private fun inkUp(ev: MotionEvent) {
@@ -272,6 +315,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     private fun reset() {
         if (mode == Mode.INK || mode == Mode.ERASE) sink.writing(false)
         view.removeCallbacks(snap)
+        cancelPick()
         snapped = null
         meta = null
         pts.clear()

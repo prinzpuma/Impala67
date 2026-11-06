@@ -2,10 +2,11 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Heft: eine Seite zum Zeichnen auf dem Arbeitsflächen-Hintergrund der PWA. Stifte, Farben, Radierer
-/// und Lasso kommen nur aus Apples Werkzeugleiste (PencilKit). Darüber schweben (Liquid Glass) links
-/// Blättern und Seitenübersicht, rechts „Bilder“ (Auswählen & Bearbeiten, Text, Bild, Kamera,
-/// Handschrift → Text), „+“ (neue Seite, Papier, Bild als Seite, Import, Scannen) und Teilen (PDF, SVG).
+/// Heft: alle Seiten in einer Fläche auf dem Arbeitsflächen-Hintergrund der PWA. Stifte, Farben, Radierer
+/// und Lasso kommen nur aus Apples Werkzeugleiste (PencilKit). Darüber schweben (Liquid Glass) links die
+/// Seitenanzeige (öffnet die Übersicht), rechts „+“ (ein Panel wie `plusPopHtml`: neue Seite davor/danach/
+/// am Ende, Papier, Text, Bild, Kamera, Handschrift → Text, Import, Scannen) und Teilen. Bilder und Texte
+/// werden direkt angetippt bzw. gehalten (`HeftSelectLayer`).
 struct HeftScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
@@ -28,6 +29,9 @@ struct HeftScreen: View {
     @State private var showExportDialog = false
     @State private var currentPaper: String?
     @State private var exportTask: Task<Void, Never>?
+    @State private var showAdd = false
+    /// Wo „Neue Seite“ einfügt (`insertPos` der PWA): before, after, last.
+    @AppStorage("impala.heft.insertPos") private var insertPos = "after"
     @Namespace private var namespace
 
     /// Wohin ausgewählte Fotos gehen: auf die Seite oder je als neue Seite.
@@ -40,7 +44,7 @@ struct HeftScreen: View {
             if !pageIds.isEmpty {
                 // Alle Seiten untereinander in einer Fläche (wie `.heft-pages` der PWA).
                 HeftCanvas(core: store.core, pageId: pageId, pageIds: pageIds, initialPageId: currentId, revision: revision,
-                           link: link, selecting: link.selecting, lassoText: link.lassoText,
+                           link: link, lassoText: link.lassoText,
                            onCurrentPage: { id in if currentId != id { currentId = id } },
                            onPullAdd: { addPage(nil) })
                     .ignoresSafeArea(edges: .bottom)
@@ -101,7 +105,7 @@ struct HeftScreen: View {
                     Spacer(minLength: 0)
                     corner
                 }
-                if link.selecting { SelectBar(link: link) }
+                if link.selection != nil { SelectBar(link: link) }
                 if link.lassoText { hint("Umkreise die Handschrift, die als Text erkannt werden soll.") { link.lassoText = false } }
                 if let busy {
                     hint(busy, onCancel: {
@@ -112,7 +116,7 @@ struct HeftScreen: View {
                 }
             }
             .padding(Space.s3)
-            .animation(.snappy, value: link.selecting)
+            .animation(.snappy, value: link.selection)
             .animation(.snappy, value: link.lassoText)
         }
         .clipped()
@@ -142,7 +146,7 @@ struct HeftScreen: View {
         .sheet(isPresented: $showPages) {
             HeftPagesSheet(
                 pageId: pageId, pageIds: pageIds, currentId: currentId, revision: revision,
-                onJump: jump, onAdd: addPage,
+                onJump: jump, onAdd: { addPage($0) },
                 onChanged: { loadPages(); revision += 1 }
             )
             .presentationSizing(.form)
@@ -198,73 +202,50 @@ struct HeftScreen: View {
 
     // MARK: Leisten
 
-    /// „Bilder“ (heft-toolbar-ui.js `imgPopHtml`), dazu „Handschrift → Text“ mit Apple Vision.
-    private var imageMenu: some View {
-        Menu {
-            Section("Bilder") {
-                Toggle(isOn: Binding(get: { link.selecting }, set: { on in
-                    link.lassoText = false
-                    link.selecting = on
-                })) {
-                    Label { Text("Bilder & Texte auswählen & bearbeiten") } icon: { Icon("select") }
-                }
-            }
-            Button { newText() } label: { Label { Text("Text schreiben") } icon: { Icon("pen") } }
-            Button { photos = []; photoTarget = .insert } label: { Label { Text("Bild hinzufügen") } icon: { Icon("image") } }
-            if CameraPicker.isAvailable {
-                Button { showCamera = true } label: { Label { Text("Bild aufnehmen") } icon: { Icon("camera") } }
-            }
-            Divider()
-            Button {
-                link.selecting = false
-                link.lassoText = true
-            } label: { Label { Text("Handschrift → Text") } icon: { Icon("note") } }
-        } label: {
-            Icon("image", size: 18)
-                .foregroundStyle(link.selecting || link.lassoText ? Impala.accent : Impala.text)
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Bilder einfügen oder bearbeiten")
-    }
-
-    /// Rechte Ecke: Bilder, „Seite hinzufügen“ (`plusPopHtml`) und Teilen (Apple-Teilen-Blatt).
+    /// Rechte Ecke: „+“ (ein Panel für Seiten und Einfügen, wie `plusPopHtml` der PWA bzw. GoodNotes)
+    /// und Teilen (Apple-Teilen-Blatt; alle Formate im Export-Dialog).
     private var corner: some View {
         GlassEffectContainer {
             HStack(spacing: 2) {
-                imageMenu
-                AddPageMenu(
-                    currentPaper: currentPaper,
-                    onAdd: addPage, onPaper: setPaper,
-                    onImagePage: { photos = []; photoTarget = .page },
-                    onImport: { showImporter = true },
-                    onScan: DocumentScanner.isAvailable ? { showScanner = true } : nil
-                )
+                Button { showAdd = true } label: {
+                    Icon("plus", size: 18)
+                        .foregroundStyle(link.lassoText ? Impala.accent : Impala.text)
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Seite hinzufügen oder einfügen")
+                .popover(isPresented: $showAdd, arrowEdge: .top) {
+                    HeftAddPanel(
+                        insertPos: $insertPos, currentPaper: currentPaper,
+                        onAdd: { kind in showAdd = false; addPage(kind, at: insertPos) },
+                        onPaper: setPaper,
+                        onText: { afterPanel(newText) },
+                        onImage: { afterPanel { photos = []; photoTarget = .insert } },
+                        onCamera: CameraPicker.isAvailable ? { afterPanel { showCamera = true } } : nil,
+                        onLassoText: { showAdd = false; link.coordinator?.clearSelection(); link.lassoText = true },
+                        onImagePage: { afterPanel { photos = []; photoTarget = .page } },
+                        onImport: { afterPanel { showImporter = true } },
+                        onScan: DocumentScanner.isAvailable ? { afterPanel { showScanner = true } } : nil
+                    )
+                    .presentationCompactAdaptation(.popover)
+                }
                 Menu {
                     Button {
                         exportCurrentPng()
                     } label: {
-                        Label { Text("Aktuelle Seite als PNG") } icon: { Icon("image") }
-                    }
-                    if pageIds.count > 1 {
-                        Button {
-                            exportAllPng()
-                        } label: {
-                            Label { Text("Alle Seiten als PNG") } icon: { Icon("image") }
-                        }
+                        Label { Text("Seite als Bild") } icon: { Icon("image") }
                     }
                     Button {
                         exportPdf()
                     } label: {
-                        Label { Text("Alle Seiten als PDF") } icon: { Icon("printer") }
+                        Label { Text("Heft als PDF") } icon: { Icon("printer") }
                     }
                     Button {
                         exportSvg()
                     } label: {
-                        Label { Text("Aktuelle Seite als SVG") } icon: { Icon("download") }
+                        Label { Text("Seite als SVG") } icon: { Icon("download") }
                     }
-                    Divider()
                     Button {
                         UIPasteboard.general.string = "#" + pageId
                     } label: {
@@ -274,7 +255,7 @@ struct HeftScreen: View {
                     Button {
                         showExportDialog = true
                     } label: {
-                        Label { Text("Heft exportieren …") } icon: { Icon("upload") }
+                        Label { Text("Mehr …") } icon: { Icon("upload") }
                     }
                 } label: {
                     Icon("upload", size: 18)
@@ -291,6 +272,16 @@ struct HeftScreen: View {
         }
     }
 
+    /// Panel schließen, dann ein Blatt öffnen (Fotos, Kamera, Import): zwei Präsentationen zugleich
+    /// verweigert SwiftUI.
+    private func afterPanel(_ action: @escaping () -> Void) {
+        showAdd = false
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            action()
+        }
+    }
+
     private func hint(_ text: String, onCancel: (() -> Void)?) -> some View {
         HStack(spacing: Space.s2) {
             Text(text).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text)
@@ -304,9 +295,10 @@ struct HeftScreen: View {
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    /// Linke Ecke wie `heft-corner-l-group`: Seiten (‹ n / m ›, Antippen öffnet die Seitenübersicht).
+    /// Linke Ecke wie `heft-corner-l-group`: Seitenanzeige „n / m“, Antippen öffnet die Seitenübersicht.
+    /// Geblättert wird durch Scrollen (alle Seiten liegen untereinander).
     private var pageNav: some View {
-        PageNav(index: index, count: pageIds.count, namespace: namespace, onMove: move, onPages: { showPages = true })
+        PageNav(index: index, count: pageIds.count, namespace: namespace, onPages: { showPages = true })
     }
 
     // MARK: Seiten
@@ -322,10 +314,16 @@ struct HeftScreen: View {
         }
     }
 
-    /// Neue Seite am Ende; ohne Wahl mit dem Papier der letzten Seite (wie PWA und Android).
-    private func addPage(_ paper: HeftPaperKind?) {
+    /// Neue Seite (Standard: am Ende); ohne Wahl mit dem Papier der letzten Seite (wie PWA und Android).
+    /// `pos` wie `insertPos` der PWA: vor oder nach der aktuellen Seite bzw. am Ende.
+    private func addPage(_ paper: HeftPaperKind?, at pos: String = "last") {
         let last = pageIds.last.flatMap { hid in attempt("heftPage", { try store.core.heftPage(pageId: pageId, heftPageId: hid) })?.paper }
-        guard let id = attempt("heftAddPage", { try store.core.heftAddPage(pageId: pageId, at: nil, paper: paper?.rawValue ?? last) }) else { return }
+        let at: UInt32? = switch pos {
+        case "before" where !pageIds.isEmpty: UInt32(index)
+        case "after" where !pageIds.isEmpty: UInt32(index + 1)
+        default: nil
+        }
+        guard let id = attempt("heftAddPage", { try store.core.heftAddPage(pageId: pageId, at: at, paper: paper?.rawValue ?? last) }) else { return }
         loadPages()
         jump(id)
     }
@@ -349,12 +347,6 @@ struct HeftScreen: View {
         guard pageIds.contains(id) else { return }
         currentId = id
         link.coordinator?.scroll(to: id, animated: true)
-    }
-
-    private func move(_ by: Int) {
-        let to = min(max(0, index + by), pageIds.count - 1)
-        guard pageIds.indices.contains(to) else { return }
-        jump(pageIds[to])
     }
 
     // MARK: Bilder und Texte
@@ -388,7 +380,6 @@ struct HeftScreen: View {
         guard let id = currentId,
               let imageId = HeftImport.insertImage(core: store.core, pageId: pageId, heftPageId: id, image: image) else { return }
         link.lassoText = false
-        link.selecting = true
         link.coordinator?.reload()
         link.coordinator?.selectAfterReload(.image(imageId))
     }
@@ -404,7 +395,6 @@ struct HeftScreen: View {
         if let textId = edit.textId {
             canvas.setText(textId, to: text)
         } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            link.selecting = true
             canvas.addText(text)
         }
     }
@@ -423,13 +413,6 @@ struct HeftScreen: View {
         runExport("Erzeuge Bild …") { _ in
             let url = await HeftExport.pagePng(core: store.core, pageId: pageId, heftPageId: id, pageNumber: pageNum, background: background)
             if let url { share = SharedFile(url: url) }
-        }
-    }
-
-    private func exportAllPng(background: HeftBackground = .paper) {
-        runExport("Erzeuge Bilder …") { onStatus in
-            let urls = await HeftExport.pagesPng(core: store.core, pageId: pageId, background: background, onProgress: onStatus)
-            if let urls, !urls.isEmpty { share = SharedFile(urls: urls) }
         }
     }
 
@@ -469,13 +452,13 @@ struct HeftScreen: View {
     }
 }
 
-/// Leiste im Auswahlmodus: Text bearbeiten, Löschen, Fertig.
+/// Leiste, solange ein Bild oder Textfeld ausgewählt ist: Text bearbeiten, Löschen, Fertig.
 private struct SelectBar: View {
     let link: HeftCanvasLink
 
     var body: some View {
         HStack(spacing: Space.s2) {
-            Text(link.selection == nil ? "Bild oder Text antippen" : "Ziehen verschiebt, der Griff skaliert")
+            Text("Ziehen verschiebt, der Griff skaliert")
                 .font(.system(size: TextSize.sm))
                 .foregroundStyle(Impala.text2)
             if case .text(let id) = link.selection {
@@ -483,11 +466,9 @@ private struct SelectBar: View {
                     if let t = link.coordinator?.text(id) { link.textEdit = HeftTextEdit(textId: t.id, text: t.text) }
                 }
             }
-            if link.selection != nil {
-                Button(role: .destructive) { link.coordinator?.deleteSelection() } label: { Icon("trash", size: 16) }
-                    .accessibilityLabel("Löschen")
-            }
-            Button("Fertig") { link.selecting = false }
+            Button(role: .destructive) { link.coordinator?.deleteSelection() } label: { Icon("trash", size: 16) }
+                .accessibilityLabel("Löschen")
+            Button("Fertig") { link.coordinator?.clearSelection() }
                 .fontWeight(.semibold)
         }
         .font(.system(size: TextSize.sm))
@@ -498,18 +479,16 @@ private struct SelectBar: View {
     }
 }
 
-/// Seitenanzeige der PWA-Heftleiste: ‹ n / m ›, Antippen der Zahl öffnet die Seitenübersicht.
+/// Seitenanzeige der PWA-Heftleiste (`heft-corner-l`): „n / m“, Antippen öffnet die Seitenübersicht.
 private struct PageNav: View {
     let index: Int
     let count: Int
     let namespace: Namespace.ID
-    let onMove: (Int) -> Void
     let onPages: () -> Void
 
     var body: some View {
         GlassEffectContainer {
             HStack(spacing: 2) {
-                button("chevron-left", "Vorige Seite", enabled: index > 0) { onMove(-1) }
                 Button(action: onPages) {
                     HStack(spacing: 6) {
                         Icon("pages-stack", size: 16)
@@ -520,71 +499,138 @@ private struct PageNav: View {
                     }
                     .foregroundStyle(Impala.text)
                     .frame(minWidth: 64, minHeight: 40)
+                    .padding(.horizontal, Space.s2)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .matchedTransitionSource(id: "heft-pages", in: namespace)
                 .accessibilityLabel("Seitenübersicht")
-                button("chevron-right", "Nächste Seite", enabled: index < count - 1) { onMove(1) }
             }
             .padding(.horizontal, Space.s1)
             .frame(height: 48)
             .impalaGlass(interactive: true)
         }
     }
-
-    private func button(_ icon: String, _ label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Icon(icon, size: 16)
-                .foregroundStyle(enabled ? Impala.text : Impala.text2.opacity(0.4))
-                .frame(width: 36, height: 40)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel(label)
-    }
 }
 
-/// „Seite hinzufügen“ (Tippen: Papier der letzten Seite, Halten: `plusPopHtml` – neue Seite mit Papier,
-/// Papier dieser Seite, Bild als Seite, PDF oder Bild importieren, Dokument scannen).
-private struct AddPageMenu: View {
+/// „+“-Panel wie `plusPopHtml`/`imgPopHtml` der PWA in einem: neue Seite (davor, danach, am Ende) mit
+/// Papier-Vorschau, Papier dieser Seite, dann Einfügen auf der Seite und Seiten aus Bildern/Dateien.
+private struct HeftAddPanel: View {
+    @Binding var insertPos: String
     let currentPaper: String?
-    let onAdd: (HeftPaperKind?) -> Void
+    let onAdd: (HeftPaperKind) -> Void
     let onPaper: (HeftPaperKind) -> Void
+    let onText: () -> Void
+    let onImage: () -> Void
+    let onCamera: (() -> Void)?
+    let onLassoText: () -> Void
     let onImagePage: () -> Void
     let onImport: () -> Void
     let onScan: (() -> Void)?
 
     var body: some View {
-        Menu {
-            Section("Neue Seite") {
-                ForEach(HeftPaperKind.allCases) { kind in
-                    Button { onAdd(kind) } label: { Label(kind.label, systemImage: kind.symbol) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.s3) {
+                head("Neue Seite")
+                Picker("Position", selection: $insertPos) {
+                    Text("Davor").tag("before")
+                    Text("Danach").tag("after")
+                    Text("Am Ende").tag("last")
                 }
-            }
-            Menu("Papier dieser Seite") {
-                ForEach(HeftPaperKind.allCases) { kind in
-                    Button { onPaper(kind) } label: {
-                        Label(kind.label, systemImage: currentPaper == kind.rawValue ? "checkmark" : kind.symbol)
+                .pickerStyle(.segmented)
+                HStack(spacing: Space.s2) {
+                    ForEach(HeftPaperKind.allCases) { kind in
+                        Button { onAdd(kind) } label: {
+                            VStack(spacing: Space.s1) {
+                                HeftPaperSwatch(kind: kind)
+                                    .frame(height: 78)
+                                Text(kind.label)
+                                    .font(.system(size: TextSize.xs))
+                                    .foregroundStyle(Impala.text2)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Neue Seite \(kind.label)")
                     }
                 }
+
+                head("Papier dieser Seite")
+                HStack(spacing: Space.s1) {
+                    ForEach(HeftPaperKind.allCases) { kind in
+                        let on = currentPaper == kind.rawValue
+                        Button { onPaper(kind) } label: {
+                            Text(kind.label)
+                                .font(.system(size: TextSize.sm, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? Impala.accent : Impala.text)
+                                .frame(maxWidth: .infinity, minHeight: 32)
+                                .background(on ? Impala.activeTint : Impala.surface, in: Capsule())
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Divider()
+                head("Einfügen")
+                row("Text schreiben", "pen", onText)
+                row("Bild hinzufügen", "image", onImage)
+                if let onCamera { row("Bild aufnehmen", "camera", onCamera) }
+                row("Handschrift → Text", "note", onLassoText)
+
+                Divider()
+                head("Seiten aus Dateien")
+                row("Bild als Seite", "image", onImagePage)
+                row("PDF oder Bild importieren", "upload", onImport)
+                if let onScan { row("Dokument scannen", "camera", onScan) }
+
+                Text("Bild oder Text antippen oder halten, dann verschieben, skalieren oder löschen.")
+                    .font(.system(size: TextSize.xs))
+                    .foregroundStyle(Impala.text2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Divider()
-            Button(action: onImagePage) { Label { Text("Bild als Seite") } icon: { Icon("image") } }
-            Button(action: onImport) { Label { Text("PDF oder Bild importieren") } icon: { Icon("upload") } }
-            if let onScan {
-                Button(action: onScan) { Label { Text("Dokument scannen") } icon: { Icon("camera") } }
+            .padding(Space.s4)
+        }
+        .frame(width: 360)
+        .frame(maxHeight: 640)
+    }
+
+    private func head(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: TextSize.xs, weight: .semibold))
+            .foregroundStyle(Impala.text2)
+            .textCase(.uppercase)
+    }
+
+    private func row(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Space.s3) {
+                Icon(icon, size: 16).foregroundStyle(Impala.text2).frame(width: 22)
+                Text(title).font(.system(size: TextSize.base)).foregroundStyle(Impala.text)
+                Spacer(minLength: 0)
             }
-        } label: {
-            Icon("plus", size: 18)
-                .foregroundStyle(Impala.text)
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle())
-        } primaryAction: {
-            onAdd(nil)
+            .frame(minHeight: 40)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Seite hinzufügen")
+    }
+}
+
+/// Kleine Papier-Vorschau (Ausschnitt oben links, damit Linien und Punkte erkennbar bleiben).
+private struct HeftPaperSwatch: View {
+    let kind: HeftPaperKind
+
+    var body: some View {
+        Canvas { ctx, size in
+            let crop = CGSize(width: 300, height: 300 * size.height / max(size.width, 1))
+            ctx.withCGContext { cg in
+                cg.scaleBy(x: size.width / crop.width, y: size.height / crop.height)
+                cg.clip(to: CGRect(origin: .zero, size: crop))
+                HeftPaperDraw.draw(in: cg, size: CGSize(width: 1000, height: 1414), paper: kind.rawValue)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Radius.xs))
+        .overlay(RoundedRectangle(cornerRadius: Radius.xs).stroke(Impala.edge, lineWidth: 1))
     }
 }
