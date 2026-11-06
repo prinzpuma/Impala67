@@ -6,7 +6,7 @@ enum PageStyle {
     private static let defaultIcon = ["📓": "notebook", "📄": "file", "📝": "note", "📅": "calendar"]
 
     static func title(_ p: PageSummary) -> String {
-        p.title.trimmingCharacters(in: .whitespaces).isEmpty ? "Ohne Titel" : p.title
+        p.title.trimmingCharacters(in: .whitespaces).isEmpty ? "Unbenannt" : p.title
     }
 
     /// Eigenes Emoji der Seite; `nil`, wenn ein Symbol gezeigt wird.

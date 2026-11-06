@@ -263,7 +263,7 @@ final class ShellModel {
         if tab == Self.cardsTab { return TabItem(title: "Karteikarten", icon: "cards", emoji: nil, kind: nil) }
         if tab == "nlm:main" { return TabItem(title: "Gemini Notebook", icon: "book", emoji: nil, kind: nil) }
         guard let p = store.core.page(id: tab), !p.trashed else {
-            return TabItem(title: "Ohne Titel", icon: "file", emoji: nil, kind: nil)
+            return TabItem(title: "Unbenannt", icon: "file", emoji: nil, kind: nil)
         }
         let summary = p.summary
         return TabItem(title: PageStyle.title(summary), icon: PageStyle.iconName(summary), emoji: PageStyle.emoji(summary), kind: summary.kind)

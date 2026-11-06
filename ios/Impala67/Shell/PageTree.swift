@@ -92,13 +92,14 @@ struct PageTree: View {
         MenuItem("Duplizieren", icon: "copy") {
             if let id = store.core.duplicate(page.id) { shell.open(id) }
         }
-        MenuItem("Verschieben nach…", icon: "folder-move") { moving = page }
+
         MenuItem(page.isTemplate ? "Vorlage entfernen" : "Als Vorlage", icon: "template") {
             store.core.patchPage(page.id, ["isTemplate": !page.isTemplate])
         }
         MenuItem(page.favorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
             store.core.patchPage(page.id, ["favorite": !page.favorite])
         }
+        MenuItem("Verschieben nach…", icon: "folder-move") { moving = page }
         MenuItem("Archivieren", icon: "archive") {
             shell.close(page.id)
             attempt("archivePage", { try store.core.archivePage(id: page.id) })
@@ -219,7 +220,20 @@ private struct TreePageRow<MenuContent: View>: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
             if active {
-                NewPageMenu(label: "Unterseite anlegen", create: onAddChild).transition(.opacity.combined(with: .scale(scale: 0.6)))
+                Menu {
+                    menu()
+                } label: {
+                    Icon("dots", size: 14)
+                        .foregroundStyle(Impala.text2)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Weitere Optionen")
+
+                NewPageMenu(label: "Unterseite anlegen", create: onAddChild)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
             }
         }
         .padding(.leading, CGFloat(depth) * 16)

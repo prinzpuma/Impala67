@@ -118,7 +118,7 @@ final class NoteModel {
         guard !readOnly else { return }
         saveTask?.cancel()
         saveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
             self?.flush()
         }
@@ -161,6 +161,9 @@ final class NoteModel {
         dirtyContent = true
         scheduleSave()
     }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
 
     func undo() {
         guard let prev = undoStack.popLast() else { return }

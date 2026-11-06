@@ -55,16 +55,17 @@ private struct NoteBody: View {
     @State private var rawBlock: MdBlock?
     @State private var linkURL = ""
     @State private var photos: [PhotosPickerItem] = []
+    @State private var showIconPicker = false
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
         let editing = model.activeId != nil
         ScrollView {
             VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
-                PageChrome(model: model)
+                PageChrome(model: model, onPickIcon: { showIconPicker = true })
                 ArchivedBanner(pageId: model.pageId) { model.showToast($0, style: .success) }
-                NoteEmoji(pageId: model.pageId)
-                TextField("Ohne Titel", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
+                NoteEmoji(pageId: model.pageId) { showIconPicker = true }
+                TextField("Unbenannt", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(Impala.text)
                     .submitLabel(.next)
@@ -133,6 +134,9 @@ private struct NoteBody: View {
         .environment(\.openURL, OpenURLAction { url in open(url) })
         .sheet(item: $rawBlock) { b in
             RawMarkdownSheet(text: model.rawOf(b)) { model.commitRaw(b.id, markdown: $0) }
+        }
+        .sheet(isPresented: $showIconPicker) {
+            IconPickerSheet(pageId: model.pageId)
         }
         .alert("Link einfügen", isPresented: Binding(get: { model.linkPrompt != nil }, set: { if !$0 { model.finishLink(nil) } })) {
             TextField("Link-Adresse", text: $linkURL)
@@ -309,49 +313,150 @@ private struct ArchivedBanner: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String
     let onToast: (String) -> Void
+    @State private var isArchived = false
 
     var body: some View {
-        let _ = store.pageMetaRevision
-        if store.core.page(id: pageId)?.archived == true {
-            HStack(spacing: 8) {
-                Icon("archive", size: 16).foregroundStyle(Impala.text2)
-                Text("Diese Seite ist archiviert.")
-                    .font(.system(size: TextSize.sm))
-                    .foregroundStyle(Impala.text2)
-                Spacer()
-                Button {
-                    attempt("unarchivePage", { try store.core.unarchivePage(id: pageId) })
-                    onToast("Wiederhergestellt.")
-                } label: {
-                    HStack(spacing: 4) {
-                        Icon("undo", size: 13)
-                        Text("Wiederherstellen")
+        Group {
+            if isArchived {
+                HStack(spacing: 8) {
+                    Icon("archive", size: 16).foregroundStyle(Impala.text2)
+                    Text("Diese Seite ist archiviert.")
+                        .font(.system(size: TextSize.sm))
+                        .foregroundStyle(Impala.text2)
+                    Spacer()
+                    Button {
+                        attempt("unarchivePage", { try store.core.unarchivePage(id: pageId) })
+                        onToast("Wiederhergestellt.")
+                    } label: {
+                        HStack(spacing: 4) {
+                            Icon("undo", size: 13)
+                            Text("Wiederherstellen")
+                        }
+                        .font(.system(size: TextSize.sm, weight: .medium))
+                        .foregroundStyle(Impala.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Impala.activeTint, in: Capsule())
                     }
-                    .font(.system(size: TextSize.sm, weight: .medium))
-                    .foregroundStyle(Impala.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Impala.activeTint, in: Capsule())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, Space.s3)
+                .padding(.vertical, 8)
+                .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
             }
-            .padding(.horizontal, Space.s3)
-            .padding(.vertical, 8)
-            .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        }
+        .task(id: "\(pageId):\(store.pageMetaRevision)") {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) { () -> Bool in
+                core.page(id: pageId)?.archived == true
+            }.value
+            if !Task.isCancelled {
+                isArchived = next
+            }
         }
     }
 }
 
-/// Emoji-Icon der Notiz über dem Titel.
+/// Emoji-Icon der Notiz über dem Titel wie in render.js:696-699 (`.page-icon`).
 private struct NoteEmoji: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String
+    let onPick: () -> Void
+    @State private var emoji: String?
 
     var body: some View {
-        let _ = store.pageMetaRevision
-        if let summary = store.core.page(id: pageId)?.summary, let emoji = PageStyle.emoji(summary) {
-            Text(emoji).font(.system(size: 52))
+        Group {
+            if let emoji {
+                Button(action: onPick) {
+                    Text(emoji).font(.system(size: 52))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Icon ändern: \(emoji)")
+            } else {
+                Button(action: onPick) {
+                    HStack(spacing: Space.s1) {
+                        Icon("smile", size: 14)
+                        Text("Icon hinzufügen")
+                            .font(.system(size: TextSize.xs, weight: .medium))
+                    }
+                    .foregroundStyle(Impala.text2.opacity(0.45))
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Icon hinzufügen")
+            }
         }
+        .task(id: "\(pageId):\(store.pageMetaRevision)") {
+            let core = store.core
+            let next = await Task.detached(priority: .userInitiated) { () -> String? in
+                guard let s = core.page(id: pageId)?.summary else { return nil }
+                return PageStyle.emoji(s)
+            }.value
+            if !Task.isCancelled {
+                emoji = next
+            }
+        }
+    }
+}
+
+/// Icon-Auswahl für eine Seite (`openIconPicker` in render.js:1715-1723, `IconDialog` in PageDialogs.kt).
+struct IconPickerSheet: View {
+    let pageId: String
+    @Environment(ImpalaStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    static let icons: [String] = [
+        "📝", "📘", "📕", "📙", "📗", "🧪", "🧮", "⚡",
+        "🧢", "📐", "🔬", "💡", "🎯", "📊", "🗂", "📎",
+        "✅", "⭐", "🔥", "🎓", "🧠", "📚", "🛠", "🚀"
+    ]
+
+    private let columns = [GridItem(.adaptive(minimum: 52), spacing: Space.s2)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: Space.s2) {
+                    ForEach(Self.icons, id: \.self) { emoji in
+                        Button {
+                            selectIcon(emoji)
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 28))
+                                .frame(width: 52, height: 52)
+                                .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                    }
+                }
+                .padding(Space.s4)
+            }
+            .background(Impala.panel)
+            .navigationTitle("Icon wählen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Schließen") { dismiss() }
+                }
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Entfernen") {
+                        selectIcon(nil)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(340), .medium])
+    }
+
+    private func selectIcon(_ icon: String?) {
+        let patch: [String: Any?] = ["icon": icon]
+        store.core.patchPage(pageId, patch)
+        dismiss()
     }
 }
 
@@ -362,15 +467,15 @@ private struct PageChrome: View {
     @Environment(ShellModel.self) private var shell
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     let model: NoteModel
+    let onPickIcon: () -> Void
     @State private var shareItem: ShareItem?
     @State private var movingPage: PageSummary?
+    @State private var summary: PageSummary?
+    @State private var isArchived = false
+    @State private var marks = 0
 
     var body: some View {
-        let _ = store.pageMetaRevision
-        let page = store.core.page(id: model.pageId)
-        let summary = page?.summary
         let isFavorite = summary?.favorite == true
-        let isArchived = page?.archived == true
         let currentTitle = model.title.isEmpty ? (summary?.title.isEmpty == false ? summary!.title : "") : model.title
 
         HStack(alignment: .center, spacing: Space.s2) {
@@ -432,8 +537,18 @@ private struct PageChrome: View {
             Spacer(minLength: Space.s2)
 
             HStack(spacing: 4) {
-                // 1. Teilen-Knopf: Öffnet iOS-Share-Sheet mit Titel & Markdown-Inhalt
-                Button(action: shareNote) {
+                // 1. Teilen-Menü wie `shareMenuHtml` in render.js:765-768
+                Menu {
+                    MenuItem("Als PDF exportieren / drucken", icon: "printer") {
+                        exportPdf()
+                    }
+                    MenuItem("Als Markdown (.md) speichern", icon: "download") {
+                        exportMarkdown()
+                    }
+                    MenuItem("Internen Link kopieren", icon: "link") {
+                        copyLink()
+                    }
+                } label: {
                     HStack(spacing: 4) {
                         Icon("upload", size: 14)
                         Text("Teilen")
@@ -447,14 +562,10 @@ private struct PageChrome: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
-                .accessibilityLabel("Teilen")
+                .accessibilityLabel("Exportieren & Teilen")
 
-                // 2. Favoriten-Stern: Schaltet core.setFavorite direkt um mit Haptik
-                Button {
-                    let haptic = UIImpactFeedbackGenerator(style: .medium)
-                    haptic.impactOccurred()
-                    store.core.setFavorite(id: model.pageId, favorite: !isFavorite)
-                } label: {
+                // 2. Favoriten-Stern wie render.js:761
+                Button(action: toggleFavorite) {
                     Icon("star", size: 15)
                         .foregroundStyle(isFavorite ? Impala.accent : Impala.text2)
                         .frame(width: 30, height: 30)
@@ -463,68 +574,80 @@ private struct PageChrome: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
-                .accessibilityLabel(isFavorite ? "Aus Favoriten entfernen" : "Zu Favoriten")
+                .accessibilityLabel(isFavorite ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen")
 
-                // 3. ⋯-Aktionsmenü („Weitere Optionen“)
+                // 3. ⋯-Aktionsmenü („Weitere Optionen“) wie `moreMenuHtml` in render.js:770-790
                 Menu {
-                    Button(action: exportPdf) {
-                        Label { Text("Als PDF exportieren / drucken") } icon: { Icon("printer") }
+                    MenuItem("Rückgängig", icon: "undo") {
+                        model.undo()
+                    }
+                    .disabled(!model.canUndo)
+
+                    MenuItem("Wiederholen", icon: "redo") {
+                        model.redo()
+                    }
+                    .disabled(!model.canRedo)
+
+                    Divider()
+
+                    MenuItem(isFavorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
+                        toggleFavorite()
                     }
 
-                    Button(action: exportMarkdown) {
-                        Label { Text("Als Markdown (.md) speichern / teilen") } icon: { Icon("download") }
+                    MenuItem("Als PDF exportieren / drucken", icon: "printer") {
+                        exportPdf()
                     }
 
-                    Button(action: copyLink) {
-                        Label { Text("Internen Link kopieren") } icon: { Icon("link") }
+                    MenuItem("Als Markdown (.md) speichern", icon: "download") {
+                        exportMarkdown()
+                    }
+
+                    MenuItem("Internen Link kopieren", icon: "link") {
+                        copyLink()
                     }
 
                     Divider()
 
-                    Button {
-                        if let summary { movingPage = summary }
-                    } label: {
-                        Label { Text("Verschieben nach…") } icon: { Icon("folder-move") }
+                    if let pdfId = summary?.pdfId {
+                        MenuItem("PDF im neuen Tab öffnen", icon: "external") {
+                            shell.openNewTab(model.pageId)
+                        }
+                        MenuItem("PDF herunterladen", icon: "download") {
+                            downloadPdf(pdfId: pdfId)
+                        }
+                    }
+
+                    MenuItem("Icon ändern", icon: "smile") {
+                        onPickIcon()
+                    }
+
+                    if marks > 0 {
+                        MenuItem("Karten aus Markierungen (\(marks))", icon: "cards") {
+                            cardsFromHighlights()
+                        }
+                    }
+
+                    MenuItem("Duplizieren", icon: "copy") {
+                        duplicate()
                     }
 
                     let isTemplate = summary?.isTemplate == true
-                    Button {
-                        store.core.patchPage(model.pageId, ["isTemplate": !isTemplate])
-                    } label: {
-                        Label {
-                            Text(isTemplate ? "Vorlage entfernen" : "Als Vorlage festlegen")
-                        } icon: {
-                            Icon("template")
-                        }
+                    MenuItem(isTemplate ? "Vorlage entfernen" : "Als Vorlage", icon: "template") {
+                        toggleTemplate()
                     }
 
-                    let marks = highlightCount(page?.content ?? blocksToMarkdown(blocks: model.blocks))
-                    Button(action: cardsFromHighlights) {
-                        Label {
-                            Text(marks > 0 ? "Lernkarten aus Markierungen (\(marks))" : "Lernkarten aus Markierungen")
-                        } icon: {
-                            Icon("cards")
-                        }
+                    MenuItem("Verschieben nach…", icon: "folder-move") {
+                        if let summary { movingPage = summary }
                     }
 
-                    Button(action: duplicate) {
-                        Label { Text("Duplizieren") } icon: { Icon("copy") }
-                    }
-
-                    Button {
+                    MenuItem(isArchived ? "Aus Archiv holen" : "Archivieren", icon: isArchived ? "undo" : "archive") {
                         toggleArchive(isArchived: isArchived)
-                    } label: {
-                        Label {
-                            Text(isArchived ? "Aus Archiv holen" : "Archivieren")
-                        } icon: {
-                            Icon(isArchived ? "undo" : "archive")
-                        }
                     }
 
                     Divider()
 
-                    Button(role: .destructive, action: trash) {
-                        Label { Text("In Papierkorb") } icon: { Icon("trash") }
+                    MenuItem("Löschen", icon: "trash", role: .destructive) {
+                        trash()
                     }
                 } label: {
                     Icon("dots", size: 16)
@@ -545,14 +668,32 @@ private struct PageChrome: View {
         .sheet(item: $movingPage) { p in
             MovePageSheet(page: p)
         }
+        .task(id: "\(model.pageId):\(store.pageMetaRevision):\(store.pagesRevision)") {
+            let pageId = model.pageId
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) { () -> (PageSummary?, Bool, Int) in
+                guard let detail = core.page(id: pageId) else { return (nil, false, 0) }
+                let marksCount = highlightCount(detail.content)
+                return (detail.summary, detail.archived, marksCount)
+            }.value
+            if !Task.isCancelled {
+                summary = loaded.0
+                isArchived = loaded.1
+                marks = loaded.2
+            }
+        }
     }
 
-    private func shareNote() {
-        model.flush()
-        let content = store.core.page(id: model.pageId)?.content ?? blocksToMarkdown(blocks: model.blocks)
-        let title = model.title.trimmingCharacters(in: .whitespaces)
-        let shareText = title.isEmpty ? content : "# \(title)\n\n\(content)"
-        shareItem = ShareItem(items: [shareText])
+    private func toggleFavorite() {
+        let isFavorite = summary?.favorite == true
+        let haptic = UIImpactFeedbackGenerator(style: .medium)
+        haptic.impactOccurred()
+        store.core.setFavorite(id: model.pageId, favorite: !isFavorite)
+    }
+
+    private func toggleTemplate() {
+        let isTemplate = summary?.isTemplate == true
+        store.core.patchPage(model.pageId, ["isTemplate": !isTemplate])
     }
 
     private func exportPdf() {
@@ -560,7 +701,7 @@ private struct PageChrome: View {
         let page = store.core.page(id: model.pageId)
         let title = model.title.trimmingCharacters(in: .whitespaces)
         let content = page?.content ?? blocksToMarkdown(blocks: model.blocks)
-        let icon = page?.summary.icon
+        let icon = summary?.icon ?? page?.summary.icon
         let heading = [icon, title].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
         let html = printableHtml(heading: heading.isEmpty ? "Unbenannt" : heading, content: content)
         if let url = renderPdfFile(title: title, html: html) {
@@ -594,7 +735,27 @@ private struct PageChrome: View {
         UIPasteboard.general.string = link
         let haptic = UIImpactFeedbackGenerator(style: .light)
         haptic.impactOccurred()
-        model.showToast("Interner Link kopiert: \(link)")
+        model.showToast("Interner Link kopiert: \(link) — auf anderen Seiten als [Text](\(link)) einfügen.", style: .success)
+    }
+
+    private func downloadPdf(pdfId: String) {
+        let core = store.core
+        let title = model.title.trimmingCharacters(in: .whitespaces)
+        let clean = title.replacingOccurrences(of: #"[\\/:*?"<>|]"#, with: "_", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        let fileName = (clean.isEmpty ? "Dokument" : clean) + ".pdf"
+        Task {
+            let url = await Task.detached { () -> URL? in
+                guard let file = attempt("file", { try core.file(id: pdfId) }) ?? nil else { return nil }
+                let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                return (try? file.bytes.write(to: tmp)) != nil ? tmp : nil
+            }.value
+            if let url {
+                shareItem = ShareItem(items: [url])
+            } else {
+                model.showToast("PDF konnte nicht geladen werden.", style: .error)
+            }
+        }
     }
 
     private func cardsFromHighlights() {

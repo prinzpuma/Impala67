@@ -130,19 +130,19 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | „★ Favoriten“ oben | ✅ | `Shell/PageTree.swift:290` |
 | Arbeitsbereich-Kopf: Einklappen, „Neue Seite in …“ | ✅ | `PageTree.swift:22-25` |
 | Einrückung je Ebene, aktive Zeile getönt | ✅ | `PageTree.swift:220, 283` |
-| ⋯-Knopf in der Zeile | 🟡 | Nur Halten/Rechtsklick (`PageTree.swift:233`) |
+| ⋯-Knopf in der Zeile | ✅ | ⋯-Knopf in der aktiven Zeile (`PageTree.swift:223`) und Kontextmenü (`PageTree.swift:249`) · am Gerät ungeprüft |
 | Umbenennen direkt in der Zeile | 🟡 | Alert mit Textfeld (`PageTree.swift:73-79`) |
 | Ziehen: davor/danach/hinein, Kopf = Wurzel | ✅ | `Shell/TreeDrop.swift:76-79` |
 
 ### 1.4 Seiten-Kontextmenü
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| In neuem Tab öffnen | ✅ | `PageTree.swift:85` |
-| Duplizieren, Als Vorlage, Favorit | ✅ | `PageTree.swift:87-96` |
+| In neuem Tab öffnen | ✅ | `PageTree.swift:90` |
+| Duplizieren, Als Vorlage, Favorit | ✅ | `PageTree.swift:92-101` in PWA-Reihenfolge · am Gerät ungeprüft |
 | Vorlesungsübersicht, Fach… | ❌ | fehlt |
-| Verschieben nach… | ✅ | `Shell/TreeDrop.swift:147-185` |
+| Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Aus Archiv holen | 🟡 | Nur in der Bibliothek |
-| Archivieren / Löschen | ✅ | `PageTree.swift:97-104` |
+| Archivieren / Löschen | ✅ | `PageTree.swift:103-110` · am Gerät ungeprüft |
 
 ### 1.5 Stapelbaum
 | Punkt | Status | Fundstelle / Notiz |
@@ -189,10 +189,11 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 ### 1.10 Seitenkopf
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| Teilen mit Exportmenü | 🟡 | Teilt direkt Markdown (`Notes/NoteEditor.swift:381-395`) |
+| Teilen mit Exportmenü | ✅ | Teilen-Menü mit PDF, Markdown und Link (`Notes/NoteEditor.swift:513-535`) wie `shareMenuHtml` der PWA · am Gerät ungeprüft |
 | Stern Favorit | ✅ | `NoteEditor.swift:398-411` |
 | ⋯: PDF, Markdown, Link, Karten aus Markierungen, Duplizieren, Archiv, Papierkorb | ✅ | `NoteEditor.swift:414-456` |
-| ⋯: Vorlage, Vorlesungsübersicht, Fach, Verschieben, Verlauf | ❌ | fehlen im Menü |
+| ⋯: Vorlage, Verschieben, Rückgängig/Wiederholen, Icon | ✅ | `Notes/NoteEditor.swift:551-645` im ⋯-Menü wie in PWA `moreMenuHtml` · am Gerät ungeprüft |
+| ⋯: Vorlesungsübersicht, Fach, Verlauf | ❌ | fehlen im Kern (bewusst nicht umgesetzt) |
 | Rückverweise und Brotkrumen | ✅ | `NoteEditor.swift:73, 366-374` |
 
 ### 1.11 KI-Panel
@@ -229,7 +230,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 |---|---|---|
 | Neu: Notiz, Heft, Vorlage | 🟡 | Menü statt Dialog |
 | Namenseingabe | 🟡 | Alert |
-| Verschieben nach… | ✅ | `Shell/TreeDrop.swift:147-185` |
+| Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ❌ | fehlt |
 | Verlauf-Dialog mit Wiederherstellen | ❌ | fehlt |
 | Icon- und Cover-Wahl für Seiten | ❌ | Cover nur für Hefte in der Bibliothek |
@@ -298,10 +299,10 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 |---|---|---|
 | Brotkrumen (Arbeitsbereich, Ahnen, Titel) | ✅ | `Notes/NoteEditor.swift:565-640` |
 | Archiv-Banner mit Wiederherstellen | ✅ | `NoteEditor.swift:301-325` |
-| Icon-Auswahl | ❌ | nur Anzeige (`NoteEditor.swift:346`) |
+| Icon-Auswahl | ✅ | `Notes/NoteEditor.swift:357-465` `NoteEmoji` (Klick öffnet Picker), `IconPickerSheet` mit 24 Emojis, Entfernen, Schließen über `patchPage` / `pageUpdate`-Event; auch im ⋯-Menü · am Gerät ungeprüft |
 | Cover (Vorlagen, eigenes Bild) | ❌ | fehlt für Notizen |
-| Platzhalter „Unbenannt“ | 🟡 | „Ohne Titel“ |
-| Teilen-Menü (PDF, MD, Link) | 🟡 | teilt nur Markdown |
+| Platzhalter „Unbenannt“ | ✅ | `Notes/NoteEditor.swift:68` `TextField("Unbenannt", ...)`, `PageStyle.swift:9` · am Gerät ungeprüft |
+| Teilen-Menü (PDF, MD, Link) | ✅ | `Notes/NoteEditor.swift:513-535` Menu mit PDF, Markdown und Link wie `shareMenuHtml` der PWA · am Gerät ungeprüft |
 | Als Vorlage im ⋯ | ✅ | `NoteEditor.swift` (`PageChrome`) & Seitenbaum |
 | Verschieben im ⋯ | ✅ | `NoteEditor.swift` (`TreeMoveSheet`) & Seitenbaum |
 | Verlauf (Seitenversionen) | ❌ | fehlt |
@@ -310,7 +311,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Markdown ↔ Blöcke über den Kern | ✅ | `Notes/NoteModel.swift:5` |
-| Automatisch speichern | 🟡 | 600 ms statt 450 ms (`NoteModel.swift:113`) |
+| Automatisch speichern | ✅ | 450 ms statt 600 ms (`Notes/NoteModel.swift:121`) wie in der PWA · am Gerät ungeprüft |
 | Rückgängig-Schritte beim Tippen | ✅ | `NoteModel.swift:140` |
 | Speichern beim Verlassen | ✅ | `NoteEditor.swift:26-31` |
 | PDF-Ansicht im Editor | ❌ | fehlt |
