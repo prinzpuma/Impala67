@@ -155,20 +155,30 @@ enum HeftImages {
         return c
     }()
 
-    /// Bild `im` mit höchstens `maxPixels` an der längeren Seite; `nil`, solange die Daten fehlen.
-    static func image(core: ImpalaCore, pageId: String, heftPageId: String, image im: HeftImage, maxPixels: Int) -> UIImage? {
-        let key = "\(im.id)@\(maxPixels)" as NSString
-        if let hit = cache.object(forKey: key) { return hit }
-        guard let data = attempt("heftImageData", { try core.heftImageData(pageId: pageId, heftPageId: heftPageId, imageId: im.id) }) ?? nil,
-              let src = CGImageSourceCreateWithData(data.bytes as CFData, nil),
-              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
-                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                  kCGImageSourceCreateThumbnailWithTransform: true,
-                  kCGImageSourceThumbnailMaxPixelSize: maxPixels,
-              ] as CFDictionary)
-        else { return nil }
+    private static func key(_ id: String, _ maxPixels: Int) -> NSString { "\(id)@\(maxPixels)" as NSString }
+
+    /// Schon dekodiertes Bild `im` mit höchstens `maxPixels` an der längeren Seite, sonst `nil`.
+    static func cached(_ im: HeftImage, maxPixels: Int) -> UIImage? {
+        cache.object(forKey: key(im.id, maxPixels))
+    }
+
+    /// Bild `im` im Hintergrund dekodieren (verkleinert) und zwischenspeichern; `nil`, solange die Daten fehlen.
+    static func load(core: ImpalaCore, pageId: String, heftPageId: String, image im: HeftImage, maxPixels: Int) async -> UIImage? {
+        if let hit = cached(im, maxPixels: maxPixels) { return hit }
+        let imageId = im.id
+        let cg = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+            guard let data = attempt("heftImageData", { try core.heftImageData(pageId: pageId, heftPageId: heftPageId, imageId: imageId) }) ?? nil,
+                  let src = CGImageSourceCreateWithData(data.bytes as CFData, nil)
+            else { return nil }
+            return CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+            ] as CFDictionary)
+        }.value
+        guard let cg else { return nil }
         let img = UIImage(cgImage: cg)
-        cache.setObject(img, forKey: key, cost: cg.bytesPerRow * cg.height)
+        cache.setObject(img, forKey: key(imageId, maxPixels), cost: cg.bytesPerRow * cg.height)
         return img
     }
 }

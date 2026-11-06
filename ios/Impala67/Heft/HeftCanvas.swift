@@ -83,7 +83,15 @@ struct HeftCanvas: UIViewRepresentable {
         private var fitted = false
 
         /// Bekannte Striche je PencilKit-Schlüssel (`randomSeed`): Kern-ID, Daten und Lage beim letzten Abgleich.
-        private struct Known { var id: String; var data: HeftStroke; var transform: CGAffineTransform; var bounds: CGRect }
+        /// `drawn`: Lage, in der die Punkte von `data` gelten (geladen: Identität; neu geschrieben: Lage beim
+        /// Schreiben). Verschieben ändert nur `transform`, die Daten bleiben – die Ink-Ebene rechnet um.
+        private struct Known {
+            var id: String
+            var data: HeftStroke
+            var transform: CGAffineTransform
+            var bounds: CGRect
+            var drawn: CGAffineTransform
+        }
         private var known: [UInt32: Known] = [:]
         /// Gelöschte Striche, damit „Rückgängig“ nach dem Radieren die Originaldaten wiederherstellt.
         private var removed: [UInt32: HeftStroke] = [:]
@@ -103,6 +111,8 @@ struct HeftCanvas: UIViewRepresentable {
         /// die Sync, Checkpoint oder Handschrift-Scan gerade halten können.
         private let writer = DispatchQueue(label: "impala.heft.write", qos: .userInitiated)
         private var resignObserver: NSObjectProtocol?
+        /// Dekodieren fehlender Bilder der Seite (abgebrochen beim nächsten Neuladen).
+        private var imageLoad: Task<Void, Never>?
 
         /// Alles Gesammelte schreiben und warten, bis die Warteschlange leer ist – für die seltenen Stellen,
         /// die gleich danach Striche aus dem Kern lesen (Lasso, Handschrift → Text).
@@ -114,13 +124,21 @@ struct HeftCanvas: UIViewRepresentable {
         /// Apples Werkzeugleiste ist die einzige Werkzeug- und Farbwahl im Heft (Stift, Marker, Radierer,
         /// Lasso, Lineal; Standardfarben wie die PWA). Rückgängig/Wiederholen und „Mit Finger zeichnen“
         /// bringt sie selbst mit.
-        let toolPicker = PKToolPicker(toolItems: [
-            PKToolPickerInkingItem(type: .pen, color: UIColor(css: HeftPalette.colors[0].css), width: HeftPalette.size),
-            PKToolPickerInkingItem(type: .marker, color: UIColor(css: HeftPalette.colors[4].css), width: HeftPalette.size * 3),
-            PKToolPickerEraserItem(type: .vector),
-            PKToolPickerLassoItem(),
-            PKToolPickerRulerItem(),
-        ])
+        /// Eine Leiste für alle Seiten und Hefte (wie die Werkzeugwahl der PWA): Beim Blättern entsteht ein
+        /// neuer Canvas, die gewählten Stifte, Farben und Breiten bleiben. Über App-Starts merkt sie sich
+        /// PencilKit selbst (`stateAutosaveName`).
+        static let sharedToolPicker: PKToolPicker = {
+            let picker = PKToolPicker(toolItems: [
+                PKToolPickerInkingItem(type: .pen, color: UIColor(css: HeftPalette.colors[0].css), width: HeftPalette.size),
+                PKToolPickerInkingItem(type: .marker, color: UIColor(css: HeftPalette.colors[4].css), width: HeftPalette.size * 3),
+                PKToolPickerEraserItem(type: .vector),
+                PKToolPickerLassoItem(),
+                PKToolPickerRulerItem(),
+            ])
+            picker.stateAutosaveName = "impala.heft.tools"
+            return picker
+        }()
+        var toolPicker: PKToolPicker { Self.sharedToolPicker }
 
         /// Farbe des aktuellen Stifts bzw. Markers (für neue Textfelder), sonst Schwarz.
         var currentColor: String {
@@ -152,6 +170,8 @@ struct HeftCanvas: UIViewRepresentable {
             hold.delegate = hold
             canvas.addGestureRecognizer(hold)
             toolPicker.addObserver(canvas)
+            // Der neue Canvas übernimmt das gerade gewählte Werkzeug der gemeinsamen Leiste.
+            canvas.tool = toolPicker.selectedTool
             toolPicker.setVisible(true, forFirstResponder: canvas)
             // Wie `visibilitychange`/`pagehide` in heft.js: beim Verlassen der App sofort schreiben.
             resignObserver = NotificationCenter.default.addObserver(
@@ -186,11 +206,7 @@ struct HeftCanvas: UIViewRepresentable {
             pageSize = CGSize(width: data.width, height: data.height)
             paper.configure(size: pageSize, paper: data.paper)
             ink.configure(size: pageSize)
-            let maxSide = canvas.traitCollection.displayScale * 2
-            images.configure(size: pageSize, data: data) { im in
-                HeftImages.image(core: core, pageId: pageId, heftPageId: heftPageId, image: im,
-                                 maxPixels: min(4096, Int(max(im.w, im.h) * maxSide)))
-            }
+            showImages(data, scale: canvas.traitCollection.displayScale)
             texts.configure(size: pageSize, data: data) { _ in nil }
             select.configure(size: pageSize, data: data)
             if link?.selection != select.selected {
@@ -220,7 +236,7 @@ struct HeftCanvas: UIViewRepresentable {
                 }
                 guard let pk = HeftInk.pkStroke(s, seed: seed, hidden: true) else { continue }
                 strokes.append(pk)
-                next[seed] = Known(id: s.id, data: s, transform: .identity, bounds: pk.renderBounds)
+                next[seed] = Known(id: s.id, data: s, transform: .identity, bounds: pk.renderBounds, drawn: .identity)
             }
             known = next
             let unchanged = reused == strokes.count && strokes.count == current.count
@@ -230,11 +246,57 @@ struct HeftCanvas: UIViewRepresentable {
                 canvas.drawing = PKDrawing(strokes: strokes)
                 applying = false
             }
-            ink.update(canvas.drawing.strokes)
+            updateInk()
             canvas.contentSize = CGSize(width: pageSize.width * canvas.zoomScale, height: pageSize.height * canvas.zoomScale)
             fitWidth()
             layoutPage()
+            viewportChanged()
         }
+
+        /// Bilder der Seite zeigen. Schon dekodierte sofort; fehlende werden im Hintergrund dekodiert und
+        /// danach ergänzt – vorher hielt das Dekodieren großer Scans/PDF-Seiten den Hauptthread an.
+        private func showImages(_ data: HeftPageData, scale: CGFloat) {
+            imageLoad?.cancel()
+            imageLoad = nil
+            let size = CGSize(width: data.width, height: data.height)
+            let pixels = { (im: HeftImage) in min(4096, Int(max(im.w, im.h) * scale * 2)) }
+            images.configure(size: size, data: data) { im in HeftImages.cached(im, maxPixels: pixels(im)) }
+            let missing = data.images.filter { HeftImages.cached($0, maxPixels: pixels($0)) == nil }
+            guard !missing.isEmpty else { return }
+            let (core, pageId, heftPageId) = (core, pageId, heftPageId)
+            imageLoad = Task { [weak self] in
+                for im in missing {
+                    _ = await HeftImages.load(core: core, pageId: pageId, heftPageId: heftPageId, image: im, maxPixels: pixels(im))
+                    if Task.isCancelled { return }
+                }
+                guard let self, !Task.isCancelled else { return }
+                self.images.configure(size: size, data: data) { im in HeftImages.cached(im, maxPixels: pixels(im)) }
+            }
+        }
+
+        /// Ink-Ebene nachziehen: gespeicherte (in PencilKit durchsichtige) Striche in Zeichenreihenfolge,
+        /// mit ihren Kerndaten und der Lage seit dem Laden (Lasso-Verschieben).
+        private func updateInk() {
+            guard let canvas else { return }
+            var list: [(data: HeftStroke, transform: CGAffineTransform)] = []
+            for stroke in canvas.drawing.strokes where HeftInk.isHidden(stroke) {
+                guard let k = known[stroke.randomSeed] else { continue }
+                let t: CGAffineTransform = k.drawn == stroke.transform ? .identity : k.drawn.inverted().concatenating(stroke.transform)
+                list.append((data: k.data, transform: t))
+            }
+            ink.update(list)
+        }
+
+        /// Sichtbaren Ausschnitt an die Ink-Ebene melden (scharfe Detail-Bitmap beim Zoomen).
+        private func viewportChanged() {
+            guard let canvas else { return }
+            let z = max(canvas.zoomScale, 0.01)
+            let visible = CGRect(x: canvas.contentOffset.x / z, y: canvas.contentOffset.y / z,
+                                 width: canvas.bounds.width / z, height: canvas.bounds.height / z)
+            ink.viewportChanged(visible: visible, displayScale: canvas.traitCollection.displayScale)
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) { viewportChanged() }
 
         /// Doppeltipp wie `heft-viewport.js`: ab 1,9× zurück auf Passbreite, sonst auf mindestens 2,2×
         /// (bzw. 1,8× des jetzigen Zooms) um den getippten Punkt. Die Faktoren gelten wie in der PWA
@@ -280,13 +342,16 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.contentInset = UIEdgeInsets(top: Self.gutter, left: side, bottom: Self.gutter + 80, right: side)
         }
 
-        func scrollViewDidZoom(_ scrollView: UIScrollView) { layoutPage() }
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            layoutPage()
+            viewportChanged()
+        }
 
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
-            // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung.
-            ink.update(canvas.drawing.strokes)
-            guard !applying else { return }
-            sync(canvas)
+            if !applying { sync(canvas) }
+            // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung (nach dem Abgleich,
+            // damit neu geschriebene Striche schon ihre Kerndaten haben).
+            updateInk()
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
@@ -303,8 +368,11 @@ struct HeftCanvas: UIViewRepresentable {
                 let seed = stroke.randomSeed
                 seen.insert(seed)
                 if var k = known[seed] {
-                    // Unverändert, verschoben (Lasso) oder anders geändert → neu schreiben.
+                    // Unverändert, verschoben (Lasso) oder anders geändert → neu schreiben. Ohne Maske
+                    // (Pixel-Radierer) und mit gleicher Lage ist der Strich unverändert – `renderBounds` für
+                    // jeden Strich der Seite nach jedem neuen Strich kostete bei vollen Seiten spürbar Zeit.
                     let t = stroke.transform
+                    if t == k.transform && stroke.mask == nil { continue }
                     let bounds = stroke.renderBounds
                     if t == k.transform && bounds == k.bounds { continue }
                     let rel = k.transform.inverted().concatenating(t)
@@ -385,13 +453,13 @@ struct HeftCanvas: UIViewRepresentable {
             let seed = HeftInk.seed(id)
             guard let pk = HeftInk.pkStroke(data, seed: seed, hidden: true) else { return false }
             // Erst merken, dann tauschen: so bleibt der Abgleich richtig, egal wann PencilKit die Änderung meldet.
-            known[seed] = Known(id: id, data: data, transform: .identity, bounds: pk.renderBounds)
+            known[seed] = Known(id: id, data: data, transform: .identity, bounds: pk.renderBounds, drawn: .identity)
             var all = canvas.drawing.strokes
             if let i = all.firstIndex(where: { $0.randomSeed == stroke.randomSeed }) { all[i] = pk } else { all.append(pk) }
             applying = true
             canvas.drawing = PKDrawing(strokes: all)
             applying = false
-            ink.update(canvas.drawing.strokes)
+            updateInk()
             if AppHaptics.isEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             return true
         }
@@ -547,7 +615,8 @@ struct HeftCanvas: UIViewRepresentable {
             // Kern-IDs sind kleingeschriebene UUIDs (wie `uuid::Uuid::new_v4` im Kern).
             let id = UUID().uuidString.lowercased()
             let data = HeftStroke(id: id, tool: c.tool, color: c.color, size: c.size, points: c.points, shape: nil)
-            known[stroke.randomSeed] = Known(id: id, data: data, transform: stroke.transform, bounds: stroke.renderBounds)
+            known[stroke.randomSeed] = Known(id: id, data: data, transform: stroke.transform, bounds: stroke.renderBounds,
+                                             drawn: stroke.transform)
             batchAdd.append(data)
             scheduleFlush()
         }
