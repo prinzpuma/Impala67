@@ -8,17 +8,19 @@ struct Sidebar: View {
     @Environment(SyncController.self) private var sync
     @Environment(\.shellNamespace) private var zoom
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
     @Namespace private var pills
     @State private var controlsInset: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let isCompact = density == AppDensity.compact.rawValue
+        VStack(alignment: .leading, spacing: isCompact ? 8 : 10) {
             // Die Pillen schweben als Liquid Glass über der Seitenleiste (wie die Leisten über dem Inhalt).
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 2) {
                     NavPills(ns: pills)
-                    .padding(3)
-                    .impalaGlass(interactive: true)
+                        .padding(3)
+                        .impalaGlass(interactive: true)
                     Spacer(minLength: 0)
                     Pill(icon: "search", label: "Suchen", active: false, ns: pills) {
                         shell.sheet = .search
@@ -33,9 +35,16 @@ struct Sidebar: View {
                 .background(WindowControlsInset(leading: $controlsInset))
                 .animation(.smooth(duration: 0.2), value: controlsInset)
             }
-            if tabsPosition == AppTabsPosition.sidebar.rawValue {
+
+            // In der PWA (.topbar): im Komfortabelmodus gibt es eine Kante unter den Pillen, im Kompaktmodus keine.
+            if !isCompact {
+                Divider().overlay(Impala.edgeSoft)
+            }
+
+            if tabsPosition == AppTabsPosition.sidebar.rawValue && shell.sidebarMode == .files {
                 SidebarTabs()
             }
+
             Group {
                 switch shell.sidebarMode {
                 case .files: PageTree()
@@ -45,7 +54,9 @@ struct Sidebar: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
             .animation(.smooth(duration: 0.25), value: shell.sidebarMode)
+
             Divider().overlay(Impala.edgeSoft)
+
             VStack(spacing: 2) {
                 FootButton(icon: "book", label: "Gemini Notebook") { shell.sheet = .notebook }.zoomSource(ShellSheet.notebook, zoom)
                 FootButton(icon: "graph", label: "Wissensgraph") { shell.sheet = .graph }.zoomSource(ShellSheet.graph, zoom)
@@ -55,9 +66,18 @@ struct Sidebar: View {
                     .zoomSource(ShellSheet.settings, zoom)
             }
         }
-        .padding(.horizontal, Space.s2)
-        .padding(.vertical, 10)
+        .padding(.horizontal, isCompact ? Space.s2 : 10)
+        .padding(.vertical, isCompact ? 8 : 10)
         .background(Impala.sidebar)
+        .clipShape(RoundedRectangle(cornerRadius: isCompact ? 0 : Radius.lg, style: .continuous))
+        .overlay {
+            if !isCompact {
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .stroke(Impala.edgeSoft, lineWidth: 1)
+            }
+        }
+        .padding(isCompact ? 0 : 6)
+        .background(isCompact ? Impala.sidebar : Impala.bg0)
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -160,6 +180,7 @@ private struct Pill: View {
 
 /// Knopf der sekundären Navigation (`.side-foot button`).
 private struct FootButton: View {
+    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
     let icon: String
     let label: String
     /// Sync-Zustand als Punkt (nur am Einstellungen-Knopf, wenn gekoppelt).
@@ -169,6 +190,7 @@ private struct FootButton: View {
     let action: () -> Void
 
     var body: some View {
+        let isCompact = density == AppDensity.compact.rawValue
         Button(action: action) {
             HStack(spacing: Space.s2) {
                 Icon(icon, size: 15)
@@ -178,7 +200,7 @@ private struct FootButton: View {
             }
             .foregroundStyle(active ? Impala.text : Impala.text2)
             .padding(.horizontal, Space.s2)
-            .frame(minHeight: 40)
+            .frame(minHeight: isCompact ? 32 : 40)
             .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
@@ -198,29 +220,34 @@ extension View {
 private struct SidebarTabs: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
         let _ = store.pageMetaRevision
+        let isCompact = density == AppDensity.compact.rawValue
         if !shell.tabs.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text("Offene Tabs")
                         .font(.system(size: TextSize.xs, weight: .semibold))
                         .foregroundStyle(Impala.text2)
                     Spacer()
                     Menu {
+                        MenuItem("Neuer Chat", icon: "sparkles") {
+                            shell.openNewTab("chat:\(UUID().uuidString)")
+                        }
                         MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
                         MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
                         TemplateMenuSection(create: newPage)
-                        MenuItem("Seite suchen", icon: "search") { shell.sheet = .search }
+                        MenuItem("In neuem Tab öffnen…", icon: "search") { shell.sheet = .search }
                     } label: {
                         Icon("plus", size: 13)
                             .foregroundStyle(Impala.text2)
                             .frame(width: 24, height: 24)
                             .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
                     .accessibilityLabel("Neuen Tab öffnen")
                 }
                 .padding(.horizontal, Space.s1)
@@ -231,13 +258,13 @@ private struct SidebarTabs: View {
                         let inf = info(tab)
                         HStack(spacing: 6) {
                             Button {
-                                shell.open(tab)
+                                shell.openTab(tab)
                             } label: {
                                 HStack(spacing: 6) {
                                     if let emoji = inf.emoji { Text(emoji).font(.system(size: TextSize.xs)) }
                                     else { Icon(inf.icon, size: 14) }
                                     Text(inf.title)
-                                        .font(.system(size: TextSize.sm))
+                                        .font(.system(size: TextSize.sm, weight: active ? .medium : .regular))
                                         .lineLimit(1)
                                     Spacer(minLength: 0)
                                 }
@@ -254,12 +281,16 @@ private struct SidebarTabs: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
                             .accessibilityLabel("Tab schließen")
                         }
                         .foregroundStyle(active ? Impala.text : Impala.text2)
                         .padding(.horizontal, 8)
-                        .frame(minHeight: density == AppDensity.compact.rawValue ? 30 : 36)
+                        .padding(.vertical, isCompact ? 3 : 6)
+                        .frame(minHeight: isCompact ? 30 : 38)
                         .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .hoverEffect(.highlight)
                     }
                 }
             }
@@ -268,15 +299,8 @@ private struct SidebarTabs: View {
     }
 
     private func info(_ tab: String) -> (title: String, icon: String, emoji: String?) {
-        if tab.hasPrefix("chat:") {
-            let _ = store.chatsRevision
-            let title = store.core.chat(id: String(tab.dropFirst(5)))?.title ?? ""
-            return (title.isEmpty ? "Chat" : title, "sparkles", nil)
-        }
-        if tab == "anki:main" { return ("Karteikarten", "cards", nil) }
-        if tab == "nlm:main" { return ("Gemini Notebook", "book", nil) }
-        guard let p = store.core.page(id: tab)?.summary else { return ("Ohne Titel", "file", nil) }
-        return (PageStyle.title(p), PageStyle.iconName(p), PageStyle.emoji(p))
+        let item = shell.tabInfo(tab)
+        return (item.title, item.icon, item.emoji)
     }
 
     private func newPage(_ choice: NewPageChoice) {

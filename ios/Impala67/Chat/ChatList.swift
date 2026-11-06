@@ -10,12 +10,11 @@ struct ChatList: View {
     @State private var renaming: ChatInfo?
     @State private var title = ""
     @State private var deleting: ChatInfo?
+    @State private var list: [ChatInfo] = []
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
-        let _ = store.chatsRevision
         let chat = shell.chat
-        let list = store.core.chats()
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {
                 Button {
@@ -46,6 +45,11 @@ struct ChatList: View {
             .animation(.smooth(duration: 0.25), value: list.map(\.id))
         }
         .scrollIndicators(.hidden)
+        .task(id: store.chatsRevision) {
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) { core.chats() }.value
+            if !Task.isCancelled { list = loaded }
+        }
         .alert("Chat umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Titel", text: $title)
             Button("Speichern") { if let r = renaming { chat.rename(r.id, title) } }

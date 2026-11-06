@@ -36,10 +36,10 @@ Die PWA hat diese Hänger nicht. Ursachen laut Code (noch nicht mit Instruments 
 
 | # | Ursache | Fundstelle | Status |
 |---|---|---|---|
-| P1 | **Eine Sperre für den ganzen Kern.** Jeder Kern-Aufruf vom Hauptthread wartet, solange ein Hintergrund-Thread die Sperre hält. Sie halten u. a.: Sync-Import je Portion, danach `settle_remote` (bei Bedarf **komplettes Neuladen des Logs** und **Checkpoint des ganzen Zustands** nach jedem Durchgang mit Importen), App-Checkpoint, Handschrift-Hintergrundscan, Drive-Backup. Diese Zeit sieht die App als Hänger. | `core/impala-ffi/src/lib.rs:210` (`Shared = Arc<Mutex<Inner>>`), `core/impala-ffi/src/sync.rs:165-186`, `:330-340` | 🟡 Checkpoint nach Sync nur noch bei Neuladen oder ab 500 Events Rest (05.11.); Sync-Import selbst hält die Sperre weiter |
+| P1 | **Eine Sperre für den ganzen Kern.** Jeder Kern-Aufruf vom Hauptthread wartet, solange ein Hintergrund-Thread die Sperre hält. Sie halten u. a.: Sync-Import je Portion, danach `settle_remote` (bei Bedarf **komplettes Neuladen des Logs** und **Checkpoint des ganzen Zustands** nach jedem Durchgang mit Importen), App-Checkpoint, Handschrift-Hintergrundscan, Drive-Backup. Diese Zeit sieht die App als Hänger. | `core/impala-ffi/src/lib.rs:210` (`Shared = Arc<Mutex<Inner>>`), `core/impala-ffi/src/sync.rs:165-186`, `:330-340` | ✅ Checkpoint in `settle_remote` entkoppelt (06.11.): Checkpoint läuft wie in PWA nur noch beim Wechsel in den Hintergrund (`scenePhase != .active`), nicht mehr mitten im aktiven Sync unter Sperre · am Gerät ungeprüft |
 | P2 | **Ansichten fragen den Kern bei jedem Neuzeichnen synchron ab.** Die Startseite hängt an `store.revision` (= *jede* Änderung, auch jeder Strich und jeder fremde Sync) und ruft dann `studyQueue`, `recentPages(40)`, `learningSessions`, `homeArticles(30)`, `conflictCount` und `cardTotals` auf dem Hauptthread auf. „Weißt du's noch?“ geht alle Karten auf dem Hauptthread durch. | `Home/HomeScreen.swift:27-41`, `:168` | ✅ Code (05.11.): `HomeData.load` und „Weißt du's noch?“ im Hintergrund, kein `store.revision` mehr · am Gerät ungeprüft |
 | P3 | Karten: Stapelbaum und Übersicht rufen bei jeder Kartenänderung `deckOverview` und `studyQueue` auf, beide auf dem Hauptthread, also doppelt. | `Cards/DeckTree.swift:12-14`, `Cards/CardsScreen.swift:39-42` | ✅ Code (05.11.): eine Abfrage im Hintergrund (`CardsModel.refresh`), geteilt mit Suche · am Gerät ungeprüft |
-| P4 | Seitenbaum, Tab-Leiste und der ganze Inhaltsbereich hängen an `pagesRevision`. Jede Seitenänderung (Tippen, Sync) baut den Baum per `TreeRows.read` neu und zeichnet den Inhalt neu. | `Shell/PageTree.swift:16-17`, `Shell/RootView.swift:85`, `Shell/TabBar.swift:12` | 🟡 Baum im Hintergrund gelesen, Editor/Heft nicht mehr neu aufgebaut (`PageScreen` nur ID + Art); Tab-Leiste und Inhaltsbereich lesen weiter je Seite auf dem Hauptthread |
+| P4 | Seitenbaum, Tab-Leiste und der ganze Inhaltsbereich hängen an `pagesRevision`. Jede Seitenänderung (Tippen, Sync) baut den Baum per `TreeRows.read` neu und zeichnet den Inhalt neu. | `Shell/PageTree.swift:16-17`, `Shell/RootView.swift:85`, `Shell/TabBar.swift:12` | ✅ Tab-Metadaten in `ShellModel` gecacht (06.11.); Tab-Leiste, Seitenleiste und `RootView` lesen ohne FFI-Aufrufe im `body`; `TreeRows.read` filtert Kindknoten ohne redundante `childrenOf`-Aufrufe; `CardBrowser`, `StatsScreen`, `TrashSheet`, `ChatList` lesen im Hintergrund · am Gerät ungeprüft |
 | P5 | Heft: Jeder Strich wird synchron auf dem Hauptthread gespeichert (`heftAddStroke`, `heftRemoveStrokes` …) und wartet damit auf die Sperre aus P1. Zu prüfen: Löst eine Heftänderung auch `pagesRevision` aus (dann P4 bei jedem Strich)? | `Heft/HeftCanvas.swift:258-451` | ✅ Code (05.11.): Hinzufügen, Löschen, Verschieben über eine Hintergrund-Warteschlange; Neuladen wartet auf offene Striche · am Gerät ungeprüft |
 | P6 | Fremde Heftänderungen starten jedes Mal den Handschrift-Hintergrundscan. | `Core/ImpalaStore.swift:54` | 🟡 |
 
@@ -165,9 +165,9 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 ### 1.7 Offene Tabs in der Seitenleiste
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| Kopf „Offene Tabs“ mit „+“ | 🟡 | „+“ ohne Neuer Chat (`Sidebar.swift:152-163`) |
+| Kopf „Offene Tabs“ mit „+“ | ✅ | „+“ mit Neuer Chat, Notiz, Heft, Vorlage, Suche (`Sidebar.swift:235-251`) |
 | Zeile mit Symbol, aktiv, ✕ | ✅ | `Sidebar.swift:172-216` |
-| Umschaltbar (Tabs oben / Seitenleiste) | ✅ | `Settings/SettingsSheet.swift:419-421` |
+| Umschaltbar (Tabs oben / Seitenleiste) | ✅ | Exakt baugleich wie PWA (`SettingsSheet.swift`, `RootView.swift`, `NoteEditor.swift`, `HeftScreen.swift`) |
 
 ### 1.8 Fußleiste, Breite, Einklappen
 | Punkt | Status | Fundstelle / Notiz |
@@ -181,10 +181,10 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 ### 1.9 Tab-Leiste
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| ☰, Zurück/Vor mit Verlauf | ✅ | `Shell/TabBar.swift:14-41` |
+| ☰, Zurück/Vor mit Verlauf | ✅ | Exakt wie PWA/Android: Home als feste Basis, Kontext-Menü mit Verlaufssprung, Überspringen gelöschter Seiten, ⌘[/⌘]/Escape (`ShellModel.swift`, `TabBar.swift`, `RootView.swift`) |
 | Chip mit Titel, ✕, Nachbar wird aktiv | ✅ | `TabBar.swift:128-148` |
 | Chat-, Karten-, Gemini-Tab | ✅ | `TabBar.swift:98-106` |
-| „+“ mit Neuer Chat | 🟡 | Neuer Chat fehlt (`TabBar.swift:79-89`) |
+| „+“ mit Neuer Chat | ✅ | „+“ mit Neuer Chat, Notiz, Heft, Vorlage, Suche (`TabBar.swift:70-88`) |
 
 ### 1.10 Seitenkopf
 | Punkt | Status | Fundstelle / Notiz |

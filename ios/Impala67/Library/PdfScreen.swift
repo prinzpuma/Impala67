@@ -7,50 +7,99 @@ struct PdfScreen: View {
     let page: PageSummary
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dismiss) private var dismiss
     @State private var document: PDFDocument?
     @State private var shareURL: URL?
     @State private var missing = false
     @State private var current = 1
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            if let document {
-                PdfKitView(document: document, page: $current)
-                    .ignoresSafeArea(edges: .bottom)
-                    .transition(.opacity)
-                if document.pageCount > 1 {
-                    // Seitenzahl schwebt wie die Blätter-Leiste im Heft in Liquid Glass.
-                    Text("\(current) / \(document.pageCount)")
-                        .font(.system(size: TextSize.sm, weight: .medium).monospacedDigit())
-                        .foregroundStyle(Impala.text)
-                        .contentTransition(.numericText(value: Double(current)))
-                        .animation(.snappy(duration: 0.25), value: current)
-                        .padding(.horizontal, Space.s3)
-                        .padding(.vertical, 7)
-                        .impalaGlass()
-                        .padding(.bottom, Space.s4)
+        VStack(spacing: 0) {
+            // Kopfzeile mit Zurück-Knopf zur Bibliothek
+            HStack(spacing: Space.s2) {
+                Button { dismiss() } label: {
+                    HStack(spacing: 4) {
+                        Icon("chevron-left", size: 16)
+                        Text("Bibliothek").font(.system(size: TextSize.sm))
+                    }
+                    .foregroundStyle(Impala.text2)
+                    .padding(.horizontal, Space.s2)
+                    .frame(height: 36)
+                    .background(Impala.surface.opacity(0.8), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .contentShape(Rectangle())
                 }
-            } else if missing {
-                Placeholder(icon: "file", title: "PDF nicht gefunden", text: "Die Datei ist auf diesem Gerät noch nicht da. Nach dem nächsten Sync erneut öffnen.")
-            } else {
-                ProgressView("PDF wird geladen…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Zurück zur Bibliothek")
+
+                Spacer()
+
+                Text(PageStyle.title(page))
+                    .font(.system(size: TextSize.sm, weight: .semibold))
+                    .foregroundStyle(Impala.text)
+                    .lineLimit(1)
+
+                Spacer()
+
+                HStack(spacing: Space.s2) {
+                    if let shareURL {
+                        ShareLink(item: shareURL) {
+                            Icon("share", size: 15)
+                                .foregroundStyle(Impala.text2)
+                                .frame(width: 36, height: 36)
+                                .background(Impala.surface.opacity(0.8), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        }
+                    }
+                    Button {
+                        dismiss()
+                        shell.open(page.id)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Icon("note", size: 14)
+                            Text("Als Seite öffnen").font(.system(size: TextSize.xs))
+                        }
+                        .foregroundStyle(Impala.text)
+                        .padding(.horizontal, Space.s2)
+                        .frame(height: 36)
+                        .background(Impala.surface.opacity(0.8), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                }
+            }
+            .padding(.horizontal, Space.s3)
+            .padding(.vertical, Space.s2)
+            .background(Impala.panel)
+            .overlay(alignment: .bottom) { Rectangle().fill(Impala.edgeSoft).frame(height: 1) }
+
+            ZStack(alignment: .bottom) {
+                if let document {
+                    PdfKitView(document: document, page: $current)
+                        .ignoresSafeArea(edges: .bottom)
+                        .transition(.opacity)
+                    if document.pageCount > 1 {
+                        // Seitenzahl schwebt wie die Blätter-Leiste im Heft in Liquid Glass.
+                        Text("\(current) / \(document.pageCount)")
+                            .font(.system(size: TextSize.sm, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Impala.text)
+                            .contentTransition(.numericText(value: Double(current)))
+                            .animation(.snappy(duration: 0.25), value: current)
+                            .padding(.horizontal, Space.s3)
+                            .padding(.vertical, 7)
+                            .impalaGlass()
+                            .padding(.bottom, Space.s4)
+                    }
+                } else if missing {
+                    Placeholder(icon: "file", title: "PDF nicht gefunden", text: "Die Datei ist auf diesem Gerät noch nicht da. Nach dem nächsten Sync erneut öffnen.")
+                } else {
+                    ProgressView("PDF wird geladen…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .animation(.smooth(duration: 0.3), value: document == nil)
         .background(Impala.bg0)
-        .navigationTitle(PageStyle.title(page))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let shareURL {
-                ToolbarItem(placement: .primaryAction) { ShareLink(item: shareURL) }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    shell.open(page.id)
-                    shell.sheet = nil
-                } label: { Label("Als Seite öffnen", image: "i-note") }
-            }
-        }
+        // Eigene Kopfzeile mit Zurück-Knopf ersetzt die System-Leiste (sonst zwei Zurück-Knöpfe).
+        .toolbar(.hidden, for: .navigationBar)
         .task(id: page.pdfId) { await load() }
     }
 

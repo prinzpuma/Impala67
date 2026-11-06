@@ -360,6 +360,7 @@ private struct NoteEmoji: View {
 private struct PageChrome: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     let model: NoteModel
     @State private var shareItem: ShareItem?
     @State private var movingPage: PageSummary?
@@ -373,6 +374,53 @@ private struct PageChrome: View {
         let currentTitle = model.title.isEmpty ? (summary?.title.isEmpty == false ? summary!.title : "") : model.title
 
         HStack(alignment: .center, spacing: Space.s2) {
+            if tabsPosition == AppTabsPosition.sidebar.rawValue {
+                HStack(spacing: Space.s1) {
+                    Button { shell.toggleSidebar() } label: {
+                        Icon("columns", size: 16)
+                            .foregroundStyle(Impala.text2)
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Linke Spalte ein-/ausklappen")
+
+                    Button { shell.goBack() } label: {
+                        Icon("chevron-left", size: 15)
+                            .foregroundStyle(shell.canGoBack ? Impala.text : Impala.text2.opacity(0.35))
+                            .frame(width: 26, height: 26)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!shell.canGoBack)
+                    .hoverEffect(.highlight)
+                    .contextMenu {
+                        ForEach(shell.backHistoryItems()) { item in
+                            MenuItem(item.title, icon: item.icon) { shell.jumpToHistory(item.index) }
+                        }
+                    }
+                    .accessibilityLabel("Zurück")
+
+                    Button { shell.goForward() } label: {
+                        Icon("chevron-right", size: 15)
+                            .foregroundStyle(shell.canGoForward ? Impala.text : Impala.text2.opacity(0.35))
+                            .frame(width: 26, height: 26)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!shell.canGoForward)
+                    .hoverEffect(.highlight)
+                    .contextMenu {
+                        ForEach(shell.forwardHistoryItems()) { item in
+                            MenuItem(item.title, icon: item.icon) { shell.jumpToHistory(item.index) }
+                        }
+                    }
+                    .accessibilityLabel("Vor")
+                }
+                .padding(.trailing, 2)
+            }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 Breadcrumbs(
                     pageId: model.pageId,

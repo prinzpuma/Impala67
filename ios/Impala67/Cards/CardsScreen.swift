@@ -301,13 +301,12 @@ private struct CardBrowser: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @State private var query = ""
+    @State private var allCards: [CardInfo] = []
 
     var body: some View {
-        let _ = store.cardsRevision
         let cards = shell.cards
-        let all = store.core.cardsInDeckTree(deck: deck, includeTrashed: false).filter { !$0.archived }
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let shown = q.isEmpty ? all : all.filter { ($0.front + "\n" + $0.back).lowercased().contains(q) }
+        let shown = q.isEmpty ? allCards : allCards.filter { ($0.front + "\n" + $0.back).lowercased().contains(q) }
         VStack(spacing: 0) {
             HStack {
                 Button { withAnimation(.smooth) { cards.view = .decks } } label: {
@@ -320,7 +319,7 @@ private struct CardBrowser: View {
                 }
                 .pressable()
                 Spacer()
-                Text("\(Deck.label(deck)) · \(Deck.cardsText(all.count))")
+                Text("\(Deck.label(deck)) · \(Deck.cardsText(allCards.count))")
                     .font(.system(size: TextSize.sm, weight: .semibold))
                     .foregroundStyle(Impala.text)
                     .lineLimit(1)
@@ -385,6 +384,13 @@ private struct CardBrowser: View {
             }
         }
         .background(Impala.panel)
+        .task(id: "\(deck):\(store.cardsRevision)") {
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) {
+                core.cardsInDeckTree(deck: deck, includeTrashed: false).filter { !$0.archived }
+            }.value
+            if !Task.isCancelled { allCards = loaded }
+        }
     }
 }
 

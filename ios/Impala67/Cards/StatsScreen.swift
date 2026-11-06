@@ -194,10 +194,26 @@ struct LearnStats {
 struct StatsScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @State private var stats: LearnStats?
 
     var body: some View {
-        let _ = store.cardsRevision
-        let d = LearnStats(json: store.core.learningStatsJson())
+        Group {
+            if let d = stats {
+                content(d)
+            } else {
+                Impala.panel
+            }
+        }
+        .task(id: store.cardsRevision) {
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) {
+                LearnStats(json: core.learningStatsJson())
+            }.value
+            if !Task.isCancelled { stats = loaded }
+        }
+    }
+
+    private func content(_ d: LearnStats) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.s6) {
                 HStack(spacing: Space.s2) {

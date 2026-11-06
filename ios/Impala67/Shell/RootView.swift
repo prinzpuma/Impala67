@@ -15,21 +15,49 @@ struct RootView: View {
         if let shell {
             @Bindable var shell = shell
             @Bindable var cards = shell.cards
+            let isCompact = density == AppDensity.compact.rawValue
             NavigationSplitView(columnVisibility: $shell.columns) {
                 Sidebar()
-                    .navigationSplitViewColumnWidth(min: 236, ideal: 260, max: 320)
+                    .navigationSplitViewColumnWidth(
+                        min: isCompact ? 220 : 236,
+                        ideal: isCompact ? 236 : 260,
+                        max: isCompact ? 320 : 340
+                    )
             } detail: {
-                HStack(spacing: 0) {
+                HStack(spacing: isCompact ? 0 : 6) {
                     VStack(spacing: 0) {
-                        TabBar()
+                        if showTopTabBar(shell) {
+                            TabBar()
+                        }
                         MainContent()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .background(Impala.panel)
+                    .clipShape(RoundedRectangle(cornerRadius: isCompact ? 0 : Radius.lg, style: .continuous))
+                    .overlay {
+                        if !isCompact {
+                            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                .stroke(Impala.edgeSoft, lineWidth: 1)
+                        }
+                    }
+
                     if showsAiPanel(shell) {
                         AiPanel(activePageId: activePage(shell))
                             .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .background(Impala.panel)
+                            .clipShape(RoundedRectangle(cornerRadius: isCompact ? 0 : Radius.lg, style: .continuous))
+                            .overlay {
+                                if isCompact {
+                                    Rectangle().fill(Impala.edgeSoft).frame(width: 1)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                        .stroke(Impala.edgeSoft, lineWidth: 1)
+                                }
+                            }
                     }
                 }
+                .padding(isCompact ? 0 : 6)
                 .overlay(alignment: .bottomTrailing) {
                     if !showsAiPanel(shell) && !isChatTab(shell) {
                         AiOrbButton()
@@ -38,7 +66,7 @@ struct RootView: View {
                     }
                 }
                 .animation(.spring(duration: 0.4, bounce: 0.15), value: showsAiPanel(shell))
-                .background(Impala.panel)
+                .background(isCompact ? Impala.panel : Impala.bg0)
                 .toolbar(.hidden, for: .navigationBar)
                 .modifier(DeckDialogsModifier(cards: cards, core: store.core))
                 .sheet(item: $cards.editor) { target in
@@ -59,6 +87,7 @@ struct RootView: View {
             // Stapel und Lernschlange einmal je Kartenänderung, im Hintergrund (Stapelbaum, Übersicht, Suche).
             .task(id: store.cardsRevision) { await shell.cards.refresh(core: store.core) }
             .onChange(of: store.chatsRevision) { shell.chat.reloadIfIdle() }
+            .task(id: [store.pageMetaRevision, store.chatsRevision]) { shell.refreshTabInfos() }
         } else {
             Color.clear.onAppear { shell = ShellModel(store: store) }
         }
@@ -73,8 +102,20 @@ extension RootView {
 
     /// Geöffnete Notiz bzw. Heft als Kontext für die KI.
     private func activePage(_ shell: ShellModel) -> String? {
-        guard let id = shell.active, let page = store.core.page(id: id), !page.trashed else { return nil }
+        guard let id = shell.active, shell.tabInfo(id).kind != nil else { return nil }
         return id
+    }
+
+    /// Ob die obere Tab-Leiste gezeichnet werden soll.
+    /// In der PWA (.tabs-in-sidebar): In Notiz und Heft wird #tabbar komplett ausgeblendet (`display: none`),
+    /// da ☰ ‹ › direkt in der Kopfzeile des Editors bzw. Hefts sitzen.
+    private func showTopTabBar(_ shell: ShellModel) -> Bool {
+        if tabsPosition == AppTabsPosition.top.rawValue { return true }
+        if shell.libraryOpen { return true }
+        guard let active = shell.active else { return true } // Startseite
+        let kind = shell.tabInfo(active).kind
+        if kind == .note || kind == .heft { return false }
+        return true
     }
 }
 
@@ -104,7 +145,7 @@ private struct MainContent: View {
     private var screenName: String {
         if shell.libraryOpen { return "library" }
         guard let tab = shell.active else { return "home" }
-        if let page = store.core.page(id: tab), !page.trashed { return page.summary.kind == .heft ? "heft" : "note" }
+        if let kind = shell.tabInfo(tab).kind { return kind == .heft ? "heft" : "note" }
         if tab.hasPrefix("chat:") { return "chat" }
         if tab == ShellModel.cardsTab { return "cards" }
         return tab == "nlm:main" ? "notebook" : "other"
@@ -113,8 +154,9 @@ private struct MainContent: View {
     @ViewBuilder
     private var content: some View {
         if let tab = shell.active {
-            if let page = store.core.page(id: tab), !page.trashed {
-                PageScreen(pageId: tab, kind: page.summary.kind).id(tab)
+            let item = shell.tabInfo(tab)
+            if let kind = item.kind {
+                PageScreen(pageId: tab, kind: kind).id(tab)
             } else if tab.hasPrefix("chat:") {
                 ChatScreen(chatId: String(tab.dropFirst(5)))
             } else if tab == ShellModel.cardsTab {
@@ -178,6 +220,20 @@ private struct ShellShortcuts: ViewModifier {
             }
             .keyboardShortcut(.space, modifiers: .option)
             .hidden()
+            // ⌘[ : Zurück wie im Browser / iPadOS / macOS
+            Button("") { shell.goBack() }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(!shell.canGoBack)
+                .hidden()
+            // ⌘] : Vor wie im Browser / iPadOS / macOS
+            Button("") { shell.goForward() }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(!shell.canGoForward)
+                .hidden()
+            // Escape: Schließt offene Sheets, Bibliothek oder Lern-Unteransichten
+            Button("") { shell.handleEscape() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .hidden()
         }
     }
 }

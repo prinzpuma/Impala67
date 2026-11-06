@@ -9,19 +9,18 @@ struct AiPanel: View {
     let activePageId: String?
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @State private var recentChats: [ChatInfo] = []
 
     var body: some View {
         let chat = shell.chat
-        let _ = store.chatsRevision
         VStack(spacing: 0) {
             HStack(spacing: Space.s1) {
                 Text("KI-Coach").font(.system(size: TextSize.sm, weight: .semibold)).foregroundStyle(Impala.text2)
                 StatusChip()
                 Spacer(minLength: 0)
                 Menu {
-                    let list = store.core.chats().prefix(40)
-                    if list.isEmpty { Text("Noch keine gespeicherten Chats.") }
-                    ForEach(Array(list), id: \.id) { info in
+                    if recentChats.isEmpty { Text("Noch keine gespeicherten Chats.") }
+                    ForEach(recentChats, id: \.id) { info in
                         Button(info.title.isEmpty ? "Chat" : info.title) { chat.open(info.id) }
                     }
                 } label: {
@@ -46,6 +45,11 @@ struct AiPanel: View {
         .frame(width: aiPanelWidth)
         .frame(maxHeight: .infinity)
         .background(Impala.panel)
+        .task(id: store.chatsRevision) {
+            let core = store.core
+            let loaded = await Task.detached(priority: .utility) { Array(core.chats().prefix(40)) }.value
+            if !Task.isCancelled { recentChats = loaded }
+        }
         .overlay(alignment: .leading) { Rectangle().fill(Impala.edge).frame(width: 0.5) }
     }
 }

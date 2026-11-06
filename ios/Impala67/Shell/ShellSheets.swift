@@ -233,16 +233,11 @@ private struct TrashSheet: View {
     @State private var filter: TrashFilter = .all
     @State private var confirmEmpty = false
     @State private var purge: Purge?
+    @State private var pages: [PageSummary] = []
+    @State private var decks: [DeckInfo] = []
+    @State private var cards: [CardInfo] = []
 
     var body: some View {
-        let _ = store.pageMetaRevision
-        let _ = store.cardsRevision
-        let pages = store.core.trashedPages()
-        let decks = store.core.trashedDecks()
-        // Wie `orphanTrashedCards` der PWA: Karten eines gelöschten Stapels stehen nur beim Stapel.
-        let cards = store.core.trashedCards().filter { c in
-            !decks.contains { c.deck == $0.name || c.deck.hasPrefix($0.name + Deck.sep) }
-        }
 
         let showPages = (filter == .all || filter == .pages) && !pages.isEmpty
         let showDecks = (filter == .all || filter == .decks) && !decks.isEmpty
@@ -352,6 +347,22 @@ private struct TrashSheet: View {
                 Text("Stapel „\(Deck.label(d.name))“" + (d.cards > 0 ? " samt \(Deck.cardsText(Int(d.cards)))" : "") + " wird unwiderruflich entfernt.")
             case .card:
                 Text("Die Karte wird unwiderruflich entfernt.")
+            }
+        }
+        .task(id: "\(store.pageMetaRevision):\(store.cardsRevision)") {
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) {
+                let p = core.trashedPages()
+                let d = core.trashedDecks()
+                let c = core.trashedCards().filter { card in
+                    !d.contains { card.deck == $0.name || card.deck.hasPrefix($0.name + Deck.sep) }
+                }
+                return (p, d, c)
+            }.value
+            if !Task.isCancelled {
+                pages = loaded.0
+                decks = loaded.1
+                cards = loaded.2
             }
         }
     }

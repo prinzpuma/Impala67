@@ -136,6 +136,7 @@ private struct DeckTreeRow<MenuContent: View>: View {
         }
         .padding(.leading, CGFloat(entry.depth) * 16)
         .padding(.trailing, 4)
+        .padding(.vertical, density == AppDensity.compact.rawValue ? 4 : 8)
         .frame(minHeight: density == AppDensity.compact.rawValue ? 32 : 40)
         .background {
             if active {

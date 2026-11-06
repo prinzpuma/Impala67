@@ -103,6 +103,15 @@ enum AppDensity: String, CaseIterable, Identifiable {
 
     var isCompact: Bool { self == .compact }
 
+    /// Rand zum Bildschirm und Abstand zwischen den Spalten im Komfortabel-Modus (`--app-gap` in layout.css).
+    static let appGap: CGFloat = 6
+
+    /// Standardbreite der Seitenleiste: kompakt 236 pt, komfortabel 260 pt (`--sidebar-w`).
+    var sidebarWidth: CGFloat { isCompact ? 236 : 260 }
+
+    /// Radius der schwebenden Panel-Karten im Komfortabel-Modus (layout.css `var(--radius-lg)` = 16 pt; kompakt = 0).
+    var cardRadius: CGFloat { isCompact ? 0 : Radius.lg }
+
     static var current: AppDensity {
         let raw = UserDefaults.standard.string(forKey: key) ?? "compact"
         return AppDensity(rawValue: raw) ?? .compact
@@ -221,7 +230,7 @@ enum Space {
     static let s6: CGFloat = 24
 
     /// Dichte-abhängiger vertikaler Abstand (Kompakt vs. Komfortabel wie in der PWA).
-    static var rowPadding: CGFloat { AppDensity.current.isCompact ? 5 : 9 }
+    static var rowPadding: CGFloat { AppDensity.current.isCompact ? 4 : 8 }
 }
 
 extension UIColor {

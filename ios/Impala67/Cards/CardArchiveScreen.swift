@@ -7,11 +7,11 @@ struct CardArchiveScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
 
+    @State private var archivedDecks: [DeckInfo] = []
+    @State private var archivedCards: [CardInfo] = []
+
     var body: some View {
-        let _ = store.cardsRevision
         let cards = shell.cards
-        let archivedDecks = store.core.archivedDecks()
-        let archivedCards = store.core.orphanArchivedCards()
 
         VStack(spacing: 0) {
             // Kopfzeile: Zurück zu den Stapeln
@@ -164,6 +164,16 @@ struct CardArchiveScreen: View {
             }
         }
         .background(Impala.panel)
+        .task(id: store.cardsRevision) {
+            let core = store.core
+            let loaded = await Task.detached(priority: .userInitiated) {
+                (core.archivedDecks(), core.orphanArchivedCards())
+            }.value
+            if !Task.isCancelled {
+                archivedDecks = loaded.0
+                archivedCards = loaded.1
+            }
+        }
     }
 
     private func plain(_ md: String, _ empty: String) -> String {

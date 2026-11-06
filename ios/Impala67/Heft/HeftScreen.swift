@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 /// Handschrift → Text), „+“ (neue Seite, Papier, Bild als Seite, Import, Scannen) und Teilen (PDF, SVG).
 struct HeftScreen: View {
     @Environment(ImpalaStore.self) private var store
+    @Environment(ShellModel.self) private var shell
+    @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     let pageId: String
     @State private var pageIds: [String] = []
     /// Aktuelle Seite über ihre ID, damit sie beim Umsortieren und Löschen erhalten bleibt.
@@ -49,6 +51,53 @@ struct HeftScreen: View {
             VStack(alignment: .trailing, spacing: Space.s2) {
                 // Links Seiten, rechts Bilder, „+“ und Teilen. Zeichenwerkzeuge kommen nur aus Apples Leiste.
                 HStack(alignment: .top, spacing: Space.s2) {
+                    if tabsPosition == AppTabsPosition.sidebar.rawValue {
+                        GlassEffectContainer {
+                            HStack(spacing: 2) {
+                                Button { shell.toggleSidebar() } label: {
+                                    Icon("columns", size: 16)
+                                        .foregroundStyle(Impala.text2)
+                                        .frame(width: 36, height: 40)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Linke Spalte ein-/ausklappen")
+
+                                Button { shell.goBack() } label: {
+                                    Icon("chevron-left", size: 15)
+                                        .foregroundStyle(shell.canGoBack ? Impala.text : Impala.text2.opacity(0.35))
+                                        .frame(width: 32, height: 40)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!shell.canGoBack)
+                                .contextMenu {
+                                    ForEach(shell.backHistoryItems()) { item in
+                                        MenuItem(item.title, icon: item.icon) { shell.jumpToHistory(item.index) }
+                                    }
+                                }
+                                .accessibilityLabel("Zurück")
+
+                                Button { shell.goForward() } label: {
+                                    Icon("chevron-right", size: 15)
+                                        .foregroundStyle(shell.canGoForward ? Impala.text : Impala.text2.opacity(0.35))
+                                        .frame(width: 32, height: 40)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!shell.canGoForward)
+                                .contextMenu {
+                                    ForEach(shell.forwardHistoryItems()) { item in
+                                        MenuItem(item.title, icon: item.icon) { shell.jumpToHistory(item.index) }
+                                    }
+                                }
+                                .accessibilityLabel("Vor")
+                            }
+                            .padding(.horizontal, Space.s1)
+                            .frame(height: 48)
+                            .impalaGlass(interactive: true)
+                        }
+                    }
                     pageNav
                     Spacer(minLength: 0)
                     corner

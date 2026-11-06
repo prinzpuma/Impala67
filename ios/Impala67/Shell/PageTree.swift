@@ -224,6 +224,7 @@ private struct TreePageRow<MenuContent: View>: View {
         }
         .padding(.leading, CGFloat(depth) * 16)
         .padding(.trailing, 2)
+        .padding(.vertical, density == AppDensity.compact.rawValue ? 4 : 8)
         .frame(minHeight: density == AppDensity.compact.rawValue ? 32 : 40)
         .background {
             // Die Markierung der aktiven Seite gleitet zur neuen Zeile.
@@ -290,14 +291,16 @@ struct TreeRows: RandomAccessCollection {
     static func read(_ core: ImpalaCore) -> TreeRows {
         var t = TreeRows()
         t.open = core.treeOpen()
-        let favorites = core.recentPages(limit: UInt32.max).filter(\.favorite)
+        let all = core.recentPages(limit: UInt32.max)
+        let favorites = all.filter(\.favorite)
+        let parentIds = Set(all.compactMap(\.parentId))
         if !favorites.isEmpty {
             t.rows.append(Row(id: "head:fav", kind: .head(title: "★ Favoriten", collapseKey: nil, workspaceId: nil)))
             for p in favorites { t.rows.append(Row(id: "fav:\(p.id)", kind: .page(p, depth: 0, hasKids: false))) }
         }
         func branch(_ parent: String?, _ ws: String?, _ depth: Int) {
             for p in core.childrenOf(parentId: parent, workspaceId: ws) {
-                let kids = depth < maxDepth && !core.childrenOf(parentId: p.id, workspaceId: nil).isEmpty
+                let kids = depth < maxDepth && parentIds.contains(p.id)
                 t.rows.append(Row(id: "tree:\(p.id)", kind: .page(p, depth: depth, hasKids: kids)))
                 if kids && !t.isCollapsed(p.id) { branch(p.id, nil, depth + 1) }
             }
