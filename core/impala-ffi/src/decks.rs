@@ -70,8 +70,9 @@ fn known(state: &State, name: &str) -> bool {
 
 /// Alle sichtbaren Stapelnamen samt gedachten Eltern (`collectActiveDeckSet`).
 fn active_names(state: &State) -> BTreeSet<String> {
+    // „Standard“ nicht fest dazu: Die PWA zeigt ihn nur, wenn er angelegt (und nicht gelöscht oder
+    // archiviert) ist oder Karten trägt.
     let mut set: BTreeSet<String> = BTreeSet::new();
-    set.insert(DEFAULT_DECK.to_owned());
     for (name, d) in state.decks.iter() {
         if !d.is_trashed() && !state.is_deck_archived(name) {
             set.insert(name.clone());
