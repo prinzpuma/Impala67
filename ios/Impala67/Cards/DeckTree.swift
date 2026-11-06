@@ -48,9 +48,7 @@ struct DeckTree: View {
                 .padding(.leading, Space.s1)
                 .padding(.top, Space.s2 + Space.s1)
                 .padding(.bottom, Space.s1)
-                AllDecksRow(active: shell.active == ShellModel.cardsTab && cards.view == .decks, ns: highlight) {
-                    shell.openCards(.decks)
-                }
+                // Keine eigene „Übersicht“-Zeile (die PWA hat keine): die Pille „Karten“ öffnet die Übersicht.
                 if entries.isEmpty {
                     Text("Noch keine Stapel")
                         .font(.system(size: TextSize.sm))
@@ -75,39 +73,6 @@ struct DeckTree: View {
     }
 }
 
-/// „Übersicht“: alle Stapel mit Kennzahlen im Karten-Tab.
-private struct AllDecksRow: View {
-    let active: Bool
-    let ns: Namespace.ID
-    let action: () -> Void
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        HStack(spacing: Space.s2) {
-            Icon("cards", size: 15)
-            Text("Übersicht").font(.system(size: TextSize.sm, weight: active ? .medium : .regular))
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(active ? Impala.text : Impala.text2)
-        .padding(.leading, 6)
-        .frame(minHeight: 34)
-        .background {
-            if active {
-                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .fill(Impala.activeTint)
-                    .matchedGeometryEffect(id: "active", in: ns)
-            }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: Radius.sm))
-        .onTapGesture(perform: action)
-        .contextMenu {
-            MenuItem("Archivierte Karten & Stapel", icon: "archive") {
-                shell.openCards(.archive)
-            }
-        }
-        .hoverEffect(.highlight)
-    }
-}
 
 /// Stapelzeile (`.deck-tree-row`) wie die Seitenzeilen: 16 pt Einrückung je Ebene, aktiv getönt.
 private struct DeckTreeRow<MenuContent: View>: View {

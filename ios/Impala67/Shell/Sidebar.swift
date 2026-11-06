@@ -107,7 +107,10 @@ private struct NavPills: View {
         let shown = dragging ?? current
         HStack(spacing: 2) {
             ForEach(Self.items.indices, id: \.self) { i in
-                Pill(icon: Self.items[i].0, label: Self.items[i].1, active: shown == i, ns: ns) { select(i) }
+                // Beim Ziehen wandert nur die Tönung; das Label bleibt bis zum Loslassen an der gewählten
+                // Pille. Sonst änderten sich die Breiten unter dem Finger, die Trefferprüfung kippte zur
+                // Nachbarpille und die Markierung sprang zurück und wieder hin.
+                Pill(icon: Self.items[i].0, label: Self.items[i].1, active: shown == i, expanded: current == i, ns: ns) { select(i) }
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("navPills")) } action: { frames[i] = $0 }
             }
         }
@@ -119,9 +122,8 @@ private struct NavPills: View {
                     if i != dragging { withAnimation(.bouncy(duration: 0.3)) { dragging = i } }
                 }
                 .onEnded { v in
-                    let i = index(at: v.location.x)
-                    dragging = nil
-                    select(i)
+                    let i = dragging ?? index(at: v.location.x)
+                    select(i) { dragging = nil }
                 }
         )
     }
@@ -132,8 +134,10 @@ private struct NavPills: View {
         return frames.min(by: { abs($0.value.midX - x) < abs($1.value.midX - x) })?.key ?? current
     }
 
-    private func select(_ i: Int) {
+    /// `also` läuft in derselben Animation (Ende des Ziehens), damit kein Zwischenstand gezeichnet wird.
+    private func select(_ i: Int, also: () -> Void = {}) {
         withAnimation(.bouncy(duration: 0.35, extraBounce: 0.05)) {
+            also()
             switch i {
             // Ein Tipp öffnet die Startseite (am iPad statt Doppelklick wie in der PWA).
             case 0: shell.goHome()
@@ -150,6 +154,8 @@ private struct Pill: View {
     let icon: String
     let label: String
     let active: Bool
+    /// Label sichtbar (gewählte Pille); beim Ziehen getrennt von der Tönung (`active`).
+    var expanded: Bool? = nil
     let ns: Namespace.ID
     let action: () -> Void
 
@@ -164,7 +170,7 @@ private struct Pill: View {
     private var content: some View {
         HStack(spacing: 6) {
             Icon(icon, size: 16)
-            if active {
+            if expanded ?? active {
                 Text(label)
                     .font(.system(size: TextSize.sm, weight: .medium))
                     .transition(.blurReplace)
