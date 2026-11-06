@@ -162,9 +162,6 @@ final class NoteModel {
         scheduleSave()
     }
 
-    var canUndo: Bool { !undoStack.isEmpty }
-    var canRedo: Bool { !redoStack.isEmpty }
-
     func undo() {
         guard let prev = undoStack.popLast() else { return }
         redoStack.append(blocks)
