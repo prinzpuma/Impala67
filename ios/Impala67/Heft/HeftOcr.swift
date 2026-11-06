@@ -146,6 +146,8 @@ struct HeftOcrResult: Identifiable {
     var text: String
     let strokeIds: [String]
     let bounds: CGRect
+    /// Heftseite der Striche (alle Seiten liegen in einer durchlaufenden Ansicht).
+    var heftPageId: String = ""
 }
 
 /// Erkannter Text zum Prüfen: kopieren oder die Striche durch ein Textfeld ersetzen.

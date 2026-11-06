@@ -16,8 +16,6 @@ struct HeftScreen: View {
     @State private var currentId: String?
     /// Zählt hoch, wenn das Heft außerhalb des Canvas geändert wurde (anderes Gerät, Seitenübersicht).
     @State private var revision = 0
-    /// Blätterrichtung für den Übergang (vor: von rechts, zurück: von links).
-    @State private var forward = true
     @State private var showPages = false
     @State private var link = HeftCanvasLink()
     @State private var photoTarget: PhotoTarget?
@@ -39,12 +37,13 @@ struct HeftScreen: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if let id = currentId, pageIds.contains(id) {
-                HeftCanvas(core: store.core, pageId: pageId, heftPageId: id, revision: revision,
-                           link: link, selecting: link.selecting, lassoText: link.lassoText)
-                    .id(id)
+            if !pageIds.isEmpty {
+                // Alle Seiten untereinander in einer Fläche (wie `.heft-pages` der PWA).
+                HeftCanvas(core: store.core, pageId: pageId, pageIds: pageIds, initialPageId: currentId, revision: revision,
+                           link: link, selecting: link.selecting, lassoText: link.lassoText,
+                           onCurrentPage: { id in if currentId != id { currentId = id } },
+                           onPullAdd: { addPage(nil) })
                     .ignoresSafeArea(edges: .bottom)
-                    .transition(.push(from: forward ? .trailing : .leading))
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -117,17 +116,11 @@ struct HeftScreen: View {
             .animation(.snappy, value: link.lassoText)
         }
         .clipped()
-        .sensoryFeedback(.selection, trigger: currentId)
-        // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`).
+        // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`) und Startseite beim
+        // nächsten Öffnen (wie `rememberPos` der PWA).
         .onChange(of: currentId, initial: true) { HeftLastPage.index[pageId] = index }
         // Für den Profiler-Bericht: Strichzahlen dieses Hefts (Vergleich mit PWA/Android).
         .onAppear { HeftLastPage.open = pageId }
-        // Neue Seite: Auswahl und Lasso gelten nur für die Seite, auf der sie begonnen wurden.
-        .onChange(of: currentId) {
-            link.selecting = false
-            link.lassoText = false
-            link.selection = nil
-        }
         .background(Impala.bg0)
         .onAppear(perform: loadPages)
         // Papierart der Seite nur bei Seitenwechsel/Änderung lesen, im Hintergrund: `heftPage` lädt alle
@@ -321,7 +314,8 @@ struct HeftScreen: View {
     private func loadPages() {
         let done = Profiler.shared.begin("heft.loadPages")
         defer { done() }
-        let old = index
+        // Beim ersten Laden die zuletzt angezeigte Seite dieses Hefts.
+        let old = currentId == nil ? (HeftLastPage.index[pageId] ?? 0) : index
         pageIds = store.core.heftPageIds(pageId: pageId)
         if !(currentId.map { pageIds.contains($0) } ?? false) {
             currentId = pageIds.isEmpty ? nil : pageIds[min(old, pageIds.count - 1)]
@@ -349,10 +343,12 @@ struct HeftScreen: View {
         revision += 1
     }
 
+    /// Zu einer Seite scrollen (‹ ›, Seitenübersicht, neue Seite). Eine eben angelegte Seite kennt der
+    /// Canvas erst nach dem nächsten Aktualisieren; er springt dann hin.
     private func jump(_ id: String) {
-        guard let to = pageIds.firstIndex(of: id) else { return }
-        forward = to >= index
-        withAnimation(.smooth(duration: 0.35)) { currentId = id }
+        guard pageIds.contains(id) else { return }
+        currentId = id
+        link.coordinator?.scroll(to: id, animated: true)
     }
 
     private func move(_ by: Int) {
@@ -402,33 +398,21 @@ struct HeftScreen: View {
         link.textEdit = HeftTextEdit(textId: nil, text: "")
     }
 
+    /// Textfeld speichern; die Seite des Felds kennt der Canvas (alle Seiten liegen in einer Fläche).
     private func saveText(_ edit: HeftTextEdit, _ text: String) {
-        guard let id = currentId, let canvas = link.coordinator else { return }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let canvas = link.coordinator else { return }
         if let textId = edit.textId {
-            guard var t = canvas.text(textId) else { return }
-            if trimmed.isEmpty {
-                _ = attempt("heftRemoveTexts", { try store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId]) })
-            } else {
-                t.text = text
-                _ = attempt("heftSetText", { try store.core.heftSetText(pageId: pageId, heftPageId: id, text: t) })
-            }
-            canvas.reload()
-        } else if !trimmed.isEmpty {
-            let c = canvas.visibleCenter()
-            let new = attempt("heftAddText", { try store.core.heftAddText(pageId: pageId, heftPageId: id, text: text,
-                                                  x: Double(c.x) - 200, y: Double(c.y) - 30, w: 400, color: canvas.currentColor, size: 30) })
+            canvas.setText(textId, to: text)
+        } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             link.selecting = true
-            canvas.reload()
-            if let tid = new?.ids.first { canvas.selectAfterReload(.text(tid)) }
+            canvas.addText(text)
         }
     }
 
     private func deleteText(_ edit: HeftTextEdit) {
-        guard let id = currentId, let textId = edit.textId else { return }
-        _ = attempt("heftRemoveTexts", { try store.core.heftRemoveTexts(pageId: pageId, heftPageId: id, ids: [textId]) })
+        guard let textId = edit.textId else { return }
+        link.coordinator?.removeText(textId)
         link.selection = nil
-        link.coordinator?.reload()
     }
 
     // MARK: Export

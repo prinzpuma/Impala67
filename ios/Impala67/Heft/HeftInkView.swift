@@ -35,6 +35,8 @@ final class HeftInkView: UIView {
     private let detailLayer = CALayer()
     private var size = CGSize.zero
     private var zoom: CGFloat = 1
+    /// Lage der Seite in der durchlaufenden Heft-Ansicht (Seitenkoordinaten).
+    var origin = CGPoint.zero
     private var items: [Item] = []
     /// Umrisse der aktuell gezeichneten Striche (zugleich die Menge der bekannten Schlüssel).
     private var boundsCache: [Key: CGRect] = [:]
@@ -118,11 +120,11 @@ final class HeftInkView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         transform = CGAffineTransform(scaleX: zoom, y: zoom)
-        layer.position = .zero
+        layer.position = CGPoint(x: origin.x * zoom, y: origin.y * zoom)
         CATransaction.commit()
     }
 
-    /// Sichtbarer Ausschnitt (Seitenkoordinaten) hat sich geändert; kurz nach dem Ende der Bewegung
+    /// Sichtbarer Ausschnitt (Seitenkoordinaten dieser Seite) hat sich geändert; kurz nach dem Ende der Bewegung
     /// wird die Detail-Bitmap passend gezeichnet oder entfernt.
     func viewportChanged(visible: CGRect, displayScale: CGFloat) {
         detailWork?.cancel()
@@ -144,11 +146,11 @@ final class HeftInkView: UIView {
             return
         }
         if let cur = detailArea, abs(cur.scale - want) < want * 0.02, cur.rect.contains(vis) { return }
-        // Etwas Rand um den sichtbaren Bereich, damit kurzes Verschieben scharf bleibt (höchstens ~9 Mio. Pixel).
+        // Etwas Rand um den sichtbaren Bereich, damit kurzes Verschieben scharf bleibt (höchstens ~6 Mio. Pixel).
         let px = vis.width * vis.height * want * want
-        let grow = max(1, min(1.6, sqrt(9_000_000 / max(px, 1))))
+        let grow = max(1, min(1.5, sqrt(6_000_000 / max(px, 1))))
         let rect = vis.insetBy(dx: -vis.width * (grow - 1) / 2, dy: -vis.height * (grow - 1) / 2).intersection(page)
-        let scale = min(want, sqrt(12_000_000 / max(rect.width * rect.height, 1)))
+        let scale = min(want, sqrt(8_000_000 / max(rect.width * rect.height, 1)))
         tokens += 1
         detailToken = tokens
         detailArea = (rect, want)
@@ -247,10 +249,11 @@ final class HeftInkRenderer: @unchecked Sendable {
         let image: CGImage
     }
 
-    /// Auflösung der Seiten-Bitmap: höchstens 3 Pixel je Punkt und 6 Mio. Pixel (wie `MAX_RENDER_PIXELS`
-    /// in heft-viewport.js) – für ein A4-Blatt rund 2,6 Pixel je Punkt, scharf bis etwas über Passbreite.
+    /// Auflösung der Seiten-Bitmap: höchstens 3 Pixel je Punkt und 4 Mio. Pixel (16 MB; bis zu fünf Seiten
+    /// sind gleichzeitig geladen) – für eine Heftseite (1000 × 1414) rund 1,7 Pixel je Punkt; ab der
+    /// Passbreite des iPads zeichnet die Detail-Bitmap den sichtbaren Teil scharf darüber.
     static func baseScale(_ size: CGSize) -> CGFloat {
-        min(3, sqrt(6_000_000 / max(size.width * size.height, 1)))
+        min(3, sqrt(4_000_000 / max(size.width * size.height, 1)))
     }
 
     private let queue = DispatchQueue(label: "impala.heft.ink", qos: .userInteractive)

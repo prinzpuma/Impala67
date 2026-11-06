@@ -24,8 +24,9 @@ final class HeftObjectsView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Inhalt der Seite setzen; `image` liefert das dekodierte Bild zu einer Bild-ID (`nil`: Daten fehlen noch).
-    func configure(size: CGSize, data: HeftPageData, image: (HeftImage) -> UIImage?) {
+    /// Inhalt der geladenen Seiten setzen (Koordinaten der durchlaufenden Heft-Ansicht); `image` liefert
+    /// das dekodierte Bild zu einer Bild-ID (`nil`: Daten fehlen noch).
+    func configure(size: CGSize, pages: [HeftPlaced], image: (HeftImage) -> UIImage?) {
         bounds = CGRect(origin: .zero, size: size)
         subviews.forEach { $0.removeFromSuperview() }
         layer.sublayers?.forEach { $0.removeFromSuperlayer() }
@@ -33,24 +34,27 @@ final class HeftObjectsView: UIView {
         views.removeAll()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        switch kind {
-        case .images:
-            for im in data.images {
-                guard let img = image(im)?.cgImage else { continue }
-                let l = CALayer()
-                l.frame = CGRect(x: im.x, y: im.y, width: im.w, height: im.h)
-                l.contents = img
-                l.contentsGravity = .resize
-                l.minificationFilter = .trilinear
-                layer.addSublayer(l)
-                views[im.id] = l
-            }
-        case .texts:
-            for t in data.texts where !t.text.isEmpty {
-                let box = HeftTextBox(t)
-                addSubview(box)
-                boxes.append(box)
-                views[t.id] = box
+        for page in pages {
+            let o = page.origin
+            switch kind {
+            case .images:
+                for im in page.data.images {
+                    guard let img = image(im)?.cgImage else { continue }
+                    let l = CALayer()
+                    l.frame = CGRect(x: im.x + o.x, y: im.y + o.y, width: im.w, height: im.h)
+                    l.contents = img
+                    l.contentsGravity = .resize
+                    l.minificationFilter = .trilinear
+                    layer.addSublayer(l)
+                    views[im.id] = l
+                }
+            case .texts:
+                for t in page.data.texts where !t.text.isEmpty {
+                    let box = HeftTextBox(t, origin: o)
+                    addSubview(box)
+                    boxes.append(box)
+                    views[t.id] = box
+                }
             }
         }
         CATransaction.commit()
@@ -82,13 +86,19 @@ final class HeftObjectsView: UIView {
     }
 }
 
+/// Eine geladene Heftseite und ihre Lage in der durchlaufenden Heft-Ansicht.
+struct HeftPlaced {
+    let origin: CGPoint
+    let data: HeftPageData
+}
+
 /// Ein Textfeld wie `drawTextBox` in heft.js (Innenabstand 10, Zeilenhöhe 1,4, Breite `w` oder 400).
 private final class HeftTextBox: UIView {
     private let text: HeftText
 
-    init(_ text: HeftText) {
+    init(_ text: HeftText, origin: CGPoint) {
         self.text = text
-        super.init(frame: HeftTextStyle.frame(text))
+        super.init(frame: HeftTextStyle.frame(text).offsetBy(dx: origin.x, dy: origin.y))
         isOpaque = false
         backgroundColor = .clear
         isUserInteractionEnabled = false

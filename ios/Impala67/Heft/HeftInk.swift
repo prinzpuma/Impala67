@@ -33,7 +33,8 @@ enum HeftInk {
     /// Zeichenfähiger PencilKit-Strich aus Kerndaten; `nil` ohne Punkte. Der `randomSeed` ist aus der
     /// Strich-ID abgeleitet und dient beim Vergleichen als Schlüssel (`HeftCanvas`). `hidden`: fast
     /// durchsichtig (Canvas, sichtbar über [HeftInkView]).
-    static func pkStroke(_ s: HeftStroke, seed: UInt32, hidden: Bool = false) -> PKStroke? {
+    /// `offset`: Lage der Seite in der durchlaufenden Heft-Ansicht (Seitenkoordinaten → Canvas).
+    static func pkStroke(_ s: HeftStroke, seed: UInt32, hidden: Bool = false, offset: CGPoint = .zero) -> PKStroke? {
         let p = points(s)
         let n = p.count / 3
         guard n > 0 else { return nil }
@@ -48,7 +49,7 @@ enum HeftInk {
         points.reserveCapacity(n + 1)
         var last: CGPoint?
         for i in 0..<n {
-            let loc = CGPoint(x: CGFloat(p[i * 3]), y: CGFloat(p[i * 3 + 1]))
+            let loc = CGPoint(x: CGFloat(p[i * 3]) + offset.x, y: CGFloat(p[i * 3 + 1]) + offset.y)
             // Doppelte Punkte (Stift steht still) weglassen; PencilKit glättet sonst Knoten hinein.
             if let last, i < n - 1, abs(loc.x - last.x) < 0.05, abs(loc.y - last.y) < 0.05 { continue }
             last = loc
@@ -88,7 +89,8 @@ enum HeftInk {
     }
 
     /// Neuer Strich vom Stift im Kernformat. `size` kommt vom Werkzeug (PencilKit kennt nur Punktbreiten).
-    static func coreStroke(_ stroke: PKStroke, toolWidth: CGFloat) -> (tool: String, color: String, size: Double, points: [Float]) {
+    /// `offset`: Lage der Seite im Canvas; die Punkte werden in Seitenkoordinaten zurückgerechnet.
+    static func coreStroke(_ stroke: PKStroke, toolWidth: CGFloat, offset: CGPoint = .zero) -> (tool: String, color: String, size: Double, points: [Float]) {
         let marker = stroke.ink.inkType == .marker
         // Stift: Werkzeugbreite = Breite bei Druck 0,5 = size. Marker: size × 3.
         let size = Double(marker ? toolWidth / 3 : toolWidth)
@@ -96,8 +98,8 @@ enum HeftInk {
         out.reserveCapacity(stroke.path.count * 3)
         for point in stroke.path {
             let loc = point.location.applying(stroke.transform)
-            out.append(Float(loc.x))
-            out.append(Float(loc.y))
+            out.append(Float(loc.x - offset.x))
+            out.append(Float(loc.y - offset.y))
             out.append(marker ? 0.5 : pressure(width: point.size.width, size: size))
         }
         return (marker ? "marker" : "pen", stroke.ink.color.cssHex, (size * 100).rounded() / 100, out)

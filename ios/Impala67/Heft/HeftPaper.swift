@@ -67,8 +67,12 @@ final class HeftPaperView: UIView {
     private let lines = CAShapeLayer()
     private let margin = CAShapeLayer()
     private let dots = CAShapeLayer()
+    /// „Seite n“ unter dem Blatt (`.heft-page-label` der PWA).
+    private let label = CATextLayer()
     private var size = CGSize.zero
     private var kind = ""
+    /// Lage der Seite in der durchlaufenden Heft-Ansicht (Seitenkoordinaten).
+    var origin = CGPoint.zero
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -89,6 +93,18 @@ final class HeftPaperView: UIView {
         margin.lineWidth = 1
         dots.fillColor = HeftPaperDraw.ink.withAlphaComponent(0.35).cgColor
         for l in [sheet, lines, margin, dots] { layer.addSublayer(l) }
+        label.alignmentMode = .center
+        label.fontSize = 15
+        label.foregroundColor = UIColor.secondaryLabel.cgColor
+        layer.addSublayer(label)
+    }
+
+    /// Seitennummer unter dem Blatt.
+    func setNumber(_ n: Int) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        label.string = "Seite \(n)"
+        CATransaction.commit()
     }
 
     @available(*, unavailable)
@@ -107,6 +123,7 @@ final class HeftPaperView: UIView {
         lines.path = l
         margin.path = m
         dots.path = d
+        label.frame = CGRect(x: 0, y: size.height + 8, width: size.width, height: 22)
         CATransaction.commit()
         bounds = CGRect(origin: .zero, size: size)
     }
@@ -126,8 +143,8 @@ final class HeftPaperView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         transform = CGAffineTransform(scaleX: zoom, y: zoom)
-        layer.position = .zero
-        for l in [lines, margin, dots] { l.contentsScale = traitCollection.displayScale * zoom }
+        layer.position = CGPoint(x: origin.x * zoom, y: origin.y * zoom)
+        for l in [lines, margin, dots, label] { l.contentsScale = traitCollection.displayScale * zoom }
         CATransaction.commit()
     }
 }

@@ -55,11 +55,20 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Elemente der Seite; eine Auswahl bleibt, solange es das Element noch gibt.
-    func configure(size: CGSize, data: HeftPageData) {
+    /// Elemente der geladenen Seiten (Koordinaten der durchlaufenden Heft-Ansicht); eine Auswahl bleibt,
+    /// solange es das Element noch gibt.
+    func configure(size: CGSize, pages: [HeftPlaced]) {
         bounds = CGRect(origin: .zero, size: size)
-        targets = data.images.map { (.image($0.id), CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h)) }
-            + data.texts.filter { !$0.text.isEmpty }.map { (.text($0.id), HeftTextStyle.frame($0)) }
+        targets = []
+        for page in pages {
+            let (o, data) = (page.origin, page.data)
+            for im in data.images {
+                targets.append((item: Item.image(im.id), frame: CGRect(x: im.x + o.x, y: im.y + o.y, width: im.w, height: im.h)))
+            }
+            for t in data.texts where !t.text.isEmpty {
+                targets.append((item: Item.text(t.id), frame: HeftTextStyle.frame(t).offsetBy(dx: o.x, dy: o.y)))
+            }
+        }
         if let s = selected, !targets.contains(where: { $0.item == s }) { selected = nil }
         current = nil
         redraw()
