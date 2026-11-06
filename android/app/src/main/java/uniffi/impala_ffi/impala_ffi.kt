@@ -1518,6 +1518,10 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1759,6 +1763,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_children_of(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_clear_pages(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_compact_local(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_conflict_count(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_conflicts(
@@ -1992,6 +1998,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_tree_open(
 fun uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_settings_json(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_storage_check(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_study_queue(
 ): Short
@@ -2330,6 +2338,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_children_of(`ptr`: Pointer,`parentId`
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_clear_pages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_compact_local(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Long
 fun uniffi_impala_ffi_fn_method_impalacore_conflict_count(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun uniffi_impala_ffi_fn_method_impalacore_conflicts(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2563,6 +2573,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_tree_open(`ptr`: Pointer,`key`: R
 fun uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(`ptr`: Pointer,`tabs`: RustBuffer.ByValue,`activeTabId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_settings_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_storage_check(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_study_queue(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`utcOffsetMinutes`: Int,`mix`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3207,6 +3219,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_clear_pages() != 2531.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_compact_local() != 14681.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_conflict_count() != 65320.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3556,6 +3571,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_storage_check() != 52100.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_study_queue() != 60615.toShort()) {
@@ -7910,6 +7928,11 @@ public interface ImpalaCoreInterface {
     fun `clearPages`()
     
     /**
+     * Event-Log jetzt verdichten (Speicher-Einstellungen); liefert die Zahl entfernter Events.
+     */
+    fun `compactLocal`(): kotlin.ULong
+    
+    /**
      * Zahl der offenen Konflikte (Hinweis-Zähler).
      */
     fun `conflictCount`(): kotlin.UInt
@@ -8516,6 +8539,12 @@ public interface ImpalaCoreInterface {
     fun `settingsJson`(): kotlin.String
     
     /**
+     * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
+     * einmal: nur auf Nachfrage aufrufen, nie beim Start.
+     */
+    fun `storageCheck`(): StorageCheckInfo
+    
+    /**
      * Lernwarteschlange jetzt. `deck`: Stapel samt Unterstapeln (`None`: alle).
      * `utc_offset_minutes`: aktueller Versatz der Ortszeit (MEZ +60, MESZ +120) für die Tagesgrenze.
      */
@@ -9045,6 +9074,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 }
     }
     
+    
+
+    
+    /**
+     * Event-Log jetzt verdichten (Speicher-Einstellungen); liefert die Zahl entfernter Events.
+     */
+    @Throws(CoreException::class)override fun `compactLocal`(): kotlin.ULong {
+            return FfiConverterULong.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_compact_local(
+        it, _status)
+}
+    }
+    )
+    }
     
 
     
@@ -10868,6 +10913,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_settings_json(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
+     * einmal: nur auf Nachfrage aufrufen, nie beim Start.
+     */
+    @Throws(CoreException::class)override fun `storageCheck`(): StorageCheckInfo {
+            return FfiConverterTypeStorageCheckInfo.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_storage_check(
         it, _status)
 }
     }
@@ -15781,6 +15843,66 @@ public object FfiConverterTypeSemanticHit: FfiConverterRustBuffer<SemanticHit> {
             FfiConverterDouble.write(value.`semanticScore`, buf)
             FfiConverterDouble.write(value.`lexicalScore`, buf)
             FfiConverterBoolean.write(value.`archived`, buf)
+    }
+}
+
+
+
+/**
+ * Ergebnis von [`ImpalaCore::storage_check`]; im Normalfall alles 0.
+ */
+data class StorageCheckInfo (
+    /**
+     * Heft-Bilder, die der Checkpoint als Kopie statt als Verweis hält, obwohl sie im Log liegen.
+     */
+    var `checkpointCopies`: kotlin.ULong, 
+    var `checkpointCopiesBytes`: kotlin.ULong, 
+    /**
+     * Verweise auf ein Event, das es nicht mehr gibt.
+     */
+    var `deadPointers`: kotlin.ULong, 
+    /**
+     * Bilder ohne Heftseite, älter als die Schonfrist (fallen bei der nächsten Kompaktierung).
+     */
+    var `orphanImages`: kotlin.ULong, 
+    var `orphanImagesBytes`: kotlin.ULong, 
+    var `ok`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeStorageCheckInfo: FfiConverterRustBuffer<StorageCheckInfo> {
+    override fun read(buf: ByteBuffer): StorageCheckInfo {
+        return StorageCheckInfo(
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: StorageCheckInfo) = (
+            FfiConverterULong.allocationSize(value.`checkpointCopies`) +
+            FfiConverterULong.allocationSize(value.`checkpointCopiesBytes`) +
+            FfiConverterULong.allocationSize(value.`deadPointers`) +
+            FfiConverterULong.allocationSize(value.`orphanImages`) +
+            FfiConverterULong.allocationSize(value.`orphanImagesBytes`) +
+            FfiConverterBoolean.allocationSize(value.`ok`)
+    )
+
+    override fun write(value: StorageCheckInfo, buf: ByteBuffer) {
+            FfiConverterULong.write(value.`checkpointCopies`, buf)
+            FfiConverterULong.write(value.`checkpointCopiesBytes`, buf)
+            FfiConverterULong.write(value.`deadPointers`, buf)
+            FfiConverterULong.write(value.`orphanImages`, buf)
+            FfiConverterULong.write(value.`orphanImagesBytes`, buf)
+            FfiConverterBoolean.write(value.`ok`, buf)
     }
 }
 

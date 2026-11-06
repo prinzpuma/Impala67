@@ -977,6 +977,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_children_of(void*_Nonnull ptr,
 void uniffi_impala_ffi_fn_method_impalacore_clear_pages(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_COMPACT_LOCAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_COMPACT_LOCAL
+uint64_t uniffi_impala_ffi_fn_method_impalacore_compact_local(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CONFLICT_COUNT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CONFLICT_COUNT
 uint32_t uniffi_impala_ffi_fn_method_impalacore_conflict_count(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -1560,6 +1565,11 @@ void uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(void*_Nonnull ptr, RustB
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SETTINGS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SETTINGS_JSON
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_settings_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_STORAGE_CHECK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_STORAGE_CHECK
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_storage_check(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_STUDY_QUEUE
@@ -2973,6 +2983,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_clear_pages(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_COMPACT_LOCAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_COMPACT_LOCAL
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_compact_local(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CONFLICT_COUNT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CONFLICT_COUNT
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_conflict_count(void
@@ -3672,6 +3688,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SETTINGS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SETTINGS_JSON
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_settings_json(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_STORAGE_CHECK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_STORAGE_CHECK
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_storage_check(void
     
 );
 #endif

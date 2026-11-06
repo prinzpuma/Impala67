@@ -21,11 +21,12 @@ mod storage;
 use std::fmt;
 
 pub use event::{LogInfo, Object, Seq};
+pub use impala_sync::BlobKeep;
 pub use exchange::{ExportOptions, ImportOptions, ImportReport, PreparedImport};
 pub use memory::MemoryStorage;
 pub use ops::{Compacted, StorageExt};
 #[cfg(feature = "sqlite")]
-pub use sqlite::SqliteStorage;
+pub use sqlite::{SqliteStorage, StorageCheck};
 pub use storage::{Blob, CheckpointSlot, PartKind, Storage, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

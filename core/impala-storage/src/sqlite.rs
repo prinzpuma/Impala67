@@ -41,6 +41,19 @@ const MIGRATIONS: &[&str] = &[
         AND COALESCE(json_extract(body, '$._derived') IN (0, ''), 1)
     ELSE 0 END;
     CREATE INDEX events_own ON events(seq) WHERE own = 1;",
+    // 3: Heft-Bilder nur noch einmal speichern. `blob_hash` markiert `heftBlob`-Events mit Daten;
+    // ein Checkpoint-Bild ist dann ein Verweis (`seq`, `data` leer) auf sein Event statt einer
+    // zweiten Kopie. Vorhandene Kopien werden hier umgestellt, wenn das Bild im Log liegt.
+    "ALTER TABLE events ADD COLUMN blob_hash TEXT;
+    UPDATE events SET blob_hash = json_extract(body, '$.payload.hash')
+        WHERE CASE WHEN json_valid(body) THEN json_extract(body, '$.type') = 'heftBlob'
+            AND json_type(body, '$.payload.hash') = 'text' AND json_type(body, '$.payload.data') = 'text'
+        ELSE 0 END;
+    CREATE INDEX events_blob ON events(blob_hash, seq) WHERE blob_hash IS NOT NULL;
+    ALTER TABLE checkpoint_parts ADD COLUMN seq INTEGER;
+    UPDATE checkpoint_parts
+        SET seq = (SELECT MAX(e.seq) FROM events e WHERE e.blob_hash = checkpoint_parts.hash), data = ''
+        WHERE kind = 1 AND EXISTS (SELECT 1 FROM events e WHERE e.blob_hash = checkpoint_parts.hash);",
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -99,6 +112,78 @@ impl SqliteStorage {
     pub fn schema_version(&self) -> Result<u32, Error> {
         self.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).map_err(db)
     }
+
+    /// Kontrolle gegen doppelten Speicher (wie `DB.storageCheck()` der PWA); im Normalfall alles 0.
+    /// `blobs`: aktueller Heft-Zustand, sonst bleiben verwaiste Bilder ungezählt. Liest alle
+    /// Bild-Events einmal – nur auf Nachfrage aufrufen.
+    pub fn storage_check(&self, blobs: Option<&impala_sync::BlobKeep>) -> Result<StorageCheck, Error> {
+        let blob = kind_id(PartKind::HeftBlob);
+        let (copies, copies_bytes): (i64, i64) = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*), COALESCE(SUM(length(data)), 0) FROM checkpoint_parts p
+                WHERE kind = ?1 AND seq IS NULL AND EXISTS (SELECT 1 FROM events e WHERE e.blob_hash = p.hash)",
+                [blob],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(db)?;
+        let dead: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM checkpoint_parts p WHERE kind = ?1 AND seq IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM events e WHERE e.seq = p.seq AND e.blob_hash = p.hash)",
+                [blob],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        let mut check = StorageCheck {
+            checkpoint_copies: copies as u64,
+            checkpoint_copies_bytes: copies_bytes as u64,
+            dead_pointers: dead as u64,
+            live_known: blobs.is_some(),
+            ..StorageCheck::default()
+        };
+        if let Some(keep) = blobs {
+            let mut stmt = self
+                .conn
+                .prepare(
+                    "SELECT blob_hash, COALESCE(json_extract(body, '$.t'), ''), length(json_extract(body, '$.payload.data'))
+                    FROM events WHERE blob_hash IS NOT NULL",
+                )
+                .map_err(db)?;
+            let mut rows = stmt.query([]).map_err(db)?;
+            while let Some(r) = rows.next().map_err(db)? {
+                let hash: String = r.get(0).map_err(db)?;
+                let t: String = r.get(1).map_err(db)?;
+                if !keep.live.contains(&hash) && crate::js::cmp(&t, keep.since).is_lt() {
+                    check.orphan_images += 1;
+                    check.orphan_images_bytes += r.get::<_, Option<i64>>(2).map_err(db)?.unwrap_or(0) as u64;
+                }
+            }
+        }
+        Ok(check)
+    }
+}
+
+/// Ergebnis von [`SqliteStorage::storage_check`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StorageCheck {
+    /// Checkpoint-Bilder als Kopie, obwohl das Bild im Log liegt (sollte ein Verweis sein).
+    pub checkpoint_copies: u64,
+    pub checkpoint_copies_bytes: u64,
+    /// Verweise auf ein Event, das es nicht (mehr) gibt (gelesen wird dann ein anderes desselben Bildes).
+    pub dead_pointers: u64,
+    /// Bilder, die kein Heft zeigt, älter als die Schonfrist (fallen bei der nächsten Kompaktierung).
+    pub orphan_images: u64,
+    pub orphan_images_bytes: u64,
+    /// Ob der Heft-Zustand bekannt war (sonst ist `orphan_images` nicht gezählt).
+    pub live_known: bool,
+}
+
+impl StorageCheck {
+    pub fn ok(&self) -> bool {
+        self.checkpoint_copies == 0 && self.dead_pointers == 0 && self.orphan_images == 0
+    }
 }
 
 fn migrate(conn: &mut Connection) -> Result<(), Error> {
@@ -115,22 +200,57 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
     Ok(())
 }
 
+/// Hash eines `heftBlob`-Events mit Bilddaten (Spalte `blob_hash`, Regel wie Migration 3).
+fn blob_hash_of(ev: &Object) -> Option<&str> {
+    if ev.get("type").and_then(Value::as_str) != Some("heftBlob") {
+        return None;
+    }
+    let p = ev.get("payload")?;
+    p.get("data")?.as_str()?;
+    p.get("hash")?.as_str()
+}
+
+/// Neuestes Event mit diesem Bild.
+fn blob_event(conn: &Connection, hash: &str) -> Result<Option<i64>, Error> {
+    conn.prepare_cached("SELECT MAX(seq) FROM events WHERE blob_hash = ?1")
+        .and_then(|mut s| s.query_row([hash], |r| r.get(0)))
+        .map_err(db)
+}
+
 fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Error> {
     match w {
         Write::AddEvent(mut ev) => {
             ev.shift_remove("seq");
             let id = ev.get("id").and_then(id_key);
             let own = is_own(&ev);
+            let blob_hash = blob_hash_of(&ev);
             let body = serde_json::to_string(&ev).map_err(json_err)?;
-            tx.prepare_cached("INSERT INTO events (id, body, own) VALUES (?1, ?2, ?3)")
-                .and_then(|mut s| s.execute(params![id, body, own]))
+            tx.prepare_cached("INSERT INTO events (id, body, own, blob_hash) VALUES (?1, ?2, ?3, ?4)")
+                .and_then(|mut s| s.execute(params![id, body, own, blob_hash]))
                 .map_err(db)?;
             added.push(tx.last_insert_rowid() as Seq);
         }
         Write::DeleteEvent(seq) => {
-            tx.prepare_cached("DELETE FROM events WHERE seq = ?1")
-                .and_then(|mut s| s.execute([to_i64(seq)]))
+            let seq = to_i64(seq);
+            let hash: Option<String> = tx
+                .prepare_cached("SELECT blob_hash FROM events WHERE seq = ?1")
+                .and_then(|mut s| s.query_row([seq], |r| r.get(0)).optional())
+                .map_err(db)?
+                .flatten();
+            // Zeigt ein Checkpoint-Bild auf dieses Event: auf ein anderes mit demselben Bild umhängen,
+            // sonst die Daten als Kopie übernehmen – ein Verweis geht nie ins Leere.
+            if let Some(hash) = &hash {
+                tx.prepare_cached(
+                    "UPDATE checkpoint_parts SET
+                        data = CASE WHEN EXISTS (SELECT 1 FROM events WHERE blob_hash = ?2 AND seq <> ?1) THEN ''
+                            ELSE (SELECT json_extract(body, '$.payload.data') FROM events WHERE seq = ?1) END,
+                        seq = (SELECT MAX(seq) FROM events WHERE blob_hash = ?2 AND seq <> ?1)
+                    WHERE kind = ?3 AND hash = ?2 AND seq = ?1",
+                )
+                .and_then(|mut s| s.execute(params![seq, hash, kind_id(PartKind::HeftBlob)]))
                 .map_err(db)?;
+            }
+            tx.prepare_cached("DELETE FROM events WHERE seq = ?1").and_then(|mut s| s.execute([seq])).map_err(db)?;
         }
         Write::PutBlob(key, blob) => {
             let meta = blob.meta.as_ref().map(serde_json::to_string).transpose().map_err(json_err)?;
@@ -165,8 +285,14 @@ fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Err
                 .map_err(db)?;
         }
         Write::PutPart(kind, hash, data) => {
-            tx.prepare_cached("INSERT OR REPLACE INTO checkpoint_parts (kind, hash, data) VALUES (?1, ?2, ?3)")
-                .and_then(|mut s| s.execute(params![kind_id(kind), hash, data]))
+            // Liegt das Bild im Log, genügt ein Verweis auf sein Event (keine zweite Kopie).
+            let seq = match kind {
+                PartKind::HeftBlob => blob_event(tx, &hash)?,
+                PartKind::HeftDoc => None,
+            };
+            let data = if seq.is_some() { String::new() } else { data };
+            tx.prepare_cached("INSERT OR REPLACE INTO checkpoint_parts (kind, hash, data, seq) VALUES (?1, ?2, ?3, ?4)")
+                .and_then(|mut s| s.execute(params![kind_id(kind), hash, data, seq]))
                 .map_err(db)?;
         }
         Write::DeletePart(kind, hash) => {
@@ -308,9 +434,20 @@ impl Storage for SqliteStorage {
     }
 
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error> {
+        let row: Option<(String, Option<i64>)> = self
+            .conn
+            .prepare_cached("SELECT data, seq FROM checkpoint_parts WHERE kind = ?1 AND hash = ?2")
+            .and_then(|mut s| s.query_row(params![kind_id(kind), hash], |r| Ok((r.get(0)?, r.get(1)?))).optional())
+            .map_err(db)?;
+        let Some((data, seq)) = row else { return Ok(None) };
+        let Some(seq) = seq else { return Ok(Some(data)) };
+        // Verweis: Daten aus dem Event; zeigt er ins Leere, aus einem anderen Event desselben Bildes.
         self.conn
-            .prepare_cached("SELECT data FROM checkpoint_parts WHERE kind = ?1 AND hash = ?2")
-            .and_then(|mut s| s.query_row(params![kind_id(kind), hash], |r| r.get(0)).optional())
+            .prepare_cached(
+                "SELECT json_extract(body, '$.payload.data') FROM events WHERE blob_hash = ?1
+                ORDER BY seq = ?2 DESC, seq DESC LIMIT 1",
+            )
+            .and_then(|mut s| s.query_row(params![hash, seq], |r| r.get(0)).optional())
             .map_err(db)
     }
 
@@ -362,6 +499,70 @@ mod tests {
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{suffix}", dir.display()));
         }
+    }
+
+    fn obj(v: serde_json::Value) -> Object {
+        v.as_object().cloned().unwrap()
+    }
+
+    fn blob_ev(id: &str, t: &str, hash: &str) -> Write {
+        Write::AddEvent(obj(serde_json::json!({
+            "id": id, "t": t, "type": "heftBlob", "payload": {"hash": hash, "data": format!("data:{hash}")}
+        })))
+    }
+
+    fn stored(s: &SqliteStorage, hash: &str) -> (String, Option<i64>) {
+        s.conn
+            .query_row("SELECT data, seq FROM checkpoint_parts WHERE kind = 1 AND hash = ?1", [hash], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn heft_images_are_stored_once() {
+        let mut s = SqliteStorage::open_in_memory().unwrap();
+        s.apply(vec![blob_ev("a", "1", "A"), blob_ev("a2", "2", "A")]).unwrap();
+        let put = |h: &str| Write::PutPart(PartKind::HeftBlob, h.into(), format!("data:{h}"));
+        s.apply(vec![put("A"), put("X")]).unwrap();
+        assert_eq!(stored(&s, "A"), (String::new(), Some(2)), "Verweis auf das neueste Event");
+        assert_eq!(stored(&s, "X"), ("data:X".into(), None), "ohne Event bleibt die Kopie");
+        assert_eq!(s.part(PartKind::HeftBlob, "A").unwrap().as_deref(), Some("data:A"));
+        assert!(s.storage_check(None).unwrap().ok());
+
+        // Event weg: auf das andere umhängen, beim letzten die Daten übernehmen.
+        s.apply(vec![Write::DeleteEvent(2)]).unwrap();
+        assert_eq!(stored(&s, "A"), (String::new(), Some(1)));
+        s.apply(vec![Write::DeleteEvent(1)]).unwrap();
+        assert_eq!(stored(&s, "A"), ("data:A".into(), None));
+        assert_eq!(s.part(PartKind::HeftBlob, "A").unwrap().as_deref(), Some("data:A"));
+
+        // Verwaiste Bilder zählen nur mit bekanntem Heft-Zustand und außerhalb der Schonfrist.
+        s.apply(vec![blob_ev("b", "2026-01-01", "B"), blob_ev("c", "2026-03-01", "C")]).unwrap();
+        let live: HashSet<String> = HashSet::new();
+        let check = s.storage_check(Some(&impala_sync::BlobKeep { live: &live, since: "2026-02-01" })).unwrap();
+        assert_eq!((check.orphan_images, check.orphan_images_bytes, check.live_known), (1, 6, true));
+    }
+
+    #[test]
+    fn migrates_old_checkpoint_copies_to_pointers() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(&format!("{};{}", MIGRATIONS[0], MIGRATIONS[1])).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute(
+            "INSERT INTO events (id, body) VALUES ('a', ?1)",
+            [r#"{"id":"a","t":"1","type":"heftBlob","payload":{"hash":"A","data":"data:A"}}"#],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO checkpoint_parts VALUES (1, 'A', 'data:A'), (1, 'X', 'data:X'), (2, 'A', '{}')", [])
+            .unwrap();
+        migrate(&mut conn).unwrap();
+        let s = SqliteStorage { conn };
+        assert_eq!(stored(&s, "A"), (String::new(), Some(1)));
+        assert_eq!(stored(&s, "X"), ("data:X".into(), None));
+        assert_eq!(s.part(PartKind::HeftBlob, "A").unwrap().as_deref(), Some("data:A"));
+        assert_eq!(s.part(PartKind::HeftDoc, "A").unwrap().as_deref(), Some("{}"));
+        assert_eq!(s.storage_check(None).unwrap(), StorageCheck::default());
     }
 
     #[test]

@@ -39,9 +39,17 @@ pub const PAGE_TYPES: [&str; 18] = [
 ];
 
 /// Ergebnis einer Kompaktierung.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Compacted {
     pub dropped: usize,
+    /// Heft-Bilder, die mit ihren `heftBlob`-Events ganz aus dem Log gefallen sind: Der geladene
+    /// Zustand soll sie vergessen (`Model::forget_heft_blobs`), sonst listet sie der Checkpoint weiter.
+    pub dropped_blobs: Vec<String>,
+}
+
+/// Hash eines `heftBlob`-Events.
+fn heft_blob_hash(ev: &Object) -> Option<&str> {
+    (event::kind(ev) == "heftBlob").then(|| ev.get("payload")?.get("hash")?.as_str()).flatten()
 }
 
 pub trait StorageExt: Storage {
@@ -96,36 +104,48 @@ pub trait StorageExt: Storage {
     }
 
     /// Kompaktiert den Log, wenn mindestens `min_drop` Events wegfallen. Welche bleiben,
-    /// entscheidet `impala_sync::compact`. Das Event mit der höchsten `seq` bleibt immer
+    /// entscheidet `impala_sync::compact_with`; mit `blobs` (aktueller Heft-Zustand bekannt) fallen
+    /// auch Bilder weg, die kein Heft mehr zeigt. Das Event mit der höchsten `seq` bleibt immer
     /// (Wasserstand für Upload-Cursor und Checkpoint). Setzt die Kompaktierungs-Untergrenze.
-    fn compact(&mut self, min_drop: usize, now: &str) -> Result<Compacted, Error> {
+    fn compact(&mut self, min_drop: usize, now: &str, blobs: Option<&impala_sync::BlobKeep>) -> Result<Compacted, Error> {
         let events = self.all_events()?;
-        let Some(keep) = compaction::keep_indices(&events) else { return Ok(Compacted::default()) };
+        let Some(keep) = compaction::keep_indices(&events, blobs) else { return Ok(Compacted::default()) };
         if events.len() - keep.len() < min_drop {
             return Ok(Compacted::default());
         }
         let floor = keep.first().map(|&i| event::time(&events[i]).to_owned()).filter(|t| !t.is_empty());
         let mut kept: HashSet<Seq> = keep.iter().map(|&i| event::seq(&events[i])).collect();
         kept.insert(events.iter().map(event::seq).max().unwrap_or(0));
-        let mut writes: Vec<Write> =
-            events.iter().map(event::seq).filter(|s| !kept.contains(s)).map(Write::DeleteEvent).collect();
-        let dropped = writes.len();
-        if dropped == 0 {
+        let (stay, gone): (Vec<&Object>, Vec<&Object>) = events.iter().partition(|ev| kept.contains(&event::seq(ev)));
+        if gone.is_empty() {
             return Ok(Compacted::default());
         }
+        let still: HashSet<&str> = stay.iter().filter_map(|ev| heft_blob_hash(ev)).collect();
+        let mut dropped_blobs: Vec<String> =
+            gone.iter().filter_map(|ev| heft_blob_hash(ev)).filter(|h| !still.contains(h)).map(str::to_owned).collect();
+        dropped_blobs.sort();
+        dropped_blobs.dedup();
+        // Ohne Heft-Zustand bleibt der Checkpoint-Teil (der Speicher macht daraus eine Kopie);
+        // mit ihm ist sicher, dass kein Heft das Bild zeigt, und der Teil fällt gleich mit.
+        let mut writes: Vec<Write> = match blobs {
+            Some(_) => dropped_blobs.iter().map(|h| Write::DeletePart(PartKind::HeftBlob, h.clone())).collect(),
+            None => Vec::new(),
+        };
+        writes.extend(gone.iter().map(|ev| Write::DeleteEvent(event::seq(ev))));
+        let dropped = gone.len();
         writes.push(Write::SetMeta(COMPACT_FLOOR_KEY.into(), Some(floor.unwrap_or_else(|| now.to_owned()))));
         self.apply(writes)?;
-        Ok(Compacted { dropped })
+        Ok(Compacted { dropped, dropped_blobs })
     }
 
     /// Kompaktiert nur, wenn seit der letzten Prüfung genug neue Events kamen (`compactLocalIfDue`).
-    fn compact_if_due(&mut self, now: &str) -> Result<Compacted, Error> {
+    fn compact_if_due(&mut self, now: &str, blobs: Option<&impala_sync::BlobKeep>) -> Result<Compacted, Error> {
         let top = self.max_seq()?;
         let checked = self.meta(COMPACT_CHECKED_SEQ_KEY)?.and_then(|s| s.parse::<Seq>().ok()).unwrap_or(0).min(top);
         if top - checked < COMPACT_CHECK_STEP {
             return Ok(Compacted::default());
         }
-        let result = self.compact(COMPACT_CHECK_STEP as usize, now)?;
+        let result = self.compact(COMPACT_CHECK_STEP as usize, now, blobs)?;
         self.apply(vec![Write::SetMeta(COMPACT_CHECKED_SEQ_KEY.into(), Some(top.to_string()))])?;
         Ok(result)
     }
@@ -133,21 +153,22 @@ pub trait StorageExt: Storage {
     /// Seiten-Reset: Seiten-/Heft-Events, Vektoren, Blobs (außer Hintergrundbild) und den
     /// Checkpoint entsorgen – Einstellungen überleben. Ein lokaler Neuanfang, kein Sync-Reset.
     fn clear_pages(&mut self) -> Result<(), Error> {
-        let mut writes: Vec<Write> = self
-            .all_events()?
-            .iter()
-            .filter(|ev| PAGE_TYPES.contains(&event::kind(ev)))
-            .map(|ev| Write::DeleteEvent(event::seq(ev)))
-            .collect();
-        writes.push(Write::ClearVecs);
-        writes.extend(self.blob_keys()?.into_iter().filter(|k| k != KEEP_ON_RESET).map(Write::DeleteBlob));
-        // In IndexedDB liegt der Checkpoint im selben Store und fällt dort mit weg.
-        writes.extend([
+        // In IndexedDB liegt der Checkpoint im selben Store und fällt dort mit weg. Teile zuerst:
+        // Verweise auf gelöschte Bild-Events müssten sonst erst zu Kopien werden.
+        let mut writes = vec![
             Write::DeleteCheckpoint(CheckpointSlot::Current),
             Write::DeleteCheckpoint(CheckpointSlot::Legacy),
             Write::ClearParts(PartKind::HeftBlob),
             Write::ClearParts(PartKind::HeftDoc),
-        ]);
+        ];
+        writes.extend(
+            self.all_events()?
+                .iter()
+                .filter(|ev| PAGE_TYPES.contains(&event::kind(ev)))
+                .map(|ev| Write::DeleteEvent(event::seq(ev))),
+        );
+        writes.push(Write::ClearVecs);
+        writes.extend(self.blob_keys()?.into_iter().filter(|k| k != KEEP_ON_RESET).map(Write::DeleteBlob));
         self.apply(writes).map(drop)
     }
 

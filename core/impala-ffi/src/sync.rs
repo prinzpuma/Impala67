@@ -415,6 +415,11 @@ fn run<H: HttpClient>(
             Cmd::Sync(force_all, reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.sync(force_all));
+                if r.is_ok() {
+                    // Erst nach dem Upload verdichten (wie die PWA): überholte Stände sind dann entbehrlich.
+                    settle_remote(&client.store_mut().core);
+                    crate::storage_care::compact_if_due(&client.store_mut().core);
+                }
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);

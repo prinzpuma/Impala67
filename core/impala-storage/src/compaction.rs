@@ -66,7 +66,8 @@ impl<'a> JsLike for Json<'a> {
 /// Indizes der behaltenen Events in Log-Reihenfolge (nach `t`, dann `seq`).
 /// `None`: Ein Event hat eine Form, über die der Sync-Kern nicht sicher entscheiden kann –
 /// dann wird nicht kompaktiert (Kompaktierung ist optional, Weglassen nie nötig).
-pub fn keep_indices(events: &[Object]) -> Option<Vec<usize>> {
+/// Mit `blobs` fallen auch Heft-Bilder weg, die kein Heft mehr zeigt ([`impala_sync::compact_with`]).
+pub fn keep_indices(events: &[Object], blobs: Option<&impala_sync::BlobKeep>) -> Option<Vec<usize>> {
     let decoded: Result<Vec<_>, _> = events.iter().map(|ev| impala_sync::decode(&Json::Root(ev))).collect();
-    decoded.ok().map(|evs| impala_sync::compact(&evs))
+    decoded.ok().map(|evs| impala_sync::compact_with(&evs, blobs))
 }

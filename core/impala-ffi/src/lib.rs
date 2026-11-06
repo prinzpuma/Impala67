@@ -29,6 +29,7 @@ mod pages;
 mod rag;
 mod scan;
 mod stats;
+mod storage_care;
 mod study_records;
 mod sync;
 mod ui;

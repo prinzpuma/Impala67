@@ -379,6 +379,9 @@ fn run<H: HttpClient>(
                 };
                 let r = if restore { block_on(backup.restore(&mut on_phase)) } else { block_on(backup.sync(&mut on_phase)) };
                 settle_remote(&shared);
+                if r.is_ok() {
+                    crate::storage_care::compact_if_due(&shared);
+                }
                 set_progress("");
                 let _ = reply.send(r);
             }

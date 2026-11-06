@@ -3237,6 +3237,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func clearPages() throws 
     
     /**
+     * Event-Log jetzt verdichten (Speicher-Einstellungen); liefert die Zahl entfernter Events.
+     */
+    func compactLocal() throws  -> UInt64
+    
+    /**
      * Zahl der offenen Konflikte (Hinweis-Zähler).
      */
     func conflictCount()  -> UInt32
@@ -3843,6 +3848,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func settingsJson()  -> String
     
     /**
+     * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
+     * einmal: nur auf Nachfrage aufrufen, nie beim Start.
+     */
+    func storageCheck() throws  -> StorageCheckInfo
+    
+    /**
      * Lernwarteschlange jetzt. `deck`: Stapel samt Unterstapeln (`None`: alle).
      * `utc_offset_minutes`: aktueller Versatz der Ortszeit (MEZ +60, MESZ +120) für die Tagesgrenze.
      */
@@ -4262,6 +4273,16 @@ open func clearPages()throws   {try rustCallWithError(FfiConverterTypeCoreError_
     uniffi_impala_ffi_fn_method_impalacore_clear_pages(self.uniffiClonePointer(),$0
     )
 }
+}
+    
+    /**
+     * Event-Log jetzt verdichten (Speicher-Einstellungen); liefert die Zahl entfernter Events.
+     */
+open func compactLocal()throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_compact_local(self.uniffiClonePointer(),$0
+    )
+})
 }
     
     /**
@@ -5643,6 +5664,17 @@ open func setUiTabs(tabs: [String], activeTabId: String?)throws   {try rustCallW
 open func settingsJson() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_settings_json(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
+     * einmal: nur auf Nachfrage aufrufen, nie beim Start.
+     */
+open func storageCheck()throws  -> StorageCheckInfo  {
+    return try  FfiConverterTypeStorageCheckInfo_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_storage_check(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -13868,6 +13900,129 @@ public func FfiConverterTypeSemanticHit_lower(_ value: SemanticHit) -> RustBuffe
 }
 
 
+/**
+ * Ergebnis von [`ImpalaCore::storage_check`]; im Normalfall alles 0.
+ */
+public struct StorageCheckInfo {
+    /**
+     * Heft-Bilder, die der Checkpoint als Kopie statt als Verweis hält, obwohl sie im Log liegen.
+     */
+    public var checkpointCopies: UInt64
+    public var checkpointCopiesBytes: UInt64
+    /**
+     * Verweise auf ein Event, das es nicht mehr gibt.
+     */
+    public var deadPointers: UInt64
+    /**
+     * Bilder ohne Heftseite, älter als die Schonfrist (fallen bei der nächsten Kompaktierung).
+     */
+    public var orphanImages: UInt64
+    public var orphanImagesBytes: UInt64
+    public var ok: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Heft-Bilder, die der Checkpoint als Kopie statt als Verweis hält, obwohl sie im Log liegen.
+         */checkpointCopies: UInt64, checkpointCopiesBytes: UInt64, 
+        /**
+         * Verweise auf ein Event, das es nicht mehr gibt.
+         */deadPointers: UInt64, 
+        /**
+         * Bilder ohne Heftseite, älter als die Schonfrist (fallen bei der nächsten Kompaktierung).
+         */orphanImages: UInt64, orphanImagesBytes: UInt64, ok: Bool) {
+        self.checkpointCopies = checkpointCopies
+        self.checkpointCopiesBytes = checkpointCopiesBytes
+        self.deadPointers = deadPointers
+        self.orphanImages = orphanImages
+        self.orphanImagesBytes = orphanImagesBytes
+        self.ok = ok
+    }
+}
+
+#if compiler(>=6)
+extension StorageCheckInfo: Sendable {}
+#endif
+
+
+extension StorageCheckInfo: Equatable, Hashable {
+    public static func ==(lhs: StorageCheckInfo, rhs: StorageCheckInfo) -> Bool {
+        if lhs.checkpointCopies != rhs.checkpointCopies {
+            return false
+        }
+        if lhs.checkpointCopiesBytes != rhs.checkpointCopiesBytes {
+            return false
+        }
+        if lhs.deadPointers != rhs.deadPointers {
+            return false
+        }
+        if lhs.orphanImages != rhs.orphanImages {
+            return false
+        }
+        if lhs.orphanImagesBytes != rhs.orphanImagesBytes {
+            return false
+        }
+        if lhs.ok != rhs.ok {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(checkpointCopies)
+        hasher.combine(checkpointCopiesBytes)
+        hasher.combine(deadPointers)
+        hasher.combine(orphanImages)
+        hasher.combine(orphanImagesBytes)
+        hasher.combine(ok)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStorageCheckInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StorageCheckInfo {
+        return
+            try StorageCheckInfo(
+                checkpointCopies: FfiConverterUInt64.read(from: &buf), 
+                checkpointCopiesBytes: FfiConverterUInt64.read(from: &buf), 
+                deadPointers: FfiConverterUInt64.read(from: &buf), 
+                orphanImages: FfiConverterUInt64.read(from: &buf), 
+                orphanImagesBytes: FfiConverterUInt64.read(from: &buf), 
+                ok: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StorageCheckInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.checkpointCopies, into: &buf)
+        FfiConverterUInt64.write(value.checkpointCopiesBytes, into: &buf)
+        FfiConverterUInt64.write(value.deadPointers, into: &buf)
+        FfiConverterUInt64.write(value.orphanImages, into: &buf)
+        FfiConverterUInt64.write(value.orphanImagesBytes, into: &buf)
+        FfiConverterBool.write(value.ok, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageCheckInfo_lift(_ buf: RustBuffer) throws -> StorageCheckInfo {
+    return try FfiConverterTypeStorageCheckInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageCheckInfo_lower(_ value: StorageCheckInfo) -> RustBuffer {
+    return FfiConverterTypeStorageCheckInfo.lower(value)
+}
+
+
 public struct StudyQueue {
     /**
      * Jetzt zu lernen, in Lernreihenfolge (die erste Karte zeigen).
@@ -20390,6 +20545,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_clear_pages() != 2531) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_compact_local() != 14681) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_conflict_count() != 65320) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20739,6 +20897,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_storage_check() != 52100) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_study_queue() != 60615) {

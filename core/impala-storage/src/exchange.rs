@@ -50,7 +50,7 @@ impl Default for ExportOptions {
 /// Log-Reihenfolge (nach `t`, dann `seq`), ohne gerätelokale Marken.
 pub fn export_all<S: Storage + ?Sized>(storage: &S, opts: &ExportOptions) -> Result<String, Error> {
     let mut all = storage.events_after(0, None, None)?;
-    let order = compaction::keep_indices(&all).unwrap_or_else(|| {
+    let order = compaction::keep_indices(&all, None).unwrap_or_else(|| {
         // Ohne Kompaktierung (unbekannte Event-Form) trotzdem dieselbe Reihenfolge.
         let mut order: Vec<usize> = (0..all.len()).collect();
         order.sort_by(|&a, &b| {

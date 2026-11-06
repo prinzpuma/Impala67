@@ -64,7 +64,7 @@ fn scenario_matches_js_logs() {
                     assert_eq!(s.log_info().unwrap(), info_of(&step["info"]), "{at}");
                 }
                 "compactIfDue" => {
-                    let r = s.compact_if_due("JETZT").unwrap();
+                    let r = s.compact_if_due("JETZT", None).unwrap();
                     assert_eq!(r.dropped as u64, step["expect"]["dropped"].as_u64().unwrap(), "{at}");
                     let floor = s.meta(exchange::COMPACT_FLOOR_KEY).unwrap();
                     assert_eq!(floor.as_deref(), step["expect"]["floor"].as_str(), "{at}");
