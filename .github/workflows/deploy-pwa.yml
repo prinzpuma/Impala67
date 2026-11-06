@@ -50,21 +50,11 @@ jobs:
           # sonst erreicht er installierte PWAs nicht (Service Worker liefert cache-first).
           # Release-Commit (package.json geändert): genau diese Version.
           # Sonst: nächster Patch als Vorabversion, z. B. 2.2.84-dev.57 (> 2.2.83, < 2.2.84).
-          HEAD_SHA=$(git rev-parse HEAD)
-          REMOTE_TAG=$(git ls-remote --tags origin "refs/tags/v*" | grep "^${HEAD_SHA}" | head -n 1 | awk '{print $2}' | sed 's#refs/tags/##' | sed 's#\^{}##')
           VERSION=$(node -p "require('./package.json').version")
           PREVIOUS=$(git show HEAD^:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
-          if [ -n "$REMOTE_TAG" ]; then
-            VERSION="${REMOTE_TAG#v}"
-          elif [ "$VERSION" = "$PREVIOUS" ]; then
-            EXISTING_TAGS=$(git ls-remote --tags origin "refs/tags/v*" | awk '{print $2}' | sed 's#refs/tags/##')
+          if [ "$VERSION" = "$PREVIOUS" ]; then
             IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            PATCH=$((PATCH + 1))
-            VERSION="$MAJOR.$MINOR.$PATCH"
-            while echo "$EXISTING_TAGS" | grep -qx "v$VERSION"; do
-              PATCH=$((PATCH + 1))
-              VERSION="$MAJOR.$MINOR.$PATCH"
-            done
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))-dev.$GITHUB_RUN_NUMBER"
           fi
           echo "PWA-Version: $VERSION"
           node .github/scripts/set-version.mjs "$VERSION"

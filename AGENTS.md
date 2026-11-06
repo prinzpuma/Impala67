@@ -38,7 +38,7 @@
 - **Sicherheit & Geheimnisse**: Keine API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben nur lokal im Browser.
 - **Rückwärtskompatibilität**: Lokale IndexedDB-Daten dürfen durch Updates nie verloren gehen oder ungefragt inkompatibel werden.
 - **Zustand nur über Events**: Gespeicherte Daten (`S.pages`, `S.cards`, … und Hefte) liegen im Rust-Kern und ändern sich nur über `STATE.dispatch`. Die Ansichten in `S` sind schreibgeschützt; Hefte nur über `STATE.heftDoc`/`heftPage` lesen, nie alle auf einmal.
-- **Offline-Cache**: Jeder Push auf `main` bekommt automatisch eine eigene Cache-Version (Release `x.y.z`, siehe `.github/workflows/deploy-pwa.yml` und `.github/workflows/release.yml`). Neue App-Dateien müssen nur in `APP_FILES` im Service Worker stehen.
+- **Offline-Cache**: Jeder Push auf `main` bekommt automatisch eine eigene Cache-Version (Zwischenstand `x.y.z-dev.N`, Release `x.y.z`, siehe `.github/workflows/deploy-pwa.yml`). Neue App-Dateien müssen nur in `APP_FILES` im Service Worker stehen.
 
 ## 5. Arbeitsweise
 
@@ -49,7 +49,7 @@
 
 ## 6. Veröffentlichung
 
-- **Ein Push auf `main` geht sofort live und wird released**: Er veröffentlicht die PWA über GitHub Pages und erstellt automatisch ein GitHub Release mit getaggter Version und nativer Android Release APK. Vorher prüfen, ob die Änderung fertig ist.
+- **Ein Push auf `main` geht sofort live**: Er veröffentlicht die PWA automatisch über GitHub Pages. Ein offizielles GitHub Release (mit Android Release APK) wird nur manuell über den Workflow ausgelöst. Vorher prüfen, ob die Änderung fertig ist.
 - **Versionen automatisch**: Der CI-Workflow setzt Versionsnummern und Cache-Strings über `.github/scripts/set-version.mjs`. Nicht von Hand ändern.
 
 ## 7. KI- & Entwickler-Integration (MCP Live-Bridge)

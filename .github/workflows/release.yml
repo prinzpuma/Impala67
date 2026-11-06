@@ -2,8 +2,6 @@ name: Release & Android APK veröffentlichen
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -67,15 +65,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${GITHUB_REF_NAME}"
             VERSION="${TAG#v}"
           else
             EXISTING_TAGS=$(git ls-remote --tags origin "refs/tags/v*" | awk '{print $2}' | sed 's#refs/tags/##')
             TYPE="${{ github.event.inputs.release_type }}"
-            if [ -z "$TYPE" ]; then
-              TYPE="patch"
-            fi
             if [ "$TYPE" = "manual" ]; then
               VERSION="${{ github.event.inputs.manual_version }}"
               if [ -z "$VERSION" ]; then
@@ -84,27 +79,22 @@ jobs:
               fi
             else
               CURRENT=$(node -p "require('./package.json').version")
-              PREVIOUS=$(git show HEAD^:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
-              if [ "$CURRENT" != "$PREVIOUS" ] && [ -n "$PREVIOUS" ]; then
-                VERSION="$CURRENT"
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+              if [ "$TYPE" = "major" ]; then
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+              elif [ "$TYPE" = "minor" ]; then
+                MINOR=$((MINOR + 1))
+                PATCH=0
               else
-                IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-                if [ "$TYPE" = "major" ]; then
-                  MAJOR=$((MAJOR + 1))
-                  MINOR=0
-                  PATCH=0
-                elif [ "$TYPE" = "minor" ]; then
-                  MINOR=$((MINOR + 1))
-                  PATCH=0
-                else
-                  PATCH=$((PATCH + 1))
-                fi
-                VERSION="$MAJOR.$MINOR.$PATCH"
-                while echo "$EXISTING_TAGS" | grep -qx "v$VERSION"; do
-                  PATCH=$((PATCH + 1))
-                  VERSION="$MAJOR.$MINOR.$PATCH"
-                done
+                PATCH=$((PATCH + 1))
               fi
+              VERSION="$MAJOR.$MINOR.$PATCH"
+              while echo "$EXISTING_TAGS" | grep -qx "v$VERSION"; do
+                PATCH=$((PATCH + 1))
+                VERSION="$MAJOR.$MINOR.$PATCH"
+              done
             fi
             TAG="v$VERSION"
             if ! echo "$EXISTING_TAGS" | grep -qx "$TAG"; then
