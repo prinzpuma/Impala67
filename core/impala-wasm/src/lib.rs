@@ -25,14 +25,18 @@ extern "C" {
 /// Kompaktiert das Event-Log und liefert die Indizes der behaltenen Events in Log-Reihenfolge.
 /// Die Events bleiben in JS; der Kern fragt nur die Felder ab, die die Regeln lesen.
 /// Wirft, wenn ein Event eine Form hat, die nur die JS-Implementierung abdeckt.
+/// `live` (Bilder, die ein Heft gerade zeigt) und `since` (Schonfrist, ISO-Zeit) zusammen: auch
+/// Bilder ohne Heftseite fallen weg (`impala_sync::compact_with`); fehlt eins, gilt die alte Regel.
 #[wasm_bindgen(js_name = compactOrder)]
-pub fn compact_order(events: Array) -> Result<Vec<u32>, JsError> {
+pub fn compact_order(events: Array, live: Option<Vec<String>>, since: Option<String>) -> Result<Vec<u32>, JsError> {
     let events = events
         .iter()
         .map(|ev| impala_sync::decode(&Js(ev)))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| JsError::new(&e.0))?;
-    Ok(impala_sync::compact(&events).into_iter().map(|i| i as u32).collect())
+    let live: Option<std::collections::HashSet<String>> = live.map(|l| l.into_iter().collect());
+    let keep = live.as_ref().zip(since.as_deref()).map(|(live, since)| impala_sync::BlobKeep { live, since });
+    Ok(impala_sync::compact_with(&events, keep.as_ref()).into_iter().map(|i| i as u32).collect())
 }
 
 struct Js(JsValue);

@@ -10,9 +10,12 @@ const byLogOrder = (a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0
 
 // Behaltene Events in Log-Reihenfolge. Hat ein Event eine Form, die der Kern nicht sicher
 // beurteilen kann, wird diesmal nichts verworfen (verlustfrei, nur größer).
-export function compactEvents(events) {
+// blobKeep = { live: [Bild-Hashes, die ein Heft gerade zeigt], since: ISO-Zeit der Schonfrist }:
+// dann fallen auch Bilder weg, die keine Heftseite mehr zeigt (sonst blieben sie für immer).
+export function compactEvents(events, blobKeep = null) {
 	try {
-		return Array.from(CORE.compactOrder(events), (i) => events[i]);
+		const order = blobKeep ? CORE.compactOrder(events, blobKeep.live, blobKeep.since) : CORE.compactOrder(events);
+		return Array.from(order, (i) => events[i]);
 	} catch (error) {
 		console.warn("Kompaktierung übersprungen:", error?.message || error);
 		return [...events].sort(byLogOrder);
@@ -23,21 +26,27 @@ export function compactEvents(events) {
 // Das Event mit der höchsten seq bleibt immer: DB.maxSeq() ist der Wasserstand für Upload-Cursor
 // und Start-Checkpoint. Sänke er, hielte der Cloudflare-Push den Log für zurückgesetzt und lüde
 // alles neu hoch. Ein zusätzlich behaltenes Event ist harmlos, der Log bleibt eine Obermenge.
-export function compactEventStore(db, minDrop) {
+// droppedBlobs: Hashes weggefallener Heft-Bilder (der geladene Zustand vergisst sie dann).
+export function compactEventStore(db, minDrop, blobKeep = null) {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
 		const req = store.getAll();
 		let dropped = 0, floor = "";
+		const droppedBlobs = [];
 		req.onsuccess = () => {
-			const evs = req.result || [], compacted = compactEvents(evs);
+			const evs = req.result || [], compacted = compactEvents(evs, blobKeep);
 			if (evs.length - compacted.length < minDrop) return;
 			const keep = new Set(compacted.map((ev) => ev.seq));
 			keep.add(evs.reduce((top, ev) => Math.max(top, ev.seq || 0), 0));
-			for (const ev of evs) if (!keep.has(ev.seq)) { store.delete(ev.seq); dropped++; }
+			for (const ev of evs) if (!keep.has(ev.seq)) {
+				store.delete(ev.seq);
+				dropped++;
+				if (ev.type === "heftBlob" && ev.payload?.hash) droppedBlobs.push(String(ev.payload.hash));
+			}
 			floor = compacted.length ? compacted[0].t : "";
 		};
 		req.onerror = () => { try { tx.abort(); } catch {} };
-		tx.oncomplete = () => resolve({ dropped, floor });
+		tx.oncomplete = () => resolve({ dropped, droppedBlobs, floor });
 		tx.onerror = tx.onabort = () => reject(tx.error || req.error || new Error("Kompaktierung abgebrochen."));
 	});
 }

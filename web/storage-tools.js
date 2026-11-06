@@ -225,7 +225,14 @@ export const STORAGE_TOOLS = (() => {
 
     const cacheStats = await inspectCaches(cachesObj);
 
+    // Kontrolle gegen doppelten oder verwaisten Speicher (db.js storageCheck); null = nicht prüfbar.
+    let check = null;
+    if (db?.storageCheck) {
+      try { check = await db.storageCheck(); } catch {}
+    }
+
     return {
+      check,
       estimate,
       legacyDb,
       eventLog,

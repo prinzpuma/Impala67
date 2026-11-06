@@ -543,6 +543,27 @@ function renderStorageDetailsHtml(rep) {
 		'</div>';
 	}
 
+	// Kontrolle: Speicher darf nicht doppelt oder verwaist liegen (db.js storageCheck).
+	const c = rep.check;
+	if (c && !c.ok) {
+		const items = [
+			c.checkpointCopies ? `${c.checkpointCopies} Heft-Bilder doppelt im Start-Speicher (${c.checkpointCopiesMb} MB)` : "",
+			c.orphanImages ? `${c.orphanImages} Bilder ohne Heftseite (${c.orphanImagesMb} MB)` : "",
+			c.deadPointers ? `${c.deadPointers} Verweise auf entfernte Bilder` : "",
+			c.duplicateCache ? `${c.duplicateCache} Dateien doppelt im Cache (${c.duplicateCacheMb} MB)` : "",
+		].filter(Boolean);
+		html += '<div class="storage-alert-card">' +
+			'<div class="storage-alert-header">' +
+				'<span class="storage-alert-icon" aria-hidden="true">⚠️</span>' +
+				'<div><b>Speicher-Kontrolle</b>' +
+					'<p>' + items.map(e).join(" · ") + '. Räumt sich beim nächsten Verdichten, Neustart bzw. Update selbst auf.</p>' +
+				'</div>' +
+			'</div>' +
+		'</div>';
+	} else if (c?.ok) {
+		html += '<p class="storage-card-desc">✓ Speicher-Kontrolle: nichts doppelt oder verwaist.</p>';
+	}
+
 	html += '<div class="storage-grid">';
 
 	// Karte 1: Hefte & Notizen

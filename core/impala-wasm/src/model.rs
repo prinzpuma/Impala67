@@ -396,6 +396,12 @@ impl ModelCore {
         Ok(self.m.release_heft_blobs(&strings(parse(keep)?)) as u32)
     }
 
+    /// Von der Kompaktierung verworfene Bilder vergessen (JSON-Liste der Hashes).
+    #[wasm_bindgen(js_name = forgetHeftBlobs)]
+    pub fn forget_heft_blobs(&mut self, gone: &str) -> Result<u32, JsError> {
+        Ok(self.m.forget_heft_blobs(&strings(parse(gone)?)) as u32)
+    }
+
     /// Welche Bilder JS aus dem Checkpoint lesen soll (`targets`: JSON-Liste oder `null` = alle).
     #[wasm_bindgen(js_name = blobsToHydrate)]
     pub fn blobs_to_hydrate(&self, targets: &str) -> Result<String, JsError> {
@@ -542,6 +548,12 @@ impl ModelCore {
     pub fn heft_meta(&self, page_id: &str) -> Option<String> {
         let m = self.m.heft_meta(page_id)?;
         Some(text(&HeftMetaJs { rev: m.rev, pages: m.pages, ocr_text: m.ocr_text, updated: m.updated, bytes: m.bytes }))
+    }
+
+    /// Bildreferenzen aller Hefte (sortiert, ohne Doppelte): was die Kompaktierung behalten muss.
+    #[wasm_bindgen(js_name = heftLiveBlobs)]
+    pub fn heft_live_blobs(&self) -> String {
+        text(&self.m.state().hefte.referenced_blobs())
     }
 
     /// Bildreferenzen eines Hefts.

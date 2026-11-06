@@ -1028,6 +1028,28 @@ export class ModelCore {
         }
     }
     /**
+     * Von der Kompaktierung verworfene Bilder vergessen (JSON-Liste der Hashes).
+     * @param {string} gone
+     * @returns {number}
+     */
+    forgetHeftBlobs(gone) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(gone, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_forgetHeftBlobs(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return r0 >>> 0;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {string} hash
      * @returns {boolean}
      */
@@ -1138,6 +1160,26 @@ export class ModelCore {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             wasm.modelcore_heftIndexSummary(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Bildreferenzen aller Hefte (sortiert, ohne Doppelte): was die Kompaktierung behalten muss.
+     * @returns {string}
+     */
+    heftLiveBlobs() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.modelcore_heftLiveBlobs(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred1_0 = r0;
@@ -2487,13 +2529,21 @@ export function aiToolDefs() {
  * Kompaktiert das Event-Log und liefert die Indizes der behaltenen Events in Log-Reihenfolge.
  * Die Events bleiben in JS; der Kern fragt nur die Felder ab, die die Regeln lesen.
  * Wirft, wenn ein Event eine Form hat, die nur die JS-Implementierung abdeckt.
+ * `live` (Bilder, die ein Heft gerade zeigt) und `since` (Schonfrist, ISO-Zeit) zusammen: auch
+ * Bilder ohne Heftseite fallen weg (`impala_sync::compact_with`); fehlt eins, gilt die alte Regel.
  * @param {Array<any>} events
+ * @param {string[] | null} [live]
+ * @param {string | null} [since]
  * @returns {Uint32Array}
  */
-export function compactOrder(events) {
+export function compactOrder(events, live, since) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.compactOrder(retptr, addHeapObject(events));
+        var ptr0 = isLikeNone(live) ? 0 : passArrayJsValueToWasm0(live, wasm.__wbindgen_export);
+        var len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(since) ? 0 : passStringToWasm0(since, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len1 = WASM_VECTOR_LEN;
+        wasm.compactOrder(retptr, addHeapObject(events), ptr0, len0, ptr1, len1);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -2501,9 +2551,9 @@ export function compactOrder(events) {
         if (r3) {
             throw takeObject(r2);
         }
-        var v1 = getArrayU32FromWasm0(r0, r1).slice();
+        var v3 = getArrayU32FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export5(r0, r1 * 4, 4);
-        return v1;
+        return v3;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -4125,7 +4175,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4706(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4727(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4171,7 +4221,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4706(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4727(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4264,7 +4314,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 187, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4650);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4671);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -4291,14 +4341,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4706(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4706(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4727(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4727(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4650(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4671(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4650(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4671(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

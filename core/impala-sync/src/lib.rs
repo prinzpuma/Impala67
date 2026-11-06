@@ -26,7 +26,7 @@ pub use client::{
     BlobReport, CompactReport, LocalBlob, PassReport, Progress, PushReport, StoreError, SyncClient, SyncState,
     SyncStore, WsAction, is_uploadable,
 };
-pub use compact::compact;
+pub use compact::{BlobKeep, compact, compact_with};
 pub use error::{SyncError, is_retryable_status};
 pub use event::{Body, Event, Field, JsLike, Kind, Patch, Snapshot, Unsupported, Update, decode};
 pub use js::{JsonValue, compact_values};

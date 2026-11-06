@@ -232,9 +232,24 @@ self.addEventListener("activate", (e) => {
 	e.waitUntil(
 		caches.keys()
 			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE && !keepsAcrossVersions(k)).map((k) => caches.delete(k))))
+			.then(() => dropOptionalDuplicates().catch(() => {}))
 			.then(() => self.clients.claim())
 	);
 });
+
+// Transformers.js legt seine Laufzeit (onnxruntime-WASM, ~27 MB) selbst in "transformers-cache" ab.
+// Holte sie der erste Abruf am Service Worker vorbei, lag sie zusätzlich im OPTIONAL_CACHE. Doppelte
+// dort beim Update entfernen; der Fetch-Handler liefert sie dann aus dem anderen Cache.
+async function dropOptionalDuplicates() {
+	const others = (await caches.keys()).filter((k) => k !== OPTIONAL_CACHE && keepsAcrossVersions(k) && k !== SHARE_CACHE);
+	if (!others.length) return;
+	const opt = await caches.open(OPTIONAL_CACHE);
+	for (const req of await opt.keys()) {
+		for (const name of others) {
+			if (await (await caches.open(name)).match(req)) { await opt.delete(req); break; }
+		}
+	}
+}
 
 // Web Share Target: unterstützte installierte PWAs (vor allem Android/ChromeOS)
 // senden ein PDF als POST. iPadOS registriert eine reine PWA derzeit nicht als
@@ -317,6 +332,8 @@ self.addEventListener("fetch", (e) => {
 				const mainCache = await caches.open(CACHE);
 				cached = await mainCache.match(key);
 			}
+			// Liegt die Datei schon in einem anderen dauerhaften Cache (Transformers.js), nicht doppelt speichern.
+			if (!cached) cached = await caches.match(key, { cacheName: "transformers-cache" });
 			if (cached) return cached;
 			const res = await fetch(req);
 			if (res && res.ok && !isHtmlFallback(url.pathname, res)) {

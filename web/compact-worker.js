@@ -25,7 +25,7 @@ self.onmessage = async ({ data }) => {
 	let d = null;
 	try {
 		d = await openDb(data.name, data.version);
-		const result = await compactEventStore(d, data.minDrop);
+		const result = await compactEventStore(d, data.minDrop, data.blobKeep || null);
 		self.postMessage(result);
 	} catch (e) {
 		self.postMessage({ error: String(e?.message || e) });

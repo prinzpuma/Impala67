@@ -497,6 +497,19 @@ impl Model {
         released
     }
 
+    /// Bilder vergessen, deren `heftBlob`-Events die Kompaktierung verworfen hat (kein Heft zeigt sie).
+    /// Der nächste Checkpoint listet sie dann nicht mehr, und ihre Teile werden aufgeräumt.
+    pub fn forget_heft_blobs(&mut self, gone: &[String]) -> usize {
+        let mut n = 0;
+        for h in gone {
+            let known = self.blob_sizes.remove(h).is_some();
+            let loaded = self.state.hefte.blobs.remove(h).is_some();
+            self.dirty_blobs.remove(h);
+            n += usize::from(known || loaded);
+        }
+        n
+    }
+
     /// Welche Bilder [`Model::hydrate_heft_blobs`] aus dem Speicher holen müsste (bekannt, nicht geladen).
     pub fn blobs_to_hydrate(&self, targets: Option<&[String]>) -> Vec<String> {
         if self.blob_sizes.is_empty() || (self.payload_loaded && targets.is_none()) {

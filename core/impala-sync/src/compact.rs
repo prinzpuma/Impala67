@@ -10,6 +10,9 @@
 //! 4. Chats/Tagesartikel sind Last-write-wins-Schnappschüsse: nur der Gewinner je Eintrag;
 //!    von den Tagesartikeln nur die [`ARTICLE_KEEP`] neuesten.
 //! 5. Bilder (`heftBlob`) bleiben nur, solange ein behaltenes Heft-Event sie referenziert.
+//!    Mit [`BlobKeep`] ([`compact_with`]) enger: nur Bilder, die ein Heft gerade zeigt, plus alles
+//!    der Schonfrist (Bilder und Heft-Events ab `since`). Heft-Events bleiben, nur ihre Bilder nicht:
+//!    `i+` eines später entfernten Bildes verweist sonst für immer auf dessen Daten.
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -20,8 +23,22 @@ use crate::event::{Body, Event, Patch, Snapshot};
 pub const KEEP_CONTENT_VERSIONS: usize = 10;
 pub const ARTICLE_KEEP: usize = 30;
 
+/// Welche Bilder die Kompaktierung behält, wenn der aktuelle Heft-Zustand bekannt ist.
+pub struct BlobKeep<'a> {
+    /// Bilder, die ein Heft im aktuellen Zustand zeigt.
+    pub live: &'a HashSet<String>,
+    /// Schonfrist (ISO-Zeit): Bilder und Heft-Events ab hier zählen immer (Rückgängig, Geräte mit
+    /// noch nicht gesyncten Änderungen, lokale Heft-Versionen).
+    pub since: &'a str,
+}
+
 /// Liefert die Indizes der behaltenen Events, in Log-Reihenfolge (nach `t`, dann `seq`).
 pub fn compact(events: &[Event]) -> Vec<usize> {
+    compact_with(events, None)
+}
+
+/// Wie [`compact`]; mit `blobs` fallen auch Bilder weg, die kein Heft mehr zeigt.
+pub fn compact_with(events: &[Event], blobs: Option<&BlobKeep>) -> Vec<usize> {
     let mut order: Vec<usize> = (0..events.len()).collect();
     order.sort_by(|&a, &b| js_cmp(&events[a].t, &events[b].t).then(events[a].seq.cmp(&events[b].seq)));
 
@@ -56,16 +73,23 @@ pub fn compact(events: &[Event]) -> Vec<usize> {
     }
     keep.reverse();
 
-    let used: Set<&str> = keep
+    let recent = |t: &str| blobs.is_none_or(|b| js_cmp(t, b.since) != Ordering::Less);
+    let mut used: Set<&str> = keep
         .iter()
+        .filter(|&&i| recent(&events[i].t))
         .filter_map(|&i| match &events[i].body {
             Body::HeftRefs(refs) => Some(refs.iter().map(String::as_str)),
             _ => None,
         })
         .flatten()
         .collect();
+    if let Some(b) = blobs {
+        used.extend(b.live.iter().map(String::as_str));
+    }
     keep.retain(|&i| match &events[i].body {
-        Body::HeftBlob(hash) => hash.as_deref().is_some_and(|h| used.contains(h)),
+        Body::HeftBlob(hash) => {
+            (blobs.is_some() && recent(&events[i].t)) || hash.as_deref().is_some_and(|h| used.contains(h))
+        }
         _ => true,
     });
     keep

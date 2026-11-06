@@ -210,15 +210,130 @@ export const DB = (() => {
 		const current = await ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
 		return current || ro("blobs", (s) => s.get(LEGACY_STATE_CHECKPOINT_KEY));
 	}
+	// Heft-Bilder des Checkpoints sind Verweise ({ seq }) auf ihr heftBlob-Event im Log: Die Bilddaten
+	// liegen damit nur EINMAL in IndexedDB. Früher stand jedes Bild hier zusätzlich als Kopie ({ data }),
+	// was den Bild-Speicher verdoppelte. Alte Kopien liest das weiterhin; dedupeCheckpointBlobs() stellt
+	// sie auf Verweise um. Ein toter Verweis (Event wegkompaktiert) liefert null → Suche im Log.
 	function getStateCheckpointPayload(hashes) {
 		ensureOpen();
 		const ids = [...new Set((hashes || []).filter(Boolean))];
 		if (!ids.length) return Promise.resolve({});
-		const store = db.transaction("blobs").objectStore("blobs");
+		const tx = db.transaction(["blobs", "events"]);
+		const store = tx.objectStore("blobs"), events = tx.objectStore("events");
 		return Promise.all(ids.map(async (hash) => {
 			const rec = await val(store.get(STATE_CHECKPOINT_BLOB_PREFIX + hash));
-			return [hash, (rec && typeof rec.data === "string") ? rec.data : null];
+			if (rec && typeof rec.data === "string") return [hash, rec.data];
+			if (!rec || !rec.seq) return [hash, null];
+			const ev = await val(events.get(Number(rec.seq)));
+			const p = ev?.type === "heftBlob" ? ev.payload : null;
+			return [hash, p && p.hash === hash && typeof p.data === "string" ? p.data : null];
 		})).then((entries) => Object.fromEntries(entries));
+	}
+	// Bild-Teile des Checkpoints auf ihr Event im Log zeigen lassen ({ hash: seq }), nur für schon
+	// vorhandene Teile. Für die Selbstheilung nach einer Suche im Log (state.js) und die Umstellung.
+	function pointCheckpointBlobs(seqByHash) {
+		const entries = Object.entries(seqByHash || {}).filter(([hash, seq]) => hash && Number(seq) > 0);
+		if (!entries.length) return Promise.resolve();
+		return rw("blobs", (s) => entries.forEach(([hash, seq]) => {
+			const key = STATE_CHECKPOINT_BLOB_PREFIX + hash;
+			const req = s.getKey(key);
+			req.onsuccess = () => { if (req.result !== undefined) s.put({ seq: Number(seq) }, key); };
+		}));
+	}
+	// seq des heftBlob-Events je Hash (per Cursor, nicht das ganze Log auf einmal im Speicher).
+	function heftBlobSeqs(hashes) {
+		ensureOpen();
+		const wanted = new Set(hashes || []);
+		const seqByHash = {};
+		if (!wanted.size) return Promise.resolve(seqByHash);
+		return new Promise((resolve, reject) => {
+			const req = db.transaction("events").objectStore("events").openCursor();
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return resolve(seqByHash);
+				const ev = cur.value;
+				if (ev?.type === "heftBlob" && wanted.has(ev.payload?.hash) && typeof ev.payload?.data === "string") seqByHash[ev.payload.hash] = cur.key;
+				cur.continue();
+			};
+			req.onerror = () => reject(req.error);
+		});
+	}
+	// Einmalige Umstellung alter Bild-Kopien auf Verweise; eine Marke merkt sich, dass es erledigt ist.
+	const CHECKPOINT_BLOB_DEDUPE_KEY = "impala67_checkpoint_blob_ptr_v1";
+	async function dedupeCheckpointBlobs() {
+		ensureOpen();
+		try { if (localStorage.getItem(CHECKPOINT_BLOB_DEDUPE_KEY)) return 0; } catch { /* ohne Speicher: einfach prüfen */ }
+		const present = (await ro("blobs", (s) => s.getAllKeys(stateCheckpointBlobRange()))).map((k) => String(k).slice(STATE_CHECKPOINT_BLOB_PREFIX.length));
+		const seqByHash = await heftBlobSeqs(present);
+		await pointCheckpointBlobs(seqByHash);
+		try { localStorage.setItem(CHECKPOINT_BLOB_DEDUPE_KEY, U.now()); } catch { /* nächster Start versucht es erneut */ }
+		return Object.keys(seqByHash).length;
+	}
+
+	// Kontrolle gegen doppelten Speicher (Speicherübersicht, MCP impala_storage_report). Im Normalfall
+	// ist alles 0; sonst hat eine der Regeln oben versagt:
+	// - checkpointCopies: Heft-Bilder, die der Checkpoint als Kopie statt als Verweis hält
+	// - deadPointers: Verweise auf ein Event, das es nicht mehr gibt (heilt beim nächsten Laden)
+	// - orphanImages: Bilder ohne Heftseite, älter als die Schonfrist (fällt bei der nächsten Kompaktierung)
+	// - duplicateCache: dieselbe Datei in mehreren Caches (räumt der Service Worker beim Update auf)
+	// Liest das Log per Cursor einmal ganz – nur auf Nachfrage aufrufen, nie beim Start.
+	async function storageCheck() {
+		ensureOpen();
+		const mb = (chars) => Math.round(chars / 1e5) / 10;
+		const blobSeqs = new Map();
+		const check = { checkpointCopies: 0, checkpointCopiesMb: 0, deadPointers: 0, orphanImages: 0, orphanImagesMb: 0, duplicateCache: 0, duplicateCacheMb: 0 };
+		const parts = await new Promise((resolve, reject) => {
+			const out = [];
+			const req = db.transaction("blobs").objectStore("blobs").openCursor(stateCheckpointBlobRange());
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return resolve(out);
+				const v = cur.value;
+				if (typeof v?.data === "string") { check.checkpointCopies++; check.checkpointCopiesMb += v.data.length; }
+				else if (v?.seq) out.push([String(cur.key).slice(STATE_CHECKPOINT_BLOB_PREFIX.length), Number(v.seq)]);
+				cur.continue();
+			};
+			req.onerror = () => reject(req.error);
+		});
+		const keep = blobKeepNow();
+		const live = keep ? new Set(keep.live) : null;
+		await new Promise((resolve, reject) => {
+			const req = db.transaction("events").objectStore("events").openCursor();
+			req.onsuccess = () => {
+				const cur = req.result;
+				if (!cur) return resolve();
+				const ev = cur.value;
+				if (ev?.type === "heftBlob" && ev.payload?.hash) {
+					blobSeqs.set(cur.key, ev.payload.hash);
+					if (live && !live.has(ev.payload.hash) && String(ev.t) < keep.since) {
+						check.orphanImages++;
+						check.orphanImagesMb += String(ev.payload.data || "").length;
+					}
+				}
+				cur.continue();
+			};
+			req.onerror = () => reject(req.error);
+		});
+		check.deadPointers = parts.filter(([hash, seq]) => blobSeqs.get(seq) !== hash).length;
+		if (typeof caches !== "undefined") {
+			const seen = new Map();
+			// App-Versions-Caches überschneiden sich gewollt, solange ein Update wartet.
+			for (const name of (await caches.keys()).filter((n) => !/^impala67-v\d/.test(n))) {
+				const cache = await caches.open(name);
+				for (const req of await cache.keys()) {
+					if (!seen.has(req.url)) { seen.set(req.url, name); continue; }
+					check.duplicateCache++;
+					const res = await cache.match(req);
+					check.duplicateCacheMb += res ? Number(res.headers.get("content-length")) || (await res.blob()).size : 0;
+				}
+			}
+			check.duplicateCacheMb = Math.round(check.duplicateCacheMb / 1e5) / 10;
+		}
+		check.checkpointCopiesMb = mb(check.checkpointCopiesMb);
+		check.orphanImagesMb = mb(check.orphanImagesMb);
+		check.liveKnown = Boolean(live);
+		check.ok = !check.checkpointCopies && !check.deadPointers && !check.orphanImages && !check.duplicateCache;
+		return check;
 	}
 	// Kernzustand und neue, inhaltsadressierte Heft-Bilder werden gemeinsam committed.
 	// Bereits gespeicherte Hashes sind unveränderlich und werden deshalb nicht erneut
@@ -231,25 +346,27 @@ export const DB = (() => {
 		.then((rec) => (rec && typeof rec.data === "string" ? rec.data : null));
 	// Schreibt nur Einträge, deren Hash noch fehlt (unveränderte Hefte kosten nichts), und
 	// räumt in derselben Transaktion alles weg, was der neue Checkpoint nicht mehr kennt.
-	function putPartitionedEntries(s, range, prefix, entries, known) {
+	// seqByHash: Bilder, deren heftBlob-Event bekannt ist, werden nur als Verweis gespeichert.
+	function putPartitionedEntries(s, range, prefix, entries, known, seqByHash = null) {
 		const checkReq = s.getAllKeys(range);
 		checkReq.onsuccess = () => {
 			const existingKeys = new Set(checkReq.result || []);
 			entries.forEach(([hash, data]) => {
 				const key = prefix + hash;
-				if (!existingKeys.has(key)) s.put({ data }, key);
+				const seq = Number(seqByHash?.[hash]) || 0;
+				if (!existingKeys.has(key)) s.put(seq ? { seq } : { data }, key);
 			});
 			if (known) existingKeys.forEach((key) => {
 				if (!known.has(String(key).slice(prefix.length))) s.delete(key);
 			});
 		};
 	}
-	function putStateCheckpoint(checkpoint, heftBlobs, heftDocs) {
+	function putStateCheckpoint(checkpoint, heftBlobs, heftDocs, blobSeqs = null) {
 		const validEntries = (map) => Object.entries(map || {}).filter(([hash, data]) => hash && typeof data === "string");
 		const knownBlobs = checkpoint?.heftBlobSizes && typeof checkpoint.heftBlobSizes === "object" ? new Set(Object.keys(checkpoint.heftBlobSizes)) : null;
 		const knownHefte = checkpoint?.heftDocHashes && typeof checkpoint.heftDocHashes === "object" ? new Set(Object.values(checkpoint.heftDocHashes)) : null;
 		return rw("blobs", (s) => {
-			putPartitionedEntries(s, stateCheckpointBlobRange(), STATE_CHECKPOINT_BLOB_PREFIX, validEntries(heftBlobs), knownBlobs);
+			putPartitionedEntries(s, stateCheckpointBlobRange(), STATE_CHECKPOINT_BLOB_PREFIX, validEntries(heftBlobs), knownBlobs, blobSeqs);
 			if (knownHefte) putPartitionedEntries(s, stateCheckpointHeftRange(), STATE_CHECKPOINT_HEFT_PREFIX, validEntries(heftDocs), knownHefte);
 			s.put(checkpoint, STATE_CHECKPOINT_KEY);
 			s.delete(LEGACY_STATE_CHECKPOINT_KEY);
@@ -354,7 +471,21 @@ export const DB = (() => {
 	// UI sonst über eine Sekunde ein. Scheitert der Worker (alte WebViews, Node-Tests),
 	// läuft dieselbe Logik wie bisher hier — beides ist drop-only und damit wiederholbar.
 	const COMPACT_WORKER_TIMEOUT_MS = 60000;
-	function compactInWorker(minDrop) {
+	// Heft-Bilder: Welche ein Heft gerade zeigt, weiß nur der geladene Zustand (state.js meldet sich
+	// hier an). Ohne Angabe behält die Kompaktierung jedes je referenzierte Bild (alte Regel).
+	// Schonfrist: neuere Bilder und Heft-Events zählen immer (Rückgängig, Heft-Versionen, Geräte,
+	// deren Änderungen noch nicht angekommen sind).
+	const HEFT_BLOB_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+	// policy = { live: () => [Hashes] | null, dropped: (Hashes) => void }
+	let heftBlobPolicy = null;
+	const setHeftBlobPolicy = (policy) => { heftBlobPolicy = policy && typeof policy.live === "function" ? policy : null; };
+	function blobKeepNow() {
+		let live = null;
+		try { live = heftBlobPolicy?.live(); } catch (e) { console.warn("Heft-Bilder nicht lesbar, Bilder bleiben:", e); }
+		if (!Array.isArray(live)) return null;
+		return { live, since: new Date(Date.now() - HEFT_BLOB_GRACE_MS).toISOString() };
+	}
+	function compactInWorker(minDrop, blobKeep) {
 		if (typeof Worker === "undefined") return Promise.resolve(null);
 		return new Promise((resolve) => {
 			let worker;
@@ -368,15 +499,21 @@ export const DB = (() => {
 				finish(data && !data.error ? data : null);
 			};
 			worker.onerror = (e) => { e.preventDefault?.(); finish(null); };
-			worker.postMessage({ name: db.name, version: db.version, minDrop });
+			worker.postMessage({ name: db.name, version: db.version, minDrop, blobKeep });
 		});
 	}
 	async function compactLocal(minDrop = 200) {
 		ensureOpen();
-		const { dropped, floor } = (await compactInWorker(minDrop)) || (await compactEventStore(db, minDrop));
+		const blobKeep = blobKeepNow();
+		const { dropped, droppedBlobs, floor } = (await compactInWorker(minDrop, blobKeep)) || (await compactEventStore(db, minDrop, blobKeep));
 		if (!dropped) return 0;
 		forgetKnownEventIds();
 		localStorage.setItem(COMPACT_FLOOR_KEY, floor || U.now());
+		// Weggefallene Bilder vergisst der geladene Zustand; der nächste Checkpoint listet sie nicht
+		// mehr, und putStateCheckpoint räumt ihre Teile (Verweise) dabei auf.
+		if (droppedBlobs?.length) {
+			try { heftBlobPolicy?.dropped?.(droppedBlobs); } catch (e) { console.warn("Heft-Bilder nicht vergessen:", e); }
+		}
 		return dropped;
 	}
 
@@ -611,5 +748,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, knownIds, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, knownIds, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, setHeftBlobPolicy, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, pointCheckpointBlobs, heftBlobSeqs, dedupeCheckpointBlobs, storageCheck, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
 })();

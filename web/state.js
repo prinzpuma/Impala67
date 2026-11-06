@@ -350,6 +350,7 @@ export const STATE = (() => {
 			_memo.clear(); _heftMeta.clear();
 			adoptTabs();
 			_loading = false;
+			registerHeftBlobPolicy();
 			const queued = _queuedRemoteEvents;
 			_queuedRemoteEvents = [];
 			// Was der Start schon enthielt, erkennt der Kern nicht wieder: doppelte IDs aussortieren.
@@ -367,6 +368,25 @@ export const STATE = (() => {
 	}
 
 	// ---- Heft-Bilder ------------------------------------------------------------------------
+	// Die Kompaktierung (db.js) darf Bilder verwerfen, die kein Heft mehr zeigt – das weiß nur der
+	// geladene Zustand. Während eines (Neu-)Ladens gibt es keine Liste: dann bleiben alle Bilder.
+	// Danach einmalig alte Bild-Kopien des Checkpoints auf Verweise umstellen (im Leerlauf, liest das Log).
+	let _blobDedupeQueued = false;
+	function registerHeftBlobPolicy() {
+		DB.setHeftBlobPolicy({
+			live: () => (_loading ? null : JSON.parse(M.heftLiveBlobs())),
+			dropped: (hashes) => {
+				if (M.forgetHeftBlobs(JSON.stringify(hashes))) { _heftMeta.clear(); scheduleCheckpoint(); }
+			},
+		});
+		if (_blobDedupeQueued) return;
+		_blobDedupeQueued = true;
+		setTimeout(() => {
+			DB.dedupeCheckpointBlobs()
+				.then((n) => { if (n) console.info("[state] " + n + " Heft-Bilder im Checkpoint auf Verweise umgestellt."); })
+				.catch((e) => console.warn("[state] Checkpoint-Bilder nicht umgestellt:", e));
+		}, 20000);
+	}
 	// Bilder aus dem Checkpoint werden nur für das Heft geladen, das sie braucht. Fehlt ein Teil,
 	// wird das Log nach dem heftBlob durchsucht.
 	const hasHeftBlob = (hash) => M.hasHeftBlob(String(hash));
@@ -375,7 +395,7 @@ export const STATE = (() => {
 	async function hydrateHeftBlobs(targetHashes = null) {
 		const targets = JSON.stringify(targetHashes ? [...targetHashes] : null);
 		const needed = JSON.parse(M.blobsToHydrate(targets));
-		const found = {}, recovered = {};
+		const found = {}, recovered = {}, repointed = {};
 		const BATCH_SIZE = 4;
 		for (let i = 0; i < needed.length; i += BATCH_SIZE) {
 			const batch = needed.slice(i, i + BATCH_SIZE);
@@ -393,6 +413,7 @@ export const STATE = (() => {
 				const p = event?.payload || {};
 				if (event?.type === "heftBlob" && missing.has(p.hash) && typeof p.data === "string") {
 					recovered[p.hash] = p.data;
+					repointed[p.hash] = event.seq;
 					missing.delete(p.hash);
 					if (!missing.size) break;
 				}
@@ -400,6 +421,8 @@ export const STATE = (() => {
 		}
 		M.hydrateHeftBlobs(targets, JSON.stringify(found), JSON.stringify(recovered));
 		if (Object.keys(recovered).length) _heftMeta.clear();
+		// Selbstheilung: Der Checkpoint-Teil zeigt künftig auf das gefundene Event (keine zweite Suche).
+		DB.pointCheckpointBlobs(repointed).catch(() => {});
 		return true;
 	}
 
@@ -446,8 +469,14 @@ export const STATE = (() => {
 				heftHashes: parts.hefte,
 			}))), { eventCount: current.count }, 5);
 			if (res.status === "written") {
+				// Neue Bilder als Verweis auf ihr heftBlob-Event speichern statt als zweite Kopie.
+				const blobSeqs = {};
+				for (const event of after) if (event?.type === "heftBlob" && event.payload?.hash && res.blobs[event.payload.hash]) blobSeqs[event.payload.hash] = event.seq;
+				// Nach einem vollen Neueinlesen liegen die Bilder vor dem Wasserstand: im Log nachschlagen.
+				const unknown = Object.keys(res.blobs).filter((hash) => !blobSeqs[hash]);
+				if (unknown.length) Object.assign(blobSeqs, await DB.heftBlobSeqs(unknown).catch(() => ({})));
 				try {
-					await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(res.checkpoint, res.blobs, res.hefte), {
+					await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(res.checkpoint, res.blobs, res.hefte, blobSeqs), {
 						eventCount: current.count, newHeftBlobs: Object.keys(res.blobs).length, newHefte: Object.keys(res.hefte).length,
 					}, 5);
 				} catch (error) {

@@ -91,6 +91,29 @@ fn compares_strings_like_javascript() {
 }
 
 #[test]
+fn images_no_heft_shows_fall_away_after_grace() {
+    // A: alt, entfernt (nur im alten i+ referenziert) · B: alt, im Heft sichtbar · C: neu (Schonfrist).
+    let events = parse(
+        r#"[
+        {"t":"2026-01-01","seq":1,"type":"heftBlob","payload":{"hash":"A"}},
+        {"t":"2026-01-01","seq":2,"type":"heftBlob","payload":{"hash":"B"}},
+        {"t":"2026-01-02","seq":3,"type":"heftOps","payload":{"pageId":"h","ops":[{"t":"i+","p":"p","o":{"id":"a","ref":"A"}},{"t":"i+","p":"p","o":{"id":"b","ref":"B"}}]}},
+        {"t":"2026-01-03","seq":4,"type":"heftOps","payload":{"pageId":"h","ops":[{"t":"i-","p":"p","ids":["a"]}]}},
+        {"t":"2026-03-01","seq":5,"type":"heftBlob","payload":{"hash":"C"}}
+    ]"#,
+    )
+    .unwrap();
+    // Alte Regel: A hängt am alten i+ und bleibt; C (noch von nichts referenziert) fällt sofort.
+    assert_eq!(compact(&events), vec![0, 1, 2, 3]);
+    let live: std::collections::HashSet<String> = ["B".to_owned()].into();
+    let keep = impala_sync::BlobKeep { live: &live, since: "2026-02-01" };
+    assert_eq!(impala_sync::compact_with(&events, Some(&keep)), vec![1, 2, 3, 4]);
+    // In der Schonfrist zählt auch das alte i+ noch.
+    let keep = impala_sync::BlobKeep { live: &live, since: "2026-01-01" };
+    assert_eq!(impala_sync::compact_with(&events, Some(&keep)), vec![0, 1, 2, 3, 4]);
+}
+
+#[test]
 fn json_adapter_matches_test_adapter() {
     // Die öffentliche JSON-Hülle des Crates entscheidet wie die Test-Hülle oben.
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/compact");
