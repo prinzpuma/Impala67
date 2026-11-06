@@ -10,6 +10,7 @@ struct RootView: View {
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
+    @AppStorage(AppStatusBar.hiddenKey) private var statusBarHidden = false
 
     var body: some View {
         if let shell {
@@ -58,6 +59,9 @@ struct RootView: View {
                     }
                 }
                 .padding(isCompact ? 0 : 6)
+                // Bis an die Unterkante: Sonst blieb unter den Panels der Streifen der Home-Leiste als
+                // dunkler Balken stehen (Komfortabel). Die Tastatur weicht weiterhin aus (nur `.container`).
+                .ignoresSafeArea(.container, edges: .bottom)
                 .overlay(alignment: .bottomTrailing) {
                     if !showsAiPanel(shell) && !isChatTab(shell) {
                         AiOrbButton()
@@ -74,6 +78,7 @@ struct RootView: View {
                 }
             }
             .navigationSplitViewStyle(.balanced)
+            .statusBarHidden(statusBarHidden)
             .tint(AppAccent(rawValue: accent)?.color ?? Impala.accent)
             .environment(shell)
             .environment(\.shellNamespace, namespace)

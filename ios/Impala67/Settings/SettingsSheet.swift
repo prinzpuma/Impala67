@@ -339,6 +339,7 @@ private struct AppearanceSettingsSections: View {
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppHaptics.key) private var haptics = true
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
+    @AppStorage(AppStatusBar.hiddenKey) private var statusBarHidden = false
 
     @State private var homeName = ""
     @State private var homeArticle = true
@@ -430,6 +431,14 @@ private struct AppearanceSettingsSections: View {
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 220)
                 }
+
+                SettingsDivider()
+
+                SettingsSwitchRow(
+                    title: "Statusleiste ausblenden",
+                    description: "Uhrzeit, WLAN und Akku oben verstecken – mehr Platz für Notizen",
+                    isOn: $statusBarHidden
+                )
 
                 SettingsDivider()
 

@@ -180,6 +180,11 @@ enum AppHaptics {
     }
 }
 
+/// Statusleiste (Uhrzeit, Akku) oben ausblenden – nur iPad, für mehr Platz.
+enum AppStatusBar {
+    static let hiddenKey = "impala67HideStatusBar"
+}
+
 /// Tab-Anordnung wie `impala67TabsPosition` der PWA (Oben vs. Seitenleiste).
 enum AppTabsPosition: String, CaseIterable, Identifiable {
     case top, sidebar

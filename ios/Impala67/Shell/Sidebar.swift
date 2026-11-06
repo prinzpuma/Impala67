@@ -77,6 +77,9 @@ struct Sidebar: View {
             }
         }
         .padding(isCompact ? 0 : 6)
+        // Bis an die Unterkante (wie der Inhalt rechts): sonst lagen die Fußknöpfe kompakt um die Höhe der
+        // Home-Leiste zu hoch und komfortabel stand darunter ein dunkler Balken.
+        .ignoresSafeArea(.container, edges: .bottom)
         .background(isCompact ? Impala.sidebar : Impala.bg0)
         .toolbar(.hidden, for: .navigationBar)
     }
