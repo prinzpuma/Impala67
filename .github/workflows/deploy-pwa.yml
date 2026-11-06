@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -48,14 +48,9 @@ jobs:
           set -euo pipefail
           # Jeder Push bekommt eine eigene Version und damit einen eigenen Offline-Cache,
           # sonst erreicht er installierte PWAs nicht (Service Worker liefert cache-first).
-          # Release-Commit (package.json geändert): genau diese Version.
-          # Sonst: nächster Patch als Vorabversion, z. B. 2.2.84-dev.57 (> 2.2.83, < 2.2.84).
-          VERSION=$(node -p "require('./package.json').version")
-          PREVIOUS=$(git show HEAD^:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
-          if [ "$VERSION" = "$PREVIOUS" ]; then
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            VERSION="$MAJOR.$MINOR.$((PATCH + 1))-dev.$GITHUB_RUN_NUMBER"
-          fi
+          # Quelle sind die Release-Tags: Trägt der Commit einen (Release-Workflow), genau diese Version,
+          # sonst nächster Patch als Vorabversion, z. B. 2.2.124-dev.57 (> 2.2.123, < 2.2.124).
+          VERSION=$(node .github/scripts/version-from-tags.mjs dev "$GITHUB_RUN_NUMBER")
           echo "PWA-Version: $VERSION"
           node .github/scripts/set-version.mjs "$VERSION"
           node .github/scripts/check-version-sync.mjs "$VERSION"
