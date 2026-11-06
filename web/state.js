@@ -61,12 +61,16 @@ export const S = {
 	libFolder: null, // geöffneter GoodNotes-Ordner im Hefte-Regal (gnFolders-ID), null = Wurzel
 	libFilter: "", // Filtertext der Bibliothek (Titel + Tags)
 	pageMenuOpenId: null, // ID der Seite, deren ⋯-Menü in der Sidebar gerade offen ist
+	deckMenuOpenName: null, // Stapel-Name, dessen ⋯-Menü gerade offen ist
+	deckMenuLocation: null, // "sidebar" | "main"
 	histVersions: null, // geladene Versionen für den Seitenverlauf-Dialog
 	histIndex: 0, // aktuell ausgewählte Version im Verlauf
 	histPageId: null, // Seite, deren Verlauf gerade offen ist
 	pendingNewPage: null, // { wsId, parentId } während der Vorlagen-Auswahl
 	ankiTab: "decks", // Karteikarten-Bereich: "decks" | "browser" | "stats" | "archive" | "study"
 	ankiDeck: null, // aktuell gewählter Stapel (null = alle)
+	ankiCustomQueue: null, // Custom-Queue für Wiederholungssitzungen (Karten-IDs)
+	ankiCustomTitle: null, // "Heute gelernt" | "Alle Karten"
 	ankiSort: "due", // Browser-Sortierung: "front" | "deck" | "state" | "due" | "interval" | "reps" | "lapses" | "created"
 	ankiSortDir: 1, // 1 = aufsteigend, -1 = absteigend
 	ankiSearch: "", // Suchtext im Karten-Browser

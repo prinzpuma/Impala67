@@ -6,6 +6,7 @@ if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
 import { SyncRoom } from "../server/worker.js";
 import { CLOUD_SYNC_PROTOCOL, isBlobAlive } from "../web/sync-core.js";
+import { STORAGE_TOOLS } from "../web/storage-tools.js";
 import { DB } from "../web/db.js";
 // Der Sync-Client ist der Rust-Kern (web/core/, npm run build:core) – derselbe, den die PWA lädt.
 import initCore, * as CORE from "../web/core/impala_core.js";
@@ -257,4 +258,71 @@ test("Sync Server: Reset setzt Daten zurück, das nächste Gerät baut die Cloud
 	assert.equal(cb.state().generation, room.generation);
 	assert.equal((await room.readEvents(0, 10)).events.length, 1);
 	ca.free(); cb.free();
+});
+
+test("Storage Tools: Detaillierte Speicher-Analyse und Alt-DB-Prüfung", async () => {
+	const mockIdb = {
+		databases: async () => [{ name: "impala67" }, { name: "notion" }],
+		deleteDatabase: (name) => {
+			assert.equal(name, "notion");
+			return { onsuccess: null, onerror: null, onblocked: null };
+		},
+	};
+	const legacyCheck = await STORAGE_TOOLS.checkLegacyDatabase(mockIdb);
+	assert.equal(legacyCheck.exists, true);
+
+	const mockIdbClean = {
+		databases: async () => [{ name: "impala67" }],
+	};
+	const cleanCheck = await STORAGE_TOOLS.checkLegacyDatabase(mockIdbClean);
+	assert.equal(cleanCheck.exists, false);
+
+	const mockCaches = {
+		keys: async () => ["impala67-v2.2.87", "impala67-v2.2.86", "impala67-optional-modules"],
+		open: async (name) => ({
+			keys: async () => [{ url: "https://example.com/file1" }],
+			match: async () => ({
+				headers: { get: (h) => (h === "content-length" ? "1048576" : null) },
+				blob: async () => ({ size: 1048576 }),
+			}),
+		}),
+	};
+
+	const cacheStats = await STORAGE_TOOLS.inspectCaches(mockCaches);
+	assert.equal(cacheStats.items.length, 3);
+	assert.equal(cacheStats.totalBytes, 3 * 1048576);
+
+	const pages = {
+		p1: { id: "p1", title: "Folien.pdf", content: "Dokument · 12,5 MB", pdfId: "blob-123" },
+		p2: { id: "p2", title: "Notiz", content: "Normaler Text" },
+	};
+	const patch = STORAGE_TOOLS.buildDetachPatch(pages.p1);
+	assert.equal(patch.pdfId, "blob-123");
+	assert.equal(patch.patch.pdfId, null);
+	assert.ok(patch.patch.content.includes("ausgelagert"));
+
+	const rep = await STORAGE_TOOLS.inspectDetailedStorage({
+		pages,
+		db: {
+			eventLogInfo: async () => ({ count: 42, maxSeq: 100 }),
+			allBlobKeys: async () => ["blob-123", "orphan-blob", "__impala67_state_checkpoint_v2__"],
+		},
+		state: {
+			heftIds: () => ["p2"],
+			heftMeta: () => ({ pages: 5, bytes: 50000 }),
+			heftImageRefs: () => ["img-1", "img-2"],
+		},
+		cachesObj: mockCaches,
+		idb: mockIdb,
+		aliveChecker: (k) => k === "blob-123",
+	});
+
+	assert.equal(rep.legacyDb.exists, true);
+	assert.equal(rep.eventLog.count, 42);
+	assert.equal(rep.blobStats.total, 3);
+	assert.equal(rep.blobStats.orphans, 1);
+	assert.equal(rep.heftStats.count, 1);
+	assert.equal(rep.heftStats.totalPages, 5);
+	assert.equal(rep.heftStats.totalImages, 2);
+	assert.equal(rep.pdfStats.count, 1);
 });

@@ -198,6 +198,13 @@ export async function rateAndReviewCard(cardId, grade, renderedReviewId) {
 			subject: subject.name, subjectSource: subject.source, dueAt: card.srs.due || null,
 			previousReviewAt: previous?.t || null, intervalDays,
 		});
+		if (Array.isArray(S.ankiCustomQueue)) {
+			const idx = S.ankiCustomQueue.indexOf(card.id);
+			if (idx !== -1) S.ankiCustomQueue.splice(idx, 1);
+			if (Number(grade) === 1) {
+				S.ankiCustomQueue.push(card.id);
+			}
+		}
 		return card;
 	} finally {
 		_ratingInFlight = false;

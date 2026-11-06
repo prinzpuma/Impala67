@@ -79,9 +79,9 @@ export async function purgeOldTrash() {
 // endgültig. Kandidaten werden deshalb gegen die Fassungen im Log geprüft; weil das den
 // ganzen Log liest, höchstens einmal am Tag.
 const BLOB_GC_KEY = "impala67_blob_gc_at", BLOB_GC_EVERY_MS = 864e5;
-export async function purgeOrphanBlobs() {
+export async function purgeOrphanBlobs(force = false) {
 	try {
-		if (Date.now() - (Number(U.storage.get(BLOB_GC_KEY)) || 0) < BLOB_GC_EVERY_MS) return;
+		if (!force && Date.now() - (Number(U.storage.get(BLOB_GC_KEY)) || 0) < BLOB_GC_EVERY_MS) return 0;
 		const alive = blobAliveChecker(S.pages);
 		const orphans = (await DB.allBlobKeys()).map(String).filter((key) => !alive(key));
 		let removed = 0;
@@ -99,7 +99,8 @@ export async function purgeOrphanBlobs() {
 		}
 		U.storage.set(BLOB_GC_KEY, Date.now());
 		if (removed) console.info("Blob-GC: " + removed + " verwaiste Blobs entfernt.");
-	} catch (e) { console.warn("Blob-GC übersprungen:", e); }
+		return removed;
+	} catch (e) { console.warn("Blob-GC übersprungen:", e); return 0; }
 }
 
 

@@ -21,6 +21,34 @@ const renderSidebar = (...a) => RENDER.renderSidebar(...a);
 const renderMain = (...a) => RENDER.renderMain(...a);
 const ankiCardsOf = (...a) => RENDER_ANKI.ankiCardsOf(...a);
 const openCardEditor = (...a) => RENDER_ANKI.openCardEditor(...a);
+const getCardsReviewedToday = (...a) => RENDER_ANKI.getCardsReviewedToday(...a);
+
+function startCustomStudy(deck, mode) {
+	if (mode === "repeat") {
+		const cards = getCardsReviewedToday(deck);
+		if (!cards.length) {
+			U.toast("In diesem Stapel wurden heute noch keine Karten gelernt.", "info");
+			return false;
+		}
+		S.ankiDeck = deck || null;
+		S.ankiCustomQueue = cards.map((c) => c.id).sort(() => Math.random() - 0.5);
+		S.ankiCustomTitle = "Heute gelernt (" + cards.length + ")";
+	} else {
+		const cards = ankiCardsOf(deck);
+		if (!cards.length) {
+			U.toast("Dieser Stapel enthält keine aktiven Karten.", "info");
+			return false;
+		}
+		S.ankiDeck = deck || null;
+		S.ankiCustomQueue = cards.map((c) => c.id).sort(() => Math.random() - 0.5);
+		S.ankiCustomTitle = "Alle Karten (" + cards.length + ")";
+	}
+	S.ankiTab = "study";
+	resetStudyCard();
+	if (S.view !== "anki") openPage("anki:main");
+	else renderMain();
+	return true;
+}
 const $ = (id) => U.el(id);
 
 // Stapel-⋯-Menü und seine Aktionen. Läuft VOR dem Außenklick-Schließen der Popovers,
@@ -31,23 +59,34 @@ export async function handleDeckMenuClick(e) {
 		e.preventDefault();
 		e.stopPropagation();
 		const name = deckMenuBtn.dataset.deckmenu;
-		const open = S.deckMenuOpenName !== name;
+		const loc = deckMenuBtn.closest("#tree") ? "sidebar" : "main";
+		const open = !(S.deckMenuOpenName === name && S.deckMenuLocation === loc);
 		S.pageMenuOpenId = null;
 		S.topMenu = null;
 		S.modelMenuOpen = false;
 		S.deckMenuOpenName = open ? name : null;
-		renderSidebar(); // positioniert offenes Menü in render.js
+		S.deckMenuLocation = open ? loc : null;
+		if (loc === "sidebar" || !open) renderSidebar();
 		if (S.view === "anki") renderMain();
 		return true;
 	}
-	const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive]");
+	const deckAction = closestOf(e, "[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive],[data-deckstudyrepeat],[data-deckstudyall]");
 	if (deckAction) {
 		e.preventDefault();
 		e.stopPropagation();
-		const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate || deckAction.dataset.deckarchive;
+		const name = deckAction.dataset.deckdel || deckAction.dataset.deckrename || deckAction.dataset.deckduplicate || deckAction.dataset.deckarchive || deckAction.dataset.deckstudyrepeat || deckAction.dataset.deckstudyall;
 		S.deckMenuOpenName = null;
+		S.deckMenuLocation = null;
 		renderSidebar();
 		if (S.view === "anki") renderMain();
+		if (deckAction.hasAttribute("data-deckstudyrepeat")) {
+			startCustomStudy(name, "repeat");
+			return true;
+		}
+		if (deckAction.hasAttribute("data-deckstudyall")) {
+			startCustomStudy(name, "all");
+			return true;
+		}
 		if (deckAction.hasAttribute("data-deckrename")) {
 			if (PLATFORM.isTouch()) {
 				openPromptDialog("Stapel umbenennen", async (newName) => {
@@ -59,6 +98,7 @@ export async function handleDeckMenuClick(e) {
 				return true;
 			}
 			S.renamingDeck = name;
+			if (S.view === "anki") renderMain();
 			renderSidebar();
 			const inp = document.querySelector('[data-deckrenamename="' + CSS.escape(name) + '"]');
 			if (inp) focusRenameInput(inp);
@@ -99,8 +139,10 @@ export async function handleAnkiClick(t, e) {
 	// ⛶ Vollbild (23. Juli): Body-Klasse blendet Seitenleiste + Tab-Leiste aus — rein per
 	// CSS auf die sichtbare Anki-Ansicht begrenzt (styles.css, :has), erneut klicken = zurück.
 	if (t.dataset.ankizen) { setAnkiZen(!S.ankiZen); return true; }
-	if (t.dataset.ankitab) { S.ankiTab = t.dataset.ankitab; resetStudyCard(); renderMain(); return true; }
+	if (t.dataset.ankitab) { if (t.dataset.ankitab !== "study") { S.ankiCustomQueue = null; S.ankiCustomTitle = null; } S.ankiTab = t.dataset.ankitab; resetStudyCard(); renderMain(); return true; }
 	if (t.hasAttribute("data-ankistudy")) {
+		S.ankiCustomQueue = null;
+		S.ankiCustomTitle = null;
 		S.ankiDeck = t.dataset.ankistudy || null;
 		// Interleaved Practice: nur der „Gemischt lernen“-Button aktiviert den Misch-Modus
 		S.ankiMix = t.hasAttribute("data-ankimix");
@@ -114,6 +156,8 @@ export async function handleAnkiClick(t, e) {
 		else renderMain();
 		return true;
 	}
+	if (t.hasAttribute("data-deckstudyrepeat")) { startCustomStudy(t.dataset.deckstudyrepeat || S.ankiDeck || null, "repeat"); return true; }
+	if (t.hasAttribute("data-deckstudyall")) { startCustomStudy(t.dataset.deckstudyall || S.ankiDeck || null, "all"); return true; }
 	// DRY: Klick auf „Antwort zeigen“ nutzt denselben Aufdeck-Pfad wie die
 	// Leertaste — inkl. Festpinnen der sichtbaren Karte (Bug-Fix, s. oben).
 	if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return true; }
@@ -201,6 +245,9 @@ export async function handleAnkiClick(t, e) {
 	if (t.hasAttribute("data-deckopen") && !closestOf(e, ".row-add, .page-menu, input, button")) {
 		S.ankiDeck = t.dataset.deckopen || null;
 		S.deckMenuOpenName = null;
+		S.deckMenuLocation = null;
+		S.ankiCustomQueue = null;
+		S.ankiCustomTitle = null;
 		if (S.ankiTab === "study") S.ankiTab = "decks";
 		render();
 		return true;

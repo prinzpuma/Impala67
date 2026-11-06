@@ -19,6 +19,7 @@ import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
+import { STORAGE_TOOLS } from "./storage-tools.js";
 import { lead } from "./icons.js";
 
 const renderStatusDot = () => BUS.emit("ui:render-status-dot");
@@ -979,6 +980,81 @@ export async function handleSaveSettings() {
 	AI.detectThinkingCapabilities().catch(() => {});
 }
 
+export async function handleDeleteLegacyDb(t) {
+	const ok = await U.confirm(
+		"Möchtest du die alte „notion“-Datenbank wirklich endgültig löschen?\n\nDeine aktuellen Notizen und Hefte liegen sicher in der Impala67-Datenbank. Das Löschen gibt den belegten Speicherplatz im Browser frei.",
+		{ title: "Alte Datenbank löschen", ok: "Jetzt löschen", danger: true }
+	);
+	if (!ok) return;
+	if (t) { t.disabled = true; t.textContent = "Lösche…"; }
+	try {
+		const deleted = await STORAGE_TOOLS.deleteLegacyDatabase();
+		if (deleted) {
+			U.toast("Alte Notion-Datenbank gelöscht. Speicher freigegeben.", "success");
+		} else {
+			U.toast("Löschen blockiert (bitte eventuelle andere Tabs der App schließen).", "error");
+		}
+	} catch (e) {
+		U.toast("Fehler beim Löschen: " + (e?.message || e), "error");
+	} finally {
+		if (t) { t.disabled = false; t.textContent = "Alte Datenbank löschen"; }
+		await hydrateStorageUsage();
+	}
+}
+
+export async function handleStorageCompact(t) {
+	if (t) { t.disabled = true; t.textContent = "Verdichte…"; }
+	try {
+		const dropped = await DB.compactLocalIfDue(true);
+		let orphans = 0;
+		try {
+			const { purgeOrphanBlobs } = await import("./boot.js");
+			orphans = await purgeOrphanBlobs(true);
+		} catch {}
+		STATE.scheduleCheckpoint();
+		U.toast(`Verdichtet: ${dropped} alte Events und ${orphans} verwaiste Blobs bereinigt.`, "success");
+	} catch (e) {
+		U.toast("Fehler beim Verdichten: " + (e?.message || e), "error");
+	} finally {
+		if (t) { t.disabled = false; t.textContent = "Log verdichten & Reste aufräumen"; }
+		await hydrateStorageUsage();
+	}
+}
+
+export async function handleStorageDetachPdfs(t) {
+	const all = STORAGE_TOOLS.collectPdfPages(S.pages);
+	const plan = all.filter((r) => r.pdfId);
+	if (!plan.length) {
+		U.toast("Keine auslagerbaren PDFs gefunden.", "info");
+		return;
+	}
+	const totalMb = Math.round(plan.reduce((s, r) => s + (r.kb || 0), 0) / 1024);
+	const ok = await U.confirm(
+		`Möchtest du die Binärdaten von ${plan.length} PDF(s) (ca. ${totalMb} MB) auslagern?\n\nZusammenfassung, Text und Volltextsuche bleiben erhalten. Das Original-PDF lässt sich danach aber auf keinem Gerät mehr öffnen oder herunterladen – vorher bei Bedarf selbst sichern.`,
+		{ title: "Original-PDFs auslagern", ok: "PDFs auslagern" }
+	);
+	if (!ok) return;
+	if (t) { t.disabled = true; t.textContent = "Lagere aus…"; }
+	let detached = 0;
+	try {
+		for (const item of plan) {
+			const page = S.pages[item.id];
+			const d = STORAGE_TOOLS.buildDetachPatch(page);
+			if (!d) continue;
+			await STATE.dispatch("pageUpdate", { id: item.id, patch: d.patch });
+			try { await DB.delBlob(d.pdfId); } catch {}
+			detached++;
+		}
+		render();
+		U.toast(`${detached} PDF(s) erfolgreich ausgelagert (~${totalMb} MB freigegeben).`, "success");
+	} catch (e) {
+		U.toast("Fehler beim Auslagern: " + (e?.message || e), "error");
+	} finally {
+		if (t) { t.disabled = false; t.textContent = "Original-PDFs auslagern"; }
+		await hydrateStorageUsage();
+	}
+}
+
 export async function handleResetAll(t) {
 	const ok = await U.confirm(
 		"Möchtest du wirklich alle lokalen Seiten unwiderruflich löschen?\n\nDeine Einstellungen, API-Keys, Karteikarten und Stapel bleiben erhalten.",
@@ -1239,6 +1315,9 @@ export const SETTINGS = {
 	handleDriveMode,
 	handleDriveRestore,
 	handleResetAll,
+	handleDeleteLegacyDb,
+	handleStorageCompact,
+	handleStorageDetachPdfs,
 	handleBackupNow,
 	handleThemeSelect,
 	handleSystemThemeToggle,

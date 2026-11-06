@@ -465,7 +465,8 @@ function renderSidebar() {
 
 	const selectionKey = S.chatSelection instanceof Set ? [...S.chatSelection].sort().join(",") : "";
 	const tabsKey = document.body.classList.contains("tabs-in-sidebar") ? ("tabs:" + S.tabs.join(",") + ":" + S.activeTabId) : "";
-	const sidebarKey = [_sidebarRevision, S.pageMenuOpenId || "", S.deckMenuOpenName || "",
+	const sidebarDeckMenu = S.deckMenuLocation === "sidebar" ? (S.deckMenuOpenName || "") : "";
+	const sidebarKey = [_sidebarRevision, S.pageMenuOpenId || "", sidebarDeckMenu,
 		S.renamingPageId || "", S.renamingDeck || "", selectionKey, tabsKey].join("|");
 	if (tree.dataset.renderKey === sidebarKey && syncActiveSidebarRow(tree)) {
 		repositionSidebarPageMenu(tree);
@@ -485,7 +486,7 @@ function renderSidebar() {
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;
 		// Offenes ⋯-Menü nach Rebuild fixed neu positionieren, sonst clippt #tree
-		if (S.deckMenuOpenName) {
+		if (S.deckMenuOpenName && S.deckMenuLocation === "sidebar") {
 			const name = CSS.escape(S.deckMenuOpenName);
 			const anchor = tree.querySelector(`[data-deckmenu="${name}"]`);
 			const menu = tree.querySelector(`[data-deckmenu-panel="${name}"]`);

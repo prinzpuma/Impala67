@@ -317,6 +317,15 @@ export async function handleButtonClick(t) {
 		case "btnResetAll":
 			await SETTINGS.handleResetAll(t);
 			break;
+		case "btnDeleteLegacyDb":
+			await SETTINGS.handleDeleteLegacyDb(t);
+			break;
+		case "btnStorageCompact":
+			await SETTINGS.handleStorageCompact(t);
+			break;
+		case "btnStorageDetachPdfs":
+			await SETTINGS.handleStorageDetachPdfs(t);
+			break;
 		case "btnTrash":
 			S.view = "trash";
 			blurActive();

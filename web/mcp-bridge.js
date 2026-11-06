@@ -581,9 +581,15 @@ export function initMcpBridge() {
 					}
 					case "impala_storage_report": {
 						const usage = CLOUDFLARE_SYNC ? CLOUDFLARE_SYNC.status()?.usage || null : null;
-						const rep = STORAGE_TOOLS.storageReport(S.pages, usage);
+						const rep = await STORAGE_TOOLS.inspectDetailedStorage({
+							pages: S.pages,
+							db: DB,
+							state: STATE,
+						});
+						rep.syncUsage = usage;
+						const legacyRep = STORAGE_TOOLS.storageReport(S.pages, usage);
 						const limit = Math.max(1, Math.min(50, Number(args.limit) || 15));
-						rep.top = rep.top.slice(0, limit).map((r) => ({
+						rep.pdfTop = legacyRep.top.slice(0, limit).map((r) => ({
 							...r,
 							parent: (r.parentId && S.pages[r.parentId]?.title) || null,
 						}));

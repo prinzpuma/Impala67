@@ -11,6 +11,7 @@ import { TELE } from "./telemetrie.js";
 import { statHtml, ankiSec, statsData, statsPageHtml } from "./anki-stats.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { PLATFORM } from "./platform.js";
+import { POPOVERS } from "./popovers.js";
 
 const hydrateImages = (root) => BUS.emit("ui:hydrate-images", root);
 // Reiner String-Wrapper. FIX: lief vorher über BUS.emit — emit liefert aber keinen Rückgabewert,
@@ -74,6 +75,23 @@ function ankiCardsOf(deck) {
 	return deck ? cards.filter((c) => STATE.deckInTree(c.deck || "Standard", deck)) : cards;
 }
 
+function getCardsReviewedToday(deck) {
+	const t = new Date();
+	const back = t.getHours() < 4 ? 1 : 0;
+	const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4).getTime();
+	const reviewedCardIds = new Set();
+	for (const r of (S.reviews || [])) {
+		if (r && r.cardId && r.grade > 0) {
+			const rt = new Date(r.t).getTime();
+			if (Number.isFinite(rt) && rt >= dayStart) {
+				reviewedCardIds.add(r.cardId);
+			}
+		}
+	}
+	const cards = ankiCardsOf(deck);
+	return cards.filter((c) => reviewedCardIds.has(c.id));
+}
+
 // Anki hat für die „für den Moment fertig“-Ansicht KEINEN Hintergrund-Timer und
 // KEINE live tickende Sekunden-Anzeige — das war vorher selbst erfunden und
 // buggy (löste alle ~1 Sekunde einen Re-Render aus, auch wenn die nächste
@@ -116,7 +134,7 @@ function deckTreeHtml() {
 			const chevron = kids.length
 				? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
 				: '<span class="row-chevron spacer"></span>';
-			const menuOpen = S.deckMenuOpenName === name;
+			const menuOpen = S.deckMenuOpenName === name && S.deckMenuLocation === "sidebar";
 			const renaming = S.renamingDeck === name;
 			let html = '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
 				chevron +
@@ -141,7 +159,16 @@ function deckTreeHtml() {
 // Notion-artiges ⋯-Menü je Stapel (wie pageMenuHtml bei Seiten): Umbenennen, Duplizieren, Löschen.
 function deckMenuHtml(name) {
 	// data-deckmenu-panel markiert das Stapel-Popover eindeutig (nicht mit Seiten-⋯ verwechseln).
+	const todayCount = getCardsReviewedToday(name).length;
+	const allCount = ankiCardsOf(name).length;
 	return '<div class="page-menu" data-deckmenu-panel="' + U.esc(name) + '">' +
+		'<button type="button" class="menu-item" data-deckstudyrepeat="' + U.esc(name) + '">' +
+			lead("rotate") + 'Heute gelernt wiederholen' + (todayCount ? '<small class="menu-hint"> (' + todayCount + ')</small>' : "") +
+		'</button>' +
+		'<button type="button" class="menu-item" data-deckstudyall="' + U.esc(name) + '">' +
+			lead("cards") + 'Alle Karten wiederholen' + (allCount ? '<small class="menu-hint"> (' + allCount + ')</small>' : "") +
+		'</button>' +
+		'<div class="menu-sep"></div>' +
 		'<button type="button" class="menu-item" data-deckrename="' + U.esc(name) + '">' + lead("pen") + 'Umbenennen</button>' +
 		'<button type="button" class="menu-item" data-deckduplicate="' + U.esc(name) + '">' + lead("copy") + 'Duplizieren</button>' +
 		'<button type="button" class="menu-item" data-deckarchive="' + U.esc(name) + '">' + lead("archive") + 'Archivieren</button>' +
@@ -173,6 +200,12 @@ function renderAnki(main) {
 		U.renderMath(main);
 		U.highlightCode(main);
 		hydrateImages(main);
+		if (S.deckMenuOpenName && S.deckMenuLocation === "main") {
+			const name = CSS.escape(S.deckMenuOpenName);
+			const anchor = main.querySelector(`[data-deckmenu="${name}"]`);
+			const menu = main.querySelector(`[data-deckmenu-panel="${name}"]`);
+			if (anchor && menu) POPOVERS.position(anchor, menu, { align: "end", gap: 2 });
+		}
 	} catch (err) {
 		console.error("[Anki] Fehler beim Rendern der Karteikarten-Ansicht:", err);
 		S.ankiTab = "decks";
@@ -218,7 +251,10 @@ function ankiDecksHtml() {
 			? '<button class="deck-ico deck-collapse" data-collapse="deck:' + U.esc(d) + '" aria-expanded="' + (!collapsed) + '" title="Unterstapel ' + (collapsed ? "anzeigen" : "ausblenden") + '">' + (collapsed ? "▸" : "▾") + "</button>"
 			: '<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : icon("cards")) + "</span>";
 		return '<div class="deck-row" style="--deck-depth:' + depth + '">' + deckIco +
-			'<span class="deck-info"><span class="deck-name">' + U.esc(label) + "</span>" +
+			'<span class="deck-info">' +
+				(S.renamingDeck === d
+					? '<input class="row-rename-input" data-deckrenamename="' + U.esc(d) + '" value="' + U.esc(label) + '" autocomplete="off">'
+					: '<span class="deck-name">' + U.esc(label) + "</span>") +
 			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
 			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
 				(cnt.review + cnt.learn + cnt.neu
@@ -237,7 +273,7 @@ function ankiDecksHtml() {
 				'<button class="deck-feyn" data-ankistudy="' + U.esc(d) + '" data-ankifeyn="1" ' + (open ? "" : "disabled") + ' title="Feynman-Modus: erst selbst erklären (tippen oder diktieren), die KI prüft gegen die Rückseite und schlägt die Note vor">' + lead("explain") + 'Feynman</button>' +
 				'<button type="button" class="deck-iconbtn deck-more-btn" data-deckmenu="' + U.esc(d) + '" title="Weitere Optionen">' + icon("dots") + '</button>' +
 			"</span>" +
-			(S.deckMenuOpenName === d ? deckMenuHtml(d) : "") +
+			(S.deckMenuOpenName === d && S.deckMenuLocation === "main" ? deckMenuHtml(d) : "") +
 			"</div>";
 	}).join("");
 	// 🃏 Übersicht v3 wie der Homescreen (home-view.js): ein Satz vorn — die Kartenzahl ist selbst
@@ -375,7 +411,8 @@ function ankiStatsHtml() {
 // Lern-Ansicht — Anki-nah:
 // Queue Learning→Review→New, Learn-Ahead 20 Min, Space=Antwort / bei Rückseite=Gut.
 function ankiStudyHtml() {
-	const snap = STATE.studySnapshot(S.ankiDeck);
+	const isCustom = Array.isArray(S.ankiCustomQueue);
+	const snap = isCustom ? null : STATE.studySnapshot(S.ankiDeck);
 	// Eine einmal gezeigte Frage darf nicht mehr vom Queue-Kopf abhängen. Während
 	// sie offen ist, können Learning-Karten fällig werden oder fremde Events einen
 	// Render ausloesen. Ohne diese Bindung wechselte dann mitten im Nachdenken die
@@ -384,13 +421,25 @@ function ankiStudyHtml() {
 	if (c && (c.trashed || c.suspended)) c = null;
 	if (!c) {
 		S.reviewCardId = null;
-		c = snap.dueNow[0] || null;
+		if (isCustom) {
+			while (S.ankiCustomQueue.length && !c) {
+				const id = S.ankiCustomQueue[0];
+				const cand = S.cards[id];
+				if (cand && !cand.trashed && !cand.suspended) c = cand;
+				else S.ankiCustomQueue.shift();
+			}
+		} else {
+			c = snap.dueNow[0] || null;
+		}
 		if (c) S.reviewCardId = c.id;
 	}
 	const canUndo = typeof EXTRAS !== "undefined" && EXTRAS.canUndoReview();
-	const cnt = snap.counts;
+	const cnt = snap ? snap.counts : { neu: 0, learn: 0, review: 0 };
+	const remainingCustom = isCustom ? S.ankiCustomQueue.length : 0;
 	// Anki-Deck-Übersicht: New | Learning | Review
-	const countsHtml =
+	const countsHtml = isCustom
+		? '<span class="study-counts" title="Wiederholungs-Sitzung"><b class="cnt-open">' + remainingCustom + '</b> noch zu lernen</span>'
+		:
 		'<span class="study-counts" title="Neu · Lernen · Wiederholen (wie Anki)">' +
 			'<b class="cnt-new">' + cnt.neu + '</b> neu · ' +
 			'<b class="cnt-learn">' + cnt.learn + '</b> lernen · ' +
@@ -400,16 +449,32 @@ function ankiStudyHtml() {
 	// zur Stapelübersicht, nachdem die globale Tab-Leiste im Fokusmodus verborgen ist.
 	const head = '<div class="study-head">' +
 		'<button class="mini" data-ankitab="decks" title="Zur Stapelübersicht">‹ Stapel' + pad("exit") + '</button>' +
-		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (S.ankiMix ? " · " + lead("shuffle") + "gemischt" : "") + (S.ankiFeyn ? " · " + lead("explain") + "Feynman" : "") + "</span>" +
+		'<span>Stapel: <b>' + U.esc(S.ankiDeck || "Alle") + "</b>" + (isCustom ? ' · ' + lead("rotate") + U.esc(S.ankiCustomTitle || "Wiederholen") : "") + (S.ankiMix ? " · " + lead("shuffle") + "gemischt" : "") + (S.ankiFeyn ? " · " + lead("explain") + "Feynman" : "") + "</span>" +
 		'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span>' +
 		// ⛶ Vollbild (23. Juli): gleicher Schalter wie in der Kopfzeile der Übersicht
 		'<button class="mini" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden">' + icon("expand") + '</button></div>';
 
 	// Wirklich fertig für heute (keine Learning-Schritte mehr heute)
-	if (!c && snap.done) {
+	if (isCustom && !c) {
+		S.ankiCustomQueue = null;
+		S.ankiCustomTitle = null;
+		const d = S.ankiDeck || "";
+		return head + '<div class="study-done study-card"><h2>' + lead("party") + 'Wiederholung fertig!</h2>' +
+			'<p class="hint">Du hast alle Karten dieser Runde durchgearbeitet.</p>' +
+			'<div class="modal-actions">' +
+				'<button class="primary" data-ankitab="decks">Zur Stapelübersicht</button>' +
+				(d ? '<button data-deckstudyrepeat="' + U.esc(d) + '">Nochmal wiederholen</button>' : "") +
+			'</div></div>';
+	}
+
+	if (!c && snap && snap.done) {
 		return head + '<div class="study-done study-card"><h2>' + lead("party") + 'Gratulation!</h2>' +
 			'<p class="hint">Du hast diesen Stapel für heute fertig — keine fälligen Karten und keine offenen Lernschritte mehr.</p>' +
-			'<button data-ankitab="decks">Zurück zu den Stapeln</button></div>';
+			'<div class="modal-actions">' +
+				(S.ankiDeck ? '<button class="primary" data-deckstudyrepeat="' + U.esc(S.ankiDeck) + '">Heute gelernt nochmal wiederholen</button>' : "") +
+				(S.ankiDeck ? '<button data-deckstudyall="' + U.esc(S.ankiDeck) + '">Alle Karten wiederholen</button>' : "") +
+				'<button data-ankitab="decks">Zurück zu den Stapeln</button>' +
+			'</div></div>';
 	}
 
 	// Anki: „Congratulations! You have finished this deck for now.“ — Learning-Karten
@@ -424,6 +489,7 @@ function ankiStudyHtml() {
 				(snap.lockedAhead ? '<p class="hint">' + lead("lock") + 'Kurzzeitgedächtnis-Falle: ' + snap.lockedAhead + ' frisch bewertete Karte(n) sind kurz gesperrt — sofortiges Nochmal-Drillen fühlt sich gut an, landet aber nicht im Langzeitgedächtnis.</p>' : "") +
 				'<div class="modal-actions">' +
 					'<button class="primary" data-ankiwaitrefresh="1">Erneut prüfen</button>' +
+					(S.ankiDeck ? '<button data-deckstudyrepeat="' + U.esc(S.ankiDeck) + '">Heute gelernt trotzdem wiederholen</button>' : "") +
 					'<button data-ankitab="decks">Zur Stapelübersicht</button>' +
 				'</div></div>';
 	}
@@ -433,13 +499,15 @@ function ankiStudyHtml() {
 		return head +
 			'<div class="study-done study-card"><h2>' + lead("party") + 'Keine Karten fällig</h2>' +
 			'<p class="hint">Für diesen Stapel gibt es gerade keine weiteren fälligen Karten zum Lernen.</p>' +
-			'<div class="modal-actions"><button class="primary" data-ankitab="decks">Zur Stapelübersicht</button></div></div>';
+			'<div class="modal-actions">' +
+				(S.ankiDeck ? '<button class="primary" data-deckstudyall="' + U.esc(S.ankiDeck) + '">Alle Karten wiederholen</button>' : "") +
+				'<button data-ankitab="decks">Zur Stapelübersicht</button></div></div>';
 	}
 
 	// `c` ist bereits beim Anzeigen der Frage festgepinnt, nicht erst beim Aufdecken.
 	const pv = c.srs ? SRS.preview(c.srs) : { 1: "1m", 2: "10m", 3: "1d", 4: "4d" };
 	const cardState = c.srs?.state || "new";
-	const stLabel = { new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[cardState] || cardState;
+	const stLabel = isCustom ? "Wiederholung" : ({ new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[cardState] || cardState);
 	// 🃏 Karten-Redesign v1 (22. Juli, Nacht): ruhige Kopfzeile statt langer Meta-Kette —
 	// Stapel links, Status rechts als Pille; Details (Wdh./Fehler/Intervall) nur noch als Tooltip.
 	let html = head + '<div class="study-card">' +
@@ -610,6 +678,7 @@ function openCardEditor(cardId) {
 export const RENDER_ANKI = {
 	ankiDecks,
 	ankiCardsOf,
+	getCardsReviewedToday,
 	ankiDueOf,
 	ankiStudyOpen,
 	deckTreeHtml,

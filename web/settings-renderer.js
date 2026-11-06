@@ -20,6 +20,9 @@ import { LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { lead } from "./icons.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { BUS } from "./event-bus.js";
+import { STORAGE_TOOLS } from "./storage-tools.js";
+import { DB } from "./db.js";
+import { isBlobAlive } from "./sync-core.js";
 
 const e = (value) => U.esc(String(value ?? ""));
 const button = (label, id, className = "", disabled = false, ic = "") => '<button type="button"' + (id ? ' id="' + e(id) + '"' : "") + ' class="' + e(className) + '"' + (disabled ? " disabled" : "") + '>' + (ic ? lead(ic) : "") + e(label) + "</button>";
@@ -405,7 +408,18 @@ export function refreshCloudflareStatusUi() {
 
 // ---------- App & Speicher ----------
 function renderApp(vm) {
-	const storage = UI.row({ title: "Verwendeter Speicher", description: "IndexedDB, PDFs, Bilder und Offline-Daten", trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>' });
+	const storageMeter = '<span class="settings-meter" aria-hidden="true"><span id="settingsStorageBar"></span></span>';
+	const storageRow = UI.row({
+		title: "Verwendeter Gesamtspeicher",
+		description: "IndexedDB, Hefte, PDFs, Caches und Offline-Daten",
+		descriptionId: "settingsStorageOverviewText",
+		extra: storageMeter,
+		trailing: '<span id="settingsStorageValue" class="settings-value">Wird berechnet …</span>'
+	});
+	const storageDetails = '<div id="settingsStorageDetails" class="settings-storage-details">' +
+		'<div class="settings-storage-loading"><span class="spin-dot" aria-hidden="true"></span> Speicher-Details werden analysiert …</div>' +
+	'</div>';
+	const storage = storageRow + storageDetails;
 	const updateValues = '<span class="settings-version-values"><span>Installiert <b id="updateLocalVer">v' + e(plainVersion(vm.version)) + '</b></span><span>Verfügbar <b id="updateRemoteVer">—</b></span></span>';
 	const update = UI.row({ title: "App-Version", description: "Updates werden nur auf Wunsch geprüft", descriptionId: "updateStatus", descriptionLive: true, trailing: updateValues + updateButton(), className: "settings-update-row" });
 	const scanner = vm.nativeScannerAvailable ? UI.group("Gerät", UI.row({
@@ -504,9 +518,106 @@ export async function hydrateDriveStorage() {
 	if (text) el.textContent = text; else el.remove();
 }
 
+function formatStorageMb(bytes) {
+	if (!bytes || bytes <= 0) return "0 MB";
+	const mb = bytes / 1048576;
+	return mb < 1 ? "< 1 MB" : (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + " MB";
+}
+
+function renderStorageDetailsHtml(rep) {
+	if (!rep) return "";
+	let html = "";
+
+	if (rep.legacyDb?.exists) {
+		html += '<div class="storage-alert-card">' +
+			'<div class="storage-alert-header">' +
+				'<span class="storage-alert-icon" aria-hidden="true">⚠️</span>' +
+				'<div>' +
+					'<b>Alte „Notion“-Datenbank gefunden</b>' +
+					'<p>Auf diesem Gerät liegt noch die Alt-Datenbank aus der Zeit vor der Umbenennung zu Impala67. Sie wird nicht mehr benötigt und verbraucht Speicherplatz.</p>' +
+				'</div>' +
+			'</div>' +
+			'<div class="storage-alert-actions">' +
+				button("Alte Datenbank jetzt löschen", "btnDeleteLegacyDb", "danger small") +
+			'</div>' +
+		'</div>';
+	}
+
+	html += '<div class="storage-grid">';
+
+	// Karte 1: Hefte & Notizen
+	const topHefte = rep.heftStats?.topHefte || [];
+	const hefteListHtml = topHefte.length
+		? '<ul class="storage-sublist">' + topHefte.map((h) =>
+			`<li><span>${e(h.title)}</span><small>${h.pages} ${h.pages === 1 ? "Seite" : "Seiten"}${h.images ? ` · ${h.images} Folien` : ""}</small></li>`
+		  ).join("") + '</ul>'
+		: '<p class="storage-empty">Keine Hefte vorhanden</p>';
+
+	html += '<div class="storage-card">' +
+		'<div class="storage-card-header">' +
+			'<b>🎨 Hefte & Notizen</b>' +
+			'<span class="storage-badge">' + (rep.heftStats?.count || 0) + ' Hefte · ' + (rep.heftStats?.totalImages || 0) + ' Folien</span>' +
+		'</div>' +
+		'<p class="storage-card-desc">Eingebettete Folien, Fotos und Strichdaten.</p>' +
+		hefteListHtml +
+	'</div>';
+
+	// Karte 2: Dokumente & PDFs
+	const pdfs = rep.pdfStats?.top || [];
+	const hasDetachable = pdfs.some((p) => p.pdfId);
+	const pdfListHtml = pdfs.length
+		? '<ul class="storage-sublist">' + pdfs.map((p) =>
+			`<li><span>${e(p.title)}</span><small>${p.kb > 1024 ? (p.kb / 1024).toFixed(1) + " MB" : p.kb + " KB"}${p.pdfId ? "" : " (ausgelagert)"}</small></li>`
+		  ).join("") + '</ul>'
+		: '<p class="storage-empty">Keine PDFs vorhanden</p>';
+
+	html += '<div class="storage-card">' +
+		'<div class="storage-card-header">' +
+			'<b>📄 Dokumente & PDFs</b>' +
+			'<span class="storage-badge">' + (rep.pdfStats?.count || 0) + ' PDFs · ' + (rep.pdfStats?.totalMb || 0) + ' MB</span>' +
+		'</div>' +
+		'<p class="storage-card-desc">Original-Dateien. Auslagern behält Volltext & Suche, spart aber Gerätespeicher.</p>' +
+		pdfListHtml +
+		(hasDetachable ? '<div class="storage-card-footer">' + button("Original-PDFs auslagern", "btnStorageDetachPdfs", "secondary small") + '</div>' : '') +
+	'</div>';
+
+	// Karte 3: Datenbank & Sync-Verlauf
+	const orphansBadge = (rep.blobStats?.orphans || 0) > 0 ? ` · <span class="storage-warn-text">${rep.blobStats.orphans} unreferenziert</span>` : "";
+	html += '<div class="storage-card">' +
+		'<div class="storage-card-header">' +
+			'<b>💾 Synchronisation & Verlauf</b>' +
+			'<span class="storage-badge">' + (rep.eventLog?.count || 0) + ' Events</span>' +
+		'</div>' +
+		'<p class="storage-card-desc">Replay-Log (' + (rep.eventLog?.count || 0) + ' Events, Seq ' + (rep.eventLog?.maxSeq || 0) + '), ' + (rep.blobStats?.total || 0) + ' Blobs' + orphansBadge + '.</p>' +
+		'<div class="storage-card-footer">' +
+			button("Log verdichten & Reste aufräumen", "btnStorageCompact", "secondary small") +
+		'</div>' +
+	'</div>';
+
+	// Karte 4: Caches & Offline-Dateien
+	const cachesList = rep.cacheStats?.items || [];
+	const cacheListHtml = cachesList.length
+		? '<ul class="storage-sublist">' + cachesList.map((c) =>
+			`<li><span>${e(c.name)}</span><small>${c.count} ${c.count === 1 ? "Datei" : "Dateien"} · ${formatStorageMb(c.bytes)}</small></li>`
+		  ).join("") + '</ul>'
+		: '<p class="storage-empty">Keine Caches erfasst</p>';
+
+	html += '<div class="storage-card">' +
+		'<div class="storage-card-header">' +
+			'<b>📦 Caches & Offline-Dateien</b>' +
+			'<span class="storage-badge">' + formatStorageMb(rep.cacheStats?.totalBytes) + '</span>' +
+		'</div>' +
+		'<p class="storage-card-desc">Offline-App-Shell, Reader-Bibliotheken und temporäre Caches. Alte App-Versionen räumt der Service Worker beim Update selbst weg.</p>' +
+		cacheListHtml +
+	'</div>';
+
+	html += '</div>';
+	return html;
+}
+
 export async function hydrateStorageUsage() {
 	const targets = [document.getElementById("settingsStorageValue"), document.getElementById("settingsStorageOverview")].filter(Boolean);
-	if (!targets.length) return;
+	const textTarget = document.getElementById("settingsStorageOverviewText");
 	let text = "Nicht verfügbar";
 	let percent = 0;
 	try {
@@ -520,6 +631,22 @@ export async function hydrateStorageUsage() {
 		}
 	} catch { /* Anzeige bleibt neutral */ }
 	targets.forEach((target) => { target.textContent = text; });
+	if (textTarget) textTarget.textContent = "IndexedDB, Hefte, PDFs, Caches und Offline-Daten";
 	const bar = document.getElementById("settingsStorageBar");
 	if (bar) bar.style.width = percent.toFixed(1) + "%";
+
+	const details = document.getElementById("settingsStorageDetails");
+	if (!details) return;
+	try {
+		const rep = await STORAGE_TOOLS.inspectDetailedStorage({
+			pages: S.pages || {},
+			db: DB,
+			state: STATE,
+			aliveChecker: isBlobAlive ? (k) => isBlobAlive(k, S.pages) : null,
+		});
+		details.innerHTML = renderStorageDetailsHtml(rep);
+	} catch (e) {
+		console.warn("Speicher-Details konnten nicht geladen werden:", e);
+		details.innerHTML = '<p class="storage-empty">Speicher-Details konnten nicht ermittelt werden.</p>';
+	}
 }

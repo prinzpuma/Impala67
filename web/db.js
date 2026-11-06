@@ -384,11 +384,11 @@ export const DB = (() => {
 	// letzten Analyse mindestens so viele neue Events hinzukamen, wie compactLocal als Gewinn
 	// verlangt. Gemeinsam für Drive und Cloudflare — vorher lief sie nur nach einem Drive-Sync.
 	const COMPACT_CHECK_STEP = 200, COMPACT_CHECK_SEQ_KEY = "impala67_compact_checked_seq";
-	async function compactLocalIfDue() {
+	async function compactLocalIfDue(force = false) {
 		const top = await maxSeq();
 		const checked = Math.min(Number(localStorage.getItem(COMPACT_CHECK_SEQ_KEY) || localStorage.getItem("impala67_drive_compact_checked_seq") || 0), top);
-		if (top - checked < COMPACT_CHECK_STEP) return 0;
-		const dropped = await compactLocal(COMPACT_CHECK_STEP);
+		if (!force && top - checked < COMPACT_CHECK_STEP) return 0;
+		const dropped = await compactLocal(force ? 1 : COMPACT_CHECK_STEP);
 		localStorage.setItem(COMPACT_CHECK_SEQ_KEY, String(top));
 		return dropped;
 	}

@@ -15,6 +15,7 @@ export function position(anchor, menu, opts = {}) {
 	const gap = opts.gap == null ? 4 : opts.gap;
 	const r = anchor.getBoundingClientRect();
 	menu.style.position = "fixed";
+	menu.style.zIndex = opts.zIndex || "var(--z-menu, 40)";
 	menu.style.visibility = "hidden";
 	menu.hidden = false;
 	const width = menu.offsetWidth || opts.width || 180;
@@ -81,7 +82,12 @@ export function closeAll(except = "") {
 		if (S.modelMenuOpen) { S.modelMenuOpen = false; changed.model = true; }
 	}
 	if (except !== "page" && S.pageMenuOpenId) { S.pageMenuOpenId = null; changed.sidebar = true; }
-	if (except !== "deck" && S.deckMenuOpenName) { S.deckMenuOpenName = null; changed.sidebar = true; }
+	if (except !== "deck" && S.deckMenuOpenName) {
+		if (S.deckMenuLocation === "main") changed.main = true;
+		else changed.sidebar = true;
+		S.deckMenuOpenName = null;
+		S.deckMenuLocation = null;
+	}
 	if (except !== "top" && S.topMenu) { S.topMenu = null; changed.main = true; }
 	// 🐛 FIX: Diese Flags sind Render-EINGABEN, kommen aber nicht über STATE.dispatch. Ohne
 	// Anstoss blieb ein geschlossenes Menü als Geist im DOM stehen, bis zufällig etwas
@@ -98,7 +104,7 @@ export function closeOutside(target) {
 		: target.closest(".model-menu,#btnModelMenu,#btnModelChipFull") ? "model"
 		// Stapel-⋯ und sein Panel MÜSSEN vor dem generischen .page-menu stehen,
 		// sonst schließt closeAll das Stapel-Menü beim Klick auf „In Papierkorb“.
-		: target.closest("[data-deckmenu],[data-deckmenu-panel],[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive]") ? "deck"
+		: target.closest("[data-deckmenu],[data-deckmenu-panel],[data-deckdel],[data-deckrename],[data-deckduplicate],[data-deckarchive],[data-deckstudyrepeat],[data-deckstudyall]") ? "deck"
 		: target.closest("[data-pagemenu]") ? "page"
 		: target.closest(".page-menu:not(.top-menu)") ? (S.deckMenuOpenName ? "deck" : "page")
 		: target.closest(".top-menu,[data-sharemenu],[data-morepagemenu],#mTopMenu,#btnTopPageMenu") ? "top"
