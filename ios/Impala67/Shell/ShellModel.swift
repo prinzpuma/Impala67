@@ -292,9 +292,13 @@ final class ShellModel {
         let ui = store.core.uiTabs()
         let before = active
         tabs = ui.tabs
-        // Kein aktiver Tab = Startseite (wie in der PWA). Nur ein verwaister Tab fällt auf den ersten zurück –
-        // sonst sprang jeder Tipp auf „Home“ sofort zurück, weil das eigene Speichern dieses reload() auslöst.
-        if let id = ui.activeTabId {
+        // Startseite offen (nicht beim Start): bleibt offen. Der Kern speichert „kein aktiver Tab“ nie –
+        // bei offenen Tabs macht der Reducer (`uiTabsSet`) daraus den letzten Tab. Das eigene Speichern
+        // in goHome() löst dieses reload() aus und holte so sofort den letzten Tab wieder nach vorne.
+        // Die PWA trennt das genauso: `S.view = "home"` bleibt, egal was `activeTabId` im Kern steht.
+        if before == nil && !history.isEmpty {
+            active = nil
+        } else if let id = ui.activeTabId {
             active = tabs.contains(id) ? id : tabs.first
         } else {
             active = nil
