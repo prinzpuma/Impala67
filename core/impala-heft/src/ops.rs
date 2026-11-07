@@ -115,9 +115,9 @@ impl HeftOp {
 
     /// Konsumiert `v` (spart das Klonen großer Striche); im Fehlerfall kommt das Original zurück.
     fn parse(v: Value) -> Result<Self, Value> {
-        let Some(t) = v.get("t").and_then(Value::as_str).map(str::to_owned) else { return Err(v) };
+        let Some(t) = v.get("t").and_then(Value::as_str) else { return Err(v) };
         let page = || non_empty(v.get("p"));
-        Ok(match t.as_str() {
+        Ok(match t {
             "pg+" => {
                 let Some(pg) = v.get("page") else { return Err(v) };
                 let Some(id) = pg.get("id").filter(|i| truthy(i)).and_then(id_str) else { return Err(v) };
@@ -144,8 +144,9 @@ impl HeftOp {
                     return Err(v);
                 }
                 let Some(kind) = ItemKind::from_letter(b[0]) else { return Err(v) };
+                let op = b[1];
                 let Some(page) = page() else { return Err(v) };
-                match b[1] {
+                match op {
                     b'-' => HeftOp::Remove { page, kind, ids: str_list(v.get("ids")) },
                     b'+' | b'=' => {
                         if !v.get("o").is_some_and(|o| o.get("id").is_some_and(truthy)) {
@@ -155,7 +156,7 @@ impl HeftOp {
                         let Value::Object(mut m) = v else { unreachable!("v war ein Objekt") };
                         let o = m.remove("o").expect("o existiert");
                         let item = Item::parse(kind, o).expect("o ist ein Objekt");
-                        if b[1] == b'+' { HeftOp::Add { page, item } } else { HeftOp::Set { page, item } }
+                        if op == b'+' { HeftOp::Add { page, item } } else { HeftOp::Set { page, item } }
                     }
                     _ => return Err(v),
                 }
