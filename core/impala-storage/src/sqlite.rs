@@ -442,6 +442,25 @@ impl Storage for SqliteStorage {
         Ok(out)
     }
 
+    fn vec_headers(&self) -> Result<Vec<(String, Value)>, Error> {
+        // SQLite liest die drei Felder selbst aus dem JSON; die Zahlenreihen werden nie geparst.
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT key, json_object('updated', json_extract(rec, '$.updated'), \
+                 'model', json_extract(rec, '$.model'), 'providerId', json_extract(rec, '$.providerId')) \
+                 FROM vecs ORDER BY key",
+            )
+            .map_err(db)?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).map_err(db)?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (k, rec) = row.map_err(db)?;
+            out.push((k, serde_json::from_str(&rec).map_err(json_err)?));
+        }
+        Ok(out)
+    }
+
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error> {
         let rec: Option<String> = self
             .conn

@@ -104,6 +104,18 @@ pub trait Storage {
 
     fn vec(&self, key: &str) -> Result<Option<Value>, Error>;
     fn vecs(&self) -> Result<Vec<(String, Value)>, Error>;
+    /// Wie [`Storage::vecs`], aber je Eintrag nur `updated`, `model` und `providerId` – ohne die
+    /// Vektoren (Planung der Indexierung, läuft unter der Kern-Sperre).
+    fn vec_headers(&self) -> Result<Vec<(String, Value)>, Error> {
+        Ok(self
+            .vecs()?
+            .into_iter()
+            .map(|(k, v)| {
+                let pick = |f: &str| v.get(f).cloned().unwrap_or(Value::Null);
+                (k, serde_json::json!({ "updated": pick("updated"), "model": pick("model"), "providerId": pick("providerId") }))
+            })
+            .collect())
+    }
 
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error>;
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error>;

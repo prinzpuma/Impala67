@@ -352,7 +352,9 @@ impl SyncStore for NativeStore {
     }
 
     fn pages(&self) -> Map<String, Value> {
-        match serde_json::to_value(&crate::lock(&self.core).model.state().pages) {
+        // Unter der Sperre nur kopieren; das JSON (alle Seiten samt Inhalt) entsteht danach.
+        let pages = crate::lock(&self.core).model.state().pages.clone();
+        match serde_json::to_value(&pages) {
             Ok(Value::Object(m)) => m,
             _ => Map::new(),
         }

@@ -513,7 +513,8 @@ impl SemanticSearch {
     fn plan(&self) -> Result<(Vec<String>, Vec<String>), SearchFailure> {
         let ident = self.embedder.identity();
         let inner = lock(&self.core);
-        let stored: HashMap<String, Value> = inner.storage.vecs().map_err(storage_err)?.into_iter().collect();
+        // Nur die Kopfdaten: Die Vektoren aller Seiten zu parsen hielte die Sperre unnötig lange.
+        let stored: HashMap<String, Value> = inner.storage.vec_headers().map_err(storage_err)?.into_iter().collect();
         let state = inner.model.state();
         let mut stale = Vec::new();
         for pg in state.pages.values().filter(|p| !p.is_trashed()) {
