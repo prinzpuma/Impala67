@@ -6,27 +6,25 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.ceil
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
+// UniFFI-Datensätze aus dem Rust-Kern (core/impala-ffi/src/analysis.rs)
+typealias RateRow = uniffi.impala_ffi.RateRow
+typealias HourRate = uniffi.impala_ffi.HourRate
+typealias ProblemPage = uniffi.impala_ffi.ProblemPage
+typealias ExpRow = uniffi.impala_ffi.ExpRow
+typealias PatternData = uniffi.impala_ffi.PatternData
+
+typealias Goal = uniffi.impala_ffi.Goal
+typealias SubjectRow = uniffi.impala_ffi.SubjectRow
+typealias Subjects = uniffi.impala_ffi.Subjects
+typealias Slot = uniffi.impala_ffi.Slot
+typealias BestTime = uniffi.impala_ffi.BestTime
+typealias DueWeek = uniffi.impala_ffi.DueWeek
+typealias HomeAnalysis = uniffi.impala_ffi.HomeAnalysis
+
 // ---------- Lern-Analyse im Statistik-Tab (lernmuster.js) ----------
-
-data class RateRow(val label: String, val n: Int, val rate: Double)
-data class HourRate(val hour: Int, val n: Int, val rate: Double)
-data class ProblemPage(val pageId: String, val minutes: Int, val lost: Int)
-data class ExpRow(val label: String, val n: Int, val average: Double)
-
-data class PatternData(
-    val position: List<RateRow>,
-    val timer: List<RateRow>,
-    val hours: List<HourRate>?,
-    val experiments: List<ExpRow>,
-    val problems: List<ProblemPage>,
-) {
-    val empty get() = position.size < 2 && timer.isEmpty() && hours == null && experiments.isEmpty() && problems.isEmpty()
-}
 
 private fun passRate(list: List<STele>) = if (list.isEmpty()) 0.0 else list.count { it.data.optInt("grade") > 1 }.toDouble() / list.size
 
@@ -56,7 +54,13 @@ fun LearnData.patterns(livePages: Set<String>): PatternData {
     val problems = dwell.filter { (id, v) -> id in livePages && v[0] >= 5 * 60_000 }
         .entries.sortedByDescending { (_, v) -> v[0] + v[1] * 60_000 }.take(5)
         .map { (id, v) -> ProblemPage(id, (v[0] / 60_000).toInt(), v[1].toInt()) }
-    return PatternData(position, timer, hours, experiments, problems)
+    val empty = position.size < 2 && timer.isEmpty() && hours == null && experiments.isEmpty() && problems.isEmpty()
+    return PatternData(position, timer, hours, experiments, problems, empty)
+}
+
+/** Direkte Lernmuster aus dem Rust-Kern über [uniffi.impala_ffi.ImpalaCore]. */
+fun uniffi.impala_ffi.ImpalaCore.patterns(livePages: Collection<String>? = null): PatternData {
+    return patternData(livePages?.toList())
 }
 
 // ---------- Lernanalyse der Startseite (lernanalyse.js) ----------
@@ -70,32 +74,25 @@ fun dur(minutes: Double): String {
     return if (h > 0) "$h h" + (if (m > 0) " $m" else "") else "$m Min"
 }
 
-data class Goal(val goalMin: Int, val days: List<Double>, val done: Double, val today: Int, val pace: Double, val need: Double, val left: Int, val text: String, val warn: Boolean, val reachDay: Int?)
-data class SubjectRow(val subject: String, val now: Double, val before: Double, val delta: Int, val deck: String)
-data class Subjects(val rows: List<SubjectRow>, val worst: SubjectRow?, val text: String)
-data class Slot(val label: String, val hint: String, val n: Int, val rate: Double?)
-data class BestTime(val slots: List<Slot>, val best: Slot?, val text: String)
-data class DueWeek(val counts: List<Int>, val labels: List<String>, val peak: Int, val text: String)
-data class HomeAnalysis(val goal: Goal, val subjects: Subjects, val time: BestTime, val forecast: DueWeek, val headline: String, val action: String?, val actionDeck: String?)
-
 fun goalOf(time: LearningTime, goalMin: Int, today: LocalDate = LocalDate.now()): Goal {
     val days = time.week(today).map { it / 60.0 }
     val idx = today.dayOfWeek.value - 1
-    val done = days.sum()
-    val pace = (1L..14L).sumOf { time.seconds(today.minusDays(it)) / 60.0 } / 14
-    val left = 7 - idx
-    val need = max(0.0, goalMin - done)
-    var reach: Int? = null
-    var warn = false
-    val text = when {
-        need == 0.0 -> "Geschafft: ${dur(done)} von ${dur(goalMin.toDouble())}."
-        pace > 0 && pace * left >= need -> {
-            reach = min(6, idx + ceil(need / pace).toInt() - 1)
-            "Bei deinem Tempo schaffst du es " + (if (reach == idx) "heute" else "am " + DAY_LONG[reach]) + "."
-        }
-        else -> { warn = true; "Es fehlen noch ${dur(need)}, also etwa ${dur(need / left)} pro Tag." }
-    }
-    return Goal(goalMin, days, done, idx, pace, need, left, text, warn, reach)
+    val pace = (1L..14L).sumOf { time.seconds(today.minusDays(it)) / 60.0 } / 14.0
+    return uniffi.impala_ffi.computeGoal(goalMin, days, idx, pace)
+}
+
+/** Direkte Lernanalyse aus dem Rust-Kern über [uniffi.impala_ffi.ImpalaCore]. */
+fun uniffi.impala_ffi.ImpalaCore.homeAnalysis(
+    time: LearningTime,
+    goalMin: Int,
+    now: Instant = Instant.now(),
+    zone: ZoneId = ZoneId.systemDefault(),
+): HomeAnalysis? {
+    val today = now.atZone(zone).toLocalDate()
+    val days = time.week(today).map { it / 60.0 }
+    val pace = (1L..14L).sumOf { time.seconds(today.minusDays(it)) / 60.0 } / 14.0
+    val tzOffset = zone.rules.getOffset(now).totalSeconds / 60
+    return homeAnalysis(now.toEpochMilli(), tzOffset, goalMin, days, pace)
 }
 
 fun LearnData.homeAnalysis(time: LearningTime, goalMin: Int, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): HomeAnalysis? {

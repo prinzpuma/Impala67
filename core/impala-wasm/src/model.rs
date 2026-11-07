@@ -163,7 +163,7 @@ struct HeftMetaJs {
 /// Der Zustand der App samt Log-Anbindung (eine Instanz je Tab).
 #[wasm_bindgen]
 pub struct ModelCore {
-    m: Model,
+    pub(crate) m: Model,
     search: NoteSearch,
     load: Option<Prefetched>,
 }

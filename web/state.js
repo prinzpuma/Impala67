@@ -626,6 +626,23 @@ export const STATE = (() => {
 	const conflictWithTexts = (c) => JSON.parse(M.conflictWithTexts(JSON.stringify(c)));
 	const conflictResolve = (c, action) => JSON.parse(M.conflictResolve(JSON.stringify(c), String(action)));
 
+	// Lernanalyse (Wochenziel, Fächer, Tageszeit, Prognose) und Lernmuster aus dem Kern
+	function homeAnalysis(goalMin, days, pace, now = Date.now(), tzOffset = -(new Date().getTimezoneOffset())) {
+		return M.homeAnalysis(
+			typeof now === "number" ? now : new Date(now).getTime(),
+			tzOffset,
+			goalMin,
+			JSON.stringify(days || []),
+			pace,
+		);
+	}
+	function computeGoal(goalMin, days, today, pace) {
+		return M.computeGoal(goalMin, JSON.stringify(days || []), today, pace);
+	}
+	function patternData() {
+		return M.patternData();
+	}
+
 	return {
 		onChange: null, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
 		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftMeta, heftPreview,
@@ -634,6 +651,7 @@ export const STATE = (() => {
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
 		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
+		homeAnalysis, computeGoal, patternData,
 	};
 })();
 
