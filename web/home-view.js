@@ -62,16 +62,15 @@ function contMeta(pg) {
 }
 // „Weißt du's noch?“: täglich eine andere schon gelernte Karte, nur zum Aufdecken (keine Bewertung,
 // der Lernplan bleibt unberührt). Bilder/Formeln/HTML raus, Lückentext wird zur Lücke.
-const CLOZE = /\{\{c\d+::(.*?)(?:::[^}]*)?\}\}/g;
 const cardText = (md) => CORE.mdCardText(String(md || ""));
 function recall(cards) {
 	const pool = cards.filter((c) => c && !c.suspended && c.srs && c.srs.state === "review" && cardText(c.front).length >= 3);
 	if (pool.length < 5) return "";
 	const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
 	const c = pool[(day * 2654435761 >>> 0) % pool.length];
-	const cloze = CLOZE.test(c.front); CLOZE.lastIndex = 0;
-	const q = cloze ? cardText(c.front.replace(CLOZE, "＿＿＿")) : cardText(c.front);
-	const a = cloze ? [...c.front.matchAll(CLOZE)].map((m) => cardText(m[1])).join(" · ") : cardText(c.back);
+	const cloze = CORE.clozeRecall(String(c.front || ""));
+	const q = cloze ? cardText(cloze.question) : cardText(c.front);
+	const a = cloze ? cloze.answers.map(cardText).join(" · ") : cardText(c.back);
 	if (!a) return "";
 	const cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 	return `<details class="hv-recall" data-key="recall:${esc(c.id)}"><summary><small>Weißt du's noch?</small><span>${esc(cut(q, 140))}</span><em>Antwort zeigen</em></summary><p>${esc(cut(a, 220))}</p></details>`;

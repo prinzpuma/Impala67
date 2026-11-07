@@ -4,6 +4,7 @@
 //! Der Kartenzustand [`Srs`] hat dieselbe JSON-Form wie `card.srs` im JS (Events `cardReview`,
 //! IndexedDB); unbekannte Zusatzfelder alter Karten bleiben erhalten.
 
+pub mod cloze;
 mod fsrs;
 mod time;
 

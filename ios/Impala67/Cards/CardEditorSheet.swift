@@ -166,10 +166,6 @@ struct CardEditorSheet: View {
     /// Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine leere Lücke
     /// an der Schreibmarke.
     private func wrapCloze() {
-        let numbers = Self.clozeNumber.matches(in: front, range: NSRange(front.startIndex..., in: front)).compactMap { m in
-            Range(m.range(at: 1), in: front).flatMap { Int(front[$0]) }
-        }
-        let open = "{{c\((numbers.max() ?? 0) + 1)::"
         var range = front.endIndex..<front.endIndex
         if let sel = selection {
             switch sel.indices {
@@ -178,12 +174,15 @@ struct CardEditorSheet: View {
             @unknown default: break
             }
         }
-        let picked = String(front[range])
-        let start = front.distance(from: front.startIndex, to: range.lowerBound)
-        front.replaceSubrange(range, with: open + picked + "}}")
-        let caret = start + open.count + (picked.isEmpty ? 0 : picked.count + 2)
-        selection = TextSelection(insertionPoint: front.index(front.startIndex, offsetBy: min(caret, front.count)))
+        let u16Start = UInt32(front.utf16.distance(from: front.utf16.startIndex, to: range.lowerBound.samePosition(in: front.utf16) ?? front.utf16.startIndex))
+        let u16End = UInt32(front.utf16.distance(from: front.utf16.startIndex, to: range.upperBound.samePosition(in: front.utf16) ?? front.utf16.endIndex))
+        let res = wrapCloze(text: front, selectionStart: u16Start, selectionEnd: u16End)
+        front = res.text
+        if let target = front.utf16.index(front.utf16.startIndex, offsetBy: Int(res.cursor), limitedBy: front.utf16.endIndex),
+           let charIndex = target.samePosition(in: front) {
+            selection = TextSelection(insertionPoint: charIndex)
+        } else {
+            selection = TextSelection(insertionPoint: front.endIndex)
+        }
     }
-
-    private static let clozeNumber = try! NSRegularExpression(pattern: #"\{\{c(\d+)::"#)
 }
