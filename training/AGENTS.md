@@ -2,6 +2,8 @@
 
 Dieses Verzeichnis enthält die Werkzeuge, Datensätze, Trainingsskripte und das vollständige Fortschritts- und Diagnose-Protokoll, um kompakte On-Device-Modelle (**Qwen 3.5 4B**) gezielt für Impala67 zu finetunen.
 
+> **Antwort an den Nutzer**: Am Ende nur die Zusammenfassungs-Box der App (Claude Code: `wrap_up`) nutzen, kein zusätzlicher Fließtext; ohne Box höchstens wenige Sätze (siehe `../AGENTS.md`).
+
 ---
 
 ## 1. Übersicht & Dateien im Ordner
@@ -31,7 +33,7 @@ Dieses Verzeichnis enthält die Werkzeuge, Datensätze, Trainingsskripte und das
   * Hybrid-Architektur (Gated DeltaNet / Linear Attention) spart bis zu 70 % KV-Cache-RAM bei langen Notizen.
   * Native Multimodalität (Vision/Handschrift direkt im Modell, kein separates Modell nötig).
   * Exzellente deutsche Sprachunterstützung (201 Sprachen) und sehr saubere JSON-Struktur ab Werk.
-* **Hardware-Ziele:** Native Android-App (Kotlin/Compose über Rust-Kern) und zukünftige iPadOS-App (M1 / Swift). Kein Web/PWA-Zwang.
+* **Hardware-Ziele:** Native Android-App (Kotlin/Compose über Rust-Kern) und native iPad-App (SwiftUI/PencilKit über Rust-Kern, `ios/`). Kein Web/PWA-Zwang.
 
 ### Phase 2: Erste Basismessung & Real-World Stresstests
 * **Einfache Tests (300 Tokens Kontext):** 6 von 6 Tests bestanden. Das Basismodell beherrscht Impala-Tools im Kurzkontext fehlerfrei.

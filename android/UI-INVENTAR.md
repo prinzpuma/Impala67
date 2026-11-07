@@ -4,7 +4,8 @@ Vollständige Liste aller sichtbaren UI-Elemente der PWA (`web/`), jeweils mit S
 Kotlin/Compose-App (`android/app/src/main/java/org/impala67/app/`). Grundlage für den schrittweisen
 Nachbau. Regeln für die Umsetzung: `android/PORTING.md`.
 
-Stand: 2026-11-01 (aus dem Code erhoben, nicht im Emulator geprüft). Zeilenangaben können veralten.
+Stand: 2026-11-07 (Kästchen nachgezogen; zuletzt inhaltlich am 1. November aus dem Code erhoben, nicht im
+Emulator geprüft). 955 von 1451 Punkten erledigt. Zeilenangaben können veralten.
 
 **Legende:** `[x]` = erledigt (✅ wie PWA) · `[ ]` = offen · ✅ vorhanden wie PWA · 🟡 teilweise/abweichend · ⬜ fehlt ·
 ➕ nur Android · ➖ entfällt nativ. Beim Abarbeiten Zeile auf `[x]` und ✅ setzen.

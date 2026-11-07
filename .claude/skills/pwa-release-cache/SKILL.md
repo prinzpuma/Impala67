@@ -11,15 +11,15 @@ Use this skill whenever modifying static web assets in `web/`, updating `web/ser
 
 ## 1. Golden Rules for Service Worker & Cache
 
-1. **Cache Version Bumping**:
-   * Any change to cached files in `web/` (`.js`, `.css`, `.html`, icons) requires bumping the cache version in `web/service-worker.js`.
-   * Never leave the cache version unchanged when altering web client behavior.
+1. **Cache Version Is Automatic**:
+   * Do **not** bump the cache version in `web/service-worker.js` by hand. On every push, `deploy-pwa.yml` derives it from the release tags (`version-from-tags.mjs`, e.g. `2.2.124-dev.57`) and writes it via `set-version.mjs`.
+   * New cached files only need to be added to `APP_FILES` in `web/service-worker.js`; verify with `npm run check:pwa`.
 2. **Offline-First Resilience**:
-   * The app must boot and load notes from IndexedDB completely offline without network access.
+   * The app must boot and load notes from IndexedDB completely offline without network access; the Rust core/WASM must start from the cached files.
    * Check cache fallback handling in `web/service-worker.js` for navigation and asset fetches.
 3. **Release Workflow Isolation**:
-   * In local development, avoid manually modifying release-only artifacts like `.github/workflows/release.yml` version stamps unless explicitly asked.
-   * Automated release CI handles updating `web/version.json` and production cache versions.
+   * Do not hand-edit version stamps in `package.json`/`web/version.json`; the CI sets them from release tags (`version-from-tags.mjs`, `set-version.mjs`).
+   * Official releases are manual (`release.yml`); a push to `main` only deploys the PWA (`deploy-pwa.yml`).
 
 ---
 

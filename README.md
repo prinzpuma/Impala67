@@ -6,6 +6,7 @@ Impala67 ist eine installierbare, local-first Progressive Web App für Notizen, 
 
 - 🌐 **Web-App / PWA (Browser, PC, Mac, iPad, Android):** [Impala67 öffnen](https://prinzpuma.github.io/Impala67/)
 - 📱 **Android App (APK):** [Impala67.apk herunterladen (Direktlink)](https://github.com/prinzpuma/Impala67/releases/latest/download/Impala67.apk)
+- 🍎 **iPad-App (IPA):** unsigniertes Build-Artefakt im GitHub-Actions-Lauf „iPad-App bauen“ ([ios/README.md](ios/README.md))
 - 📦 **Alle Releases & Versionshistorie:** [GitHub Releases](https://github.com/prinzpuma/Impala67/releases)
 
 ## Funktionen

@@ -2,12 +2,12 @@
 
 ## 1. Produkt und Plattformen
 
-- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) und nativer Android-App (Kotlin/Compose über dem Rust-Kern, `android/`). Nutzung:
-  - **iPad / Tablet**: Handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht).
+- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) und nativer Android-App (Kotlin/Compose über dem Rust-Kern, `android/`) sowie nativer iPad-App (SwiftUI/PencilKit über dem Rust-Kern, `ios/`). Nutzung:
+  - **iPad / Tablet**: Handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht, PWA oder native iPad-App).
   - **Laptop / PC (Linux, Windows, macOS)**: Strukturiertes Tippen (Markdown-Editor).
   - **Smartphone / Android**: Schnelles Lesen und mobile Kurznotizen.
 - **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
-- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Die native Android-App nutzt `web/` nicht.
+- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Die nativen Apps (`android/`, `ios/`) nutzen `web/` nicht.
 - **Rust-Kern**: Die Logik ohne Oberfläche wird schrittweise nach Rust verlagert (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`). Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall); die PWA lädt den Kern als WASM aus `web/core/` (über `web/rust-core.js`). Nach Änderungen in `core/`: `npm run build:core` und `web/core/` + `core/wasm-build.json` mitcommitten.
 - **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren.
 
@@ -27,8 +27,10 @@
 - **Daten & Sync**: `web/db.js`, `web/state.js` (Ein-/Ausgabe und Abfragen für das Rust-Datenmodell `ModelCore`), `web/state-views.js` (nur lesbare Ansichten in `S`), `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
 - **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`; UniFFI-Hülle für native Apps `core/impala-ffi` (ändert den WASM-Stempel nicht)
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
+- **Native Apps**: `android/` (Kotlin/Compose, Regeln: `android/PORTING.md`), `ios/` (SwiftUI/PencilKit, Stand: `ios/README.md`, Parität: `ios/PARITAET.md`), gemeinsame Brücke `core/impala-ffi`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
-- **Veröffentlichung**: `.github/workflows/release.yml`, `.github/scripts/set-version.mjs`
+- **Doku**: `docs/ARCHITEKTUR.md`, `docs/NATIV-PLAN.md`, `docs/IPAD-TESTAUFTRAG.md` und Testberichte `docs/IPAD-TESTBERICHT-*.md`
+- **Veröffentlichung**: `.github/workflows/release.yml` (manuelles Release mit Android-APK), `deploy-pwa.yml` (PWA bei jedem Push), `android-check.yml` (Debug-Bau), `ios-build.yml` (unsignierte IPA); Versionen aus `.github/scripts/version-from-tags.mjs`, gesetzt über `.github/scripts/set-version.mjs`
 - **Backlog**: `TODO.md`
 
 ## 4. Code-Qualität und Sicherheit
@@ -42,6 +44,7 @@
 
 ## 5. Arbeitsweise
 
+- **Antwort = Abschluss-Box**: Am Ende einer Aufgabe nur die Zusammenfassungs-Box der App (Claude Code: `wrap_up`) als Antwort nutzen, kein zusätzlicher Fließtext. Gibt es keine Box, höchstens wenige Sätze. Ausführlich nur, wenn der Nutzer ausdrücklich eine Erklärung will.
 - **Kommunikation**: Kurz und verständlich antworten. Änderungen so beschreiben, wie sie sich für Bedienung, Verhalten oder Nutzen der App auswirken. Keine langen Code-Blöcke im Chat wiederholen.
 - **Kontext sparen**: Dateien über 300 Zeilen nicht komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten. Details zu Agenten-Delegation stehen in `CLAUDE.md`.
 - **Testen**: Vor einer Änderung die betroffenen Einzeltests ausführen. `npm run verify` nur bei Bedarf.
@@ -49,12 +52,12 @@
 
 ## 6. Veröffentlichung
 
-- **Ein Push auf `main` geht sofort live**: Er veröffentlicht die PWA automatisch über GitHub Pages. Ein offizielles GitHub Release (mit Android Release APK) wird nur manuell über den Workflow ausgelöst. Vorher prüfen, ob die Änderung fertig ist.
-- **Versionen automatisch**: Der CI-Workflow setzt Versionsnummern und Cache-Strings über `.github/scripts/set-version.mjs`. Nicht von Hand ändern.
+- **Ein Push auf `main` geht sofort live**: Er veröffentlicht die PWA automatisch über GitHub Pages. Ein offizielles GitHub Release (mit Android Release APK) wird nur manuell über den Workflow ausgelöst; die iPad-App baut `ios-build.yml` als unsigniertes Artefakt. Vorher prüfen, ob die Änderung fertig ist.
+- **Versionen automatisch**: Quelle sind die Release-Tags (`version-from-tags.mjs`), gesetzt und geprüft über `.github/scripts/set-version.mjs`. `package.json` und `web/version.json` werden im Repo nicht von Hand hochgezählt.
 
 ## 7. KI- & Entwickler-Integration (MCP Live-Bridge)
 
-- **Verbindung**: Der MCP-Server in `mcp/` verbindet KI-Assistenten über einen lokalen WebSocket (`ws://127.0.0.1:8765`) mit der im Browser laufenden App (`http://localhost:8000`). Die Gegenseite in der App ist `web/mcp-bridge.js`.
+- **Verbindung**: Der MCP-Server in `mcp/` verbindet KI-Assistenten über einen lokalen WebSocket (`ws://127.0.0.1:8765`) mit der im Browser laufenden App (`http://localhost:8000`). Die Gegenseite in der App ist `web/mcp-bridge.js`. Die native iPad-App nutzt dieselbe Bridge über WLAN (`ws://<IP>:8766`, Einrichtung: `mcp/lan-setup.mjs`).
 - **Tools** (Stand: Code in `mcp/` und `web/mcp-bridge.js`):
   - **Inhalte**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`
   - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`, `impala_get_ai_trace`

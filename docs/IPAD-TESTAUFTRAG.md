@@ -1,11 +1,13 @@
 ﻿# Testauftrag iPad-App (für Gemini über die MCP-Bridge)
 
-Ziel: Die iPad-App soll **besser als die PWA** sein – flüssiger, ohne Hänger, mit allem, was die
+**Status:** Erledigt am 07.11.2026 – Bericht: [`IPAD-TESTBERICHT-2026-11-07.md`](IPAD-TESTBERICHT-2026-11-07.md).
+
+Ziel: Die iPad-App soll **besser als die PWA** sein - flüssiger, ohne Hänger, mit allem, was die
 PWA kann. Du **testest und misst nur**, du änderst keinen Code. Ergebnis ist ein Bericht
 (`docs/IPAD-TESTBERICHT-<Datum>.md`), mit dem Claude die Fehler behebt.
 
-Grundlage: `ios/PARITAET.md` (Stand der Gleichheit). Fast alle Leistungs-Punkte dort sind
-„✅ Code · **am Gerät ungeprüft**“ – genau das prüfst du.
+Grundlage: `ios/PARITAET.md` (Stand der Gleichheit). Die wichtigsten Leistungs-Punkte sind inzwischen
+am Gerät geprüft; offene Punkte und neue Lücken stehen im Bericht vom 07.11.2026.
 
 ## Regeln
 

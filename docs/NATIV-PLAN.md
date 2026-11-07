@@ -1,6 +1,6 @@
 # Impala67 – Plan: Rust-Kern & native Apps
 
-Stand: 27. Oktober 2026
+Stand: 7. November 2026 (Plan vom 27. Oktober, fortgeschrieben)
 
 ## Ziel
 
@@ -131,13 +131,14 @@ Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API
    - **KI** (`ai.rs`, `ai_tools.rs`, `chats.rs`, `rag.rs`): `AiAssistant` mit Agent-Schleife, Werkzeuge
      (`inspect`, `change` samt Rückgängig) in Rust, Chats; `SemanticSearch` mit Embeddings der Plattform
      (`TextEmbedder`) oder Cloud, Vektoren in SQLite.
-   Offen: Android-/iOS-Build (NDK, `cargo-ndk`, Bindings im App-Projekt) – richtet Gemini ein; Test mit echtem
+   Android-Build (NDK, `cargo-ndk`, Bindings im App-Projekt) und iOS-CI-Build stehen. Offen: Test mit echtem
    Google-Konto, echtem KI-Anbieter und echtem Embedding-Modell; Cloze-Regeln liegen doppelt (Rust in
    `impala-ffi/src/cloze.rs`, JS in `web/extras.js`) bis die PWA sie über den WASM-Kern nutzt; KI-Chats werden erst
    am Lauf-Ende gespeichert.
 4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz. Beschlossen am 4. November 2026,
-   Details siehe „iPad-App“ unten. Begonnen in ios/ (Aufbau und Bauen ohne Mac: ios/README.md): Seitenleiste,
-   Notiz als Text, Heft mit PencilKit im Strichformat des Kerns; Build als unsignierte .ipa über .github/workflows/ios-build.yml.
+   Details siehe „iPad-App“ unten. Stand 7. November 2026: App läuft auf dem Gerät (iPadOS 27.2, `2.2.124+25`);
+   Startseite, Heft, Suche, Graph, KI, Bibliothek und Sync wurden geprüft. Bericht:
+   `docs/IPAD-TESTBERICHT-2026-11-07.md`. Build als unsignierte `.ipa` über `.github/workflows/ios-build.yml`.
 5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
 6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
 
@@ -177,7 +178,7 @@ Gegen vergessene Neubauten hält `core/wasm-build.json` Hashes von Quellen und A
 - Kein `serde-wasm-bindgen` für große Objekt-Bäume: zu langsam und zu groß. Gezielter Zugriff über ein Trait hält den Kern
   zudem plattformneutral – dasselbe Muster passt für UniFFI.
 
-## Stand Rust-Kern (27. Oktober 2026)
+## Stand Rust-Kern (27. Oktober 2026, historische Messung)
 
 Workspace `core/`: ein Crate je Fachgebiet, Fassade `impala-core`, WASM-Hülle `impala-wasm`. Regeln für Arbeiten
 daran: `core/AGENT-REGELN.md`. Jedes Crate hat Golden-Tests aus dem JS-Original (`core/tools/gen-golden-*.mjs`).
@@ -243,6 +244,13 @@ neue Siri in der EU verfügbar ist. Lokale Embeddings zurückgestellt. Keine Abh
 
 **Reihenfolge**: Kern-Anbindung und Seitenliste → Heft (Stift, Radierer, Lasso) → Cloudflare-Sync und Drive →
 Editor und Karteikarten → Layout-Feinschliff → Foundation Models.
+
+**Stand 7. November 2026**: Der Gerätetest ist durch (App `2.2.124+25`, iPadOS 27.2). Startseite, Seitenleiste,
+Heft-Laden, Sync unter Last, Suche, Wissensgraph, KI-Streaming und Bibliothek laufen ohne Hänger. Offen sind
+laut `docs/IPAD-TESTBERICHT-2026-11-07.md` vor allem: Kartenübersicht (193 ms) und Einstellungen (258 ms)
+entkoppeln, Kern-Sperre bei Karten-Sync (429 ms) und Kaltstart (789 ms) senken, Versionsverlauf für Seiten und
+Hefte, Seiten dazwischen einfügen sowie die Bridge-Lücken (`impala_create_page`/`impala_update_page`;
+`impala_type` wurde nach dem Test nachgebessert).
 
 ### iOS ohne Mac
 

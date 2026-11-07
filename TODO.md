@@ -1,10 +1,20 @@
 # Impala67 – Backlog & Offene Punkte
 
-Stand: v2.2.86 (28. Oktober 2026)
+Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen aus den Release-Tags)
 
 ---
 
 ## 1. Zuletzt umgesetzt (Erledigt)
+
+- [x] **Android-Editor & Suchleistung (7. November 2026)**:
+  - Android: Eine Seite gilt erst nach erfolgreichem Schreiben als gespeichert; Fehlschläge werden wiederholt, Schreiben läuft nacheinander im Hintergrund statt auf dem Hauptthread (`1ef697f`).
+  - Rust-Suche: Vektorsuche ohne Zwischen-Scores, Titel-Zählungen ohne Klon (`d79f51a`).
+
+- [x] **iPad-App am Gerät geprüft und Basis gefestigt (4.–7. November 2026)**:
+  - MCP-Bridge über WLAN (`mcp/lan-setup.mjs`, Port 8766), Diagnose, Profiler, Bildschirmfoto, UI-Baum, Tippen/Texteingabe sowie Seiten anlegen/ändern; Testbericht: `docs/IPAD-TESTBERICHT-2026-11-07.md`.
+  - Startseite, Seitenleiste, Heft-Laden, Sync unter Last, Suche, Wissensgraph, KI-Streaming und Bibliothek laufen am Gerät ohne Hänger. Offen laut Bericht: 193 ms Kartenübersicht, 258 ms Einstellungen, 429 ms Kern-Sperre beim Karten-Sync, 789 ms Kaltstart, fehlender Versionsverlauf und Bridge-Lücken.
+  - Einstellungen im PWA-Look, Heft-Bilder/Texte direkt bedienbar, Heftseiten durchlaufend, Striche als Bitmap, Speicher-Aufräumen; Kern-Sperre beim Aufräumen, Indexieren und Datei-Sync verkürzt; Heft-Undo klont nicht mehr das ganze Heft.
+  - CI: Versionen kommen aus den Release-Tags (`version-from-tags.mjs`); GitHub-Releases werden nur noch manuell ausgelöst, der PWA-Deploy bleibt automatisch.
 
 - [x] **Vollständige Rust-Kern- & WASM-Umstellung der PWA (27.–28. Oktober 2026, NATIV-PLAN 3a–3f)**:
   - **Architektur (Crux-Muster)**: Sämtliche Nicht-UI-Logik läuft im gemeinsamen Rust-Kern (`core/impala-core`, 12 Crates); der Kern rechnet ohne eigene E/A und nutzt asynchrone Plattform-Traits (`HttpClient`, Stores). PWA lädt den Kern beim Start synchron als WASM (`web/rust-core.js`), ohne JS-Rückfall.
@@ -22,7 +32,7 @@ Stand: v2.2.86 (28. Oktober 2026)
   - Aufräumen: ~400 Zeilen totes Lernzeit-Widget + CSS, tote Bibliotheks-Handler und Exporte, doppelte Helfer (Escape, gzip, Fokus, leere Heftseite), Import-Zyklus aufgelöst.
 
 - [x] **Capacitor Android-Integration & Native Schicht (`web/platform-native.js`)**:
-  - Basis-Setup (`capacitor.config.json`, `android/`), automatischer APK-Build via GitHub Actions (`.github/workflows/android-build.yml`) und permanente Edge-to-Edge-Statusleiste.
+  - Basis-Setup (`capacitor.config.json`, `android/`), automatischer APK-Build via GitHub Actions (Release: `.github/workflows/release.yml`, Debug-Prüfbau: `android-check.yml`) und permanente Edge-to-Edge-Statusleiste.
   - Hardware-Back-Button, Haptik, lokale SRS-Erinnerungen, Dateisystem-Backup (`Documents/Impala67/`), ML Kit Document Scanner, Offline-Spracheingabe und „Senden an Impala67" (Share-Intent).
 - [x] **Lokale Handschrifterkennung (Bild-Modell v2)**:
   - Plattformunabhängige ONNX-Erkennung im Worker (`handwriting/` → `web/handwriting-model.onnx`, ResNet18 + BiLSTM + CTC) ersetzt ML Kit OCR.
@@ -64,7 +74,7 @@ Stand: v2.2.86 (28. Oktober 2026)
 - [x] **Restliche CSS-Überlagerungen abgebaut**:
   - Abgeleitete Design-Tokens (`--b-*`) nach `web/css/variables.css` überführt und die Komponenten-Regeln aus `web/design.css` direkt in `web/home.css`, `web/styles.css`, `web/css/editor.css` und `web/css/heft.css` integriert (`web/design.css` enthält nur noch Querschnitts-Kartenbasis und `motion.js`-Übergänge).
 - [x] **Abhängigkeits-Knäuel & `window`-Brücke aufgelöst (`docs/ARCHITEKTUR.md` B1/B2)**:
-  - Alle zirkulären Modul-Importe (0 verbleibende Zyklen in `web/*.js`) über `web/event-bus.js` (`BUS.on`/`emit`/`provide`/`call`) und direkte Submodul-Importe (`web/app-dialogs.js`, `web/state.js`) entkoppelt; veraltete Einzelfunktions-Aliase auf `window` in `web/main.js` entfernt.
+  - Alle zirkulären Modul-Importe (0 verbleibende Zyklen in `web/*.js`) über `web/event-bus.js` (`BUS.on`/`emit`/`provide`/`call`) und direkte Submodul-Importe (`web/app-dialogs.js`, `web/state.js`) entkoppelt; veraltete Einzelfunktions-Aliase auf `window` in `web/main.js` entfernt. Die Modul-Objekte dort bleiben bewusst nur als Auswertungsschnittstelle für `impala_eval`; Fachmodule importieren direkt.
 
 - [ ] **Bewusst offen gelassen (gemessen unkritisch)**:
   - Heft: Speichern vergleicht das ganze Heft (`diffDocument`); bei den größten Heften (~2.700 Striche) ~1 ms. Erst bei deutlich größeren Heften auf „nur geänderte Seiten“ umstellen.
@@ -93,7 +103,8 @@ Stand: v2.2.86 (28. Oktober 2026)
   - [ ] Start vom Checkpoint ≈ 15–30 % langsamer als die JS-Fassung (Text-Übergabe an WASM, `opt-level = "z"`); Kern-Zustand als Binärformat oder Teile je Sammlung prüfen.
   - [ ] Sync: WASM-Größe senken.
   - [x] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe (`core/impala-ffi`).
-  - [ ] iPad-App nativ (`ios/`, Stand und offene Punkte in `ios/README.md`): erster CI-Build und Test auf dem Gerät, dann Sync.
+  - [x] iPad-App nativ (`ios/`, Stand in `ios/README.md`): erster CI-Build und Gerätetest erledigt (07.11.2026, App `2.2.124+25`); Bericht: `docs/IPAD-TESTBERICHT-2026-11-07.md`. Startseite, Heft, Suche, Graph, KI, Bibliothek und Sync wurden am Gerät geprüft.
+    - [ ] Offen laut Bericht: Kartenübersicht (193 ms) und Einstellungen (258 ms) entkoppeln, Kern-Sperre bei Karten-Sync (429 ms) und Kaltstart (789 ms) senken, Versionsverlauf für Seiten/Hefte (Kern liefert `pageHistory` bereits), Seiten dazwischen einfügen, Bridge-Lücken (`impala_create_page`/`impala_update_page`; `impala_type` wurde nach dem Test nachgebessert und ist erneut zu prüfen), SwiftUI-Menüs barrierefrei machen.
     - [ ] Später: semantische Suche auf dem iPad – lokales Embedding-Modell (`SemanticSearch`), „Verwandt“-Leiste unter Notizen, RAG-Quellen im Chat.
   - [x] PWA: RAG-Index als WASM im Worker.
   - [ ] WASM-Größe (2,29 MB mit Datenmodell): `opt-level` (gemessen: `3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in impala-ai ersetzen.
@@ -101,7 +112,7 @@ Stand: v2.2.86 (28. Oktober 2026)
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).
   - [x] Markdown-Parser: Endlos-Hänger bei Callout-Titel mit U+2028/U+2029 im Rust-Parser behoben (`impala-markdown`); Farb-Serialisierung wie im JS-Original.
-  - [ ] KI: `view_heft_page` liefert dem Modell nie das Bild (`ai.js` pruneRunHistory); Prompt nennt nicht angebotene Werkzeuge.
+  - [x] KI: `view_heft_page` liefert dem Modell nie das Bild (JS-`pruneRunHistory`); Prompt nennt nicht angebotene Werkzeuge. Im Rust-Kern behoben: `prune_run_history` behält das angeforderte Heftbild, die Werkzeug-Anweisung entsteht aus der tatsächlich angebotenen Liste.
   - [x] Drive: 60-s-Aufschub greift nie (in `drive.js` behoben), Alt-Blob-Dateien werden bei jedem Sync neu geladen, kaputtes Base64 blockiert jeden Sync (beides mit dem Rust-Kern behoben).
   - [x] Handschrift: Skizzen-Striche zählen in der Strich-Bilanz (Rust-Ablauf).
   - [x] Start-Absturz bei Patch, der kein Objekt ist (früher `event-order.js:16`); Heft: Kreis-Bounds NaN, `s-` ohne Liste bricht Event ab (mit dem Rust-Datenmodell behoben).
@@ -111,9 +122,10 @@ Stand: v2.2.86 (28. Oktober 2026)
 ### Priorität 3: Native Android-App (Kotlin + Jetpack Compose + UniFFI Rust-Kern)
 *Ersatz der Capacitor-Hülle durch eine native App (Beschluss 28. Oktober 2026).*
 
-*Stand geprüft am 1. November 2026 gegen den Code in `android/`. Oberfläche: Checkliste aller PWA-Elemente in
-[`android/UI-INVENTAR.md`](android/UI-INVENTAR.md) (1449 Elemente, davon 740 offen). Ein Punkt gilt erst als erledigt,
-wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
+*Inhaltlich am 1. November 2026 gegen den Code in `android/` geprüft, Kästchen am 7. November 2026 gezählt.
+Oberfläche: Checkliste aller PWA-Elemente in [`android/UI-INVENTAR.md`](android/UI-INVENTAR.md)
+(1451 Elemente, davon 496 offen). `[x]` heißt „im Code vorhanden“, nicht „am Emulator bestätigt“; ein Punkt gilt erst
+als erledigt, wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 
 - [x] **Strategie & Setup (Option B – harter Schnitt direkt in `android/`)**:
   - Capacitor- und Cordova-Reste aus `android/` entfernt.
@@ -121,12 +133,12 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - Rust-NDK-Build und UniFFI-Kotlin-Bindings (`npm run build:android-core`, `tools/android-core.mjs`).
   - JNA eingebunden.
 - [x] **Daten & Schlüssel**: Daten kommen über Cloudflare-Sync bzw. Drive-Backup in den Rust-Kern (keine Übernahme aus der alten Capacitor-App – bewusst, Absicherung über Backup/Drive). Der Sync-Schlüssel liegt auf dem Gerät mit dem Android Keystore verschlüsselt (`settings/SecretBox.kt`).
-- [ ] **Plattform-Features & Bibliotheken**:
+- [x] **Plattform-Features & Bibliotheken**:
   - [x] **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) im Heft.
   - [x] **Handschrifterkennung**: ML Kit Digital Ink (Suchindex).
-  - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
+  - [x] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden ✅ (Code 2.11., am Gerät ungeprüft).
   - [x] **Hintergrund-Sync**: WorkManager, stündlich ein Cloudflare-Durchgang mit Netz (`sync/BackgroundWork.kt`).
-  - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel liegen wie in der PWA in `settings.aiProviders` (reisen E2EE mit dem Sync; `SecretBox` brächte dort nichts, weil der Kern sie ohnehin speichert).
+  - [x] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel liegen wie in der PWA in `settings.aiProviders` (reisen E2EE mit dem Sync; `SecretBox` brächte dort nichts, weil der Kern sie ohnehin speichert).
   - [x] **Diktat**: `SpeechRecognizer` (de-DE) im Chat – Teilergebnisse live, Ergebnis wird gesendet (`ai/Dictation.kt`). Vorlesen der Antwort fehlt (in der PWA standardmäßig aus).
   - [x] **Systemintegration**: Teilen *aus* der App ✅ (nur Tablet); Teilen *an* die App ✅ (Text → neue Seite, Bilder/PDF → neues Heft, `share/Incoming.kt`); App-Shortcuts ✅; Predictive Back ✅.
   - [x] **Lokale Erinnerung „Karteikarten fällig“**: täglich 18 Uhr über WorkManager, Tipp öffnet das Lernen.
@@ -135,11 +147,11 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   - [ ] Heft: Formerkennung ✅, Laser ✅, Radierer halten ✅, Doppeltipp-Zoom ✅, Zwei-/Drei-Finger-Tipp ✅, „Seite hinzufügen“ Davor/Danach/Am Ende ✅, Bild-/Text-Werkzeug ✅, Import/Export ✅ (auch in andere Hefte bzw. als Notiz), Verlauf ✅, Lesemodus (Telefon) ✅; offen: PDF-Text beim Import übernehmen.
   - [ ] Seitenmenü (⋯): Tablet ✅ inkl. „Als Vorlesungsübersicht“ bis auf „Fach…“ (mit dem Fächer-Modul); Telefon offen (zurückgestellt, erst Tablet).
   - [x] Editor: `[[`-Links ✅, Blockgriff mit Blockmenü ✅, Bilder/Dateien (`img:`/`file:`) ✅, Link-Schema ✅, Slash-Menü vollständig ✅ (Strukturblöcke über Rohtext), Toggle-Zustand gespeichert ✅, Formelblöcke (KaTeX) ✅, Mermaid/SVG mit Live-Vorschau ✅ (WebView, Bibliotheken wie die PWA vom CDN, danach im Cache), Datenbankansicht ✅ (Kern: `page_db`/`page_props`/`set_page_db`/`set_page_prop`), Inline-Formatierung per Tasten und Werkzeugleiste ✅ (Strg+B/I/U/E/K, Strg+Shift+S/H, Strg+Z/Y). Inline-Formeln `$…$` als KaTeX ✅, Tabellenzellen direkt bearbeiten ✅.
-  - [ ] Shell: Vor-Navigation ✅, Chat-/Karten-Tabs ✅, Drag & Drop (Seiten, Stapel, Tabs) ✅, Breitengriff ✅, Langdruck-Menüs ✅, Dichte/Schrift/Bewegung ✅, Tabs in Seitenleiste ✅, Tabs/Aufklappzustand gespeichert ✅, Dock bei Tastatur/Lernen ausblenden ✅; Daily Notes ✅; offen: Gemini-Notebook-Tab.
-  - [ ] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅).
-  - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung, Fächer, Schulnoten.
-  - [ ] Einstellungen: Übersicht ✅, KI-Quellen und Modellwahl ✅ (Kern: `ai_list_models`/`ai_ping_provider`), Backup Export/Import ✅, Gefahrenzone ✅ (Kern: `clear_pages`/`delete_all_cards`/`card_totals`), Speicher ✅; offen: Suche, Diagnose, Modell-Favoriten, Weitere Exporte, Embedding-/Handschrift-Modell, Controller, Beta-Lernfunktionen, APK-Update.
-  - [ ] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes.
+  - [x] Shell: Vor-Navigation ✅, Chat-/Karten-Tabs ✅, Drag & Drop (Seiten, Stapel, Tabs) ✅, Breitengriff ✅, Langdruck-Menüs ✅, Dichte/Schrift/Bewegung ✅, Tabs in Seitenleiste ✅, Tabs/Aufklappzustand gespeichert ✅, Dock bei Tastatur/Lernen ausblenden ✅, Daily Notes ✅, Gemini-Notebook-Tab ✅ (Code 2.11., am Gerät ungeprüft).
+  - [x] KI: Anhänge, Modellwahl, Aktionen je Nachricht (Diktat ✅; Code 2.11., am Gerät ungeprüft).
+  - [ ] Lernen: Statistik, Archiv, Import/Export, Feynman/Experimente, Lernanalyse, Lernzeit-Erfassung ✅ (Code 2./3.11.); Fächer und Schulnoten zurückgestellt (siehe unten).
+  - [ ] Einstellungen: Übersicht ✅, KI-Quellen und Modellwahl ✅ (Kern: `ai_list_models`/`ai_ping_provider`), Backup Export/Import ✅, Gefahrenzone ✅ (Kern: `clear_pages`/`delete_all_cards`/`card_totals`), Speicher ✅; Suche, Diagnose, Modell-Favoriten, Weitere Exporte, Performance-Profiler und APK-Update ✅ (Code 2./3.11.); offen: Embedding-/Handschrift-Modell, Controller, Beta-Lernfunktionen.
+  - [x] Neue Module: Wissensgraph, Gemini Notebook, PDF-Ansicht, Bibliothek-Ordner, Daily Notes ✅ (Code 2./3.11., am Gerät ungeprüft).
   - [x] Akzentfarbe aus dem Android-Hintergrundbild (Material You, ab Android 12; Standard) – Akzentauswahl wird jetzt auch angewendet.
 - [x] **Android Google Drive OAuth**: Anmeldung über Google Identity (`sync/DriveController.kt`).
 - [x] **Umgesetzt (2. November 2026, noch nicht auf dem Gerät getestet)**: eigener Impala-Scanner (Kern: `scan_detect`/`scan_process`,
@@ -159,10 +171,10 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
   jetzt auch Drive als Kanal), Startfehler-Anzeige und Hinweis bei langem Start, Einstellungssuche, Kartenzahl am
   App-Symbol über die Erinnerung. Bewusst nicht übernommen, weil in der PWA ohne Wirkung: Lerntimer-Start, Vorlesen.
   Noch offen: „Verwandt“-Leiste und RAG-Quellen (brauchen den semantischen Index auf Android).
-  `android/UI-INVENTAR.md` ist für die Arbeit vom 2. November noch nicht vollständig abgehakt.
+  `android/UI-INVENTAR.md` ist nachgezogen (955 von 1451 Kästchen erledigt), aber noch nicht am Emulator geprüft.
 - **Erstmal irrelevant (zurückgestellt)**: Schulnoten, Fächer, Abschreiben (Schreibübung), Beta-Lernfunktionen (Experimente),
-  Handschrift-Training/-Einstellungen, Export-Feinheiten, Seitenkopf-Reste (Cover-Bild, Breite, Schrift), App & Speicher
-  (APK-Update, Speicherbericht), Controller, Fach-Vorschläge, Heft-Kopfmenüs, Startbildschirm-Widget und die ganze
+  Handschrift-Training/-Einstellungen, Export-Feinheiten, Seitenkopf-Reste (Cover-Bild, Breite, Schrift),
+  Controller, Fach-Vorschläge, Heft-Kopfmenüs, Startbildschirm-Widget und die ganze
   Telefon-Oberfläche (Teil 6 im Inventar).
 
 - [ ] **Android Home-Screen Widget (optional)**:

@@ -366,7 +366,7 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
 ## Offen
 
 - Noch nicht auf einem Gerät gebaut oder getestet (erster CI-Lauf steht aus).
-- Sync/Drive: Drive braucht noch die iOS-Client-ID (siehe oben). „Nach jeder Änderung synchronisieren“
+- Sync/Drive: „Nach jeder Änderung synchronisieren“
   (`DriveAutoSync` im Kern), Hinweis „nicht gesichert“ auf der Startseite (`driveBackupView`), Drive im
   Hintergrund-Durchgang, Kopplungs-Link (`#cf-pair=`) als Universal Link öffnen, Verdichten, weitere
   Einstellungen.
