@@ -86,6 +86,8 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     private val dirtyContent get() = contentRev != savedContentRev
     private val dirtyTitle get() = titleRev != savedTitleRev
     private var debounceJob: Job? = null
+    /** Fehlschläge in Folge (für die begrenzte Wiederholung). */
+    private var failures = 0
     /** Zuletzt mit dem Kern abgeglichener Stand (gespeichert oder von außen übernommen). */
     private var lastMarkdown = ""
     private var lastTitle = ""
@@ -146,12 +148,15 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
                 }
             }
             result.onSuccess { md ->
+                failures = 0
                 if (md != null && cRev > savedContentRev) { savedContentRev = cRev; lastMarkdown = md }
                 if (newTitle != null && tRev > savedTitleRev) { savedTitleRev = tRev; lastTitle = newTitle }
             }.onFailure { e ->
                 Log.e("Impala67", "Seite $pageId nicht gespeichert", e)
                 // Nicht Geschriebenes wieder als offen markieren, damit der nächste Versuch es mitnimmt.
                 queuedContentRev = savedContentRev; queuedTitleRev = savedTitleRev
+                // Begrenzt: Eine gelöschte Seite o. Ä. scheitert dauerhaft und soll nicht ewig weiterlaufen.
+                if (++failures > MAX_RETRIES) return@onFailure
                 // Im App-Bereich, damit der Versuch auch nach dem Schließen der Seite noch läuft.
                 debounceJob?.cancel()
                 debounceJob = store.scope.launch(Dispatchers.Main) { delay(RETRY_DELAY_MS); save() }
@@ -343,6 +348,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     private companion object {
         const val SAVE_DELAY_MS = 600L
         const val RETRY_DELAY_MS = 2_000L
+        const val MAX_RETRIES = 5
         /** Ein Schreibweg für alle Editor-Seiten: Schreibvorgänge laufen in Aufrufreihenfolge. */
         val writer = Dispatchers.IO.limitedParallelism(1)
         const val COALESCE_MS = 900L

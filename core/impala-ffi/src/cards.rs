@@ -140,9 +140,11 @@ impl ImpalaCore {
             .filter(|d| !d.is_trashed() && !d.is_archived())
             .filter_map(|d| d.name.clone())
             .collect();
-        for d in counts.keys() {
-            if !names.iter().any(|n| n.as_str() == *d) {
-                names.push((*d).to_owned());
+        // In Kartenreihenfolge ergänzen (nicht in HashMap-Reihenfolge), damit die Liste stabil bleibt.
+        for c in state.active_cards() {
+            let d = c.deck_name();
+            if !names.iter().any(|n| n == d) {
+                names.push(d.to_owned());
             }
         }
         names
