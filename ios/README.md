@@ -90,6 +90,15 @@ Gleiche Einträge (Art, Name, Meldungsanfang, Version) werden zusammengefasst, h
 `impala67-performance.json` (Application Support). Kopieren und Teilen als JSON. Kern-Aufrufe laufen über
 `attempt("name", { try core.…() })` statt `try?`, damit Fehler mit Aufrufstelle im Protokoll landen.
 
+## MCP-Bridge (WLAN)
+
+`App/DevBridge.swift` wie web/mcp-bridge.js: Mit der Adresse aus `node mcp/lan-setup.mjs`
+(Einstellungen → App & Speicher → Für Entwickler, leer = aus) verbindet sich die App im Vordergrund mit dem
+MCP-Server auf dem PC. Werkzeuge: Diagnose (Ansicht, Tabs, Speicher, Wärme, Profiler-Kontext),
+Performance-Trace (dieser Profiler, ein/aus/leeren), Seiten, Suche, UI-Aktionen und `impala_screenshot`.
+Kein `impala_eval` (kein JavaScript). Lokales Netzwerk und `ws://` erlaubt `project.yml`
+(`NSLocalNetworkUsageDescription`, `NSAllowsLocalNetworking`).
+
 ## App-Icon
 
 `npm run ios:app-icon` (`tools/ios-app-icon.mjs`) zeichnet `web/icon.svg` mit Chrome/Edge (puppeteer-core,

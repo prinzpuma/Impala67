@@ -29,6 +29,10 @@ targets:
         # Diktat im KI-Chat und im Feynman-Modus (Speech, auf dem Gerät).
         NSMicrophoneUsageDescription: Zum Diktieren von Nachrichten und Erklärungen.
         NSSpeechRecognitionUsageDescription: Wandelt dein Diktat in Text um.
+        # Entwickler-Bridge (App/DevBridge.swift): ws:// zum MCP-Server auf dem PC im WLAN.
+        NSLocalNetworkUsageDescription: Verbindet die App für Entwicklertests mit deinem PC im WLAN.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         # OAuth-Client vom Typ „iOS“ (Bundle-ID org.impala67.app) im selben Google-Cloud-

@@ -7,6 +7,7 @@ web/.env
 web/test-*
 test/verify-home*
 mcp/*.log
+mcp/.lan-token
 
 # Android
 android/.gradle/

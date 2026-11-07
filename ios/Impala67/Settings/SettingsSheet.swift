@@ -1054,6 +1054,9 @@ private struct ProfilerSection: View {
                     )
                 )
 
+                SettingsDivider()
+                DevBridgeRow()
+
                 if enabled || !records.isEmpty {
                     SettingsDivider()
                     if records.isEmpty {
@@ -1103,6 +1106,32 @@ private struct ProfilerSection: View {
     private func reload() {
         records = Profiler.shared.snapshot()
         copied = false
+    }
+}
+
+/// Adresse des MCP-Servers im WLAN (`node mcp/lan-setup.mjs`) mit Verbindungsstand; leer = aus.
+private struct DevBridgeRow: View {
+    @State private var url = DevBridge.shared.url
+
+    var body: some View {
+        let bridge = DevBridge.shared
+        SettingsInputRow(title: "MCP-Bridge (WLAN)", description: status(bridge.state)) {
+            TextField("ws://192.168.…:8766/?token=…", text: $url)
+                .settingsInputStyle()
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit { bridge.url = url }
+                .onDisappear { if url != bridge.url { bridge.url = url } }
+        }
+    }
+
+    private func status(_ s: DevBridge.State) -> String {
+        switch s {
+        case .off: "Aus – Adresse vom PC eintragen"
+        case .connecting: "Verbinde …"
+        case .connected: "Verbunden"
+        }
     }
 }
 

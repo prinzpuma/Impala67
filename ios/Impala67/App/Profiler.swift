@@ -61,6 +61,9 @@ final class Profiler: @unchecked Sendable {
         lock.withLock { currentScreen = screen }
     }
 
+    /// Angezeigte Ansicht (für die Diagnose der Entwickler-Bridge).
+    var screen: String { lock.withLock { currentScreen } }
+
     // MARK: Aufzeichnen
 
     /// Fehler des Rust-Kerns (Ã¼ber `attempt`).

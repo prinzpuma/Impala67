@@ -91,12 +91,14 @@ final class AppModel {
         sync?.onForeground()
         drive?.onForeground()
         if let core = store?.core { HeftOcr.startBackgroundScan(core: core) }
+        DevBridge.shared.onForeground()
     }
 
     /// Wie die Android-App in onStop: Checkpoint schreiben, damit der nächste Start schnell ist;
     /// dann den nächsten Hintergrund-Durchgang anmelden.
     func onBackground() {
         HeftOcr.stopBackgroundScan()
+        DevBridge.shared.onBackground()
         sync?.onBackground()
         drive?.onBackground()
         saveCheckpoint()

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
+import { timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -95,13 +97,53 @@ function callViaRelay(tool, args) {
 	});
 }
 
+// WLAN-Zugang für die native iPad-App (ios/Impala67/App/DevBridge.swift): eigener Port auf allen
+// Schnittstellen, nur mit Kopplungs-Code (`?token=`), ohne Relay. Aus nur, solange es keinen Code gibt
+// (IMPALA_LAN_TOKEN oder mcp/.lan-token, angelegt von `node mcp/lan-setup.mjs`).
+const lanPort = Number(process.env.IMPALA_LAN_PORT || 8766);
+function readLanToken() {
+	if (process.env.IMPALA_LAN_TOKEN) return process.env.IMPALA_LAN_TOKEN.trim();
+	try { return readFileSync(new URL("./.lan-token", import.meta.url), "utf8").trim(); } catch { return ""; }
+}
+const lanToken = readLanToken();
+function hasLanToken(url) {
+	let given = "";
+	try { given = new URL(url || "/", "ws://lan").searchParams.get("token") || ""; } catch { return false; }
+	const a = Buffer.from(given);
+	const b = Buffer.from(lanToken);
+	return a.length === b.length && timingSafeEqual(a, b);
+}
+let lanStarted = false;
+function startLanServer() {
+	if (!lanToken || lanToken.length < 16 || lanStarted) return;
+	lanStarted = true;
+	const lan = new WebSocketServer({ host: "0.0.0.0", port: lanPort, verifyClient: (info) => hasLanToken(info.req.url) });
+	lan.on("connection", (ws) => acceptApp(ws, "iPad-App (WLAN)"));
+	lan.on("listening", () => console.error(`[impala-mcp] WLAN-Zugang auf Port ${lanPort}.`));
+	lan.on("error", (err) => { lanStarted = false; console.error(`[impala-mcp] WLAN-Port ${lanPort}:`, err.message); });
+}
+
 function startWsServer() {
 	// Nur Loopback: Ohne host lauscht ws auf allen Netzwerkschnittstellen, und Verbindungen
 	// ohne Origin (andere Rechner im WLAN) kämen über /relay direkt an impala_eval.
 	const wss = new WebSocketServer({ host: "127.0.0.1", port: wsPort, verifyClient: (info) => isAllowedOrigin(info.origin) });
 	wss.on("connection", (ws, req) => {
 		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
-		console.error("[impala-mcp] ⚡ Browser-App live verbunden!");
+		acceptApp(ws, "Browser-App");
+	});
+	wss.on("listening", () => {
+		console.error(`[impala-mcp] Primärserver auf Port ${wsPort}.`);
+		startLanServer();
+	});
+	wss.on("error", (err) => {
+		if (err.code === "EADDRINUSE") { wss.close(); startRelay(); return; }
+		console.error(`[impala-mcp] WSS Port ${wsPort}:`, err.message);
+	});
+}
+
+/** Eine App-Verbindung (Browser-Tab oder iPad) nimmt Werkzeug-Aufrufe entgegen. */
+function acceptApp(ws, label) {
+		console.error(`[impala-mcp] ⚡ ${label} live verbunden!`);
 		connectedSockets.add(ws);
 		// Eine neue Verbindung übernimmt nur, wenn noch keine aktiv ist. Sonst lenkte
 		// jeder frisch geöffnete (z. B. Test-)Tab alle Aufrufe von der genutzten App weg.
@@ -140,12 +182,6 @@ function startWsServer() {
 		ws.on("error", (err) => {
 			console.error("[impala-mcp] WebSocket-Fehler:", err.message);
 		});
-	});
-	wss.on("listening", () => console.error(`[impala-mcp] Primärserver auf Port ${wsPort}.`));
-	wss.on("error", (err) => {
-		if (err.code === "EADDRINUSE") { wss.close(); startRelay(); return; }
-		console.error(`[impala-mcp] WSS Port ${wsPort}:`, err.message);
-	});
 }
 startWsServer();
 
@@ -396,6 +432,16 @@ const TOOLS = [
 		},
 	},
 	{
+		name: "impala_screenshot",
+		description: "Bildschirmfoto der verbundenen App (nur native iPad-App über WLAN). Zeigt, was gerade auf dem Gerät zu sehen ist.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				scale: { type: "number", description: "Verkleinerung 0.2–1 (Standard 0.5)" },
+			},
+		},
+	},
+	{
 		name: "impala_storage_report",
 		description: "Zeigt die größten PDF-Speicherfresser (Anzahl, Gesamt-MB, Top-Liste) plus Cloudflare-Quota. Rein lesend, lädt keine PDF-Binärdaten.",
 		inputSchema: {
@@ -483,7 +529,7 @@ export async function startServer() {
 	async function handleToolCall(name, args = {}) {
 		const result = await callLiveBrowser(name, args);
 		if (result === null) {
-			return { error: "Impala67 ist nicht verbunden. Öffne die App im Browser (http://localhost:8000 oder die PWA mit ?mcpBridge=1)." };
+			return { error: "Impala67 ist nicht verbunden. Öffne die App im Browser (http://localhost:8000 oder die PWA mit ?mcpBridge=1) oder koppel die iPad-App (node mcp/lan-setup.mjs)." };
 		}
 		if (name === "impala_get_diagnostics" && result && typeof result === "object" && !result.error) {
 			result.mcpServer = {

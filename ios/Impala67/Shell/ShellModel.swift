@@ -285,6 +285,7 @@ final class ShellModel {
         chat = ChatModel(core: store.core)
         chat.panelOpen = UserDefaults.standard.bool(forKey: "aiPanelOpen")
         reload()
+        DevBridge.shared.shell = self
     }
 
     /// Vom Kern neu lesen (Start, Änderung auf einem anderen Gerät).
