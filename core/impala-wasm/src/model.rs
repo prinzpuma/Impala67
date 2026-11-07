@@ -801,6 +801,20 @@ impl ModelCore {
         .to_string()
     }
 
+    /// Statistik-Kennzahlen (`anki-stats.js` `statsData`).
+    #[wasm_bindgen(js_name = learningStats)]
+    pub fn learning_stats(&self, deck: Option<String>, now: f64, tz_offset_minutes: i64) -> String {
+        let now_ts = Timestamp::from_millis(now as i64);
+        let options = impala_model::stats::StatsOptions {
+            deck: deck.as_deref().filter(|d| !d.is_empty()),
+            now: now_ts,
+            tz_offset_minutes,
+            think_ms: None,
+        };
+        let stats = self.m.state().learning_stats(&options);
+        text(&stats)
+    }
+
     /// Seitensuche: `[{ id, score, terms, snippet }]`.
     #[wasm_bindgen(js_name = searchNotes)]
     pub fn search_notes(&mut self, query: &str, include_archived: bool) -> String {
@@ -987,4 +1001,32 @@ pub fn conflict_diff_rows(left: &str, right: &str) -> String {
         })
         .collect();
     Value::Array(rows).to_string()
+}
+
+/// Berechnet Statistik-Kennzahlen aus übergebenen Karten, Reviews und Telemetrie (`statsData`).
+#[wasm_bindgen(js_name = computeCardStats)]
+pub fn compute_card_stats_js(
+    cards_json: &str,
+    reviews_json: &str,
+    telemetry_json: &str,
+    deck: Option<String>,
+    now_ms: f64,
+    tz_offset_minutes: i64,
+    think_ms: Option<f64>,
+) -> Result<String, JsError> {
+    let cards: Vec<impala_model::Card> =
+        objects(parse(cards_json)?).into_iter().map(impala_model::Card::from_object).collect();
+    let reviews: Vec<impala_model::Review> =
+        objects(parse(reviews_json)?).into_iter().map(impala_model::Review::from_object).collect();
+    let telemetry: Vec<impala_model::Telemetry> =
+        objects(parse(telemetry_json)?).into_iter().map(impala_model::Telemetry::from_object).collect();
+    let now = Timestamp::from_millis(now_ms as i64);
+    let options = impala_model::stats::StatsOptions {
+        deck: deck.as_deref().filter(|d| !d.is_empty()),
+        now,
+        tz_offset_minutes,
+        think_ms: think_ms.map(|ms| ms as i64),
+    };
+    let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
+    Ok(text(&stats))
 }

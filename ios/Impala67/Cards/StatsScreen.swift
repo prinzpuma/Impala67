@@ -1,20 +1,16 @@
 import Charts
 import SwiftUI
 
-/// Rohdaten für die Statistik (`learningStatsJson` des Kerns), Auswertung wie anki-stats.js bzw.
-/// `StatsData.kt`. Kandidat für den Rust-Kern, sobald die PWA die Auswertung dorthin verlagert.
+/// Statistik-Kennzahlen aus dem Rust-Kern (`learningStats` des Kerns), aufbereitet für die Oberfläche.
 struct LearnStats {
-    struct Card { let id, front, deck, state: String; let stability: Double; let lapses: Int; let due: Date?; let suspended: Bool }
-    struct Review { let id, cardId, deck: String; let t: Date; let grade: Int; let first, learning: Bool; let intervalDays: Double? }
+    struct Card: Identifiable { let id, front, deck: String; let lapses: Int }
     struct DeckRow: Identifiable { let name: String; let n, due, reif: Int; let rate: Double?; var id: String { name } }
     struct Day: Identifiable { let day: Date; let n: Int; var id: Date { day } }
     struct Forecast: Identifiable { let label: String; let n: Int; var id: String { label } }
     struct Bucket: Identifiable { let label: String; let n: Int; let rate: Double?; var id: String { label } }
     struct Stock: Identifiable { let label: String; let n: Int; var id: String { label } }
 
-    static let reifTage = 21.0
     static let minN = 10
-    static let window = 30
 
     let reviewsAll: Int
     let last: Int
@@ -52,140 +48,65 @@ struct LearnStats {
 
     static func pct(_ x: Double) -> String { "\(Int((x * 100).rounded())) %" }
 
-    /// Behalten zählt nur echte Abfragen: Erstkontakt und Lernschritte sagen noch nichts über das Gedächtnis.
-    private static func hitRate(_ list: [Review]) -> Double? {
-        let g = list.filter { $0.grade > 0 && !$0.first && !$0.learning }
-        return g.count >= minN ? Double(g.filter { $0.grade > 1 }.count) / Double(g.count) : nil
-    }
-
-    private static func date(_ s: Any?) -> Date? {
-        guard let s = s as? String, !s.isEmpty else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: s) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: s)
-    }
-
-    init(json: String, now: Date = Date(), calendar cal: Calendar = .current) {
-        let o = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
-        let cards: [Card] = ((o["cards"] as? [[String: Any]]) ?? []).map {
-            Card(id: $0["id"] as? String ?? "", front: $0["front"] as? String ?? "",
-                 deck: ($0["deck"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? Deck.standard,
-                 state: $0["state"] as? String ?? "new", stability: ($0["stability"] as? NSNumber)?.doubleValue ?? 0,
-                 lapses: ($0["lapses"] as? NSNumber)?.intValue ?? 0, due: Self.date($0["due"]),
-                 suspended: $0["suspended"] as? Bool ?? false)
+    init(stats: LearningStats, now: Date = Date(), calendar cal: Calendar = .current) {
+        reviewsAll = Int(stats.reviewsAll)
+        last = Int(stats.last)
+        rate = stats.rate
+        trend = stats.trend.map { Int($0) }
+        avg = stats.avg
+        bestand = [
+            Stock(label: "Neu", n: Int(stats.bestand.neu)),
+            Stock(label: "Lernen", n: Int(stats.bestand.lernen)),
+            Stock(label: "Wiederholen", n: Int(stats.bestand.wiederholen)),
+            Stock(label: "Ausgesetzt", n: Int(stats.bestand.ausgesetzt)),
+        ]
+        n = Int(stats.n)
+        reif = Int(stats.reif)
+        decks = stats.decks.map {
+            DeckRow(name: $0.name, n: Int($0.n), due: Int($0.due), reif: Int($0.reif), rate: $0.rate)
         }
-        let reviews: [Review] = ((o["reviews"] as? [[String: Any]]) ?? []).compactMap { r in
-            guard let t = Self.date(r["t"]) else { return nil }
-            return Review(id: r["id"] as? String ?? "", cardId: r["cardId"] as? String ?? "",
-                          deck: (r["deck"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? Deck.standard, t: t,
-                          grade: (r["grade"] as? NSNumber)?.intValue ?? 0, first: r["first"] as? Bool ?? false,
-                          learning: r["learning"] as? Bool ?? false, intervalDays: (r["intervalDays"] as? NSNumber)?.doubleValue)
-        }.sorted { $0.t < $1.t }
 
-        let day = 86_400.0
-        let ago = { (r: Review) in now.timeIntervalSince(r.t) / day }
-        let w = Double(Self.window)
-        let last = reviews.filter { ago($0) >= 0 && ago($0) < w }
-        let before = reviews.filter { ago($0) >= w && ago($0) < 2 * w }
-        let rate = Self.hitRate(last)
-        let rateBefore = Self.hitRate(before)
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd"
+        dateFmt.timeZone = cal.timeZone
 
-        var neu = 0, lernen = 0, wieder = 0, aus = 0, reif = 0
-        var deckOrder: [String] = []
-        var deckCounts: [String: (n: Int, due: Int, reif: Int)] = [:]
-        for c in cards {
-            if deckCounts[c.deck] == nil { deckOrder.append(c.deck) }
-            var row = deckCounts[c.deck] ?? (0, 0, 0)
-            row.n += 1
-            defer { deckCounts[c.deck] = row }
-            if c.suspended { aus += 1; continue }
-            switch c.state {
-            case "new": neu += 1
-            case "review": wieder += 1
-            default: lernen += 1
-            }
-            if c.state == "review", c.stability >= Self.reifTage { reif += 1; row.reif += 1 }
-            if let due = c.due, due <= now { row.due += 1 }
+        series = stats.series.compactMap { s in
+            guard let d = dateFmt.date(from: s.date) else { return nil }
+            return Day(day: d, n: Int(s.n))
         }
-        decks = deckOrder.map { name in
-            let r = deckCounts[name]!
-            return DeckRow(name: name, n: r.n, due: r.due, reif: r.reif, rate: Self.hitRate(last.filter { $0.deck == name }))
-        }.sorted { $0.due != $1.due ? $0.due > $1.due : $0.name.localizedCompare($1.name) == .orderedAscending }
 
-        let today = cal.startOfDay(for: now)
-        var perDay: [Date: Int] = [:]
-        for r in reviews { perDay[cal.startOfDay(for: r.t), default: 0] += 1 }
-        series = (0..<Self.window).reversed().map { i in
-            let d = cal.date(byAdding: .day, value: -i, to: today)!
-            return Day(day: d, n: perDay[d] ?? 0)
-        }
         let weekday = DateFormatter()
         weekday.locale = Locale(identifier: "de_DE")
         weekday.dateFormat = "EE"
-        forecast = (0..<7).map { i in
-            let d0 = cal.date(byAdding: .day, value: i, to: today)!
-            let end = cal.date(byAdding: .day, value: 1, to: d0)!
-            let start = i == 0 ? Date.distantPast : d0
-            let n = cards.filter { c in !c.suspended && c.due.map { $0 >= start && $0 < end } == true }.count
-            return Forecast(label: i == 0 ? "Heute" : weekday.string(from: d0), n: n)
-        }
-        var longest = 0, run = 0
-        var prev: Date?
-        for k in perDay.keys.sorted() {
-            run = prev.map { cal.dateComponents([.day], from: $0, to: k).day == 1 } == true ? run + 1 : 1
-            longest = max(longest, run)
-            prev = k
-        }
-        var d = today
-        if (perDay[d] ?? 0) == 0 { d = cal.date(byAdding: .day, value: -1, to: d)! }
-        var current = 0
-        while (perDay[d] ?? 0) > 0 {
-            current += 1
-            d = cal.date(byAdding: .day, value: -1, to: d)!
+        let today = cal.startOfDay(for: now)
+
+        forecast = stats.forecast.map { f in
+            let offset = Int(f.dayOffset)
+            let label: String
+            if offset == 0 {
+                label = "Heute"
+            } else if let d = cal.date(byAdding: .day, value: offset, to: today) {
+                label = weekday.string(from: d)
+            } else {
+                label = "+\(offset)T"
+            }
+            return Forecast(label: label, n: Int(f.n))
         }
 
-        // Behalten nach Wiederholungsabstand (telemetrie.js `retentionStats`).
-        let ids = Set(last.map(\.id))
-        var prevT: [String: Date] = [:]
-        var rows: [(Review, Double?)] = []
-        for r in reviews where r.grade > 0 {
-            let gap = r.intervalDays.flatMap { $0 >= 0 ? $0 : nil } ?? prevT[r.cardId].map { r.t.timeIntervalSince($0) / day }
-            prevT[r.cardId] = r.t
-            if ids.contains(r.id) { rows.append((r, gap)) }
-        }
-        retention = [(1, "1 Tag"), (3, "3 Tage"), (7, "1 Woche"), (14, "2 Wochen")].map { target, label in
-            let lo = target == 1 ? 0.5 : Double(target) * 0.6
-            let hi = target == 1 ? 2.0 : Double(target) * 1.6
-            let ok = rows.filter { r, g in !r.first && !r.learning && g.map { $0 >= lo && $0 <= hi } == true }
-            return Bucket(label: label, n: ok.count, rate: ok.isEmpty ? nil : Double(ok.filter { $0.0.grade > 1 }.count) / Double(ok.count))
+        streakCurrent = Int(stats.streakCurrent)
+        streakLongest = Int(stats.streakLongest)
+        hard = stats.hard.map {
+            Card(id: $0.id, front: $0.front, deck: $0.deck, lapses: Int($0.lapses))
         }
 
-        // Denkzeit-Median aus der Telemetrie wie `TELE.thinkMedian` / `LearnData.kt`
-        let tel = ((o["telemetry"] as? [[String: Any]]) ?? []).filter {
-            ($0["kind"] as? String) == "review"
-        }
-        let timed: [Int64] = tel.suffix(300).compactMap { item in
-            guard let data = item["data"] as? [String: Any] else { return nil }
-            if (data["typed"] as? Bool) == true || (data["distracted"] as? Bool) == true { return nil }
-            guard let ms = (data["thinkMs"] as? NSNumber)?.int64Value, ms >= 400 && ms <= 120_000 else { return nil }
-            return ms
-        }.sorted()
-        thinkMs = timed.count >= 12 ? timed[timed.count / 2] : 0
+        retention = [
+            Bucket(label: "1 Tag", n: Int(stats.retention.day1.n), rate: stats.retention.day1.rate),
+            Bucket(label: "3 Tage", n: Int(stats.retention.day3.n), rate: stats.retention.day3.rate),
+            Bucket(label: "1 Woche", n: Int(stats.retention.day7.n), rate: stats.retention.day7.rate),
+            Bucket(label: "2 Wochen", n: Int(stats.retention.day14.n), rate: stats.retention.day14.rate),
+        ]
 
-        reviewsAll = reviews.count
-        self.last = last.count
-        self.rate = rate
-        trend = rate.flatMap { r in rateBefore.map { Int(((r - $0) * 100).rounded()) } }
-        avg = Double(last.count) / w
-        bestand = [Stock(label: "Neu", n: neu), Stock(label: "Lernen", n: lernen), Stock(label: "Wiederholen", n: wieder),
-                   Stock(label: "Ausgesetzt", n: aus)]
-        n = cards.count
-        self.reif = reif
-        streakCurrent = current
-        streakLongest = longest
-        hard = Array(cards.filter { $0.lapses > 0 }.sorted { $0.lapses > $1.lapses }.prefix(5))
+        thinkMs = stats.thinkMs
     }
 }
 
@@ -206,8 +127,9 @@ struct StatsScreen: View {
         }
         .task(id: store.cardsRevision) {
             let core = store.core
+            let offset = Int32(TimeZone.current.secondsFromGMT() / 60)
             let loaded = await Task.detached(priority: .userInitiated) {
-                LearnStats(json: core.learningStatsJson())
+                LearnStats(stats: core.learningStats(deck: nil, nowMs: nil, utcOffsetMinutes: offset))
             }.value
             if !Task.isCancelled { stats = loaded }
         }

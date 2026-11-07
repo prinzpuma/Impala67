@@ -1,19 +1,16 @@
 package org.impala67.app.study.stats
 
 import java.time.DayOfWeek
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import uniffi.impala_ffi.LearningStats
 
 const val REIF_TAGE = 21
 const val MIN_N = 10
-private const val WINDOW = 30L
 
 data class Bestand(val neu: Int, val lernen: Int, val wiederholen: Int, val ausgesetzt: Int)
 data class DeckRow(val name: String, val n: Int, val due: Int, val reif: Int, val rate: Double?)
@@ -44,6 +41,54 @@ data class StatsData(
     val thinkMs: Long,
     val retention: Retention,
 ) {
+    companion object {
+        fun from(stats: LearningStats, today: LocalDate = LocalDate.now()): StatsData {
+            val perDay = stats.heatmap.associate { LocalDate.parse(it.date) to it.n.toInt() }
+            val series = stats.series.map { DayCount(LocalDate.parse(it.date), it.n.toInt()) }
+            val peak = if (stats.peak.n > 0u) DayCount(LocalDate.parse(stats.peak.date), stats.peak.n.toInt()) else null
+            val forecast = stats.forecast.map { f ->
+                val offset = f.dayOffset.toLong()
+                val label = if (offset == 0L) "Heute" else today.plusDays(offset).dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMAN)
+                Forecast(label, f.n.toInt())
+            }
+            val decks = stats.decks.map { DeckRow(it.name, it.n.toInt(), it.due.toInt(), it.reif.toInt(), it.rate) }
+            val hard = stats.hard.map { SCard(it.id, it.front, it.deck, null, "review", it.stability, it.lapses.toInt(), null, false) }
+            val retention = Retention(
+                Bucket(stats.retention.day1.n.toInt(), stats.retention.day1.rate),
+                Bucket(stats.retention.day3.n.toInt(), stats.retention.day3.rate),
+                Bucket(stats.retention.day7.n.toInt(), stats.retention.day7.rate),
+                Bucket(stats.retention.day14.n.toInt(), stats.retention.day14.rate),
+            )
+            val bestand = Bestand(
+                stats.bestand.neu.toInt(),
+                stats.bestand.lernen.toInt(),
+                stats.bestand.wiederholen.toInt(),
+                stats.bestand.ausgesetzt.toInt(),
+            )
+            return StatsData(
+                reviewsAll = stats.reviewsAll.toInt(),
+                last = stats.last.toInt(),
+                rate = stats.rate,
+                trend = stats.trend,
+                avg = stats.avg,
+                bestand = bestand,
+                n = stats.n.toInt(),
+                reif = stats.reif.toInt(),
+                gelernt = stats.gelernt.toInt(),
+                decks = decks,
+                series = series,
+                peak = peak,
+                forecast = forecast,
+                perDay = perDay,
+                streakCurrent = stats.streakCurrent.toInt(),
+                streakLongest = stats.streakLongest.toInt(),
+                hard = hard,
+                thinkMs = stats.thinkMs,
+                retention = retention,
+            )
+        }
+    }
+
     /** Lead-Satz (anki-stats.js `leadText`). */
     val lead: String
         get() {
@@ -66,87 +111,6 @@ data class StatsData(
 
 fun pct(x: Double) = "${(x * 100).roundToInt()} %"
 fun plural(n: Int, one: String, many: String) = "$n " + if (n == 1) one else many
-
-/** Behalten zählt nur echte Abfragen: Erstkontakt und Lernschritte sagen noch nichts über das Gedächtnis. */
-private fun hitRate(list: List<SReview>): Double? {
-    val g = list.filter { it.grade > 0 && !it.first && !it.learning }
-    return if (g.size >= MIN_N) g.count { it.grade > 1 }.toDouble() / g.size else null
-}
-
-fun LearnData.stats(now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): StatsData {
-    val today = now.atZone(zone).toLocalDate()
-    val ago = { r: SReview -> ChronoUnit.MILLIS.between(r.t, now) / 86_400_000.0 }
-    val last = reviews.filter { ago(it) in 0.0..<WINDOW.toDouble() }
-    val before = reviews.filter { ago(it) >= WINDOW && ago(it) < 2 * WINDOW }
-    val rate = hitRate(last)
-    val rateBefore = hitRate(before)
-
-    var neu = 0; var lernen = 0; var wieder = 0; var aus = 0; var reif = 0; var gelernt = 0
-    val decks = LinkedHashMap<String, IntArray>()
-    for (c in cards) {
-        val row = decks.getOrPut(c.deck) { IntArray(3) }
-        row[0]++
-        if (c.suspended) { aus++; continue }
-        when (c.state) {
-            "new" -> neu++
-            "review" -> { wieder++; gelernt++ }
-            else -> lernen++
-        }
-        if (c.state == "review" && c.stability >= REIF_TAGE) { reif++; row[2]++ }
-        if (c.due != null && !c.due.isAfter(now)) row[1]++
-    }
-    val deckRows = decks.map { (name, r) -> DeckRow(name, r[0], r[1], r[2], hitRate(last.filter { it.deck == name })) }
-        .sortedWith(compareByDescending<DeckRow> { it.due }.thenBy { it.name.lowercase() })
-
-    val perDay = reviews.groupingBy { it.t.atZone(zone).toLocalDate() }.eachCount()
-    val series = (WINDOW - 1 downTo 0).map { i -> today.minusDays(i).let { DayCount(it, perDay[it] ?: 0) } }
-    val peak = series.maxByOrNull { it.n }?.takeIf { it.n > 0 }
-    val forecast = (0L until 7L).map { i ->
-        val d0 = today.plusDays(i)
-        val end = d0.plusDays(1).atStartOfDay(zone).toInstant()
-        val start = if (i == 0L) Instant.EPOCH else d0.atStartOfDay(zone).toInstant()
-        val n = cards.count { !it.suspended && it.due != null && !it.due.isBefore(start) && it.due.isBefore(end) }
-        Forecast(if (i == 0L) "Heute" else d0.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMAN), n)
-    }
-    var longest = 0; var run = 0; var prev: LocalDate? = null
-    for (k in perDay.keys.sorted()) {
-        run = if (prev != null && ChronoUnit.DAYS.between(prev, k) == 1L) run + 1 else 1
-        longest = maxOf(longest, run)
-        prev = k
-    }
-    var d = today
-    if ((perDay[d] ?: 0) == 0) d = d.minusDays(1)
-    var current = 0
-    while ((perDay[d] ?: 0) > 0) { current++; d = d.minusDays(1) }
-
-    return StatsData(
-        reviewsAll = reviews.size, last = last.size, rate = rate,
-        trend = if (rate != null && rateBefore != null) ((rate - rateBefore) * 100).roundToInt() else null,
-        avg = last.size / WINDOW.toDouble(), bestand = Bestand(neu, lernen, wieder, aus), n = cards.size,
-        reif = reif, gelernt = gelernt, decks = deckRows, series = series, peak = peak, forecast = forecast,
-        perDay = perDay, streakCurrent = current, streakLongest = longest,
-        hard = cards.filter { it.lapses > 0 }.sortedByDescending { it.lapses }.take(5),
-        thinkMs = thinkMedian, retention = retention(last),
-    )
-}
-
-/** Behalten nach Wiederholungsabstand (telemetrie.js `retentionStats`). */
-fun LearnData.retention(subset: List<SReview>): Retention {
-    val ids = subset.map { it.id }.toHashSet()
-    val prev = HashMap<String, Instant>()
-    val rows = reviews.filter { it.grade > 0 }.map { r ->
-        val gap = r.intervalDays?.takeIf { it >= 0 } ?: prev[r.cardId]?.let { ChronoUnit.MILLIS.between(it, r.t) / 86_400_000.0 }
-        prev[r.cardId] = r.t
-        r to gap
-    }.filter { it.first.id in ids }
-    fun bucket(target: Int): Bucket {
-        val min = if (target == 1) 0.5 else target * 0.6
-        val max = if (target == 1) 2.0 else target * 1.6
-        val ok = rows.filter { (r, g) -> !r.first && !r.learning && g != null && g in min..max }
-        return Bucket(ok.size, if (ok.isEmpty()) null else ok.count { it.first.grade > 1 }.toDouble() / ok.size)
-    }
-    return Retention(bucket(1), bucket(3), bucket(7), bucket(14))
-}
 
 /** Erste Montag-Spalte der Heatmap (53 Wochen bis heute). */
 fun heatmapStart(today: LocalDate): LocalDate = today.minusDays(364).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))

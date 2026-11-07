@@ -18,9 +18,11 @@ data class StatsView(val stats: StatsData, val patterns: PatternData, val titles
 
 class StatsViewModel(private val store: ImpalaStore, private val prefs: DevicePrefs) : ViewModel() {
     val view: StateFlow<StatsView?> = store.query(Touches.any(Touches.cards, Touches.pages)) { core ->
+        val offset = java.time.ZoneId.systemDefault().rules.getOffset(java.time.Instant.now()).totalSeconds / 60
+        val stats = StatsData.from(core.learningStats(deck = null, nowMs = null, utcOffsetMinutes = offset))
         val data = LearnData.parse(core.learningStatsJson())
         val live = core.recentPages(UInt.MAX_VALUE).associate { it.id to it.title }
-        StatsView(data.stats(), data.patterns(live.keys), live)
+        StatsView(stats, data.patterns(live.keys), live)
     }
 
     private val _busy = MutableStateFlow<String?>(null)

@@ -9,12 +9,12 @@ mod time;
 
 pub use fsrs::retrievability;
 use fsrs::{
-    MAX_INTERVAL_DAYS, MIN_STABILITY, forget_stability, fuzz_days, init_difficulty, init_stability, js_round,
-    next_difficulty, next_interval, or, recall_stability, short_term_stability,
+    forget_stability, fuzz_days, init_difficulty, init_stability, js_round, next_difficulty, next_interval, or,
+    recall_stability, short_term_stability, MAX_INTERVAL_DAYS, MIN_STABILITY,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-pub use time::{MS_PER_DAY, MS_PER_MINUTE, Timestamp};
+pub use time::{civil_from_days, days_from_civil, Timestamp, MS_PER_DAY, MS_PER_MINUTE};
 
 /// Bewertung einer Wiederholung (JS `grade` 1…4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

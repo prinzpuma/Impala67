@@ -613,6 +613,12 @@ export const STATE = (() => {
 	// .slice(): Aufrufer dürfen das Ergebnis verändern, ohne den Zwischenspeicher zu beschädigen.
 	const dueCards = () => studySnapshot(null).dueNow.slice();
 
+	function learningStats(deck, now = new Date()) {
+		const t = now instanceof Date ? now : new Date(now);
+		const deckArg = deck ? String(deck) : undefined;
+		return JSON.parse(M.learningStats(deckArg, t.getTime(), -t.getTimezoneOffset()));
+	}
+
 	// Seitenverlauf aus dem Log (append-only, also vollständig). Nur Events dieser Seite gehen in den Kern.
 	async function pageHistory(pageId) {
 		const events = (await DB.allEvents()).filter((ev) => ev?.payload?.id === pageId);
@@ -633,7 +639,7 @@ export const STATE = (() => {
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
-		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
+		dueCards, studySnapshot, learningStats, deckConfOf, backlinksOf, pageHistory,
 	};
 })();
 
