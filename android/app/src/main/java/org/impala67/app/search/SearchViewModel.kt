@@ -22,8 +22,9 @@ import org.impala67.app.search.SearchText.RECENT
 import java.util.TimeZone
 
 /**
- * Treffer für die Suche (in der PWA: `gather` in search.js). Der Kern liefert Volltext-Treffer mit
- * Ausschnitt; die Seiten dazu werden einzeln gelesen. Entprellt (150 ms), Abfragen im Hintergrund.
+ * Treffer für die Suche (in der PWA: `gather` in search.js). Der Kern liefert die fertigen
+ * Paletten-Seitentreffer (`palettePages`) und filtert die Schnell-Aktionen (`filteredActions`).
+ * Entprellt (150 ms), Abfragen im Hintergrund.
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class SearchViewModel(private val store: ImpalaStore) : ViewModel() {
@@ -48,16 +49,10 @@ class SearchViewModel(private val store: ImpalaStore) : ViewModel() {
         val queue = core.studyQueue(null, offset, false)
         val due = (queue.new + queue.review + queue.learn).toInt()
 
-        val pages = if (ql.isEmpty()) {
-            core.recentPages(RECENT_LIMIT).map { SearchRow.Page(it, archived = false, snippet = "") }
-        } else {
-            core.search(ql, true).mapNotNull { hit ->
-                core.page(hit.pageId)?.let { detail ->
-                    SearchRow.Page(detail.summary, detail.archived, SearchText.snippet(hit.snippet))
-                }
-            }
+        val pages = core.palettePages(ql, RECENT_LIMIT).map { hit ->
+            SearchRow.Page(hit.summary, hit.archived, hit.snippet)
         }
-        val actions = SearchText.actions(due).filter { ql.isEmpty() || it.label.contains(ql, ignoreCase = true) }
+        val actions = SearchText.filteredActions(due, ql)
 
         return buildList {
             if (pages.isNotEmpty()) add(SearchSection(if (ql.isEmpty()) RECENT else PAGES, pages))

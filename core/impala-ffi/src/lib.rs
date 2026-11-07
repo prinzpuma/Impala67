@@ -26,6 +26,7 @@ mod heft_library;
 mod heft_undo;
 mod markdown;
 mod pages;
+mod palette;
 mod rag;
 mod scan;
 mod stats;

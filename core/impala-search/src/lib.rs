@@ -25,7 +25,10 @@ pub use embed::{
 };
 pub use fuzzy::{FuzzyHit, FuzzyIndex, fold, typo_distance};
 pub use notes::{NoteDoc, NoteHit, NoteIndex};
-pub use palette::{highlight_ranges, preview};
+pub use palette::{
+    ChatSearchDoc, PaletteActionId, filter_actions, format_page_path, highlight_ranges, highlight_ranges_utf16,
+    preview, search_chats,
+};
 pub use rank::{PageMeta, QueryCache, RagHit, RelatedHit, VectorIndex, rank_rag, related, search};
 pub use settings::{SettingsHit, SettingsIndex, SettingsItemDef, normalize_settings_text};
 pub use store::{ChunkVec, IndexError, ReindexPlan, VecEntry, VecRecord, index_page, needs_reindex};

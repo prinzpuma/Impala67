@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use impala_search::store::ChunkVec;
 use impala_search::vector::{best_k, cosine_scores, norm, rows};
-use impala_search::{EmbeddingIdentity, PageMeta, VecRecord};
+use impala_search::{ChatSearchDoc, EmbeddingIdentity, PageMeta, SettingsIndex, VecRecord};
 use serde_json::json;
 use wasm_bindgen::prelude::*;
 
@@ -206,4 +206,55 @@ pub fn rag_inline_file_ids(content: &str, pdf_id: Option<String>) -> Vec<String>
 #[wasm_bindgen(js_name = ragIsPdf)]
 pub fn rag_is_pdf(mime: Option<String>, name: Option<String>) -> bool {
     impala_search::chunk::is_pdf(mime.as_deref(), name.as_deref())
+}
+
+// ---- Befehlspalette & Einstellungssuche (`web/search.js`, `web/settings-schema.js`) ----
+
+/// Vorschau-Ausschnitt (`snippet.replace(/\s+/g, " ").trim().slice(0, 110)`).
+#[wasm_bindgen(js_name = searchPreview)]
+pub fn search_preview(snippet: &str) -> String {
+    impala_search::preview(snippet)
+}
+
+/// Markierungsbereiche in UTF-16-Code-Units als flache Liste `[start0, end0, start1, end1, …]`.
+#[wasm_bindgen(js_name = searchHighlightRanges)]
+pub fn search_highlight_ranges(text: &str, query: &str, terms: Vec<String>) -> Vec<u32> {
+    impala_search::highlight_ranges_utf16(text, query, &terms).into_iter().flat_map(|(s, e)| [s, e]).collect()
+}
+
+/// Formatiert den Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+#[wasm_bindgen(js_name = searchFormatPagePath)]
+pub fn search_format_page_path(workspace_name: Option<String>, ancestor_titles: Vec<String>) -> String {
+    impala_search::format_page_path(workspace_name.as_deref(), &ancestor_titles)
+}
+
+/// Filtert Schnell-Aktionen (`[[id, label], …]` als JSON) nach `query`; liefert passende IDs als JSON-Array.
+#[wasm_bindgen(js_name = searchFilterActions)]
+pub fn search_filter_actions(actions_json: &str, query: &str) -> String {
+    let pairs: Vec<(String, String)> = serde_json::from_str(actions_json).unwrap_or_default();
+    let ids = impala_search::filter_actions(&pairs, query);
+    serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into())
+}
+
+/// Filtert und begrenzt Chats (`[{ id, title, messages: [..] }]` als JSON) für das Befehls-Menü; liefert passende Chat-IDs als JSON-Array.
+#[wasm_bindgen(js_name = searchChats)]
+pub fn search_chats_js(chats_json: &str, query: &str, include_messages: bool, limit: usize) -> String {
+    let docs: Vec<ChatSearchDoc> = serde_json::from_str(chats_json).unwrap_or_default();
+    let ids = impala_search::search_chats(&docs, query, include_messages, limit);
+    serde_json::to_string(&ids).unwrap_or_else(|_| "[]".into())
+}
+
+/// Normalisiert Einstellungstext wie `normalize` in `settings-schema.js`.
+#[wasm_bindgen(js_name = normalizeSettingsText)]
+pub fn normalize_settings_text_js(text: &str) -> String {
+    impala_search::normalize_settings_text(text)
+}
+
+/// Durchsucht den Standard-Einstellungskatalog (`platform`: `"web"`, `"native"`, oder leer für alle).
+/// Liefert `[{ id, section, score }]` als JSON.
+#[wasm_bindgen(js_name = searchSettingsCatalog)]
+pub fn search_settings_catalog(query: &str, limit: usize, platform: Option<String>) -> String {
+    let plat = platform.as_deref().filter(|s| !s.is_empty());
+    let hits = SettingsIndex::default_catalog().search(query, limit, plat);
+    serde_json::to_string(&hits).unwrap_or_else(|_| "[]".into())
 }
