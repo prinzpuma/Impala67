@@ -90,7 +90,6 @@ import kotlinx.coroutines.launch
 import org.impala67.app.ImpalaApp
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
-import org.impala67.app.heft.scan.IMPORT_MAX_EDGE
 import org.impala67.app.heft.scan.rememberDocumentScan
 import android.net.Uri
 import java.io.File
@@ -179,11 +178,6 @@ fun HeftScreen(
     }
     val target by rememberUpdatedState(currentId)
     val imagePick = rememberHeftImagePick(onImage = { img -> target?.let { vm.addImage(it, img) } }, onError = vm::message)
-    val pagePick = rememberHeftImagePick(
-        onImage = { img -> scope.launch { focus = vm.addImagePage(currentData?.paper?.let(Paper::of) ?: Paper.BLANK, img) } },
-        onError = vm::message,
-        maxEdge = IMPORT_MAX_EDGE,
-    )
     var importing by remember { mutableStateOf<List<Uri>?>(null) }
     val filePick = rememberHeftFilePick { importing = it }
     val media = HeftMediaActions(
@@ -205,7 +199,6 @@ fun HeftScreen(
         remove = { currentId?.let(vm::removePage) },
         canRemove = pages.size > 1,
         scan = scan,
-        imagePage = pagePick.pick,
         importFiles = filePick,
         overview = { showPages = true },
         currentPaper = currentData?.paper?.let(Paper::of),

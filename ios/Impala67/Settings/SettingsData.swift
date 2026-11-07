@@ -20,13 +20,13 @@ struct BackupSettingsSections: View {
                     Button("Importieren") {
                         showImport = true
                     }
-                    .buttonStyle(.glass)
+                    .settingsButton(.secondary)
                     .disabled(busy)
 
                     Button(lastBackup.isEmpty ? "Backup erstellen" : "Backup erneut erstellen") {
                         exportBackup()
                     }
-                    .buttonStyle(.glassProminent)
+                    .settingsButton(.primary)
                     .disabled(busy)
                 }
             }
@@ -54,7 +54,7 @@ struct BackupSettingsSections: View {
                 Button("Exportieren") {
                     exportTelemetry()
                 }
-                .buttonStyle(.glass)
+                .settingsButton(.secondary)
             }
             SettingsDivider()
             SettingsRow(
@@ -62,14 +62,25 @@ struct BackupSettingsSections: View {
                 description: "Alle Notizen des Arbeitsbereichs als Markdown (.md)"
             ) {
                 let workspaces = store.core.workspaces()
-                Menu("Exportieren") {
+                Menu {
                     ForEach(workspaces, id: \.id) { ws in
                         Button(ws.name) {
                             exportWorkspace(ws.id, name: ws.name)
                         }
                     }
+                } label: {
+                    Text("Exportieren")
+                        .font(.system(size: TextSize.xs, weight: .semibold))
+                        .foregroundStyle(Impala.text)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .frame(minHeight: 32)
+                        .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radius.sm)
+                                .strokeBorder(Impala.edgeSoft, lineWidth: 1)
+                        )
                 }
-                .buttonStyle(.glass)
             }
         }
     }
@@ -84,19 +95,7 @@ struct BackupSettingsSections: View {
         message = nil
         Task {
             do {
-                let json = try store.core.exportJson(includeBlobs: true)
-                let dateStr = Date().formatted(Date.FormatStyle().year().month().day())
-                let tempDir = FileManager.default.temporaryDirectory
-                let fileUrl = tempDir.appendingPathComponent("impala67-export-\(dateStr).json")
-                try json.write(to: fileUrl, atomically: true, encoding: .utf8)
-                let formattedNow = Date().formatted(
-                    Date.FormatStyle()
-                        .day(.twoDigits).month(.twoDigits).year(.defaultDigits)
-                        .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
-                        .locale(Locale(identifier: "de_DE"))
-                )
-                lastBackup = formattedNow
-                shareFile = SharedFile(url: fileUrl)
+                shareFile = SharedFile(url: try BackupExport.write(store))
                 message = "Backup erfolgreich erstellt."
             } catch {
                 message = "Export-Fehler: \(error.localizedDescription)"
@@ -166,6 +165,26 @@ struct BackupSettingsSections: View {
     }
 }
 
+/// Vollständiges Backup als JSON-Datei (wie `btnExport` der PWA); merkt die Zeit unter `impala67LastBackup`.
+/// Genutzt vom Backup-Bereich und von der Backup-Kachel der Übersicht.
+enum BackupExport {
+    @MainActor
+    static func write(_ store: ImpalaStore) throws -> URL {
+        let json = try store.core.exportJson(includeBlobs: true)
+        let dateStr = Date().formatted(Date.FormatStyle().year().month().day())
+        let fileUrl = FileManager.default.temporaryDirectory.appendingPathComponent("impala67-export-\(dateStr).json")
+        try json.write(to: fileUrl, atomically: true, encoding: .utf8)
+        let now = Date().formatted(
+            Date.FormatStyle()
+                .day(.twoDigits).month(.twoDigits).year(.defaultDigits)
+                .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+                .locale(Locale(identifier: "de_DE"))
+        )
+        UserDefaults.standard.set(now, forKey: "impala67LastBackup")
+        return fileUrl
+    }
+}
+
 /// Gefahrenzone wie `danger-zone` der PWA: Seiten, Chats oder Karten löschen mit Bestätigung.
 struct DangerZoneGroup: View {
     @Environment(ImpalaStore.self) private var store
@@ -206,7 +225,7 @@ struct DangerZoneGroup: View {
                 Button("Seiten löschen", role: .destructive) {
                     confirmDanger = .pages
                 }
-                .buttonStyle(.glass)
+                .settingsButton(.danger)
             }
 
             SettingsDivider()
@@ -220,7 +239,7 @@ struct DangerZoneGroup: View {
                 Button("Chats löschen", role: .destructive) {
                     confirmDanger = .chats
                 }
-                .buttonStyle(.glass)
+                .settingsButton(.danger)
                 .disabled(chatCount == 0)
             }
 
@@ -235,7 +254,7 @@ struct DangerZoneGroup: View {
                 Button("Karten löschen", role: .destructive) {
                     confirmDanger = .cards
                 }
-                .buttonStyle(.glass)
+                .settingsButton(.danger)
                 .disabled(!hasCards)
             }
         }

@@ -267,7 +267,7 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
 - **Werkzeuge** nur über Apples Werkzeugleiste (`PKToolPicker`: Stift, Marker, Radierer, Lasso, Lineal,
   Farben, Rückgängig, „Mit Finger zeichnen“); Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`,
   Dicke 3. Keine eigene Farbleiste daneben. Oben links „n / m“ (Seitenübersicht; geblättert wird durch
-  Scrollen), rechts „+“ und Teilen. Neue Textfelder nehmen die Farbe des aktuellen Stifts.
+  Scrollen), rechts „+“. Neue Textfelder nehmen die Farbe des aktuellen Stifts.
 - **Papier sichtbar**: Der Canvas ist durchsichtig (`isOpaque = false`), sonst übermalt PencilKit das
   Papier mit seiner Hintergrundfarbe (schwarzes Heft im Dunkelmodus).
 - **Bilder und Textfelder** (`HeftObjects.swift`): Bilder unter, Textfelder über den
@@ -279,17 +279,16 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
   Auswahl: Ziehen verschiebt, Griff skaliert (Bilder mit Seitenverhältnis, Textfelder in der Breite),
   Antippen eines Textfelds bearbeitet es; Leiste mit Löschen/Fertig (`heftSetImageFrame`, `heftSetText`,
   `heftRemoveImages`/`heftRemoveTexts`).
-- **„+“-Panel** (wie `plusPopHtml` + `imgPopHtml`): „Text schreiben“ (`heftAddText` in der Mitte des
-  Ausschnitts), „Bild hinzufügen“ (Fotos), „Bild aufnehmen“ (Kamera) – eingefügte Bilder sind danach
-  gewählt – und „Handschrift → Text“ (statt „In Text“ im Lasso der PWA, `HeftOcr.swift`): der nächste
-  Strich umkreist die Handschrift, Apple Vision liest sie (Deutsch/Englisch, auf dem Gerät), danach
-  Kopieren oder „Als Textfeld ersetzen“.
-- **Seiten aus Dateien** (im „+“-Panel): „Bild als Seite“,
-  „PDF oder Bild importieren“ (PDFKit rendert jede Seite randlos mit 1800 px, eingebetteter Text wird
-  Texterkennung der Seite) und „Dokument scannen“ (VisionKit-Dokumentenkamera, mehrere Seiten, entzerrt);
-  neue Seiten landen hinter der aktuellen (`HeftImport.swift`).
-- **Teilen** (Pfeil-Knopf): „Als PDF exportieren“ (jede Seite mit 2480 px als JPEG, PDF-Gerüst aus dem Kern
-  `heftBuildPdf`, Dateiname `heftExportFileName`), „Seite als SVG“ (`heftPageSvg`), „Internen Link kopieren“.
+- **„+“-Panel** (wie `plusPopHtml` + `imgPopHtml`): „Text“ (`heftAddText` in der Mitte des Ausschnitts),
+  „Bild“ (Fotos), „Foto aufnehmen“ (Kamera) – eingefügte Bilder sind danach gewählt. Handschrift in Text
+  umwandeln macht die KI über das Seitenbild (kein Lasso „In Text“ mehr).
+- **Seiten aus Dateien** (im „+“-Panel): „PDF oder Bilder importieren“ (je Bild bzw. PDF-Seite eine Seite;
+  PDFKit rendert randlos mit 1800 px, eingebetteter Text wird Texterkennung der Seite) und „Dokument
+  scannen“ (VisionKit-Dokumentenkamera, mehrere Seiten, entzerrt); neue Seiten landen hinter der aktuellen
+  (`HeftImport.swift`).
+- **Teilen** (in der Seitenübersicht wie PWA/GoodNotes): „Exportieren …“ (PDF oder PNG, aktuelle bzw. alle
+  Seiten; jede Seite mit 2480 px, PDF-Gerüst aus dem Kern `heftBuildPdf`), „Internen Link kopieren“;
+  „Auswählen“ → „Teilen (n)“ exportiert genau die gewählten Seiten.
 - **Formerkennung**: Wird der Stift am Strichende ~0,45 s gehalten (`HoldWatcher`), erkennt der Kern
   eine Form (`heftFitShape`: Linie, Rechteck, Dreieck, Pfeil, Ellipse); der Strich wird dann durch die
   Form ersetzt (`heftAddShape`, gespeichert wie in PWA/Android als `shape` ohne Punkte). Formen anderer

@@ -18,10 +18,8 @@ import kotlin.math.min
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.impala67.app.heft.scan.insertImagePage
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
-import org.impala67.app.heft.ink.HandwritingRecognizer
 import org.impala67.app.heft.ink.HeftIndexer
 import org.impala67.app.heft.scan.ScannedPage
 import org.impala67.app.heft.scan.insertScannedPages
@@ -214,7 +212,6 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     override fun onCleared() {
         indexer.close()
-        lassoText.close()
         super.onCleared()
     }
 
@@ -234,14 +231,6 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         runCatching { store.write { it.insertScannedPages(pageId, at, scans) } }
             .onSuccess { changed() }
             .onFailure { _messages.tryEmit(it.message ?: "Scan nicht eingefügt") }
-            .getOrNull()
-    }
-
-    /** „Bild als Seite“: neue Seite am Ende mit dem Papier der aktuellen Seite; liefert ihre ID. */
-    suspend fun addImagePage(paper: Paper, img: ScannedPage): String? = writes.withLock {
-        runCatching { store.write { it.insertImagePage(pageId, null, paper.id, img) } }
-            .onSuccess { changed() }
-            .onFailure { _messages.tryEmit(it.message ?: "Bild-Seite nicht eingefügt") }
             .getOrNull()
     }
 
@@ -327,8 +316,6 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     var lasso by mutableStateOf<LassoSel?>(null)
         private set
 
-    private val lassoText = HandwritingRecognizer()
-
     fun clearLasso() { lasso = null }
 
     /** Fingertipp neben die Auswahl: Lasso beenden, zurück zum Stift mit offenen Optionen. */
@@ -383,14 +370,6 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         val sel = lasso ?: return
         lasso = null
         removeStrokes(sel.heftPageId, sel.ids)
-    }
-
-    /** Handschrift der Auswahl erkennen (ML Kit); `null`, wenn kein Text erkannt wurde. */
-    suspend fun lassoRecognize(): String? {
-        val sel = lasso ?: return null
-        val want = sel.ids.toHashSet()
-        val strokes = page(sel.heftPageId).value?.strokes.orEmpty().filter { it.id in want }
-        return lassoText.recognize(strokes)
     }
 
     private suspend fun selection(heftPageId: String, ids: List<String>): LassoSel? {

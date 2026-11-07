@@ -17,10 +17,8 @@ struct HeftCanvas: UIViewRepresentable {
     let initialPageId: String?
     /// Zählt hoch, wenn das Heft außerhalb des Canvas geändert wurde (anderes Gerät, Seitenübersicht).
     let revision: Int
-    /// Verbindung zur Leiste (Auswahl, Lasso für Text, Einfügen an der sichtbaren Stelle).
+    /// Verbindung zur Leiste (Auswahl, Einfügen an der sichtbaren Stelle).
     let link: HeftCanvasLink
-    /// „Handschrift → Text“: der nächste Strich ist ein Lasso und wird nicht gespeichert.
-    let lassoText: Bool
     /// Die Seite in der Mitte der Ansicht hat gewechselt (Seitenanzeige „n / m“).
     let onCurrentPage: (String) -> Void
     /// Über das Ende der letzten Seite hinaus gezogen (Hochziehen für eine neue Seite wie in der PWA).
@@ -60,7 +58,6 @@ struct HeftCanvas: UIViewRepresentable {
         c.onCurrentPage = onCurrentPage
         c.onPullAdd = onPullAdd
         c.setPages(pageIds, revision: revision)
-        c.setLassoText(lassoText)
     }
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
@@ -134,9 +131,6 @@ struct HeftCanvas: UIViewRepresentable {
         private var loadedRevision = -1
         private var imageLoad: Task<Void, Never>?
 
-        private var lassoText = false
-        /// Werkzeug vor dem Lasso für „Handschrift → Text“.
-        private var toolBeforeLasso: PKTool?
         private var applying = false
         private var fitted = false
         private var lastWidth: CGFloat = 0
@@ -661,7 +655,6 @@ struct HeftCanvas: UIViewRepresentable {
             let done = Profiler.shared.begin("heft.drawing-diff")
             defer { done() }
             let strokes = canvas.drawing.strokes
-            var lasso: PKStroke?
             var seen = Set<UInt32>()
             var moves: [String: (page: String, dx: Double, dy: Double, ids: [String])] = [:]
             var toRemove: [(page: String, id: String)] = []
@@ -694,18 +687,11 @@ struct HeftCanvas: UIViewRepresentable {
                     addStroke(stroke, original: original)
                 } else if pending.contains(where: { $0.randomSeed == seed }) {
                     continue
-                } else if lassoText {
-                    lasso = stroke
                 } else if stroke.ink.inkType == .pen {
                     pending.append(stroke)
                 } else {
                     addStroke(stroke, original: nil)
                 }
-            }
-
-            if let lasso {
-                recognizeLasso(lasso, in: canvas)
-                return
             }
             for (seed, k) in known where !seen.contains(seed) {
                 toRemove.append((page: k.page, id: k.id))
@@ -775,22 +761,7 @@ struct HeftCanvas: UIViewRepresentable {
             return true
         }
 
-        // MARK: Bilder, Textfelder, Handschrift → Text
-
-        /// Lasso für „Handschrift → Text“ ein-/ausschalten.
-        func setLassoText(_ lassoText: Bool) {
-            guard let canvas else { return }
-            if lassoText != self.lassoText {
-                self.lassoText = lassoText
-                if lassoText {
-                    toolBeforeLasso = canvas.tool
-                    canvas.tool = PKInkingTool(.pen, color: UIColor(Impala.accent).withAlphaComponent(0.7), width: 2)
-                } else if let before = toolBeforeLasso {
-                    canvas.tool = before
-                    toolBeforeLasso = nil
-                }
-            }
-        }
+        // MARK: Bilder und Textfelder
 
         /// Seite in der Mitte des sichtbaren Ausschnitts und der Mittelpunkt dort (Seitenkoordinaten) –
         /// dort landen neue Textfelder.
@@ -900,67 +871,6 @@ struct HeftCanvas: UIViewRepresentable {
             link?.textEdit = HeftTextEdit(textId: t.id, text: t.text)
         }
 
-        /// Alles Gesammelte schreiben und warten, bis die Warteschlange leer ist – für die seltenen Stellen,
-        /// die gleich danach Striche aus dem Kern lesen (Lasso, Handschrift → Text, Formen).
-        private func flushAndWait() {
-            flush()
-            writer.sync {}
-        }
-
-        /// Lasso-Strich entfernen, die umkreisten Striche als Bild an Apple Vision geben.
-        private func recognizeLasso(_ stroke: PKStroke, in canvas: PKCanvasView) {
-            applying = true
-            canvas.drawing = PKDrawing(strokes: canvas.drawing.strokes.filter { $0.randomSeed != stroke.randomSeed })
-            applying = false
-            link?.lassoText = false
-            guard let page = pageOf(stroke) else { return }
-            let o = origin(of: page)
-            var polygon: [Float] = []
-            for p in stroke.path {
-                let loc = p.location.applying(stroke.transform)
-                polygon += [Float(loc.x - o.x), Float(loc.y - o.y)]
-            }
-            flushAndWait()
-            let ids = (attempt("heftSelectByLasso", { try core.heftSelectByLasso(pageId: pageId, heftPageId: page, polygon: polygon) })) ?? []
-            let want = Set(ids)
-            // Die umkreisten Striche im aktuellen Stand des Kerns (nach `flushAndWait`).
-            let picked = (attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: page) }))?
-                .strokes.filter { want.contains($0.id) } ?? []
-            let raw = HeftInk.bounds(picked)
-            guard !picked.isEmpty, !raw.isNull else {
-                link?.ocr = HeftOcrResult(text: "", strokeIds: [], bounds: .zero, heftPageId: page)
-                return
-            }
-            let bounds = raw.insetBy(dx: -16, dy: -16)
-            // Vision braucht dunkle Schrift auf hellem Grund, nicht auf Transparenz; gezeichnet wie die PWA.
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 2
-            format.opaque = true
-            let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { ctx in
-                UIColor.white.setFill()
-                ctx.fill(CGRect(origin: .zero, size: bounds.size))
-                ctx.cgContext.translateBy(x: -bounds.minX, y: -bounds.minY)
-                HeftInk.draw(picked, in: ctx.cgContext)
-            }
-            guard let cg = image.cgImage else { return }
-            Task { [weak self] in
-                let text = await HeftOcr.recognize(cg)
-                self?.link?.ocr = HeftOcrResult(text: text, strokeIds: ids, bounds: bounds, heftPageId: page)
-            }
-        }
-
-        /// Striche des Lassos durch ein Textfeld an ihrer Stelle ersetzen.
-        func replaceWithText(_ result: HeftOcrResult, text: String, color: String) {
-            let page = result.heftPageId
-            guard slot[page] != nil else { return }
-            flushAndWait()
-            _ = attempt("heftRemoveStrokes", { try core.heftRemoveStrokes(pageId: pageId, heftPageId: page, ids: result.strokeIds) })
-            let w = max(160, result.bounds.width)
-            _ = attempt("heftAddText", { try core.heftAddText(pageId: pageId, heftPageId: page, text: text,
-                                      x: result.bounds.minX, y: result.bounds.minY, w: w, color: color, size: 30) })
-            load([page], force: true)
-            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: page)
-        }
 
         // MARK: Schreiben
 

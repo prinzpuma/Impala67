@@ -13,6 +13,7 @@ struct LearningSettingsSections: View {
     @AppStorage("impala67ControllerEnabled") private var controllerEnabled = false
     @AppStorage("impala67PadHud") private var padHud = true
     @AppStorage("impala67PadVib") private var padVib = true
+    @State private var controllerExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -57,6 +58,14 @@ struct LearningSettingsSections: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
+                    .tint(Impala.text)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.sm)
+                            .strokeBorder(Impala.edgeSoft, lineWidth: 1)
+                    )
                 }
             }
 
@@ -91,39 +100,47 @@ struct LearningSettingsSections: View {
                 )
             }
 
-            // MARK: - Mit Controller lernen
+            // MARK: - Controller
             SettingsCardGroup(
-                title: "Mit Controller lernen",
+                title: "Controller",
                 footnote: "Unterstützt kabellose Bluetooth-Controller (PlayStation DualSense, Xbox Wireless, Nintendo Switch Pro und MFi-Controller)."
             ) {
-                SettingsSwitchRow(
-                    title: "Controller-Steuerung",
-                    description: "Karten abfragen, umdrehen und bewerten per Gamepad",
-                    isOn: $controllerEnabled
-                )
-                if controllerEnabled {
-                    SettingsDivider()
+                SettingsDisclosure(
+                    title: "Mit Controller lernen",
+                    subtitle: "Kabellose Bluetooth-Controller (PlayStation, Xbox, Switch Pro, MFi)",
+                    badge: controllerEnabled ? "Aktiv" : nil,
+                    isExpanded: $controllerExpanded
+                ) {
                     SettingsSwitchRow(
-                        title: "Tastenhinweise (HUD)",
-                        description: "Blendet Tastenbelegung während des Lernens dezent am Bildschirmrand ein",
-                        isOn: $padHud
+                        title: "Controller-Steuerung",
+                        description: "Karten abfragen, umdrehen und bewerten per Gamepad",
+                        isOn: $controllerEnabled
                     )
-                    SettingsDivider()
-                    SettingsSwitchRow(
-                        title: "Vibration",
-                        description: "Taktile Rückmeldung beim Umdrehen und Bewerten",
-                        isOn: $padVib
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title: "Tastenbelegung",
-                        description: "A = Aufdecken · B / 1 = Nochmal · X / 2 = Schwer · Y / 3 = Gut · RB / 4 = Einfach"
-                    )
+                    if controllerEnabled {
+                        SettingsDivider()
+                        SettingsSwitchRow(
+                            title: "Tastenhinweise (HUD)",
+                            description: "Blendet Tastenbelegung während des Lernens dezent am Bildschirmrand ein",
+                            isOn: $padHud
+                        )
+                        SettingsDivider()
+                        SettingsSwitchRow(
+                            title: "Vibration",
+                            description: "Taktile Rückmeldung beim Umdrehen und Bewerten",
+                            isOn: $padVib
+                        )
+                        SettingsDivider()
+                        SettingsRow(
+                            title: "Tastenbelegung",
+                            description: "A = Aufdecken · B / 1 = Nochmal · X / 2 = Schwer · Y / 3 = Gut · RB / 4 = Einfach"
+                        )
+                    }
                 }
             }
         }
         .onAppear {
             weekGoal = WeekGoal.normalized(weekGoal)
+            controllerExpanded = controllerEnabled
         }
     }
 }

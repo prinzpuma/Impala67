@@ -297,6 +297,8 @@ struct HeftExportSheet: View {
     let pageId: String
     let pageIds: [String]
     let currentId: String?
+    /// In der Seitenübersicht ausgewählte Seiten (`exportSel` der PWA); nil = aktuelle oder alle wählbar.
+    let only: [String]?
     let onShare: (SharedFile) -> Void
 
     @State private var name: String = ""
@@ -321,10 +323,11 @@ struct HeftExportSheet: View {
         var id: String { rawValue }
     }
 
-    init(pageId: String, pageIds: [String], currentId: String?, onShare: @escaping (SharedFile) -> Void) {
+    init(pageId: String, pageIds: [String], currentId: String?, only: [String]? = nil, onShare: @escaping (SharedFile) -> Void) {
         self.pageId = pageId
         self.pageIds = pageIds
         self.currentId = currentId
+        self.only = only
         self.onShare = onShare
     }
 
@@ -333,6 +336,7 @@ struct HeftExportSheet: View {
     }
 
     private var targetIds: [String] {
+        if let only { return only }
         if scope == .current, let id = currentId {
             return [id]
         }
@@ -356,7 +360,7 @@ struct HeftExportSheet: View {
                     Text("Dateiname")
                 }
 
-                if pageIds.count > 1 {
+                if only == nil, pageIds.count > 1 {
                     Section("Seitenumfang") {
                         Picker("Umfang", selection: $scope) {
                             Text("Aktuelle Seite (Seite \(currentIndex + 1))").tag(ExportScope.current)

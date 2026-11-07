@@ -23,11 +23,12 @@ struct AiSettingsSections: View {
     }
 }
 
-/// „Aktives Modell“: Modelle aller Quellen nach Quelle gruppiert und durchsuchbar, manuelle Modell-ID.
+/// „Aktives Modell“: Modelle aller Quellen nach Quelle gruppiert und durchsuchbar, Favoriten oben, manuelle Modell-ID.
 private struct AiModelSection: View {
     let s: AiSettings
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
+    @AppStorage("impala67FavModels") private var favModelsRaw = ""
     @State private var query = ""
     @State private var manual = false
     @State private var manualModel = ""
@@ -51,100 +52,232 @@ private struct AiModelSection: View {
                     Button(chat.modelsLoading ? "Lädt …" : "Neu laden") {
                         chat.refreshModels(force: true)
                     }
-                    .buttonStyle(.glass)
+                    .settingsButton(.secondary)
                     .disabled(chat.modelsLoading)
                 }
             )
 
             SettingsDivider()
 
-            // Suchfeld
+            // Modell-Suchleiste (.settings-model-search)
             HStack(spacing: Space.s2) {
-                Icon("search", size: 14)
-                    .foregroundStyle(Impala.text2)
-                TextField("Modelle durchsuchen …", text: $query)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if !query.isEmpty {
-                    Button { query = "" } label: {
-                        Icon("x", size: 12).foregroundStyle(Impala.text2)
+                HStack(spacing: 6) {
+                    Icon("search", size: 14)
+                        .foregroundStyle(Impala.text2)
+                    TextField("Modelle durchsuchen …", text: $query)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: TextSize.sm))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if !query.isEmpty {
+                        Button {
+                            query = ""
+                        } label: {
+                            Icon("x", size: 12)
+                                .foregroundStyle(Impala.text2)
+                                .padding(3)
+                                .background(Impala.edgeSoft.opacity(0.4), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Impala.panel, in: Capsule())
+                .overlay(Capsule().strokeBorder(Impala.edgeSoft, lineWidth: 1))
+
+                Text("\(hits.count) von \(chat.models.count) Modelle")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Impala.text2)
             }
             .padding(.horizontal, Space.s4)
             .padding(.vertical, Space.s2 + 2)
 
             SettingsDivider()
 
-            // Modell-Liste nach Provider
-            ForEach(s.sources) { src in
-                let list = hits.filter { $0.providerId == src.id }
-                if !list.isEmpty {
-                    DisclosureGroup("\(src.label) (\(list.count))") {
-                        ForEach(list, id: \.self) { m in
-                            Button { chat.select(m) } label: {
-                                HStack {
-                                    Text(modelName(m.id))
-                                        .font(.system(size: TextSize.sm))
-                                        .foregroundStyle(Impala.text)
-                                    Spacer()
-                                    if m.providerId == s.activeId && m.id == s.model {
-                                        Icon("check", size: 14)
-                                            .foregroundStyle(Impala.accent)
-                                            .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .padding(.vertical, 4)
+            // Scrollbare PWA-Modellliste mit Favoriten (.settings-model-list)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 1) {
+                    if chat.modelsLoading && chat.models.isEmpty {
+                        Text("Lädt …")
+                            .font(.system(size: TextSize.sm))
+                            .foregroundStyle(Impala.text2)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 24)
+                    } else if chat.models.isEmpty {
+                        Text("Keine Modelle gefunden. Prüfe die unten hinterlegten Quellen.")
+                            .font(.system(size: TextSize.sm))
+                            .foregroundStyle(Impala.text2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 24)
+                            .padding(.horizontal, 16)
+                    } else if hits.isEmpty {
+                        Text("Kein Modell passt zu „\(query)“.")
+                            .font(.system(size: TextSize.sm))
+                            .foregroundStyle(Impala.text2)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 24)
+                    } else {
+                        let favHits = hits.filter { isFav($0) }
+                        if !favHits.isEmpty {
+                            Text("FAVORITEN")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.5)
+                                .foregroundStyle(Impala.text2)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 8)
+                                .padding(.bottom, 2)
+
+                            ForEach(favHits, id: \.self) { m in
+                                modelRow(m, srcLabel: s.name(of: m.providerId), chat: chat)
                             }
-                            .buttonStyle(.plain)
                         }
-                    }
-                    .padding(.horizontal, Space.s4)
-                    .padding(.vertical, Space.s2)
 
-                    SettingsDivider()
-                }
-            }
+                        ForEach(s.sources) { src in
+                            let list = hits.filter { $0.providerId == src.id }
+                            if !list.isEmpty {
+                                Text("\(src.label.uppercased()) (\(list.count))")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .tracking(0.5)
+                                    .foregroundStyle(Impala.text2)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 2)
 
-            if !chat.modelsLoading && chat.modelsChecked && chat.models.isEmpty {
-                SettingsRow(
-                    title: "Keine Modelle gefunden",
-                    description: "Prüfe die unten hinterlegten Quellen und API-Schlüssel."
-                )
-                SettingsDivider()
-            }
-
-            // Manuelle Modell-ID
-            DisclosureGroup("Manuelle Modell-ID", isExpanded: $manual) {
-                VStack(spacing: Space.s2) {
-                    TextField("Modell-ID (z. B. gpt-4o oder claude-3-5-sonnet)", text: $manualModel)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    HStack {
-                        Picker("Quelle", selection: $manualProvider) {
-                            ForEach(s.sources) { Text($0.label).tag($0.id) }
+                                ForEach(list, id: \.self) { m in
+                                    modelRow(m, srcLabel: src.label, chat: chat)
+                                }
+                            }
                         }
-                        .pickerStyle(.menu)
-                        Spacer()
-                        Button("Übernehmen") {
-                            AiSettings.select(store.core, providerId: manualProvider, model: manualModel.trimmingCharacters(in: .whitespaces))
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(manualModel.trimmingCharacters(in: .whitespaces).isEmpty || manualProvider.isEmpty)
                     }
                 }
                 .padding(.vertical, 4)
             }
-            .padding(.horizontal, Space.s4)
-            .padding(.vertical, Space.s2)
+            .frame(minHeight: 160, maxHeight: 280)
+            .background(Impala.panel.opacity(0.45))
+
+            SettingsDivider()
+
+            // Aufklappbereich „Manuelle Modell-ID“
+            SettingsDisclosure(
+                title: "Manuelle Modell-ID",
+                subtitle: "Falls die Quelle ein Modell nicht automatisch auflistet",
+                isExpanded: $manual
+            ) {
+                VStack(alignment: .leading, spacing: Space.s2) {
+                    TextField("Modell-ID (z. B. gpt-4o oder claude-3-5-sonnet)", text: $manualModel)
+                        .settingsInputStyle()
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    HStack(spacing: Space.s2) {
+                        Picker("Quelle", selection: $manualProvider) {
+                            ForEach(s.sources) { Text($0.label).tag($0.id) }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.system(size: TextSize.sm))
+                        .foregroundStyle(Impala.text)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(minHeight: 34)
+                        .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.sm))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radius.sm)
+                                .strokeBorder(Impala.edgeSoft, lineWidth: 1)
+                        )
+
+                        Spacer()
+
+                        Button("Übernehmen") {
+                            AiSettings.select(store.core, providerId: manualProvider, model: manualModel.trimmingCharacters(in: .whitespaces))
+                        }
+                        .settingsButton(.primary)
+                        .disabled(manualModel.trimmingCharacters(in: .whitespaces).isEmpty || manualProvider.isEmpty)
+                    }
+                }
+                .padding(.horizontal, Space.s4)
+                .padding(.vertical, Space.s3)
+            }
         }
         .onAppear {
             chat.refreshModels()
             manualModel = s.model
             manualProvider = s.activeId
         }
+        .onChange(of: s.model) {
+            if !manual { manualModel = s.model }
+        }
+        .onChange(of: s.activeId) {
+            if !manual { manualProvider = s.activeId }
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ m: AiModel, srcLabel: String, chat: ChatModel) -> some View {
+        let isActive = m.providerId == s.activeId && m.id == s.model
+        HStack(spacing: 2) {
+            Button {
+                chat.select(m)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(modelName(m.id))
+                            .font(.system(size: TextSize.xs, weight: .semibold))
+                            .foregroundStyle(isActive ? Impala.accent : Impala.text)
+                            .lineLimit(1)
+                        Text(srcLabel)
+                            .font(.system(size: 11))
+                            .foregroundStyle(isActive ? Impala.accent : Impala.text2)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if isActive {
+                        Icon("check", size: 13)
+                            .foregroundStyle(Impala.accent)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(minHeight: 36)
+                .background(isActive ? Impala.activeTint : Color.clear, in: RoundedRectangle(cornerRadius: Radius.sm))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                toggleFav(m)
+            } label: {
+                Text(isFav(m) ? "★" : "☆")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isFav(m) ? Impala.warn : Impala.text2)
+                    .frame(width: 30, height: 34)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private var favKeys: Set<String> {
+        Set(favModelsRaw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    }
+
+    private func modelKey(_ m: AiModel) -> String {
+        "\(m.providerId)::\(m.id)" // wie `favModels` in state.js
+    }
+
+    private func isFav(_ m: AiModel) -> Bool {
+        favKeys.contains(modelKey(m))
+    }
+
+    private func toggleFav(_ m: AiModel) {
+        var set = favKeys
+        let key = modelKey(m)
+        if set.contains(key) {
+            set.remove(key)
+        } else {
+            set.insert(key)
+        }
+        favModelsRaw = set.sorted().joined(separator: ",")
     }
 
     private func modelName(_ id: String) -> String { id == "impala-ai" ? "Impala AI" : id }
@@ -170,7 +303,7 @@ private struct AiSourcesSection: View {
                     Button("Quelle hinzufügen") {
                         s.save(store.core, AiSource(id: "custom-\(UUID().uuidString.prefix(8).lowercased())", name: "Neue Quelle", base: "", key: ""))
                     }
-                    .buttonStyle(.glassProminent)
+                    .settingsButton(.primary)
 
                     ForEach(Array(AiSettings.presets.enumerated()), id: \.offset) { _, preset in
                         Button(preset.label) {
@@ -178,7 +311,7 @@ private struct AiSourcesSection: View {
                             if s.sources.contains(where: { $0.id == p.id }) { p.id += "-\(UUID().uuidString.prefix(4).lowercased())" }
                             s.save(store.core, p)
                         }
-                        .buttonStyle(.glass)
+                        .settingsButton(.secondary)
                     }
                 }
                 .padding(.horizontal, Space.s4)
@@ -204,57 +337,80 @@ private struct SourceRow: View {
 
     var body: some View {
         let dirty = name != source.name || base != source.base || key != source.key
-        DisclosureGroup(isExpanded: $open) {
-            VStack(alignment: .leading, spacing: Space.s2) {
+        SettingsDisclosure(
+            title: source.label,
+            subtitle: active ? "Aktive Quelle" : cleanDisplayUrl(source.base),
+            badge: active ? "Aktiv" : nil,
+            isExpanded: $open
+        ) {
+            SettingsInputRow(title: "Name") {
                 TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Server-URL", text: $base, prompt: Text("https://…/v1"))
-                    .textFieldStyle(.roundedBorder)
+                    .settingsInputStyle()
+            }
+
+            SettingsDivider()
+
+            SettingsInputRow(title: "Server-URL", description: "OpenAI-kompatibler Endpunkt") {
+                TextField("https://…/v1", text: $base)
+                    .settingsInputStyle()
                     .textContentType(.URL)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                SecureField("API-Key", text: $key, prompt: Text("Optional"))
-                    .textFieldStyle(.roundedBorder)
+            }
+
+            SettingsDivider()
+
+            SettingsInputRow(title: "API-Schlüssel", description: "Bleibt lokal im Schlüsselbund") {
+                SecureField("Optional", text: $key)
+                    .settingsInputStyle()
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            }
 
-                if let status {
+            if let status {
+                SettingsDivider()
+                HStack(spacing: Space.s2) {
+                    StatusIndicator(tone: status.ok ? .ok : .danger)
                     Text(status.text)
                         .font(.system(size: TextSize.sm))
                         .foregroundStyle(status.ok ? Impala.success : Impala.danger)
-                        .transition(.opacity)
                 }
+                .padding(.horizontal, Space.s4)
+                .padding(.vertical, 8)
+            }
 
-                HStack {
-                    Button("Entfernen", role: .destructive) { confirmRemove = true }
-                        .buttonStyle(.glass)
-                    Spacer()
-                    Button(testing ? "Teste …" : "Verbindung testen") { test() }
-                        .buttonStyle(.glass)
-                        .disabled(testing)
-                    Button("Speichern") {
-                        s.save(store.core, AiSource(id: source.id, name: name.trimmingCharacters(in: .whitespaces),
-                                                    base: cleanBase(base), key: key))
-                        shell.chat.refreshModels(force: true)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!dirty)
+            SettingsDivider()
+
+            HStack(spacing: 8) {
+                Button(testing ? "Teste …" : "Verbindung testen") {
+                    test()
                 }
+                .settingsButton(.primary)
+                .disabled(testing)
+
+                Button("Speichern") {
+                    s.save(store.core, AiSource(
+                        id: source.id,
+                        name: name.trimmingCharacters(in: .whitespaces),
+                        base: cleanBase(base),
+                        key: key
+                    ))
+                    shell.chat.refreshModels(force: true)
+                }
+                .settingsButton(.secondary)
+                .disabled(!dirty)
+
+                Spacer()
+
+                Button("Entfernen") {
+                    confirmRemove = true
+                }
+                .settingsButton(.danger)
             }
-            .padding(.top, 4)
-            .padding(.bottom, 2)
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(source.label).font(.system(size: TextSize.base, weight: .medium))
-                Text(active ? "Aktive Quelle" : source.base.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))
-                    .font(.system(size: TextSize.sm))
-                    .foregroundStyle(Impala.text2)
-                    .lineLimit(1)
-            }
+            .padding(.horizontal, Space.s4)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, Space.s4)
-        .padding(.vertical, Space.s2 + 2)
         .onAppear {
             open = active
             reset()
@@ -292,6 +448,10 @@ private struct SourceRow: View {
                 }
             }
         }
+    }
+
+    private func cleanDisplayUrl(_ url: String) -> String {
+        url.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: "")
     }
 
     private func cleanBase(_ s: String) -> String {
@@ -361,20 +521,20 @@ private struct AiBehaviorSection: View {
             SettingsDivider()
             VStack(alignment: .leading, spacing: Space.s2) {
                 Text("Eigene Anweisungen")
-                    .font(.system(size: TextSize.base, weight: .medium))
+                    .font(.system(size: TextSize.base, weight: .semibold))
                     .foregroundStyle(Impala.text)
                 Text("Tonfall, Fach und dauerhafte Vorgaben für den KI-Assistenten")
                     .font(.system(size: TextSize.sm))
                     .foregroundStyle(Impala.text2)
                 TextField("z. B. „Antworte prägnant und auf Deutsch.“", text: $instructions, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(3...7)
+                    .settingsInputStyle()
+                    .lineLimit(4...8)
                 HStack {
                     Spacer()
                     Button("Speichern") {
                         AiSettings.patch(store.core, ["customInstructions": instructions.trimmingCharacters(in: .whitespacesAndNewlines)])
                     }
-                    .buttonStyle(.glassProminent)
+                    .settingsButton(.primary)
                     .disabled(instructions == s.customInstructions)
                 }
             }
@@ -382,5 +542,6 @@ private struct AiBehaviorSection: View {
             .padding(.vertical, Space.s3)
         }
         .onAppear { instructions = s.customInstructions }
+        .onChange(of: s.customInstructions) { instructions = s.customInstructions }
     }
 }

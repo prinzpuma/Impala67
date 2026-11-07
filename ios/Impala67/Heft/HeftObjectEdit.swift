@@ -305,13 +305,9 @@ struct HeftTextSheet: View {
 /// Verbindung zwischen Heft-Leiste (SwiftUI) und Leinwand: Modi, Auswahl und offene Blätter.
 @MainActor @Observable
 final class HeftCanvasLink {
-    /// „Handschrift → Text“: der nächste Strich umkreist die Handschrift.
-    var lassoText = false
     var selection: HeftSelectLayer.Item?
     /// Textfeld wird geschrieben bzw. bearbeitet.
     var textEdit: HeftTextEdit?
-    /// Ergebnis der Handschrifterkennung.
-    var ocr: HeftOcrResult?
     @ObservationIgnored weak var coordinator: HeftCanvas.Coordinator?
 }
 

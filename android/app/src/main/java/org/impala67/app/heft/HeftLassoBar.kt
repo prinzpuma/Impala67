@@ -1,8 +1,5 @@
 package org.impala67.app.heft
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,44 +11,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import org.impala67.app.R
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.TextSize
 
 /**
- * Aktionsleiste der Lasso-Auswahl (heft-lasso.js `updateLassoBarUI`): In Text, Duplizieren, Löschen,
- * Auswahl aufheben. Das Trainingsbeispiel der PWA entfällt: nativ erkennt ML Kit die Handschrift.
+ * Aktionsleiste der Lasso-Auswahl (heft-lasso.js `updateLassoBarUI`): Duplizieren, Löschen, Auswahl
+ * aufheben. Handschrift liest die KI (Seitenbild), nicht das Lasso.
  */
 @Composable
 fun HeftLassoBar(vm: HeftViewModel, modifier: Modifier = Modifier) {
     val c = Impala.colors
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     Row(modifier.heftFloat().padding(horizontal = 6.dp, vertical = 4.dp), Arrangement.spacedBy(4.dp), Alignment.CenterVertically) {
-        LassoButton(R.drawable.ic_i_note, "In Text") {
-            vm.message("Handschrift wird erkannt…")
-            scope.launch {
-                val text = runCatching { vm.lassoRecognize() }
-                    .onFailure { vm.message("Erkennung fehlgeschlagen: " + (it.message ?: it)) }
-                    .getOrElse { return@launch }
-                if (text.isNullOrBlank()) { vm.message("Kein Text erkannt."); return@launch }
-                val copied = runCatching {
-                    val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clip.setPrimaryClip(ClipData.newPlainText("Handschrift", text))
-                }.isSuccess
-                vm.message((if (copied) "Erkannt & kopiert: „" else "Erkannt (Kopieren nicht möglich): „") + text + "“")
-            }
-        }
         LassoButton(R.drawable.ic_i_copy, "Duplizieren", onClick = vm::lassoDuplicate)
         LassoButton(R.drawable.ic_i_trash, "Löschen", onClick = vm::lassoDelete)
         Icon(

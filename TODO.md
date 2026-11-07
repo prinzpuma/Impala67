@@ -123,7 +123,7 @@ wenn ein Emulator-Screenshot neben der PWA (gleiche Breite) übereinstimmt.*
 - [x] **Daten & Schlüssel**: Daten kommen über Cloudflare-Sync bzw. Drive-Backup in den Rust-Kern (keine Übernahme aus der alten Capacitor-App – bewusst, Absicherung über Backup/Drive). Der Sync-Schlüssel liegt auf dem Gerät mit dem Android Keystore verschlüsselt (`settings/SecretBox.kt`).
 - [ ] **Plattform-Features & Bibliotheken**:
   - [x] **Stift / Zeichnen**: Jetpack Ink (`androidx.ink`) im Heft.
-  - [x] **Handschrifterkennung**: ML Kit Digital Ink (Lasso „In Text“, Suchindex).
+  - [x] **Handschrifterkennung**: ML Kit Digital Ink (Suchindex).
   - [ ] **Dokumentenscanner (Dual-Modus)**: ML Kit Document Scanner ✅; eigener Bild-Scanner und Auswahl zwischen beiden fehlen.
   - [x] **Hintergrund-Sync**: WorkManager, stündlich ein Cloudflare-Durchgang mit Netz (`sync/BackgroundWork.kt`).
   - [ ] **Sicherheit**: Sync-Schlüssel im Keystore ✅; Drive-Token nur im Arbeitsspeicher ✅; KI-API-Schlüssel liegen wie in der PWA in `settings.aiProviders` (reisen E2EE mit dem Sync; `SecretBox` brächte dort nichts, weil der Kern sie ohnehin speichert).

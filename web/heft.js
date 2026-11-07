@@ -27,8 +27,7 @@ import {
 	drawLassoSelection,
 	updateLassoBarUI,
 	duplicateLassoStrokes,
-	deleteLassoStrokes,
-	recognizeLassoText
+	deleteLassoStrokes
 } from "./heft-lasso.js";
 import { loadToolPrefs, saveToolPrefs as persistToolPrefs } from "./heft-tools.js";
 import { TRAY_DOCK_PX, trayCss, toolbarHtml as buildToolbarHtml, plusPopHtml as buildPlusPopHtml, imgPopHtml } from "./heft-toolbar-ui.js";
@@ -42,7 +41,6 @@ import {
 	fileToImageData,
 	imagePage as createImagePage,
 	insertImageFile as runInsertImageFile,
-	addImagePageFromFile as runAddImagePageFromFile,
 	importPdf as runImportPdf,
 	importFilesIntoHeft as runImportFilesIntoHeft,
 	openImportDialog as renderImportDialog,
@@ -1129,10 +1127,6 @@ export const HEFT = (() => {
 		updateLassoBarUI(host, lassoSel, lead);
 	}
 
-	function recognizeLassoSelection() {
-		recognizeLassoText(lassoSel, HANDSCHRIFT, U.toast, PERF_PROFILER);
-	}
-
 	function duplicateLassoSelection() {
 		const next = duplicateLassoStrokes(lassoSel, doc, pushUndo);
 		if (!next) return;
@@ -1307,15 +1301,6 @@ export const HEFT = (() => {
 		});
 	}
 
-	async function addImagePageFromFile(f) {
-		return runAddImagePageFromFile(f, {
-			getPage: page,
-			addPageAt,
-			blobRef,
-			newPage
-		});
-	}
-
 	function importFiles() {
 		return runImportFiles({
 			pickFiles: filePick,
@@ -1401,7 +1386,6 @@ export const HEFT = (() => {
 		}
 		if (d.henavback) { BUS.emit("tabs:nav-back"); return; }
 		if (d.henavforward) { BUS.emit("tabs:nav-forward"); return; }
-		if (d.helassotext) { recognizeLassoSelection(); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }
 		if (d.helassodel) { deleteLassoSelection(); return; }
 		if (d.helassoclear) { dropLasso(); updateChrome(); return; }
@@ -1447,7 +1431,6 @@ export const HEFT = (() => {
 		}
 		if (d.headdtpl) { closePop(); addPageAt(d.headdtpl); return; }
 		if (d.headdend) { addPageAtEnd(); return; }
-		if (d.headdimg) { closePop(); pickImage(false, addImagePageFromFile); return; }
 		if (d.heimport) { closePop(); importFiles(); return; }
 		if (d.hescan) { closePop(); openScanner(); return; }
 		if (d.hetextadd) { closePop(); openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }

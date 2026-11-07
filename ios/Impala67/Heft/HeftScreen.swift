@@ -4,9 +4,9 @@ import UniformTypeIdentifiers
 
 /// Heft: alle Seiten in einer Fläche auf dem Arbeitsflächen-Hintergrund der PWA. Stifte, Farben, Radierer
 /// und Lasso kommen nur aus Apples Werkzeugleiste (PencilKit). Darüber schweben (Liquid Glass) links die
-/// Seitenanzeige (öffnet die Übersicht), rechts „+“ (ein Panel wie `plusPopHtml`: neue Seite davor/danach/
-/// am Ende, Papier, Text, Bild, Kamera, Handschrift → Text, Import, Scannen) und Teilen. Bilder und Texte
-/// werden direkt angetippt bzw. gehalten (`HeftSelectLayer`).
+/// Seitenanzeige (öffnet die Übersicht samt Teilen), rechts „+“ (ein Panel wie `plusPopHtml`: neue Seite
+/// davor/danach/am Ende, Papier, Text, Bild, Kamera, Import, Scannen). Bilder und Texte werden direkt
+/// angetippt bzw. gehalten (`HeftSelectLayer`).
 struct HeftScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
@@ -19,23 +19,17 @@ struct HeftScreen: View {
     @State private var revision = 0
     @State private var showPages = false
     @State private var link = HeftCanvasLink()
-    @State private var photoTarget: PhotoTarget?
+    @State private var pickPhoto = false
     @State private var photos: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showScanner = false
     @State private var showImporter = false
-    @State private var share: SharedFile?
     @State private var busy: String?
-    @State private var showExportDialog = false
     @State private var currentPaper: String?
-    @State private var exportTask: Task<Void, Never>?
     @State private var showAdd = false
     /// Wo „Neue Seite“ einfügt (`insertPos` der PWA): before, after, last.
     @AppStorage("impala.heft.insertPos") private var insertPos = "after"
     @Namespace private var namespace
-
-    /// Wohin ausgewählte Fotos gehen: auf die Seite oder je als neue Seite.
-    private enum PhotoTarget { case insert, page }
 
     private var index: Int { currentId.flatMap { pageIds.firstIndex(of: $0) } ?? 0 }
 
@@ -44,7 +38,7 @@ struct HeftScreen: View {
             if !pageIds.isEmpty {
                 // Alle Seiten untereinander in einer Fläche (wie `.heft-pages` der PWA).
                 HeftCanvas(core: store.core, pageId: pageId, pageIds: pageIds, initialPageId: currentId, revision: revision,
-                           link: link, lassoText: link.lassoText,
+                           link: link,
                            onCurrentPage: { id in if currentId != id { currentId = id } },
                            onPullAdd: { addPage(nil) })
                     .ignoresSafeArea(edges: .bottom)
@@ -52,7 +46,7 @@ struct HeftScreen: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             VStack(alignment: .trailing, spacing: Space.s2) {
-                // Links Seiten, rechts Bilder, „+“ und Teilen. Zeichenwerkzeuge kommen nur aus Apples Leiste.
+                // Links Seiten (mit Teilen), rechts „+“. Zeichenwerkzeuge kommen nur aus Apples Leiste.
                 HStack(alignment: .top, spacing: Space.s2) {
                     if tabsPosition == AppTabsPosition.sidebar.rawValue {
                         GlassEffectContainer {
@@ -106,18 +100,10 @@ struct HeftScreen: View {
                     corner
                 }
                 if link.selection != nil { SelectBar(link: link) }
-                if link.lassoText { hint("Umkreise die Handschrift, die als Text erkannt werden soll.") { link.lassoText = false } }
-                if let busy {
-                    hint(busy, onCancel: {
-                        exportTask?.cancel()
-                        exportTask = nil
-                        self.busy = nil
-                    })
-                }
+                if let busy { hint(busy) }
             }
             .padding(Space.s3)
             .animation(.snappy, value: link.selection)
-            .animation(.snappy, value: link.lassoText)
         }
         .clipped()
         // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`) und Startseite beim
@@ -157,24 +143,7 @@ struct HeftScreen: View {
                           canDelete: edit.textId != nil, onSave: { saveText(edit, $0) }, onDelete: { deleteText(edit) })
                 .presentationSizing(.form)
         }
-        .sheet(item: $link.ocr) { result in
-            HeftOcrSheet(result: result) { text in link.coordinator?.replaceWithText(result, text: text, color: link.coordinator?.currentColor ?? HeftPalette.colors[0].css) }
-                .presentationSizing(.form)
-        }
-        .sheet(item: $share) { ShareSheet(items: $0.urls) }
-        .sheet(isPresented: $showExportDialog) {
-            HeftExportSheet(
-                pageId: pageId,
-                pageIds: pageIds,
-                currentId: currentId,
-                onShare: { share = $0 }
-            )
-            .presentationSizing(.form)
-        }
-        .photosPicker(
-            isPresented: Binding(get: { photoTarget != nil }, set: { if !$0 && photos.isEmpty { photoTarget = nil } }),
-            selection: $photos, maxSelectionCount: photoTarget == .insert ? 1 : 20, matching: .images
-        )
+        .photosPicker(isPresented: $pickPhoto, selection: $photos, maxSelectionCount: 1, matching: .images)
         .onChange(of: photos) { _, items in
             guard !items.isEmpty else { return }
             Task { await importPhotos(items) }
@@ -202,14 +171,14 @@ struct HeftScreen: View {
 
     // MARK: Leisten
 
-    /// Rechte Ecke: „+“ (ein Panel für Seiten und Einfügen, wie `plusPopHtml` der PWA bzw. GoodNotes)
-    /// und Teilen (Apple-Teilen-Blatt; alle Formate im Export-Dialog).
+    /// Rechte Ecke: „+“ (ein Panel für Seiten und Einfügen, wie `plusPopHtml` der PWA bzw. GoodNotes).
+    /// Teilen sitzt in der Seitenübersicht.
     private var corner: some View {
         GlassEffectContainer {
             HStack(spacing: 2) {
                 Button { showAdd = true } label: {
                     Icon("plus", size: 18)
-                        .foregroundStyle(link.lassoText ? Impala.accent : Impala.text)
+                        .foregroundStyle(Impala.text)
                         .frame(width: 40, height: 40)
                         .contentShape(Rectangle())
                 }
@@ -221,50 +190,13 @@ struct HeftScreen: View {
                         onAdd: { kind in showAdd = false; addPage(kind, at: insertPos) },
                         onPaper: setPaper,
                         onText: { afterPanel(newText) },
-                        onImage: { afterPanel { photos = []; photoTarget = .insert } },
+                        onImage: { afterPanel { photos = []; pickPhoto = true } },
                         onCamera: CameraPicker.isAvailable ? { afterPanel { showCamera = true } } : nil,
-                        onLassoText: { showAdd = false; link.coordinator?.clearSelection(); link.lassoText = true },
-                        onImagePage: { afterPanel { photos = []; photoTarget = .page } },
                         onImport: { afterPanel { showImporter = true } },
                         onScan: DocumentScanner.isAvailable ? { afterPanel { showScanner = true } } : nil
                     )
                     .presentationCompactAdaptation(.popover)
                 }
-                Menu {
-                    Button {
-                        exportCurrentPng()
-                    } label: {
-                        Label { Text("Seite als Bild") } icon: { Icon("image") }
-                    }
-                    Button {
-                        exportPdf()
-                    } label: {
-                        Label { Text("Heft als PDF") } icon: { Icon("printer") }
-                    }
-                    Button {
-                        exportSvg()
-                    } label: {
-                        Label { Text("Seite als SVG") } icon: { Icon("download") }
-                    }
-                    Button {
-                        UIPasteboard.general.string = "#" + pageId
-                    } label: {
-                        Label { Text("Internen Link kopieren") } icon: { Icon("link") }
-                    }
-                    Divider()
-                    Button {
-                        showExportDialog = true
-                    } label: {
-                        Label { Text("Mehr …") } icon: { Icon("upload") }
-                    }
-                } label: {
-                    Icon("upload", size: 18)
-                        .foregroundStyle(Impala.text)
-                        .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Exportieren & Teilen")
             }
             .padding(.horizontal, Space.s1)
             .frame(height: 48)
@@ -282,12 +214,9 @@ struct HeftScreen: View {
         }
     }
 
-    private func hint(_ text: String, onCancel: (() -> Void)?) -> some View {
+    private func hint(_ text: String) -> some View {
         HStack(spacing: Space.s2) {
             Text(text).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text)
-            if let onCancel {
-                Button("Abbrechen", action: onCancel).font(.system(size: TextSize.sm, weight: .semibold))
-            }
         }
         .padding(.horizontal, Space.s3)
         .frame(minHeight: 40)
@@ -351,41 +280,22 @@ struct HeftScreen: View {
 
     // MARK: Bilder und Texte
 
+    /// Ausgewähltes Foto auf die aktuelle Seite (Bilder als eigene Seiten kommen über den Import).
     private func importPhotos(_ items: [PhotosPickerItem]) async {
-        let target = photoTarget
-        var images: [UIImage] = []
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) { images.append(img) }
-        }
+        let data = try? await items.first?.loadTransferable(type: Data.self)
         photos = []
-        photoTarget = nil
-        switch target {
-        case .insert: if let img = images.first { insertImage(img) }
-        case .page:
-            var at = index + 1
-            var last: String?
-            for img in images {
-                if let id = HeftImport.addImagePage(core: store.core, pageId: pageId, image: img, at: at, bleed: false) {
-                    last = id
-                    at += 1
-                }
-            }
-            pagesAdded(last)
-        case nil: break
-        }
+        if let data, let img = UIImage(data: data) { insertImage(img) }
     }
 
     /// Bild auf die aktuelle Seite; danach ist es ausgewählt (verschieben, skalieren, löschen).
     private func insertImage(_ image: UIImage) {
         guard let id = currentId,
               let imageId = HeftImport.insertImage(core: store.core, pageId: pageId, heftPageId: id, image: image) else { return }
-        link.lassoText = false
         link.coordinator?.reload()
         link.coordinator?.selectAfterReload(.image(imageId))
     }
 
     private func newText() {
-        link.lassoText = false
         link.textEdit = HeftTextEdit(textId: nil, text: "")
     }
 
@@ -405,48 +315,12 @@ struct HeftScreen: View {
         link.selection = nil
     }
 
-    // MARK: Export
-
-    private func exportCurrentPng(background: HeftBackground = .paper) {
-        guard let id = currentId else { return }
-        let pageNum = index + 1
-        runExport("Erzeuge Bild …") { _ in
-            let url = await HeftExport.pagePng(core: store.core, pageId: pageId, heftPageId: id, pageNumber: pageNum, background: background)
-            if let url { share = SharedFile(url: url) }
-        }
-    }
-
-    private func exportPdf() {
-        runExport("Erzeuge PDF …") { onStatus in
-            let url = await HeftExport.pdf(core: store.core, pageId: pageId, onProgress: onStatus)
-            if let url { share = SharedFile(url: url) }
-        }
-    }
-
-    private func exportSvg() {
-        guard let id = currentId, let url = HeftExport.svg(core: store.core, pageId: pageId, heftPageId: id) else { return }
-        share = SharedFile(url: url)
-    }
-
-    /// Längere Hintergrundarbeit ausführen; Aktualisierungen des Hinweistextes laufen auf dem MainActor.
     /// Längere Arbeit nach dem nächsten Bild ausführen, damit der Hinweis vorher erscheint (Import).
     private func run(_ status: String, _ work: @escaping () -> Void) {
         busy = status
         Task {
             try? await Task.sleep(for: .milliseconds(60))
             work()
-            busy = nil
-        }
-    }
-
-    private func runExport(_ initialStatus: String, _ work: @escaping (@escaping @Sendable (String) -> Void) async -> Void) {
-        busy = initialStatus
-        exportTask?.cancel()
-        exportTask = Task {
-            await Task.yield()
-            await work { status in
-                Task { @MainActor in busy = status }
-            }
             busy = nil
         }
     }
@@ -523,8 +397,6 @@ private struct HeftAddPanel: View {
     let onText: () -> Void
     let onImage: () -> Void
     let onCamera: (() -> Void)?
-    let onLassoText: () -> Void
-    let onImagePage: () -> Void
     let onImport: () -> Void
     let onScan: (() -> Void)?
 
@@ -574,15 +446,13 @@ private struct HeftAddPanel: View {
 
                 Divider()
                 head("Einfügen")
-                row("Text schreiben", "pen", onText)
-                row("Bild hinzufügen", "image", onImage)
-                if let onCamera { row("Bild aufnehmen", "camera", onCamera) }
-                row("Handschrift → Text", "note", onLassoText)
+                row("Text", "pen", onText)
+                row("Bild", "image", onImage)
+                if let onCamera { row("Foto aufnehmen", "camera", onCamera) }
 
                 Divider()
                 head("Seiten aus Dateien")
-                row("Bild als Seite", "image", onImagePage)
-                row("PDF oder Bild importieren", "upload", onImport)
+                row("PDF oder Bilder importieren", "upload", onImport)
                 if let onScan { row("Dokument scannen", "camera", onScan) }
 
                 Text("Bild oder Text antippen oder halten, dann verschieben, skalieren oder löschen.")

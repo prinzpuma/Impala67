@@ -58,8 +58,7 @@ class HeftPageActions(
     val remove: () -> Unit,
     val canRemove: Boolean,
     val scan: () -> Unit,
-    /** „Bild als Seite“ und „PDF oder Bild importieren“ (heft-toolbar-ui.js `plusPopHtml`). */
-    val imagePage: () -> Unit,
+    /** „PDF oder Bild importieren“ (heft-toolbar-ui.js `plusPopHtml`): je Bild bzw. PDF-Seite eine Seite. */
     val importFiles: () -> Unit,
     val overview: () -> Unit,
     /** Papier der aktuellen Seite (im Menü markiert). */
@@ -130,10 +129,6 @@ fun HeftAddMenu(expanded: Boolean, onDismiss: () -> Unit, actions: HeftPageActio
             }
             HorizontalDivider(color = c.edgeSoft)
             Column {
-                PopActionRow("Bild als Seite", R.drawable.ic_i_image) {
-                    onDismiss()
-                    actions.imagePage()
-                }
                 PopActionRow("PDF oder Bild importieren", R.drawable.ic_i_upload) {
                     onDismiss()
                     actions.importFiles()

@@ -164,7 +164,6 @@ export function plusPopHtml({ insertPos, curPaper }, renderIcon = icon) {
 		'<div class="heft-paper-chips">' + PAPERS.map((p) => '<button type="button" class="heft-paper-chip' + (p[0] === curPaper ? " active" : "") + '" data-hesetpaper="' + p[0] + '">' +
 			'<i class="heft-tpl-paper heft-tpl-' + p[0] + '"></i>' + p[2] + '</button>').join("") + '</div>' +
 		'<div class="heft-pop-sep"></div>' +
-		'<button type="button" class="heft-pop-row" data-headdimg="1">' + renderIcon("image") + 'Bild als Seite</button>' +
 		'<button type="button" class="heft-pop-row" data-heimport="1">' + renderIcon("upload") + 'PDF oder Bild importieren</button>' +
 		'<button type="button" class="heft-pop-row" data-hescan="1">' + renderIcon("camera") + 'Dokument scannen</button>';
 }

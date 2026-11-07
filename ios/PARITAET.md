@@ -397,7 +397,6 @@ Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilK
 |---|---|---|
 | Bilder/Texte auswählen, verschieben, skalieren | ✅ | `Heft/HeftObjectEdit.swift:24-110` |
 | Text direkt auf der Seite schreiben | 🟡 | Sheet statt direkt |
-| Handschrift → Text (Lasso) | ✅ | `Heft/HeftOcr.swift` |
 | Lasso: Duplizieren | 🟡 | fehlt (Text, Löschen da) |
 | Entf löscht Auswahl | 🟡 | nur über Leiste |
 

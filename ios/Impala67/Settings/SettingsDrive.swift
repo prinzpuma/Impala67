@@ -38,14 +38,14 @@ struct DriveSections: View {
                                 Text(buttonLabel).contentTransition(.interpolate)
                             }
                         }
-                        .buttonStyle(.glassProminent)
+                        .settingsButton(.primary)
                         .disabled(busy || drive.running || (!drive.hasClient && !(drive.connected && !drive.needsLogin)))
 
                         if drive.connected {
                             Button("Abmelden", role: .destructive) {
                                 Task { await drive.logout() }
                             }
-                            .buttonStyle(.glass)
+                            .settingsButton(.danger)
                         }
                     }
                 }
@@ -79,10 +79,25 @@ struct DriveSections: View {
 
             if let s = drive.storage, drive.connected {
                 SettingsDivider()
-                SettingsRow(
-                    title: "Verwendeter Drive-Speicher",
-                    description: "\(bytes(s.appBytes)) im App-Ordner · \(bytes(s.usedBytes)) von \(s.limitBytes > 0 ? bytes(s.limitBytes) : "unbegrenzt") belegt"
-                )
+                HStack(alignment: .center, spacing: Space.s3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Verwendeter Drive-Speicher")
+                            .font(.system(size: TextSize.base, weight: .semibold))
+                            .foregroundStyle(Impala.text)
+                        Text("\(bytes(s.appBytes)) im App-Ordner · \(bytes(s.usedBytes)) von \(s.limitBytes > 0 ? bytes(s.limitBytes) : "unbegrenzt") belegt")
+                            .font(.system(size: TextSize.sm))
+                            .foregroundStyle(Impala.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if s.limitBytes > 0 {
+                            SettingsMeter(fraction: min(max(s.usedBytes / s.limitBytes, 0.02), 1.0))
+                                .padding(.top, 4)
+                        }
+                    }
+                    Spacer(minLength: Space.s2)
+                }
+                .frame(minHeight: 58)
+                .padding(.horizontal, Space.s4)
+                .padding(.vertical, 12)
             }
 
             if drive.connected && !drive.needsLogin {
@@ -92,7 +107,7 @@ struct DriveSections: View {
                     description: "Holt alles aus dem Drive-Backup, was diesem iPad fehlt. Löscht nichts."
                 ) {
                     Button("Wiederherstellen") { Task { await drive.sync(restore: true) } }
-                        .buttonStyle(.glass)
+                        .settingsButton(.secondary)
                         .disabled(drive.running)
                 }
             }
@@ -122,6 +137,14 @@ struct DriveSections: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
+                    .tint(Impala.text)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.sm)
+                            .strokeBorder(Impala.edgeSoft, lineWidth: 1)
+                    )
                     .disabled(!info.selectable)
                 }
                 SettingsDivider()
@@ -135,6 +158,14 @@ struct DriveSections: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
+                .tint(Impala.text)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm)
+                        .strokeBorder(Impala.edgeSoft, lineWidth: 1)
+                )
             }
             .onChange(of: interval) { _, minutes in
                 if minutes != drive.intervalMinutes { drive.intervalMinutes = minutes }
@@ -173,27 +204,28 @@ struct DriveSections: View {
 
         // MARK: - Erweitert
         SettingsCardGroup(title: "Erweitert") {
-            DisclosureGroup("Google Client-ID", isExpanded: $showAdvanced) {
-                VStack(alignment: .leading, spacing: Space.s2) {
-                    Text("OAuth-Webclient-ID für benutzerdefinierte Google-Integrationen")
-                        .font(.system(size: TextSize.sm))
-                        .foregroundStyle(Impala.text2)
-                    TextField("OAuth-Webclient-ID", text: $clientId)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    HStack {
-                        Spacer()
+            SettingsDisclosure(
+                title: "Google Client-ID",
+                subtitle: "OAuth-Webclient-ID für eigene Google-Projekte",
+                isExpanded: $showAdvanced
+            ) {
+                SettingsInputRow(
+                    title: "Client-ID",
+                    description: "Wird gerätelokal für den OAuth-Flow hinterlegt"
+                ) {
+                    HStack(spacing: Space.s2) {
+                        TextField("OAuth-Webclient-ID", text: $clientId)
+                            .settingsInputStyle()
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
                         Button("Speichern") {
                             AiSettings.patch(store.core, ["driveClientId": clientId.trimmingCharacters(in: .whitespacesAndNewlines)])
                         }
-                        .buttonStyle(.glassProminent)
+                        .settingsButton(.primary)
                     }
                 }
-                .padding(.vertical, 4)
             }
-            .padding(.horizontal, Space.s4)
-            .padding(.vertical, Space.s2 + 2)
         }
         // Beim Erscheinen und bei jeder Einstellungsänderung genau einmal (Lesen + Parsen im Hintergrund).
         .task(id: store.settingsRevision) { await loadSettings() }

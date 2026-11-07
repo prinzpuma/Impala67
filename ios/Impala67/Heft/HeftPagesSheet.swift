@@ -5,7 +5,8 @@ func seitenZahl(_ n: Int) -> String { "\(n) " + (n == 1 ? "Seite" : "Seiten") }
 
 /// Seitenübersicht des Hefts (heft-pages-ui.js, Android `HeftPagesSheet`/`HeftPagesGrid`): Raster mit
 /// Vorschaubildern, die aktive Seite umrandet. Antippen springt zur Seite, Ziehen sortiert um
-/// (`heftMovePage`), Halten öffnet Papier und Löschen, „Auswählen“ löscht mehrere Seiten auf einmal.
+/// (`heftMovePage`), Halten öffnet Papier und Löschen, „Auswählen“ teilt oder löscht mehrere Seiten auf
+/// einmal. Teilen (Export, Link) sitzt hier wie in der PWA und GoodNotes, nicht in der Heft-Leiste.
 /// Am Ende „Neue Seite“ (Tippen: Papier der letzten Seite, Halten: Papier wählen).
 struct HeftPagesSheet: View {
     @Environment(ImpalaStore.self) private var store
@@ -27,7 +28,15 @@ struct HeftPagesSheet: View {
     @State private var selected: Set<String> = []
     @State private var deleting: [String] = []
     @State private var dropTarget: String?
+    /// Export-Dialog offen: ausgewählte Seiten bzw. nil = aktuelle oder alle.
+    @State private var exporting: ExportRequest?
+    @State private var share: SharedFile?
     @Environment(\.displayScale) private var displayScale
+
+    private struct ExportRequest: Identifiable {
+        let id = UUID()
+        let only: [String]?
+    }
 
     private static let tileWidth: CGFloat = 150
 
@@ -63,11 +72,30 @@ struct HeftPagesSheet: View {
                     if picking {
                         Button("Fertig") { endPicking() }
                     } else {
-                        Button { dismiss() } label: { Icon("x", size: 15) }
-                            .accessibilityLabel("Schließen")
+                        HStack(spacing: Space.s3) {
+                            Menu {
+                                Button { exporting = ExportRequest(only: nil) } label: {
+                                    Label { Text("Exportieren …") } icon: { Icon("upload") }
+                                }
+                                Button { UIPasteboard.general.string = "#" + pageId } label: {
+                                    Label { Text("Internen Link kopieren") } icon: { Icon("link") }
+                                }
+                            } label: { Icon("share", size: 16) }
+                            .accessibilityLabel("Teilen")
+                            Button { dismiss() } label: { Icon("x", size: 15) }
+                                .accessibilityLabel("Schließen")
+                        }
                     }
                 }
                 if picking {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button {
+                            exporting = ExportRequest(only: pageIds.filter { selected.contains($0) })
+                        } label: {
+                            Label("Teilen (\(selected.count))", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(selected.isEmpty)
+                    }
                     ToolbarItem(placement: .bottomBar) {
                         Button(role: .destructive) {
                             deleting = pageIds.filter { selected.contains($0) }
@@ -81,6 +109,11 @@ struct HeftPagesSheet: View {
             }
         }
         .sensoryFeedback(.selection, trigger: selected)
+        .sheet(item: $exporting) { req in
+            HeftExportSheet(pageId: pageId, pageIds: pageIds, currentId: currentId, only: req.only) { share = $0 }
+                .presentationSizing(.form)
+        }
+        .sheet(item: $share) { ShareSheet(items: $0.urls) }
         .confirmationDialog(
             "Löschen",
             isPresented: Binding(get: { !deleting.isEmpty }, set: { if !$0 { deleting = [] } }),

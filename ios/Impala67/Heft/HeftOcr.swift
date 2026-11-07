@@ -3,10 +3,9 @@ import SwiftUI
 import UIKit
 import Vision
 
-/// Handschrift-Erkennung auf dem iPad mit Apple Vision (Deutsch und Englisch, auf dem Gerät):
-/// - „In Text“ im Lasso (`recognize`, wie `recognizeLassoText` in `heft-lasso.js`).
-/// - Automatische Seiten-Erkennung für Suche & KI (`schedule`, `startBackgroundScan`, Quelle `"apple"`,
-///   höchste Stufe über `"android"` und `"pwa"`).
+/// Handschrift-Erkennung auf dem iPad mit Apple Vision (Deutsch und Englisch, auf dem Gerät): automatische
+/// Seiten-Erkennung für Suche & KI (`schedule`, `startBackgroundScan`, Quelle `"apple"`, höchste Stufe über
+/// `"android"` und `"pwa"`). Handschrift in Text umwandeln macht die KI über das Seitenbild.
 enum HeftOcr {
     private static let src = "apple"
     /// Nach dem letzten Strich warten, bevor die Seite erkannt wird (`PRIORITY_DEBOUNCE_MS` in heft-indexer.js).
@@ -137,58 +136,5 @@ enum HeftOcr {
     static func stopBackgroundScan() {
         bgTask?.cancel()
         bgTask = nil
-    }
-}
-
-/// Ergebnis der Erkennung: Text, umkreiste Striche und ihr Rahmen (Seitenkoordinaten).
-struct HeftOcrResult: Identifiable {
-    let id = UUID()
-    var text: String
-    let strokeIds: [String]
-    let bounds: CGRect
-    /// Heftseite der Striche (alle Seiten liegen in einer durchlaufenden Ansicht).
-    var heftPageId: String = ""
-}
-
-/// Erkannter Text zum Prüfen: kopieren oder die Striche durch ein Textfeld ersetzen.
-struct HeftOcrSheet: View {
-    let result: HeftOcrResult
-    let onReplace: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var text = ""
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: Space.s3) {
-                if result.text.isEmpty {
-                    Text("Keine Handschrift erkannt. Umkreise die Striche etwas großzügiger.")
-                        .font(.system(size: TextSize.sm))
-                        .foregroundStyle(Impala.text2)
-                }
-                TextEditor(text: $text)
-                    .font(.system(size: TextSize.lg))
-                    .scrollContentBackground(.hidden)
-                    .padding(Space.s2)
-                    .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.sm))
-                HStack(spacing: Space.s2) {
-                    TintButton(title: "Kopieren") {
-                        UIPasteboard.general.string = text
-                        dismiss()
-                    }
-                    TintButton(title: "Als Textfeld ersetzen", strong: true) {
-                        onReplace(text)
-                        dismiss()
-                    }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .padding(Space.s4)
-            .navigationTitle("Handschrift → Text")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } }
-            }
-        }
-        .onAppear { text = result.text }
     }
 }

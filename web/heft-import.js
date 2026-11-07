@@ -134,27 +134,6 @@ export async function insertImageFile(f, {
 	}
 }
 
-export async function addImagePageFromFile(f, {
-	getPage,
-	addPageAt,
-	blobRef,
-	newPage,
-	pageW = PAGE_W,
-	pageH = PAGE_H
-} = {}) {
-	try {
-		const im = await fileToImageData(f, 1600);
-		const pg = typeof getPage === "function" ? getPage() : getPage;
-		const paper = pg ? pg.paper : "blank";
-		const newPg = imagePage(im, paper, false, { blobRef, newPage, pageW, pageH });
-		if (addPageAt) addPageAt(null, newPg);
-		return newPg;
-	} catch (e) {
-		console.warn("Heft: Bild-Seite fehlgeschlagen", e);
-		return null;
-	}
-}
-
 export async function importPdf(f, at, targetDoc, {
 	blobRef,
 	newPage,

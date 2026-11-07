@@ -895,7 +895,6 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Position Davor / Danach / Am Ende** – Segment-Auswahl; Standard „Danach“ (web/heft-toolbar-ui.js:194, 200; web/heft.js:1451-1455, 162, 1690; heft.js:1217-1220) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu` (Segmentwahl, Standard „Danach“, gilt für die Sitzung)
 - [x] **Vorlage Liniert / Kariert / Punkte / Blanko** – Tipp legt Seite mit Papier an (web/heft-toolbar-ui.js:196-201; web/heft.js:1456; web/heft-tools.js:8) — Kotlin: ✅ HeftCorners.kt:115-171 (Mini-Vorschau), HeftTopBar.kt:73-75 (Menü)
 - [x] **Papier dieser Seite** – Chips zum Umstellen (web/heft-toolbar-ui.js:202-204; web/heft.js:1501-1506) — Kotlin: ✅ HeftCorners.kt:89-97, HeftTopBar.kt:95-98
-- [x] **Bild als Seite** – Bilddatei als eigene Seite mit 40 Rand, Papier der aktuellen Seite, am Ende (web/heft-toolbar-ui.js:206; web/heft.js:1458; web/heft-import.js:79-99, 137-156) — Kotlin: ✅ HeftCorners.kt `HeftAddMenu`, scan/HeftScan.kt `insertImagePage`
 - [x] **PDF oder Bild importieren** – öffnet Import-Dialog (web/heft-toolbar-ui.js:207; web/heft.js:1459) — Kotlin: ✅ HeftTransfer.kt `HeftImportDialog` (Ort: beliebiges Heft oder „Als neue Notiz-Seite(n)“, Position)
 - [x] **Dokument scannen** – öffnet Scanner (web/heft-toolbar-ui.js:208; web/heft.js:1460) — Kotlin: ✅ HeftCorners.kt:99-102, HeftTopBar.kt:77-81 (ML Kit, siehe Abschnitt 15)
 
@@ -939,7 +938,6 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 - [x] **Eckgriff ziehen = proportional skalieren** (Faktor 0,15–6, Grenzen am Seitenrand; web/heft-input.js:133-153, 292-326) — Kotlin: ✅ HeftLasso.kt:81-90, 110-115 (Grenzen im Kern; Faktorbereich nicht geprüft)
 - [x] **Tipp außerhalb beendet Lasso, Stift mit offenen Optionen** (web/heft-input.js:116-122) — Kotlin: ✅ HeftViewModel.kt:186-189
 - [x] **Finger auf Auswahl greift, Finger daneben beendet** (web/heft-lasso.js:97; web/heft-input.js:115) — Kotlin: ✅ HeftInput.kt:77-84
-- [x] **Aktionsleiste „In Text“** – Handschrifterkennung, Text in Zwischenablage, Meldung (web/heft-lasso.js:173, 209-240; web/heft.js:1411) — Kotlin: ✅ HeftLassoBar.kt:41-54 (ML Kit statt ONNX, Modell wird nachgeladen; HandwritingRecognizer.kt)
 - [x] **Aktionsleiste „Duplizieren“** – Kopie 28 Einheiten versetzt, Auswahl wandert auf Kopie (web/heft-lasso.js:174, 183-193; web/heft.js:1413) — Kotlin: ✅ HeftLassoBar.kt:55, HeftViewModel.kt:227-231
 - [x] **Aktionsleiste „Löschen“** (web/heft-lasso.js:175, 198-207; web/heft.js:1414) — Kotlin: ✅ HeftLassoBar.kt:56, HeftViewModel.kt:233-237
 - [ ] **Aktionsleiste „KI-Trainingsbeispiel“** – Eingabefeld für Text, Speichern als Trainingsbeispiel (web/heft-lasso.js:176, 245-259; web/heft.js:1412) — Kotlin: ⬜ bewusst entfallen (HeftLassoBar.kt:33)
@@ -1064,7 +1062,6 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 - [ ] **Automatische Handschrift-Indexierung nach Strichen (Suche)** – PWA: Hintergrund-Warteschlange (web/heft-indexer.js:250-350), nicht nur 3,5 s; Kotlin: pro Seite 3,5 s verzögert (ink/HeftIndexer.kt:21-37, 47-55) — Kotlin: 🟡 ink/HeftIndexer.kt (anderer Ablauf; Kommentar „wie in der PWA“ stimmt so nicht)
 - [ ] **Seiten mit Scan-Text werden übersprungen** (ink/HeftIndexer.kt:11-16, 42) — Kotlin: 🟡 (PWA-Verhalten nicht geprüft)
-- [x] **Erkennung als Text (Lasso „In Text“)** (Abschnitt 8) — Kotlin: ✅ ink/HandwritingRecognizer.kt (ML Kit Deutsch)
 - [ ] **Erkennungsmodell: lokales ONNX, ca. 10 MB** (web/settings-renderer.js:263-283; web/handschrift.js) — Kotlin: 🟡 ink/HandwritingRecognizer.kt (ML Kit Digital Ink, Modell-Download bei Bedarf; Einstellungen nur Platzhalter, settings/SettingsAiSync.kt:40)
 - [ ] **Fortschritt „x % der Handschrift analysiert“ in den Einstellungen** (web/heft-index-progress.js:14-20; web/settings-renderer.js:272; web/settings.js:1253-1255) — Kotlin: ⬜
 - [ ] **Anzahl gesammelter Trainingsbeispiele** (web/settings-renderer.js:268-269) — Kotlin: ⬜
