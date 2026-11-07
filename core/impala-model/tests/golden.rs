@@ -434,3 +434,54 @@ fn konflikt_dialog_wie_js() {
         assert_same(&json!(rows), &d["rows"], "alignDiffRows");
     }
 }
+
+
+#[test]
+fn bibliothek_wie_js() {
+    use impala_model::library::{
+        archive_tree, default_cover, folder_tone, gn_order_of_page, gn_shelf, notion_tree, sidebar_tree_rows,
+    };
+    let g = golden("library.json");
+    for c in g["covers"].as_array().unwrap() {
+        assert_eq!(
+            default_cover(c["title"].as_str().unwrap(), c["id"].as_str().unwrap()),
+            c["cover"].as_str().unwrap()
+        );
+    }
+    for t in g["tones"].as_array().unwrap() {
+        assert_eq!(folder_tone(t["key"].as_str().unwrap()), t["tone"].as_str().unwrap());
+    }
+    for o in g["gnOrders"].as_array().unwrap() {
+        let p = Page::from_object(o["item"].as_object().unwrap().clone());
+        assert_eq!(gn_order_of_page(&p), o["expected"].as_f64().unwrap());
+    }
+    let st = State::from_object(g["state"].as_object().unwrap().clone());
+    assert_same(
+        &serde_json::to_value(notion_tree(&st, None, None, "")).unwrap(),
+        &g["expectedNotionAll"],
+        "notion_tree all",
+    );
+    assert_same(
+        &serde_json::to_value(notion_tree(&st, None, None, "script")).unwrap(),
+        &g["expectedNotionSearchScript"],
+        "notion_tree search script",
+    );
+    assert_same(
+        &serde_json::to_value(archive_tree(&st, "all", "")).unwrap(),
+        &g["expectedArchiveAll"],
+        "archive_tree all",
+    );
+    assert_same(
+        &serde_json::to_value(gn_shelf(&st, None, "all", "")).unwrap(),
+        &g["expectedShelfRoot"],
+        "gn_shelf root",
+    );
+    assert_same(
+        &serde_json::to_value(gn_shelf(&st, Some("f1"), "all", "")).unwrap(),
+        &g["expectedShelfF1"],
+        "gn_shelf f1",
+    );
+    let sb = sidebar_tree_rows(&st);
+    assert!(sb.iter().any(|r| r.row_id == "head:fav"));
+    assert!(sb.iter().any(|r| r.row_id == "tree:p2" && r.depth == 1));
+}

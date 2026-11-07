@@ -10,6 +10,7 @@ pub mod conflict;
 pub mod event;
 pub mod js;
 pub mod jsmap;
+pub mod library;
 pub mod merge;
 pub mod migrate;
 pub mod model;
