@@ -104,9 +104,27 @@ impl SqliteStorage {
     fn init(mut conn: Connection) -> Result<Self, Error> {
         // journal_mode liefert eine Zeile zurück („wal“ bzw. „memory“).
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(())).map_err(db)?;
-        conn.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;").map_err(db)?;
+        // journal_size_limit: Nach jedem WAL-Checkpoint schrumpft das Schreib-Log wieder auf
+        // höchstens 4 MB, statt so groß zu bleiben wie die größte Schreibspitze.
+        conn.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA journal_size_limit = 4194304;")
+            .map_err(db)?;
         migrate(&mut conn)?;
         Ok(Self { conn })
+    }
+
+    /// Platz gelöschter Zeilen ans System zurückgeben: SQLite verwendet freie Seiten nur wieder,
+    /// die Datei schrumpft nie von selbst. `VACUUM` baut sie neu – nur, wenn mindestens ein Viertel
+    /// (und ≥ 1 MB) leer steht, denn es schreibt die ganze Datei. Liefert, ob neu gebaut wurde.
+    pub fn reclaim(&self) -> Result<bool, Error> {
+        let pragma = |name: &str| self.conn.query_row(&format!("PRAGMA {name}"), [], |r| r.get::<_, i64>(0)).map_err(db);
+        let (pages, free, page_size) = (pragma("page_count")?, pragma("freelist_count")?, pragma("page_size")?);
+        let vacuum = free * page_size >= 1 << 20 && free * 4 >= pages;
+        if vacuum {
+            self.conn.execute_batch("VACUUM").map_err(db)?;
+        }
+        // Liefert eine Zeile (busy, log, checkpointed).
+        self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(())).map_err(db)?;
+        Ok(vacuum)
     }
 
     pub fn schema_version(&self) -> Result<u32, Error> {

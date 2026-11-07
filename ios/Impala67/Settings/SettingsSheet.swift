@@ -898,7 +898,10 @@ private struct DensityPickerRow: View {
 
 /// „App & Speicher“: Speicheranzeige, Aufschlüsselung, App-Version, Beta-Design, Gefahrenzone und Profiler.
 private struct AppSection: View {
+    @Environment(ImpalaStore.self) private var store
     @AppStorage("impala67BetaUi") private var betaUi = false
+    @State private var compacting = false
+    @State private var compactMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -991,6 +994,18 @@ private struct AppSection: View {
                 }
                 .padding(.horizontal, Space.s4)
                 .padding(.vertical, 12)
+
+                SettingsDivider()
+
+                // Wie „Log verdichten & Reste aufräumen“ der PWA (settings.js `handleStorageCompact`).
+                SettingsRow(
+                    title: "Speicher aufräumen",
+                    description: compactMessage ?? "Überholte Änderungen und nicht mehr gezeigte Heft-Bilder entfernen, freien Platz zurückgeben"
+                ) {
+                    Button(compacting ? "Räume auf…" : "Aufräumen") { compact() }
+                        .settingsButton(.secondary)
+                        .disabled(compacting)
+                }
             }
 
             // MARK: - App
@@ -1019,6 +1034,25 @@ private struct AppSection: View {
 
             // MARK: - Profiler
             ProfilerSection()
+        }
+    }
+
+    /// Kompaktiert sofort und gibt freien Platz zurück (Kern: `compact_local` + `reclaim`).
+    private func compact() {
+        compacting = true
+        let core = store.core
+        let before = AppInfo.storageBytes
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { Result { try core.compactLocal() } }.value
+            compacting = false
+            switch result {
+            case .success(let dropped):
+                let freed = max(before - AppInfo.storageBytes, 0)
+                compactMessage = "\(dropped) alte Änderungen entfernt, "
+                    + ByteCountFormatter.string(fromByteCount: freed, countStyle: .file) + " frei geworden"
+            case .failure(let error):
+                compactMessage = "Fehler beim Aufräumen: \(error.localizedDescription)"
+            }
         }
     }
 }

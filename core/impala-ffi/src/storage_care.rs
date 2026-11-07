@@ -54,6 +54,8 @@ impl Inner {
             self.model.forget_heft_blobs(&dropped_blobs);
             self.model.save_checkpoint(&mut self.storage)?;
         }
+        // Gelöschte Events und ersetzte Checkpoints geben ihren Platz erst hier frei.
+        self.storage.reclaim()?;
         Ok(dropped)
     }
 }
