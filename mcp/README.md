@@ -38,7 +38,7 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 - `impala_get_performance_trace` — Profiler-Trace inkl. App- und KI-Fehler; `enable`, `mode` (`anomalies`/`all`, Detail-Trace nur hierüber), `clear`.
 - `impala_get_ai_trace` — vollständiges KI-Debugprotokoll der Sitzung (Anfragen, Status, Dauer, Fallbacks); `clear`.
 - `impala_eval` — JavaScript in der App ausführen (Funktionsrumpf mit `return`; `S`, `STATE`, `RENDER`, `TABS`, `PERF_PROFILER`, `CLOUDFLARE_SYNC`, `DRIVE`, `SEARCH` verfügbar).
-- `impala_run_ui_action` — `open_page`, `close_active_tab`, `search_ui`, `trigger_sync`, `toggle_sidebar`.
+- `impala_run_ui_action` — `open_page`, `close_active_tab`, `search_ui`, `trigger_sync`, `toggle_sidebar`, `go_back`, `dismiss` (nur iPad).
 
 **Handschrift-Training**
 - `impala_heft_page_image` — Heftseite als Bild mit Raster plus Lesung des lokalen Modells.

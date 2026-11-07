@@ -168,6 +168,7 @@ final class DevBridge {
         case "impala_run_ui_action":
             return uiAction(args, core: core)
         case "impala_ui_tree":
+            await Self.enableAccessibilityTree()
             return uiTree(query: (args["query"] as? String) ?? "", interactive: args["interactive"] as? Bool ?? false,
                           limit: (args["limit"] as? Int) ?? 300)
         case "impala_tap":
@@ -300,6 +301,23 @@ final class DevBridge {
         case "toggle_sidebar":
             shell.toggleSidebar()
             return ["ok": true]
+        case "go_back":
+            // Wie ‹ / Escape: offenes Sheet, Bibliothek, Karten-Unteransicht, sonst Verlauf zurück.
+            let hadSheet = shell.sheet != nil
+            shell.goBack()
+            return ["ok": true, "closedSheet": hadSheet]
+        case "dismiss":
+            // Sheet der Shell schließen, sonst den obersten von UIKit/SwiftUI gezeigten Dialog.
+            if shell.sheet != nil {
+                shell.handleEscape()
+                return ["ok": true, "dismissed": "shell.sheet"]
+            }
+            let root = Self.windows().last { $0.isKeyWindow }?.rootViewController
+            var top = root
+            while let next = top?.presentedViewController { top = next }
+            guard let top, top !== root else { return ["ok": false, "note": "Nichts offen."] }
+            top.dismiss(animated: true)
+            return ["ok": true, "dismissed": String(describing: type(of: top))]
         default:
             return ["error": "Unbekannte UI-Aktion: \(action)"]
         }
@@ -309,6 +327,22 @@ final class DevBridge {
 
     /// Elemente der letzten `impala_ui_tree`-Abfrage; `impala_tap` mit `index` greift darauf zu.
     @ObservationIgnored private var lastTree: [NSObject] = []
+
+    private static var accessibilityEnabled = false
+
+    /// SwiftUI baut seinen Accessibility-Baum nur, wenn eine Bedienungshilfe oder Automatisierung
+    /// läuft. Wie XCTest/Accessibility Inspector die Automatisierung einschalten (libAccessibility,
+    /// `_AXSSetAutomationEnabled`) – erst beim ersten Baum-/Tipp-Aufruf über die Bridge, danach kurz
+    /// warten, bis SwiftUI die Elemente angelegt hat.
+    private static func enableAccessibilityTree() async {
+        guard !accessibilityEnabled else { return }
+        accessibilityEnabled = true
+        guard let lib = dlopen("/usr/lib/libAccessibility.dylib", RTLD_NOW),
+              let sym = dlsym(lib, "_AXSSetAutomationEnabled") else { return }
+        typealias SetEnabled = @convention(c) (Int32) -> Void
+        unsafeBitCast(sym, to: SetEnabled.self)(1)
+        try? await Task.sleep(for: .milliseconds(600))
+    }
 
     /// Sichtbare Fenster der App von unten nach oben (Hauptfenster, Sheets, Menüs, Alerts).
     private static func windows() -> [UIWindow] {
@@ -394,23 +428,34 @@ final class DevBridge {
 
     /// Element wie mit VoiceOver auslösen (`accessibilityActivate`); UIKit-Steuerelemente notfalls direkt.
     private func tap(_ args: [String: Any]) async -> [String: Any] {
+        await Self.enableAccessibilityTree()
         if lastTree.isEmpty || args["index"] == nil { _ = uiTree(query: "", interactive: false, limit: 0) }
         var target: NSObject?
+        var point: CGPoint?
         if let i = args["index"] as? Int, lastTree.indices.contains(i) {
             target = lastTree[i]
         } else if let label = (args["label"] as? String)?.lowercased(), !label.isEmpty {
             let named = lastTree.filter { ($0.accessibilityLabel ?? "").lowercased().contains(label) }
             target = named.first { ($0.accessibilityLabel ?? "").lowercased() == label } ?? named.first(where: Self.isInteractive) ?? named.first
-        } else if let x = args["x"] as? Double, let y = args["y"] as? Double {
+        } else if let x = (args["x"] as? NSNumber)?.doubleValue, let y = (args["y"] as? NSNumber)?.doubleValue {
             let p = CGPoint(x: x, y: y)
-            // Oberstes Fenster zuerst, dort das kleinste Element unter dem Punkt.
+            point = p
+            // Kleinstes Element unter dem Punkt; ohne Baum die UIKit-Ansicht per Hit-Test.
             target = lastTree.filter { $0.accessibilityFrame.contains(p) }
                 .min { $0.accessibilityFrame.width * $0.accessibilityFrame.height < $1.accessibilityFrame.width * $1.accessibilityFrame.height }
+                ?? Self.hitView(at: p)
         }
-        guard let el = target else { return ["error": "Kein passendes Element (erst impala_ui_tree aufrufen)."] }
+        guard let el = target else {
+            return ["error": "Kein passendes Element (\(lastTree.count) im Baum). label, index oder x/y angeben."]
+        }
         var how = "accessibilityActivate"
         var ok = el.accessibilityActivate()
-        if !ok, let control = el as? UIControl, control.isEnabled {
+        // Eingabefelder: Fokus setzen, damit impala_type danach schreiben kann.
+        if !ok, let field = Self.textInput(from: el, at: point) {
+            ok = field.becomeFirstResponder()
+            how = "becomeFirstResponder"
+        }
+        if !ok, let control = Self.control(from: el), control.isEnabled {
             control.sendActions(for: .touchUpInside)
             ok = true
             how = "UIControl.touchUpInside"
@@ -423,6 +468,35 @@ final class DevBridge {
             "frame": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)], "screen": Profiler.shared.screen,
             "note": ok ? "" : "Element hat das Auslösen abgelehnt (für VoiceOver nicht bedienbar) – das ist selbst ein Hinweis auf einen Fehler.",
         ]
+    }
+
+    /// Oberste UIKit-Ansicht unter einem Bildschirmpunkt (Fenster von oben nach unten).
+    private static func hitView(at p: CGPoint) -> UIView? {
+        for w in windows().reversed() {
+            let local = w.convert(p, from: w.screen.coordinateSpace)
+            if let v = w.hitTest(local, with: nil) { return v }
+        }
+        return nil
+    }
+
+    private static func ancestors(_ v: UIView?) -> [UIView] {
+        var out: [UIView] = []
+        var cur = v
+        while let c = cur { out.append(c); cur = c.superview }
+        return out
+    }
+
+    /// Textfeld zum Element: es selbst oder die UIKit-Ansicht unter seiner Mitte (SwiftUI-`TextField`
+    /// liegt als `UITextField` darunter).
+    private static func textInput(from el: NSObject, at point: CGPoint?) -> UIView? {
+        if let v = el as? UIView, v is UITextField || v is UITextView { return v }
+        let f = el.accessibilityFrame
+        return ancestors(hitView(at: point ?? CGPoint(x: f.midX, y: f.midY)))
+            .first { $0 is UITextField || $0 is UITextView }
+    }
+
+    private static func control(from el: NSObject) -> UIControl? {
+        ancestors(el as? UIView).compactMap { $0 as? UIControl }.first
     }
 
     /// Text ins gerade fokussierte Eingabefeld (`submit`: danach Zeilenumbruch/Enter).

@@ -574,6 +574,11 @@ export function initMcpBridge() {
 								result = { ok: true, sidebarCollapsed: S.sidebarCollapsed };
 								break;
 							}
+							case "go_back": {
+								TABS.navBack();
+								result = { ok: true };
+								break;
+							}
 							default:
 								result = { error: `Unbekannte UI-Aktion: ${action}` };
 						}

@@ -421,8 +421,8 @@ const TOOLS = [
 			properties: {
 				action: {
 					type: "string",
-					enum: ["open_page", "close_active_tab", "search_ui", "trigger_sync", "toggle_sidebar"],
-					description: "Die auszuführende UI-Aktion",
+					enum: ["open_page", "close_active_tab", "search_ui", "trigger_sync", "toggle_sidebar", "go_back", "dismiss"],
+					description: "Die auszuführende UI-Aktion (go_back: wie ‹ zurück, schließt auf dem iPad zuerst offene Sheets; dismiss: nur iPad, schließt Sheet oder obersten Dialog)",
 				},
 				target: { type: "string", description: "Ziel für die Aktion (z.B. Seiten-ID oder Titel bei open_page)" },
 				await: { type: "boolean", description: "Bei trigger_sync: Auf Abschluss des Sync-Vorgangs warten (Standard: true). Bei false wird der Sync sofort im Hintergrund angestoßen." },
