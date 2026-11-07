@@ -5,7 +5,7 @@
 // über ctx herein, sein Zustand (Host, Blockliste, Auswahl) bleibt dort.
 
 import { U } from "./util.js";
-import { LISTY } from "./editor-markdown.js";
+import { LISTY, continuationBlock, indentBlock } from "./editor-markdown.js";
 import { TEXTY, closeMenus } from "./editor-menus.js";
 import { inlineHtml, splitFieldAtCaret, hydrateInlineMath, visibleLength, caretInfo } from "./editor-inline.js";
 
@@ -44,9 +44,8 @@ export function createBlockKeys(ctx) {
 			mutate(() => {
 				b.text = before;
 				// Listen setzen sich fort; Überschriften/Zitate erzeugen Text darunter
-				const nb = LISTY[b.type]
-					? { id: uid(), type: b.type, indent: b.indent || 0, text: after, ...(b.type === "todo" ? { checked: false } : {}) }
-					: { id: uid(), type: "p", text: after };
+				const cont = LISTY[b.type] ? continuationBlock(b, uid()) : null;
+				const nb = cont && cont[1] ? { ...cont[1], text: after } : { id: uid(), type: "p", text: after };
 				c.list.splice(c.index + 1, 0, nb);
 				neuId = nb.id;
 			});
@@ -61,11 +60,11 @@ export function createBlockKeys(ctx) {
 			e.preventDefault();
 			if (!LISTY[b.type]) return; // wie Notion (vereinfachtes Modell): nur Listen-Ebenen
 			mutate(() => {
-				if (e.shiftKey) { if ((b.indent || 0) > 0) b.indent--; }
+				if (e.shiftKey) { if ((b.indent || 0) > 0) b.indent = indentBlock(b, -1).indent || 0; }
 				else {
 					// Nur einrücken, wenn ein Listenelement darüber existiert (Notion-Regel)
 					const prev = c.list[c.index - 1];
-					if (prev && LISTY[prev.type] && (b.indent || 0) <= (prev.indent || 0)) b.indent = (b.indent || 0) + 1;
+					if (prev && LISTY[prev.type] && (b.indent || 0) <= (prev.indent || 0)) b.indent = indentBlock(b, 1).indent || 0;
 				}
 			}, { soft: true });
 			focusBlock(b.id, off);

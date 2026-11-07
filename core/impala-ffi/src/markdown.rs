@@ -234,6 +234,79 @@ pub fn markdown_teaser(body: String) -> String {
     impala_markdown::teaser(&body)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MdShortcutType {
+    H1,
+    H2,
+    H3,
+    Bullet,
+    Number,
+    Todo { checked: bool },
+    Quote,
+    Code,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct MdShortcutResult {
+    pub shortcut_type: MdShortcutType,
+    pub rest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct MdWrapResult {
+    pub text: String,
+    pub caret: u32,
+}
+
+#[uniffi::export]
+pub fn md_shortcut_type(line: String) -> Option<MdShortcutResult> {
+    impala_markdown::shortcut_type(&line).map(|(st, rest)| {
+        let shortcut_type = match st {
+            impala_markdown::ShortcutType::H1 => MdShortcutType::H1,
+            impala_markdown::ShortcutType::H2 => MdShortcutType::H2,
+            impala_markdown::ShortcutType::H3 => MdShortcutType::H3,
+            impala_markdown::ShortcutType::Bullet => MdShortcutType::Bullet,
+            impala_markdown::ShortcutType::Number => MdShortcutType::Number,
+            impala_markdown::ShortcutType::Todo { checked } => MdShortcutType::Todo { checked },
+            impala_markdown::ShortcutType::Quote => MdShortcutType::Quote,
+            impala_markdown::ShortcutType::Code => MdShortcutType::Code,
+        };
+        MdShortcutResult { shortcut_type, rest }
+    })
+}
+
+#[uniffi::export]
+pub fn md_convert_block(block: MdBlock, target_type: String) -> MdBlock {
+    let b: Block = block.into();
+    let res = impala_markdown::convert_block(&b, &target_type);
+    res.into()
+}
+
+#[uniffi::export]
+pub fn md_continuation_block(block: MdBlock, new_id: String) -> Option<Vec<MdBlock>> {
+    let b: Block = block.into();
+    impala_markdown::continuation_block(&b, new_id).map(|(b1, b2)| vec![b1.into(), b2.into()])
+}
+
+#[uniffi::export]
+pub fn md_indent_block(block: MdBlock, delta: i32) -> MdBlock {
+    let b: Block = block.into();
+    let res = impala_markdown::indent_block(&b, delta);
+    res.into()
+}
+
+#[uniffi::export]
+pub fn md_list_numbers(blocks: Vec<MdBlock>) -> std::collections::HashMap<String, u32> {
+    let bs = blocks_from_md(blocks);
+    impala_markdown::list_numbers(&bs).into_iter().collect()
+}
+
+#[uniffi::export]
+pub fn md_wrap_markers(text: String, start_utf16: u32, end_utf16: u32, before: String, after: String) -> MdWrapResult {
+    let (text, caret) = impala_markdown::wrap_markers(&text, start_utf16, end_utf16, &before, &after);
+    MdWrapResult { text, caret }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
