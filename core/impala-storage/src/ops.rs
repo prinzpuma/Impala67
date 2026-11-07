@@ -138,13 +138,19 @@ pub trait StorageExt: Storage {
         Ok(Compacted { dropped, dropped_blobs })
     }
 
-    /// Kompaktiert nur, wenn seit der letzten Prüfung genug neue Events kamen (`compactLocalIfDue`).
-    fn compact_if_due(&mut self, now: &str, blobs: Option<&impala_sync::BlobKeep>) -> Result<Compacted, Error> {
+    /// Kamen seit der letzten Prüfung genug neue Events für eine Kompaktierung? Billig (zwei Lesungen).
+    fn compact_due(&self) -> Result<bool, Error> {
         let top = self.max_seq()?;
         let checked = self.meta(COMPACT_CHECKED_SEQ_KEY)?.and_then(|s| s.parse::<Seq>().ok()).unwrap_or(0).min(top);
-        if top - checked < COMPACT_CHECK_STEP {
+        Ok(top - checked >= COMPACT_CHECK_STEP)
+    }
+
+    /// Kompaktiert nur, wenn seit der letzten Prüfung genug neue Events kamen (`compactLocalIfDue`).
+    fn compact_if_due(&mut self, now: &str, blobs: Option<&impala_sync::BlobKeep>) -> Result<Compacted, Error> {
+        if !self.compact_due()? {
             return Ok(Compacted::default());
         }
+        let top = self.max_seq()?;
         let result = self.compact(COMPACT_CHECK_STEP as usize, now, blobs)?;
         self.apply(vec![Write::SetMeta(COMPACT_CHECKED_SEQ_KEY.into(), Some(top.to_string()))])?;
         Ok(result)

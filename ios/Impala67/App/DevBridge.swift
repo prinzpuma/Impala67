@@ -510,6 +510,11 @@ final class DevBridge {
     }
 
     private static func firstResponder(in windows: [UIWindow]) -> UIResponder? {
+        // UIKit selbst fragen: Eine an `nil` gesendete Aktion landet beim Ersthelfer – auch wenn er
+        // (SwiftUI-`.searchable`, Eingabe-Hosts) nicht im Ansichtsbaum der Fenster hängt.
+        CaptureFirstResponder.found = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.impalaCaptureFirstResponder), to: nil, from: nil, for: nil)
+        if let r = CaptureFirstResponder.found { return r }
         func find(_ v: UIView) -> UIResponder? {
             if v.isFirstResponder { return v }
             for s in v.subviews { if let r = find(s) { return r } }
@@ -530,5 +535,16 @@ final class DevBridge {
         }
         guard kr == KERN_SUCCESS else { return nil }
         return (Double(info.phys_footprint) / 1_048_576 * 10).rounded() / 10
+    }
+}
+
+/// Ablage für [`UIResponder.impalaCaptureFirstResponder`] (nur Hauptthread).
+@MainActor private enum CaptureFirstResponder {
+    static weak var found: UIResponder?
+}
+
+extension UIResponder {
+    @objc fileprivate func impalaCaptureFirstResponder() {
+        MainActor.assumeIsolated { CaptureFirstResponder.found = self }
     }
 }

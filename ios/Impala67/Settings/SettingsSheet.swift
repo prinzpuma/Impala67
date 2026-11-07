@@ -589,6 +589,8 @@ private struct AppearanceSettingsSections: View {
     @State private var homeTopics = ""
     @State private var relatedPages = true
     @State private var loaded = false
+    /// Fächernamen für die Themen-Vorschläge; einmal im Hintergrund gelesen, nicht bei jedem Neuzeichnen.
+    @State private var workspaceNames: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -738,12 +740,19 @@ private struct AppearanceSettingsSections: View {
                 )
             }
         }
-        .onAppear {
-            let s = HomeSettings.read(store.core)
+        // Einstellungs-JSON und Fächer im Hintergrund lesen (wie die KI-Übersicht), nicht beim Öffnen
+        // auf dem Hauptthread.
+        .task {
+            let core = store.core
+            let (s, ws) = await Task.detached(priority: .userInitiated) {
+                (HomeSettings.read(core), core.workspaces().map(\.name))
+            }.value
+            guard !Task.isCancelled else { return }
             homeName = s.name
             homeArticle = s.article
             homeTopics = s.topics
             relatedPages = s.relatedPages
+            workspaceNames = ws
             loaded = true
         }
         .onDisappear {
@@ -761,8 +770,7 @@ private struct AppearanceSettingsSections: View {
 
     private var topicSuggestions: [String] {
         let own = Set(homeTopics.components(separatedBy: CharacterSet(charactersIn: ",;\n")).map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
-        let ws = store.core.workspaces().map(\.name)
-        return ws.filter { !own.contains($0.lowercased()) && !$0.isEmpty }
+        return workspaceNames.filter { !own.contains($0.lowercased()) && !$0.isEmpty }
     }
 }
 

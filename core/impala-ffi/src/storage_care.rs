@@ -42,6 +42,11 @@ impl Inner {
     /// Kompaktiert den Log (`force`: sofort, sonst nur wenn fällig). Weggefallene Bilder vergisst
     /// der Zustand; danach gleich ein neuer Checkpoint, sonst spielt der nächste Start alles neu ab.
     pub(crate) fn compact_local(&mut self, force: bool) -> Result<usize, CoreError> {
+        // Läuft nach jedem Sync unter der Kern-Sperre: Nicht fällig → sofort zurück, ohne den
+        // Heft-Zustand nach Bildern abzusuchen und ohne WAL-Checkpoint.
+        if !force && !self.storage.compact_due()? {
+            return Ok(0);
+        }
         let now = self.clock.now();
         let keep = self.heft_blob_keep();
         let blobs = keep.as_ref().map(|(live, since)| BlobKeep { live, since });
@@ -55,7 +60,9 @@ impl Inner {
             self.model.save_checkpoint(&mut self.storage)?;
         }
         // Gelöschte Events und ersetzte Checkpoints geben ihren Platz erst hier frei.
-        self.storage.reclaim()?;
+        if force || dropped > 0 {
+            self.storage.reclaim()?;
+        }
         Ok(dropped)
     }
 }
