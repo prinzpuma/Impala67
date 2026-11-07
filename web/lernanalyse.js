@@ -83,10 +83,10 @@ export function lernanalyseParts() {
 		(d.action ? `<button class="hv-link la-act" ${studyAttr(d.actionDeck)}>${esc(d.action)}</button>` : "") +
 		'<span class="la-toggle">Lernanalyse</span>';
 	const body = '<div class="la-grid">' +
-		block("Schaffe ich das Wochenziel?", d.goal.text, d.goal.warn ? "warn" : "ok", goalChart(d.goal)) +
-		block("Welche Fächer lassen nach?", d.subjects.text, d.subjects.worst ? "warn" : "ok", subjectRows(d.subjects)) +
-		block("Wann lerne ich am besten?", d.time.text, "ok", slotBars(d.time)) +
-		block("Was kommt auf mich zu?", d.forecast.text, (d.forecast.peak !== null && d.forecast.peak !== undefined && d.forecast.peak >= 0) ? "warn" : "ok", forecastBars(d.forecast)) +
+		block("Schaffe ich das Wochenziel?", d.goal.text, d.goal.tone, goalChart(d.goal)) +
+		block("Welche Fächer lassen nach?", d.subjects.text, d.subjects.tone, subjectRows(d.subjects)) +
+		block("Wann lerne ich am besten?", d.time.text, d.time.tone, slotBars(d.time)) +
+		block("Was kommt auf mich zu?", d.forecast.text, d.forecast.tone, forecastBars(d.forecast)) +
 		"</div>";
 	return { summary, body };
 }

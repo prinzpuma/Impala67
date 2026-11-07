@@ -18,6 +18,9 @@ pub const DAY_LONG: [&str; 7] = ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
 
 /// Formatiert Minuten im Stil der App („45 Min“, „1 h“, „1 h 30“).
 pub fn dur(minutes: f64) -> String {
+    if !minutes.is_finite() || minutes <= 0.0 {
+        return "0 Min".to_string();
+    }
     let m0 = minutes.round() as i64;
     let h = m0 / 60;
     let m = m0 % 60;
@@ -53,8 +56,14 @@ pub struct GoalAnalysis {
 pub fn compute_goal(goal_min: u32, days: &[f64], today: u8, pace: f64) -> GoalAnalysis {
     let days_vec = days.to_vec();
     let done: f64 = days.iter().sum();
+    let today = today.min(6);
     let left = 7 - today;
-    let need = (goal_min as f64 - done).max(0.0);
+    let pace = if pace.is_finite() && pace > 0.0 { pace } else { 0.0 };
+    let need = if done >= goal_min as f64 || (goal_min as f64 - done).abs() < 1e-6 {
+        0.0
+    } else {
+        (goal_min as f64 - done).max(0.0)
+    };
     let mut warn = false;
     let mut reach_day = None;
     let text = if need == 0.0 {
@@ -476,7 +485,7 @@ pub struct PatternData {
 struct ValidReview {
     grade: u8,
     pos: u32,
-    hour: u8,
+    hour: Option<u8>,
     timer: Option<bool>,
     exp: Vec<String>,
     review_id: Option<String>,
@@ -506,7 +515,7 @@ fn extract_review_events(telemetry: &[Telemetry]) -> Vec<ValidReview> {
                 out.push(ValidReview {
                     grade,
                     pos: if pos >= 0 { pos as u32 } else { 0 },
-                    hour: if (0..24).contains(&hour) { hour as u8 } else { 0 },
+                    hour: if (0..24).contains(&hour) { Some(hour as u8) } else { None },
                     timer,
                     exp,
                     review_id,
@@ -565,7 +574,7 @@ pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -
     } else {
         let all_hours: Vec<HourRate> = (0..24)
             .map(|h| {
-                let list: Vec<&ValidReview> = rs.iter().filter(|e| e.hour == h).collect();
+                let list: Vec<&ValidReview> = rs.iter().filter(|e| e.hour == Some(h)).collect();
                 HourRate { hour: h, n: list.len() as u32, rate: pass_rate(&list) }
             })
             .collect();
@@ -627,7 +636,7 @@ pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -
     problem_candidates.sort_by(|a, b| {
         let score_b = (b.1).0 + (b.1).1 * 60_000;
         let score_a = (a.1).0 + (a.1).1 * 60_000;
-        score_b.cmp(&score_a)
+        score_b.cmp(&score_a).then_with(|| a.0.cmp(b.0))
     });
     let problems: Vec<ProblemPage> = problem_candidates
         .into_iter()
@@ -884,5 +893,58 @@ mod tests {
         assert_eq!(res.problems[0].page_id, "p1");
         assert_eq!(res.problems[0].minutes, 10);
         assert_eq!(res.problems[0].lost, 2);
+    }
+
+    #[test]
+    fn test_dur_edge_cases() {
+        assert_eq!(dur(-1.0), "0 Min");
+        assert_eq!(dur(f64::NAN), "0 Min");
+        assert_eq!(dur(f64::INFINITY), "0 Min");
+        assert_eq!(dur(f64::NEG_INFINITY), "0 Min");
+        assert_eq!(dur(0.0), "0 Min");
+    }
+
+    #[test]
+    fn test_compute_goal_edge_cases() {
+        // today >= 7 (darf nicht panicken oder durch 0 teilen)
+        let g_sunday = compute_goal(60, &[60.0], 7, 10.0);
+        assert_eq!(g_sunday.today, 6);
+        assert_eq!(g_sunday.left, 1);
+        assert_eq!(g_sunday.need, 0.0);
+
+        let g_out_of_bounds = compute_goal(100, &[10.0], 10, -5.0);
+        assert_eq!(g_out_of_bounds.today, 6);
+        assert_eq!(g_out_of_bounds.left, 1);
+        assert_eq!(g_out_of_bounds.pace, 0.0);
+        assert!(g_out_of_bounds.warn);
+
+        // Fast erreicht (Floating Point Rundungsungenauigkeit: 59.99999999999999 bei 60 Min Ziel)
+        let g_almost = compute_goal(60, &[19.99999999999999, 40.0], 2, 20.0);
+        assert_eq!(g_almost.need, 0.0);
+        assert!(!g_almost.warn);
+        assert!(g_almost.text.starts_with("Geschafft:"));
+    }
+
+    #[test]
+    fn test_patterns_missing_hour_does_not_inflate_midnight() {
+        let mut telemetry = Vec::new();
+        // 60 Reviews ohne Stunde
+        for i in 0..60 {
+            let mut t = Telemetry { kind: Some("review".to_string()), ..Default::default() };
+            t.set(
+                "data",
+                serde_json::json!({
+                    "grade": 3,
+                    "pos": i,
+                    "timer": true,
+                    "reviewId": format!("r_{i}")
+                }),
+            );
+            telemetry.push(t);
+        }
+
+        let res = compute_patterns(&telemetry, &HashSet::new());
+        // Keine Stunde vorhanden -> keine Chronobiologie
+        assert_eq!(res.hours, None);
     }
 }
