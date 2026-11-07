@@ -25,7 +25,7 @@ import uniffi.impala_ffi.ImpalaCore
  * über den Kern ([write] / [dispatch]). Der Kern meldet jede Änderung – eigene wie fremde aus dem
  * Sync – als [Changes]; Abfragen lesen daraufhin neu. Keine Logik, die im Kern liegt, hier nachbauen.
  */
-class ImpalaStore(val core: ImpalaCore, private val scope: CoroutineScope) {
+class ImpalaStore(val core: ImpalaCore, val scope: CoroutineScope) {
     // Unbegrenzt, damit tryEmit nie scheitert: ein fester Puffer verwarf bei einem Sync-Schwall
     // still Meldungen, und Ansichten blieben veraltet. Die Abnehmer sind schnell ([query] fasst zusammen).
     private val _changes = MutableSharedFlow<Changes>(extraBufferCapacity = Channel.UNLIMITED)

@@ -1,6 +1,7 @@
 package org.impala67.app.editor
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -75,11 +75,20 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     private var nonce = 0
     internal var cursor = 0
         private set
-    private var dirtyContent = false
-    private var dirtyTitle = false
-    private var saveJob: Job? = null
-    @Volatile private var lastMarkdown = ""
-    @Volatile private var lastTitle = ""
+    // Stände zählen hoch bei jeder Änderung; „ungespeichert“ heißt: der Stand ist noch nicht erfolgreich
+    // geschrieben. Alles hier nur im Hauptthread lesen/schreiben.
+    private var contentRev = 0
+    private var titleRev = 0
+    private var queuedContentRev = 0
+    private var queuedTitleRev = 0
+    private var savedContentRev = 0
+    private var savedTitleRev = 0
+    private val dirtyContent get() = contentRev != savedContentRev
+    private val dirtyTitle get() = titleRev != savedTitleRev
+    private var debounceJob: Job? = null
+    /** Zuletzt mit dem Kern abgeglichener Stand (gespeichert oder von außen übernommen). */
+    private var lastMarkdown = ""
+    private var lastTitle = ""
 
     init {
         viewModelScope.launch { header.filterNotNull().collect { applyRemote(it.page) } }
@@ -106,36 +115,54 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
 
     fun onTitle(value: String) {
         if (value == title) return
-        title = value; dirtyTitle = true; lastEdit = SystemClock.uptimeMillis(); scheduleSave()
+        title = value; titleRev++; lastEdit = SystemClock.uptimeMillis(); scheduleSave()
     }
 
     private fun scheduleSave() {
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            delay(SAVE_DELAY_MS)
-            val snapshot = blocks
-            val newTitle = if (dirtyTitle) title else null
-            val hasContent = dirtyContent
-            dirtyTitle = false; dirtyContent = false
-            withContext(NonCancellable + Dispatchers.IO) {
-                val md = if (hasContent) blocksToMarkdown(snapshot) else null
-                md?.let { lastMarkdown = it }
-                newTitle?.let { lastTitle = it }
-                runCatching { store.core.updatePage(pageId, newTitle, md) }
+        debounceJob?.cancel()
+        debounceJob = viewModelScope.launch { delay(SAVE_DELAY_MS); save() }
+    }
+
+    /**
+     * Schreibt den aktuellen Stand. Die Schreibvorgänge laufen im App-Bereich (überleben das Schließen
+     * der Seite) und strikt nacheinander auf [writer], damit ein älterer Stand nie einen neueren
+     * überholt. Erst nach Erfolg gilt ein Stand als gespeichert; bei einem Fehler bleibt er
+     * ungespeichert (Sync überschreibt ihn dann nicht) und wird erneut versucht.
+     */
+    private fun save() {
+        val cRev = contentRev
+        val tRev = titleRev
+        val snapshot = if (cRev != queuedContentRev) blocks else null
+        val newTitle = if (tRev != queuedTitleRev) title else null
+        if (snapshot == null && newTitle == null) return
+        if (snapshot != null) queuedContentRev = cRev
+        if (newTitle != null) queuedTitleRev = tRev
+        store.scope.launch(Dispatchers.Main.immediate) {
+            val result = withContext(writer) {
+                runCatching {
+                    val md = snapshot?.let { blocksToMarkdown(it) }
+                    store.core.updatePage(pageId, newTitle, md)
+                    md
+                }
+            }
+            result.onSuccess { md ->
+                if (md != null && cRev > savedContentRev) { savedContentRev = cRev; lastMarkdown = md }
+                if (newTitle != null && tRev > savedTitleRev) { savedTitleRev = tRev; lastTitle = newTitle }
+            }.onFailure { e ->
+                Log.e("Impala67", "Seite $pageId nicht gespeichert", e)
+                // Nicht Geschriebenes wieder als offen markieren, damit der nächste Versuch es mitnimmt.
+                queuedContentRev = savedContentRev; queuedTitleRev = savedTitleRev
+                // Im App-Bereich, damit der Versuch auch nach dem Schließen der Seite noch läuft.
+                debounceJob?.cancel()
+                debounceJob = store.scope.launch(Dispatchers.Main) { delay(RETRY_DELAY_MS); save() }
             }
         }
     }
 
-    /** Sofort speichern (App im Hintergrund, Seite verlassen). */
+    /** Sofort speichern (App im Hintergrund, Seite verlassen); blockiert den Hauptthread nicht. */
     fun flush() {
-        if (!dirtyContent && !dirtyTitle) return
-        saveJob?.cancel()
-        val newTitle = if (dirtyTitle) title else null
-        val md = if (dirtyContent) blocksToMarkdown(blocks) else null
-        dirtyTitle = false; dirtyContent = false
-        md?.let { lastMarkdown = it }
-        newTitle?.let { lastTitle = it }
-        runCatching { store.core.updatePage(pageId, newTitle, md) }
+        debounceJob?.cancel()
+        save()
     }
 
     override fun onCleared() = flush()
@@ -154,7 +181,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
         redoStack.clear()
         lastEdit = now
         blocks = new
-        dirtyContent = true
+        contentRev++
         updateHistoryFlags()
         scheduleSave()
     }
@@ -168,7 +195,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
         val target = from.removeLastOrNull() ?: return
         to.addLast(blocks)
         blocks = target
-        dirtyContent = true; lastEdit = 0
+        contentRev++; lastEdit = 0
         updateHistoryFlags()
         scheduleSave()
         active?.let { a -> if (blocks.none { it.id == a.id }) active = null else activate(a.id, a.mode, cursor) }
@@ -315,6 +342,9 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
 
     private companion object {
         const val SAVE_DELAY_MS = 600L
+        const val RETRY_DELAY_MS = 2_000L
+        /** Ein Schreibweg für alle Editor-Seiten: Schreibvorgänge laufen in Aufrufreihenfolge. */
+        val writer = Dispatchers.IO.limitedParallelism(1)
         const val COALESCE_MS = 900L
         const val MAX_HISTORY = 100
     }
