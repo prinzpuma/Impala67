@@ -1,0 +1,1460 @@
+{
+  "catalog": [
+    {
+      "id": "overview-status",
+      "section": "overview",
+      "platform": null,
+      "title": "app status",
+      "haystack": "app status ki sync backup speicher und version auf einen blick status zustand start dashboard diagnose ubersicht"
+    },
+    {
+      "id": "theme",
+      "section": "appearance",
+      "platform": null,
+      "title": "erscheinungsbild",
+      "haystack": "erscheinungsbild system hell oder dunkel design theme modus mode dark light geratemodus darstellung"
+    },
+    {
+      "id": "accent",
+      "section": "appearance",
+      "platform": null,
+      "title": "akzentfarbe",
+      "haystack": "akzentfarbe farbe fur aktive elemente design blau violett grun orange farbe darstellung"
+    },
+    {
+      "id": "density",
+      "section": "appearance",
+      "platform": null,
+      "title": "darstellungsdichte",
+      "haystack": "darstellungsdichte kompakt oder komfortabel design abstand platz layout darstellung"
+    },
+    {
+      "id": "font-size",
+      "section": "appearance",
+      "platform": null,
+      "title": "schriftgro e",
+      "haystack": "schriftgro e klein normal oder gro lesbarkeit text schrift lesbar zoom darstellung"
+    },
+    {
+      "id": "motion",
+      "section": "appearance",
+      "platform": null,
+      "title": "bewegung reduzieren",
+      "haystack": "bewegung reduzieren weniger ubergange und animationen keine handschrift erkennung lesbarkeit animation motion barrierefreiheit performance handschrift erkennung speicher darstellung"
+    },
+    {
+      "id": "native-haptics",
+      "section": "appearance",
+      "platform": "native",
+      "title": "haptisches feedback",
+      "haystack": "haptisches feedback taktile vibrationen bei aktionen werkzeugwechsel und bewertungen lesbarkeit vibration haptik feedback touch motor darstellung"
+    },
+    {
+      "id": "tabs-position",
+      "section": "appearance",
+      "platform": null,
+      "title": "tab anordnung",
+      "haystack": "tab anordnung horizontale leiste oben oder vertikale tabs in der seitenleiste oberflache tabs leiste vertikal horizontal seitenleiste navigation anordnung darstellung"
+    },
+    {
+      "id": "home-name",
+      "section": "appearance",
+      "platform": null,
+      "title": "begru ungsname",
+      "haystack": "begru ungsname name in der begru ung auf der startseite oberflache anzeigename profil startseite home darstellung"
+    },
+    {
+      "id": "home-article",
+      "section": "appearance",
+      "platform": null,
+      "title": "tagesartikel",
+      "haystack": "tagesartikel ki zusammenfassung deiner notizen auf der startseite oberflache artikel zusammenfassung ki startseite home taglich darstellung"
+    },
+    {
+      "id": "related-pages",
+      "section": "appearance",
+      "platform": null,
+      "title": "verwandte seiten",
+      "haystack": "verwandte seiten inhaltlich ahnliche seiten unter jeder notiz oberflache ahnlich verwandt vorschlage embedding notiz verknupfung darstellung"
+    },
+    {
+      "id": "home-topics",
+      "section": "appearance",
+      "platform": null,
+      "title": "themen fur den tagesartikel",
+      "haystack": "themen fur den tagesartikel themen uber die der tagesartikel schreibt oberflache artikel themen facher startseite darstellung"
+    },
+    {
+      "id": "ai-models",
+      "section": "ai",
+      "platform": null,
+      "title": "chat modell",
+      "haystack": "chat modell aktives modell suchen und auswahlen aktives modell llm modell provider quelle ki"
+    },
+    {
+      "id": "ai-sources",
+      "section": "ai",
+      "platform": null,
+      "title": "ki quellen",
+      "haystack": "ki quellen openai gemini lm studio und eigene endpunkte quellen api key schlussel token url endpoint anbieter ki"
+    },
+    {
+      "id": "ai-embedding",
+      "section": "ai",
+      "platform": null,
+      "title": "embedding modell",
+      "haystack": "embedding modell modell fur semantische suche lokale ki rag vektor suche bekko ki"
+    },
+    {
+      "id": "ai-handwriting",
+      "section": "ai",
+      "platform": null,
+      "title": "handschrifterkennung",
+      "haystack": "handschrifterkennung lokales modell trainingsbeispiele und handschrift export lokale ki handschrift ink stift heft training onnx ki"
+    },
+    {
+      "id": "ai-tools",
+      "section": "ai",
+      "platform": null,
+      "title": "tools mitsenden",
+      "haystack": "tools mitsenden der ki die app werkzeuge zur verfugung stellen verhalten werkzeuge tools funktionen ki"
+    },
+    {
+      "id": "ai-instructions",
+      "section": "ai",
+      "platform": null,
+      "title": "eigene anweisungen",
+      "haystack": "eigene anweisungen tonfall und dauerhafte vorgaben verhalten prompt system text ki"
+    },
+    {
+      "id": "learning-options",
+      "section": "learning",
+      "platform": null,
+      "title": "lernverhalten",
+      "haystack": "lernverhalten overlearning selbsteinschatzung und lernanalyse lernverhalten karten telemetrie sicherheit confidence statistik lernen"
+    },
+    {
+      "id": "break-reminder",
+      "section": "learning",
+      "platform": null,
+      "title": "pausen erinnerung",
+      "haystack": "pausen erinnerung erinnert nach 40 minuten lernen an eine kurze pause lernverhalten pause karten lernzeit timer 40 min break reminder lernen"
+    },
+    {
+      "id": "learning-beta",
+      "section": "learning",
+      "platform": null,
+      "title": "beta lernfunktionen",
+      "haystack": "beta lernfunktionen optionale ki gestutzte lernmodi beta lernfunktionen experimente feynman fehler hinweise multiple choice lernen"
+    },
+    {
+      "id": "controller-status",
+      "section": "learning",
+      "platform": null,
+      "title": "mit controller lernen",
+      "haystack": "mit controller lernen gamepad verbinden tastenhinweise und vibration controller gamepad pad xbox playstation stadia controller lernen"
+    },
+    {
+      "id": "controller-map",
+      "section": "learning",
+      "platform": null,
+      "title": "tastenbelegung",
+      "haystack": "tastenbelegung aktionen an controller tasten binden controller mapping anlernen taste button gamepad lernen"
+    },
+    {
+      "id": "controller-advanced",
+      "section": "learning",
+      "platform": null,
+      "title": "deadzone hid",
+      "haystack": "deadzone hid rohe achsen und nicht standardisierte controller controller hid achse trigger deadzone technisch gamepad lernen"
+    },
+    {
+      "id": "cf-sync",
+      "section": "sync",
+      "platform": null,
+      "title": "cloudflare live sync",
+      "haystack": "cloudflare live sync echtzeit synchronisierung mit ende zu ende verschlusselung cloudflare live sync cloudflare echtzeit sync websocket live server speicher quota e2ee koppeln qr sync backup"
+    },
+    {
+      "id": "drive",
+      "section": "sync",
+      "platform": null,
+      "title": "google drive",
+      "haystack": "google drive backup und sync uber den privaten app speicher google drive google login konto cloud verbinden sync backup"
+    },
+    {
+      "id": "drive-automation",
+      "section": "sync",
+      "platform": null,
+      "title": "automatische synchronisierung",
+      "haystack": "automatische synchronisierung intervall und sync nach anderungen festlegen google drive automatisch intervall minuten haufigkeit jede anderung sync backup"
+    },
+    {
+      "id": "token-sync",
+      "section": "sync",
+      "platform": null,
+      "title": "tokens uber drive synchronisieren",
+      "haystack": "tokens uber drive synchronisieren ki keys lokal behalten oder auf eigene gerate ubertragen google drive secrets api schlussel privat sicherheit datenschutz sync backup"
+    },
+    {
+      "id": "sync-advanced",
+      "section": "sync",
+      "platform": null,
+      "title": "google client id",
+      "haystack": "google client id oauth webclient fur google drive erweitert oauth client id technisch verbindungsdetails sync backup"
+    },
+    {
+      "id": "backup",
+      "section": "sync",
+      "platform": null,
+      "title": "backup wiederherstellung",
+      "haystack": "backup wiederherstellung event log und dateien exportieren oder importieren backup json sichern wiederherstellen import export sync backup"
+    },
+    {
+      "id": "data-export",
+      "section": "sync",
+      "platform": null,
+      "title": "weitere exporte",
+      "haystack": "weitere exporte lerndaten und markdown workspace exportieren backup telemetrie zip markdown rohdatei sync backup"
+    },
+    {
+      "id": "storage",
+      "section": "app",
+      "platform": null,
+      "title": "lokaler speicher",
+      "haystack": "lokaler speicher verwendeten geratespeicher anzeigen speicher indexeddb quota gro e app speicher"
+    },
+    {
+      "id": "updates",
+      "section": "app",
+      "platform": null,
+      "title": "app updates",
+      "haystack": "app updates version prufen und update installieren app pwa version neu laden cache app speicher"
+    },
+    {
+      "id": "native-scanner",
+      "section": "app",
+      "platform": "native",
+      "title": "dokumenten scanner",
+      "haystack": "dokumenten scanner google scanner oder impala scanner verwenden gerat scanner scannen kamera dokument google ml kit impala foto app speicher"
+    },
+    {
+      "id": "beta-ui",
+      "section": "app",
+      "platform": null,
+      "title": "beta design",
+      "haystack": "beta design platz zum testen neuer design ideen aktuell ohne wirkung experimente beta ui design modern experimentell oberflache layout heft stift werkzeugleiste app speicher"
+    },
+    {
+      "id": "danger-zone",
+      "section": "app",
+      "platform": null,
+      "title": "lokale seiten loschen",
+      "haystack": "lokale seiten loschen alle lokalen seiten unwiderruflich entfernen gefahrenzone reset loschen zurucksetzen app speicher"
+    },
+    {
+      "id": "danger-chats",
+      "section": "app",
+      "platform": null,
+      "title": "alle chats loschen",
+      "haystack": "alle chats loschen gespeicherte chats auf diesem und synchronisierten geraten entfernen gefahrenzone chat verlauf unterhaltung loschen zurucksetzen app speicher"
+    },
+    {
+      "id": "danger-cards",
+      "section": "app",
+      "platform": null,
+      "title": "alle karteikarten loschen",
+      "haystack": "alle karteikarten loschen alle karteikarten stapel und lernfortschritte entfernen gefahrenzone karteikarten anki karten stapel deck loschen zurucksetzen app speicher"
+    },
+    {
+      "id": "performance-profiler",
+      "section": "app",
+      "platform": null,
+      "title": "performance profiler",
+      "haystack": "performance profiler hanger app und ki fehler lokal protokollieren fur entwickler langsam hanger profiler long task diagnose ruckeln fehler ki debug protokoll entwickler app speicher"
+    },
+    {
+      "id": "mcp-bridge",
+      "section": "app",
+      "platform": "web",
+      "title": "mcp live bridge",
+      "haystack": "mcp live bridge app mit einem ki assistenten auf diesem rechner verbinden fur entwickler mcp claude agent bridge websocket entwickler live app speicher"
+    }
+  ],
+  "cases": [
+    {
+      "query": "",
+      "context": "all",
+      "hits": []
+    },
+    {
+      "query": "",
+      "context": "web",
+      "hits": []
+    },
+    {
+      "query": "",
+      "context": "native",
+      "hits": []
+    },
+    {
+      "query": "theme",
+      "context": "all",
+      "hits": [
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "theme",
+      "context": "web",
+      "hits": [
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "theme",
+      "context": "native",
+      "hits": [
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "dark",
+      "context": "all",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "dark",
+      "context": "web",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "dark",
+      "context": "native",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "status",
+      "context": "all",
+      "hits": [
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "status",
+      "context": "web",
+      "hits": [
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "status",
+      "context": "native",
+      "hits": [
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "ki",
+      "context": "all",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 4
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "learning-beta",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "ai-models",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "native-scanner",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "ai-instructions",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "ai-embedding",
+          "section": "ai",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "ki",
+      "context": "web",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 4
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "learning-beta",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "ai-models",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "ai-instructions",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "ai-embedding",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "ai-handwriting",
+          "section": "ai",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "ki",
+      "context": "native",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 4
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "learning-beta",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "ai-models",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "native-scanner",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "ai-instructions",
+          "section": "ai",
+          "score": 1
+        },
+        {
+          "id": "ai-embedding",
+          "section": "ai",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "sync",
+      "context": "all",
+      "hits": [
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "sync",
+      "context": "web",
+      "hits": [
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "sync",
+      "context": "native",
+      "hits": [
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "speicher",
+      "context": "all",
+      "hits": [
+        {
+          "id": "storage",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "updates",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "beta-ui",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "motion",
+          "section": "appearance",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "speicher",
+      "context": "web",
+      "hits": [
+        {
+          "id": "storage",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "updates",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "beta-ui",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "motion",
+          "section": "appearance",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "speicher",
+      "context": "native",
+      "hits": [
+        {
+          "id": "storage",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "danger-chats",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "updates",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "beta-ui",
+          "section": "app",
+          "score": 1
+        },
+        {
+          "id": "motion",
+          "section": "appearance",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "modus",
+      "context": "all",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "modus",
+      "context": "web",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "modus",
+      "context": "native",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "karten",
+      "context": "all",
+      "hits": [
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "learning-options",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "break-reminder",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "karten",
+      "context": "web",
+      "hits": [
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "learning-options",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "break-reminder",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "karten",
+      "context": "native",
+      "hits": [
+        {
+          "id": "danger-cards",
+          "section": "app",
+          "score": 2
+        },
+        {
+          "id": "learning-options",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "break-reminder",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "controller",
+      "context": "all",
+      "hits": [
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 2
+        },
+        {
+          "id": "controller-advanced",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "controller-map",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "controller",
+      "context": "web",
+      "hits": [
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 2
+        },
+        {
+          "id": "controller-advanced",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "controller-map",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "controller",
+      "context": "native",
+      "hits": [
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 2
+        },
+        {
+          "id": "controller-advanced",
+          "section": "learning",
+          "score": 1
+        },
+        {
+          "id": "controller-map",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "offline",
+      "context": "all",
+      "hits": []
+    },
+    {
+      "query": "offline",
+      "context": "web",
+      "hits": []
+    },
+    {
+      "query": "offline",
+      "context": "native",
+      "hits": []
+    },
+    {
+      "query": "erscheinungsbild",
+      "context": "all",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 4
+        }
+      ]
+    },
+    {
+      "query": "erscheinungsbild",
+      "context": "web",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 4
+        }
+      ]
+    },
+    {
+      "query": "erscheinungsbild",
+      "context": "native",
+      "hits": [
+        {
+          "id": "theme",
+          "section": "appearance",
+          "score": 4
+        }
+      ]
+    },
+    {
+      "query": "backup",
+      "context": "all",
+      "hits": [
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 4
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "data-export",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "backup",
+      "context": "web",
+      "hits": [
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 4
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "data-export",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "backup",
+      "context": "native",
+      "hits": [
+        {
+          "id": "backup",
+          "section": "sync",
+          "score": 4
+        },
+        {
+          "id": "overview-status",
+          "section": "overview",
+          "score": 1
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "cf-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 1
+        },
+        {
+          "id": "data-export",
+          "section": "sync",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "vibration",
+      "context": "all",
+      "hits": [
+        {
+          "id": "native-haptics",
+          "section": "appearance",
+          "score": 1
+        },
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "vibration",
+      "context": "web",
+      "hits": [
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "vibration",
+      "context": "native",
+      "hits": [
+        {
+          "id": "native-haptics",
+          "section": "appearance",
+          "score": 1
+        },
+        {
+          "id": "controller-status",
+          "section": "learning",
+          "score": 1
+        }
+      ]
+    },
+    {
+      "query": "mcp",
+      "context": "all",
+      "hits": [
+        {
+          "id": "mcp-bridge",
+          "section": "app",
+          "score": 4
+        }
+      ]
+    },
+    {
+      "query": "mcp",
+      "context": "web",
+      "hits": [
+        {
+          "id": "mcp-bridge",
+          "section": "app",
+          "score": 4
+        }
+      ]
+    },
+    {
+      "query": "mcp",
+      "context": "native",
+      "hits": []
+    },
+    {
+      "query": "scanner",
+      "context": "all",
+      "hits": [
+        {
+          "id": "native-scanner",
+          "section": "app",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "scanner",
+      "context": "web",
+      "hits": []
+    },
+    {
+      "query": "scanner",
+      "context": "native",
+      "hits": [
+        {
+          "id": "native-scanner",
+          "section": "app",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "danger",
+      "context": "all",
+      "hits": []
+    },
+    {
+      "query": "danger",
+      "context": "web",
+      "hits": []
+    },
+    {
+      "query": "danger",
+      "context": "native",
+      "hits": []
+    },
+    {
+      "query": "nichtvorhanden",
+      "context": "all",
+      "hits": []
+    },
+    {
+      "query": "nichtvorhanden",
+      "context": "web",
+      "hits": []
+    },
+    {
+      "query": "nichtvorhanden",
+      "context": "native",
+      "hits": []
+    },
+    {
+      "query": "google drive",
+      "context": "all",
+      "hits": [
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 6
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 5
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 3
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "google drive",
+      "context": "web",
+      "hits": [
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 6
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 5
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 3
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "google drive",
+      "context": "native",
+      "hits": [
+        {
+          "id": "drive",
+          "section": "sync",
+          "score": 6
+        },
+        {
+          "id": "sync-advanced",
+          "section": "sync",
+          "score": 5
+        },
+        {
+          "id": "token-sync",
+          "section": "sync",
+          "score": 3
+        },
+        {
+          "id": "drive-automation",
+          "section": "sync",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "ki quellen",
+      "context": "all",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 6
+        }
+      ]
+    },
+    {
+      "query": "ki quellen",
+      "context": "web",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 6
+        }
+      ]
+    },
+    {
+      "query": "ki quellen",
+      "context": "native",
+      "hits": [
+        {
+          "id": "ai-sources",
+          "section": "ai",
+          "score": 6
+        }
+      ]
+    },
+    {
+      "query": "tagesartikel",
+      "context": "all",
+      "hits": [
+        {
+          "id": "home-article",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "tagesartikel",
+      "context": "web",
+      "hits": [
+        {
+          "id": "home-article",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 2
+        }
+      ]
+    },
+    {
+      "query": "tagesartikel",
+      "context": "native",
+      "hits": [
+        {
+          "id": "home-article",
+          "section": "appearance",
+          "score": 4
+        },
+        {
+          "id": "home-topics",
+          "section": "appearance",
+          "score": 2
+        }
+      ]
+    }
+  ]
+}
