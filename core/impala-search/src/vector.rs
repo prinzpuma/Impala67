@@ -32,9 +32,9 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
     let n = a.len().min(b.len());
     let (a, b) = (&a[..n], &b[..n]);
     let mut acc = [0f32; 8];
-    let (ca, cb) = (a.chunks_exact(8), b.chunks_exact(8));
-    let (ra, rb) = (ca.remainder(), cb.remainder());
-    for (x, y) in ca.zip(cb) {
+    let (ca, ra) = a.as_chunks::<8>();
+    let (cb, rb) = b.as_chunks::<8>();
+    for (x, y) in ca.iter().zip(cb) {
         for i in 0..8 {
             acc[i] += x[i] * y[i];
         }
@@ -127,18 +127,36 @@ pub struct Scored {
 
 /// Die `k` ähnlichsten Zeilen, absteigend; bei Gleichstand die kleinere Zeile zuerst.
 pub fn top_k(matrix: &[f32], dim: usize, query: &[f32], k: usize) -> Result<Vec<Scored>, VectorError> {
-    let scores = cosine_scores(matrix, dim, query, None)?;
-    Ok(best_k(&scores, k))
+    let n = rows(matrix, dim)?;
+    if query.len() != dim {
+        return Err(VectorError::DimMismatch { query: query.len(), dim });
+    }
+    if k == 0 {
+        return Ok(Vec::new());
+    }
+    let qn = norm(query);
+    let all = matrix
+        .chunks_exact(dim)
+        .take(n)
+        .enumerate()
+        .map(|(i, row)| Scored { index: i as u32, score: dot(query, row) / (qn * norm(row)) })
+        .collect();
+    Ok(best_of(all, k))
 }
 
 /// Die `k` größten Werte (NaN zählt als kleinster), absteigend, stabil.
 pub fn best_k(scores: &[f32], k: usize) -> Vec<Scored> {
-    let key = |s: f32| if s.is_nan() { f32::NEG_INFINITY } else { s };
-    let order = |a: &Scored, b: &Scored| key(b.score).total_cmp(&key(a.score)).then(a.index.cmp(&b.index));
-    let mut all: Vec<Scored> = scores.iter().enumerate().map(|(i, &score)| Scored { index: i as u32, score }).collect();
     if k == 0 {
         return Vec::new();
     }
+    let all = scores.iter().enumerate().map(|(i, &score)| Scored { index: i as u32, score }).collect();
+    best_of(all, k)
+}
+
+/// Auswahl und Sortierung der `k` besten Einträge; `k >= 1` erwartet.
+fn best_of(mut all: Vec<Scored>, k: usize) -> Vec<Scored> {
+    let key = |s: f32| if s.is_nan() { f32::NEG_INFINITY } else { s };
+    let order = |a: &Scored, b: &Scored| key(b.score).total_cmp(&key(a.score)).then(a.index.cmp(&b.index));
     if k < all.len() {
         all.select_nth_unstable_by(k - 1, order);
         all.truncate(k);

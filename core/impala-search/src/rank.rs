@@ -234,12 +234,13 @@ pub fn rank_rag(
         .collect();
     hits.sort_by(|a, b| b.0.total_cmp(&a.0));
 
-    let mut per_page: HashMap<u32, usize> = HashMap::new();
+    // Höchstens zwei Chunks je Seite; Seiten sind 0..pages.len() durchnummeriert.
+    let mut per_page = vec![0u8; index.pages.len()];
     let mut out = Vec::new();
     for (score, semantic, lex, ci) in hits {
         let c = &index.chunks[ci];
-        let n = per_page.entry(c.page).or_default();
-        if *n >= MAX_PER_PAGE {
+        let n = &mut per_page[c.page as usize];
+        if *n >= MAX_PER_PAGE as u8 {
             continue;
         }
         *n += 1;
@@ -283,16 +284,13 @@ fn lexical_scores(
     let mut title_terms: HashMap<u32, (Vec<u32>, u32)> = HashMap::new();
     let tf_of = |title_terms: &mut HashMap<u32, (Vec<u32>, u32)>, ci: usize| -> (Vec<u32>, u32) {
         let c = &index.chunks[ci];
-        let (tcounts, tlen) = title_terms
-            .entry(c.page)
-            .or_insert_with(|| {
-                let words: Vec<&str> = terms_of(&title_lc[c.page as usize]).collect();
-                (terms.iter().map(|q| words.iter().filter(|w| *w == q).count() as u32).collect(), words.len() as u32)
-            })
-            .clone();
+        let (tcounts, tlen) = title_terms.entry(c.page).or_insert_with(|| {
+            let words: Vec<&str> = terms_of(&title_lc[c.page as usize]).collect();
+            (terms.iter().map(|q| words.iter().filter(|w| *w == q).count() as u32).collect(), words.len() as u32)
+        });
         let tf = terms
             .iter()
-            .zip(&tcounts)
+            .zip(tcounts.iter())
             .map(|(q, tc)| {
                 let in_text = index
                     .vocab
@@ -302,7 +300,7 @@ fn lexical_scores(
                 in_text + tc
             })
             .collect();
-        (tf, c.len + tlen)
+        (tf, c.len + *tlen)
     };
     let per_doc: Vec<(Vec<u32>, u32)> = docs.iter().map(|&ci| tf_of(&mut title_terms, ci)).collect();
     let n = docs.len() as f64;
