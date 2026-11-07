@@ -442,6 +442,43 @@ const TOOLS = [
 		},
 	},
 	{
+		name: "impala_ui_tree",
+		description: "Listet die sichtbaren Bedienelemente der App so, wie VoiceOver sie sieht (nur native iPad-App): index, Beschriftung, Zustand (button, selected, disabled, textfield …) und Rahmen [x, y, Breite, Höhe] in Punkten – auch offene Menüs, Sheets und Alerts. Grundlage für impala_tap.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Nur Elemente, deren Beschriftung/Wert diesen Text enthält" },
+				interactive: { type: "boolean", description: "Nur bedienbare Elemente (Knöpfe, Links, Felder) (Standard: false)" },
+				limit: { type: "number", description: "Max. Einträge (Standard: 300)" },
+			},
+		},
+	},
+	{
+		name: "impala_tap",
+		description: "Löst ein Bedienelement der App aus wie ein Antippen mit VoiceOver (nur native iPad-App). Ziel per index (aus impala_ui_tree), label (Beschriftung) oder x/y (Punkte). Lehnt das Element ab (ok=false), ist es für VoiceOver nicht bedienbar. Danach mit impala_ui_tree oder impala_screenshot nachsehen.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				index: { type: "number", description: "Index aus der letzten impala_ui_tree-Antwort" },
+				label: { type: "string", description: "Beschriftung (exakt bevorzugt, sonst enthält)" },
+				x: { type: "number", description: "x in Punkten" },
+				y: { type: "number", description: "y in Punkten" },
+			},
+		},
+	},
+	{
+		name: "impala_type",
+		description: "Tippt Text in das gerade fokussierte Eingabefeld der App (nur native iPad-App; Feld vorher per impala_tap fokussieren).",
+		inputSchema: {
+			type: "object",
+			properties: {
+				text: { type: "string", description: "Einzufügender Text" },
+				submit: { type: "boolean", description: "Danach Enter senden (Standard: false)" },
+			},
+			required: ["text"],
+		},
+	},
+	{
 		name: "impala_storage_report",
 		description: "Zeigt die größten PDF-Speicherfresser (Anzahl, Gesamt-MB, Top-Liste) plus Cloudflare-Quota. Rein lesend, lädt keine PDF-Binärdaten.",
 		inputSchema: {

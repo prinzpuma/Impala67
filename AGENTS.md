@@ -58,7 +58,7 @@
 - **Tools** (Stand: Code in `mcp/` und `web/mcp-bridge.js`):
   - **Inhalte**: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`
   - **Diagnose & Performance**: `impala_get_diagnostics`, `impala_get_performance_trace`, `impala_get_ai_trace`
-  - **Live-Testing & UI**: `impala_eval`, `impala_run_ui_action`
+  - **Live-Testing & UI**: `impala_eval`, `impala_run_ui_action`; nur iPad-App: `impala_screenshot`, `impala_ui_tree`, `impala_tap`, `impala_type`
   - **Handschrift-Training**: `impala_heft_page_image` (Seite als Bild + Modell-Lesung), `impala_heft_label_lines` (KI legt Zeilen und Text fest → Trainingsbeispiele)
   - **Speicher**: `impala_storage_report`, `impala_storage_cleanup`
 - **Entwickler-Workflow**: Der Agent prüft Features und Fehler direkt im echten Browser-Tab und liest Messwerte aus. Der Nutzer muss dafür keine manuellen Testschritte machen.

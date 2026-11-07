@@ -167,6 +167,13 @@ final class DevBridge {
             return screenshot(scale: (args["scale"] as? Double) ?? 0.5)
         case "impala_run_ui_action":
             return uiAction(args, core: core)
+        case "impala_ui_tree":
+            return uiTree(query: (args["query"] as? String) ?? "", interactive: args["interactive"] as? Bool ?? false,
+                          limit: (args["limit"] as? Int) ?? 300)
+        case "impala_tap":
+            return await tap(args)
+        case "impala_type":
+            return typeText(args["text"] as? String ?? "", submit: args["submit"] as? Bool ?? false)
         default:
             return ["error": "Auf dem iPad nicht verfügbar: \(tool)"]
         }
@@ -184,6 +191,7 @@ final class DevBridge {
             "thermalState": ["nominal", "fair", "serious", "critical"][min(ProcessInfo.processInfo.thermalState.rawValue, 3)],
             "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
             "pageCount": core.recentPages(limit: 100_000).count,
+            "storage": ["total": AppInfo.storage, "db": AppInfo.dbBreakdown.db, "wal": AppInfo.dbBreakdown.wal],
         ]
         if let shell {
             app["activeTab"] = shell.active ?? "home"
@@ -295,6 +303,146 @@ final class DevBridge {
         default:
             return ["error": "Unbekannte UI-Aktion: \(action)"]
         }
+    }
+
+    // MARK: Bedienelemente (Accessibility-Baum, wie VoiceOver ihn sieht)
+
+    /// Elemente der letzten `impala_ui_tree`-Abfrage; `impala_tap` mit `index` greift darauf zu.
+    @ObservationIgnored private var lastTree: [NSObject] = []
+
+    /// Sichtbare Fenster der App von unten nach oben (Hauptfenster, Sheets, Menüs, Alerts).
+    private static func windows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { !$0.isHidden && $0.alpha > 0.01 }
+            .sorted { $0.windowLevel.rawValue < $1.windowLevel.rawValue }
+    }
+
+    private static func collect(_ obj: NSObject, into out: inout [NSObject], depth: Int = 0) {
+        guard depth < 80, out.count < 3000 else { return }
+        if let v = obj as? UIView, v.isHidden || v.alpha < 0.01 || v.accessibilityElementsHidden { return }
+        if obj.isAccessibilityElement { out.append(obj); return }
+        if let kids = obj.accessibilityElements as? [NSObject], !kids.isEmpty {
+            kids.forEach { collect($0, into: &out, depth: depth + 1) }
+            return
+        }
+        let n = obj.accessibilityElementCount()
+        if n > 0, n != NSNotFound {
+            for i in 0..<n {
+                if let k = obj.accessibilityElement(at: i) as? NSObject { collect(k, into: &out, depth: depth + 1) }
+            }
+            return
+        }
+        (obj as? UIView)?.subviews.forEach { collect($0, into: &out, depth: depth + 1) }
+    }
+
+    private static func traitNames(_ obj: NSObject) -> [String] {
+        let t = obj.accessibilityTraits
+        var names: [String] = []
+        let map: [(UIAccessibilityTraits, String)] = [
+            (.button, "button"), (.link, "link"), (.header, "header"), (.selected, "selected"),
+            (.notEnabled, "disabled"), (.staticText, "text"), (.image, "image"), (.searchField, "search"),
+            (.adjustable, "adjustable"), (.tabBar, "tabbar"), (.keyboardKey, "key"),
+        ]
+        for (trait, name) in map where t.contains(trait) { names.append(name) }
+        if obj is UITextField || obj is UITextView { names.append("textfield") }
+        return names
+    }
+
+    private static func isInteractive(_ obj: NSObject) -> Bool {
+        let t = obj.accessibilityTraits
+        return t.contains(.button) || t.contains(.link) || t.contains(.adjustable) || t.contains(.searchField)
+            || obj is UIControl || obj is UITextView
+    }
+
+    /// Alle sichtbaren Elemente mit Beschriftung, Zustand und Rahmen (Bildschirmpunkte wie `impala_screenshot` bei scale 1 / displayScale).
+    private func uiTree(query: String, interactive: Bool, limit: Int) -> [String: Any] {
+        var all: [NSObject] = []
+        let wins = Self.windows()
+        for w in wins { Self.collect(w, into: &all) }
+        let screen = wins.first?.windowScene?.screen.bounds ?? .zero
+        lastTree = all.filter { el in
+            let f = el.accessibilityFrame
+            return f.width > 0 && f.height > 0 && f.intersects(screen)
+        }
+        let q = query.lowercased()
+        var rows: [[String: Any]] = []
+        for (i, el) in lastTree.enumerated() {
+            if interactive && !Self.isInteractive(el) { continue }
+            let label = el.accessibilityLabel ?? ""
+            let value = el.accessibilityValue ?? ""
+            let ident = (el as? UIAccessibilityIdentification)?.accessibilityIdentifier ?? ""
+            if !q.isEmpty && ![label, value, ident, el.accessibilityHint ?? ""].contains(where: { $0.lowercased().contains(q) }) { continue }
+            let f = el.accessibilityFrame
+            var row: [String: Any] = [
+                "index": i, "label": label, "traits": Self.traitNames(el),
+                "frame": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)],
+            ]
+            if !value.isEmpty { row["value"] = value }
+            if !ident.isEmpty { row["id"] = ident }
+            if let hint = el.accessibilityHint, !hint.isEmpty { row["hint"] = hint }
+            rows.append(row)
+            if rows.count >= limit { break }
+        }
+        return [
+            "screen": Profiler.shared.screen, "windows": wins.count, "total": lastTree.count, "count": rows.count,
+            "elements": rows,
+            "note": "frame = [x, y, Breite, Höhe] in Punkten. impala_tap mit index, label oder x/y.",
+        ]
+    }
+
+    /// Element wie mit VoiceOver auslösen (`accessibilityActivate`); UIKit-Steuerelemente notfalls direkt.
+    private func tap(_ args: [String: Any]) async -> [String: Any] {
+        if lastTree.isEmpty || args["index"] == nil { _ = uiTree(query: "", interactive: false, limit: 0) }
+        var target: NSObject?
+        if let i = args["index"] as? Int, lastTree.indices.contains(i) {
+            target = lastTree[i]
+        } else if let label = (args["label"] as? String)?.lowercased(), !label.isEmpty {
+            let named = lastTree.filter { ($0.accessibilityLabel ?? "").lowercased().contains(label) }
+            target = named.first { ($0.accessibilityLabel ?? "").lowercased() == label } ?? named.first(where: Self.isInteractive) ?? named.first
+        } else if let x = args["x"] as? Double, let y = args["y"] as? Double {
+            let p = CGPoint(x: x, y: y)
+            // Oberstes Fenster zuerst, dort das kleinste Element unter dem Punkt.
+            target = lastTree.filter { $0.accessibilityFrame.contains(p) }
+                .min { $0.accessibilityFrame.width * $0.accessibilityFrame.height < $1.accessibilityFrame.width * $1.accessibilityFrame.height }
+        }
+        guard let el = target else { return ["error": "Kein passendes Element (erst impala_ui_tree aufrufen)."] }
+        var how = "accessibilityActivate"
+        var ok = el.accessibilityActivate()
+        if !ok, let control = el as? UIControl, control.isEnabled {
+            control.sendActions(for: .touchUpInside)
+            ok = true
+            how = "UIControl.touchUpInside"
+        }
+        // Kurz warten, damit Menüs, Sheets und Animationen stehen, bevor der Aufrufer nachsieht.
+        try? await Task.sleep(for: .milliseconds(450))
+        let f = el.accessibilityFrame
+        return [
+            "ok": ok, "how": how, "label": el.accessibilityLabel ?? "", "traits": Self.traitNames(el),
+            "frame": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)], "screen": Profiler.shared.screen,
+            "note": ok ? "" : "Element hat das Auslösen abgelehnt (für VoiceOver nicht bedienbar) – das ist selbst ein Hinweis auf einen Fehler.",
+        ]
+    }
+
+    /// Text ins gerade fokussierte Eingabefeld (`submit`: danach Zeilenumbruch/Enter).
+    private func typeText(_ text: String, submit: Bool) -> [String: Any] {
+        guard let input = Self.firstResponder(in: Self.windows()) as? UIKeyInput else {
+            return ["error": "Kein Eingabefeld fokussiert (erst Feld per impala_tap antippen)."]
+        }
+        input.insertText(text)
+        if submit { input.insertText("\n") }
+        return ["ok": true, "typed": text.count]
+    }
+
+    private static func firstResponder(in windows: [UIWindow]) -> UIResponder? {
+        func find(_ v: UIView) -> UIResponder? {
+            if v.isFirstResponder { return v }
+            for s in v.subviews { if let r = find(s) { return r } }
+            return nil
+        }
+        for w in windows.reversed() { if let r = find(w) { return r } }
+        return nil
     }
 
     /// Wie „Arbeitsspeicher“ im Xcode-Messgerät (`phys_footprint`).
