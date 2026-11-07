@@ -108,44 +108,19 @@ final class HomeArticleWriter {
         )
     }
 
-    /// Eigenes Thema: das am längsten nicht mehr behandelte (nie behandelte zuerst, in Eingabereihenfolge).
+    /// Eigenes Thema: das am längsten nicht mehr behandelte (aus dem Rust-Kern).
     private static func pickTopic(_ raw: String, _ history: [HomeArticleInfo]) -> String? {
-        let own = raw.split(whereSeparator: { ",;\n".contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard !own.isEmpty else { return nil }
-        func lastUse(_ t: String) -> Int {
-            history.firstIndex { ($0.topics.first ?? "").lowercased() == t.lowercased() } ?? .max
-        }
-        return own.reduce(own[0]) { lastUse($1) > lastUse($0) ? $1 : $0 }
+        pickArticleTopic(topicsRaw: raw, historyFirstTopics: history.map { $0.topics.first ?? "" })
     }
 
-    /// Notizen zum Thema: Seite gleichen Titels samt Unterseiten, sonst Treffer der Suche; ohne Thema alle.
+    /// Notizen zum Thema (aus dem Rust-Kern).
     private static func pool(core: ImpalaCore, topic: String?) -> [String] {
-        guard let topic else { return core.recentPages(limit: 200).map(\.id) + core.archivedPages().map(\.id) }
-        if let root = core.findPageByTitle(title: topic), root.title.lowercased() == topic.lowercased() {
-            return core.pageSubtree(id: root.id)
-        }
-        return Array(core.search(query: topic, includeArchived: true).prefix(8).map(\.pageId))
+        core.articlePoolIds(topic: topic)
     }
 
     private static func chooseNotes(core: ImpalaCore, ids: [String], history: [HomeArticleInfo]) -> [Note] {
-        let used = Set(history.prefix(recent).flatMap { $0.sources.map(\.id) })
-        let usable = Array(Set(ids)).compactMap(core.page(id:))
-            .filter { !$0.trashed && $0.summary.kind == .note && $0.content.trimmingCharacters(in: .whitespacesAndNewlines).count >= minText }
-            .sorted { a, b in
-                let ua = used.contains(a.summary.id), ub = used.contains(b.summary.id)
-                return ua != ub ? !ua : a.summary.updated > b.summary.updated
-            }
-        let onlyArchived = !usable.contains { !$0.archived }
-        let main = usable.filter { !$0.archived || onlyArchived }.prefix(activeNotes)
-        let side = onlyArchived ? [] : usable.filter(\.archived).prefix(archivedNotes)
-        var budget = notesTotal
-        return (Array(main) + Array(side)).compactMap { p in
-            let limit = min(p.archived ? archivedChars : noteChars, max(0, budget))
-            let text = String(p.content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit))
-            budget -= text.count
-            guard !text.isEmpty else { return nil }
-            return Note(id: p.summary.id, title: p.summary.title.isEmpty ? "Ohne Titel" : p.summary.title, text: text, archived: p.archived)
+        core.chooseArticleNotes(candidateIds: ids).map {
+            Note(id: $0.id, title: $0.title, text: $0.text, archived: $0.archived)
         }
     }
 }

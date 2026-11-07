@@ -988,3 +988,71 @@ pub fn conflict_diff_rows(left: &str, right: &str) -> String {
         .collect();
     Value::Array(rows).to_string()
 }
+
+
+#[wasm_bindgen]
+impl ModelCore {
+    #[wasm_bindgen(js_name = allGrades)]
+    pub fn all_grades_js(&self) -> String {
+        text(&impala_model::kleinteile::all_grades(self.m.state()))
+    }
+
+    #[wasm_bindgen(js_name = gradesBySubject)]
+    pub fn grades_by_subject_js(&self) -> String {
+        text(&impala_model::kleinteile::grades_by_subject(self.m.state()))
+    }
+
+    #[wasm_bindgen(js_name = exportGradesMarkdown)]
+    pub fn export_grades_markdown_js(&self, today_label: &str) -> String {
+        impala_model::kleinteile::export_grades_markdown(self.m.state(), today_label)
+    }
+
+    #[wasm_bindgen(js_name = mergedChatSessions)]
+    pub fn merged_chat_sessions_js(&self, local_json: &str, now: &str) -> Result<String, JsError> {
+        let local: Vec<Value> = parse(local_json)?;
+        Ok(text(&impala_model::kleinteile::merged_chat_sessions(self.m.state(), &local, now)))
+    }
+}
+
+#[wasm_bindgen(js_name = gradeTier)]
+pub fn grade_tier_js(grade: f64) -> u8 {
+    impala_model::kleinteile::grade_tier(grade)
+}
+
+#[wasm_bindgen(js_name = gradesWeightedAverage)]
+pub fn grades_weighted_average_js(list_json: &str) -> Result<Option<f64>, JsError> {
+    let list: Vec<impala_model::kleinteile::GradeInfo> = parse(list_json)?;
+    Ok(impala_model::kleinteile::weighted_average(&list))
+}
+
+#[wasm_bindgen(js_name = pickArticleTopic)]
+pub fn pick_article_topic_js(topics_raw: &str, history_first_topics_json: &str) -> Result<Option<String>, JsError> {
+    let hist: Vec<String> = parse(history_first_topics_json)?;
+    Ok(impala_model::kleinteile::pick_article_topic(topics_raw, &hist))
+}
+
+#[wasm_bindgen(js_name = chooseArticleNotes)]
+pub fn choose_article_notes_js(
+    pool_json: &str,
+    recent_used_ids_json: &str,
+    recent_focuses_json: &str,
+    known_subjects_json: &str,
+) -> Result<String, JsError> {
+    let pool: Vec<impala_model::kleinteile::ArticlePoolItem> = parse(pool_json)?;
+    let used: Vec<String> = parse(recent_used_ids_json)?;
+    let focuses: Vec<String> = parse(recent_focuses_json)?;
+    let known: Vec<String> = parse(known_subjects_json)?;
+    Ok(text(&impala_model::kleinteile::choose_article_notes(&pool, &used, &focuses, &known)))
+}
+
+#[wasm_bindgen(js_name = normalizeChatSession)]
+pub fn normalize_chat_session_js(raw_json: &str, now: &str) -> Result<Option<String>, JsError> {
+    let raw: Value = parse(raw_json)?;
+    Ok(impala_model::kleinteile::normalize_chat_value(&raw, now).map(|v| text(&v)))
+}
+
+#[wasm_bindgen(js_name = sortChatSessions)]
+pub fn sort_chat_sessions_js(list_json: &str) -> Result<String, JsError> {
+    let list: Vec<Value> = parse(list_json)?;
+    Ok(text(&impala_model::kleinteile::sort_chat_values(list)))
+}

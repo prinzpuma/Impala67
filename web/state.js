@@ -634,6 +634,10 @@ export const STATE = (() => {
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
 		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
+		allGrades: () => JSON.parse(M.allGrades()),
+		gradesBySubject: () => JSON.parse(M.gradesBySubject()),
+		exportGradesMarkdown: (todayLabel = "") => M.exportGradesMarkdown(String(todayLabel)),
+		mergedChatSessions: (localRaw = [], now = "") => JSON.parse(M.mergedChatSessions(JSON.stringify(localRaw), String(now))),
 	};
 })();
 

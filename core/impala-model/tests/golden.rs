@@ -434,3 +434,49 @@ fn konflikt_dialog_wie_js() {
         assert_same(&json!(rows), &d["rows"], "alignDiffRows");
     }
 }
+
+
+#[test]
+fn kleinteile_wie_js() {
+    use impala_model::kleinteile::{
+        ArticlePoolItem, all_grades, choose_article_notes, export_grades_markdown, grade_tier, grades_by_subject,
+        merged_chat_sessions, pick_article_topic, weighted_average,
+    };
+    let g = golden("kleinteile.json");
+    for case in g["grades"].as_array().unwrap() {
+        let mut obj = Object::new();
+        obj.insert("grades".into(), case["grades"].clone());
+        let st = State::from_object(obj);
+        let list = all_grades(&st);
+        assert_same(&serde_json::to_value(&list).unwrap(), &case["all"], "all_grades");
+        assert_same(&json!(weighted_average(&list)), &case["average"], "weighted_average");
+        assert_same(&serde_json::to_value(grades_by_subject(&st)).unwrap(), &case["subjects"], "grades_by_subject");
+        let md = export_grades_markdown(&st, case["today"].as_str().unwrap());
+        assert_eq!(md, case["markdown"].as_str().unwrap(), "export_grades_markdown");
+    }
+    for t in g["tiers"].as_array().unwrap() {
+        assert_eq!(grade_tier(t["grade"].as_f64().unwrap()) as u64, t["tier"].as_u64().unwrap());
+    }
+    for tc in g["topics"].as_array().unwrap() {
+        let hist: Vec<String> =
+            tc["history"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect();
+        let got = pick_article_topic(tc["topicsRaw"].as_str().unwrap(), &hist);
+        assert_eq!(json!(got), tc["picked"]);
+    }
+    for cc in g["choose"].as_array().unwrap() {
+        let pool: Vec<ArticlePoolItem> = serde_json::from_value(cc["pool"].clone()).unwrap();
+        let used: Vec<String> = serde_json::from_value(cc["recentUsedIds"].clone()).unwrap();
+        let focuses: Vec<String> = serde_json::from_value(cc["recentFocuses"].clone()).unwrap();
+        let known: Vec<String> = serde_json::from_value(cc["knownSubjects"].clone()).unwrap();
+        let got = choose_article_notes(&pool, &used, &focuses, &known);
+        assert_same(&serde_json::to_value(&got).unwrap(), &cc["result"], "choose_article_notes");
+    }
+    for ch in g["chats"].as_array().unwrap() {
+        let mut obj = Object::new();
+        obj.insert("chatSessions".into(), ch["stateChats"].clone());
+        let st = State::from_object(obj);
+        let local: Vec<Value> = ch["localRaw"].as_array().unwrap().clone();
+        let got = merged_chat_sessions(&st, &local, ch["now"].as_str().unwrap());
+        assert_same(&Value::Array(got), &ch["merged"], "merged_chat_sessions");
+    }
+}
