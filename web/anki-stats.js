@@ -33,9 +33,9 @@ const shortDate = (k) => {
 
 // Berechnet Statistik-Kennzahlen: delegiert an STATE.learningStats (bzw. CORE.computeCardStats bei expliziten Karten/Reviews).
 export function statsData(options = {}) {
-	const { cards, reviews, now = new Date(), thinkMs } = options;
-	if (!cards && !reviews && typeof STATE !== "undefined" && STATE.learningStats) {
-		return STATE.learningStats(null, now);
+	const { cards, reviews, deck, now = new Date(), thinkMs } = options;
+	if (!cards && !reviews && typeof STATE !== "undefined" && typeof STATE.learningStats === "function") {
+		return STATE.learningStats(deck, now, thinkMs);
 	}
 	const t = now instanceof Date ? now : new Date(now);
 	const tele = (typeof S !== "undefined" && S?.telemetry) ? S.telemetry : [];
@@ -43,7 +43,7 @@ export function statsData(options = {}) {
 		JSON.stringify(cards || []),
 		JSON.stringify(reviews || []),
 		JSON.stringify(tele),
-		null,
+		deck ? String(deck) : null,
 		t.getTime(),
 		-t.getTimezoneOffset(),
 		thinkMs != null ? Number(thinkMs) : null
@@ -97,6 +97,7 @@ function activityHtml(d) {
 
 function forecastHtml(d, now = new Date()) {
 	if (!d.forecast || !d.forecast.length) return "";
+	const t = now instanceof Date ? now : new Date(now);
 	const max = Math.max(1, ...d.forecast.map((x) => x.n));
 	const bars = d.forecast.map((x, i) => {
 		let label = x.label;
@@ -105,7 +106,7 @@ function forecastHtml(d, now = new Date()) {
 			if (offset === 0) {
 				label = "Heute";
 			} else {
-				const dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+				const dayDate = new Date(t.getFullYear(), t.getMonth(), t.getDate() + offset);
 				label = dayDate.toLocaleDateString("de-DE", { weekday: "short" });
 			}
 		}
@@ -151,13 +152,14 @@ function retentionHtml(d) {
 
 // GitHub-artige Heatmap: 53 Wochen × 7 Tage, Farbstufe = Wiederholungen pro Tag
 function heatmapHtml(d, now = new Date()) {
+	const t = now instanceof Date ? now : new Date(now);
 	let cells = "";
 	if (Array.isArray(d.heatmap) && d.heatmap.length) {
 		for (const cell of d.heatmap) {
 			cells += '<div class="heat-cell l' + cell.level + '" title="' + cell.date + ": " + cell.n + ' Wiederholungen"></div>';
 		}
 	} else if (d.perDay) {
-		const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const end = new Date(t.getFullYear(), t.getMonth(), t.getDate());
 		const start = new Date(end);
 		start.setDate(start.getDate() - 364 - ((end.getDay() + 6) % 7));
 		for (let x = new Date(start); x <= end; x.setDate(x.getDate() + 1)) {

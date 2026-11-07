@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use impala_srs::{MS_PER_DAY, MS_PER_MINUTE, Timestamp, civil_from_days, days_from_civil};
+use impala_srs::{civil_from_days, days_from_civil, Timestamp, MS_PER_DAY, MS_PER_MINUTE};
 
 use crate::tree::deck_in_tree;
 use crate::types::{Card, Review, State, Telemetry};
@@ -213,7 +213,7 @@ struct ReviewRow<'a> {
     gap_days: Option<f64>,
 }
 
-fn compute_retention(all_reviews: &[Review], filtered_review_ids: &HashSet<&str>) -> RetentionStats {
+pub fn compute_retention(all_reviews: &[Review], filtered_review_ids: &HashSet<&str>) -> RetentionStats {
     let mut sorted: Vec<&Review> = all_reviews.iter().filter(|r| r.grade.unwrap_or(0.0) > 0.0).collect();
     sorted.sort_by(|a, b| a.t().cmp(b.t()));
 
@@ -264,7 +264,11 @@ fn parse_date_parts(k: &str) -> Option<(i64, i64, i64)> {
     let y = parts.next()?.parse().ok()?;
     let m = parts.next()?.parse().ok()?;
     let d = parts.next()?.parse().ok()?;
-    if parts.next().is_none() { Some((y, m, d)) } else { None }
+    if parts.next().is_none() {
+        Some((y, m, d))
+    } else {
+        None
+    }
 }
 
 pub fn compute_stats(
@@ -520,5 +524,17 @@ impl State {
         let active = self.active_cards();
         let cards: Vec<Card> = active.into_iter().cloned().collect();
         compute_stats(&cards, &self.reviews, &self.telemetry, options)
+    }
+
+    pub fn think_median(&self) -> i64 {
+        compute_think_median(&self.telemetry)
+    }
+
+    pub fn retention_stats(&self, review_ids: Option<&[&str]>) -> RetentionStats {
+        let set: HashSet<&str> = match review_ids {
+            Some(ids) => ids.iter().copied().collect(),
+            None => self.reviews.iter().filter_map(|r| r.id.as_deref()).collect(),
+        };
+        compute_retention(&self.reviews, &set)
     }
 }

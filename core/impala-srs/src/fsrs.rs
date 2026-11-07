@@ -19,7 +19,11 @@ pub(crate) fn js_round(x: f64) -> f64 {
 
 /// `Number(x) || fallback`: 0 und NaN gelten als fehlend.
 pub(crate) fn or(x: f64, fallback: f64) -> f64 {
-    if x == 0.0 || x.is_nan() { fallback } else { x }
+    if x == 0.0 || x.is_nan() {
+        fallback
+    } else {
+        x
+    }
 }
 
 pub(crate) fn safe_stability(s: f64) -> f64 {

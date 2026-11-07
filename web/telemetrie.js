@@ -40,6 +40,9 @@ export const TELE = (() => {
 
 	let _medKey = "", _medVal = 0;
 	function thinkMedian() {
+		if (typeof STATE !== "undefined" && typeof STATE.thinkMedian === "function") {
+			return STATE.thinkMedian();
+		}
 		const tele = S.telemetry || [];
 		const key = logStamp(tele);
 		if (key === _medKey) return _medVal;
@@ -248,6 +251,11 @@ export const TELE = (() => {
 		})).sort((a, b) => b.reviews - a.reviews);
 	}
 	function retentionStatsForReviews(reviews) {
+		if (typeof STATE !== "undefined" && typeof STATE.retentionStats === "function") {
+			const ids = (reviews || []).map((review) => review && review.id).filter(Boolean);
+			const stats = STATE.retentionStats(ids);
+			if (stats) return stats;
+		}
 		const ids = new Set((reviews || []).map((review) => review && review.id).filter(Boolean));
 		return retentionStats(reviewRows().filter((review) => ids.has(review.id)));
 	}

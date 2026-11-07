@@ -13,12 +13,12 @@ use impala_model::search::NoteSearch;
 use impala_model::study::StudyOptions;
 use impala_model::tree::deck_in_tree;
 use impala_model::types::Page;
-use impala_model::{CheckpointSave, LogEvent, Merge3, Model, merge3, migrate, touched};
+use impala_model::{merge3, migrate, touched, CheckpointSave, LogEvent, Merge3, Model};
 use impala_srs::Timestamp;
 use impala_storage::{Blob, CheckpointSlot, Error, LogInfo, Object, PartKind, Storage, Write};
 use js_sys::Function;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 
 use crate::js::to_js;
@@ -803,16 +803,40 @@ impl ModelCore {
 
     /// Statistik-Kennzahlen (`anki-stats.js` `statsData`).
     #[wasm_bindgen(js_name = learningStats)]
-    pub fn learning_stats(&self, deck: Option<String>, now: f64, tz_offset_minutes: i64) -> String {
+    pub fn learning_stats(
+        &self,
+        deck: Option<String>,
+        now: f64,
+        tz_offset_minutes: i32,
+        think_ms: Option<f64>,
+    ) -> String {
         let now_ts = Timestamp::from_millis(now as i64);
         let options = impala_model::stats::StatsOptions {
             deck: deck.as_deref().filter(|d| !d.is_empty()),
             now: now_ts,
-            tz_offset_minutes,
-            think_ms: None,
+            tz_offset_minutes: tz_offset_minutes as i64,
+            think_ms: think_ms.map(|ms| ms as i64),
         };
         let stats = self.m.state().learning_stats(&options);
         text(&stats)
+    }
+
+    /// Denkzeit-Median aus der Telemetrie (`telemetrie.js` `thinkMedian`).
+    #[wasm_bindgen(js_name = thinkMedian)]
+    pub fn think_median(&self) -> f64 {
+        self.m.state().think_median() as f64
+    }
+
+    /// Retention-Kennzahlen nach Wiederholungsabstand (`telemetrie.js` `retentionStatsForReviews`).
+    #[wasm_bindgen(js_name = retentionStats)]
+    pub fn retention_stats(&self, review_ids_json: Option<String>) -> Result<String, JsError> {
+        let ids: Option<Vec<String>> = match review_ids_json {
+            Some(s) if !s.is_empty() => Some(strings(parse(&s)?)),
+            _ => None,
+        };
+        let ids_ref: Option<Vec<&str>> = ids.as_ref().map(|v| v.iter().map(String::as_str).collect());
+        let stats = self.m.state().retention_stats(ids_ref.as_deref());
+        Ok(text(&stats))
     }
 
     /// Seitensuche: `[{ id, score, terms, snippet }]`.
@@ -1011,7 +1035,7 @@ pub fn compute_card_stats_js(
     telemetry_json: &str,
     deck: Option<String>,
     now_ms: f64,
-    tz_offset_minutes: i64,
+    tz_offset_minutes: i32,
     think_ms: Option<f64>,
 ) -> Result<String, JsError> {
     let cards: Vec<impala_model::Card> =
@@ -1024,7 +1048,7 @@ pub fn compute_card_stats_js(
     let options = impala_model::stats::StatsOptions {
         deck: deck.as_deref().filter(|d| !d.is_empty()),
         now,
-        tz_offset_minutes,
+        tz_offset_minutes: tz_offset_minutes as i64,
         think_ms: think_ms.map(|ms| ms as i64),
     };
     let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);

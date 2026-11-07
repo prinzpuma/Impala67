@@ -6,7 +6,7 @@ use impala_model::stats::{
     StatsData as ModelStats, StatsOptions,
 };
 use impala_srs::Timestamp;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::ImpalaCore;
 
@@ -237,5 +237,49 @@ impl ImpalaCore {
             "telemetry": serde_json::to_value(&state.telemetry).unwrap_or(Value::Null),
         })
         .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stats_berechnung_und_json() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        // Leere Statistik
+        let empty = core.learning_stats(None, None, Some(60));
+        assert_eq!(empty.n, 0);
+        assert_eq!(empty.reviews_all, 0);
+        assert_eq!(empty.bestand.neu, 0);
+        assert_eq!(empty.series.len(), 30);
+        assert_eq!(empty.forecast.len(), 7);
+        assert!(empty.heatmap.len() >= 365 && empty.heatmap.len() <= 371);
+        assert_eq!(empty.heatmap.last().unwrap().date, empty.series.last().unwrap().date);
+
+        // Karte anlegen
+        let card_id = core.create_card("Vorderseite".into(), "Rückseite".into(), Some("Mathe".into()), None).unwrap();
+        let stats = core.learning_stats(None, None, Some(60));
+        assert_eq!(stats.n, 1);
+        assert_eq!(stats.bestand.neu, 1);
+        assert_eq!(stats.decks.len(), 1);
+        assert_eq!(stats.decks[0].name, "Mathe");
+
+        // Deck-Filter
+        let bio_stats = core.learning_stats(Some("Bio".into()), None, Some(60));
+        assert_eq!(bio_stats.n, 0);
+
+        // Karte bewerten
+        core.review_card(card_id, 3).unwrap();
+        let after_review = core.learning_stats(None, None, Some(60));
+        assert_eq!(after_review.reviews_all, 1);
+        assert_eq!(after_review.bestand.neu, 0);
+        assert_eq!(after_review.bestand.lernen, 1);
+
+        // JSON-Export testen
+        let json_str = core.learning_stats_json();
+        let v: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(v["cards"].as_array().unwrap().len(), 1);
+        assert_eq!(v["reviews"].as_array().unwrap().len(), 1);
     }
 }

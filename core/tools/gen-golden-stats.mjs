@@ -35,8 +35,90 @@ export async function resolve(spec, ctx, next) {
 }`;
 register("data:text/javascript," + encodeURIComponent(hooks));
 
-const { statsData } = await import("../../web/anki-stats.js");
 const { TELE } = await import("../../web/telemetrie.js");
+
+const DAY = 864e5;
+const REIF_TAGE = 21;
+const MIN_N = 10;
+const WOCHEN = 30;
+
+const graded = (list) => list.filter((r) => r.grade > 0 && !r.first && !r.learning);
+function hitRate(list) {
+	const g = graded(list);
+	return g.length >= MIN_N ? g.filter((r) => r.grade > 1).length / g.length : null;
+}
+
+const utcOf = (k) => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+
+function streaks(perDay, now) {
+	let longest = 0, run = 0, prev = null;
+	for (const k of Object.keys(perDay).sort()) {
+		run = prev && (utcOf(k) - utcOf(prev)) / DAY === 1 ? run + 1 : 1;
+		longest = Math.max(longest, run);
+		prev = k;
+	}
+	const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	if (!perDay[dayKey(d)]) d.setDate(d.getDate() - 1);
+	let current = 0;
+	while (perDay[dayKey(d)]) { current++; d.setDate(d.getDate() - 1); }
+	return { longest, current };
+}
+
+function statsData({ cards, reviews, now = new Date(), thinkMs = 0 }) {
+	const ago = (r) => (now - new Date(r.t)) / DAY;
+	const last = reviews.filter((r) => ago(r) >= 0 && ago(r) < WOCHEN);
+	const before = reviews.filter((r) => ago(r) >= WOCHEN && ago(r) < 2 * WOCHEN);
+	const rate = hitRate(last);
+	const rateBefore = hitRate(before);
+
+	const bestand = { neu: 0, lernen: 0, wiederholen: 0, ausgesetzt: 0 };
+	const decksMap = {};
+	let reif = 0, gelernt = 0, faellig = 0;
+	for (const c of cards) {
+		const name = c.deck || "Standard";
+		const row = decksMap[name] || (decksMap[name] = { name, n: 0, due: 0, reif: 0 });
+		row.n++;
+		if (c.suspended) { bestand.ausgesetzt++; continue; }
+		if (c.srs.state === "new") bestand.neu++;
+		else if (c.srs.state === "review") { bestand.wiederholen++; gelernt++; }
+		else bestand.lernen++;
+		const istReif = c.srs.state === "review" && (c.srs.stability || 0) >= REIF_TAGE;
+		if (istReif) { reif++; row.reif++; }
+		if (new Date(c.srs.due) <= now) { faellig++; row.due++; }
+	}
+	const decks = Object.values(decksMap)
+		.map((row) => ({ ...row, rate: hitRate(last.filter((r) => r.deck === row.name)) }))
+		.sort((a, b) => b.due - a.due || a.name.localeCompare(b.name, "de"));
+
+	const perDay = {};
+	for (const r of reviews) { const k = dayKey(r.t); perDay[k] = (perDay[k] || 0) + 1; }
+	const series = [];
+	for (let i = WOCHEN - 1; i >= 0; i--) {
+		const k = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
+		series.push({ k, n: perDay[k] || 0 });
+	}
+	const peak = series.reduce((a, b) => (b.n > a.n ? b : a), { k: "", n: 0 });
+	const forecast = [];
+	for (let i = 0; i < 7; i++) {
+		const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+		const d1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1);
+		const from = i === 0 ? new Date(0) : d0;
+		const n = cards.filter((c) => !c.suspended && new Date(c.srs.due) >= from && new Date(c.srs.due) < d1).length;
+		forecast.push({ label: i === 0 ? "Heute" : d0.toLocaleDateString("de-DE", { weekday: "short" }), n });
+	}
+
+	const hard = cards
+		.filter((c) => (c.srs?.lapses || 0) > 0)
+		.sort((a, b) => (b.srs?.lapses || 0) - (a.srs?.lapses || 0))
+		.slice(0, 5);
+
+	return {
+		reviewsAll: reviews.length, last, rate, trend: rate !== null && rateBefore !== null ? Math.round((rate - rateBefore) * 100) : null,
+		avg: last.length / WOCHEN, bestand, n: cards.length, faellig, reif, gelernt, decks,
+		series, peak, forecast, perDay, streak: streaks(perDay, now), hard, thinkMs,
+		retention: TELE.retentionStatsForReviews(reviews),
+	};
+}
 
 function dayKey(x) {
 	const d = new Date(x);
