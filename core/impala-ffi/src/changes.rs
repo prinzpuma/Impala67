@@ -101,12 +101,7 @@ impl Changes {
 }
 
 impl Inner {
-    /// `ev` wurde gerade angewandt.
-    pub(crate) fn note(&mut self, ev: &LogEvent, remote: bool) {
-        self.note_as(ev, remote, content_only(ev));
-    }
-
-    fn note_as(&mut self, ev: &LogEvent, remote: bool, content_only: bool) {
+    pub(crate) fn note_as(&mut self, ev: &LogEvent, remote: bool, content_only: bool) {
         let t = touched(ev, self.model.state());
         self.pending.add(t, remote, content_only);
     }
@@ -116,14 +111,8 @@ impl Inner {
         impala_model::order::sort_events(&mut events);
         for ev in events {
             // `touched` liest nur diese Felder; so muss kein großes Heft-Bild kopiert werden.
-            let mut p = serde_json::Map::new();
-            for k in ["id", "pageId", "hash"] {
-                if let Some(v) = ev.payload.get(k) {
-                    p.insert(k.into(), v.clone());
-                }
-            }
-            let probe = LogEvent::new(ev.id.clone(), ev.t.clone(), ev.kind.clone(), serde_json::Value::Object(p));
-            let content = content_only(&ev);
+            let probe = probe_event(&ev.kind, &ev.t, &ev.id, &ev.payload);
+            let content = content_only(&ev.kind, &ev.payload);
             self.model.apply_remote_one(ev);
             self.note_as(&probe, true, content);
         }
@@ -136,12 +125,22 @@ impl Inner {
     }
 }
 
+/// Probe-Event für [`touched`]: nur die Felder, die es liest (kein großes Heft-Bild).
+pub(crate) fn probe_event(kind: &str, t: &str, id: &str, payload: &serde_json::Value) -> LogEvent {
+    let mut p = serde_json::Map::new();
+    for k in ["id", "pageId", "hash"] {
+        if let Some(v) = payload.get(k) {
+            p.insert(k.into(), v.clone());
+        }
+    }
+    LogEvent::new(id, t, kind, serde_json::Value::Object(p))
+}
+
 /// Ändert `ev` nur den Inhalt einer Seite (Heft-Striche, Notiztext), nichts, was Listen zeigen?
-fn content_only(ev: &LogEvent) -> bool {
-    match ev.kind.as_str() {
+pub(crate) fn content_only(kind: &str, payload: &serde_json::Value) -> bool {
+    match kind {
         "heftOps" | "heftSnap" => true,
-        "pageUpdate" => ev
-            .payload
+        "pageUpdate" => payload
             .get("patch")
             .and_then(serde_json::Value::as_object)
             .is_some_and(|p| !p.is_empty() && p.keys().all(|k| k == "content")),

@@ -40,9 +40,9 @@ pub fn heft_snapshot_first_page(snapshot: String) -> Option<HeftPageData> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ImpalaCore;
     use crate::heft::HeftStroke;
     use crate::heft_items::HeftChange;
-    use crate::ImpalaCore;
 
     #[test]
     fn stand_sichern_und_wiederherstellen() {
@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(core.heft_page_ids(heft.clone()).len(), 2);
 
         let edit = core.heft_restore(heft.clone(), snap).unwrap();
-        assert_eq!(core.heft_page_ids(heft.clone()), [page.clone()]);
+        assert_eq!(core.heft_page_ids(heft.clone()), std::slice::from_ref(&page));
         assert_eq!(core.heft_page(heft.clone(), page.clone()).unwrap().strokes.len(), 1);
 
         // Die Umkehr bringt den Stand vor dem Wiederherstellen zurück.

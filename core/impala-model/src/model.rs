@@ -47,6 +47,14 @@ pub enum CheckpointSave {
     Stale,
 }
 
+/// Ergebnis von [`Model::dispatch`]: ID und bereits serialisierte Log-Form (für den Sync).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Dispatched {
+    pub id: String,
+    /// Das Event als Log-Objekt, wie es der Speicher bekommen hat (mit `seq`).
+    pub object: Object,
+}
+
 /// Abgeleitete Heft-Kennzahlen (`S.heftMeta`): Badges, Bibliothek, Suche.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeftMeta {
@@ -374,12 +382,18 @@ impl Model {
         payload: Value,
         id: &str,
         now: &str,
-    ) -> Result<LogEvent, Error> {
+    ) -> Result<Dispatched, Error> {
         let mut ev = Self::local_event(kind, payload, id, now);
-        let seqs = storage.add_events(vec![ev.to_object()])?;
+        // Die Log-Form wird einmal gebaut: für den Speicher und (ohne erneutes Serialisieren) den Sync.
+        let mut object = ev.to_object();
+        let seqs = storage.add_events(vec![object.clone()])?;
         ev.seq = seqs.first().copied().unwrap_or(0);
-        self.apply_local(ev.clone());
-        Ok(ev)
+        if ev.seq > 0 {
+            object.insert("seq".into(), Value::from(ev.seq));
+        }
+        self.applied_after_load.insert(ev.id.clone());
+        self.reduce(ev, false);
+        Ok(Dispatched { id: id.to_owned(), object })
     }
 
     /// Folgenummer, bis zu der der letzte Checkpoint (oder der Start) reicht.

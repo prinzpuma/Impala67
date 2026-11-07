@@ -48,7 +48,7 @@ impl LogEvent {
             Value::String(s) => s,
             _ => return None,
         };
-        let mut text = |k: &str| ev.remove(k).filter(|v| js::truthy(v)).map(|v| js::to_string(&v)).unwrap_or_default();
+        let mut text = |k: &str| ev.remove(k).filter(js::truthy).map(|v| js::to_string(&v)).unwrap_or_default();
         Some(LogEvent {
             id: text("id"),
             t: text("t"),

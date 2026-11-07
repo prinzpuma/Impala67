@@ -75,10 +75,10 @@ fn has_key(v: Option<&Value>) -> bool {
 pub fn merge_settings_patch(current: &crate::types::Settings, patch: &Object) -> Option<Object> {
     let mut next = patch.clone();
     let Some(Value::Array(incoming)) = next.get("aiProviders") else { return Some(next) };
-    let old: Vec<Value> = match (&current.ai_providers, current.extra.get("aiProviders")) {
-        (Some(list), _) => list.clone(),
+    let old: &[Value] = match (&current.ai_providers, current.extra.get("aiProviders")) {
+        (Some(list), _) => list,
         (None, Some(v)) if js::truthy(v) => return None, // `.map` auf Nicht-Liste
-        _ => Vec::new(),
+        _ => &[],
     };
     if old.iter().any(Value::is_null) || incoming.iter().any(Value::is_null) {
         return None;
@@ -198,7 +198,7 @@ impl State {
             Event::PageDelete { id } => {
                 let key = id.clone().unwrap_or_else(|| "undefined".into());
                 if let Some(id) = id {
-                    self.close_page_tabs(&HashSet::from([id.clone()]));
+                    self.close_page_tabs(std::slice::from_ref(id));
                     fx.deleted_page = Some(id.clone());
                 }
                 for pg in self.pages.values_mut() {
@@ -222,7 +222,7 @@ impl State {
                         pg.set("trashedAt", s(t));
                     }
                 }
-                self.close_page_tabs(&ids.into_iter().collect());
+                self.close_page_tabs(&ids);
             }
             Event::PageRestore { id: Some(id) } => {
                 for id in self.page_subtree(id) {
@@ -245,7 +245,7 @@ impl State {
                         }
                     }
                 }
-                self.close_page_tabs(&ids.into_iter().collect());
+                self.close_page_tabs(&ids);
             }
             Event::PageUnarchive { id: Some(root) } => {
                 for id in self.page_subtree(root) {
@@ -772,7 +772,7 @@ impl State {
     }
 
     /// Schließt Tabs entfernter Seiten (`closePageTabs`; die offene Ansicht regelt die Oberfläche).
-    fn close_page_tabs(&mut self, gone: &HashSet<String>) {
+    fn close_page_tabs(&mut self, gone: &[String]) {
         if gone.is_empty() {
             return;
         }

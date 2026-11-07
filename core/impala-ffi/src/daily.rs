@@ -15,7 +15,7 @@ pub struct DailyNote {
     pub snippet: String,
 }
 
-fn str_extra<'a>(v: Option<&'a Value>) -> Option<&'a str> {
+fn str_extra(v: Option<&Value>) -> Option<&str> {
     v.and_then(Value::as_str).filter(|s| !s.is_empty())
 }
 
@@ -34,7 +34,15 @@ impl ImpalaCore {
                 key.starts_with(&prefix).then(|| DailyNote {
                     key: key.to_owned(),
                     page_id: p.id().to_owned(),
-                    snippet: p.content().lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(70).collect(),
+                    snippet: p
+                        .content()
+                        .lines()
+                        .map(str::trim)
+                        .find(|l| !l.is_empty())
+                        .unwrap_or("")
+                        .chars()
+                        .take(70)
+                        .collect(),
                 })
             })
             .collect();

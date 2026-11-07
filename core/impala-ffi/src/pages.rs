@@ -185,10 +185,10 @@ impl ImpalaCore {
             }
         }
         for p in &pages {
-            if let Some(parent) = p.parent().filter(|id| pages.iter().any(|q| q.id() == *id)) {
-                if !out.iter().any(|l| l.from == parent && l.to == p.id()) {
-                    out.push(PageLink { from: parent.to_owned(), to: p.id().to_owned(), child: true });
-                }
+            if let Some(parent) = p.parent().filter(|id| pages.iter().any(|q| q.id() == *id))
+                && !out.iter().any(|l| l.from == parent && l.to == p.id())
+            {
+                out.push(PageLink { from: parent.to_owned(), to: p.id().to_owned(), child: true });
             }
         }
         out

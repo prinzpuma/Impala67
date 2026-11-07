@@ -19,7 +19,7 @@ fn dispatch_checkpoint_und_heftbilder() {
     assert_eq!(report.reject_reason, Some("missing"));
     let ev =
         m.dispatch(&mut s, "pageCreate", json!({ "id": "h", "title": "Heft", "kind": "heft" }), "e1", &t(1)).unwrap();
-    assert_eq!(ev.payload["created"], json!(t(1)));
+    assert_eq!(ev.object["payload"]["created"], json!(t(1)));
     m.dispatch(&mut s, "heftBlob", json!({ "hash": "B", "data": "data:abc" }), "e2", &t(2)).unwrap();
     m.dispatch(
         &mut s,

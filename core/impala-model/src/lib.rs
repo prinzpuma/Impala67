@@ -26,7 +26,7 @@ pub use changes::{Ids, Touched, touched};
 pub use event::{Event, LogEvent};
 pub use jsmap::JsMap;
 pub use merge::{Merge3, merge3};
-pub use model::{CheckpointSave, HeftMeta, LoadReport, Model};
+pub use model::{CheckpointSave, Dispatched, HeftMeta, LoadReport, Model};
 pub use order::{OrderTimes, order_keys, reorder_safe};
 pub use reduce::{Effects, Live};
 pub use types::{

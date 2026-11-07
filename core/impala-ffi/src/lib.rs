@@ -179,9 +179,11 @@ fn summary(pg: &Page) -> PageSummary {
         icon: pg.extra.get("icon").and_then(Value::as_str).unwrap_or("").to_owned(),
         favorite: pg.extra.get("favorite").is_some_and(|v| v.as_bool().unwrap_or(false)),
         cover: pg.extra.get("cover").and_then(Value::as_str).unwrap_or("").to_owned(),
-        tags: pg.extra.get("tags").and_then(Value::as_array).map_or_else(Vec::new, |t| {
-            t.iter().filter_map(Value::as_str).map(str::to_owned).collect()
-        }),
+        tags: pg
+            .extra
+            .get("tags")
+            .and_then(Value::as_array)
+            .map_or_else(Vec::new, |t| t.iter().filter_map(Value::as_str).map(str::to_owned).collect()),
         is_template: pg.extra.get("isTemplate").is_some_and(|v| v.as_bool().unwrap_or(false)),
         pdf_id: pg.extra.get("pdfId").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
         created: pg.created_at().to_owned(),
@@ -296,12 +298,15 @@ impl Inner {
     fn dispatch(&mut self, kind: &str, payload: Value) -> Result<String, CoreError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = self.clock.now();
-        let ev = self.model.dispatch(&mut self.storage, kind, payload, &id, &now)?;
-        self.note(&ev, false);
+        // Änderungsmeldung aus den kleinen Feldern; das große Heft-Bild wird nicht kopiert.
+        let probe = changes::probe_event(kind, &now, &id, &payload);
+        let content = changes::content_only(kind, &payload);
+        let done = self.model.dispatch(&mut self.storage, kind, payload, &id, &now)?;
+        self.note_as(&probe, false, content);
         if let Some((_, tx)) = &self.sync_tx {
-            let _ = tx.send(sync::Cmd::Local(Value::Object(ev.to_object())));
+            let _ = tx.send(sync::Cmd::Local(Value::Object(done.object)));
         }
-        Ok(ev.id)
+        Ok(done.id)
     }
 }
 
