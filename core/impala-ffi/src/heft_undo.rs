@@ -12,6 +12,10 @@ use impala_heft::{HeftDoc, HeftOp, HeftPage, Item, ItemKind};
 /// Grenze: Entfernte Elemente kommen ans Ende ihrer Liste zurück – die Stapelreihenfolge
 /// der Striche (z. B. Marker über Stift) kann sich dadurch ändern.
 pub(crate) fn inverse(doc: &HeftDoc, ops: &[HeftOp]) -> Vec<HeftOp> {
+    // Eine Operation (der Normalfall: ein Strich) braucht keine Arbeitskopie des ganzen Hefts.
+    if let [op] = ops {
+        return inverse_one(doc, op);
+    }
     let mut scratch = doc.clone();
     let mut groups = Vec::with_capacity(ops.len());
     for op in ops {
