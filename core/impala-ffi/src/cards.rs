@@ -130,21 +130,25 @@ impl ImpalaCore {
     pub fn decks(&self) -> Vec<DeckInfo> {
         let inner = self.lock();
         let state = inner.model.state();
+        let mut counts: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
+        for c in state.active_cards() {
+            *counts.entry(c.deck_name()).or_default() += 1;
+        }
         let mut names: Vec<String> = state
             .decks
             .values()
             .filter(|d| !d.is_trashed() && !d.is_archived())
             .filter_map(|d| d.name.clone())
             .collect();
-        for c in state.active_cards() {
-            if !names.iter().any(|n| n == c.deck_name()) {
-                names.push(c.deck_name().to_owned());
+        for d in counts.keys() {
+            if !names.iter().any(|n| n.as_str() == *d) {
+                names.push((*d).to_owned());
             }
         }
         names
             .into_iter()
             .map(|name| {
-                let cards = state.active_cards().iter().filter(|c| c.deck_name() == name).count() as u64;
+                let cards = counts.get(name.as_str()).copied().unwrap_or(0);
                 DeckInfo { name, cards }
             })
             .collect()

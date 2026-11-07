@@ -265,7 +265,7 @@ impl Model {
                 if !partitioned {
                     m.dirty_blobs = m.blob_sizes.keys().cloned().collect();
                 }
-                let mut tail: Vec<LogEvent> = tail.iter().filter_map(LogEvent::from_object).collect();
+                let mut tail: Vec<LogEvent> = tail.into_iter().filter_map(LogEvent::from_object_owned).collect();
                 order::sort_events(&mut tail);
                 let saved_times = cp.get("orderTimes").and_then(Value::as_object).map(order::times_from_object);
                 m.order_complete = saved_times.is_some();

@@ -179,24 +179,24 @@ impl State {
             let m = if r.truthy("first") { &mut used_new } else { &mut used_rev };
             *m.entry(d).or_default() += 1.0;
         }
-        let mut conf_cache = HashMap::new();
-        let mut take = |list: &[&'s Card], new: bool, conf_cache: &mut HashMap<String, crate::tree::DeckConf>| {
+        let mut conf_cache: HashMap<&str, crate::tree::DeckConf> = HashMap::new();
+        let mut take = |list: &[&'s Card], new: bool, conf_cache: &mut HashMap<&'s str, crate::tree::DeckConf>| {
             let mut out = Vec::new();
             for c in list {
-                let d = c.deck_name().to_owned();
-                let conf = conf_cache.entry(d.clone()).or_insert_with(|| self.deck_conf(&d)).clone();
-                let rev = Value::from(used_rev.get(&d).copied().unwrap_or(0.0));
+                let d = c.deck_name();
+                let conf = conf_cache.entry(d).or_insert_with(|| self.deck_conf(d));
+                let rev = Value::from(used_rev.get(d).copied().unwrap_or(0.0));
                 if js::value_ge(&rev, conf.rev_per_day()) {
                     continue;
                 }
                 if new {
-                    let n = Value::from(used_new.get(&d).copied().unwrap_or(0.0));
+                    let n = Value::from(used_new.get(d).copied().unwrap_or(0.0));
                     if js::value_ge(&n, conf.new_per_day()) {
                         continue;
                     }
-                    *used_new.entry(d).or_default() += 1.0;
+                    *used_new.entry(d.to_owned()).or_default() += 1.0;
                 } else {
-                    *used_rev.entry(d).or_default() += 1.0;
+                    *used_rev.entry(d.to_owned()).or_default() += 1.0;
                 }
                 out.push(*c);
             }
@@ -206,8 +206,8 @@ impl State {
         let limited_new = take(&new_raw, true, &mut conf_cache);
 
         let lock_cut = o.now.add_millis(-OVERLEARN_LOCK_MS).to_iso();
-        let fresh: HashSet<String> =
-            self.reviews.iter().filter(|r| js::lt(&lock_cut, r.t())).filter_map(|r| r.card_id.clone()).collect();
+        let fresh: HashSet<&str> =
+            self.reviews.iter().filter(|r| js::lt(&lock_cut, r.t())).filter_map(|r| r.card_id.as_deref()).collect();
         let ahead_free: Vec<&Card> = if o.overlearn_lock {
             learn_ahead.iter().copied().filter(|c| !fresh.contains(c.id())).collect()
         } else {

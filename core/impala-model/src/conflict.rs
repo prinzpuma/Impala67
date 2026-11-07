@@ -836,13 +836,13 @@ const COLLAPSE_KEEP: usize = 3;
 /// Beide Spalten zeilengenau ausrichten (`alignDiffRows`).
 pub fn align_diff_rows(diff: &[DiffLine]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
-    let (mut dels, mut adds): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
-    let flush = |rows: &mut Vec<Row>, dels: &mut Vec<String>, adds: &mut Vec<String>| {
+    let (mut dels, mut adds): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
+    let flush = |rows: &mut Vec<Row>, dels: &mut Vec<&str>, adds: &mut Vec<&str>| {
         let n = dels.len().max(adds.len());
         for k in 0..n {
             rows.push(Row::Line {
-                left: dels.get(k).cloned(),
-                right: adds.get(k).cloned(),
+                left: dels.get(k).map(|s| (*s).to_owned()),
+                right: adds.get(k).map(|s| (*s).to_owned()),
                 changed: true,
                 start: k == 0,
             });
@@ -852,8 +852,8 @@ pub fn align_diff_rows(diff: &[DiffLine]) -> Vec<Row> {
     };
     for d in diff {
         match d.change {
-            LineChange::Del => dels.push(d.text.clone()),
-            LineChange::Add => adds.push(d.text.clone()),
+            LineChange::Del => dels.push(&d.text),
+            LineChange::Add => adds.push(&d.text),
             LineChange::Same => {
                 flush(&mut rows, &mut dels, &mut adds);
                 rows.push(Row::Line {
