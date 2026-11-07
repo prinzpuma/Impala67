@@ -442,8 +442,8 @@ pub fn heft_new_id() -> String {
 impl ImpalaCore {
     /// Mehrere Änderungen als EIN Event (eine Geste). Liefert neue IDs und die Umkehr.
     pub fn heft_apply(&self, page_id: String, changes: Vec<HeftChange>) -> Result<HeftEdit, CoreError> {
-        let mut inner = self.lock();
         let ids = Inner::added_ids(&changes);
+        let mut inner = self.lock();
         let ops = inner.change_ops(&page_id, changes)?;
         inner.heft_edit(&page_id, ops, ids)
     }
@@ -622,17 +622,17 @@ impl ImpalaCore {
         }
         let data = format!("data:{mime};base64,{}", STANDARD.encode(&bytes));
         let hash = blob_id(&data);
+        let image_id = new_id();
         let mut inner = self.lock();
         inner.heft_page(&page_id, &heft_page_id)?;
-        let image = HeftImage { id: new_id(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None };
-        let ops =
-            inner.change_ops(&page_id, vec![HeftChange::AddImage { page: heft_page_id, image: image.clone() }])?;
+        let image = HeftImage { id: image_id.clone(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None };
+        let ops = inner.change_ops(&page_id, vec![HeftChange::AddImage { page: heft_page_id, image }])?;
         // Erst das Bild, dann das Element: Fremdgeräte sehen es so nie ohne Daten. Ein im Checkpoint
         // schon bekanntes Bild braucht kein zweites (mehrere MB großes) Event.
         if !inner.model.has_heft_blob(&hash) {
             inner.dispatch("heftBlob", json!({ "hash": hash, "data": data }))?;
         }
-        inner.heft_edit(&page_id, ops, vec![image.id])
+        inner.heft_edit(&page_id, ops, vec![image_id])
     }
 
     /// Bytes und MIME-Typ eines Bilds (lädt es bei Bedarf aus Checkpoint bzw. Log nach; Altbilder mit
@@ -661,6 +661,7 @@ impl ImpalaCore {
             }
             None => image.src,
         };
+        drop(guard);
         Ok(data.and_then(|d| split_data_url(&d)).map(|(mime, bytes)| HeftImageData { bytes, mime }))
     }
 
