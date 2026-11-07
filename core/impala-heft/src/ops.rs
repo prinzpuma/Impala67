@@ -110,41 +110,54 @@ pub enum HeftOp {
 impl HeftOp {
     /// Liest eine Operation aus dem Log. Was der Reducer überspringen würde, wird [`HeftOp::Other`].
     pub fn from_value(v: Value) -> Self {
-        Self::parse(&v).unwrap_or(HeftOp::Other(v))
+        Self::parse(v).unwrap_or_else(HeftOp::Other)
     }
 
-    fn parse(v: &Value) -> Option<Self> {
-        let t = v.get("t")?.as_str()?;
+    /// Konsumiert `v` (spart das Klonen großer Striche); im Fehlerfall kommt das Original zurück.
+    fn parse(v: Value) -> Result<Self, Value> {
+        let Some(t) = v.get("t").and_then(Value::as_str).map(str::to_owned) else { return Err(v) };
         let page = || non_empty(v.get("p"));
-        Some(match t {
+        Ok(match t.as_str() {
             "pg+" => {
-                let pg = v.get("page")?;
-                let id = pg.get("id").filter(|i| truthy(i)).and_then(id_str)?;
+                let Some(pg) = v.get("page") else { return Err(v) };
+                let Some(id) = pg.get("id").filter(|i| truthy(i)).and_then(id_str) else { return Err(v) };
                 let paper = pg.get("paper").filter(|p| truthy(p)).map(|p| Paper::parse(Some(p)));
                 HeftOp::PageAdd { at: v.get("at").and_then(Value::as_f64), page: id, paper }
             }
-            "pg-" => HeftOp::PageRemove { page: page()? },
+            "pg-" => {
+                let Some(page) = page() else { return Err(v) };
+                HeftOp::PageRemove { page }
+            }
             "pgo" => HeftOp::PageOrder { order: str_list(v.get("order")) },
-            "pgp" => HeftOp::PagePaper { page: page()?, paper: Paper::parse(v.get("paper")) },
+            "pgp" => {
+                let Some(page) = page() else { return Err(v) };
+                HeftOp::PagePaper { page, paper: Paper::parse(v.get("paper")) }
+            }
             "ocr" => {
                 let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
-                HeftOp::Ocr { page: page()?, text: s("text"), src: s("src"), key: s("key") }
+                let Some(page) = page() else { return Err(v) };
+                HeftOp::Ocr { page, text: s("text"), src: s("src"), key: s("key") }
             }
             _ => {
                 let b = t.as_bytes();
                 if b.len() != 2 {
-                    return None;
+                    return Err(v);
                 }
-                let kind = ItemKind::from_letter(b[0])?;
-                let page = page()?;
+                let Some(kind) = ItemKind::from_letter(b[0]) else { return Err(v) };
+                let Some(page) = page() else { return Err(v) };
                 match b[1] {
                     b'-' => HeftOp::Remove { page, kind, ids: str_list(v.get("ids")) },
                     b'+' | b'=' => {
-                        let o = v.get("o").filter(|o| o.get("id").is_some_and(truthy))?;
-                        let item = Item::parse(kind, o.clone())?;
+                        if !v.get("o").is_some_and(|o| o.get("id").is_some_and(truthy)) {
+                            return Err(v);
+                        }
+                        // `o` ist ein Objekt (die ID ließ sich lesen): übernehmen statt klonen.
+                        let Value::Object(mut m) = v else { unreachable!("v war ein Objekt") };
+                        let o = m.remove("o").expect("o existiert");
+                        let item = Item::parse(kind, o).expect("o ist ein Objekt");
                         if b[1] == b'+' { HeftOp::Add { page, item } } else { HeftOp::Set { page, item } }
                     }
-                    _ => return None,
+                    _ => return Err(v),
                 }
             }
         })
@@ -166,7 +179,6 @@ impl HeftOp {
 
 impl Serialize for HeftOp {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        let code = |kind: &ItemKind, c: char| format!("{}{c}", kind.letter());
         if let HeftOp::Other(v) = self {
             return v.serialize(s);
         }
@@ -206,17 +218,27 @@ impl Serialize for HeftOp {
             }
             HeftOp::Add { page, item } | HeftOp::Set { page, item } => {
                 let c = if matches!(self, HeftOp::Add { .. }) { '+' } else { '=' };
-                m.serialize_entry("t", &code(&item.kind(), c))?;
+                m.serialize_entry("t", &OpCode(item.kind(), c))?;
                 m.serialize_entry("p", page)?;
                 m.serialize_entry("o", item)?;
             }
             HeftOp::Remove { page, kind, ids } => {
-                m.serialize_entry("t", &code(kind, '-'))?;
+                m.serialize_entry("t", &OpCode(*kind, '-'))?;
                 m.serialize_entry("p", page)?;
                 m.serialize_entry("ids", ids)?;
             }
         }
         m.end()
+    }
+}
+
+/// `s+`, `i=` … als Zwei-Zeichen-Text ohne Zwischen-String.
+struct OpCode(ItemKind, char);
+
+impl Serialize for OpCode {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let buf = [self.0.letter() as u8, self.1 as u8];
+        s.serialize_str(std::str::from_utf8(&buf).expect("ASCII-Code"))
     }
 }
 
@@ -267,8 +289,7 @@ pub(crate) fn insert_index(at: Option<f64>, len: usize) -> usize {
 }
 
 fn replace_or_push<T>(list: &mut Vec<T>, item: T, id: impl Fn(&T) -> &str) {
-    let key = id(&item).to_owned();
-    match list.iter_mut().find(|x| id(x) == key) {
+    match list.iter_mut().find(|x| id(x) == id(&item)) {
         Some(slot) => *slot = item,
         None => list.push(item),
     }
@@ -411,19 +432,29 @@ impl HeftEvent {
         match kind {
             "heftOps" => {
                 let page_id = non_empty(payload.get("pageId"))?;
-                let ops = payload.get("ops").and_then(Value::as_array).filter(|a| !a.is_empty())?;
-                Some(HeftEvent::Ops { page_id, ops: ops.iter().cloned().map(HeftOp::from_value).collect() })
+                let Value::Object(mut m) = payload else { return None };
+                let Value::Array(ops) = m.remove("ops")? else { return None };
+                if ops.is_empty() {
+                    return None;
+                }
+                Some(HeftEvent::Ops { page_id, ops: ops.into_iter().map(HeftOp::from_value).collect() })
             }
             "heftSnap" => {
                 let page_id = non_empty(payload.get("pageId"))?;
-                let pages = payload.get("doc").filter(|d| truthy(d))?.get("pages")?.as_array()?;
+                let Value::Object(mut m) = payload else { return None };
+                let doc = m.remove("doc")?;
+                if !truthy(&doc) {
+                    return None;
+                }
+                let Value::Object(mut doc) = doc else { return None };
+                let Value::Array(pages) = doc.remove("pages")? else { return None };
                 let mut out = Vec::with_capacity(pages.len());
                 for pg in pages {
                     // JS liest `pg.id` – bei `null` wirft das, und der Reducer überspringt das Event.
                     if pg.is_null() {
                         return None;
                     }
-                    let mut page = HeftPage::from_value(pg.clone());
+                    let mut page = HeftPage::from_value(pg);
                     page.extra.clear(); // der Reducer übernimmt nur die bekannten Felder
                     out.push(page);
                 }

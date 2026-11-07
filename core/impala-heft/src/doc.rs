@@ -221,7 +221,10 @@ impl Shape {
         if m.len() != keys.len() + 1 {
             return None;
         }
-        let v: Vec<f64> = keys.iter().map(|k| m.get(*k).and_then(Value::as_f64)).collect::<Option<_>>()?;
+        let mut v = [0.0; 8];
+        for (slot, k) in v.iter_mut().zip(keys) {
+            *slot = m.get(*k).and_then(Value::as_f64)?;
+        }
         Some(match kind {
             "line" => Shape::Line { x1: v[0], y1: v[1], x2: v[2], y2: v[3] },
             "rect" => Shape::Rect { x1: v[0], y1: v[1], x2: v[2], y2: v[3] },
