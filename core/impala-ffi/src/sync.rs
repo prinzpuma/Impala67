@@ -597,10 +597,8 @@ impl CloudSync {
         let (before, before_seq) = info();
         let pass = self.pass(Cmd::Refetch)?;
         // Was neu kam (höchstens 20, Typ · Zeit · ID): Hinweis, warum es diesem Gerät fehlte.
-        let added_events = crate::lock(&self.core)
-            .storage
-            .events_after(before_seq, None, Some(20))
-            .unwrap_or_default()
+        let events = crate::lock(&self.core).storage.events_after(before_seq, None, Some(20)).unwrap_or_default();
+        let added_events = events
             .iter()
             .filter(|e| e.get("_remote").is_some_and(|v| v.as_bool() == Some(true)))
             .map(|e| {

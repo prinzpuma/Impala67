@@ -536,7 +536,7 @@ impl SemanticSearch {
     fn page_meta(&self) -> HashMap<String, PageMeta> {
         let inner = lock(&self.core);
         let state = inner.model.state();
-        state
+        let pages: Vec<(String, PageMeta)> = state
             .pages
             .iter()
             .map(|(id, p)| {
@@ -547,7 +547,9 @@ impl SemanticSearch {
                 };
                 (id.clone(), meta)
             })
-            .collect()
+            .collect();
+        drop(inner);
+        pages.into_iter().collect()
     }
 
     fn built_index<'a>(&self, cache: &'a mut Cache) -> Result<&'a VectorIndex, SearchFailure> {
