@@ -1,0 +1,484 @@
+{
+  "merged": [
+    {
+      "name": "empty",
+      "sessions": [],
+      "expectedSeconds": 0
+    },
+    {
+      "name": "single_session_with_segment",
+      "sessions": [
+        {
+          "id": "s1",
+          "startedAt": "2026-11-01T10:00:00.000Z",
+          "endedAt": "2026-11-01T10:30:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T10:00:00.000Z",
+              "endedAt": "2026-11-01T10:30:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 1800
+    },
+    {
+      "name": "two_disjoint_sessions",
+      "sessions": [
+        {
+          "id": "s1",
+          "startedAt": "2026-11-01T10:00:00.000Z",
+          "endedAt": "2026-11-01T10:30:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T10:00:00.000Z",
+              "endedAt": "2026-11-01T10:30:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "startedAt": "2026-11-01T11:00:00.000Z",
+          "endedAt": "2026-11-01T11:15:00.000Z",
+          "durationSeconds": 900,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T11:00:00.000Z",
+              "endedAt": "2026-11-01T11:15:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 2700
+    },
+    {
+      "name": "overlapping_two_devices",
+      "sessions": [
+        {
+          "id": "dev_a",
+          "startedAt": "2026-11-01T14:00:00.000Z",
+          "endedAt": "2026-11-01T14:40:00.000Z",
+          "durationSeconds": 2400,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T14:00:00.000Z",
+              "endedAt": "2026-11-01T14:40:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "dev_b",
+          "startedAt": "2026-11-01T14:10:00.000Z",
+          "endedAt": "2026-11-01T14:50:00.000Z",
+          "durationSeconds": 2400,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T14:10:00.000Z",
+              "endedAt": "2026-11-01T14:50:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 3000
+    },
+    {
+      "name": "contained_overlap",
+      "sessions": [
+        {
+          "id": "outer",
+          "startedAt": "2026-11-01T08:00:00.000Z",
+          "endedAt": "2026-11-01T09:00:00.000Z",
+          "durationSeconds": 3600,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T08:00:00.000Z",
+              "endedAt": "2026-11-01T09:00:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "inner",
+          "startedAt": "2026-11-01T08:15:00.000Z",
+          "endedAt": "2026-11-01T08:45:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T08:15:00.000Z",
+              "endedAt": "2026-11-01T08:45:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 3600
+    },
+    {
+      "name": "touching_boundaries",
+      "sessions": [
+        {
+          "id": "s1",
+          "startedAt": "2026-11-01T12:00:00.000Z",
+          "endedAt": "2026-11-01T12:30:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T12:00:00.000Z",
+              "endedAt": "2026-11-01T12:30:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "startedAt": "2026-11-01T12:30:00.000Z",
+          "endedAt": "2026-11-01T13:00:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T12:30:00.000Z",
+              "endedAt": "2026-11-01T13:00:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 3600
+    },
+    {
+      "name": "fallback_without_segments",
+      "sessions": [
+        {
+          "id": "legacy1",
+          "startedAt": "2026-11-01T10:00:00.000Z",
+          "endedAt": "2026-11-01T10:10:00.000Z",
+          "durationSeconds": 600,
+          "segments": []
+        },
+        {
+          "id": "legacy2_no_end",
+          "startedAt": "2026-11-01T10:05:00.000Z",
+          "durationSeconds": 900,
+          "segments": null
+        }
+      ],
+      "expectedSeconds": 1200
+    },
+    {
+      "name": "multiple_segments_interleaved",
+      "sessions": [
+        {
+          "id": "multi1",
+          "startedAt": "2026-11-01T15:00:00.000Z",
+          "endedAt": "2026-11-01T16:00:00.000Z",
+          "durationSeconds": 1800,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T15:00:00.000Z",
+              "endedAt": "2026-11-01T15:15:00.000Z"
+            },
+            {
+              "startedAt": "2026-11-01T15:30:00.000Z",
+              "endedAt": "2026-11-01T15:45:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "multi2",
+          "startedAt": "2026-11-01T15:10:00.000Z",
+          "endedAt": "2026-11-01T15:35:00.000Z",
+          "durationSeconds": 1500,
+          "segments": [
+            {
+              "startedAt": "2026-11-01T15:10:00.000Z",
+              "endedAt": "2026-11-01T15:35:00.000Z"
+            }
+          ]
+        }
+      ],
+      "expectedSeconds": 2700
+    }
+  ],
+  "streaks": [
+    {
+      "name": "empty",
+      "totals": {},
+      "referenceDate": "2026-11-04",
+      "expectedStreak": 0
+    },
+    {
+      "name": "today_and_yesterday_active",
+      "totals": {
+        "2026-11-04": 600,
+        "2026-11-03": 500,
+        "2026-11-02": 400
+      },
+      "referenceDate": "2026-11-04",
+      "expectedStreak": 3
+    },
+    {
+      "name": "today_empty_yesterday_active",
+      "totals": {
+        "2026-11-04": 100,
+        "2026-11-03": 600,
+        "2026-11-02": 700
+      },
+      "referenceDate": "2026-11-04",
+      "expectedStreak": 2
+    },
+    {
+      "name": "gap_two_days_ago",
+      "totals": {
+        "2026-11-04": 600,
+        "2026-11-03": 100,
+        "2026-11-02": 800
+      },
+      "referenceDate": "2026-11-04",
+      "expectedStreak": 1
+    },
+    {
+      "name": "today_zero_yesterday_zero",
+      "totals": {
+        "2026-11-04": 0,
+        "2026-11-03": 0,
+        "2026-11-02": 800
+      },
+      "referenceDate": "2026-11-04",
+      "expectedStreak": 0
+    }
+  ],
+  "weeks": [
+    {
+      "name": "current_week",
+      "refDate": "2026-11-04",
+      "offset": 0,
+      "days": [
+        {
+          "date": "2026-11-02",
+          "seconds": 1200
+        },
+        {
+          "date": "2026-11-03",
+          "seconds": 1800
+        },
+        {
+          "date": "2026-11-04",
+          "seconds": 600
+        },
+        {
+          "date": "2026-11-05",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-06",
+          "seconds": 2400
+        },
+        {
+          "date": "2026-11-07",
+          "seconds": 900
+        },
+        {
+          "date": "2026-11-08",
+          "seconds": 300
+        }
+      ]
+    },
+    {
+      "name": "prev_week",
+      "refDate": "2026-11-04",
+      "offset": -1,
+      "days": [
+        {
+          "date": "2026-10-26",
+          "seconds": 0
+        },
+        {
+          "date": "2026-10-27",
+          "seconds": 0
+        },
+        {
+          "date": "2026-10-28",
+          "seconds": 0
+        },
+        {
+          "date": "2026-10-29",
+          "seconds": 0
+        },
+        {
+          "date": "2026-10-30",
+          "seconds": 500
+        },
+        {
+          "date": "2026-10-31",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-01",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "name": "next_week",
+      "refDate": "2026-11-04",
+      "offset": 1,
+      "days": [
+        {
+          "date": "2026-11-09",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-10",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-11",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-12",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-13",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-14",
+          "seconds": 0
+        },
+        {
+          "date": "2026-11-15",
+          "seconds": 0
+        }
+      ]
+    }
+  ],
+  "cycle": [
+    {
+      "input": 120,
+      "next": 300
+    },
+    {
+      "input": 300,
+      "next": 480
+    },
+    {
+      "input": 480,
+      "next": 720
+    },
+    {
+      "input": 720,
+      "next": 120
+    },
+    {
+      "input": 50,
+      "next": 120
+    },
+    {
+      "input": 0,
+      "next": 480
+    },
+    {
+      "input": 999,
+      "next": 120
+    }
+  ],
+  "nudges": [
+    {
+      "streak": 5,
+      "todaySeconds": 0,
+      "weekMin": 100,
+      "goalMin": 300,
+      "hour": 15,
+      "expected": {
+        "kind": "streakAtRisk",
+        "streakDays": 5
+      },
+      "result": {
+        "kind": "streakAtRisk",
+        "streakDays": 5
+      }
+    },
+    {
+      "streak": 5,
+      "todaySeconds": 0,
+      "weekMin": 100,
+      "goalMin": 300,
+      "hour": 13,
+      "expected": {
+        "kind": "none"
+      },
+      "result": {
+        "kind": "none"
+      }
+    },
+    {
+      "streak": 0,
+      "todaySeconds": 0,
+      "weekMin": 270,
+      "goalMin": 300,
+      "hour": 11,
+      "expected": {
+        "kind": "goalInReach",
+        "minutesLeft": 30
+      },
+      "result": {
+        "kind": "goalInReach",
+        "minutesLeft": 30
+      }
+    },
+    {
+      "streak": 0,
+      "todaySeconds": 0,
+      "weekMin": 300,
+      "goalMin": 300,
+      "hour": 11,
+      "expected": {
+        "kind": "goalReached"
+      },
+      "result": {
+        "kind": "goalReached"
+      }
+    },
+    {
+      "streak": 0,
+      "todaySeconds": 0,
+      "weekMin": 350,
+      "goalMin": 300,
+      "hour": 11,
+      "expected": {
+        "kind": "goalReached"
+      },
+      "result": {
+        "kind": "goalReached"
+      }
+    },
+    {
+      "streak": 0,
+      "todaySeconds": 1500,
+      "weekMin": 100,
+      "goalMin": 300,
+      "hour": 11,
+      "expected": {
+        "kind": "todayProgress",
+        "minutes": 25
+      },
+      "result": {
+        "kind": "todayProgress",
+        "minutes": 25
+      }
+    },
+    {
+      "streak": 0,
+      "todaySeconds": 0,
+      "weekMin": 50,
+      "goalMin": 300,
+      "hour": 10,
+      "expected": {
+        "kind": "none"
+      },
+      "result": {
+        "kind": "none"
+      }
+    }
+  ]
+}

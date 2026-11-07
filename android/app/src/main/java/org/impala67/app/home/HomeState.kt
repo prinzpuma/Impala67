@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /** Alles, was die Startseite zeigt – fertig berechnet (wie die Daten für `homeViewHtml`). */
 data class HomeState(
@@ -103,15 +104,14 @@ object HomeText {
 
     /** Ein Satz, was heute zählt: Streak in Gefahr > Ziel in Reichweite > Ziel geschafft > heutige Zeit. */
     fun nudge(s: HomeState, now: LocalTime = LocalTime.now()): String {
-        val todayMin = (s.todaySeconds / 60.0).roundToInt()
-        val left = s.goalMin - s.weekMin
-        return when {
-            s.streak > 0 && todayMin == 0 && now.hour >= 14 -> " Dein Streak von ${dayCount(s.streak)} wartet noch auf heute."
-            left > 0 && left <= 60 -> " Nur noch ${dur(left)} bis zum Wochenziel."
-            left <= 0 && s.weekMin > 0 -> " Das Wochenziel hast du schon geschafft."
-            todayMin > 0 -> " Heute schon ${dur(todayMin.toDouble())} gelernt."
-            else -> ""
-        }
+        val weekSec = s.week.sum().coerceAtLeast(0L).toULong()
+        return uniffi.impala_ffi.learningTimeHomeNudgeText(
+            streak = s.streak.coerceAtLeast(0).toUInt(),
+            todaySeconds = s.todaySeconds.coerceAtLeast(0L).toULong(),
+            weekSeconds = weekSec,
+            goalMin = s.goalMin.coerceAtLeast(0).toUInt(),
+            currentHour = now.hour.coerceAtLeast(0).toUInt(),
+        )
     }
 
     fun title(page: PageSummary) = (if (page.icon.isNotEmpty()) page.icon + " " else "") + page.title.ifEmpty { "Ohne Titel" }
