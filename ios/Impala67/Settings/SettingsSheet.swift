@@ -88,7 +88,8 @@ struct SettingsSheet: View {
                 sidebarContent
                     .padding(.horizontal, 12)
                     .padding(.vertical, 20)
-                    .frame(width: 252, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(width: 252)
                     .background(Impala.sidebar)
                     .overlay(alignment: .trailing) {
                         Rectangle().fill(Impala.edgeSoft).frame(width: 1)
