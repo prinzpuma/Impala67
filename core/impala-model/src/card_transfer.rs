@@ -7,16 +7,31 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
+use serde_json::Value;
+
 pub const TXT_HEADER: &str = "# Impala67-Karteikarten v1";
+
+fn deserialize_lenient_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<Value>::deserialize(deserializer)?;
+    match opt {
+        Some(Value::String(s)) => Ok(s),
+        Some(Value::Number(n)) => Ok(n.to_string()),
+        Some(Value::Bool(b)) => Ok(b.to_string()),
+        _ => Ok(String::new()),
+    }
+}
 
 /// Eine Karte zum Importieren bzw. Exportieren (Vorderseite, Rückseite, Stapel).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlainCard {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_string")]
     pub front: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_string")]
     pub back: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_string")]
     pub deck: String,
 }
 
@@ -294,7 +309,8 @@ pub fn parse_table_cards(text: &str, default_deck: &str) -> ParsedCards {
         } else if deck_directive.is_some() {
             effective_default_deck
         } else if let Some(d) = row.get(2) {
-            d.as_str()
+            let trimmed = d.trim();
+            if trimmed.is_empty() { effective_default_deck } else { trimmed }
         } else {
             effective_default_deck
         };
@@ -534,6 +550,62 @@ fn match_div_pair(s: &str) -> Option<&str> {
     if tail.len() >= 5 && tail[..5].eq_ignore_ascii_case("<div>") { Some(&tail[5..]) } else { None }
 }
 
+fn find_closing_tag(s: &str, tag: &str) -> Option<usize> {
+    let lower = s.to_ascii_lowercase();
+    let needle = format!("</{tag}");
+    if let Some(pos) = lower.find(&needle) {
+        let after = &lower[pos + needle.len()..];
+        if let Some(gt) = after.find('>') {
+            return Some(pos + needle.len() + gt + 1);
+        }
+    }
+    None
+}
+
+fn decode_html_entity(ent: &str) -> Option<String> {
+    match ent {
+        "amp" => Some("&".to_string()),
+        "lt" => Some("<".to_string()),
+        "gt" => Some(">".to_string()),
+        "quot" => Some("\"".to_string()),
+        "apos" => Some("'".to_string()),
+        "nbsp" => Some("\u{00a0}".to_string()),
+        "auml" => Some("ä".to_string()),
+        "Auml" => Some("Ä".to_string()),
+        "ouml" => Some("ö".to_string()),
+        "Ouml" => Some("Ö".to_string()),
+        "uuml" => Some("ü".to_string()),
+        "Uuml" => Some("Ü".to_string()),
+        "szlig" => Some("ß".to_string()),
+        "euro" => Some("€".to_string()),
+        "copy" => Some("©".to_string()),
+        "trade" => Some("™".to_string()),
+        "reg" => Some("®".to_string()),
+        "ndash" => Some("–".to_string()),
+        "mdash" => Some("—".to_string()),
+        "hellip" => Some("…".to_string()),
+        "lsquo" => Some("‘".to_string()),
+        "rsquo" => Some("’".to_string()),
+        "ldquo" => Some("“".to_string()),
+        "rdquo" => Some("”".to_string()),
+        "deg" => Some("°".to_string()),
+        "plusmn" => Some("±".to_string()),
+        "times" => Some("×".to_string()),
+        "divide" => Some("÷".to_string()),
+        s if s.starts_with('#') => {
+            let num = if let Some(hex) = s.strip_prefix("#x").or_else(|| s.strip_prefix("#X")) {
+                u32::from_str_radix(hex, 16).ok()
+            } else if let Some(dec) = s.strip_prefix('#') {
+                dec.parse::<u32>().ok()
+            } else {
+                None
+            };
+            num.and_then(char::from_u32).map(|c| c.to_string())
+        }
+        _ => None,
+    }
+}
+
 /// HTML aus Anki-Feldern in Klartext umwandeln (wie `stripHtml` in `web/extras.js`).
 pub fn strip_html(s: &str) -> String {
     // 1. <br\s*/?> und </div>\s*<div> durch \n ersetzen
@@ -559,71 +631,173 @@ pub fn strip_html(s: &str) -> String {
         }
     }
 
-    // 2. HTML-Tags entfernen und Entitäten auflösen
+    // 2. HTML-Tags entfernen (<script> / <style> samt Inhalt überspringen) und Entitäten auflösen
     let mut out = String::with_capacity(step1.len());
-    let mut chars = step1.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '<' {
-            for c in chars.by_ref() {
-                if c == '>' {
-                    break;
+    let bytes = step1.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if bytes[i] == b'<' {
+            let tail = &step1[i + 1..];
+            let first_char = tail.chars().next();
+            let is_tag = match first_char {
+                Some(c) if c.is_ascii_alphabetic() => true,
+                Some('/') => tail.chars().nth(1).is_some_and(|c| c.is_ascii_alphabetic()),
+                Some('!') | Some('?') => true,
+                _ => false,
+            };
+
+            if is_tag {
+                let tag_name_len = tail
+                    .char_indices()
+                    .take_while(|(_, c)| c.is_ascii_alphanumeric())
+                    .last()
+                    .map_or(0, |(idx, c)| idx + c.len_utf8());
+                let tag_name = &tail[..tag_name_len];
+
+                if tag_name.eq_ignore_ascii_case("style")
+                    && let Some(close_idx) = find_closing_tag(&step1[i..], "style")
+                {
+                    i += close_idx;
+                    continue;
+                } else if tag_name.eq_ignore_ascii_case("script")
+                    && let Some(close_idx) = find_closing_tag(&step1[i..], "script")
+                {
+                    i += close_idx;
+                    continue;
                 }
-            }
-        } else if ch == '&' {
-            let mut ent = String::new();
-            let mut found_semi = false;
-            while let Some(&c) = chars.peek() {
-                if c == ';' {
-                    chars.next();
-                    found_semi = true;
-                    break;
-                } else if c.is_alphanumeric() || c == '#' {
-                    ent.push(chars.next().unwrap());
-                    if ent.len() > 10 {
+
+                i += 1;
+                let mut in_quote = None;
+                while i < bytes.len() {
+                    let b = bytes[i];
+                    if let Some(q) = in_quote {
+                        if b == q {
+                            in_quote = None;
+                        }
+                    } else if b == b'"' || b == b'\'' {
+                        in_quote = Some(b);
+                    } else if b == b'>' {
+                        i += 1;
                         break;
                     }
-                } else {
+                    i += 1;
+                }
+                continue;
+            } else {
+                out.push('<');
+                i += 1;
+                continue;
+            }
+        } else if bytes[i] == b'&' {
+            let tail = &step1[i + 1..];
+            let mut semi_pos = None;
+            for (offset, ch) in tail.char_indices() {
+                if ch == ';' {
+                    semi_pos = Some(offset);
+                    break;
+                }
+                if !ch.is_alphanumeric() && ch != '#' || offset > 10 {
                     break;
                 }
             }
-            if found_semi {
-                match ent.as_str() {
-                    "amp" => out.push('&'),
-                    "lt" => out.push('<'),
-                    "gt" => out.push('>'),
-                    "quot" => out.push('"'),
-                    "apos" => out.push('\''),
-                    "nbsp" => out.push('\u{00a0}'),
-                    s if s.starts_with('#') => {
-                        let num = if let Some(hex) = s.strip_prefix("#x").or_else(|| s.strip_prefix("#X")) {
-                            u32::from_str_radix(hex, 16).ok()
-                        } else if let Some(dec) = s.strip_prefix('#') {
-                            dec.parse::<u32>().ok()
-                        } else {
-                            None
-                        };
-                        if let Some(c) = num.and_then(char::from_u32) {
-                            out.push(c);
-                        } else {
-                            out.push('&');
-                            out.push_str(&ent);
-                            out.push(';');
-                        }
-                    }
-                    _ => {
-                        out.push('&');
-                        out.push_str(&ent);
-                        out.push(';');
-                    }
+
+            if let Some(pos) = semi_pos {
+                let ent = &tail[..pos];
+                if let Some(decoded) = decode_html_entity(ent) {
+                    out.push_str(&decoded);
+                    i += 1 + pos + 1;
+                    continue;
                 }
-            } else {
-                out.push('&');
-                out.push_str(&ent);
             }
+
+            out.push('&');
+            i += 1;
         } else {
+            let ch = step1[i..].chars().next().unwrap();
             out.push(ch);
+            i += ch.len_utf8();
         }
     }
 
     out.trim().to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plain_card_lenient_deserialization() {
+        let json = serde_json::json!([
+            { "front": "Q1", "back": "A1", "deck": null },
+            { "front": null, "back": 42, "deck": "Mathe" },
+            { "front": "Q3", "back": "A3" }
+        ]);
+        let cards: Vec<PlainCard> = serde_json::from_value(json).unwrap();
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].deck, "");
+        assert_eq!(cards[1].front, "");
+        assert_eq!(cards[1].back, "42");
+        assert_eq!(cards[2].deck, "");
+    }
+
+    #[test]
+    fn test_parse_table_cards_fallback_deck() {
+        let text = "front;back;\nZelle;Mitochondrium;\n";
+        let parsed = parse_table_cards(text, "Biologie");
+        assert_eq!(parsed.cards.len(), 1);
+        assert_eq!(parsed.cards[0].deck, "Biologie");
+
+        let text2 = "front;back;deck\nZelle;Mitochondrium;\n";
+        let parsed2 = parse_table_cards(text2, "Standard");
+        assert_eq!(parsed2.cards.len(), 1);
+        assert_eq!(parsed2.cards[0].deck, "Standard");
+    }
+
+    #[test]
+    fn test_strip_html_math_inequalities() {
+        assert_eq!(strip_html("a < b and c > d"), "a < b and c > d");
+        assert_eq!(strip_html("5 < 10"), "5 < 10");
+        assert_eq!(strip_html("x <= y & y >= z"), "x <= y & y >= z");
+    }
+
+    #[test]
+    fn test_strip_html_style_and_script() {
+        assert_eq!(strip_html("<style>body { color: red; }</style>Wichtiger Text"), "Wichtiger Text");
+        assert_eq!(strip_html("<script>alert('bad');</script>Normaler Text"), "Normaler Text");
+    }
+
+    #[test]
+    fn test_strip_html_german_entities() {
+        assert_eq!(
+            strip_html("&auml;pfel, &ouml;l, &uuml;ber, &szlig;, 100 &euro; &ndash; fertig"),
+            "äpfel, öl, über, ß, 100 € – fertig"
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_export_import() {
+        let cards = vec![
+            PlainCard {
+                front: "Frage 1\nmit Zeilenumbruch".into(),
+                back: "Antwort 1\n---\nmit Trenner".into(),
+                deck: "Biologie::Zellbiologie".into(),
+            },
+            PlainCard {
+                front: "@frage mit Formatmarker".into(),
+                back: "\\@antwort mit Backslash".into(),
+                deck: "Informatik".into(),
+            },
+        ];
+        let txt = export_txt(&cards);
+        let parsed = parse_impala_txt(&txt, "Standard");
+        assert_eq!(parsed.errors, Vec::<String>::new());
+        assert_eq!(parsed.cards, cards);
+
+        let csv = export_csv(&cards);
+        let parsed_csv = parse_table_cards(&csv, "Standard");
+        assert_eq!(parsed_csv.errors, Vec::<String>::new());
+        assert_eq!(parsed_csv.cards, cards);
+    }
 }
