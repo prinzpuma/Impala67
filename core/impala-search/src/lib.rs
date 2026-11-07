@@ -12,6 +12,8 @@ pub mod notes;
 pub mod onnx;
 pub mod palette;
 pub mod rank;
+pub mod settings;
+pub(crate) mod settings_catalog;
 pub mod store;
 pub mod text;
 pub mod vector;
@@ -23,6 +25,8 @@ pub use embed::{
 };
 pub use fuzzy::{FuzzyHit, FuzzyIndex, fold, typo_distance};
 pub use notes::{NoteDoc, NoteHit, NoteIndex};
+pub use palette::{highlight_ranges, preview};
 pub use rank::{PageMeta, QueryCache, RagHit, RelatedHit, VectorIndex, rank_rag, related, search};
+pub use settings::{SettingsHit, SettingsIndex, SettingsItemDef, normalize_settings_text};
 pub use store::{ChunkVec, IndexError, ReindexPlan, VecEntry, VecRecord, index_page, needs_reindex};
 pub use vector::{Scored, VectorError, cosine, dot, norm, top_k};

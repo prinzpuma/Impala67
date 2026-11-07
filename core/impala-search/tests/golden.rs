@@ -294,3 +294,46 @@ fn related_like_js() {
         }
     }
 }
+
+#[test]
+fn palette_golden() {
+    let g = golden("palette.json");
+    for c in g["previews"].as_array().unwrap() {
+        assert_eq!(impala_search::preview(c["input"].as_str().unwrap()), s(&c["output"]));
+    }
+    for c in g["highlights"].as_array().unwrap() {
+        let text = c["text"].as_str().unwrap();
+        let query = c["query"].as_str().unwrap();
+        let terms = strings(&c["terms"]);
+        let got = impala_search::highlight_ranges(text, query, &terms);
+        let want: Vec<(usize, usize)> = c["want"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|pair| (pair[0].as_u64().unwrap() as usize, pair[1].as_u64().unwrap() as usize))
+            .collect();
+        assert_eq!(got, want, "highlight_ranges({text}, {query})");
+    }
+}
+
+#[test]
+fn settings_search_golden() {
+    let g = golden("settings_search.json");
+    let index = impala_search::SettingsIndex::default_catalog();
+    for c in g["cases"].as_array().unwrap() {
+        let q = c["query"].as_str().unwrap();
+        let ctx = c["context"].as_str().unwrap();
+        let plat = match ctx {
+            "all" => None,
+            p => Some(p),
+        };
+        let hits = index.search(q, 8, plat);
+        let want = c["hits"].as_array().unwrap();
+        assert_eq!(hits.len(), want.len(), "Trefferanzahl für '{q}' ({ctx})");
+        for (h, w) in hits.iter().zip(want) {
+            assert_eq!(h.id, s(&w["id"]), "'{q}' ({ctx}) id");
+            assert_eq!(h.section, s(&w["section"]), "'{q}' ({ctx}) section");
+            assert_eq!(h.score, w["score"].as_u64().unwrap() as u32, "'{q}' ({ctx}) score");
+        }
+    }
+}
