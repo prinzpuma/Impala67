@@ -7,6 +7,7 @@ mod ai;
 mod ai_tools;
 mod busy;
 mod card_ops;
+mod card_transfer;
 mod cards;
 mod changes;
 mod chats;

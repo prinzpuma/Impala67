@@ -1,0 +1,826 @@
+{
+  "exportTxt": [
+    {
+      "input": [],
+      "output": "# Impala67-Karteikarten v1"
+    },
+    {
+      "input": [
+        {
+          "front": "Einfache Frage",
+          "back": "Einfache Antwort",
+          "deck": "Standard"
+        }
+      ],
+      "output": "# Impala67-Karteikarten v1\n\n@stapel Standard\n@frage\nEinfache Frage\n@antwort\nEinfache Antwort\n---"
+    },
+    {
+      "input": [
+        {
+          "front": "Frage 1",
+          "back": "Antwort 1",
+          "deck": "Bio"
+        },
+        {
+          "front": "Frage 2",
+          "back": "Antwort 2",
+          "deck": "Bio"
+        },
+        {
+          "front": "Frage 3",
+          "back": "Antwort 3",
+          "deck": "Mathe::Analysis"
+        }
+      ],
+      "output": "# Impala67-Karteikarten v1\n\n@stapel Bio\n@frage\nFrage 1\n@antwort\nAntwort 1\n---\n@frage\nFrage 2\n@antwort\nAntwort 2\n---\n\n@stapel Mathe::Analysis\n@frage\nFrage 3\n@antwort\nAntwort 3\n---"
+    },
+    {
+      "input": [
+        {
+          "front": "Karte ohne Stapel",
+          "back": "Antwort",
+          "deck": ""
+        },
+        {
+          "front": "Karte mit Leerzeichen-Stapel",
+          "back": "Antwort",
+          "deck": "   "
+        }
+      ],
+      "output": "# Impala67-Karteikarten v1\n\n@stapel Standard\n@frage\nKarte ohne Stapel\n@antwort\nAntwort\n---\n\n@stapel    \n@frage\nKarte mit Leerzeichen-Stapel\n@antwort\nAntwort\n---"
+    },
+    {
+      "input": [
+        {
+          "front": "@frage am Anfang\nund @stapel hier\n\\@antwort auch\n---\n--- \n\\escaped\n\\\\doppelt",
+          "back": "Zeile 1\nZeile 2 mit Sonderzeichen: ; \" \t \n---",
+          "deck": "Test::Escapes"
+        },
+        {
+          "front": "@stapel_not_marker @fragezeichen",
+          "back": "Normaler Text mit \\LaTeX Formel",
+          "deck": "Test::Special"
+        }
+      ],
+      "output": "# Impala67-Karteikarten v1\n\n@stapel Test::Escapes\n@frage\n\\@frage am Anfang\nund @stapel hier\n\\\\@antwort auch\n\\---\n\\--- \n\\\\escaped\n\\\\\\doppelt\n@antwort\nZeile 1\nZeile 2 mit Sonderzeichen: ; \" \t \n\\---\n---\n\n@stapel Test::Special\n@frage\n@stapel_not_marker @fragezeichen\n@antwort\nNormaler Text mit \\LaTeX Formel\n---"
+    },
+    {
+      "input": [
+        {
+          "front": "Frage mit \"Anführungszeichen\" und ; Semikolon\nund Umbruch\tund Tab",
+          "back": "Antwort; mit \"vielen\" ;;; Semikolons\nund Umbrüchen\n\nund Leerzeilen",
+          "deck": "CSV\"Deck;1"
+        }
+      ],
+      "output": "# Impala67-Karteikarten v1\n\n@stapel CSV\"Deck;1\n@frage\nFrage mit \"Anführungszeichen\" und ; Semikolon\nund Umbruch\tund Tab\n@antwort\nAntwort; mit \"vielen\" ;;; Semikolons\nund Umbrüchen\n\nund Leerzeilen\n---"
+    }
+  ],
+  "exportCsv": [
+    {
+      "input": [],
+      "output": "front;back;deck\n"
+    },
+    {
+      "input": [
+        {
+          "front": "Einfache Frage",
+          "back": "Einfache Antwort",
+          "deck": "Standard"
+        }
+      ],
+      "output": "front;back;deck\nEinfache Frage;Einfache Antwort;Standard"
+    },
+    {
+      "input": [
+        {
+          "front": "Frage 1",
+          "back": "Antwort 1",
+          "deck": "Bio"
+        },
+        {
+          "front": "Frage 2",
+          "back": "Antwort 2",
+          "deck": "Bio"
+        },
+        {
+          "front": "Frage 3",
+          "back": "Antwort 3",
+          "deck": "Mathe::Analysis"
+        }
+      ],
+      "output": "front;back;deck\nFrage 1;Antwort 1;Bio\nFrage 2;Antwort 2;Bio\nFrage 3;Antwort 3;Mathe::Analysis"
+    },
+    {
+      "input": [
+        {
+          "front": "Karte ohne Stapel",
+          "back": "Antwort",
+          "deck": ""
+        },
+        {
+          "front": "Karte mit Leerzeichen-Stapel",
+          "back": "Antwort",
+          "deck": "   "
+        }
+      ],
+      "output": "front;back;deck\nKarte ohne Stapel;Antwort;Standard\nKarte mit Leerzeichen-Stapel;Antwort;   "
+    },
+    {
+      "input": [
+        {
+          "front": "@frage am Anfang\nund @stapel hier\n\\@antwort auch\n---\n--- \n\\escaped\n\\\\doppelt",
+          "back": "Zeile 1\nZeile 2 mit Sonderzeichen: ; \" \t \n---",
+          "deck": "Test::Escapes"
+        },
+        {
+          "front": "@stapel_not_marker @fragezeichen",
+          "back": "Normaler Text mit \\LaTeX Formel",
+          "deck": "Test::Special"
+        }
+      ],
+      "output": "front;back;deck\n\"@frage am Anfang\nund @stapel hier\n\\@antwort auch\n---\n--- \n\\escaped\n\\\\doppelt\";\"Zeile 1\nZeile 2 mit Sonderzeichen: ; \"\" \t \n---\";Test::Escapes\n@stapel_not_marker @fragezeichen;Normaler Text mit \\LaTeX Formel;Test::Special"
+    },
+    {
+      "input": [
+        {
+          "front": "Frage mit \"Anführungszeichen\" und ; Semikolon\nund Umbruch\tund Tab",
+          "back": "Antwort; mit \"vielen\" ;;; Semikolons\nund Umbrüchen\n\nund Leerzeilen",
+          "deck": "CSV\"Deck;1"
+        }
+      ],
+      "output": "front;back;deck\n\"Frage mit \"\"Anführungszeichen\"\" und ; Semikolon\nund Umbruch\tund Tab\";\"Antwort; mit \"\"vielen\"\" ;;; Semikolons\nund Umbrüchen\n\nund Leerzeilen\";\"CSV\"\"Deck;1\""
+    }
+  ],
+  "parseCsv": [
+    {
+      "input": "",
+      "output": []
+    },
+    {
+      "input": "front;back;deck\nf1;b1;d1\nf2;b2;d2",
+      "output": [
+        [
+          "front",
+          "back",
+          "deck"
+        ],
+        [
+          "f1",
+          "b1",
+          "d1"
+        ],
+        [
+          "f2",
+          "b2",
+          "d2"
+        ]
+      ]
+    },
+    {
+      "input": "front,back,deck\nf1,b1,d1\n\"f,2\",\"b,2\",\"d,2\"",
+      "output": [
+        [
+          "front",
+          "back",
+          "deck"
+        ],
+        [
+          "f1",
+          "b1",
+          "d1"
+        ],
+        [
+          "f,2",
+          "b,2",
+          "d,2"
+        ]
+      ]
+    },
+    {
+      "input": "front\tback\tdeck\nf1\tb1\td1",
+      "output": [
+        [
+          "front",
+          "back",
+          "deck"
+        ],
+        [
+          "f1",
+          "b1",
+          "d1"
+        ]
+      ]
+    },
+    {
+      "input": "#separator:tab\n#deck:Custom\nf1\tb1",
+      "output": [
+        [
+          "#separator:tab"
+        ],
+        [
+          "#deck:Custom"
+        ],
+        [
+          "f1",
+          "b1"
+        ]
+      ]
+    },
+    {
+      "input": "#separator:semicolon\n\"front with ; and \"\"quotes\"\"\";\"back line 1\nline 2\";MyDeck",
+      "output": [
+        [
+          "#separator:semicolon"
+        ],
+        [
+          "front with ; and \"quotes\"",
+          "back line 1\nline 2",
+          "MyDeck"
+        ]
+      ]
+    },
+    {
+      "input": "#separator:pipe\nf1|b1|d1\nf2|b2|d2",
+      "output": [
+        [
+          "#separator:pipe"
+        ],
+        [
+          "f1",
+          "b1",
+          "d1"
+        ],
+        [
+          "f2",
+          "b2",
+          "d2"
+        ]
+      ]
+    },
+    {
+      "input": "#separator:comma\n\n\n# Kommentar\n\"a\",\"b\",\"c\"\n\n",
+      "output": [
+        [
+          "#separator:comma"
+        ],
+        [
+          "# Kommentar"
+        ],
+        [
+          "a",
+          "b",
+          "c"
+        ]
+      ]
+    },
+    {
+      "input": "front;back\nOnlyFront;\n;OnlyBack\n;",
+      "output": [
+        [
+          "front",
+          "back"
+        ],
+        [
+          "OnlyFront",
+          ""
+        ],
+        [
+          "",
+          "OnlyBack"
+        ]
+      ]
+    }
+  ],
+  "parseTableCards": [
+    {
+      "input": {
+        "text": "front;back;deck\nZelle;Mitochondrium;Bio\nAtom;Proton;Physik",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Zelle",
+            "back": "Mitochondrium",
+            "deck": "Bio"
+          },
+          {
+            "front": "Atom",
+            "back": "Proton",
+            "deck": "Physik"
+          }
+        ],
+        "errors": [],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "#separator:tab\n#deck:Chemie\nSauerstoff\tO\nWasserstoff\tH",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Sauerstoff",
+            "back": "O",
+            "deck": "Chemie"
+          },
+          {
+            "front": "Wasserstoff",
+            "back": "H",
+            "deck": "Chemie"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    },
+    {
+      "input": {
+        "text": "#separator:tab\n#deck:Medizin\n#guid column:1\n#notetype column:2\n#deck column:3\nguid1\tBasic\tAnatomie\tHerz\tMuskel\nguid2\tBasic\tAnatomie\tLunge\tOrgan",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Herz",
+            "back": "Muskel",
+            "deck": "Anatomie"
+          },
+          {
+            "front": "Lunge",
+            "back": "Organ",
+            "deck": "Anatomie"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    },
+    {
+      "input": {
+        "text": "Keine Antwort vorhanden;",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Eine Karte hat keine Antwort: Keine Antwort vorhanden"
+        ],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "front,back\nFrage 1,Antwort 1\nFrage 2,",
+        "defaultDeck": "FallbackDeck"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Frage 1",
+            "back": "Antwort 1",
+            "deck": "FallbackDeck"
+          }
+        ],
+        "errors": [
+          "Eine Karte hat keine Antwort: Frage 2"
+        ],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "# Kommentar\n#separator:comma\nf1,b1,deck1\n# noch ein Kommentar\nf2,b2",
+        "defaultDeck": "FallbackDeck"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "f1",
+            "back": "b1",
+            "deck": "deck1"
+          },
+          {
+            "front": "f2",
+            "back": "b2",
+            "deck": "FallbackDeck"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    }
+  ],
+  "parseImpalaTxt": [
+    {
+      "input": {
+        "text": "# Impala67-Karteikarten v1\n\n@stapel Bio\n@frage\nWas ist ATP?\n@antwort\nAdenosintriphosphat, der universelle Energieträger.\n---\n@frage\nZweite Frage\n@antwort\nZweite Antwort\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Was ist ATP?",
+            "back": "Adenosintriphosphat, der universelle Energieträger.",
+            "deck": "Bio"
+          },
+          {
+            "front": "Zweite Frage",
+            "back": "Zweite Antwort",
+            "deck": "Bio"
+          }
+        ],
+        "errors": [],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "﻿# Mit BOM und CRLF\r\n\r\n@stapel Mathe::Analysis\r\n@frage\r\n@frage mit Formatmarker\r\n\\@antwort mit Backslash\r\n\\---\r\n@antwort\r\nAntwort mit \\LaTeX\r\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "@frage mit Formatmarker\n@antwort mit Backslash\n---",
+            "back": "Antwort mit \\LaTeX",
+            "deck": "Mathe::Analysis"
+          }
+        ],
+        "errors": [],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "@stapel Ungueltig::::Pfad\n@frage\nFrage\n@antwort\nAntwort\n---\n@antwort\nAntwort ohne Frage\n---\n@frage\nFrage ohne Antwort\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Zeile 1: Ungültiger Stapelpfad.",
+          "Zeile 2: Frage, Antwort oder gültiger Stapel fehlt.",
+          "Zeile 7: Antwort ohne Frage.",
+          "Zeile 10: Frage, Antwort oder gültiger Stapel fehlt."
+        ],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "@stapel Neuer::Stapel\n@frage\n\n@antwort\nAntwort ohne Frage-Text\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Zeile 2: Frage, Antwort oder gültiger Stapel fehlt."
+        ],
+        "format": "Impala-TXT"
+      }
+    }
+  ],
+  "parseCardText": [
+    {
+      "input": {
+        "text": "# Impala67-Karteikarten v1\n\n@stapel Bio\n@frage\nWas ist ATP?\n@antwort\nAdenosintriphosphat, der universelle Energieträger.\n---\n@frage\nZweite Frage\n@antwort\nZweite Antwort\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Was ist ATP?",
+            "back": "Adenosintriphosphat, der universelle Energieträger.",
+            "deck": "Bio"
+          },
+          {
+            "front": "Zweite Frage",
+            "back": "Zweite Antwort",
+            "deck": "Bio"
+          }
+        ],
+        "errors": [],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "﻿# Mit BOM und CRLF\r\n\r\n@stapel Mathe::Analysis\r\n@frage\r\n@frage mit Formatmarker\r\n\\@antwort mit Backslash\r\n\\---\r\n@antwort\r\nAntwort mit \\LaTeX\r\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "@frage mit Formatmarker\n@antwort mit Backslash\n---",
+            "back": "Antwort mit \\LaTeX",
+            "deck": "Mathe::Analysis"
+          }
+        ],
+        "errors": [],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "@stapel Ungueltig::::Pfad\n@frage\nFrage\n@antwort\nAntwort\n---\n@antwort\nAntwort ohne Frage\n---\n@frage\nFrage ohne Antwort\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Zeile 1: Ungültiger Stapelpfad.",
+          "Zeile 2: Frage, Antwort oder gültiger Stapel fehlt.",
+          "Zeile 7: Antwort ohne Frage.",
+          "Zeile 10: Frage, Antwort oder gültiger Stapel fehlt."
+        ],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "@stapel Neuer::Stapel\n@frage\n\n@antwort\nAntwort ohne Frage-Text\n---",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Zeile 2: Frage, Antwort oder gültiger Stapel fehlt."
+        ],
+        "format": "Impala-TXT"
+      }
+    },
+    {
+      "input": {
+        "text": "front;back;deck\nZelle;Mitochondrium;Bio\nAtom;Proton;Physik",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Zelle",
+            "back": "Mitochondrium",
+            "deck": "Bio"
+          },
+          {
+            "front": "Atom",
+            "back": "Proton",
+            "deck": "Physik"
+          }
+        ],
+        "errors": [],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "#separator:tab\n#deck:Chemie\nSauerstoff\tO\nWasserstoff\tH",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Sauerstoff",
+            "back": "O",
+            "deck": "Chemie"
+          },
+          {
+            "front": "Wasserstoff",
+            "back": "H",
+            "deck": "Chemie"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    },
+    {
+      "input": {
+        "text": "#separator:tab\n#deck:Medizin\n#guid column:1\n#notetype column:2\n#deck column:3\nguid1\tBasic\tAnatomie\tHerz\tMuskel\nguid2\tBasic\tAnatomie\tLunge\tOrgan",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Herz",
+            "back": "Muskel",
+            "deck": "Anatomie"
+          },
+          {
+            "front": "Lunge",
+            "back": "Organ",
+            "deck": "Anatomie"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    },
+    {
+      "input": {
+        "text": "Keine Antwort vorhanden;",
+        "defaultDeck": "Standard"
+      },
+      "output": {
+        "cards": [],
+        "errors": [
+          "Eine Karte hat keine Antwort: Keine Antwort vorhanden"
+        ],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "front,back\nFrage 1,Antwort 1\nFrage 2,",
+        "defaultDeck": "FallbackDeck"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "Frage 1",
+            "back": "Antwort 1",
+            "deck": "FallbackDeck"
+          }
+        ],
+        "errors": [
+          "Eine Karte hat keine Antwort: Frage 2"
+        ],
+        "format": "CSV/TSV"
+      }
+    },
+    {
+      "input": {
+        "text": "# Kommentar\n#separator:comma\nf1,b1,deck1\n# noch ein Kommentar\nf2,b2",
+        "defaultDeck": "FallbackDeck"
+      },
+      "output": {
+        "cards": [
+          {
+            "front": "f1",
+            "back": "b1",
+            "deck": "deck1"
+          },
+          {
+            "front": "f2",
+            "back": "b2",
+            "deck": "FallbackDeck"
+          }
+        ],
+        "errors": [],
+        "format": "Anki-Text"
+      }
+    }
+  ],
+  "cardKey": [
+    {
+      "input": {
+        "front": "Frage",
+        "back": "Antwort",
+        "deck": "Bio"
+      },
+      "output": "Bio\u001fFrage\u001fAntwort"
+    },
+    {
+      "input": {
+        "front": "  Frage mit Leerzeichen  ",
+        "back": "\nAntwort mit Umbruch\n",
+        "deck": "  Bio  "
+      },
+      "output": "Bio\u001fFrage mit Leerzeichen\u001fAntwort mit Umbruch"
+    },
+    {
+      "input": {
+        "front": "Frage",
+        "back": "Antwort",
+        "deck": ""
+      },
+      "output": "Standard\u001fFrage\u001fAntwort"
+    },
+    {
+      "input": {
+        "front": "",
+        "back": "",
+        "deck": "Standard"
+      },
+      "output": "Standard\u001f\u001f"
+    }
+  ],
+  "duplicateCount": [
+    {
+      "input": {
+        "cards": [
+          {
+            "front": "F1",
+            "back": "B1",
+            "deck": "D1"
+          },
+          {
+            "front": "F2",
+            "back": "B2",
+            "deck": "D2"
+          }
+        ],
+        "existing": {}
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "cards": [
+          {
+            "front": "F1",
+            "back": "B1",
+            "deck": "D1"
+          },
+          {
+            "front": "F1",
+            "back": "B1",
+            "deck": "D1"
+          },
+          {
+            "front": "F2",
+            "back": "B2",
+            "deck": "D2"
+          }
+        ],
+        "existing": {}
+      },
+      "output": 1
+    },
+    {
+      "input": {
+        "cards": [
+          {
+            "front": "F1",
+            "back": "B1",
+            "deck": "D1"
+          },
+          {
+            "front": "F2",
+            "back": "B2",
+            "deck": "D2"
+          }
+        ],
+        "existing": {
+          "c1": {
+            "front": "F1",
+            "back": "B1",
+            "deck": "D1",
+            "trashed": false
+          },
+          "c2": {
+            "front": "F2",
+            "back": "B2",
+            "deck": "D2",
+            "trashed": true
+          }
+        }
+      },
+      "output": 1
+    }
+  ],
+  "stripHtml": [
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "Einfacher Text",
+      "output": "Einfacher Text"
+    },
+    {
+      "input": "Text mit <br> und <br/> und <br /> Umbrüchen",
+      "output": "Text mit \n und \n und \n Umbrüchen"
+    },
+    {
+      "input": "<div>Erste Zeile</div><div>Zweite Zeile</div>",
+      "output": "Erste Zeile\nZweite Zeile"
+    },
+    {
+      "input": "<div>Zeile 1</div> <div>Zeile 2</div>",
+      "output": "Zeile 1\nZeile 2"
+    },
+    {
+      "input": "<b>Fett</b>, <i>kursiv</i>, <u>unterstrichen</u>, <span style=\"color:red\">rot</span>",
+      "output": "Fett, kursiv, unterstrichen, rot"
+    },
+    {
+      "input": "<img src=\"x\" onerror=\"alert(1)\">Bild-Tag",
+      "output": "Bild-Tag"
+    },
+    {
+      "input": "&lt;b&gt;Entitäten&lt;/b&gt; &amp; &quot;Anführungszeichen&quot; &apos;Apos&#39; &nbsp; Nicht-Trennend",
+      "output": "<b>Entitäten</b> & \"Anführungszeichen\" 'Apos'   Nicht-Trennend"
+    },
+    {
+      "input": "   \n  Leerzeichen drumherum  \t\n  ",
+      "output": "Leerzeichen drumherum"
+    },
+    {
+      "input": "<div><span>Verschachtelt <b>und</b> <i>gemischt</i></span></div>",
+      "output": "Verschachtelt und gemischt"
+    }
+  ]
+}

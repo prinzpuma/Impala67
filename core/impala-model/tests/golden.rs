@@ -434,3 +434,88 @@ fn konflikt_dialog_wie_js() {
         assert_same(&json!(rows), &d["rows"], "alignDiffRows");
     }
 }
+
+#[test]
+fn karten_import_export_wie_js() {
+    let g = golden("card-transfer.json");
+
+    for c in g["exportTxt"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"].clone()).unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::export_txt(&cards);
+        assert_eq!(got, expected, "exportTxt mismatch");
+    }
+
+    for c in g["exportCsv"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"].clone()).unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::export_csv(&cards);
+        assert_eq!(got, expected, "exportCsv mismatch");
+    }
+
+    for c in g["parseCsv"].as_array().unwrap() {
+        let text = c["input"].as_str().unwrap();
+        let expected: Vec<Vec<String>> = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_csv(text);
+        assert_eq!(got, expected, "parseCsv mismatch for input: {text:?}");
+    }
+
+    for c in g["parseTableCards"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_table_cards(text, default_deck);
+        assert_eq!(got, expected, "parseTableCards mismatch");
+    }
+
+    for c in g["parseImpalaTxt"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_impala_txt(text, default_deck);
+        assert_eq!(got, expected, "parseImpalaTxt mismatch");
+    }
+
+    for c in g["parseCardText"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_card_text(text, default_deck);
+        assert_eq!(got, expected, "parseCardText mismatch");
+    }
+
+    for c in g["cardKey"].as_array().unwrap() {
+        let front = c["input"]["front"].as_str().unwrap();
+        let back = c["input"]["back"].as_str().unwrap();
+        let deck = c["input"]["deck"].as_str().unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::card_key(front, back, deck);
+        assert_eq!(got, expected, "cardKey mismatch");
+    }
+
+    for c in g["duplicateCount"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"]["cards"].clone()).unwrap();
+        let existing_obj = c["input"]["existing"].as_object().unwrap();
+        let seen: HashSet<String> = existing_obj
+            .values()
+            .filter(|v| !v["trashed"].as_bool().unwrap_or(false))
+            .map(|v| {
+                impala_model::card_key(
+                    v["front"].as_str().unwrap_or(""),
+                    v["back"].as_str().unwrap_or(""),
+                    v["deck"].as_str().unwrap_or("Standard"),
+                )
+            })
+            .collect();
+        let expected = c["output"].as_u64().unwrap() as usize;
+        let got = impala_model::duplicate_count(&cards, seen);
+        assert_eq!(got, expected, "duplicateCount mismatch");
+    }
+
+    for c in g["stripHtml"].as_array().unwrap() {
+        let html = c["input"].as_str().unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::strip_html(html);
+        assert_eq!(got, expected, "stripHtml mismatch for input: {html:?}");
+    }
+}
