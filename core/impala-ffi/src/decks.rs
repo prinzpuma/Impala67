@@ -2,16 +2,14 @@
 //! Papierkorb, Stapel-Optionen und Überblick – mit den Events und Payloads der PWA
 //! (`web/app-click-anki.js`, `web/app-sidebar-events.js`, `web/extras.js`, `web/render-anki.js`).
 
-use std::collections::BTreeSet;
-
-use impala_model::State;
 use impala_model::js;
 use impala_model::study::StudyOptions;
 use impala_model::tree::deck_in_tree;
-use serde_json::{Map, Value, json};
+use impala_model::State;
+use serde_json::{json, Map, Value};
 
-use crate::cards::{DeckInfo, wall_now};
-use crate::{CoreError, ImpalaCore, Inner, invalid};
+use crate::cards::{wall_now, DeckInfo};
+use crate::{invalid, CoreError, ImpalaCore, Inner};
 
 /// Trennzeichen zwischen Eltern- und Unterstapel.
 const SEP: &str = "::";
@@ -53,6 +51,125 @@ pub struct DeckOverview {
     pub review: u64,
 }
 
+/// Eine Zeile im Stapelbaum mit Kennzahlen.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct DeckEntry {
+    /// Voller Name; Unterstapel als `"Eltern::Kind"`.
+    pub name: String,
+    /// Kurzname / letzter Abschnitt („Analysis“ bei „Mathe::Analysis“).
+    pub label: String,
+    /// Elternstapel (`None` bei oberster Ebene).
+    pub parent: Option<String>,
+    /// Ebene im Baum (0 = oberste Ebene).
+    pub depth: i32,
+    /// Hat dieser Stapel sichtbare Unterstapel?
+    pub has_kids: bool,
+    /// Ist dieser Stapel eingeklappt?
+    pub collapsed: bool,
+    /// Aktive Karten im Stapel samt Unterstapeln.
+    pub total: u64,
+    /// Davon ausgesetzt.
+    pub suspended: u64,
+    /// Neue Karten heute (mit Tageslimit).
+    pub new: u64,
+    /// Offene Lernschritte heute.
+    pub learn: u64,
+    /// Jetzt fällige Lernschritte.
+    pub learn_now: u64,
+    /// Fällige Wiederholungen (mit Tageslimit).
+    pub review: u64,
+    /// Fällige Karten (`review + learn`).
+    pub due: u64,
+    /// Jetzt fällige Karten (`review + learn_now`).
+    pub due_now: u64,
+    /// Karten heute offen (`!done`).
+    pub open: bool,
+    /// Manuelle Reihenfolge (`reorder_decks`), `None` = alphabetisch.
+    pub order: Option<f64>,
+    /// Eingebettete Übersicht für direkte Kompatibilität (`entry.deck.xxx`).
+    pub deck: DeckOverview,
+}
+
+impl From<impala_model::tree::DeckTreeEntry> for DeckEntry {
+    fn from(e: impala_model::tree::DeckTreeEntry) -> Self {
+        let deck = DeckOverview {
+            name: e.name.clone(),
+            order: e.order,
+            total: e.total,
+            suspended: e.suspended,
+            new: e.new,
+            learn: e.learn,
+            review: e.review,
+        };
+        DeckEntry {
+            name: e.name,
+            label: e.label,
+            parent: e.parent,
+            depth: e.depth,
+            has_kids: e.has_kids,
+            collapsed: e.collapsed,
+            total: e.total,
+            suspended: e.suspended,
+            new: e.new,
+            learn: e.learn,
+            learn_now: e.learn_now,
+            review: e.review,
+            due: e.due,
+            due_now: e.due_now,
+            open: e.open,
+            order: e.order,
+            deck,
+        }
+    }
+}
+
+/// Kurzname eines Stapels („Mathe::Analysis“ → „Analysis“).
+#[uniffi::export]
+pub fn deck_label(name: String) -> String {
+    impala_model::tree::deck_label(&name).to_owned()
+}
+
+/// Elternteil eines Stapels („Mathe::Analysis“ → Some("Mathe"), „Mathe“ → None).
+#[uniffi::export]
+pub fn deck_parent(name: String) -> Option<String> {
+    impala_model::tree::deck_parent(&name).map(str::to_owned)
+}
+
+/// Stapel-Übersicht in hierarchische Tiefenreihenfolge bringen; eingeklappte Äste entfallen.
+#[uniffi::export]
+pub fn flatten_decks(overview: Vec<DeckOverview>, collapsed: Vec<String>) -> Vec<DeckEntry> {
+    let collapsed_set: std::collections::HashSet<String> = collapsed.into_iter().collect();
+    let entries: Vec<impala_model::tree::DeckTreeEntry> = overview
+        .into_iter()
+        .map(|d| {
+            let label = impala_model::tree::deck_label(&d.name).to_owned();
+            let parent = impala_model::tree::deck_parent(&d.name).map(str::to_owned);
+            let due = d.review + d.learn;
+            let due_now = d.review + d.learn;
+            let open = d.new + d.learn + d.review > 0;
+            impala_model::tree::DeckTreeEntry {
+                name: d.name,
+                label,
+                parent,
+                depth: 0,
+                has_kids: false,
+                collapsed: false,
+                total: d.total,
+                suspended: d.suspended,
+                new: d.new,
+                learn: d.learn,
+                learn_now: d.learn,
+                review: d.review,
+                due,
+                due_now,
+                open,
+                order: d.order,
+            }
+        })
+        .collect();
+    impala_model::tree::flatten_tree_entries(entries, &collapsed_set).into_iter().map(DeckEntry::from).collect()
+}
+
 /// Name bereinigen: Teile trimmen, leere Teile ablehnen (`"A::"`, `"::B"`, `""`).
 fn clean_name(raw: &str) -> Result<String, CoreError> {
     let parts: Vec<&str> = raw.split(SEP).map(js::trim).collect();
@@ -68,37 +185,17 @@ fn known(state: &State, name: &str) -> bool {
     state.decks.keys().any(|k| deck_in_tree(k, name)) || state.cards.values().any(|c| deck_in_tree(c.deck_name(), name))
 }
 
-/// Alle sichtbaren Stapelnamen samt gedachten Eltern (`collectActiveDeckSet`).
-fn active_names(state: &State) -> BTreeSet<String> {
-    // „Standard“ nicht fest dazu: Die PWA zeigt ihn nur, wenn er angelegt (und nicht gelöscht oder
-    // archiviert) ist oder Karten trägt.
-    let mut set: BTreeSet<String> = BTreeSet::new();
-    for (name, d) in state.decks.iter() {
-        if !d.is_trashed() && !state.is_deck_archived(name) {
-            set.insert(name.clone());
-        }
-    }
-    for c in state.active_cards() {
-        set.insert(c.deck_name().to_owned());
-    }
-    let all: Vec<String> = set.iter().cloned().collect();
-    for n in all {
-        let mut path = js::parent_path(&n);
-        while !path.is_empty() {
-            set.insert(path.to_owned());
-            path = js::parent_path(path);
-        }
-    }
-    set
-}
-
 fn order_of(state: &State, name: &str) -> Option<f64> {
     state.decks.get(name).and_then(|d| d.order)
 }
 
 fn conf_number(v: &Value, default: u32) -> u32 {
     let n = js::to_number(Some(v));
-    if n.is_finite() { n.clamp(0.0, f64::from(u32::MAX)) as u32 } else { default }
+    if n.is_finite() {
+        n.clamp(0.0, f64::from(u32::MAX)) as u32
+    } else {
+        default
+    }
 }
 
 fn to_config(conf: &impala_model::tree::DeckConf) -> DeckConfig {
@@ -113,7 +210,11 @@ fn to_config(conf: &impala_model::tree::DeckConf) -> DeckConfig {
 impl Inner {
     /// Stapel muss bekannt sein (angelegt oder von Karten benutzt).
     fn known_deck(&self, name: &str) -> Result<(), CoreError> {
-        if known(self.model.state(), name) { Ok(()) } else { Err(invalid(format!("Unbekannter Stapel {name}"))) }
+        if known(self.model.state(), name) {
+            Ok(())
+        } else {
+            Err(invalid(format!("Unbekannter Stapel {name}")))
+        }
     }
 
     fn deck_event(&mut self, kind: &str, name: &str) -> Result<(), CoreError> {
@@ -259,6 +360,21 @@ impl ImpalaCore {
         state.trashed_deck_roots().into_iter().map(|name| tree_info(state, name)).collect()
     }
 
+    /// Fertiger Stapelbaum: Hierarchie aus "A::B"-Namen, Tiefe, Elternteil, Kurzname,
+    /// aktive Stapel, eingeklappt-Zustand als Eingabe, Zähler je Knoten summiert.
+    pub fn deck_tree(&self, collapsed: Vec<String>, utc_offset_minutes: i32, mix: bool) -> Vec<DeckEntry> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let now = wall_now();
+        let collapsed_set: std::collections::HashSet<String> = collapsed.into_iter().collect();
+        let entries = state.deck_tree(&collapsed_set, |name| {
+            let mut opts = StudyOptions::with_offset(Some(name), now, i64::from(utc_offset_minutes));
+            opts.mix = mix;
+            opts
+        });
+        entries.into_iter().map(DeckEntry::from).collect()
+    }
+
     /// Stapel-Übersicht wie der Stapelbaum der PWA: „Standard“ zuerst, dann manuelle Reihenfolge,
     /// dann alphabetisch; Eltern ohne eigenen Eintrag sind ergänzt. `utc_offset_minutes` wie bei
     /// `study_queue`.
@@ -266,19 +382,7 @@ impl ImpalaCore {
         let inner = self.lock();
         let state = inner.model.state();
         let now = wall_now();
-        let mut names: Vec<String> = active_names(state).into_iter().collect();
-        names.sort_by(|a, b| {
-            let (oa, ob) = (order_of(state, a), order_of(state, b));
-            (b == DEFAULT_DECK)
-                .cmp(&(a == DEFAULT_DECK))
-                .then_with(|| match (oa, ob) {
-                    (Some(x), Some(y)) => x.total_cmp(&y),
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (None, None) => std::cmp::Ordering::Equal,
-                })
-                .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
-        });
+        let names = state.active_deck_names(None);
         let active = state.active_cards();
         names
             .into_iter()
@@ -286,11 +390,20 @@ impl ImpalaCore {
                 let mut opts = StudyOptions::with_offset(Some(&name), now, i64::from(utc_offset_minutes));
                 opts.mix = mix;
                 let counts = state.study_snapshot(&opts).counts;
-                let in_tree = || active.iter().filter(|c| deck_in_tree(c.deck_name(), &name));
+                let mut total = 0u64;
+                let mut suspended = 0u64;
+                for c in &active {
+                    if deck_in_tree(c.deck_name(), &name) {
+                        total += 1;
+                        if c.is_suspended() {
+                            suspended += 1;
+                        }
+                    }
+                }
                 DeckOverview {
                     order: order_of(state, &name),
-                    total: in_tree().count() as u64,
-                    suspended: in_tree().filter(|c| c.is_suspended()).count() as u64,
+                    total,
+                    suspended,
                     new: counts.new as u64,
                     learn: counts.learn as u64,
                     review: counts.review as u64,
@@ -427,5 +540,72 @@ mod tests {
         assert_eq!(core.deck_config(Some("Bio::Zelle".into())).new_per_day, 20);
         core.set_deck_config(None, DeckConfig { new_per_day: 7, ..base }).unwrap();
         assert_eq!(core.deck_config(Some("Bio".into())).new_per_day, 7);
+    }
+
+    #[test]
+    fn stapelbaum_hierarchie_und_eingeklappt() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        core.create_deck("Mathe".into()).unwrap();
+        core.create_deck("Mathe::Analysis".into()).unwrap();
+        core.create_deck("Mathe::Analysis::Integral".into()).unwrap();
+        core.create_deck("Mathe::LinAlg".into()).unwrap();
+        core.create_deck("Informatik".into()).unwrap();
+
+        core.create_card("f1".into(), "b1".into(), Some("Mathe::Analysis::Integral".into()), None).unwrap();
+        core.create_card("f2".into(), "b2".into(), Some("Mathe::LinAlg".into()), None).unwrap();
+        core.create_card("f3".into(), "b3".into(), Some("Informatik".into()), None).unwrap();
+
+        // 1. Alle ausgeklappt
+        let tree = core.deck_tree(vec![], 60, false);
+        let names_depth: Vec<(&str, i32, bool)> = tree.iter().map(|e| (e.name.as_str(), e.depth, e.has_kids)).collect();
+        assert_eq!(
+            names_depth,
+            [
+                ("Standard", 0, false),
+                ("Informatik", 0, false),
+                ("Mathe", 0, true),
+                ("Mathe::Analysis", 1, true),
+                ("Mathe::Analysis::Integral", 2, false),
+                ("Mathe::LinAlg", 1, false),
+            ]
+        );
+
+        // Summiert Karten je Knoten: Mathe hat 2 Karten (Integral + LinAlg)
+        let mathe = tree.iter().find(|e| e.name == "Mathe").unwrap();
+        assert_eq!(mathe.total, 2);
+        assert_eq!(mathe.label, "Mathe");
+        assert_eq!(mathe.parent, None);
+
+        let analysis = tree.iter().find(|e| e.name == "Mathe::Analysis").unwrap();
+        assert_eq!(analysis.total, 1);
+        assert_eq!(analysis.label, "Analysis");
+        assert_eq!(analysis.parent, Some("Mathe".into()));
+        assert_eq!(analysis.due_now, 0);
+        assert!(!analysis.open);
+
+        // 2. Mit eingeklapptem Mathe::Analysis
+        let tree2 = core.deck_tree(vec!["Mathe::Analysis".into()], 60, false);
+        let names2: Vec<&str> = tree2.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names2, ["Standard", "Informatik", "Mathe", "Mathe::Analysis", "Mathe::LinAlg"]);
+        let ana2 = tree2.iter().find(|e| e.name == "Mathe::Analysis").unwrap();
+        assert!(ana2.collapsed);
+
+        // 3. Mit eingeklapptem Mathe
+        let tree3 = core.deck_tree(vec!["Mathe".into()], 60, false);
+        let names3: Vec<&str> = tree3.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names3, ["Standard", "Informatik", "Mathe"]);
+
+        // 4. flatten_decks liefert dieselbe Struktur aus einer flachen Übersicht
+        let overview = core.deck_overview(60, false);
+        let flat = flatten_decks(overview, vec!["Mathe::Analysis".into()]);
+        let flat_names: Vec<&str> = flat.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(flat_names, names2);
+        assert_eq!(flat[3].name, "Mathe::Analysis");
+        assert!(flat[3].collapsed);
+
+        // 5. Hilfsfunktionen
+        assert_eq!(deck_label("Mathe::Analysis".into()), "Analysis");
+        assert_eq!(deck_parent("Mathe::Analysis".into()), Some("Mathe".into()));
+        assert_eq!(deck_parent("Mathe".into()), None);
     }
 }

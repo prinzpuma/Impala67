@@ -47,6 +47,7 @@ import org.impala67.app.study.DeckMenuActions
 import org.impala67.app.study.ErrorDialog
 import org.impala67.app.study.StudyViewModel
 import org.impala67.app.study.deckMenuActions
+import org.impala67.app.study.deckParent
 import org.impala67.app.study.flattenDecks
 import org.impala67.app.ui.shell.CardBrowserRoute
 import org.impala67.app.ui.shell.ReviewRoute
@@ -76,7 +77,7 @@ fun DeskDecks(store: ImpalaStore, nav: ShellNav, current: NavKey, modifier: Modi
     val list = rememberLazyListState()
     fun drop(moved: String, d: Drop) {
         val target = d.row?.removePrefix(DECK_KEY)
-        val parent = { n: String -> n.substringBeforeLast(DECK_SEP, "") }
+        val parent = { n: String -> deckParent(n) }
         when {
             target == null -> if (moved.contains(DECK_SEP)) vm.move(moved, null)
             d.zone == DropZone.Into -> if (target != DEFAULT_DECK) vm.move(moved, target)
@@ -139,7 +140,6 @@ private fun DeckTreeRow(
     menu: DeckMenuActions,
 ) {
     val c = Impala.colors
-    val d = e.deck
     val key = DECK_KEY + e.name
     var menuOpen by remember { mutableStateOf(false) }
     LaunchedEffect(drag.source) { if (drag.source == key) menuOpen = false }
@@ -161,9 +161,8 @@ private fun DeckTreeRow(
             color = if (active) c.text else c.text2, fontSize = TextSize.base,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        val due = d.review + d.learn
-        if (due > 0uL) CountBadge("$due", c.accent)
-        if (d.new > 0uL) CountBadge("${d.new}", c.success)
+        if (e.due > 0uL) CountBadge("${e.due}", c.accent)
+        if (e.new > 0uL) CountBadge("${e.new}", c.success)
         Box {
             RowButton(R.drawable.ic_i_dots, "Weitere Optionen") { menuOpen = true }
             DeckMenu(e.name, menuOpen, { menuOpen = false }, menu)

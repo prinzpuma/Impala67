@@ -30,41 +30,11 @@ const pad = (id) => BUS.call("controller:badge", id) ?? "";
 // „Standard“ ist der Default-Name für Karten ohne expliziten Stapel — erscheint wie
 // jeder andere Stapel in Baum/Liste und ist löschbar (Karten im Teilbaum werden mitgelöscht).
 function collectActiveDeckSet(extraName = null) {
-	const set = new Set();
-	const add = (n) => {
-		const d = String(n || "").trim();
-		if (d) set.add(d);
-	};
-	Object.keys(S.decks || {}).forEach((n) => {
-		if (!n) return;
-		const d = S.decks[n];
-		if ((d && d.trashed) || STATE.isDeckArchived(n)) return;
-		add(n);
-	});
-	STATE.activeCards().forEach((c) => add(c.deck || "Standard"));
-	if (extraName) add(extraName);
-	[...set].forEach((n) => {
-		const parts = n.split("::");
-		for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join("::"));
-	});
-	return set;
+	return new Set(STATE.activeDeckNames(extraName));
 }
 
 function ankiDecks() {
-	// „Standard“ oben, dann manuelle Drag&Drop-Reihenfolge (order aus deckReorder),
-	// Rest weiterhin alphabetisch (de) — Stapel ohne order sortieren hinter denen mit.
-	const orderOf = (n) => (S.decks[n] && typeof S.decks[n].order === "number" ? S.decks[n].order : null);
-	return [...collectActiveDeckSet()].sort((a, b) => {
-		if (a === "Standard") return -1;
-		if (b === "Standard") return 1;
-		const oa = orderOf(a), ob = orderOf(b);
-		if (oa !== null || ob !== null) {
-			if (oa === null) return 1;
-			if (ob === null) return -1;
-			if (oa !== ob) return oa - ob;
-		}
-		return U.cmpDe(a, b);
-	});
+	return STATE.activeDeckNames();
 }
 
 // Karten eines Stapels INKLUSIVE aller Unterstapel ("Mathe" enthält "Mathe::Analysis").
@@ -114,29 +84,23 @@ function ankiStudyOpen(deck) {
 // bleibt überflüssig (Lernen über die Stapel-Übersicht).
 function deckTreeHtml() {
 	return PERF_PROFILER.measure("anki.deck-tree", () => {
-		const all = ankiDecks();
-		const kidsOf = (parent) => all.filter((n) => {
-			if (parent) return n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::");
-			return !n.includes("::");
-		});
-		const rowFor = (name, depth) => {
-			const label = name.split("::").pop();
-			const kids = kidsOf(name);
+		const collapsed = STATE.activeDeckNames().filter((n) => COLLAPSE.isCollapsed("deck:" + n));
+		const entries = STATE.deckTree(collapsed);
+		const rows = entries.map((entry) => {
+			const name = entry.name;
+			const label = entry.label;
+			const depth = entry.depth;
+			const hasKids = entry.hasKids;
+			const isCollapsed = entry.collapsed;
 			const key = "deck:" + name;
-			const collapsed = COLLAPSE.isCollapsed(key);
-			// Bug-Fix („kommt noch“, 23. Juli): Badges aus dem Lern-Snapshot statt roher Zählung —
-			// „fällig“ = Wiederholungen + jetzt fällige Lernschritte (mit Tageslimit),
-			// „neu“ = neue Karten innerhalb des Tageslimits (wie Anki). Vorher zählte „fällig“
-			// die komplette Queue (inkl. neuer Karten) und „neu“ ALLE neuen Karten ohne Limit.
-			const cnt = STATE.studySnapshot(name).counts;
-			const due = cnt.review + cnt.learnNow;
-			const neu = cnt.neu;
-			const chevron = kids.length
-				? '<button class="row-chevron' + (collapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
+			const due = entry.dueNow;
+			const neu = entry.new;
+			const chevron = hasKids
+				? '<button class="row-chevron' + (isCollapsed ? "" : " open") + '" data-collapse="' + U.esc(key) + '" title="Ein-/Ausklappen">▸</button>'
 				: '<span class="row-chevron spacer"></span>';
 			const menuOpen = S.deckMenuOpenName === name && S.deckMenuLocation === "sidebar";
 			const renaming = S.renamingDeck === name;
-			let html = '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
+			return '<div class="row deck-tree-row' + (S.ankiDeck === name ? " active" : "") + '" draggable="true" data-deck="' + U.esc(name) + '" data-deckopen="' + U.esc(name) + '" style="padding-left:' + (6 + depth * 16) + 'px">' +
 				chevron +
 				(renaming
 					? '<input class="row-rename-input" data-deckrenamename="' + U.esc(name) + '" value="' + U.esc(label) + '" autocomplete="off">'
@@ -147,12 +111,10 @@ function deckTreeHtml() {
 				'<button type="button" class="row-add" draggable="false" data-decksub="' + U.esc(name) + '" title="Unterstapel anlegen">+</button>' +
 				(menuOpen ? deckMenuHtml(name) : "") +
 				"</div>";
-			if (kids.length && !collapsed) html += kids.map((k) => rowFor(k, depth + 1)).join("");
-			return html;
-		};
+		}).join("");
 		return '<div class="ws-head"><span class="ws-name">Stapel</span>' +
 			'<button class="mini" data-decknew="1" title="Neuer Stapel">+</button></div>' +
-			(all.length ? kidsOf(null).map((n) => rowFor(n, 0)).join("") : '<div class="empty small">Noch keine Stapel — mit + einen anlegen</div>');
+			(entries.length ? rows : '<div class="empty small">Noch keine Stapel — mit + einen anlegen</div>');
 	}, {}, 15);
 }
 
@@ -224,38 +186,27 @@ function renderAnki(main) {
 // Stapel-Übersicht wie Ankis Deck-Liste: hierarchisch eingerückt (Unterstapel per "::"),
 // Zähler inklusive Unterstapel, Lernen/Durchsuchen/Unterstapel je Zeile.
 function ankiDecksHtml() {
-	// Bug-Fix („kommt noch“, 22. Juli): Unterstapel hierarchisch DIREKT unter ihrem
-	// Elternstapel einsortieren (wie im Sidebar-Baum). Vorher lief die flache
-	// ankiDecks()-Sortierung: Stapel mit Drag&Drop-order sortierten vor allen ohne —
-	// Unterstapel (ohne eigenen order) rutschten dadurch ans Listenende und standen
-	// zwar eingerückt (--deck-depth), aber unter dem falschen Eltern-Eintrag.
-	const all = ankiDecks();
-	const kidsOf = (parent) => all.filter((n) => (parent ? n.startsWith(parent + "::") && !n.slice(parent.length + 2).includes("::") : !n.includes("::")));
-	const flat = [];
-	const walk = (parent, depth) => kidsOf(parent).forEach((n) => {
-		const hasKids = kidsOf(n).length > 0;
-		const collapsed = hasKids && COLLAPSE.isCollapsed("deck:" + n);
-		flat.push({ name: n, depth, hasKids, collapsed });
-		if (!collapsed) walk(n, depth + 1);
-	});
-	walk(null, 0);
-	const rows = flat.map(({ name: d, depth, hasKids, collapsed }) => {
-		const label = d.split("::").pop();
-		const cards = ankiCardsOf(d);
-		// Anki-Zähler aus dem Lern-Snapshot (Bug-Fix „kommt noch“, 23. Juli — wie Sidebar-Baum):
-		// Neu (limitiert) | Lernen (alle offenen Lernschritte heute) | Fällig (nur Wiederholungen).
-		const cnt = STATE.studySnapshot(d).counts;
-		const open = ankiStudyOpen(d);
-		const susp = cards.filter((c) => c.suspended).length;
+	const collapsed = STATE.activeDeckNames().filter((n) => COLLAPSE.isCollapsed("deck:" + n));
+	const flat = STATE.deckTree(collapsed);
+	const rows = flat.map((entry) => {
+		const d = entry.name;
+		const depth = entry.depth;
+		const hasKids = entry.hasKids;
+		const isCollapsed = entry.collapsed;
+		const label = entry.label;
+		const cardCount = entry.total;
+		const susp = entry.suspended;
+		const cnt = { review: entry.review, learn: entry.learn, neu: entry.new };
+		const open = entry.open;
 		const deckIco = hasKids
-			? '<button class="deck-ico deck-collapse" data-collapse="deck:' + U.esc(d) + '" aria-expanded="' + (!collapsed) + '" title="Unterstapel ' + (collapsed ? "anzeigen" : "ausblenden") + '">' + (collapsed ? "▸" : "▾") + "</button>"
+			? '<button class="deck-ico deck-collapse" data-collapse="deck:' + U.esc(d) + '" aria-expanded="' + (!isCollapsed) + '" title="Unterstapel ' + (isCollapsed ? "anzeigen" : "ausblenden") + '">' + (isCollapsed ? "▸" : "▾") + "</button>"
 			: '<span class="deck-ico" aria-hidden="true">' + (depth ? "↳" : icon("cards")) + "</span>";
 		return '<div class="deck-row" style="--deck-depth:' + depth + '">' + deckIco +
 			'<span class="deck-info">' +
 				(S.renamingDeck === d
 					? '<input class="row-rename-input" data-deckrenamename="' + U.esc(d) + '" value="' + U.esc(label) + '" autocomplete="off">'
 					: '<span class="deck-name">' + U.esc(label) + "</span>") +
-			'<span class="deck-meta">' + cards.length + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
+			'<span class="deck-meta">' + cardCount + " Karten" + (susp ? " · " + susp + " ausgesetzt" : "") + "</span></span>" +
 			'<span class="deck-counts" title="Fällige Wiederholungen (mit Tageslimit) · offene Lernschritte heute · neue Karten (mit Tageslimit)">' +
 				(cnt.review + cnt.learn + cnt.neu
 					? (cnt.review ? '<b class="cnt-due">' + cnt.review + " fällig</b>" : '<b class="cnt-open">' + (cnt.learn + cnt.neu) + " offen</b>") + "<small>" + cnt.learn + " lernen · " + cnt.neu + " neu</small>"
@@ -590,11 +541,7 @@ function studyFooterHtml(c) {
 // Stapel-Liste für den Editor: alle bekannten Stapel inkl. „Standard“ (falls vorhanden).
 // Fallback „Standard“, wenn noch gar kein Stapel existiert (neue Karte anlegen).
 function editorDecks() {
-	const list = [...collectActiveDeckSet(S.ankiDeck)].sort((a, b) => {
-		if (a === "Standard") return -1;
-		if (b === "Standard") return 1;
-		return U.cmpDe(a, b);
-	});
+	const list = STATE.activeDeckNames(S.ankiDeck);
 	return list.length ? list : ["Standard"];
 }
 

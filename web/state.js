@@ -541,6 +541,18 @@ export const STATE = (() => {
 	const trashedDeckRoots = () => cardMemo("trashedDeckRoots", () => ids(M.trashedDeckRoots())).slice();
 	const orphanArchivedCards = () => cardsOf(cardMemo("orphanArchived", () => ids(M.orphanArchivedCards())));
 	const orphanTrashedCards = () => cardsOf(cardMemo("orphanTrashed", () => ids(M.orphanTrashedCards())));
+	const activeDeckNames = (extraName = null) => cardMemo("activeDeckNames|" + (extraName || ""), () => Object.freeze(JSON.parse(M.activeDeckNames(extraName ? String(extraName) : null))));
+	const deckLabel = (name) => CORE.deckLabel(String(name || ""));
+	const deckParent = (name) => CORE.deckParent(String(name || ""));
+	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") !== "off"; } catch { return true; } };
+	function deckTree(collapsed = [], now = new Date()) {
+		const t = now instanceof Date ? now : new Date(now);
+		const back = t.getHours() < 4 ? 1 : 0;
+		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4);
+		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 1, 4);
+		const collapsedList = Array.isArray(collapsed) ? collapsed : Array.from(collapsed);
+		return JSON.parse(M.deckTree(JSON.stringify(collapsedList), t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock()));
+	}
 	const deckConfOf = (deck) => cardMemo("deckConf|" + (deck || ""), () => Object.freeze(JSON.parse(M.deckConf(String(deck || "")))));
 	const pageTitles = () => activePages().map((pg) => pg.title);
 	// Titel → erste nicht gelöschte Seite (Archiv inklusive): [[Wiki-Links]] im Editor.
@@ -568,7 +580,6 @@ export const STATE = (() => {
 	// zeitabhängig); ein ausdrückliches `now` umgeht den Zwischenspeicher.
 	const LEARN_AHEAD_MS = 20 * 60e3;
 	const _snapCache = { rev: -1, t: 0, map: new Map() };
-	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") !== "off"; } catch { return true; } };
 	function computeStudySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
 		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).
@@ -633,7 +644,7 @@ export const STATE = (() => {
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
-		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
+		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory, activeDeckNames, deckTree, deckLabel, deckParent,
 	};
 })();
 

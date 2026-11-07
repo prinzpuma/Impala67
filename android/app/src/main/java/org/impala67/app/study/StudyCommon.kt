@@ -32,7 +32,10 @@ const val DEFAULT_DECK = "Standard"
 const val DECK_SEP = "::"
 
 /** Letzter Namensteil: „Mathe::Analysis“ → „Analysis“. */
-fun deckLabel(name: String): String = name.substringAfterLast(DECK_SEP)
+fun deckLabel(name: String): String = uniffi.impala_ffi.deckLabel(name)
+
+/** Elternteil eines Stapels („“ für oberste Ebene). */
+fun deckParent(name: String): String = uniffi.impala_ffi.deckParent(name) ?: ""
 
 /** Fehlertext des Kerns ohne Typ-Präfix. */
 fun Throwable.reason(): String = when (this) {

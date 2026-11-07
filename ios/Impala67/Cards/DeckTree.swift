@@ -97,7 +97,7 @@ private struct DeckTreeRow<MenuContent: View>: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
             if entry.due > 0 { CountBadge(value: entry.due, color: Impala.accent) }
-            if entry.deck.new > 0 { CountBadge(value: entry.deck.new, color: Impala.success) }
+            if entry.new > 0 { CountBadge(value: entry.new, color: Impala.success) }
         }
         .padding(.leading, CGFloat(entry.depth) * 16)
         .padding(.trailing, 4)
