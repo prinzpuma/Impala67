@@ -741,6 +741,37 @@ impl ModelCore {
         self.m.state().is_deck_archived(name)
     }
 
+    #[wasm_bindgen(js_name = activeDeckNames)]
+    pub fn active_deck_names(&self, extra_name: Option<String>) -> String {
+        text(&self.m.state().active_deck_names(extra_name.as_deref().filter(|s| !s.is_empty())))
+    }
+
+    #[wasm_bindgen(js_name = deckTree)]
+    pub fn deck_tree(
+        &self,
+        collapsed_json: &str,
+        now: f64,
+        day_start: f64,
+        day_end: f64,
+        mix: bool,
+        overlearn_lock: bool,
+    ) -> Result<String, JsError> {
+        let collapsed_vec: Vec<String> = parse(collapsed_json).unwrap_or_default();
+        let collapsed_set: std::collections::HashSet<String> = collapsed_vec.into_iter().collect();
+        let now_ts = Timestamp(now as i64);
+        let day_start_ts = Timestamp(day_start as i64);
+        let day_end_ts = Timestamp(day_end as i64);
+        let entries = self.m.state().deck_tree(&collapsed_set, |deck| StudyOptions {
+            deck: Some(deck),
+            now: now_ts,
+            day_start: day_start_ts,
+            day_end: day_end_ts,
+            mix,
+            overlearn_lock,
+        });
+        Ok(text(&entries))
+    }
+
     #[wasm_bindgen(js_name = isCardArchived)]
     pub fn is_card_archived(&self, id: &str) -> bool {
         let s = self.m.state();
@@ -957,6 +988,18 @@ fn card_ids(cards: Vec<&impala_model::Card>) -> String {
 #[wasm_bindgen(js_name = deckInTree)]
 pub fn deck_in_tree_js(deck: &str, root: &str) -> bool {
     deck_in_tree(deck, root)
+}
+
+/// Letzter Namensteil eines Stapels („Mathe::Analysis“ → „Analysis“).
+#[wasm_bindgen(js_name = deckLabel)]
+pub fn deck_label_js(name: &str) -> String {
+    impala_model::tree::deck_label(name).to_owned()
+}
+
+/// Elternteil eines Stapels („Mathe::Analysis“ → "Mathe", "Mathe" → undefined/null).
+#[wasm_bindgen(js_name = deckParent)]
+pub fn deck_parent_js(name: &str) -> Option<String> {
+    impala_model::tree::deck_parent(name).map(str::to_owned)
 }
 
 /// Seitenverlauf aus dem Log (`[{ t, title, content }]`).
