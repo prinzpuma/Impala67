@@ -393,18 +393,11 @@ function ankiArchiveHtml() {
 		ankiSec("Einzelne Karten") + '<div class="deck-list">' + (cardRows || '<div class="empty small">Keine einzeln archivierten Karten</div>') + "</div>";
 }
 
-// Statistik-Tab: Auswertung und Markup liegen in anki-stats.js. Hier nur die Eingaben:
-// Karten dieses Stapels und die Bewertungen, deren Stapel (eingefroren beim Ereignis) dazugehört.
+// Statistik-Tab: Auswertung liegt im Rust-Kern (STATE.learningStats), Markup in anki-stats.js.
 function ankiStatsHtml() {
-	const cards = ankiCardsOf(S.ankiDeck);
-	const reviews = (S.reviews || []).filter((r) => {
-		if (!S.ankiDeck) return true;
-		const d = r.deck || ((S.cards[r.cardId] || {}).deck) || "Standard";
-		return STATE.deckInTree(d, S.ankiDeck);
-	});
 	const now = new Date();
 	const analyse = ANALYSE ? ANALYSE.statsHtml() : "";
-	return statsPageHtml(statsData({ cards, reviews, now, thinkMs: TELE.thinkMedian() }), analyse, now);
+	return statsPageHtml(STATE.learningStats(S.ankiDeck, now), analyse, now);
 }
 
 

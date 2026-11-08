@@ -495,3 +495,25 @@ fn lernzeit_wie_js() {
         assert_eq!(got, expected, "nudge case {:?}", case);
     }
 }
+
+#[test]
+fn statistik_wie_js() {
+    let cases = golden("stats.json");
+    for case in cases.as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let now = Timestamp::parse_iso(case["now"].as_str().unwrap()).unwrap();
+        let deck = case["deck"].as_str();
+        let tz_offset_minutes = case["tzOffsetMinutes"].as_i64().unwrap();
+        let cards: Vec<impala_model::Card> =
+            objects(&case["cards"]).into_iter().map(impala_model::Card::from_object).collect();
+        let reviews: Vec<impala_model::Review> =
+            objects(&case["reviews"]).into_iter().map(impala_model::Review::from_object).collect();
+        let telemetry: Vec<impala_model::Telemetry> =
+            objects(&case["telemetry"]).into_iter().map(impala_model::Telemetry::from_object).collect();
+        let think_ms = case["expected"]["thinkMs"].as_i64();
+        let options = impala_model::stats::StatsOptions { deck, now, tz_offset_minutes, think_ms };
+        let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
+        let actual = serde_json::to_value(&stats).unwrap();
+        assert_same(&actual, &case["expected"], &format!("statistik {name}"));
+    }
+}

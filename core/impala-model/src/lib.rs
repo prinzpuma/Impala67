@@ -20,6 +20,7 @@ pub mod query;
 mod record;
 pub mod reduce;
 pub mod search;
+pub mod stats;
 pub mod study;
 pub mod tree;
 pub mod types;

@@ -29,6 +29,31 @@ impl Timestamp {
         (self.0 - earlier.0) as f64 / MS_PER_DAY as f64
     }
 
+    /// Tage seit 1970-01-01 (UTC) für einen UTC-Versatz in Minuten.
+    pub fn days_since_epoch(self, offset_minutes: i64) -> i64 {
+        let local_ms = self.0 + offset_minutes * MS_PER_MINUTE;
+        local_ms.div_euclid(MS_PER_DAY)
+    }
+
+    /// Lokaler Tagesschlüssel „JJJJ-MM-TT“ für einen UTC-Versatz in Minuten (z. B. +60 für MEZ).
+    pub fn day_key(self, offset_minutes: i64) -> String {
+        let days = self.days_since_epoch(offset_minutes);
+        let (y, m, d) = civil_from_days(days);
+        format!("{y:04}-{m:02}-{d:02}")
+    }
+
+    /// Datumskomponenten (Jahr, Monat 1..=12, Tag 1..=31) für einen UTC-Versatz in Minuten.
+    pub fn civil_date(self, offset_minutes: i64) -> (i64, i64, i64) {
+        let days = self.days_since_epoch(offset_minutes);
+        civil_from_days(days)
+    }
+
+    /// Start des Tages (00:00:00 Uhr lokaler Zeit) als UTC-Timestamp.
+    pub fn start_of_day(self, offset_minutes: i64) -> Self {
+        let days = self.days_since_epoch(offset_minutes);
+        Timestamp(days * MS_PER_DAY - offset_minutes * MS_PER_MINUTE)
+    }
+
     /// Liest ISO-8601 wie es `toISOString` schreibt, dazu die üblichen Varianten: ohne
     /// Millisekunden/Sekunden, mit `±hh:mm`, nur Datum, sechsstellige Jahre (`+012345`).
     /// Abweichung: Datum+Uhrzeit ohne Zonenangabe gilt als UTC (JS nähme die Ortszeit) –
@@ -153,7 +178,7 @@ fn days_in_month(y: i64, m: i64) -> i64 {
 }
 
 // Kalenderumrechnung nach H. Hinnant („chrono-Compatible Low-Level Date Algorithms“).
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
     let yoe = y - era * 400;
@@ -163,7 +188,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-fn civil_from_days(z: i64) -> (i64, i64, i64) {
+pub fn civil_from_days(z: i64) -> (i64, i64, i64) {
     let z = z + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
