@@ -5,6 +5,7 @@
 // Chats und Schnell-Aktionen. Bedienung per Tastatur (↑/↓, Enter, Esc) oder Maus.
 // Die Aktionen lösen bewusst die vorhandenen Buttons/Flows der App aus — keine Doppel-Logik.
 
+import { CORE } from "./rust-core.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { CHATS } from "./chats.js";
@@ -107,24 +108,24 @@ function actionItems() {
 	const light = (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme")) === "light";
 	const click = (id) => () => { const b = U.el(id); if (b) b.click(); };
 	return [
-		{ type: "action", icon: "plus", label: "Neue Seite", run: () => newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
-		{ type: "action", icon: "cards", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
+		{ id: "new-page", type: "action", icon: "plus", label: "Neue Seite", run: () => newPageFlow(Object.keys(S.workspaces)[0] || "default", null) },
+		{ id: "review-cards", type: "action", icon: "cards", label: "Karten wiederholen" + (due ? " — " + due + " fällig" : ""), run: () => RENDER.openReview() },
 		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
 		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
-		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => openAnki("browser") },
-		{ type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
-		{ type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
+		{ id: "manage-cards", type: "action", icon: "cards", label: "Karten verwalten", run: () => openAnki("browser") },
+		{ id: "notebook", type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
+		{ id: "toggle-theme", type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");
 			SETTINGS.applyTheme();
 		} },
-		{ type: "action", icon: "archive", label: "Archiv in Bibliothek öffnen", run: () => {
+		{ id: "open-archive", type: "action", icon: "archive", label: "Archiv in Bibliothek öffnen", run: () => {
 			S.view = "library";
 			S.libMode = "archive";
 			RENDER.render();
 		} },
-		{ type: "action", icon: "trash", label: "Papierkorb öffnen", run: click("btnTrash") },
-		{ type: "action", icon: "cloud", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
-		{ type: "action", icon: "sliders", label: "Einstellungen öffnen", run: click("btnSettings") }
+		{ id: "open-trash", type: "action", icon: "trash", label: "Papierkorb öffnen", run: click("btnTrash") },
+		{ id: "open-sync-settings", type: "action", icon: "cloud", label: "Drive-Sync in Einstellungen öffnen", run: click("btnSettings") },
+		{ id: "open-settings", type: "action", icon: "sliders", label: "Einstellungen öffnen", run: click("btnSettings") }
 	];
 }
 
@@ -132,7 +133,7 @@ function actionItems() {
 function newTabActions() {
 	const wsId = S.currentWorkspaceId || Object.keys(S.workspaces)[0] || "default";
 	return [
-		{ type: "action", icon: "sparkles", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
+		{ id: "new-chat", type: "action", icon: "sparkles", label: "Neuen Chat starten", kind: "Schnellaktion", run: () => {
 			if (typeof startNewChat === "function") startNewChat({ newTab: true });
 			else {
 				// Fallback: Chat-Tab-Button / neue Session über Sidebar-Flow
@@ -140,7 +141,7 @@ function newTabActions() {
 				if (b) b.click();
 			}
 		} },
-		{ type: "action", icon: "file", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
+		{ id: "new-page", type: "action", icon: "file", label: "Neue Seite", kind: "Schnellaktion", run: async () => {
 			// Immer in neuem Tab anlegen (wie Notion + → Neue Seite)
 			if (typeof createPageInNewTab === "function") await createPageInNewTab(wsId, null);
 			else await newPageFlow(wsId, null);
@@ -148,15 +149,11 @@ function newTabActions() {
 	];
 }
 
-// WARUM: Sortierung nach Datum stand zweimal im File, einmal ungeklammert —
-// eine Seite ohne "updated" liess Strg+K mit TypeError platzen. Eine Quelle.
 function recentPages(limit) {
 	return STATE.activePages().sort(U.byNewest).slice(0, limit);
 }
 
-// Breadcrumb-Pfad einer Seite für die New-Tab-Liste (Workspace › Eltern › …)
-// PERF: pro Render gemerkt — der Pfad wurde je Seite zweimal erlaufen (Filter + Anzeige)
-// und fuer gemeinsame Eltern immer wieder von neuem; Cache leert renderList.
+// Breadcrumb-Pfad einer Seite für die New-Tab-Liste (Workspace › Eltern › …) via Rust-Kern.
 const pathCache = new Map();
 function pagePathLabel(pg) {
 	if (!pg) return "";
@@ -164,10 +161,25 @@ function pagePathLabel(pg) {
 	if (memo !== undefined) return memo;
 	const parts = RENDER.ancestorsOf(pg).map((p) => p.title || "");
 	const ws = S.workspaces[pg.workspaceId] || S.workspaces.default;
-	if (ws && ws.name) parts.unshift(ws.name);
-	const out = parts.filter(Boolean).join(" › ");
+	const out = CORE.searchFormatPagePath(ws && ws.name ? ws.name : undefined, parts);
 	pathCache.set(pg.id, out);
 	return out;
+}
+
+function filterActionsByQuery(allActions, q) {
+	const pairs = allActions.map((a) => [a.id, a.label]);
+	const ids = new Set(JSON.parse(CORE.searchFilterActions(JSON.stringify(pairs), q)));
+	return allActions.filter((a) => ids.has(a.id));
+}
+
+function filterChatsByQuery(allChats, q, includeMessages, limit) {
+	const docs = allChats.map((s) => ({
+		id: String(s.id || ""),
+		title: String(s.title || ""),
+		messages: includeMessages ? (s.messages || []).map((m) => String(m.content || "")) : [],
+	}));
+	const ids = new Set(JSON.parse(CORE.searchChats(JSON.stringify(docs), q, includeMessages, limit)));
+	return allChats.filter((s) => ids.has(String(s.id || "")));
 }
 
 function gather(q) {
@@ -176,18 +188,14 @@ function gather(q) {
 
 	// Plus-Tab-Menü: Schnellaktionen oben, dann Seiten/Chats (Titel-Suche, mehr Treffer)
 	if (paletteMode === "newTab") {
-		const acts = newTabActions().filter((a) => !ql || a.label.toLowerCase().includes(ql));
-		// WARUM: leerer Kopf erzeugte eine leere Ueberschriftszeile -> Luecke oben im Menue.
+		const acts = filterActionsByQuery(newTabActions(), ql);
 		if (acts.length) rows.push(...acts);
 		const pages = (ql
 			? STATE.activePages().filter((p) => (p.title || "").toLowerCase().includes(ql)
 				|| pagePathLabel(p).toLowerCase().includes(ql))
 			: recentPages(14)
 		).map((p) => ({ type: "page", page: p, path: pagePathLabel(p) }));
-		let chats = loadChats(); // gecacht, siehe loadChats
-		chats = (ql
-			? chats.filter((s) => (s.title || "").toLowerCase().includes(ql))
-			: chats).slice(0, ql ? 8 : 4);
+		const chats = filterChatsByQuery(loadChats(), ql, false, ql ? 8 : 4);
 		if (pages.length) rows.push({ head: ql ? "Seiten" : "Zuletzt" }, ...pages);
 		if (chats.length) rows.push({ head: "Chats" }, ...chats.map((s) => ({ type: "chat", chat: s })));
 		return rows;
@@ -196,34 +204,25 @@ function gather(q) {
 	const pages = ql
 		? STATE.searchNotes(ql, { includeArchived: true }).map((r) => ({ type: "page", page: r.page, snippet: r.snippet, terms: r.terms }))
 		: recentPages(6).map((p) => ({ type: "page", page: p }));
-	let chats = loadChats(); // gecacht, siehe loadChats
-	chats = (ql
-		? chats.filter((s) => (s.title || "").toLowerCase().includes(ql) || (s.messages || []).some((m) => (m.content || "").toLowerCase().includes(ql)))
-		: chats).slice(0, ql ? 5 : 3);
-	const acts = actionItems().filter((a) => !ql || a.label.toLowerCase().includes(ql));
+	const chats = filterChatsByQuery(loadChats(), ql, true, ql ? 5 : 3);
+	const acts = filterActionsByQuery(actionItems(), ql);
 	if (pages.length) rows.push({ head: ql ? "Seiten" : "Zuletzt bearbeitet" }, ...pages);
 	if (chats.length) rows.push({ head: "Chats" }, ...chats.map((s) => ({ type: "chat", chat: s })));
 	if (acts.length) rows.push({ head: "Aktionen" }, ...acts);
 	return rows;
 }
 
-// WARUM: Regex wurde je Zeile UND je Tastendruck neu kompiliert. Jetzt einmal pro
-// Render bauen und durchreichen. text||"" weil leere Titel sonst "undefined" anzeigten.
-// terms: Wortformen aus Tippfehler-Treffern (STATE.searchNotes), zusätzlich markiert.
-function markRe(ql, terms) {
-	const parts = [ql, ...(terms || [])].filter(Boolean).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-	return parts.length ? new RegExp("(" + parts.join("|") + ")", "gi") : null;
-}
-
-// Auf dem Klartext markieren und stückweise escapen — auf dem escapten String traf
-// die Suche „a“ sonst das „&amp;“ und zeigte kaputte Entities.
-function mark(text, re) {
+// Auf dem Klartext mit den Bereichen aus dem Rust-Kern (`searchHighlightRanges`) markieren und stückweise escapen.
+function mark(text, ql, terms) {
 	const raw = String(text || "");
-	if (!re) return U.esc(raw);
+	if (!ql && (!terms || !terms.length)) return U.esc(raw);
+	const ranges = CORE.searchHighlightRanges(raw, ql || "", terms || []);
+	if (!ranges.length) return U.esc(raw);
 	let out = "", last = 0;
-	for (const m of raw.matchAll(re)) {
-		out += U.esc(raw.slice(last, m.index)) + "<mark>" + U.esc(m[0]) + "</mark>";
-		last = m.index + m[0].length;
+	for (let i = 0; i < ranges.length; i += 2) {
+		const start = ranges[i], end = ranges[i + 1];
+		out += U.esc(raw.slice(last, start)) + "<mark>" + U.esc(raw.slice(start, end)) + "</mark>";
+		last = end;
 	}
 	return out + U.esc(raw.slice(last));
 }
@@ -232,7 +231,6 @@ function renderList(q) {
 	const list = U.el("paletteList");
 	if (!list) return;
 	const ql = q.trim().toLowerCase();
-	const re = markRe(ql);
 	pathCache.clear(); // Titel/Eltern koennen sich zwischen Renders geaendert haben
 	const rows = gather(q);
 	items = rows.filter((r) => !r.head);
@@ -244,26 +242,26 @@ function renderList(q) {
 		const sel = idx === selIdx ? " selected" : "";
 		if (r.type === "page") {
 			const pg = r.page;
-			const snip = r.snippet ? r.snippet.replace(/\s+/g, " ").trim().slice(0, 110) : "";
+			const snip = r.snippet ? CORE.searchPreview(r.snippet) : "";
 			const path = r.path || "";
-			const rowRe = r.terms ? markRe(ql, r.terms) : re;
+			const terms = r.terms || [];
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
 				'<span class="palette-icon">' + pageIcon(pg) + "</span>" +
-				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, rowRe) + "</span>" +
-				(path ? '<span class="palette-snip">' + mark(path, rowRe) + "</span>"
-					: (snip ? '<span class="palette-snip">' + mark(snip, rowRe) + "</span>" : "")) +
+				'<span class="palette-main"><span class="palette-title">' + mark(pg.title, ql, terms) + "</span>" +
+				(path ? '<span class="palette-snip">' + mark(path, ql, terms) + "</span>"
+					: (snip ? '<span class="palette-snip">' + mark(snip, ql, terms) + "</span>" : "")) +
 				"</span>" +
 				'<span class="palette-kind">' + (paletteMode === "newTab" && path ? U.esc(path.split(" › ").slice(-1)[0] || "") : (pg.archived ? "Archiv · " : "") + U.fmtDate(pg.updated)) + "</span></button>";
 		}
 		if (r.type === "chat") {
 			return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
 				'<span class="palette-icon">✦</span>' +
-				'<span class="palette-main"><span class="palette-title">' + mark(r.chat.title || "Chat", re) + "</span></span>" +
+				'<span class="palette-main"><span class="palette-title">' + mark(r.chat.title || "Chat", ql) + "</span></span>" +
 				'<span class="palette-kind">' + U.fmtDate(r.chat.updated || r.chat.created) + "</span></button>";
 		}
 		return '<button class="palette-item' + sel + '" data-palidx="' + idx + '">' +
 			'<span class="palette-icon">' + icon(r.icon) + "</span>" +
-			'<span class="palette-main"><span class="palette-title">' + mark(r.label, re) + "</span></span>" +
+			'<span class="palette-main"><span class="palette-title">' + mark(r.label, ql) + "</span></span>" +
 			'<span class="palette-kind">' + U.esc(r.kind || "Aktion") + "</span></button>";
 	}).join("") || '<div class="empty">Nichts gefunden</div>';
 	const selEl = list.querySelector(".palette-item.selected");
@@ -298,11 +296,6 @@ function runItem(it) {
 	else if (it.run) it.run();
 }
 
-// FIX: ↑/↓/Enter/Escape griffen bisher nur, solange der Fokus exakt im
-// Eingabefeld lag (e.target.id === "paletteInput"). Landete der Fokus aus
-// irgendeinem Grund auf einem Listeneintrag, reagierte insbesondere Escape
-// gar nicht mehr — genau das Muster "Menü lässt sich nicht schließen".
-// Jetzt reicht jedes Tastatur-Ziel INNERHALB des Befehls-Menüs.
 function wirePalette(el) {
 	el.addEventListener("click", (e) => {
 		if (e.target.closest("[data-palclose]")) { closePalette(); return; }

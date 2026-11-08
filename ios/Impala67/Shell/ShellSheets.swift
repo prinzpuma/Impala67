@@ -38,7 +38,7 @@ struct CloseButton: View {
     }
 }
 
-/// Befehls-Menü wie die PWA (search.js `buildRows`): ohne Suchtext „Zuletzt bearbeitet“ (6), Chats (3) und
+/// Befehls-Menü wie die PWA (`web/search.js`): ohne Suchtext „Zuletzt bearbeitet“ (6), Chats (3) und
 /// Aktionen; mit Suchtext Seiten (Volltext, auch Archiv), Chats (Titel oder Inhalt, 5) und passende Aktionen.
 private struct SearchSheet: View {
     @Environment(ImpalaStore.self) private var store
@@ -49,46 +49,18 @@ private struct SearchSheet: View {
     @State private var query = ""
     /// Ergebnisse der letzten Suche (im Hintergrund gelesen; der Kern hat nur eine Sperre) samt Suchtext.
     @State private var found = Found(query: "", pages: [], chats: [])
-    /// Chats mit kleingeschriebenem Titel und Text, einmal je Öffnen geladen (`loadChats` in search.js).
-    @State private var chatIndex: [ChatEntry]?
 
     private struct Action: Identifiable {
+        let id: String
         let icon: String
         let label: String
         let run: () -> Void
-        var id: String { label }
-    }
-
-    private struct PageRow: Identifiable, Sendable {
-        let id: String
-        let title: String
-        let snippet: String
-    }
-
-    private struct ChatEntry: Sendable {
-        let info: ChatInfo
-        let title: String
-        let text: String
     }
 
     private struct Found: Sendable {
         let query: String
-        let pages: [PageRow]
+        let pages: [PalettePageHit]
         let chats: [ChatInfo]
-    }
-
-    /// Alle Chats einmal mit vollen Nachrichten lesen (läuft im Hintergrund).
-    nonisolated private static func buildChatIndex(_ core: ImpalaCore) -> [ChatEntry] {
-        core.chats().map { c in
-            let text = core.chat(id: c.id)?.messages.compactMap { $0.content }.joined(separator: "\n").lowercased() ?? ""
-            return ChatEntry(info: c, title: c.title.lowercased(), text: text)
-        }
-    }
-
-    nonisolated private static func searchPages(_ core: ImpalaCore, query: String, ql: String) -> [PageRow] {
-        ql.isEmpty
-            ? core.recentPages(limit: 6).map { PageRow(id: $0.id, title: $0.title, snippet: "") }
-            : core.search(query: query, includeArchived: true).map { PageRow(id: $0.pageId, title: $0.title, snippet: $0.snippet) }
     }
 
     /// Suche entprellt (~150 ms wie die PWA) im Hintergrund; leerer Text zeigt sofort „Zuletzt bearbeitet“.
@@ -100,22 +72,9 @@ private struct SearchSheet: View {
             try? await Task.sleep(for: .milliseconds(150))
             if Task.isCancelled { return }
         }
-        var index = chatIndex
-        if !ql.isEmpty, index == nil {
-            let built = await Task.detached(priority: .userInitiated) { Self.buildChatIndex(core) }.value
-            chatIndex = built
-            index = built
-        }
-        if Task.isCancelled { return }
-        let entries = index ?? []
         let loaded = await Task.detached(priority: .userInitiated) { () -> Found in
-            let pages = Self.searchPages(core, query: text, ql: ql)
-            let chats: [ChatInfo]
-            if ql.isEmpty {
-                chats = Array(core.chats().prefix(3))
-            } else {
-                chats = Array(entries.filter { $0.title.contains(ql) || $0.text.contains(ql) }.map(\.info).prefix(5))
-            }
+            let pages = core.palettePages(query: text, recentLimit: 6)
+            let chats = core.paletteChats(query: text, includeMessages: true, limit: ql.isEmpty ? 3 : 5)
             return Found(query: ql, pages: pages, chats: chats)
         }.value
         if !Task.isCancelled { found = loaded }
@@ -125,14 +84,21 @@ private struct SearchSheet: View {
         let ql = query.trimmingCharacters(in: .whitespaces).lowercased()
         let pages = found.pages
         let chats = found.chats
-        let acts = actions().filter { ql.isEmpty || $0.label.lowercased().contains(ql) }
+        let allActions = actions()
+        let matchedActionIds = Set(
+            searchFilterActions(
+                actions: allActions.map { PaletteActionDef(id: $0.id, label: $0.label) },
+                query: query
+            )
+        )
+        let acts = allActions.filter { matchedActionIds.contains($0.id) }
         List {
             if !pages.isEmpty {
                 Section(ql.isEmpty ? "Zuletzt bearbeitet" : "Seiten") {
-                    ForEach(pages, id: \.id) { p in
-                        Button { dismiss(); shell.open(p.id) } label: {
+                    ForEach(pages, id: \.summary.id) { p in
+                        Button { dismiss(); shell.open(p.summary.id) } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(p.title.isEmpty ? "Ohne Titel" : p.title)
+                                Text(p.summary.title.isEmpty ? "Ohne Titel" : p.summary.title)
                                     .font(.system(size: TextSize.md, weight: .medium)).foregroundStyle(Impala.text)
                                 if !p.snippet.isEmpty {
                                     Text(p.snippet).font(.system(size: TextSize.sm)).foregroundStyle(Impala.text2).lineLimit(2)
@@ -142,7 +108,7 @@ private struct SearchSheet: View {
                         .contextMenu {
                             Button {
                                 dismiss()
-                                shell.openNewTab(p.id)
+                                shell.openNewTab(p.summary.id)
                             } label: {
                                 Label { Text("In neuem Tab öffnen") } icon: { Icon("external") }
                             }
@@ -191,25 +157,25 @@ private struct SearchSheet: View {
         let due = shell.cards.queue?.dueNow.count ?? 0
         let light = theme == AppTheme.light.rawValue
         return [
-            Action(icon: "plus", label: "Neue Seite") {
+            Action(id: "new-page", icon: "plus", label: "Neue Seite") {
                 dismiss()
                 if let id = store.core.createNew(.note, parent: nil, workspace: nil) { shell.open(id) }
             },
-            Action(icon: "cards", label: "Karten wiederholen" + (due > 0 ? " — \(due) fällig" : "")) {
+            Action(id: "review-cards", icon: "cards", label: "Karten wiederholen" + (due > 0 ? " — \(due) fällig" : "")) {
                 dismiss(); shell.openCards(.review(deck: nil, mix: false))
             },
-            Action(icon: "cards", label: "Karten verwalten") { dismiss(); shell.openCards(.decks) },
-            Action(icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)") { dismiss(); shell.open("nlm:main") },
-            Action(icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design") {
+            Action(id: "manage-cards", icon: "cards", label: "Karten verwalten") { dismiss(); shell.openCards(.decks) },
+            Action(id: "notebook", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)") { dismiss(); shell.open("nlm:main") },
+            Action(id: "toggle-theme", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design") {
                 theme = light ? AppTheme.dark.rawValue : AppTheme.light.rawValue
             },
-            Action(icon: "archive", label: "Archiv in Bibliothek öffnen") {
+            Action(id: "open-archive", icon: "archive", label: "Archiv in Bibliothek öffnen") {
                 libMode = LibraryMode.archive.rawValue
                 dismiss(); shell.open("library")
             },
-            Action(icon: "trash", label: "Papierkorb öffnen") { shell.sheet = .trash },
-            Action(icon: "cloud", label: "Drive-Sync in Einstellungen öffnen") { shell.sheet = .settings },
-            Action(icon: "sliders", label: "Einstellungen öffnen") { shell.sheet = .settings },
+            Action(id: "open-trash", icon: "trash", label: "Papierkorb öffnen") { shell.sheet = .trash },
+            Action(id: "open-sync-settings", icon: "cloud", label: "Drive-Sync in Einstellungen öffnen") { shell.sheet = .settings },
+            Action(id: "open-settings", icon: "sliders", label: "Einstellungen öffnen") { shell.sheet = .settings },
         ]
     }
 }

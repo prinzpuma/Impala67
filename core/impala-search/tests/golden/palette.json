@@ -1,0 +1,88 @@
+{
+  "previews": [
+    {
+      "input": "  a\n\n b\t",
+      "output": "a b"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "output": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "input": "   Hello   world!  \nThis is a test.\t\tOk?  ",
+      "output": "Hello world! This is a test. Ok?"
+    },
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "   ",
+      "output": ""
+    }
+  ],
+  "highlights": [
+    {
+      "text": "Foto und foto, Fotos",
+      "query": "foto",
+      "terms": [
+        "fotos"
+      ],
+      "want": [
+        [
+          0,
+          4
+        ],
+        [
+          9,
+          13
+        ],
+        [
+          15,
+          19
+        ]
+      ]
+    },
+    {
+      "text": "Größe",
+      "query": "grö",
+      "terms": [],
+      "want": [
+        [
+          0,
+          4
+        ]
+      ]
+    },
+    {
+      "text": "abc",
+      "query": "",
+      "terms": [],
+      "want": []
+    },
+    {
+      "text": "Karten wiederholen — 3 fällig",
+      "query": "karte",
+      "terms": [
+        "karten"
+      ],
+      "want": [
+        [
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "text": "Neuer Chat mit KI",
+      "query": "chat",
+      "terms": [],
+      "want": [
+        [
+          6,
+          10
+        ]
+      ]
+    }
+  ]
+}
