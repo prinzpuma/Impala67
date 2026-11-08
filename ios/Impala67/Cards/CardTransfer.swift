@@ -138,10 +138,7 @@ struct CardIoSheet: View {
 
     /// Alle Karten ohne Papierkorb und Archiv.
     static func activeCards(_ core: ImpalaCore) -> [PlainCard] {
-        var seen = Set<String>()
-        return core.decks().flatMap { core.cardsInDeck(deck: $0.name) }
-            .filter { !$0.trashed && !$0.archived && seen.insert($0.id).inserted }
-            .map { PlainCard(front: $0.front, back: $0.back, deck: $0.deck) }
+        core.activePlainCards()
     }
 
     // MARK: Import
@@ -207,16 +204,11 @@ struct CardIoSheet: View {
     }
 
     private func existingKeys() -> Set<String> {
-        Set(store.core.decks().flatMap { store.core.cardsInDeck(deck: $0.name) }
-            .filter { !$0.trashed }
-            .map { CardText.key(PlainCard(front: $0.front, back: $0.back, deck: $0.deck)) })
+        Set(store.core.existingCardKeys())
     }
 
     private func duplicateCount(_ cards: [PlainCard]) -> Int {
-        var seen = existingKeys()
-        var n = 0
-        for c in cards where !seen.insert(CardText.key(c)).inserted { n += 1 }
-        return n
+        Int(store.core.duplicateCount(cards: cards))
     }
 
     private func importCards(_ cards: [PlainCard]) {

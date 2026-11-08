@@ -4,6 +4,7 @@
 
 mod ai;
 mod analysis;
+mod card_transfer;
 mod drive;
 mod heft;
 mod ink;

@@ -132,6 +132,19 @@ impl Card {
     pub fn srs_due(&self) -> Option<&str> {
         self.srs()?.get("due")?.as_str()
     }
+    pub fn front(&self) -> &str {
+        self.extra.get("front").and_then(Value::as_str).unwrap_or("")
+    }
+    pub fn back(&self) -> &str {
+        self.extra.get("back").and_then(Value::as_str).unwrap_or("")
+    }
+    pub fn to_plain(&self) -> crate::card_transfer::PlainCard {
+        crate::card_transfer::PlainCard {
+            front: self.front().to_owned(),
+            back: self.back().to_owned(),
+            deck: self.deck_name().to_owned(),
+        }
+    }
     /// FSRS-Stand als Typ (für die Planung mit `impala_srs`).
     pub fn srs_typed(&self) -> Option<impala_srs::Srs> {
         serde_json::from_value(self.srs()?.clone()).ok()
