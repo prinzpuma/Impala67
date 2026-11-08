@@ -24,6 +24,7 @@ import uniffi.impala_ffi.CardInfo
 import uniffi.impala_ffi.CardStage
 import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.PageKind
+import uniffi.impala_ffi.clozeRecall
 import uniffi.impala_ffi.markdownCardText
 import uniffi.impala_ffi.markdownExcerpt
 import uniffi.impala_ffi.markdownPlainText
@@ -88,8 +89,6 @@ class HomeViewModel(private val store: ImpalaStore, private val prefs: DevicePre
     private data class Cards(val open: Int, val hasCards: Boolean, val recall: Recall?)
 
     private companion object {
-        val CLOZE = Regex("""\{\{c\d+::(.*?)(?:::[^}]*)?\}\}""")
-
         fun utcOffsetMinutes() = TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000
 
         fun continueItem(core: ImpalaCore, page: uniffi.impala_ffi.PageSummary): ContinueItem {
@@ -105,9 +104,9 @@ class HomeViewModel(private val store: ImpalaStore, private val prefs: DevicePre
             val offset = TimeZone.getDefault().getOffset(System.currentTimeMillis())
             val day = (System.currentTimeMillis() + offset) / 86_400_000L
             val card = pool[(((day * 2654435761L) and 0xFFFFFFFFL) % pool.size).toInt()]
-            val cloze = CLOZE.containsMatchIn(card.front)
-            val question = markdownCardText(if (cloze) card.front.replace(CLOZE, "＿＿＿") else card.front)
-            val answer = if (cloze) CLOZE.findAll(card.front).joinToString(" · ") { markdownCardText(it.groupValues[1]) }
+            val cloze = clozeRecall(card.front)
+            val question = markdownCardText(cloze?.question ?: card.front)
+            val answer = if (cloze != null) cloze.answers.joinToString(" · ") { markdownCardText(it) }
             else markdownCardText(card.back)
             if (answer.isEmpty()) return null
             return Recall(card.id, HomeText.cut(question, 140), HomeText.cut(answer, 220))

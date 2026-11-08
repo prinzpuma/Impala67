@@ -8,6 +8,7 @@ import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { CORE } from "./rust-core.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -22,7 +23,6 @@ export const EXTRAS = (() => {
 	// Klammern nirgends mit Template-/Platzhalter-Systemen kollidieren.
 	const CO = "{" + "{";
 	const CC = "}" + "}";
-	const clozeRe = () => /\{\{c(\d+)::([\s\S]*?)(?:::([^{}]*?))?\}\}/g;
 
 	// ---- Zusätzliche Styles (Heatmap, Leech, Fußbereich, Mobile-Panel, Multi-Tab) ----
 	const style = document.createElement("style");
@@ -106,17 +106,9 @@ export const EXTRAS = (() => {
 	}
 
 	// ---- Cloze: pro Lücken-Nummer eine eigene Karte (wie Anki-Geschwisterkarten) ----
-	function clozeIndexes(text) {
-		const set = new Set();
-		const re = clozeRe();
-		let m;
-		while ((m = re.exec(text))) set.add(Number(m[1]));
-		return [...set].sort((a, b) => a - b);
-	}
-	const clozeFront = (text, idx) => text.replace(clozeRe(), (all, n, ans, hint) =>
-		Number(n) === idx ? "**[" + (hint ? "…" + hint + "…" : "…") + "]**" : ans);
-	const clozeBack = (text, idx) => text.replace(clozeRe(), (all, n, ans) =>
-		Number(n) === idx ? "**==" + ans + "==**" : ans);
+	const clozeIndexes = (text) => CORE.clozeIndexes(String(text || ""));
+	const clozeFront = (text, idx) => CORE.clozeFront(String(text || ""), idx);
+	const clozeBack = (text, idx) => CORE.clozeBack(String(text || ""), idx);
 	async function createClozeCards(text, deck, pageId) {
 		const idxs = clozeIndexes(text);
 		for (const i of idxs) {
@@ -130,23 +122,13 @@ export const EXTRAS = (() => {
 	}
 
 	// ---- Karten aus ==Markierungen== und Cloze-Lücken einer Seite ----
-	const hasClozeCard = (src) => Object.values(S.cards).some((c) => c.cloze && c.cloze.src === src);
+	const hasClozeCard = (src) => Object.values(S.cards).some((c) => c && c.cloze && c.cloze.src === src);
 	async function cardsFromHighlights(pageId) {
 		const pg = S.pages[pageId];
 		if (!pg) return 0;
 		let n = 0;
-		for (const line of (pg.content || "").split(/\n+/)) {
-			const plain = line.replace(/^[\s>#*-]*(\[[ x]\]\s*)?/, "").trim();
-			if (!plain) continue;
-			if (clozeRe().test(plain)) {
-				// Zeile enthält bereits explizite Cloze-Lücken
-				if (!hasClozeCard(plain)) n += await createClozeCards(plain, S.ankiDeck || undefined, pageId);
-				continue;
-			}
-			if (!/==[^=\n]+==/.test(plain)) continue;
-			// ==Markierung== → Cloze-Lücke, der restliche Satz bleibt als Kontext stehen
-			let i = 0;
-			const src = plain.replace(/==([^=\n]+)==/g, (a, t) => CO + "c" + (++i) + "::" + t + CC);
+		const sources = CORE.clozeSourcesFromContent(pg.content || "");
+		for (const src of sources) {
 			if (!hasClozeCard(src)) n += await createClozeCards(src, S.ankiDeck || undefined, pageId);
 		}
 		U.toast(n ? n + " Karteikarte(n) erstellt." : "Keine neuen Markierungen — für alle gibt es schon Karten.", n ? "success" : "info");
@@ -602,11 +584,10 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	function clozeWrapSelection() {
 		const ta = U.el("cardFront");
 		if (!ta) return;
-		const a = ta.selectionStart, b = ta.selectionEnd;
-		const sel = ta.value.slice(a, b) || "Antwort";
-		const next = (ta.value.match(/\{\{c(\d+)::/g) || []).length + 1;
-		ta.value = ta.value.slice(0, a) + CO + "c" + next + "::" + sel + CC + ta.value.slice(b);
+		const res = CORE.clozeWrap(ta.value || "", ta.selectionStart || 0, ta.selectionEnd || 0);
+		ta.value = res.text;
 		ta.focus();
+		ta.setSelectionRange(res.cursor, res.cursor);
 	}
 	async function clozeSaveFromEditor() {
 		const front = U.el("cardFront") ? U.el("cardFront").value : "";
