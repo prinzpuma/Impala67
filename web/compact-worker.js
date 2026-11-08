@@ -1,5 +1,9 @@
 "use strict";
-import { compactEventStore } from "./compact-events.js";
+
+// compact-events.js lädt den Rust-Kern mit top-level await. Statisch importiert hing bis dahin
+// kein Listener, und der einzige Auftrag des Hauptthreads ging verloren (Zeitlimit, dann doch
+// im Hauptthread). Deshalb erst bei Bedarf laden.
+const compactReady = import("./compact-events.js");
 
 // Lokale Log-Kompaktierung abseits des UI-Threads. Lesen, Sortieren und Löschen des
 // kompletten Event-Logs blockierten die App sonst bei großen Logs über eine Sekunde.
@@ -25,6 +29,7 @@ self.onmessage = async ({ data }) => {
 	let d = null;
 	try {
 		d = await openDb(data.name, data.version);
+		const { compactEventStore } = await compactReady;
 		const result = await compactEventStore(d, data.minDrop, data.blobKeep || null);
 		self.postMessage(result);
 	} catch (e) {

@@ -1,6 +1,10 @@
 "use strict";
 
-import { buildRagIndex, rankRag } from "./rag-ranking.js";
+
+// rag-ranking.js lädt den Rust-Kern mit top-level await. Statisch importiert hing bis dahin kein
+// Listener: Die erste Suche nach dem Start ging verloren, und der Chat wartete 8 s aufs Zeitlimit,
+// bevor die KI-Anfrage überhaupt losging. Deshalb erst bei Bedarf laden.
+const rankingReady = import("./rag-ranking.js");
 
 let dbPromise = null, vecCacheAt = 0, vecCacheIdentity = "";
 
@@ -27,6 +31,7 @@ function dropIndex() {
 
 async function loadIndex(msg) {
 	if (built && vecCacheIdentity === msg.identity && Date.now() - vecCacheAt <= 30000) return built;
+	const { buildRagIndex } = await rankingReady;
 	const db = await openDb();
 	const rows = await new Promise((resolve, reject) => {
 		const store = db.transaction("vecs").objectStore("vecs");
@@ -49,6 +54,7 @@ self.addEventListener("message", async (event) => {
 	if (msg.type === "invalidate") { dropIndex(); return; }
 	if (msg.type !== "search" || !msg.id) return;
 	try {
+		const { rankRag } = await rankingReady;
 		self.postMessage({ type: "result", id: msg.id, hits: rankRag(await loadIndex(msg), msg) });
 	} catch (error) {
 		self.postMessage({ type: "error", id: msg.id, error: String(error?.message || error) });

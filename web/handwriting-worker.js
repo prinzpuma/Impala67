@@ -5,7 +5,10 @@
 // läuft im Rust-Kern (impala-ink); hier bleiben Laden und Inferenz (100 % offline via ONNX Runtime Web).
 
 import { HANDWRITING_MODEL_VERSION } from "./handwriting-model-version.js";
-import { CORE } from "./rust-core.js";
+
+// Rust-Kern NICHT statisch importieren: rust-core.js wartet beim Laden (top-level await) auf
+// die WASM-Datei, und bis dahin hängt kein message-Listener — die erste Nachricht ging verloren.
+const corePromise = import("./rust-core.js").then((m) => m.CORE);
 
 // Zeilenbilder des Kerns sind 64 px hoch (impala-ink raster::IMAGE_HEIGHT).
 const IMAGE_HEIGHT = 64;
@@ -75,7 +78,7 @@ let engine = null;
 let engineLoading = null;
 function loadEngine() {
 	if (!engineLoading) {
-		engineLoading = fetchCached(LEXICON_PATH)
+		engineLoading = corePromise.then((CORE) => fetchCached(LEXICON_PATH)
 			.then((res) => {
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				return res.arrayBuffer();
@@ -85,7 +88,7 @@ function loadEngine() {
 				console.warn("[handwriting-worker] Wörterbuch nicht geladen:", e);
 				engineLoading = null;
 				return (engine ||= new CORE.InkEngine(undefined));
-			});
+			}));
 	}
 	return engineLoading;
 }
