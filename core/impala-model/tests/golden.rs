@@ -434,3 +434,64 @@ fn konflikt_dialog_wie_js() {
         assert_same(&json!(rows), &d["rows"], "alignDiffRows");
     }
 }
+
+#[test]
+fn lernzeit_wie_js() {
+    let g = golden("lernzeit.json");
+    for case in g["merged"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let sessions: Vec<impala_model::learning_time::LearningSessionData> =
+            serde_json::from_value(case["sessions"].clone()).unwrap();
+        let got = impala_model::learning_time::merged_seconds(&sessions);
+        assert_eq!(got, case["expectedSeconds"].as_u64().unwrap(), "merged case {name}");
+    }
+    for case in g["streaks"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let totals: HashMap<String, u64> = serde_json::from_value(case["totals"].clone()).unwrap();
+        let ref_date = case["referenceDate"].as_str().unwrap();
+        let now_ms = impala_model::learning_time::parse_ms(&format!("{ref_date}T12:00:00.000Z")).unwrap();
+        let got = impala_model::learning_time::streak_days(&totals, now_ms, 0);
+        assert_eq!(got, case["expectedStreak"].as_u64().unwrap() as u32, "streak case {name}");
+    }
+
+    let sample_totals: HashMap<String, u64> = [
+        ("2026-11-02".to_string(), 1200),
+        ("2026-11-03".to_string(), 1800),
+        ("2026-11-04".to_string(), 600),
+        ("2026-11-05".to_string(), 0),
+        ("2026-11-06".to_string(), 2400),
+        ("2026-11-07".to_string(), 900),
+        ("2026-11-08".to_string(), 300),
+        ("2026-10-30".to_string(), 500),
+    ]
+    .into_iter()
+    .collect();
+
+    for case in g["weeks"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let ref_date = case["refDate"].as_str().unwrap();
+        let now_ms = impala_model::learning_time::parse_ms(&format!("{ref_date}T12:00:00.000Z")).unwrap();
+        let offset = case["offset"].as_i64().unwrap() as i32;
+        let expected_days: Vec<u64> =
+            case["days"].as_array().unwrap().iter().map(|d| d["seconds"].as_u64().unwrap()).collect();
+        let got = impala_model::learning_time::week_data(&sample_totals, now_ms, offset, 0);
+        assert_eq!(got.to_vec(), expected_days, "week case {name}");
+    }
+    for case in g["cycle"].as_array().unwrap() {
+        let input = case["input"].as_u64().unwrap() as u32;
+        let expected = case["next"].as_u64().unwrap() as u32;
+        let got = impala_model::learning_time::cycle_week_goal(input);
+        assert_eq!(got, expected, "cycle case {input}");
+    }
+    for case in g["nudges"].as_array().unwrap() {
+        let streak = case["streak"].as_u64().unwrap() as u32;
+        let today_sec = case["todaySeconds"].as_u64().unwrap();
+        let week_sec = (case["weekMin"].as_f64().unwrap() * 60.0).round() as u64;
+        let goal_min = case["goalMin"].as_u64().unwrap() as u32;
+        let hour = case["hour"].as_u64().unwrap() as u32;
+        let got = impala_model::learning_time::home_nudge(streak, today_sec, week_sec, goal_min, hour);
+        let expected: impala_model::learning_time::HomeNudge =
+            serde_json::from_value(case["expected"].clone()).unwrap();
+        assert_eq!(got, expected, "nudge case {:?}", case);
+    }
+}

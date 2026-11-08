@@ -6,6 +6,7 @@ import { TELE } from "./telemetrie.js";
 import { FACH } from "./fach.js";
 import { idlePromptContextKind } from "./lernzeit-context.js";
 import { icon, lead } from "./icons.js";
+import { CORE } from "./rust-core.js";
 
 // lernzeit.js — automatische Lernzeit-Erfassung: Segmente je Kontext (Karten, Heft, Notiz,
 // KI), Idle-Tierchen, Pausen-Erinnerung und Tagessummen für die Startseite (render.js,
@@ -21,7 +22,7 @@ export const LERNZEIT = (() => {
 	const GOAL_KEY = "impala67WeekGoalMinutes";
 
 	let lastActivityAt = Date.now();
-	let current = null;
+	let tracker = new CORE.LzSessionTracker();
 	let animal = null;
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
 
@@ -71,67 +72,39 @@ export const LERNZEIT = (() => {
 		return null;
 	}
 
-	function sameContext(meta, session = current) {
-		return !!(meta && session && meta.category === session.category && meta.sourceId === session.sourceId && meta.subject === session.subject);
-	}
-	function segmentsDuration(segments) {
-		return Math.round((segments || []).reduce((total, segment) => {
-			const start = new Date(segment.startedAt).getTime();
-			const end = new Date(segment.endedAt).getTime();
-			return total + (Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0);
-		}, 0) / 1000);
-	}
-	function openSegment(meta = categoryNow()) {
+	async function openSegment(meta = categoryNow()) {
 		if (!meta || document.hidden || animal) return;
-		const now = Date.now();
-		if (current?.activeStartedMs && sameContext(meta)) return;
-		if (current && !current.activeStartedMs && sameContext(meta) && now - current.pausedAt <= SESSION_GAP_MS) {
-			current.activeStartedMs = now;
-			current.activeStartedAt = iso();
-			current.pausedAt = 0;
-			return;
-		}
-		if (current) finishSession();
-		current = { id: U.uid(), startedAt: iso(), activeStartedAt: iso(), activeStartedMs: now, pausedAt: 0, segments: [], category: meta.category, sourceId: meta.sourceId, subject: meta.subject, subjectSource: meta.subjectSource };
+		const toPersist = tracker.openSegment(
+			Date.now(),
+			iso(),
+			meta.category,
+			meta.sourceId || undefined,
+			meta.subject || undefined,
+			meta.subjectSource || undefined,
+			U.uid
+		);
+		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
-	async function persistCurrent() {
-		if (!current || !current.segments.length) return;
-		const durationSeconds = segmentsDuration(current.segments);
-		if (durationSeconds < 1) return;
-		const endedAt = current.segments[current.segments.length - 1].endedAt;
-		await STATE.dispatch("learningSessionUpsert", {
-			id: current.id,
-			startedAt: current.startedAt,
-			endedAt,
-			durationSeconds,
-			segments: current.segments,
-			category: current.category,
-			sourceId: current.sourceId,
-			subject: current.subject,
-			subjectSource: current.subjectSource,
-			updated: iso(),
-		});
+	async function pauseSegment() {
+		const toPersist = tracker.pauseSegment(Date.now(), iso());
+		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
-	function pauseSegment() {
-		if (!current || !current.activeStartedMs) return Promise.resolve();
-		const endedAt = iso();
-		current.segments.push({ startedAt: current.activeStartedAt, endedAt });
-		current.activeStartedAt = null;
-		current.activeStartedMs = 0;
-		current.pausedAt = Date.now();
-		return persistCurrent();
+	async function finishSession() {
+		const toPersist = tracker.finishSession(Date.now(), iso());
+		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
-	function finishSession() {
-		if (!current) return Promise.resolve();
-		const finished = current;
-		const pending = pauseSegment();
-		if (current === finished) current = null;
-		return pending;
-	}
-	function maybeSplitSegment(meta = categoryNow()) {
-		if (!current) return;
-		if (sameContext(meta)) return;
-		finishSession().then(() => openSegment(meta));
+	async function maybeSplitSegment(meta = categoryNow()) {
+		if (!meta || !tracker.hasCurrent) return;
+		const toPersist = tracker.maybeSplitSegment(
+			Date.now(),
+			iso(),
+			meta.category,
+			meta.sourceId || undefined,
+			meta.subject || undefined,
+			meta.subjectSource || undefined,
+			U.uid
+		);
+		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
 
 	// Aktivität melden — EINE Stelle für alle Eingabewege. 🐛 Fix (27. Juli): Ein Gamepad
@@ -212,8 +185,8 @@ export const LERNZEIT = (() => {
 		if (!meta) {
 			lastActiveTickAt = 0;
 			if (animal) { animal.remove(); animal = null; }
-			if (current?.activeStartedMs) pauseSegment();
-			else if (current && Date.now() - current.pausedAt > SESSION_GAP_MS) {
+			if (tracker.isActive) pauseSegment();
+			else if (tracker.hasCurrent && Date.now() - tracker.pausedAtMs > SESSION_GAP_MS) {
 				finishSession();
 				activeStretchMs = 0;
 				reminderShownForBlock = false;
@@ -236,11 +209,11 @@ export const LERNZEIT = (() => {
 			showAnimal();
 			return;
 		}
-		if (current && !sameContext(meta)) maybeSplitSegment(meta);
+		if (tracker.hasCurrent) maybeSplitSegment(meta);
 		else openSegment(meta);
 
 		// Pausen-Erinnerung: Aktive, ununterbrochene Lernzeit tracken (40 min)
-		if (current && current.activeStartedMs) {
+		if (tracker.isActive) {
 			const now = Date.now();
 			if (lastActiveTickAt) {
 				const delta = Math.min(now - lastActiveTickAt, TICK_MS * 3);
@@ -263,73 +236,20 @@ export const LERNZEIT = (() => {
 	// durationSeconds stumpf addiert. Jetzt: Intervall-VEREINIGUNG — zeitlich
 	// überlappende Segmente zählen nur einmal (Wanduhr-Zeit statt Summe).
 	function mergedSeconds(sessions) {
-		const intervals = sessions.flatMap((s) => {
-			if (Array.isArray(s.segments) && s.segments.length) {
-				return s.segments.map((segment) => [new Date(segment.startedAt).getTime(), new Date(segment.endedAt).getTime()]);
-			}
-			const start = new Date(s.startedAt).getTime();
-			const end = s.endedAt ? new Date(s.endedAt).getTime() : start + (s.durationSeconds || 0) * 1000;
-			return [[start, Math.max(start, end)]];
-		}).filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end >= start).sort((a, b) => a[0] - b[0]);
-		let total = 0;
-		let curStart = null;
-		let curEnd = null;
-		for (const [start, end] of intervals) {
-			if (curEnd === null || start > curEnd) {
-				if (curEnd !== null) total += curEnd - curStart;
-				curStart = start;
-				curEnd = end;
-			} else if (end > curEnd) {
-				curEnd = end;
-			}
-		}
-		if (curEnd !== null) total += curEnd - curStart;
-		return Math.round(total / 1000);
+		return Number(CORE.lzMergedSeconds(sessions || []));
 	}
-	// Laufendes Segment als Pseudo-Session — nimmt an der Vereinigung teil,
-	// damit auch LIVE nichts doppelt zählt, wenn das andere Gerät gerade synct.
 	function currentAsSession() {
-		if (!current) return null;
-		const segments = current.segments.slice();
-		if (current.activeStartedMs) segments.push({ startedAt: current.activeStartedAt, endedAt: iso() });
-		if (!segments.length) return null;
-		return { id: current.id, startedAt: current.startedAt, endedAt: segments[segments.length - 1].endedAt, durationSeconds: segmentsDuration(segments), segments, category: current.category, subject: current.subject };
+		return tracker.currentAsSession(iso());
 	}
-	function addLiveSession(sessions) {
+	function totalsByDay() {
+		const sessions = activeSessions();
 		const live = currentAsSession();
-		if (!live) return sessions;
-		return sessions.filter((session) => session.id !== live.id).concat(live);
+		const offsetMinutes = -new Date().getTimezoneOffset();
+		return CORE.lzTotalsByDay(sessions, live, offsetMinutes);
 	}
 	function totalForDay(key) {
-		const list = addLiveSession(activeSessions()).filter((s) => dayKey(s.startedAt) === key);
-		return mergedSeconds(list);
-	}
-	// PERF: totalsByDay lief bei jedem Startseiten-Render mehrfach über ALLE Sitzungen
-	// (Tausende, ~11 ms je Aufruf). state.js ersetzt eine Sitzung bei jeder Änderung durch
-	// ein neues Objekt; ein Identitätsvergleich der Liste genügt deshalb als Cache-Schlüssel.
-	let closedTotalsCache = { sessions: [], grouped: {}, totals: {} };
-	function closedTotals() {
-		const sessions = activeSessions(), cached = closedTotalsCache;
-		if (sessions.length === cached.sessions.length && sessions.every((s, i) => s === cached.sessions[i])) return cached;
-		const grouped = {}, totals = {};
-		for (const session of sessions) (grouped[dayKey(session.startedAt)] ||= []).push(session);
-		for (const [key, list] of Object.entries(grouped)) totals[key] = mergedSeconds(list);
-		return (closedTotalsCache = { sessions, grouped, totals });
-	}
-	// Nur die Tage der laufenden Sitzung neu rechnen; ihre gespeicherte Vorversion fällt raus.
-	function totalsByDay() {
-		const { sessions, grouped, totals } = closedTotals();
-		const result = { ...totals }, live = currentAsSession();
-		if (!live) return result;
-		const liveKey = dayKey(live.startedAt), days = new Set([liveKey]);
-		for (const session of sessions) if (session.id === live.id) days.add(dayKey(session.startedAt));
-		for (const key of days) {
-			const list = (grouped[key] || []).filter((session) => session.id !== live.id);
-			if (key === liveKey) list.push(live);
-			if (list.length) result[key] = mergedSeconds(list);
-			else delete result[key];
-		}
-		return result;
+		const totals = totalsByDay();
+		return totals[key] || 0;
 	}
 	function weekStart(offset = 0) {
 		const d = new Date();
@@ -338,30 +258,25 @@ export const LERNZEIT = (() => {
 		return d;
 	}
 	function weekData(offset = 0, totals = null) {
+		const t = totals || totalsByDay();
+		const offsetMinutes = -new Date().getTimezoneOffset();
+		const raw = CORE.lzWeekData(t, Date.now(), offset, offsetMinutes);
 		const start = weekStart(offset);
-		return Array.from({ length: 7 }, (_, index) => {
+		return raw.map((seconds, index) => {
 			const d = new Date(start); d.setDate(d.getDate() + index);
-			return { d, seconds: totals ? (totals[dayKey(d)] || 0) : totalForDay(dayKey(d)) };
+			return { d, seconds };
 		});
 	}
-	// Streak: aufeinanderfolgende Tage mit ≥ 5 min Lernzeit. Ein noch „leerer“
-	// heutiger Tag bricht die Serie nicht — sie zählt dann ab gestern.
 	function streakDays(totals = null) {
-		const MIN = 5 * 60;
-		let streak = 0;
-		for (let i = 0; i < 365; i++) {
-			const d = new Date(); d.setDate(d.getDate() - i);
-			const seconds = totals ? (totals[dayKey(d)] || 0) : totalForDay(dayKey(d));
-			if (seconds >= MIN) streak++;
-			else if (i === 0) continue;
-			else break;
-		}
-		return streak;
+		const t = totals || totalsByDay();
+		const offsetMinutes = -new Date().getTimezoneOffset();
+		return CORE.lzStreakDays(t, Date.now(), offsetMinutes);
 	}
-	function weekGoalMinutes() { return Math.max(30, Number(localStorage.getItem(GOAL_KEY)) || 300); }
+	function weekGoalMinutes() {
+		return CORE.lzNormalizeWeekGoal(Number(localStorage.getItem(GOAL_KEY)) || 0);
+	}
 	function cycleGoal() {
-		const presets = [120, 300, 480, 720];
-		const next = presets[(presets.indexOf(weekGoalMinutes()) + 1 + presets.length) % presets.length];
+		const next = CORE.lzCycleWeekGoal(weekGoalMinutes());
 		localStorage.setItem(GOAL_KEY, String(next));
 		TELE.log("goalChange", { minutes: next });
 		if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lz:goal-changed", { detail: { minutes: next } }));
@@ -435,10 +350,19 @@ export const LERNZEIT = (() => {
 	}
 
 	return {
+		mergedSeconds,
+		totalForDay,
 		totalsByDay,
 		weekData,
+		streakDays,
 		weekGoalMinutes,
+		cycleGoal,
 		statsForHome,
+		openSegment,
+		pauseSegment,
+		finishSession,
+		maybeSplitSegment,
+		currentAsSession,
 		poke,
 		contextChanged,
 		startInterval,

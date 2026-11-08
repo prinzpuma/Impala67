@@ -84,13 +84,9 @@ export function homeViewHtml({ greeting, name, dateLine, conflictCount, backup, 
 	const open = study.neu + study.review + study.learn;
 	const estMin = Math.max(1, Math.round(open * secPerCard() / 60));
 	const todayMin = Math.round((todaySeconds || 0) / 60);
-	// Ein Satz, was heute zählt: Streak in Gefahr > Ziel in Reichweite > Ziel geschafft > heutige Zeit
-	const weekMin = week.reduce((s, x) => s + x.seconds, 0) / 60;
-	const left = goalMin - weekMin;
-	const nudge = streak && !todayMin && new Date().getHours() >= 14 ? ` Dein Streak von ${streak} ${streak === 1 ? "Tag" : "Tagen"} wartet noch auf heute.`
-		: left > 0 && left <= 60 ? ` Nur noch ${dur(left)} bis zum Wochenziel.`
-			: left <= 0 && weekMin > 0 ? " Das Wochenziel hast du schon geschafft."
-				: todayMin ? ` Heute schon ${dur(todayMin)} gelernt.` : "";
+	const weekSeconds = week.reduce((s, x) => s + x.seconds, 0);
+	const weekMin = weekSeconds / 60;
+	const nudge = CORE.lzHomeNudgeText(streak, todaySeconds || 0, weekSeconds, goalMin, new Date().getHours());
 	const hello = `<span class="hv-hello">${greeting}${name ? ", " + esc(name) : ""}.</span>`;
 	const fresh = !last && !hasCards;
 	const sum = fresh

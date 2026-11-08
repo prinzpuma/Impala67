@@ -6,11 +6,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use impala_drive::policy::DriveMode;
 use impala_drive::{
     Clock, DriveBackup, DriveError, DriveOptions, DriveState, DriveStore, ImportOutcome, LocalBlob, StoreError,
     SyncReport, TokenSource,
 };
-use impala_drive::policy::DriveMode;
 use js_sys::{Function, Object, Promise, Uint8Array};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
