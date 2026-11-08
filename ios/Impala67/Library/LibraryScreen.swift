@@ -298,13 +298,15 @@ private struct NotionTree: View {
     }
 
     private nonisolated static func load(core: ImpalaCore, smart: String, query: String) -> Loaded {
-        let all = core.recentPages(limit: UInt32.max)
+        let v = core.libraryNotionView(smart: smart, query: query)
         return Loaded(
-            all: all.count,
-            fav: all.filter(\.favorite).count,
-            pdf: all.filter { $0.pdfId != nil }.count,
-            tpl: all.filter(\.isTemplate).count,
-            sections: build(core: core, smart: smart, query: query)
+            all: Int(v.allCount),
+            fav: Int(v.favCount),
+            pdf: Int(v.pdfCount),
+            tpl: Int(v.tplCount),
+            sections: v.sections.map { sec in
+                (ws: sec.workspace, rows: sec.rows.map { Row(page: $0.page, depth: Int($0.depth), hasKids: $0.hasKids, collapsed: $0.collapsed) })
+            }
         )
     }
 
@@ -455,10 +457,7 @@ enum HeftCover {
 
     /// Wie `defaultCover`: fester Verlauf aus Titel und ID, wenn keiner gewählt ist.
     static func resolved(_ p: PageSummary) -> String {
-        if presets.contains(p.cover) { return p.cover }
-        var h: UInt32 = 0
-        for c in (p.title + p.id).utf16 { h = h &* 31 &+ UInt32(c) }
-        return presets[Int(h % UInt32(presets.count))]
+        resolvedHeftCover(cover: p.cover, title: p.title, id: p.id)
     }
 }
 
@@ -605,16 +604,13 @@ private struct HeftShelf: View {
     }
 
     private nonisolated static func load(core: ImpalaCore, folderId: String?, filter: String, query: String) -> Loaded {
-        let searching = !query.isEmpty
-        let folders = searching ? [] : core.heftFolders(parentId: folderId)
-        let raw = searching ? core.recentPages(limit: UInt32.max).filter { $0.kind == .heft } : core.heftInFolder(folderId: folderId)
-        let shown = raw.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
+        let s = core.libraryHeftShelf(folderId: folderId, filter: filter, query: query)
         return Loaded(
-            folders: folders.map { (folder: $0, count: core.heftInFolder(folderId: $0.id).count) },
-            shown: shown.map { (page: $0, pages: core.heftPageIds(pageId: $0.id).count) },
-            all: raw.count,
-            fav: raw.filter(\.favorite).count,
-            crumbs: folderId.map { core.heftFolderPath(folderId: $0) } ?? []
+            folders: s.folders.map { (folder: $0.folder, count: Int($0.count)) },
+            shown: s.shown.map { (page: $0.page, pages: Int($0.pagesCount)) },
+            all: Int(s.allCount),
+            fav: Int(s.favCount),
+            crumbs: s.crumbs
         )
     }
 }

@@ -13,6 +13,7 @@ pub mod event;
 pub mod js;
 pub mod jsmap;
 pub mod learning_time;
+pub mod library;
 pub mod merge;
 pub mod migrate;
 pub mod model;

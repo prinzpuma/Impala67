@@ -677,6 +677,10 @@ export const STATE = (() => {
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
 		dueCards, studySnapshot, learningStats, thinkMedian, retentionStats, deckConfOf, backlinksOf, pageHistory,
 		homeAnalysis, computeGoal, patternData, activeDeckNames, deckTree, deckLabel, deckParent,
+		libraryNotionTree: (smart = null, tag = null, query = "") => JSON.parse(M.libraryNotionTree(smart || undefined, tag || undefined, String(query || ""))),
+		libraryArchiveTree: (typeFilter = "all", query = "") => JSON.parse(M.libraryArchiveTree(String(typeFilter || "all"), String(query || ""))),
+		libraryGnShelf: (folderId = null, filter = "all", query = "") => JSON.parse(M.libraryGnShelf(folderId || undefined, String(filter || "all"), String(query || ""))),
+		gnFolderDirectCount: (folderId) => M.gnFolderDirectCount(String(folderId || "")),
 	};
 })();
 

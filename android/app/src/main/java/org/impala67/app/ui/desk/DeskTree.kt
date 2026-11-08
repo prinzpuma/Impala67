@@ -18,6 +18,8 @@ data class DeskTree(
     /** Aufklapp-Zustand wie `S.treeOpen` (geräteübergreifend, `uiTreeSet`). */
     val open: Map<String, Boolean>,
 )
+    val sidebarRows: List<uniffi.impala_ffi.SidebarRowInfo> = emptyList(),
+)
 
 /** Wie `COLLAPSE.isCollapsed` (web/collapse.js): Seiten sind standardmäßig zu, Arbeitsbereiche offen. */
 fun DeskTree.isCollapsed(key: String): Boolean = if (key.startsWith("ws:")) open[key] == false else open[key] != true
@@ -25,11 +27,11 @@ fun DeskTree.isCollapsed(key: String): Boolean = if (key.startsWith("ws:")) open
 /** Schlüssel der Wurzel eines Arbeitsbereichs in [DeskTree.kids] (wie `ws:<id>` beim Einklappen). */
 fun wsKey(id: String) = "ws:$id"
 
-/** Tiefe wie in der PWA (`depth > 8` wird nicht mehr gezeichnet). */
 private const val MAX_DEPTH = 8
 
 internal fun readDeskTree(core: ImpalaCore): DeskTree {
     val workspaces = core.workspaces()
+    val rows = core.sidebarTreeRows()
     val kids = HashMap<String, List<PageSummary>>()
     fun walk(parent: PageSummary?, ws: String, depth: Int) {
         val list = core.childrenOf(parent?.id, ws)
@@ -37,11 +39,10 @@ internal fun readDeskTree(core: ImpalaCore): DeskTree {
         if (depth < MAX_DEPTH) list.forEach { walk(it, ws, depth + 1) }
     }
     workspaces.forEach { walk(null, it.id, 0) }
-    val favorites = core.recentPages(UInt.MAX_VALUE).filter { it.favorite }
+    val favorites = rows.filter { it.kind == "page" && it.section == "fav" }.mapNotNull { it.page }
     val db = kids.values.flatten().filter { core.pageDb(it.id) != null }.mapTo(HashSet()) { it.id }
-    return DeskTree(workspaces, favorites, kids, db, core.treeOpen())
+    return DeskTree(workspaces, favorites, kids, db, core.treeOpen(), rows)
 }
-
 /**
  * Gezogene Seite ablegen (`movePageRelative`/`movePageInto` in app-sidebar-events.js): davor/danach =
  * Geschwister des Ziels (auch in einem anderen Arbeitsbereich), Mitte = Unterseite, Arbeitsbereich-Kopf =
@@ -81,22 +82,12 @@ sealed interface DeskTreeItem {
 }
 
 /** Baum in Zeilen auflösen; zugeklappt nach [isCollapsed] (Seiten-IDs und `ws:<id>` wie `COLLAPSE` in der PWA). */
-fun DeskTree.items(): List<DeskTreeItem> = buildList {
-    if (favorites.isNotEmpty()) {
-        add(DeskTreeItem.Head("★ Favoriten", null, null))
-        favorites.forEach { add(DeskTreeItem.Page(it, 0, false, "fav")) }
-    }
-    fun branch(parentKey: String, depth: Int) {
-        kids[parentKey].orEmpty().forEach { pg ->
-            val sub = kids[pg.id].orEmpty()
-            add(DeskTreeItem.Page(pg, depth, sub.isNotEmpty(), "tree"))
-            if (sub.isNotEmpty() && !isCollapsed(pg.id) && depth < MAX_DEPTH) branch(pg.id, depth + 1)
-        }
-    }
-    workspaces.forEach { ws ->
-        add(DeskTreeItem.Head(ws.name, wsKey(ws.id), ws.id))
-        if (!isCollapsed(wsKey(ws.id))) {
-            if (kids[wsKey(ws.id)].isNullOrEmpty()) add(DeskTreeItem.Empty(ws.id)) else branch(wsKey(ws.id), 0)
-        }
+/** Baum-Zeilen aus dem Rust-Kern (`sidebarTreeRows`). */
+fun DeskTree.items(): List<DeskTreeItem> = sidebarRows.mapNotNull { r ->
+    when (r.kind) {
+        "head" -> DeskTreeItem.Head(r.title, r.collapseKey, r.workspaceId)
+        "page" -> r.page?.let { DeskTreeItem.Page(it, r.depth.toInt(), r.hasKids, r.section) }
+        "empty" -> r.workspaceId?.let { DeskTreeItem.Empty(it) }
+        else -> null
     }
 }

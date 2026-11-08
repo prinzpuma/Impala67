@@ -1097,3 +1097,36 @@ pub fn compute_card_stats_js(
     let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
     Ok(text(&stats))
 }
+
+#[wasm_bindgen]
+impl ModelCore {
+    #[wasm_bindgen(js_name = libraryNotionTree)]
+    pub fn library_notion_tree(&self, smart: Option<String>, tag: Option<String>, query: &str) -> String {
+        text(&impala_model::library::notion_tree(self.m.state(), smart.as_deref(), tag.as_deref(), query))
+    }
+
+    #[wasm_bindgen(js_name = libraryArchiveTree)]
+    pub fn library_archive_tree(&self, type_filter: &str, query: &str) -> String {
+        text(&impala_model::library::archive_tree(self.m.state(), type_filter, query))
+    }
+
+    #[wasm_bindgen(js_name = libraryGnShelf)]
+    pub fn library_gn_shelf(&self, folder_id: Option<String>, filter: &str, query: &str) -> String {
+        text(&impala_model::library::gn_shelf(self.m.state(), folder_id.as_deref(), filter, query))
+    }
+
+    #[wasm_bindgen(js_name = gnFolderDirectCount)]
+    pub fn gn_folder_direct_count_js(&self, folder_id: &str) -> u32 {
+        impala_model::library::gn_folder_direct_count(self.m.state(), folder_id) as u32
+    }
+}
+
+#[wasm_bindgen(js_name = defaultCover)]
+pub fn default_cover_js(title: &str, id: &str) -> String {
+    impala_model::library::default_cover(title, id).to_owned()
+}
+
+#[wasm_bindgen(js_name = folderTone)]
+pub fn folder_tone_js(key: &str) -> String {
+    impala_model::library::folder_tone(key).to_owned()
+}
