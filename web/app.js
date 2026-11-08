@@ -518,9 +518,9 @@ function wireEvents() {
 		// (kein Tab-Wechsel wie bei data-chat).
 		if (t.dataset.sidechat) {
 			CHAT_FULLSCREEN.saveSideChat();
-			const s = CHATS.load().find((x) => x.id === t.dataset.sidechat);
+			const s = CHATS.get(t.dataset.sidechat);
 			S.chatHistOpen = false;
-			S.sideChat = s ? s.messages : [];
+			S.sideChat = CHATS.messages(s?.id);
 			S.sideChatId = s ? s.id : null;
 			render();
 			return;

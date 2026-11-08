@@ -42,6 +42,7 @@ export const S = {
 	thinkingLiveExpanded: false,
 	pdfOpen: true,
 	aiBusy: false,
+	aiActiveList: null, // Nachrichtenliste des laufenden Chats (Ziel der Antwort)
 	aiStatus: "",
 	aiDraft: "",
 	aiOnline: null, // null = unbekannt, true/false = Ping-Ergebnis

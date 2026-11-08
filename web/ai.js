@@ -25,6 +25,9 @@ export const AI = (() => {
 	const chatSessions = new Map();
 	const activeControllers = new Set();
 	const activeRuns = new Set();
+	// Zählt ⏹-Klicks: Ein Klick, solange noch kein Kern-Lauf existiert (Notizsuche,
+	// Arbeitsbereich), lief sonst ins Leere und die Antwort kam trotzdem.
+	let abortCount = 0;
 	const debugLog = [];
 	const modelCache = new Map();
 	const SAFETY_ID_KEY = "impala67AiSafetyId";
@@ -434,8 +437,10 @@ export const AI = (() => {
 
 		try {
 			const finishContext = PERF_PROFILER.start("ai.context", { anomalyThresholdMs: 1500 }, 0);
+			const aborts = abortCount;
 			const [ragHits, workspace] = await Promise.all([ragHitsFor(userText), workspaceOf()]);
 			finishContext({ rag: ragHits.length > 0, image: !!workspace.context?.imageUrl });
+			if (abortCount !== aborts) throw Object.assign(new Error("Abgebrochen."), { name: "AbortError" });
 			const page = currentPage();
 			const session = chatSessions.get(sessionKey) || { summary: null, toolsUnlocked: false };
 			const out = await withRun((run) => run.agent({
@@ -465,6 +470,7 @@ export const AI = (() => {
 	}
 
 	function abortActive() {
+		abortCount++;
 		for (const run of activeRuns) run.cancel();
 		for (const controller of activeControllers) controller.abort();
 		activeControllers.clear();

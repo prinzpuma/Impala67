@@ -139,6 +139,17 @@ export const CHATS = {
 		return this.load().find((s) => s.id === key) || null;
 	},
 
+	// Nachrichten einer Sitzung als bearbeitbare Kopie für S.chat/S.sideChat. Kommt die Sitzung
+	// aus dem Kern (S.chatSessions), sind Liste und Nachrichten eingefroren — der nächste push()
+	// beim Senden warf dann, und die Antwort hing für immer auf „denkt nach“.
+	// Läuft in diesem Chat gerade eine Antwort, gibt es dessen LEBENDE Liste zurück: Eine Kopie
+	// bekäme die restliche Antwort nicht mehr mit, und die nächste Nachricht überschriebe sie.
+	messages(id) {
+		if (id && S.aiBusy && S.aiActiveChatId === id && S.aiActiveList) return S.aiActiveList;
+		const s = id ? this.get(id) : null;
+		return s ? structuredClone(s.messages) : [];
+	},
+
 	// Reines Upsert: fehlende Einträge bedeuten NICHT "gelöscht". localOnly: nur im Gerät sichern
 	// (laufende KI-Antwort); migrateLocal hebt einen danach abgebrochenen Stand beim Start ins Log.
 	save(list, { localOnly = false } = {}) {

@@ -160,8 +160,7 @@ export function openPage(pageId, opts) {
 	if (isChat) {
 		const chatId = pageId.slice(5);
 		S.currentChatId = chatId;
-		const s = CHATS.get(chatId);
-		S.chat = s ? s.messages || [] : [];
+		S.chat = CHATS.messages(chatId);
 		S.view = "chat";
 		S.sidebarMode = "chats"; // eine Topbar-Pille: Chat
 		// FIX: Ein Chat lebt nur an EINER Stelle. Hing dieselbe Sitzung noch am

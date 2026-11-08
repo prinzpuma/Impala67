@@ -274,7 +274,7 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 	.change-page-flyout { width: 100%; max-height: 92dvh }
 }
 /* Thinking-/Reasoning-Anzeige: EIN einheitliches Design für live und finalisiert */
-.think-box { margin: var(--space-1-5) 0 var(--space-2); border: 1px solid var(--edge); border-left: 3px solid var(--accent); border-radius: var(--radius-md); background: var(--surface-subtle); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease }
+.think-box { flex-shrink: 0; margin: var(--space-1-5) 0 var(--space-2); border: 1px solid var(--edge); border-left: 3px solid var(--accent); border-radius: var(--radius-md); background: var(--surface-subtle); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease }
 .think-box:hover { border-color: var(--accent) }
 .think-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2) var(--space-3); background: transparent; border: none; color: var(--text); font-size: var(--text-sm); font-weight: 600; text-align: left; min-height: 34px; border-radius: 0; cursor: pointer }
 .think-toggle:hover { background: var(--surface-hover) }

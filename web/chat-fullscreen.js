@@ -80,6 +80,7 @@ function updateSubmitButtons() {
 
 function setBusy(isSide, busy, id = currentId(isSide)) {
 	S.aiBusy = busy;
+	S.aiActiveList = busy ? listOf(isSide) : null;
 	S.aiDraft = "";
 	S.aiThinkingDraft = "";
 	if (busy) {
@@ -171,10 +172,13 @@ export async function sendChatMessage(text, type) {
 			const hint = img ? "\n\nHinweis: Die Nachricht enthielt ein Bild. Das gewählte Modell scheint keine Bilder zu unterstützen. Wähle ein Vision-Modell oder sende die Frage ohne Bild erneut." : "";
 			target.push({ mid: U.uid(), role: "assistant", content: "**Fehler:** " + (err?.message || err) + hint, reasoning: err?.reasoning || null, reasoningExpanded: false });
 		}
+	} finally {
+		// Immer freigeben: Wirft schon die Fehlerbehandlung, blieb der Chat sonst auf
+		// „denkt nach“ stehen und ⏹ hatte keinen Lauf mehr zum Abbrechen.
+		setBusy(isSide, false);
+		saveChat(isSide, target, runId);
+		repaint();
 	}
-	setBusy(isSide, false);
-	saveChat(isSide, target, runId);
-	repaint();
 }
 
 // ---------- Nachrichten-Aktionen (Event-Delegation aus app.js) ----------
