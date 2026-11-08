@@ -9,57 +9,37 @@ import { ankiSec } from "./anki-stats.js";
 import { lead } from "./icons.js";
 
 // lernmuster.js — 📈 Lern-Analyse
-// Wertet die gesammelte Telemetrie (telemetrie.js) aus und zeigt die Ergebnisse im Statistik-Tab.
+// Wertet die gesammelte Telemetrie über den Rust-Kern (core/impala-model/src/analysis.rs) aus
+// und zeigt die Ergebnisse im Statistik-Tab.
 // 1. Beobachtungen mit Vorsicht interpretieren (Confounder wie Tageszeit/Fach nicht normiert).
 // 2. Ehrliche Mindestdatenmengen verlangen, bevor Trends dargestellt werden.
-// 3. Review-Daten stammen zentral aus telemetrie.js (TELE.reviewEvents).
 
 export const ANALYSE = (() => {
-	// Auswahl der gültigen Bewertungen + Erfolgsquote kommen aus telemetrie.js: beides war
-	// hier nachgebaut, und nur dort sind per Undo zurückgenommene Bewertungen ausgeschlossen.
-	const reviews = TELE.reviewEvents;
-	const rate = TELE.passRate;
+	const esc = (s) => U.esc(s);
 	const pct = (x) => Math.round(x * 100) + " %";
 
 	// ---------- 1) Sitzungsverlauf × Erfolg (inkl. Timer × FSRS) ----------
-	function positionHtml() {
-		const rs = reviews();
-		const buckets = [
-			{ label: "Karte 1–10", from: 0, to: 10 },
-			{ label: "Karte 11–25", from: 10, to: 25 },
-			{ label: "Karte 26–40", from: 25, to: 40 },
-			{ label: "Karte 41+", from: 40, to: 1e9 },
-		].map((b) => { const list = rs.filter((e) => e.data.pos >= b.from && e.data.pos < b.to); return { ...b, n: list.length, rate: rate(list) }; })
-			.filter((b) => b.n >= 12);
-		const timerOn = rs.filter((e) => e.data.timer === true);
-		const timerOff = rs.filter((e) => e.data.timer === false);
+	function positionHtml(p) {
+		if (p.position.length < 2 && !p.timer.length) return "";
 		let timerRows = "";
-		if (timerOn.length >= 15 && timerOff.length >= 15) {
-			timerRows = "<tr><td>" + lead("timer") + "mit Lerntimer</td><td>" + timerOn.length + "</td><td>" + pct(rate(timerOn)) + "</td></tr>" +
-				"<tr><td>ohne Timer</td><td>" + timerOff.length + "</td><td>" + pct(rate(timerOff)) + "</td></tr>";
+		if (p.timer.length >= 2) {
+			timerRows = "<tr><td>" + lead("timer") + esc(p.timer[0].label) + "</td><td>" + p.timer[0].n + "</td><td>" + pct(p.timer[0].rate) + "</td></tr>" +
+				"<tr><td>" + esc(p.timer[1].label) + "</td><td>" + p.timer[1].n + "</td><td>" + pct(p.timer[1].rate) + "</td></tr>";
 		}
-		if (buckets.length < 2 && !timerRows) return "";
 		return ankiSec("Sitzungsverlauf × Erfolg") +
 			'<table class="lib-table"><thead><tr><th>Abschnitt</th><th>Reviews</th><th>richtig</th></tr></thead><tbody>' +
-			buckets.map((b) => "<tr><td>" + b.label + "</td><td>" + b.n + "</td><td>" + pct(b.rate) + "</td></tr>").join("") +
+			p.position.map((b) => "<tr><td>" + esc(b.label) + "</td><td>" + b.n + "</td><td>" + pct(b.rate) + "</td></tr>").join("") +
 			timerRows + "</tbody></table>" +
 			'<div class="anki-note">Beobachtung, keine Regel — Tageszeit, Fach und Schwierigkeit sind nicht herausgerechnet.</div>';
 	}
 
 	// ---------- 2) Chronobiologie: Erfolgsquote nach Tageszeit ----------
-	function chronoHtml() {
-		const rs = reviews();
-		if (rs.length < 60) return "";
-		const hours = [];
-		for (let h = 0; h < 24; h++) {
-			const list = rs.filter((e) => e.data.hour === h);
-			hours.push({ h, n: list.length, rate: rate(list) });
-		}
-		if (hours.filter((x) => x.n >= 8).length < 3) return "";
-		const bars = hours.map((x) => {
+	function chronoHtml(p) {
+		if (!p.hours || !p.hours.length) return "";
+		const bars = p.hours.map((x) => {
 			const known = x.n >= 8;
 			const h = known ? Math.max(4, Math.round(x.rate * 100)) : 0;
-			return '<div class="bar-wrap" title="' + x.h + " Uhr: " + (known ? pct(x.rate) + " richtig (" + x.n + " Reviews)" : "zu wenig Daten") + '"><div class="bar" style="height:' + h + '%"></div><div class="bar-label">' + (x.h % 6 === 0 ? x.h : "") + "</div></div>";
+			return '<div class="bar-wrap" title="' + x.hour + " Uhr: " + (known ? pct(x.rate) + " richtig (" + x.n + " Reviews)" : "zu wenig Daten") + '"><div class="bar" style="height:' + h + '%"></div><div class="bar-label">' + (x.hour % 6 === 0 ? x.hour : "") + "</div></div>";
 		}).join("");
 		return ankiSec("Erfolgsquote nach Tageszeit", "Höhe = Anteil richtiger Antworten. Stunden mit unter 8 Reviews bleiben leer. Als Tendenz lesen, nicht als Stundenplan.") +
 			'<div class="bar-chart">' + bars + "</div>";
@@ -87,22 +67,17 @@ export const ANALYSE = (() => {
 	document.addEventListener("visibilitychange", () => { if (document.hidden && dwell) dwell.lost++; });
 	window.addEventListener("pagehide", flushDwell);
 
-	function problemHtml() {
-		const byPage = {};
-		(S.telemetry || []).filter((e) => e.kind === "dwell" && e.data).forEach((e) => {
-			const b = (byPage[e.data.pageId] = byPage[e.data.pageId] || { ms: 0, lost: 0 });
-			b.ms += e.data.ms || 0; b.lost += e.data.lost || 0;
-		});
-		const rows = Object.entries(byPage)
-			.map(([id, v]) => ({ id, ...v, pg: S.pages[id] }))
-			.filter((x) => x.pg && !x.pg.trashed && x.ms >= 5 * 60000)
-			.sort((a, b) => (b.ms + b.lost * 60000) - (a.ms + a.lost * 60000)).slice(0, 5);
+	function problemHtml(p) {
+		if (!p.problems || !p.problems.length) return "";
+		const rows = p.problems
+			.map((x) => ({ ...x, pg: S.pages[x.pageId] }))
+			.filter((x) => x.pg && !x.pg.trashed);
 		if (!rows.length) return "";
 		return ankiSec("Problemzonen (viel Lesezeit)") +
 			'<div class="anki-rows">' + rows.map((x) =>
-				'<div class="anki-row"><span><b>' + U.esc(x.pg.title) + "</b><small>" + Math.round(x.ms / 60000) + " min gelesen · " +
+				'<div class="anki-row"><span><b>' + esc(x.pg.title) + "</b><small>" + x.minutes + " min gelesen · " +
 				x.lost + "× App gewechselt" + (x.pg.pdfId ? " · PDF" : "") + "</small></span>" +
-				'<button data-anacard="' + x.id + '">＋ Karte</button></div>').join("") + "</div>" +
+				'<button data-anacard="' + esc(x.pageId) + '">＋ Karte</button></div>').join("") + "</div>" +
 			'<div class="anki-note">Viel Wiederlesen + häufige App-Wechsel = Kandidat für aktives Abrufen. ＋ legt eine Abruf-Karte im Stapel „Problemzonen“ an.</div>';
 	}
 	async function cardFromPage(pageId) {
@@ -132,13 +107,6 @@ export const ANALYSE = (() => {
 		// Getippte Karten (Feynman) liefern KEINE brauchbare Denkzeit — Note zählt, Zeit nicht.
 		recent.push({ grade: r.grade, thinkMs: r.typed ? null : r.thinkMs });
 		if (recent.length > 12) recent.shift();
-		// 4) Latenz als Ehrlichkeits-Signal — nur wenn die lange Zeit wirklich Zögern war.
-		//    FIX (25. Juli): Der Hinweis kam ständig und meist zu Unrecht. Im Feynman-Modus
-		//    tippt/diktiert man minutenlang eine Erklärung, bei Quiz, Hinweisen und Variation
-		//    läuft die Uhr ebenfalls weiter, und starre 20 s sind je nach Kartenlänge völlig
-		//    normal. Jetzt gilt: nicht getippt, nicht abgelenkt, keine Lernhilfe auf der Karte,
-		//    keine selbst gemeldete Unsicherheit — und mehrfach über der EIGENEN Median-Denkzeit.
-		//    Höchstens einmal pro Sitzung, nie ein automatisches Herabstufen.
 		const helpers = Array.isArray(r.exp) && r.exp.length > 0;
 		const gezoegert = !r.typed && !r.distracted && !helpers && r.confidence !== "unsure" && r.confidence !== "guess";
 		const med = (typeof TELE.thinkMedian === "function" && TELE.thinkMedian()) || 0;
@@ -148,9 +116,6 @@ export const ANALYSE = (() => {
 			lastHint = now;
 			U.toast(Math.round(r.thinkMs / 1000) + " s bis zum Aufdecken und dann „" + (r.grade >= 4 ? "Einfach" : "Gut") + "“? Ehrlich bewerten hilft dem Planer.");
 		}
-		// 5) Pausen-Hinweis statt „Aufmerksamkeits-Prädiktion“: steigen Fehlerquote
-		//    UND Denkzeit innerhalb der Sitzung, wird EINMAL eine Pause vorgeschlagen.
-		//    Getippte Karten fließen nur über die Note ein, nicht über die Zeit.
 		if (recent.length >= 10 && now - lastPause > 20 * 60000) {
 			const half = Math.floor(recent.length / 2);
 			const a = recent.slice(0, half), b = recent.slice(half);
@@ -173,32 +138,28 @@ export const ANALYSE = (() => {
 	}, true);
 
 	// ---------- 6) Experimente × Bewertung (macht Phase 2 messbar) ----------
-	// Reviews, bei denen ein Karten-Experiment benutzt wurde (exp-Array aus
-	// telemetrie.js v3), gegen normale Reviews. Anders als die übrigen Erfolgsquoten
-	// zählt hier die vollständige 1–4-Bewertung: Nochmal, Schwer, Gut und Einfach
-	// beeinflussen den Mittelwert jeweils unterschiedlich.
-	const EXP_NAMES = { feynman: lead("explain") + "Feynman", scaffolding: lead("bulb") + "Hinweise", variation: lead("shuffle") + "Variation", mc: lead("target") + "Quiz" };
-	const gradeAverage = (list) => {
-		const grades = list.map((e) => Number(e.data.grade)).filter((g) => g >= 1 && g <= 4);
-		return grades.length ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length : 0;
+	const EXP_ICONS = {
+		Feynman: lead("explain"),
+		Hinweise: lead("bulb"),
+		Variation: lead("shuffle"),
+		Quiz: lead("target"),
 	};
-	function expHtml() {
-		const rs = reviews();
-		const base = rs.filter((e) => !Array.isArray(e.data.exp) || !e.data.exp.length);
-		const rows = Object.entries(EXP_NAMES)
-			.map(([key, label]) => { const list = rs.filter((e) => Array.isArray(e.data.exp) && e.data.exp.includes(key)); return { label, n: list.length, average: gradeAverage(list) }; })
-			.filter((x) => x.n >= 15);
-		if (!rows.length || base.length < 30) return "";
+	function expHtml(p) {
+		if (!p.experiments || !p.experiments.length) return "";
+		const expRows = p.experiments.filter((x) => x.label !== "ohne Experimente");
+		const base = p.experiments.find((x) => x.label === "ohne Experimente");
 		return ankiSec("Experimente × Bewertung") +
 			'<table class="lib-table"><thead><tr><th>Experiment</th><th>Reviews</th><th>Ø Bewertung</th></tr></thead><tbody>' +
-			rows.map((x) => "<tr><td>" + x.label + "</td><td>" + x.n + "</td><td>" + x.average.toFixed(2) + "</td></tr>").join("") +
-			"<tr><td>ohne Experimente</td><td>" + base.length + "</td><td>" + gradeAverage(base).toFixed(2) + "</td></tr></tbody></table>" +
+			expRows.map((x) => "<tr><td>" + (EXP_ICONS[x.label] || "") + esc(x.label) + "</td><td>" + x.n + "</td><td>" + x.average.toFixed(2) + "</td></tr>").join("") +
+			(base ? "<tr><td>ohne Experimente</td><td>" + base.n + "</td><td>" + base.average.toFixed(2) + "</td></tr>" : "") +
+			"</tbody></table>" +
 			'<div class="anki-note">Skala: 1 = Nochmal, 2 = Schwer, 3 = Gut, 4 = Einfach. Vorsicht bei der Deutung: Hinweise & Co. laufen eher auf schweren Karten — Unterschiede sind Beobachtungen, keine Wirkungsnachweise.</div>';
 	}
 
 	// ---------- Statistik-Tab (render-anki.js hängt das an) ----------
 	function statsHtml() {
-		const html = positionHtml() + chronoHtml() + expHtml() + problemHtml();
+		const p = STATE.patternData();
+		const html = positionHtml(p) + chronoHtml(p) + expHtml(p) + problemHtml(p);
 		return '<div class="anki-block">' + ankiSec("Lern-Analyse", "Beobachtungen aus deinem Lernverlauf: Muster zum Prüfen, keine Regeln.") +
 			(html || '<div class="anki-note">Noch zu wenig Telemetrie — nach ein paar Lerntagen erscheinen hier Sitzungsverlauf × Erfolg, die Tageszeit-Analyse, Experimente × Bewertung und Problemzonen mit 1-Klick-Kartenerstellung.</div>') +
 			"</div>";

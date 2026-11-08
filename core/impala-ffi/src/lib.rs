@@ -5,6 +5,7 @@
 
 mod ai;
 mod ai_tools;
+mod analysis;
 mod busy;
 mod card_ops;
 mod cards;

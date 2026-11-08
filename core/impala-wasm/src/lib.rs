@@ -3,6 +3,7 @@
 #![allow(clippy::chunks_exact_to_as_chunks)]
 
 mod ai;
+mod analysis;
 mod drive;
 mod heft;
 mod ink;
