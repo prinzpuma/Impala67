@@ -5,14 +5,6 @@
 // bis er als gelesen markiert ist. Ältere Artikel bleiben als Verlauf. Synchronisiert über das
 // Event-Log (state.js „homeArticleUpsert“): Liegt der Artikel eines anderen Geräts schon vor, schreibt
 // dieses Gerät keinen eigenen; „Gelesen“ gilt auf allen Geräten.
-//
-// Auswahl — jeden Tag anders:
-//  • Ein Thema pro Tag: von den eigenen Themen (Einstellung homeArticleTopics) das am längsten nicht
-//    behandelte; ohne Einstellung alle Notizen. Ein Thema ist ein Fach („Mathematik“), eine Seite
-//    samt Unterseiten („Semester 3“) oder sonst ein Suchbegriff.
-//  • Darin ein Schwerpunkt-Fach, das in den letzten zwei Artikeln nicht dran war, und bevorzugt
-//    Notizen, die in den letzten Artikeln nicht vorkamen (neueste zuerst).
-//  • Archivierte Notizen sind nie Schwerpunkt, nur kurzer Verweis (außer das Thema hat nur archivierte).
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { AI } from "./ai.js";
@@ -24,7 +16,6 @@ import { CORE } from "./rust-core.js";
 const LEGACY_KEY = "impala67.homeArticles"; // vor dem Sync: nur localStorage
 const KEEP = 30;
 const RECENT = 7; // so viele frühere Artikel zählen als „kürzlich verwendet“
-const ACTIVE_NOTES = 4, ARCHIVED_NOTES = 2, MIN_TEXT = 40;
 const NOTE_CHARS = 1800, ARCHIVED_CHARS = 500, NOTES_TOTAL = 9000;
 const esc = (s) => U.esc(s);
 const DATE_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "short" });
@@ -64,15 +55,11 @@ function current() {
 }
 const due = () => { const a = load()[0]; return !a || (!!a.readAt && a.day !== today()); };
 
-// Eigenes Thema: das am längsten nicht mehr behandelte (nie behandelte zuerst, in Eingabereihenfolge)
+// Eigenes Thema: das am längsten nicht mehr behandelte (im Rust-Kern berechnet)
 function pickTopic(history) {
-	const own = String((S.settings || {}).homeArticleTopics || "").split(/[,;\n]/).map((t) => t.trim()).filter(Boolean);
-	if (!own.length) return null;
-	const lastUse = (t) => {
-		const i = history.findIndex((a) => String((a.topics || [])[0] || "").toLowerCase() === t.toLowerCase());
-		return i < 0 ? Infinity : i;
-	};
-	return own.reduce((best, t) => (lastUse(t) > lastUse(best) ? t : best));
+	const raw = String((S.settings || {}).homeArticleTopics || "");
+	const firstTopics = history.map((a) => String((a.topics || [])[0] || ""));
+	return CORE.pickArticleTopic(raw, JSON.stringify(firstTopics)) ?? null;
 }
 
 const asSubject = (topic) => FACH.KNOWN_SUBJECTS.find((s) => s.toLowerCase() === topic.toLowerCase());
@@ -98,29 +85,30 @@ async function poolFor(topic, pages) {
 	return [...new Set(ids)].map((id) => S.pages[id]).filter((p) => p && !p.trashed);
 }
 
-// Schwerpunkt-Fach und Notizen wählen — abwechselnd zu den letzten Artikeln
+// Schwerpunkt-Fach und Notizen wählen — im Rust-Kern berechnet
 function chooseNotes(pool, history) {
 	const recent = history.slice(0, RECENT);
-	const used = new Set(recent.flatMap((a) => (a.sources || []).map((src) => src.id)));
-	const lastFocus = new Set(recent.slice(0, 2).map((a) => a.focus).filter(Boolean));
-	const usable = pool.filter((p) => String(p.content || "").trim().length >= MIN_TEXT)
-		.map((p) => ({ p, archived: STATE.isPageArchived(p), subject: FACH.page(p).name, used: used.has(p.id) }))
-		.filter((n) => n.subject !== FACH.OVERVIEW_SUBJECT);
-	const candidates = usable.some((n) => !n.archived) ? usable.filter((n) => !n.archived) : usable;
-	const bySubject = new Map();
-	for (const n of candidates) {
-		const g = bySubject.get(n.subject) || { fresh: 0, newest: "" };
-		if (!n.used) g.fresh++;
-		if (String(n.p.updated || "") > g.newest) g.newest = String(n.p.updated || "");
-		bySubject.set(n.subject, g);
-	}
-	const known = (s) => (FACH.KNOWN_SUBJECTS.includes(s) ? 1 : 0);
-	const focus = [...bySubject].sort(([a, x], [b, y]) =>
-		(lastFocus.has(a) - lastFocus.has(b)) || ((x.fresh ? 0 : 1) - (y.fresh ? 0 : 1)) || (known(b) - known(a)) || y.newest.localeCompare(x.newest))[0]?.[0] || null;
-	const inFocus = usable.filter((n) => n.subject === focus).sort((a, b) => (a.used - b.used) || newest(a.p, b.p));
-	const main = inFocus.filter((n) => !n.archived || candidates === usable).slice(0, ACTIVE_NOTES);
-	const side = inFocus.filter((n) => n.archived && !main.includes(n)).slice(0, ARCHIVED_NOTES);
-	return { focus, notes: [...main, ...side] };
+	const usedIds = recent.flatMap((a) => (a.sources || []).map((src) => String(src.id || "")));
+	const recentFocuses = recent.slice(0, 2).map((a) => String(a.focus || "")).filter(Boolean);
+	const poolItems = pool.map((p) => ({
+		id: String(p.id || ""),
+		contentLen: String(p.content || "").trim().length,
+		updated: String(p.updated || ""),
+		archived: STATE.isPageArchived(p),
+		subject: FACH.page(p).name,
+	}));
+	const res = JSON.parse(CORE.chooseArticleNotes(
+		JSON.stringify(poolItems),
+		JSON.stringify(usedIds),
+		JSON.stringify(recentFocuses),
+		JSON.stringify(FACH.KNOWN_SUBJECTS),
+	));
+	const byId = new Map(pool.map((p) => [p.id, p]));
+	const notes = (res.noteIds || [])
+		.map((id) => byId.get(id))
+		.filter(Boolean)
+		.map((p) => ({ p, archived: STATE.isPageArchived(p) }));
+	return { focus: res.focus || null, notes };
 }
 
 async function write(pages) {
@@ -170,9 +158,6 @@ function ensure(getPages, manual = false) {
 		await migrateLocal();
 		// Erneut prüfen: übernommene oder inzwischen von einem anderen Gerät gesyncte Artikel
 		if (!due()) { phase = "idle"; refresh(); return; }
-		// Automatisch nur bei erreichbarer KI — sonst liefen bei jedem Start (z. B. am Handy ohne
-		// lokale KI) vier vergebliche Anfragen samt Wartezeiten. Ist der Start-Check noch nicht
-		// fertig, genügt ein eigener kurzer Ping.
 		if (!manual && !(S.aiOnline ?? await AI.ping())) { error = "KI nicht erreichbar."; phase = "idle"; refresh(); return; }
 		phase = "busy"; error = ""; refresh();
 		write(activePages())

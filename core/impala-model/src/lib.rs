@@ -12,6 +12,7 @@ pub mod conflict;
 pub mod event;
 pub mod js;
 pub mod jsmap;
+pub mod kleinteile;
 pub mod learning_time;
 pub mod library;
 pub mod merge;

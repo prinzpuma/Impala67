@@ -681,6 +681,10 @@ export const STATE = (() => {
 		libraryArchiveTree: (typeFilter = "all", query = "") => JSON.parse(M.libraryArchiveTree(String(typeFilter || "all"), String(query || ""))),
 		libraryGnShelf: (folderId = null, filter = "all", query = "") => JSON.parse(M.libraryGnShelf(folderId || undefined, String(filter || "all"), String(query || ""))),
 		gnFolderDirectCount: (folderId) => M.gnFolderDirectCount(String(folderId || "")),
+		allGrades: () => JSON.parse(M.allGrades()),
+		gradesBySubject: () => JSON.parse(M.gradesBySubject()),
+		exportGradesMarkdown: (todayLabel = "") => M.exportGradesMarkdown(String(todayLabel)),
+		mergedChatSessions: (localRaw = [], now = "") => JSON.parse(M.mergedChatSessions(JSON.stringify(localRaw), String(now))),
 	};
 })();
 

@@ -729,3 +729,107 @@ mod tests {
         assert_eq!(core_streak, 1);
     }
 }
+
+
+/// Farb-Stufe einer Note (1..=5).
+#[uniffi::export]
+pub fn grade_tier(grade: f64) -> u8 {
+    impala_model::kleinteile::grade_tier(grade)
+}
+
+/// Eigenes Thema für den Tagesartikel wählen.
+#[uniffi::export]
+pub fn pick_article_topic(topics_raw: String, history_first_topics: Vec<String>) -> Option<String> {
+    impala_model::kleinteile::pick_article_topic(&topics_raw, &history_first_topics)
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ArticleNoteItem {
+    pub id: String,
+    pub title: String,
+    pub text: String,
+    pub archived: bool,
+}
+
+#[uniffi::export]
+impl ImpalaCore {
+    /// Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+    pub fn export_grades_markdown(&self, today_label: String) -> String {
+        let inner = self.lock();
+        impala_model::kleinteile::export_grades_markdown(inner.model.state(), &today_label)
+    }
+
+    /// Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+    pub fn article_pool_ids(&self, topic: Option<String>) -> Vec<String> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let state = inner.model.state();
+        let Some(topic) = topic.filter(|t| !t.trim().is_empty()) else {
+            let mut active = state.active_pages();
+            active.sort_by(|a, b| b.updated().cmp(a.updated()));
+            active.truncate(200);
+            let mut ids: Vec<String> = active.into_iter().map(|p| p.id().to_owned()).collect();
+            ids.extend(state.archived_pages().into_iter().map(|p| p.id().to_owned()));
+            return ids;
+        };
+        if let Some(root) = state.find_page(&topic, true)
+            && root.title().to_lowercase() == topic.to_lowercase()
+        {
+            return state.page_subtree(root.id());
+        }
+        inner
+            .search
+            .search(&inner.model, &topic, true)
+            .into_iter()
+            .take(8)
+            .map(|h| h.id)
+            .collect()
+    }
+
+    /// Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+    pub fn choose_article_notes(&self, candidate_ids: Vec<String>) -> Vec<ArticleNoteItem> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let (_, used_ids, recent_focuses) = impala_model::kleinteile::article_history_meta(state);
+        let mut seen = std::collections::HashSet::new();
+        let mut pool = Vec::new();
+        for id in &candidate_ids {
+            if !seen.insert(id.clone()) {
+                continue;
+            }
+            let Some(pg) = state.pages.get(id) else { continue };
+            if pg.is_trashed() || pg.is_heft() {
+                continue;
+            }
+            pool.push(impala_model::kleinteile::ArticlePoolItem {
+                id: pg.id().to_owned(),
+                content_len: pg.content().trim().chars().count(),
+                updated: pg.updated().to_owned(),
+                archived: state.is_page_archived(pg.id()),
+                subject: "Allgemein".into(),
+            });
+        }
+        let choice = impala_model::kleinteile::choose_article_notes(&pool, &used_ids, &recent_focuses, &[]);
+        let mut budget = 9000usize;
+        let mut out = Vec::new();
+        for id in choice.note_ids {
+            let Some(pg) = state.pages.get(&id) else { continue };
+            let archived = state.is_page_archived(&id);
+            let limit = (if archived { 500 } else { 1800 }).min(budget);
+            let text: String = pg.content().trim().chars().take(limit).collect();
+            let count = text.chars().count();
+            budget = budget.saturating_sub(count);
+            if text.is_empty() {
+                continue;
+            }
+            let title = pg.title();
+            out.push(ArticleNoteItem {
+                id,
+                title: if title.is_empty() { "Ohne Titel".into() } else { title.to_owned() },
+                text,
+                archived,
+            });
+        }
+        out
+    }
+}
