@@ -75,6 +75,7 @@ function ankiCardsOf(deck) {
 	return deck ? cards.filter((c) => STATE.deckInTree(c.deck || "Standard", deck)) : cards;
 }
 
+// „Heute gelernt“: nur Karten, die noch im Lernplan sind (nicht ausgesetzt).
 function getCardsReviewedToday(deck) {
 	const t = new Date();
 	const back = t.getHours() < 4 ? 1 : 0;
@@ -88,8 +89,7 @@ function getCardsReviewedToday(deck) {
 			}
 		}
 	}
-	const cards = ankiCardsOf(deck);
-	return cards.filter((c) => reviewedCardIds.has(c.id));
+	return ankiCardsOf(deck).filter((c) => !c.suspended && reviewedCardIds.has(c.id));
 }
 
 // Anki hat für die „für den Moment fertig“-Ansicht KEINEN Hintergrund-Timer und
@@ -417,15 +417,17 @@ function ankiStudyHtml() {
 	// sie offen ist, können Learning-Karten fällig werden oder fremde Events einen
 	// Render ausloesen. Ohne diese Bindung wechselte dann mitten im Nachdenken die
 	// Vorderseite; Aufdecken, KI-Hilfen und Bewertung bezogen sich teils auf andere Karten.
+	// Eigene Runden („Alle Karten“) zeigen auch ausgesetzte Karten — welche Karten
+	// drankommen, legt dort allein die Warteschlange fest.
 	let c = S.reviewCardId && S.cards[S.reviewCardId];
-	if (c && (c.trashed || c.suspended)) c = null;
+	if (c && (c.trashed || (c.suspended && !isCustom))) c = null;
 	if (!c) {
 		S.reviewCardId = null;
 		if (isCustom) {
 			while (S.ankiCustomQueue.length && !c) {
 				const id = S.ankiCustomQueue[0];
 				const cand = S.cards[id];
-				if (cand && !cand.trashed && !cand.suspended) c = cand;
+				if (cand && !cand.trashed) c = cand;
 				else S.ankiCustomQueue.shift();
 			}
 		} else {

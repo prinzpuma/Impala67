@@ -223,7 +223,8 @@ export function showStudyAnswer(cardId) {
 	// kann sich geändert haben, während der Lernende die Frage beantwortet.
 	if (cardId && S.reviewCardId && cardId !== S.reviewCardId) return false;
 	const c = S.cards[cardId || S.reviewCardId];
-	if (!c || c.trashed || c.suspended) return false;
+	// „Alle Karten“-Runden zeigen auch ausgesetzte Karten (siehe ankiStudyHtml).
+	if (!c || c.trashed || (c.suspended && !Array.isArray(S.ankiCustomQueue))) return false;
 	S.reviewCardId = c.id;
 	S.reviewShowBack = true;
 	renderMain();

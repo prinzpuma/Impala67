@@ -1838,6 +1838,10 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 .anki-page .deck-row { padding: 12px 16px; min-height: 0; border: 0; border-radius: var(--radius-xl); background: var(--panel-solid); box-shadow: var(--b-card); transition: box-shadow .2s var(--b-ease), background .2s var(--b-ease), transform .3s var(--b-spring) }
 .anki-page .deck-row:hover { transform: none; box-shadow: var(--b-lift); background: var(--b-hover-bg) }
 .anki-page .deck-row:active:not(:disabled) { transform: scale(.99) }
+/* Das ⋯-Menü sitzt IN der Zeile und ist position: fixed. Jede Transformation der Zeile
+   (Drück-Effekt oben, 0,3 s Rückfedern) macht sie zum Bezugsrahmen – das Menü stand dann
+   außerhalb des Bildes und erschien erst nach dem Rückfedern. Offenes Menü = keine Transformation. */
+.anki-page .deck-row:has(> [data-deckmenu-panel]) { transform: none; transition: none }
 .anki-page .deck-ico { width: 34px; height: 34px; border-radius: 50%; background: var(--b-tint); font-size: 17px }
 .anki-page .cnt-due { display: inline-block; padding: 1px 9px; border-radius: var(--radius-pill); background: var(--b-due); color: color-mix(in srgb, var(--warn) 70%, var(--text)) }
 .anki-page .deck-study { border: 0; border-radius: var(--radius-pill); padding: 6px 16px; background: var(--accent); color: var(--on-accent); transition: transform .45s var(--b-spring), filter .2s }

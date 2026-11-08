@@ -34,6 +34,7 @@ function startCustomStudy(deck, mode) {
 		S.ankiCustomQueue = cards.map((c) => c.id).sort(() => Math.random() - 0.5);
 		S.ankiCustomTitle = "Heute gelernt (" + cards.length + ")";
 	} else {
+		// Bewusst MIT ausgesetzten Karten: „Alle“ heißt alle Karten des Stapels.
 		const cards = ankiCardsOf(deck);
 		if (!cards.length) {
 			U.toast("Dieser Stapel enthält keine aktiven Karten.", "info");
@@ -187,8 +188,14 @@ export async function handleAnkiClick(t, e) {
 	}
 	if (t.dataset.ankisuspend) {
 		const c = S.cards[t.dataset.ankisuspend];
-		if (c && c.id === S.reviewCardId) resetStudyCard();
-		if (c) await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: !c.suspended } });
+		// In der Lern-Ansicht heißt der Knopf immer „Aussetzen“ – auch wenn eine
+		// „Alle Karten“-Runde gerade eine bereits ausgesetzte Karte zeigt.
+		const fromStudy = !!c && c.id === S.reviewCardId;
+		if (fromStudy) {
+			resetStudyCard();
+			if (Array.isArray(S.ankiCustomQueue)) S.ankiCustomQueue = S.ankiCustomQueue.filter((id) => id !== c.id);
+		}
+		if (c) await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: fromStudy ? true : !c.suspended } });
 		return true;
 	}
 	if (t.dataset.ankiarchive) {
