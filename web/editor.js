@@ -15,6 +15,10 @@ import {
 	LISTY,
 	mimeFromName,
 	plainTextOf,
+	shortcutType,
+	convertBlock,
+	listNumbers,
+	wrapMarkers,
 } from "./editor-markdown.js";
 import {
 	initEditorMenus,
@@ -671,40 +675,14 @@ export const EDITOR = (() => {
 	// setzte ihn bei jedem Render zurück und ein DOM-Durchlauf schrieb ihn danach neu —
 	// zwei Textänderungen pro Listenpunkt und Tastendruck (Style + Layout jedes Mal).
 	function numberBlocks() {
-		const nums = new Map(), counters = {};
-		let prevListy = false;
-		const walk = (list) => {
-			for (const b of list) {
-				if (b.type === "number") {
-					const depth = b.indent || 0;
-					if (!prevListy) for (const k in counters) delete counters[k];
-					counters[depth] = (counters[depth] || 0) + 1;
-					for (const k in counters) if (+k > depth) delete counters[k];
-					nums.set(b.id, counters[depth]);
-					prevListy = true;
-				} else if (LISTY[b.type]) {
-					// Aufzählung/Todo auf derselben Ebene beendet die Nummerierung dort
-					// (tiefer eingerückte unterbrechen sie nicht).
-					const depth = b.indent || 0;
-					for (const k in counters) if (+k >= depth) delete counters[k];
-					prevListy = true;
-				} else {
-					prevListy = false;
-					for (const k in counters) delete counters[k];
-				}
-				if (b.children || b.columns) {
-					if (b.children) walk(b.children);
-					if (b.columns) b.columns.forEach((col) => { prevListy = false; walk(col); });
-					// Eine Liste im Callout/Toggle darf nicht hinter dem Container weiterzählen.
-					prevListy = false;
-					for (const k in counters) delete counters[k];
-				}
-			}
-		};
-		walk(blocks);
-		return nums;
+		const res = listNumbers(blocks);
+		if (res instanceof Map) return res;
+		const map = new Map();
+		if (res && typeof res === "object") {
+			for (const [k, v] of Object.entries(res)) map.set(k, v);
+		}
+		return map;
 	}
-
 	// Asynchrone Anreicherung nach dem HTML-Aufbau: Bilder, Hefte, Formeln, Code.
 	function hydrate() {
 		// Bild-Blobs aus IndexedDB laden. Die dataset.hydrated-Wache greift jetzt wirklich:
@@ -967,14 +945,13 @@ export const EDITOR = (() => {
 			b.type = "code";
 			return;
 		}
-		// Zieltyp ist ein Textblock
-		b.text = TEXTY[b.type] || b.type === "code" ? String(b.text || "") : keepText;
-		delete b.children; delete b.columns; delete b.rows; delete b.summary; delete b.open; delete b.language; delete b.color;
-		if (kind === "todo") b.checked = !!b.checked; else delete b.checked;
-		if (!LISTY[kind]) delete b.indent;
-		b.type = kind;
+		const baseText = TEXTY[b.type] || b.type === "code" ? String(b.text || "") : keepText;
+		const keepChecked = !!b.checked;
+		const conv = convertBlock({ ...b, text: baseText }, kind);
+		for (const k of Object.keys(b)) delete b[k];
+		Object.assign(b, conv);
+		if (kind === "todo") b.checked = keepChecked;
 	}
-
 	// ---------- Modell-Sync beim Tippen ----------
 	// Der DOM ist während des Tippens führend; nach jedem input-Event wird der
 	// betroffene Feldinhalt zurück ins Modell geschrieben (kein Re-Render!).
@@ -1002,15 +979,7 @@ export const EDITOR = (() => {
 	}
 
 	// ---------- Live-Transformationen (Markdown-Auslöser wie in Notion) ----------
-	// Greifen nur am Zeilen-/Blockanfang direkt nach einem Leerzeichen-Tastendruck.
-	const TRANSFORMS = [
-		[/^#\s$/, "h1"], [/^##\s$/, "h2"], [/^###\s$/, "h3"],
-		[/^[-*+]\s$/, "bullet"], [/^1[.)]\s$/, "number"],
-		[/^\[\]\s$/, "todo"], [/^\[ \]\s$/, "todo"],
-		[/^>\s$/, "quote"],
-	];
-
-	// Nach input prüfen: "/befehl", "[[", Markdown-Trigger, "---", FENCE, "$$".
+	// Nach input prüfen: "/befehl", "[[", Markdown-Trigger, "---", FENCE, "".
 	function handleLiveTriggers(field, e) {
 		if (composing || !field.dataset.btext) return false;
 		const bid = field.dataset.btext;
@@ -1042,23 +1011,16 @@ export const EDITOR = (() => {
 
 		// Nur bei Leerzeichen als letztem Zeichen: Blocktyp-Trigger
 		if (e && e.data === " " && c.block.type === "p") {
-			for (const [re, kind] of TRANSFORMS) {
-				if (re.test(upto)) {
-					// `upto` ist hier exakt das Kürzel am Blockanfang. Den Rest aus dem
-					// bereits synchronisierten Modell ableiten: Chromium kann die zweite
-					// DOM-Range am contenteditable-Rand noch vor dem Kürzel verankern und
-					// würde es über `split.nach` sonst ein zweites Mal übernehmen.
-					const remaining = text.slice(upto.length);
-					mutate(() => {
-						turnInto(c.block, kind);
-						c.block.text = remaining;
-					});
-					// Der DOM-Abgleich schützt das fokussierte contenteditable absichtlich.
-					// Nach der Kürzel-Umwandlung muss dessen alter Marker deshalb explizit
-					// durch den bereinigten Modelltext ersetzt werden, bevor weitergetippt wird.
-					paintTextField(bid, remaining, 0);
-					return true;
-				}
+			const st = shortcutType(upto);
+			if (st && st.type !== "code" && !st.rest) {
+				const remaining = text.slice(upto.length);
+				mutate(() => {
+					turnInto(c.block, st.type);
+					if (st.type === "todo" && st.checked) c.block.checked = true;
+					c.block.text = remaining;
+				});
+				paintTextField(bid, remaining, 0);
+				return true;
 			}
 		}
 		// "---" → Trennlinie
@@ -1122,21 +1084,8 @@ export const EDITOR = (() => {
 		// Sichtbare Zeichen wie setCaret (Range.toString zählte KaTeX-Innenleben mit).
 		const domStartOff = visibleLength(vorR.cloneContents());
 		const domMidLen = visibleLength(midR.cloneContents());
-		let next;
-		// Bei einer Auswahl des ganzen gerenderten Elements liegen die Markdown-
-		// Marker in `mid` statt außerhalb in `pre`/`post`. Kursiv braucht eine
-		// Sonderregel, damit **Fett** durch Strg+I nicht versehentlich entfettet wird.
-		const midIsWrapped = mid.startsWith(before) && mid.endsWith(after) &&
-			mid.length >= before.length + after.length &&
-			(before !== "*" || (mid.startsWith("***") && mid.endsWith("***")) ||
-				(!mid.startsWith("**") && !mid.endsWith("**")));
-		if (midIsWrapped) {
-			next = pre + mid.slice(before.length, mid.length - after.length) + post;
-		} else if (pre.endsWith(before) && post.startsWith(after)) {
-			next = pre.slice(0, -before.length) + mid + post.slice(after.length);
-		} else {
-			next = pre + before + mid + after + post;
-		}
+		const full = pre + mid + post;
+		const [next] = wrapMarkers(full, pre.length, pre.length + mid.length, before, after);
 		checkpoint(true);
 		if (caret.kind === "cell") {
 			const [bid, ri, ci] = caret.cell.split(":");

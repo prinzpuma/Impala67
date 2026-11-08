@@ -20,6 +20,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.text.input.KeyboardType
 import uniffi.impala_ffi.MdBlockKind
+import uniffi.impala_ffi.mdWrapMarkers
 
 /** Inline-Formate der Tastenkürzel (editor.js 1228–1237); Marker wie im Markdown der Seite. */
 internal enum class InlineFormat(val before: String, val after: String, val label: String) {
@@ -40,23 +41,8 @@ internal data class LinkPrompt(val id: String, val start: Int, val end: Int)
  * Ohne Auswahl entsteht ein leeres Markerpaar mit dem Caret dazwischen.
  */
 internal fun wrapMarkers(text: String, start: Int, end: Int, before: String, after: String): Pair<String, Int> {
-    val s = start.coerceIn(0, text.length)
-    val e = end.coerceIn(s, text.length)
-    val pre = text.substring(0, s)
-    val mid = text.substring(s, e)
-    val post = text.substring(e)
-    val midIsWrapped = mid.startsWith(before) && mid.endsWith(after) && mid.length >= before.length + after.length &&
-        (before != "*" || (mid.startsWith("***") && mid.endsWith("***")) || (!mid.startsWith("**") && !mid.endsWith("**")))
-    return when {
-        mid.isEmpty() -> Pair(pre + before + after + post, s + before.length)
-        midIsWrapped -> {
-            val inner = mid.substring(before.length, mid.length - after.length)
-            Pair(pre + inner + post, s + inner.length)
-        }
-        pre.endsWith(before) && post.startsWith(after) ->
-            Pair(pre.dropLast(before.length) + mid + post.drop(after.length), s - before.length + mid.length)
-        else -> Pair(pre + before + mid + after + post, s + before.length + mid.length + after.length)
-    }
+    val res = mdWrapMarkers(text, start.coerceAtLeast(0).toUInt(), end.coerceAtLeast(0).toUInt(), before, after)
+    return Pair(res.text, res.caret.toInt())
 }
 
 /** Auswahl im aktiven Textblock formatieren (Tasten und Werkzeugleiste). Codeblöcke bleiben roh. */
