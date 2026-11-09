@@ -1993,3 +1993,14 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 	body:not(.mobile-ui) :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
 	body:not(.mobile-ui) :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
 }
+
+/* == Lernansicht: Höhe bis unten nutzen ==
+   Die 88–96px Bodenabstand von .library.anki halten in Listen den KI-Kreis (#btnAiFab, unten
+   rechts) frei. In der Lernansicht steht darunter nur die Fußleiste: Sie ist so breit wie die
+   Karte, der Kreis liegt also daneben. Nur wenn die Fläche so schmal ist, dass die Fußleiste
+   bis an den Rand reicht, hält ihr padding-right (76px, siehe .study-footer) ihn frei.
+   Steht am Dateiende, damit es alle .library.anki-Varianten (Touch, Maus, Kompakt) schlägt. */
+body:not(.mobile-ui) .library.anki.anki-study-mode { padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); container-type: inline-size }
+@container (min-width: 1200px) {
+	body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-right: 0 }
+}

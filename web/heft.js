@@ -52,7 +52,7 @@ import { lead } from "./icons.js";
 import { BUS } from "./event-bus.js";
 import { createHeftViewport } from "./heft-viewport.js";
 import { createHeftInput } from "./heft-input.js";
-import { PLATFORM } from "./platform.js";
+import { toggleSidebar } from "./sidebar-toggle.js";
 
 // heft.js — GoodNotes-Kern für Impala67 (v13, 25. Juli 2026).
 //
@@ -1375,15 +1375,7 @@ export const HEFT = (() => {
 		const b = e.target.closest("button, .heft-pop-thumb");
 		if (!b || !doc) return;
 		const d = b.dataset;
-		if (d.hesidebar) {
-			const mobile = PLATFORM.isPhone();
-			if (mobile) document.body.classList.toggle("mnav-open");
-			else {
-				const on = document.body.classList.toggle("sidebar-collapsed");
-				try { localStorage.setItem("impala67.sidebarCollapsed", on ? "1" : "0"); } catch { }
-			}
-			return;
-		}
+		if (d.hesidebar) { toggleSidebar(); return; }
 		if (d.henavback) { BUS.emit("tabs:nav-back"); return; }
 		if (d.henavforward) { BUS.emit("tabs:nav-forward"); return; }
 		if (d.helassodup) { duplicateLassoSelection(); return; }

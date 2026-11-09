@@ -1225,7 +1225,8 @@ export const EDITOR = (() => {
 		ctrlAArmed = false;
 
 		// --- Inline-Format-Shortcuts ---
-		if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); wrapSelection("**", "**"); return; }
+		// Strg+B nur mit Markierung = fett; ohne Markierung klappt es die Seitenleiste (shortcuts.js).
+		if (mod && !e.shiftKey && e.key.toLowerCase() === "b" && !window.getSelection()?.isCollapsed) { e.preventDefault(); wrapSelection("**", "**"); return; }
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "i") { e.preventDefault(); wrapSelection("*", "*"); return; }
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "u") { e.preventDefault(); wrapSelection("<u>", "</u>"); return; }
 		if (mod && !e.shiftKey && e.key.toLowerCase() === "e") { e.preventDefault(); wrapSelection("\x60", "\x60"); return; }

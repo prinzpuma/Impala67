@@ -6,6 +6,7 @@ import { RENDER } from "./render.js";
 import { SEARCH } from "./search.js";
 import { POPOVERS } from "./popovers.js";
 import { VOICE } from "./voice.js";
+import { toggleSidebar } from "./sidebar-toggle.js";
 import { closeOverlay, studySpaceOrEnter, showStudyAnswer, gradeStudyCard } from "./app-dialogs.js";
 
 const renderSidebar = (...args) => RENDER.renderSidebar(...args);
@@ -77,6 +78,14 @@ export function wireShortcuts() {
 		if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "Space") {
 			e.preventDefault();
 			VOICE.toggle("side");
+			return;
+		}
+
+		// Strg/Cmd+B klappt die linke Seitenleiste auf/zu. Der Editor fängt Strg+B vorher nur ab,
+		// wenn Text markiert ist (dann fett) — sonst kommt die Taste hier an.
+		if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b" && !e.defaultPrevented) {
+			e.preventDefault();
+			toggleSidebar();
 			return;
 		}
 

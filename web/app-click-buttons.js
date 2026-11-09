@@ -15,7 +15,7 @@ import { SEARCH } from "./search.js";
 import { CHAT_FULLSCREEN } from "./chat-fullscreen.js";
 import { HEFT } from "./heft.js";
 import { PDFS } from "./pdfs.js";
-import { PLATFORM } from "./platform.js";
+import { toggleSidebar } from "./sidebar-toggle.js";
 import { blurActive, closeTopMenu } from "./app-ui.js";
 import { closeOverlay, openAnki, openHistory, startNewChat } from "./app-dialogs.js";
 
@@ -276,17 +276,9 @@ export async function handleButtonClick(t) {
 			break;
 		case "btnSidebarToggle":
 		case "btnPageSidebarToggle":
-		case "btnHeftSidebarToggle": {
-			// Mobile: Navigator-Sheet öffnen. Desktop: linke Spalte einklappen (☰ bleibt in der Tab-Leiste).
-			const mobile = PLATFORM.isPhone(); // dieselbe Definition wie mobile.js und das CSS
-			if (mobile) {
-				document.body.classList.toggle("mnav-open");
-			} else {
-				const on = document.body.classList.toggle("sidebar-collapsed");
-				try { localStorage.setItem("impala67.sidebarCollapsed", on ? "1" : "0"); } catch { /* ignore */ }
-			}
+		case "btnHeftSidebarToggle":
+			toggleSidebar();
 			break;
-		}
 		case "btnThemeDark":
 		case "btnThemeLight":
 			SETTINGS.handleThemeSelect(t.id === "btnThemeLight" ? "light" : "dark");

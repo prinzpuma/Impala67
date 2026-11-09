@@ -142,6 +142,7 @@ const APP_FILES = [
 	"./app-dialogs.js",
 	"./app-sidebar-events.js",
 	"./app-ui.js",
+	"./sidebar-toggle.js",
 	"./app-click-chat.js",
 	"./app-click-anki.js",
 	"./app-click-pages.js",
