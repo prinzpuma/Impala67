@@ -662,9 +662,12 @@ export const DB = (() => {
 		});
 		const malformed = normalized.filter((ev) => !ev).length;
 		if (malformed) console.warn("[importAll] " + malformed + " unbrauchbare Event(s) übersprungen (fehlende id/t/type).");
-		const transportEvents = opts.remote && opts.allowSecrets === false
+		const transportEvents = (opts.remote && opts.allowSecrets === false
 			? SETTINGS_SYNC.sanitizeEvents(normalized, false)
-			: normalized.filter(Boolean);
+			: normalized.filter(Boolean))
+			// Modellauswahl bleibt je Gerät: von anderen Geräten nie übernehmen.
+			.map((ev) => (opts.remote ? SETTINGS_SYNC.dropModelChoice(ev) : ev))
+			.filter(Boolean);
 		// Nur wirklich wegwerfbare gerätespezifische UI-Events unterhalb der
 		// Kompaktierungsgrenze blockieren. Fachliche Heft-Operationen sind immer zulässig.
 		const droppedByFloor = (ev) => !!floor && ev.t < floor && DROPPABLE_TYPES.has(ev.type);

@@ -14,6 +14,9 @@ pub type Object = Map<String, Value>;
 pub const LOCAL_FLAGS: [&str; 4] = ["_remote", "_remoteSource", "_derived", "seq"];
 /// Einstellungs-Felder, die bei `redactSecrets` aus `settingsSet` entfernt werden.
 pub const SECRET_FIELDS: [&str; 2] = ["notionToken", "driveDesktopClientSecret"];
+/// Modellauswahl je Gerät: wird aus eingehenden Fremd-Events entfernt (`SETTINGS_SYNC.dropModelChoice`).
+/// Die API-Schlüssel in `aiProviders` reisen dagegen weiter mit.
+pub const MODEL_FIELDS: [&str; 4] = ["aiProviderId", "aiModel", "embedProviderId", "embedModel"];
 
 /// Kennzahlen des Logs: Grundlage für Checkpoint-Gültigkeit und Sync-Wasserstand.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -72,6 +75,21 @@ pub fn redact_secrets(mut ev: Object) -> Option<Object> {
         for p in providers.iter_mut().filter_map(Value::as_object_mut) {
             p.shift_remove("key");
         }
+    }
+    if payload.is_empty() { None } else { Some(ev) }
+}
+
+/// Entfernt die Modellauswahl aus einem fremden `settingsSet`. `None`: Das Event bestand nur daraus.
+pub fn drop_model_choice(mut ev: Object) -> Option<Object> {
+    if ev.get("type").and_then(Value::as_str) != Some("settingsSet") {
+        return Some(ev);
+    }
+    let Some(Value::Object(payload)) = ev.get_mut("payload") else { return Some(ev) };
+    if !MODEL_FIELDS.iter().any(|k| payload.contains_key(*k)) {
+        return Some(ev);
+    }
+    for key in MODEL_FIELDS {
+        payload.shift_remove(key);
     }
     if payload.is_empty() { None } else { Some(ev) }
 }
@@ -136,6 +154,14 @@ mod tests {
         assert_eq!(redact_secrets(ev), None);
         let ev = obj(json!({"type": "settingsSet", "payload": {"aiProviders": [{"key": "k", "id": 1}, null]}}));
         assert_eq!(redact_secrets(ev).unwrap()["payload"], json!({"aiProviders": [{"id": 1}, null]}));
+    }
+
+    #[test]
+    fn model_choice_is_dropped() {
+        let ev = obj(json!({"type": "settingsSet", "payload": {"aiModel": "m", "aiProviderId": "p"}}));
+        assert_eq!(drop_model_choice(ev), None);
+        let ev = obj(json!({"type": "settingsSet", "payload": {"embedModel": "e", "aiProviders": [{"id": 1, "key": "k"}]}}));
+        assert_eq!(drop_model_choice(ev).unwrap()["payload"], json!({"aiProviders": [{"id": 1, "key": "k"}]}));
     }
 
     #[test]

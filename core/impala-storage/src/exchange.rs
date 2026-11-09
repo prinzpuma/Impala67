@@ -131,6 +131,12 @@ pub fn prepare<S: Storage + ?Sized>(storage: &S, data: &Value, opts: &ImportOpti
     } else {
         normalized
     };
+    // Modellauswahl bleibt je Gerät: von anderen Geräten nie übernehmen.
+    let normalized: Vec<Object> = if opts.remote.is_some() {
+        normalized.into_iter().filter_map(event::drop_model_choice).collect()
+    } else {
+        normalized
+    };
     let floor = storage.meta(COMPACT_FLOOR_KEY)?.unwrap_or_default();
     let keys: Vec<String> = normalized.iter().filter_map(|ev| ev.get("id").and_then(event::id_key)).collect();
     let mut seen = storage.known_ids(&keys)?;

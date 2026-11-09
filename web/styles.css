@@ -1688,10 +1688,13 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 /* Kartenflächen: keine eigenen Boxen — die Bühne IST die Karte.
    Die Frage behält ihre natürliche Höhe, nur die Antwort scrollt. */
 .anki-study-mode .study-card .card-face {
+	/* Spalte: mehrere Blöcke (Absätze, Formel, Grafik) stehen untereinander, nicht nebeneinander.
+	   „safe“: zu hohe Antworten laufen nach unten über statt oben unerreichbar abgeschnitten. */
 	display: flex;
+	flex-direction: column;
 	flex: 0 0 auto;
 	align-items: center;
-	justify-content: center;
+	justify-content: safe center;
 	min-height: 0;
 	padding: clamp(18px, 4vw, 40px) clamp(var(--space-2), 3vw, 28px);
 	overflow: visible;
