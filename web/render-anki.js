@@ -512,13 +512,18 @@ function ankiStudyHtml() {
 	const stLabel = isCustom ? "Wiederholung" : ({ new: "Neu", learning: "Lernen", relearning: "Neu lernen", review: "Wiederholen" }[cardState] || cardState);
 	// 🃏 Karten-Redesign v1 (22. Juli, Nacht): ruhige Kopfzeile statt langer Meta-Kette —
 	// Stapel links, Status rechts als Pille; Details (Wdh./Fehler/Intervall) nur noch als Tooltip.
-	let html = head + '<div class="study-card">' +
+	// EINE Kopfzeile statt zwei: Rückweg, Stapel samt Lernart, Tastenhinweis und Vollbild stehen
+	// in der Kartenzeile — der separate Lernkopf (`head`) bleibt nur für die Fertig-/Warte-Ansichten.
+	let html = '<div class="study-card' + (S.reviewShowBack ? " revealed" : "") + '">' +
 		'<div class="study-meta-bar" title="' + (c.srs.reps || 0) + " Wiederholungen · " + (c.srs.lapses || 0) + " Fehler · " +
 			(c.srs.state === "review" ? Math.max(1, Math.round(c.srs.stability)) + " Tage Intervall" : "Lernschritt") + '">' +
-			'<button type="button" class="study-exit-btn" data-ankitab="decks" data-ankiexit="1" aria-label="Lernen beenden">← Stapel</button>' +
-			'<span class="study-meta-deck">' + U.esc(c.deck || "Standard") + "</span>" +
+			'<button type="button" class="study-exit-btn" data-ankitab="decks" data-ankiexit="1" aria-label="Lernen beenden">← Stapel' + pad("exit") + '</button>' +
+			'<span class="study-meta-deck">' + U.esc(c.deck || "Standard") +
+				(isCustom ? ' · ' + lead("rotate") + U.esc(S.ankiCustomTitle || "Wiederholen") : "") + (S.ankiMix ? " · " + lead("shuffle") + "gemischt" : "") + (S.ankiFeyn ? " · " + lead("explain") + "Feynman" : "") + "</span>" +
 			(c.leech ? '<span class="leech-badge" title="Leech">' + lead("bug") + 'Leech</span>' : "") +
+			'<span class="study-keys hint" title="Tastatur">␣ Antwort/Gut · 1–4 bewerten</span>' +
 			'<span class="study-meta-state">' + stLabel + "</span>" +
+			'<button type="button" class="mini study-zen" data-ankizen="1" title="Vollbild: Seitenleiste und Tab-Leiste aus-/einblenden" aria-label="Vollbild">' + icon("expand") + '</button>' +
 		"</div>" +
 		// Bug-Fix („kommt noch“, 22. Juli): Klick/Tipp auf die Frage deckt NICHT mehr
 		// auf — das löste versehentliches Aufdecken aus (z. B. beim Markieren/Scrollen).

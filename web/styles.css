@@ -1668,7 +1668,8 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 	flex-direction: column;
 	justify-content: flex-start;
 	gap: var(--stage-gap);
-	width: min(820px, 100%);
+	/* Breiter auf großen Schirmen: lange Antworten (Formeln, Grafiken) brauchen weniger Höhe. */
+	width: min(1040px, 100%);
 	max-width: none;
 	min-height: var(--stage-min-h);
 	margin: var(--stage-top) auto 0;
@@ -1682,6 +1683,9 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 /* Kopfzeile in der Karte: Stapel links, Status rechts als Pille — bewusst klein und ruhig */
 .study-meta-bar { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text2) }
 .study-meta-deck { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left }
+.study-meta-bar .study-keys { flex-shrink: 0; margin-left: 0; font-weight: 500 }
+.study-meta-bar .study-zen { flex-shrink: 0; margin: 0 }
+body.mobile-ui .study-meta-bar .study-zen { display: none }
 .study-meta-state { flex-shrink: 0; padding: 2px var(--space-2); border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent) }
 /* FRAGE/ANTWORT-Labels: sofort klar, was gerade abgerufen werden soll */
 .study-side-label { font-size: var(--text-3xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text2); text-align: center; margin-top: 2px }
@@ -1716,6 +1720,11 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 @media (min-width: 769px) and (max-width: 1024px) {
 	.anki-study-mode .study-card .card-face { font-size: clamp(18px, 2vw, 21px) }
 }
+/* Aufgedeckt: Die Antwort bekommt den Platz. Ihr Scrollbereich braucht keinen großen Innenabstand,
+   und die schon bekannte Frage rückt klein und ruhig darüber (wie bei Anki).
+   Höhere Spezifität als die Breakpoints oben — gilt auf jeder Breite. */
+.anki-study-mode .study-card .card-face.back { padding-top: var(--space-2); padding-bottom: var(--space-2) }
+.anki-study-mode .study-card.revealed .card-face.front { padding-top: var(--space-1); padding-bottom: var(--space-2); font-size: clamp(15px, 1.5vw, 17px); color: var(--text2) }
 /* Die Frage füllt den freien Platz nach unten, damit Bewertung und Aktion fest sitzen. */
 .anki-study-mode .study-card .grades,
 .anki-study-mode .study-card .modal-actions { flex: 0 0 auto; margin: auto 0 0; padding-top: var(--space-4) }
