@@ -1002,7 +1002,8 @@ body.perf-mode *:not(.boot-spinner):not(#bootSplash *), body.perf-mode *::before
 .study-reveal-controls .confidence-row, .study-reveal-controls .study-counts-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--space-1-5) }
 .study-reveal-controls .study-counts-row { min-height: 20px }
 .study-card .modal-actions { justify-content: center; margin: 0 }
-.study-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; margin: 10px 0 0; padding: 0 }
+/* Fußleiste so breit wie die Karte (--study-w), damit „Bearbeiten“ und „Optionen“ an den Kartenkanten stehen. */
+.study-footer { display: flex; align-items: center; justify-content: space-between; width: var(--study-w, 100%); max-width: none; margin: 10px auto 0; padding: 0 }
 .study-footer-options { display: flex; align-items: center; gap: var(--space-1) }
 .study-footer .mini { min-height: 32px }
 /* 🐛 Fix (28. Juli): Der KI-Kreis bleibt im Lernmodus sichtbar — die Fußleiste bekommt nur
@@ -1048,7 +1049,8 @@ body.anki-study-open #mainWrap, body.anki-study-open #main { min-height: 0; heig
 	body.anki-study-open #app { height: 100dvh; min-height: 0 }
 	body.anki-study-open #mainWrap { min-height: 0 }
 }
-.anki-study-mode { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; max-width: none; padding: clamp(var(--space-3), 2.5vw, 28px) clamp(14px, 5vw, 72px) max(18px, env(safe-area-inset-bottom)); overflow: hidden }
+/* Breite von Karte und Fußleiste: auf großen Schirmen breit, damit lange Antworten (Formeln, Grafiken) weniger Höhe brauchen. */
+.anki-study-mode { --study-w: min(1040px, 100%); display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; max-width: none; padding: clamp(var(--space-3), 2.5vw, 28px) clamp(14px, 5vw, 72px) max(18px, env(safe-area-inset-bottom)); overflow: hidden }
 .anki-study-mode .study-head { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--space-1-5) 10px; flex: 0 0 auto; margin: 0 0 var(--space-3); text-align: center; font-size: var(--text-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--text2) }
 /* Karte, Kartenflächen und Bewertung stehen kanonisch weiter unten (Lern-Bühne). */
 /* Mermaid erhält in Lernkarten die volle Antwortbreite. */
@@ -1668,8 +1670,7 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 	flex-direction: column;
 	justify-content: flex-start;
 	gap: var(--stage-gap);
-	/* Breiter auf großen Schirmen: lange Antworten (Formeln, Grafiken) brauchen weniger Höhe. */
-	width: min(1040px, 100%);
+	width: var(--study-w);
 	max-width: none;
 	min-height: var(--stage-min-h);
 	margin: var(--stage-top) auto 0;
@@ -1700,6 +1701,10 @@ body.mobile-ui .study-meta-bar .study-zen { display: none }
 	align-items: center;
 	justify-content: safe center;
 	min-height: 0;
+	/* .md begrenzt Text auf 76ch — die Fläche selbst steht trotzdem mittig in der Karte
+	   (sonst klebt die kleine Frage nach dem Aufdecken links). */
+	margin-left: auto;
+	margin-right: auto;
 	padding: clamp(18px, 4vw, 40px) clamp(var(--space-2), 3vw, 28px);
 	overflow: visible;
 	overscroll-behavior: contain;
