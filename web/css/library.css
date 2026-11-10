@@ -1,42 +1,73 @@
-/* library.css — Bibliothek: gemeinsamer Kopf (Titel, Ansichts-Reiter, Werkzeugzeile, Suche),
-   Seitenbaum (Notion + Archiv), Gemini-Notebook-Mediathek, Dialoge und Drag-and-drop.
-   Das Bücherregal der GoodNotes-Ansicht steht in shelf.css (lädt danach und überschreibt). */
+/* library.css — Bibliothek: gemeinsamer Aufbau aller Ansichten (Titel, Papier-Panel mit Leiste,
+   Seitenbaum, Gemini-Notebook-Mediathek, Heft-Cover, Dialoge, Drag-and-drop).
+   Papier-/Holzfarben und die Regalbretter stehen in shelf.css (lädt danach). */
 
-/* ---------- Kopf: Titel + Zähler, darunter die Ansichten als Reiter mit Akzentstrich ---------- */
-.library.lib-docs .lib-head { display: block; margin: 0 0 var(--space-4); padding: 0; border: 0 }
+/* ---------- Titel + Zähler ---------- */
+.library.lib-docs .lib-head { display: block; margin: 0 0 var(--space-3); padding: 0; border: 0 }
 .lib-docs .lib-head-left { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px }
 .lib-docs .lib-head-left h1 { margin: 0 }
 .lib-docs .lib-sub { color: var(--text2); font-size: var(--text-sm); font-variant-numeric: tabular-nums }
-.lib-modes { flex: 1 0 100%; display: flex; gap: 26px; margin: 12px 0 0; overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--edge-soft) }
+
+/* ---------- Papier-Panel: oben die Leiste (Ansichten + Suche), darunter Filter/Pfad, dann der Inhalt.
+   .lib-top und .lib-body bilden zusammen eine Fläche. Innerhalb gelten warme Töne statt der Akzent-Tönung. ---------- */
+.lib-docs :is(.lib-top, .lib-body) {
+	--b-tint: color-mix(in srgb, var(--gn-wood) 16%, transparent);
+	--b-tint-2: color-mix(in srgb, var(--gn-wood) 26%, transparent);
+	--b-tint-3: color-mix(in srgb, var(--gn-wood) 38%, transparent);
+	--b-hover-bg: color-mix(in srgb, var(--gn-wood) 13%, transparent);
+	--panel-solid: var(--gn-sheet);
+	background: var(--gn-paper);
+	border: 1px solid var(--gn-paper-edge);
+}
+.lib-top { padding: 16px 26px 0; border-bottom: 0 !important; border-radius: 24px 24px 0 0 }
+.lib-docs .lib-body { min-height: 320px; margin: -1px 0 0; padding: 18px 26px 26px; border-top: 0; border-radius: 0 0 24px 24px }
+.lib-bar { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 16px; background: var(--gn-sheet); box-shadow: inset 0 0 0 1px var(--gn-paper-edge), 0 2px 6px -3px rgb(60 35 15 / .25) }
+.lib-modes { flex: none; display: flex; gap: 2px; margin: 0; overflow-x: auto; scrollbar-width: none }
 .lib-modes::-webkit-scrollbar { display: none }
-body .lib-modes .lib-mode { position: relative; flex: none; display: inline-flex; align-items: center; gap: 2px; height: 42px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text2); font-size: var(--text-base); font-weight: 600; white-space: nowrap; cursor: pointer; transition: color .15s ease }
-body .lib-modes .lib-mode:hover { color: var(--text); background: none }
-body .lib-modes .lib-mode.active { color: var(--text) }
-.lib-modes .lib-mode.active::after { content: ""; position: absolute; inset: auto 0 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--accent) }
-.lib-modes .lib-mode.active .i { color: var(--accent) }
-
-/* ---------- Werkzeugzeile: links Filter bzw. Pfad, rechts Suche ---------- */
-.lib-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-height: 40px; margin: 0 0 var(--space-4) }
-.lib-toolbar-left { display: flex; align-items: center; flex-wrap: wrap; min-width: 0 }
-.lib-toolbar .lib-tabs, .lib-toolbar .gn-crumbs { margin: 0 }
-.lib-toolbar .lib-tabs:empty { display: none }
-.lib-toolbar .lib-head-tools { margin-left: auto; flex-wrap: nowrap }
-.lib-search { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--panel-solid); box-shadow: var(--b-card); color: var(--text2); cursor: text; transition: box-shadow .15s ease }
-.lib-search:focus-within { box-shadow: 0 0 0 1px var(--accent-border), 0 0 0 4px var(--accent-soft) }
+body .lib-modes .lib-mode { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 36px; min-height: 0; padding: 0 12px; border: 0; border-radius: 11px; background: none; box-shadow: none; color: var(--text2); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; cursor: pointer; transition: color .15s ease, background-color .15s ease }
+body .lib-modes .lib-mode:hover { color: var(--gn-ink); background: var(--b-tint) }
+body .lib-modes .lib-mode.active { color: var(--gn-ink); background: var(--b-tint-2) }
+.lib-bar .lib-head-tools { flex: 1; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0 }
+.lib-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 11px; background: var(--b-tint); color: var(--text2); cursor: text; transition: box-shadow .15s ease }
+.lib-search:focus-within { box-shadow: inset 0 0 0 1px var(--gn-wood), 0 0 0 3px rgb(196 154 108 / .22) }
 .lib-search .i { flex: none; width: 16px; height: 16px }
-.library .lib-search #libFilter { width: 220px; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--text); font-size: 14px }
+.library .lib-search #libFilter { flex: 1; width: auto; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--text); font-size: 14px }
+.lib-toolbar-left { display: flex; align-items: center; flex-wrap: wrap; min-width: 0; min-height: 34px; margin-top: 14px }
+.lib-toolbar-left:empty { display: none }
+.lib-toolbar-left .lib-tabs, .lib-toolbar-left .gn-crumbs { margin: 0 }
+.lib-toolbar-left .lib-tabs:empty { display: none }
 
-/* ---------- Inhalt + Leerzustand ---------- */
-.lib-body { margin: 0 }
-.lib-body > .empty { margin: 0; padding: 52px 24px; border: 1px dashed var(--edge); border-radius: 18px; color: var(--text2); text-align: center; line-height: 1.5 }
-.gn-shelf .lib-body > .empty { padding: 26px 0 18px; border: 0 }
+/* ---------- Abschnitte + Leerzustand (ein leeres Regalbrett) ---------- */
+.lib-section { margin-bottom: 26px }
+.lib-section-title, .notion-tree-workspace-name { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 2px 10px; color: var(--gn-ink); font-family: var(--b-display); font-size: 15.5px; font-weight: 650; letter-spacing: -.005em }
+.lib-docs .lib-recent { grid-template-rows: var(--gn-row-h); max-height: var(--gn-row-h); overflow: hidden }
+.lib-docs .lib-body > .empty { position: relative; margin: 0 -14px; padding: 70px 24px 34px; border: 0; color: var(--text2); text-align: center; line-height: 1.5 }
+.lib-docs .lib-body > .empty::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--gn-ledge); border-top: 3px solid var(--gn-wood-top); background: var(--gn-wood); box-shadow: 0 9px 9px -6px rgb(0 0 0 / .2) }
+
+/* ---------- Heft-Cover: je Heft eigener Farbton, Muster, Schild-Platz und Gummiband (coverLook in library.js) ---------- */
+.lib-cover.gen {
+	--c1: hsl(var(--ch) var(--cs) calc(var(--cl) + 7%));
+	--c2: hsl(var(--ch) var(--cs) calc(var(--cl) - 7%));
+	--pat: repeating-linear-gradient(45deg, rgb(255 255 255 / .04) 0 2px, transparent 2px 5px);
+	background: var(--pat), linear-gradient(160deg, var(--c1), var(--c2));
+}
+.lib-cover.pat-1 { --pat: radial-gradient(rgb(255 255 255 / .2) 1.6px, transparent 2.2px) 0 0 / 13px 13px }
+.lib-cover.pat-2 { --pat: repeating-linear-gradient(90deg, rgb(255 255 255 / .1) 0 5px, transparent 5px 15px) }
+.lib-cover.pat-3 { --pat: repeating-linear-gradient(-45deg, rgb(0 0 0 / .1) 0 7px, transparent 7px 16px) }
+.lib-cover.pat-4 { --pat: linear-gradient(rgb(255 255 255 / .1) 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, rgb(255 255 255 / .1) 1px, transparent 1px) 0 0 / 12px 12px }
+.lib-cover.pat-5 { --pat: radial-gradient(circle at 20% 30%, rgb(255 255 255 / .22) 0 1.2px, transparent 1.8px) 0 0 / 9px 11px, radial-gradient(circle at 70% 60%, rgb(0 0 0 / .2) 0 1.5px, transparent 2.2px) 0 0 / 13px 10px, radial-gradient(ellipse 40% 26% at 30% 70%, rgb(255 255 255 / .1), transparent 70%) 0 0 / 38px 44px }
+.lib-cover.pat-6 { --pat: linear-gradient(transparent 66%, rgb(0 0 0 / .2) 66% 70%, rgb(255 255 255 / .16) 70% 82%, rgb(0 0 0 / .2) 82% 86%, transparent 86%) }
+.lib-cover.pat-7 { --pat: radial-gradient(circle at 82% 88%, rgb(255 255 255 / .17) 0 38%, transparent 39%), radial-gradient(circle at 10% 104%, rgb(0 0 0 / .14) 0 30%, transparent 31%) }
+.lib-cover.lab-1 { padding-top: 62% }
+.lib-cover.lab-2 { padding: 34% 18% 0 }
+.lib-cover.lab-2 .lib-cover-label { border-radius: 3px }
+.lib-cover.band::after { content: ""; position: absolute; top: 0; bottom: 0; right: 13%; width: 7px; background: linear-gradient(90deg, rgb(0 0 0 / .34), rgb(0 0 0 / .22)); box-shadow: 1px 0 0 rgb(255 255 255 / .08); pointer-events: none }
 
 /* ---------- Seitenbaum (Notion + Archiv): je Ordner eine Karte mit ruhigen Zeilen ---------- */
 .notion-tree-workspace { margin-top: 22px }
 .lib-body > .notion-tree-workspace:first-child { margin-top: 0 }
-.notion-tree-workspace-name { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 6px 8px; color: var(--text2); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase }
-.notion-tree-workspace-name span { padding: 1px 7px; border-radius: 999px; background: var(--b-tint); font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums }
-.notion-tree-list { padding: 6px; border-radius: 18px; background: var(--panel-solid); box-shadow: var(--b-card) }
+.notion-tree-workspace-name span { padding: 1px 8px; border-radius: 999px; background: var(--b-tint); color: var(--text2); font-family: inherit; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums }
+.notion-tree-list { padding: 6px; border-radius: 16px; background: var(--gn-sheet); box-shadow: inset 0 0 0 1px var(--gn-paper-edge), 0 2px 6px -3px rgb(60 35 15 / .25) }
 .notion-tree-row {
 	display: flex;
 	align-items: center;
@@ -82,9 +113,9 @@ body .lib-modes .lib-mode.active { color: var(--text) }
 .nlm-lib-btns button { min-height: 0; border: none; background: var(--b-tint); border-radius: 8px; padding: 5px 8px; cursor: pointer; color: inherit }
 .nlm-lib-btns button:hover { background: var(--b-tint-3) }
 /* In der Bibliothek: eine Karte mit Zeilen wie im Seitenbaum */
-.lib-nlm .lib-body:has(.nlm-lib-row) { padding: 6px; border-radius: 18px; background: var(--panel-solid); box-shadow: var(--b-card) }
-.lib-nlm .nlm-lib-row { min-height: 58px; margin: 0; padding: 8px 10px; border: 0; border-radius: 11px; background: transparent; transition: background-color .12s ease }
-.lib-nlm .nlm-lib-row:hover { background: var(--b-hover-bg) }
+.lib-nlm .nlm-lib-row { box-shadow: inset 0 0 0 1px var(--gn-paper-edge) }
+.lib-nlm .nlm-lib-row { min-height: 60px; margin: 0 0 8px; padding: 8px 10px; border: 0; border-radius: 14px; background: var(--gn-sheet); transition: background-color .12s ease }
+.lib-nlm .nlm-lib-row:hover { background: color-mix(in srgb, var(--gn-sheet) 86%, var(--gn-wood)) }
 .lib-nlm .nlm-lib-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--b-tint); color: var(--accent); font-size: 18px }
 .lib-nlm .nlm-lib-inbox .nlm-lib-icon { background: var(--accent); color: var(--on-accent) }
 .lib-nlm .nlm-lib-btns button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 10px; background: transparent; color: var(--text2) }
@@ -123,10 +154,10 @@ body .lib-modes .lib-mode.active { color: var(--text) }
 .gn-folder.gn-dragging, .gn-card.gn-dragging { opacity: .35 }
 
 @media (max-width: 640px) {
-	.lib-modes { gap: 20px }
-	.lib-toolbar .lib-head-tools { width: 100% }
-	.lib-search { flex: 1; min-width: 0 }
-	.library .lib-search #libFilter { width: 100%; min-width: 0 }
+	.lib-top { padding: 12px 14px 0; border-radius: 20px 20px 0 0 }
+	.lib-docs .lib-body { padding: 16px 14px 20px; border-radius: 0 0 20px 20px }
+	.lib-bar { flex-wrap: wrap }
+	.lib-modes { flex: 1 0 100% }
 	.notion-tree-row { min-height: 46px }
 	.notion-tree-meta .lib-kind { display: none }
 	.lib-archive .notion-tree-meta { display: none }

@@ -35,6 +35,22 @@ export function folderTone(key) {
 	return FOLDER_TONES[h % FOLDER_TONES.length];
 }
 
+// Jedes Heft bekommt ein eigenes Cover: die gewählte Farbe gibt die Farbfamilie vor, die Heft-ID
+// entscheidet über Farbton, Muster, Platz des Namensschilds und Gummiband. Gleiche ID = gleiches Cover.
+const COVER_HUES = { sunset: 18, ocean: 214, forest: 128, grape: 312 };
+const COVER_PATTERNS = 8;
+function coverLook(pg) {
+	const s = String(pg.id || pg.title || "");
+	let h = 2166136261;
+	for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+	const preset = pg.cover || null;
+	const hue = preset === "mono" ? 30 : (preset in COVER_HUES ? COVER_HUES[preset] + (h % 37) - 18 : h % 360);
+	const sat = preset === "mono" ? 5 : 30 + ((h >>> 6) % 16);
+	const light = preset === "mono" ? 20 + ((h >>> 10) % 10) : 40 + ((h >>> 10) % 13);
+	return "gen pat-" + ((h >>> 14) % COVER_PATTERNS) + " lab-" + ((h >>> 18) % 3) + ((h >>> 21) % 3 === 0 ? " band" : "") +
+		'" style="--ch:' + hue + ";--cs:" + sat + "%;--cl:" + light + "%";
+}
+
 // Portrait-Notebook im Schulheft-Stil: Rücken + Cover (Bild oder Stoff-Farbe) + helles
 // Namensschild mit Linien, wie auf einem Composition Book.
 export function libCoverHtml(pg) {
@@ -43,7 +59,7 @@ export function libCoverHtml(pg) {
 	const label = '<span class="lib-cover-label"><b>' + U.esc(short) + '</b><i aria-hidden="true"></i><i aria-hidden="true"></i></span>';
 	const cover = pg.coverImg
 		? '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '">'
-		: '<div class="lib-cover cover-' + U.esc(pg.cover || defaultCover(pg)) + '">';
+		: '<div class="lib-cover ' + coverLook(pg) + '">';
 	return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' + cover + label + "</div></div>";
 }
 
@@ -203,18 +219,17 @@ function libModeTabsHtml() {
 
 // Einheitlicher Aufbau aller Bibliotheks-Ansichten: Titel + Modi, darunter eine feste Werkzeugzeile
 // (links Filter bzw. Pfad, rechts Suche). Dadurch stehen Suche und Inhalt in jedem Modus gleich.
-function libHeadHtml() {
+function libToolbarHtml(left, right) {
 	const pages = STATE.activePages();
 	const hefte = pages.filter((p) => p.kind === "heft").length;
 	const n = (count, one, many) => count + " " + (count === 1 ? one : many);
 	const sub = n(pages.length - hefte, "Seite", "Seiten") + " · " + n(hefte, "Heft", "Hefte");
-	return '<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1><span class="lib-sub">' + sub + "</span>" + libModeTabsHtml() + "</div></div>";
+	return '<div class="lib-head"><div class="lib-head-left"><h1>Bibliothek</h1><span class="lib-sub">' + sub + "</span></div></div>" +
+		'<div class="lib-top"><div class="lib-bar">' + libModeTabsHtml() + '<div class="lib-head-tools">' + (right || "") + "</div></div>" +
+		'<div class="lib-toolbar-left">' + left + "</div></div>";
 }
-function libToolbarHtml(left, right) {
-	return '<div class="lib-toolbar"><div class="lib-toolbar-left">' + left + '</div><div class="lib-head-tools">' + (right || "") + "</div></div>";
-}
-function libSearchHtml(placeholder, cls) {
-	return '<label class="lib-search' + (cls ? " " + cls : "") + '">' + icon("search") +
+function libSearchHtml(placeholder) {
+	return '<label class="lib-search">' + icon("search") +
 		'<input id="libFilter" placeholder="' + placeholder + '" autocomplete="off" value="' + U.esc(S.libFilter || "") + '"></label>';
 }
 // Zeilen-Info rechts: Typ als kleine Marke, daneben das Datum.
@@ -290,7 +305,13 @@ function renderNotionTree(main) {
 	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
 	const tabs = '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
 		'<button class="lib-tab' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
+	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
+	// Oberstes Regalbrett: die zuletzt bearbeiteten Seiten und Hefte (nur ohne Filter/Suche).
+	if (!q && !smart && !S.libTag && allPages.length > 2) {
+		const recent = allPages.slice().sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || ""))).slice(0, 8);
+		html += '<section class="lib-section"><div class="lib-section-title">Zuletzt bearbeitet</div>' +
+			'<div class="lib-grid gn-grid lib-recent">' + recent.map(libCardHtml).join("") + "</div></section>";
+	}
 	wsIds.forEach((wsId) => {
 		const rows = treeRowsHtml(STATE.childrenOf(null, wsId), 0, (pg) => STATE.childrenOf(pg.id, wsId), visible, notionMeta);
 		if (!rows) return;
@@ -299,6 +320,7 @@ function renderNotionTree(main) {
 	});
 	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
 	U.morph(main, html + "</div></div>");
+	hydrateCovers(main);
 }
 
 export async function exportWorkspaceZip(wsId) {
@@ -410,9 +432,8 @@ export function renderHefteShelf(main) {
 	const crumbs = q ? '<span class="lib-crumb current">Suche</span>'
 		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + gnAncestors(folderId).map((f) =>
 			'<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>").join("");
-	let html = '<div class="library lib-docs lib-shelf gn-shelf" data-key="lib:shelf">' + libHeadHtml() +
-		libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>",
-			libSearchHtml("Hefte suchen", "gn-search") +
+	let html = '<div class="library lib-docs lib-shelf gn-shelf" data-key="lib:shelf">' + libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>",
+			libSearchHtml("Hefte suchen") +
 			'<button class="gn-new" data-libshelfnew="1">' + icon("plus") + "<span>Neu</span></button>") +
 		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
 			? gnFolderHtml(item.value)
@@ -427,8 +448,7 @@ export function renderHefteShelf(main) {
 // ---------- Gemini-Notebook-Ansicht (ehemals NotebookLM): Inbox + Mediathek ----------
 const NLM_FILTERS = [["all", "Alle"], ["inbox", lead("inbox") + "Inbox"], ["audio", lead("headphones") + "Podcasts"], ["video", lead("film") + "Videos"], ["mindmap", lead("graph") + "Mind Maps"], ["slides", lead("slides") + "Folien"]];
 export function renderNlmLibrary(main) {
-	main.innerHTML = '<div class="library lib-docs lib-nlm">' + libHeadHtml() +
-		libToolbarHtml('<div id="nlmTabs" class="lib-tabs"></div>', "") +
+	main.innerHTML = '<div class="library lib-docs lib-nlm">' + libToolbarHtml('<div id="nlmTabs" class="lib-tabs"></div>', "") +
 		'<div id="nlmLibBody" class="lib-body"><div class="empty small">Lade Mediathek…</div></div></div>';
 	NLM.listArtifacts().then((list) => {
 		const body = U.el("nlmLibBody");
@@ -496,7 +516,7 @@ export function renderArchiveLibrary(main) {
 
 	const tabs = '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
 		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + label + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree lib-archive" data-key="lib:archive">' + libHeadHtml() + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
+	let html = '<div class="library lib-docs lib-notion-tree lib-archive" data-key="lib:archive">' + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
 
 	if (!roots.length) {
 		html += '<div class="empty small">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
