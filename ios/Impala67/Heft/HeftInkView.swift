@@ -35,6 +35,10 @@ final class HeftInkView: UIView {
 
     private let baseLayer = CALayer()
     private let detailLayer = CALayer()
+    /// Loch in der Seiten-Bitmap unter der Detail-Bitmap: Vergrößert hat jeder Strich der Seiten-Bitmap einen
+    /// breiten, verschwommenen Rand, der sonst neben dem scharfen Strich darüber hervorschaut (doppelt
+    /// gezeichnete, „überzeichnete“ Schrift beim Zoomen).
+    private let baseMask = CAShapeLayer()
     private var size = CGSize.zero
     private var zoom: CGFloat = 1
     /// Lage der Seite in der durchlaufenden Heft-Ansicht (Seitenkoordinaten).
@@ -67,6 +71,23 @@ final class HeftInkView: UIView {
             layer.addSublayer(l)
         }
         detailLayer.isHidden = true
+        baseMask.fillRule = .evenOdd
+        baseMask.anchorPoint = .zero
+    }
+
+    /// Seiten-Bitmap unter `hole` ausblenden (`nil`: ganz zeigen). Aufruf innerhalb einer CATransaction.
+    private func setBaseHole(_ hole: CGRect?) {
+        guard let hole else {
+            baseLayer.mask = nil
+            return
+        }
+        let page = CGRect(origin: .zero, size: size)
+        let path = CGMutablePath()
+        path.addRect(page)
+        path.addRect(hole.intersection(page))
+        baseMask.frame = page
+        baseMask.path = path
+        baseLayer.mask = baseMask
     }
 
     @available(*, unavailable)
@@ -169,6 +190,7 @@ final class HeftInkView: UIView {
         CATransaction.setDisableActions(true)
         detailLayer.isHidden = true
         detailLayer.contents = nil
+        setBaseHole(nil)
         CATransaction.commit()
         pendingDetail = .drop
         scheduleFlush()
@@ -212,6 +234,7 @@ final class HeftInkView: UIView {
                 detailLayer.frame = r.rect
                 detailLayer.contents = r.image
                 detailLayer.isHidden = false
+                setBaseHole(r.rect)
             }
         }
         CATransaction.commit()
