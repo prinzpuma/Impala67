@@ -141,7 +141,8 @@ final class HeftInkView: UIView {
         let want = max(1, displayScale) * zoom
         let vis = visible.intersection(page)
         // Reicht die Seiten-Bitmap (wie `view.k` nahe Passbreite in der PWA), braucht es keine Detail-Ebene.
-        guard want > HeftInkRenderer.baseScale(size) * 1.15, !vis.isNull, vis.width > 1, vis.height > 1 else {
+        // Schon leicht hochskaliert wirkt die Schrift weich, deshalb ab knapp über der Seiten-Auflösung.
+        guard want > HeftInkRenderer.baseScale(size) * 1.02, !vis.isNull, vis.width > 1, vis.height > 1 else {
             dropDetail()
             return
         }

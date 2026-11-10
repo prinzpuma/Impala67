@@ -881,7 +881,7 @@ struct HeftCanvas: UIViewRepresentable {
             // Mit Original dessen Breite, damit der Druck aus den Punktbreiten richtig zurückgerechnet wird.
             let toolWidth = original.map { CGFloat($0.data.tool == "marker" ? $0.data.size * 3 : $0.data.size) }
                 ?? (canvas?.tool as? PKInkingTool)?.width ?? 2.5
-            var c = HeftInk.coreStroke(stroke, toolWidth: toolWidth, offset: origin(of: page))
+            var c = HeftInk.coreStroke(stroke, toolWidth: toolWidth, keepSize: original != nil, offset: origin(of: page))
             if let o = original?.data {
                 c.tool = o.tool == "shape" ? "pen" : o.tool
                 c.color = o.color

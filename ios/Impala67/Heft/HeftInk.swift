@@ -88,21 +88,45 @@ enum HeftInk {
         return out
     }
 
-    /// Neuer Strich vom Stift im Kernformat. `size` kommt vom Werkzeug (PencilKit kennt nur Punktbreiten).
-    /// `offset`: Lage der Seite im Canvas; die Punkte werden in Seitenkoordinaten zurückgerechnet.
-    static func coreStroke(_ stroke: PKStroke, toolWidth: CGFloat, offset: CGPoint = .zero) -> (tool: String, color: String, size: Double, points: [Float]) {
+    /// Neuer Strich vom Stift im Kernformat. `offset`: Lage der Seite im Canvas; die Punkte werden in
+    /// Seitenkoordinaten zurückgerechnet. `keepSize`: Breite `toolWidth` beibehalten (Rückgängig, gedrehter
+    /// Strich); sonst bestimmt der Stift selbst die Breite (s. u.).
+    static func coreStroke(_ stroke: PKStroke, toolWidth: CGFloat, keepSize: Bool = false, offset: CGPoint = .zero) -> (tool: String, color: String, size: Double, points: [Float]) {
         let marker = stroke.ink.inkType == .marker
-        // Stift: Werkzeugbreite = Breite bei Druck 0,5 = size. Marker: size × 3.
-        let size = Double(marker ? toolWidth / 3 : toolWidth)
+        // Punkte auf der Kurve, so wie PencilKit sie zeichnet. Die Kontrollpunkte (`for point in stroke.path`)
+        // liegen neben der Linie; durch sie gezeichnet wirkte die Schrift nach dem Neuladen eckig und verzogen.
+        var locs: [CGPoint] = []
+        var widths: [CGFloat] = []
+        for point in stroke.path.interpolatedPoints(by: .distance(1.5)) {
+            locs.append(point.location.applying(stroke.transform))
+            widths.append(point.size.width)
+        }
+        if locs.isEmpty {
+            for point in stroke.path {
+                locs.append(point.location.applying(stroke.transform))
+                widths.append(point.size.width)
+            }
+        }
+        // Stift: `size` = Breite bei Druck 0,5. Ohne Vorgabe die mittlere Punktbreite des Strichs: dann trifft
+        // die Rückrechnung (0,4–1,6 × size) die echten Breiten, statt sie an der Werkzeugbreite abzuschneiden
+        // (zu dicke, „überzeichnete“ Schrift nach dem Neuladen). Marker: size × 3 = Werkzeugbreite.
+        let size: Double
+        if marker {
+            size = Double(toolWidth / 3)
+        } else if keepSize || widths.isEmpty {
+            size = Double(toolWidth)
+        } else {
+            size = max(0.3, Double(widths.sorted()[widths.count / 2]))
+        }
+        let rounded = (size * 100).rounded() / 100
         var out: [Float] = []
-        out.reserveCapacity(stroke.path.count * 3)
-        for point in stroke.path {
-            let loc = point.location.applying(stroke.transform)
+        out.reserveCapacity(locs.count * 3)
+        for (loc, w) in zip(locs, widths) {
             out.append(Float(loc.x - offset.x))
             out.append(Float(loc.y - offset.y))
-            out.append(marker ? 0.5 : pressure(width: point.size.width, size: size))
+            out.append(marker ? 0.5 : pressure(width: w, size: rounded))
         }
-        return (marker ? "marker" : "pen", stroke.ink.color.cssHex, (size * 100).rounded() / 100, out)
+        return (marker ? "marker" : "pen", stroke.ink.color.cssHex, rounded, out)
     }
 
     // MARK: Zeichnen wie die PWA (`drawStroke` in web/heft.js)
@@ -135,26 +159,65 @@ enum HeftInk {
                 ctx.strokePath()
                 continue
             }
-            ctx.setStrokeColor(color.cgColor)
+            ctx.setFillColor(color.cgColor)
             if n == 1 {
                 let r = width(size: s.size, pressure: pr(0)) / 2
-                ctx.setFillColor(color.cgColor)
                 ctx.fillEllipse(in: CGRect(x: pt(0).x - r, y: pt(0).y - r, width: 2 * r, height: 2 * r))
                 continue
             }
-            var from = pt(0)
-            for i in 1..<n {
-                let cur = pt(i)
-                let to = i < n - 1 ? CGPoint(x: (cur.x + pt(i + 1).x) / 2, y: (cur.y + pt(i + 1).y) / 2) : cur
-                ctx.setLineWidth(width(size: s.size, pressure: (pr(i - 1) + pr(i)) / 2))
-                ctx.beginPath()
-                ctx.move(to: from)
-                ctx.addQuadCurve(to: to, control: cur)
-                ctx.strokePath()
-                from = to
-            }
+            ctx.addPath(penOutline(n: n, size: s.size, pt: pt, pr: pr))
+            ctx.fillPath()
         }
         ctx.restoreGState()
+    }
+
+    /// Stiftstrich als *eine* Fläche: dieselbe Mittellinie wie `drawStroke` der PWA (Kurven durch die
+    /// Mittelpunkte, Breite je Teilstück aus dem Druck), fein abgetastet und als Vereinigung aus Kreisen
+    /// und Verbindungsstücken gefüllt. Einzeln gezogene Teilstücke mit runden Kappen überlagern sich an
+    /// jeder Naht; ihre geglätteten Ränder addieren sich, die Schrift wirkt dann dicker und ausgefranst.
+    /// Alle Teilflächen laufen gleich herum, die Füllregel „nonzero“ vereinigt sie ohne Lücken.
+    private static func penOutline(n: Int, size: Double, pt: (Int) -> CGPoint, pr: (Int) -> Double) -> CGPath {
+        var samples: [(p: CGPoint, r: CGFloat)] = []
+        samples.reserveCapacity(n * 2)
+        var from = pt(0)
+        var lastR = width(size: size, pressure: (pr(0) + pr(1)) / 2) / 2
+        samples.append((from, lastR))
+        for i in 1..<n {
+            let cur = pt(i)
+            let to = i < n - 1 ? CGPoint(x: (cur.x + pt(i + 1).x) / 2, y: (cur.y + pt(i + 1).y) / 2) : cur
+            let r = width(size: size, pressure: (pr(i - 1) + pr(i)) / 2) / 2
+            let len = hypot(cur.x - from.x, cur.y - from.y) + hypot(to.x - cur.x, to.y - cur.y)
+            // Etwa alle 0,75 pt ein Punkt (dünne Striche dichter), höchstens 64 je Teilstück.
+            let steps = max(1, min(64, Int(ceil(len / max(0.75, min(1.5, r))))))
+            for k in 1...steps {
+                let t = CGFloat(k) / CGFloat(steps), u = 1 - t
+                let q = CGPoint(x: u * u * from.x + 2 * u * t * cur.x + t * t * to.x,
+                                y: u * u * from.y + 2 * u * t * cur.y + t * t * to.y)
+                samples.append((q, lastR + (r - lastR) * t))
+            }
+            lastR = r
+            from = to
+        }
+        let path = CGMutablePath()
+        for (i, s) in samples.enumerated() {
+            // Eigener Teilpfad je Kreis (sonst verbindet `addArc` ihn mit einer Linie zum vorigen Punkt).
+            path.move(to: CGPoint(x: s.p.x + s.r, y: s.p.y))
+            path.addArc(center: s.p, radius: s.r, startAngle: 0, endAngle: 2 * .pi, clockwise: false)
+            path.closeSubpath()
+            guard i > 0 else { continue }
+            let a = samples[i - 1]
+            let dx = s.p.x - a.p.x, dy = s.p.y - a.p.y
+            let d = hypot(dx, dy)
+            guard d > 0.01 else { continue }
+            let nx = -dy / d, ny = dx / d
+            // Gleicher Umlaufsinn wie die Kreise (steigender Winkel).
+            path.move(to: CGPoint(x: a.p.x - nx * a.r, y: a.p.y - ny * a.r))
+            path.addLine(to: CGPoint(x: s.p.x - nx * s.r, y: s.p.y - ny * s.r))
+            path.addLine(to: CGPoint(x: s.p.x + nx * s.r, y: s.p.y + ny * s.r))
+            path.addLine(to: CGPoint(x: a.p.x + nx * a.r, y: a.p.y + ny * a.r))
+            path.closeSubpath()
+        }
+        return path
     }
 
     /// Umgebendes Rechteck der Punkte (ohne Strichbreite).
