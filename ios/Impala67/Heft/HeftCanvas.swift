@@ -19,6 +19,8 @@ struct HeftCanvas: UIViewRepresentable {
     let revision: Int
     /// Verbindung zur Leiste (Auswahl, Einfügen an der sichtbaren Stelle).
     let link: HeftCanvasLink
+    /// Gewähltes Werkzeug aus der eigenen Leiste (`HeftToolPill`).
+    let tools: HeftToolSetting
     /// Die Seite in der Mitte der Ansicht hat gewechselt (Seitenanzeige „n / m“).
     let onCurrentPage: (String) -> Void
     /// Über das Ende der letzten Seite hinaus gezogen (Hochziehen für eine neue Seite wie in der PWA).
@@ -29,8 +31,8 @@ struct HeftCanvas: UIViewRepresentable {
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = HeftCanvasView()
         canvas.delegate = context.coordinator
-        // Folgt der Einstellung „Mit Finger zeichnen“ im Apple-Werkzeugpicker.
-        canvas.drawingPolicy = .default
+        // Wie „Nur Stift zeichnet“ der PWA; umgestellt über die Leiste (`apply`).
+        canvas.drawingPolicy = .pencilOnly
         // Papier ist in beiden Modi hell; sonst kehrt PencilKit die Farben im Dunkelmodus um.
         canvas.overrideUserInterfaceStyle = .light
         // Durchsichtig, sonst übermalt PencilKit das Papier darunter mit der Hintergrundfarbe (schwarzes
@@ -48,6 +50,8 @@ struct HeftCanvas: UIViewRepresentable {
         doubleTap.numberOfTapsRequired = 2
         doubleTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         canvas.addGestureRecognizer(doubleTap)
+        // Doppeltippen/Drücken am Apple Pencil (sonst übernimmt das Apples Werkzeugleiste).
+        canvas.addInteraction(UIPencilInteraction(delegate: context.coordinator))
         context.coordinator.attach(canvas)
         canvas.onLayout = { [weak coordinator = context.coordinator] in coordinator?.layoutChanged() }
         return canvas
@@ -59,17 +63,16 @@ struct HeftCanvas: UIViewRepresentable {
         link.coordinator = c
         c.onCurrentPage = onCurrentPage
         c.onPullAdd = onPullAdd
+        c.apply(tools)
         c.setPages(pageIds, revision: revision)
     }
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
         coordinator.flush()
-        coordinator.toolPicker.setVisible(false, forFirstResponder: canvas)
-        coordinator.toolPicker.removeObserver(canvas)
     }
 
     @MainActor
-    final class Coordinator: NSObject, PKCanvasViewDelegate {
+    final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate {
         private let core: ImpalaCore
         private let pageId: String
         private weak var canvas: PKCanvasView?
@@ -164,20 +167,50 @@ struct HeftCanvas: UIViewRepresentable {
         private let writer = DispatchQueue(label: "impala.heft.write", qos: .userInitiated)
         private var resignObserver: NSObjectProtocol?
 
-        /// Eine Leiste für alle Seiten und Hefte (wie die Werkzeugwahl der PWA): Gewählte Stifte, Farben und
-        /// Breiten bleiben beim Wechseln; über App-Starts merkt sie sich PencilKit selbst (`stateAutosaveName`).
-        static let sharedToolPicker: PKToolPicker = {
-            let picker = PKToolPicker(toolItems: [
-                PKToolPickerInkingItem(type: .pen, color: UIColor(css: HeftPalette.colors[0].css), width: HeftPalette.size),
-                PKToolPickerInkingItem(type: .marker, color: UIColor(css: HeftPalette.colors[4].css), width: HeftPalette.size * 3),
-                PKToolPickerEraserItem(type: .vector),
-                PKToolPickerLassoItem(),
-                PKToolPickerRulerItem(),
-            ])
-            picker.stateAutosaveName = "impala.heft.tools"
-            return picker
-        }()
-        var toolPicker: PKToolPicker { Self.sharedToolPicker }
+        /// Zuletzt übernommenes Werkzeug der Leiste.
+        private var appliedTools: HeftToolSetting?
+
+        /// Werkzeug, Nur-Stift und Lineal aus der Leiste übernehmen (nur bei Änderung).
+        func apply(_ s: HeftToolSetting) {
+            guard s != appliedTools, let canvas else { return }
+            appliedTools = s
+            canvas.tool = s.pkTool
+            canvas.drawingPolicy = s.onlyPen ? .pencilOnly : .anyInput
+            canvas.isRulerActive = s.ruler
+        }
+
+        // MARK: Apple Pencil
+
+        func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
+            HeftTools.shared.pencil(UIPencilInteraction.preferredTapAction)
+        }
+
+        func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
+            guard squeeze.phase == .ended else { return }
+            HeftTools.shared.pencil(UIPencilInteraction.preferredSqueezeAction)
+        }
+
+        // MARK: Rückgängig
+
+        func undo() {
+            canvas?.undoManager?.undo()
+            refreshUndo()
+        }
+
+        func redo() {
+            canvas?.undoManager?.redo()
+            refreshUndo()
+        }
+
+        /// Knöpfe der Leiste nachführen; nach dem Lauf, weil PencilKit den Schritt erst danach abschließt.
+        private func refreshUndo() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let link = self.link else { return }
+                let m = self.canvas?.undoManager
+                if link.canUndo != (m?.canUndo ?? false) { link.canUndo = m?.canUndo ?? false }
+                if link.canRedo != (m?.canRedo ?? false) { link.canRedo = m?.canRedo ?? false }
+            }
+        }
 
         /// Farbe des aktuellen Stifts bzw. Markers (für neue Textfelder), sonst Schwarz.
         var currentColor: String {
@@ -233,10 +266,6 @@ struct HeftCanvas: UIViewRepresentable {
             hold.delaysTouchesEnded = false
             hold.delegate = hold
             canvas.addGestureRecognizer(hold)
-            toolPicker.addObserver(canvas)
-            // Der neue Canvas übernimmt das gerade gewählte Werkzeug der gemeinsamen Leiste.
-            canvas.tool = toolPicker.selectedTool
-            toolPicker.setVisible(true, forFirstResponder: canvas)
             // Wie `visibilitychange`/`pagehide` in heft.js: beim Verlassen der App sofort schreiben.
             resignObserver = NotificationCenter.default.addObserver(
                 forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
@@ -282,6 +311,7 @@ struct HeftCanvas: UIViewRepresentable {
             applying = false
             // Alte Schritte zeigten nach dem Umordnen auf falsche Stellen.
             canvas.undoManager?.removeAllActions()
+            refreshUndo()
             for (id, v) in papers where slot[id] == nil {
                 v.removeFromSuperview()
                 papers[id] = nil
@@ -658,6 +688,7 @@ struct HeftCanvas: UIViewRepresentable {
             // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung (nach dem Abgleich,
             // damit neu geschriebene Striche schon ihre Kerndaten haben).
             updateInk()
+            refreshUndo()
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.

@@ -17,7 +17,7 @@ Die Oberfläche folgt dem Tablet-Layout der PWA (Vorlage: `android/…/ui/desk/`
 - **Apple-Feinschliff**: Liquid Glass nur für schwebende Bedienelemente (`impalaGlass`, z. B. die
   Blätter-Leiste im Heft), Seitenleiste über `NavigationSplitView`,
   Kontextmenüs (Halten) statt ⋯-Popover, Sheets für Suche/Papierkorb, Hover-Effekt mit Trackpad.
-  Im Heft ist Apples Werkzeugleiste (PencilKit) die einzige Werkzeug- und Farbwahl.
+  Im Heft eine eigene Werkzeug-Pille wie die PWA (`HeftToolPill`), nicht Apples Werkzeugleiste.
 - **Animationen (Apple-Federn statt CSS-Kurven)**: aktive Pille, Baumzeile und Tab-Markierung gleiten
   (`matchedGeometryEffect`), Pillen-Label mit Blur-Übergang, Baum klappt weich auf, Tabs federn
   herein/heraus, Tabwechsel blendet über, Sheets zoomen aus ihrem Knopf (`navigationTransition(.zoom)`),
@@ -273,9 +273,11 @@ leer) wie `drawPaper` in heft.js als Vektor-Ebene hinter den Strichen (`HeftPape
   Seite (`heftSetPaper`) und Löschen; „Auswählen“ löscht mehrere (`heftRemovePage`, eine Seite bleibt).
 - **Neue Seite** („+“-Panel bzw. Übersicht): davor, danach oder am Ende, Papier per Vorschau
   (`heftAddPage(at:paper:)`); Hochziehen am Ende nimmt das Papier der letzten Seite.
-- **Werkzeuge** nur über Apples Werkzeugleiste (`PKToolPicker`: Stift, Marker, Radierer, Lasso, Lineal,
-  Farben, Rückgängig, „Mit Finger zeichnen“); Standard wie die PWA: Stift `#1c1c1e`, Marker `#f5b800`,
-  Dicke 3. Keine eigene Farbleiste daneben. Oben links „n / m“ (Seitenübersicht; geblättert wird durch
+- **Werkzeuge** über die eigene Pille oben in der Mitte (`Heft/HeftToolbar.swift`, wie `heft-pill` der
+  PWA, Liquid Glass, 48 pt hoch wie die Leisten daneben): drei Stift-Favoriten, Marker, Radierer, Lasso,
+  Lineal, Rückgängig/Wiederholen, Einklappen. Zweites Tippen auf das aktive Werkzeug öffnet darunter
+  Dicke, Farben und „Nur Stift zeichnet“ bzw. die Radierergröße. Gemerkt in den UserDefaults
+  (`impala.heft.tools.v2`); Doppeltippen/Drücken am Pencil folgt der Systemeinstellung. Oben links „n / m“ (Seitenübersicht; geblättert wird durch
   Scrollen), rechts „+“. Neue Textfelder nehmen die Farbe des aktuellen Stifts.
 - **Papier sichtbar**: Der Canvas ist durchsichtig (`isOpaque = false`), sonst übermalt PencilKit das
   Papier mit seiner Hintergrundfarbe (schwarzes Heft im Dunkelmodus).

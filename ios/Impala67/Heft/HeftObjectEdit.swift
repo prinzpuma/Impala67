@@ -308,6 +308,9 @@ final class HeftCanvasLink {
     var selection: HeftSelectLayer.Item?
     /// Textfeld wird geschrieben bzw. bearbeitet.
     var textEdit: HeftTextEdit?
+    /// Rückgängig/Wiederholen möglich (Knöpfe der Werkzeug-Pille).
+    var canUndo = false
+    var canRedo = false
     @ObservationIgnored weak var coordinator: HeftCanvas.Coordinator?
 }
 

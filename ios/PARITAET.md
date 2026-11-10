@@ -11,7 +11,7 @@ Telefon-Teil 6).
 | ✅ | Im iOS-Code vorhanden und verhält sich laut Code wie die PWA |
 | 🟡 | Teilweise oder abweichend |
 | ❌ | Fehlt |
-| ⚪ | Bewusst anders (z. B. Apple-Werkzeugleiste im Heft, VisionKit-Scanner) |
+| ⚪ | Bewusst anders (z. B. Lineal im Heft, VisionKit-Scanner) |
 
 **Wichtig:** Die Bewertung beruht auf dem Code (Stand 05.11.2026, Commit `52a82af`). Die Leistungs-
 und Ablaufpunkte wurden am **07.11.2026** auf dem Gerät geprüft (App `2.2.124+25`, iPadOS 27.2);
@@ -375,14 +375,16 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ## 3. Heft
 
-Werkzeuge, Farben und Radierer kommen bewusst aus Apples Werkzeugleiste (PencilKit).
+Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkzeugleiste.
 
 ### 3.1 Werkzeuge
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| Stift, Marker, Radierer, Lasso, Farben, Dicke | ⚪ | `Heft/HeftCanvas.swift:88-94` |
-| Laser | ⚪ | nicht in der Apple-Leiste |
-| Rückgängig/Wiederholen | ✅ | `HeftCanvas.swift:85-87` |
+| 3 Stift-Favoriten, Marker, Radierer, Lasso, Farben, Dicke, Nur-Stift | ✅ | `Heft/HeftToolbar.swift` |
+| Leiste einklappen | ✅ | `HeftToolbar.swift` (`collapsed`) |
+| Lineal | ⚪ | nur iPad (PencilKit) |
+| Laser | ❌ | fehlt |
+| Rückgängig/Wiederholen | ✅ | `HeftToolbar.swift`, `HeftCanvas.swift` (`undo`/`redo`) |
 | Bilder-Menü (Auswahl, Text, Bild, Kamera, Handschrift) | ✅ | `Heft/HeftScreen.swift:160-177` |
 
 ### 3.2 Seiten hinzufügen und blättern

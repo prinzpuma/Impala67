@@ -2,9 +2,9 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Heft: alle Seiten in einer Fläche auf dem Arbeitsflächen-Hintergrund der PWA. Stifte, Farben, Radierer
-/// und Lasso kommen nur aus Apples Werkzeugleiste (PencilKit). Darüber schweben (Liquid Glass) links die
-/// Seitenanzeige (öffnet die Übersicht samt Teilen), rechts „+“ (ein Panel wie `plusPopHtml`: neue Seite
+/// Heft: alle Seiten in einer Fläche auf dem Arbeitsflächen-Hintergrund der PWA. Darüber schweben (Liquid
+/// Glass) links die Seitenanzeige (öffnet die Übersicht samt Teilen), in der Mitte die Werkzeug-Pille wie
+/// `heft-pill` der PWA (`HeftToolPill`: Stifte, Marker, Radierer, Lasso, Lineal, Rückgängig), rechts „+“ (ein Panel wie `plusPopHtml`: neue Seite
 /// davor/danach/am Ende, Papier, Text, Bild, Kamera, Import, Scannen). Bilder und Texte werden direkt
 /// angetippt bzw. gehalten (`HeftSelectLayer`).
 struct HeftScreen: View {
@@ -19,6 +19,7 @@ struct HeftScreen: View {
     @State private var revision = 0
     @State private var showPages = false
     @State private var link = HeftCanvasLink()
+    private let tools = HeftTools.shared
     @State private var pickPhoto = false
     @State private var photos: [PhotosPickerItem] = []
     @State private var showCamera = false
@@ -38,7 +39,7 @@ struct HeftScreen: View {
             if !pageIds.isEmpty {
                 // Alle Seiten untereinander in einer Fläche (wie `.heft-pages` der PWA).
                 HeftCanvas(core: store.core, pageId: pageId, pageIds: pageIds, initialPageId: currentId, revision: revision,
-                           link: link,
+                           link: link, tools: tools.setting,
                            onCurrentPage: { id in if currentId != id { currentId = id } },
                            onPullAdd: { addPage(nil) })
                     .ignoresSafeArea(edges: .bottom)
@@ -46,7 +47,7 @@ struct HeftScreen: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             VStack(alignment: .trailing, spacing: Space.s2) {
-                // Links Seiten (mit Teilen), rechts „+“. Zeichenwerkzeuge kommen nur aus Apples Leiste.
+                // Links Seiten (mit Teilen), in der Mitte die Werkzeuge, rechts „+“.
                 HStack(alignment: .top, spacing: Space.s2) {
                     if tabsPosition == AppTabsPosition.sidebar.rawValue {
                         GlassEffectContainer {
@@ -96,6 +97,8 @@ struct HeftScreen: View {
                         }
                     }
                     pageNav
+                    Spacer(minLength: 0)
+                    HeftToolPill(tools: tools, link: link)
                     Spacer(minLength: 0)
                     corner
                 }
