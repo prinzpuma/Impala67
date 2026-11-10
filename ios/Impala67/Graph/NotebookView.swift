@@ -10,6 +10,12 @@ struct NotebookView: View {
     @Environment(\.openURL) private var openURL
     @State private var picking = false
     @State private var notice: String?
+    /// Hintergrund; in der Bibliothek durchsichtig, damit das Papier-Panel durchscheint.
+    let background: Color
+
+    init(background: Color = Impala.panel) {
+        self.background = background
+    }
 
     static let product = "Gemini Notebook"
     static let url = URL(string: "https://notebooklm.google.com/")!
@@ -47,7 +53,7 @@ struct NotebookView: View {
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(Impala.panel)
+        .background(background)
         .overlay(alignment: .bottom) {
             if let notice {
                 Text(notice)

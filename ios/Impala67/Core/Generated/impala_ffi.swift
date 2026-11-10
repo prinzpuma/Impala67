@@ -3816,6 +3816,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func setClockOffset(ms: Int64) 
     
     /**
+     * Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
+     * Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
+     */
+    func setCoverImage(pageId: String, bytes: Data, mime: String, name: String) throws  -> String
+    
+    /**
      * Optionen für einen Stapel (samt Unterstapeln, die nichts Eigenes haben) oder – mit `None` –
      * für alle speichern (`settingsSet { deckConf }`). Schwelle mindestens 1.
      */
@@ -5598,6 +5604,21 @@ open func setClockOffset(ms: Int64)  {try! rustCall() {
         FfiConverterInt64.lower(ms),$0
     )
 }
+}
+    
+    /**
+     * Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
+     * Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
+     */
+open func setCoverImage(pageId: String, bytes: Data, mime: String, name: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_set_cover_image(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),
+        FfiConverterString.lower(name),$0
+    )
+})
 }
     
     /**
@@ -12991,6 +13012,10 @@ public struct PageSummary {
      */
     public var cover: String
     /**
+     * Eigenes Cover-Bild (Blob-ID `cover:…`, Bytes über `file`), statt `cover`.
+     */
+    public var coverImg: String?
+    /**
      * Schlagwörter der Seite.
      */
     public var tags: [String]
@@ -13018,6 +13043,9 @@ public struct PageSummary {
          * Cover (Farbe/Verlauf/Muster wie in der PWA), leer ohne.
          */cover: String, 
         /**
+         * Eigenes Cover-Bild (Blob-ID `cover:…`, Bytes über `file`), statt `cover`.
+         */coverImg: String?, 
+        /**
          * Schlagwörter der Seite.
          */tags: [String], 
         /**
@@ -13034,6 +13062,7 @@ public struct PageSummary {
         self.icon = icon
         self.favorite = favorite
         self.cover = cover
+        self.coverImg = coverImg
         self.tags = tags
         self.pdfId = pdfId
         self.isTemplate = isTemplate
@@ -13073,6 +13102,9 @@ extension PageSummary: Equatable, Hashable {
         if lhs.cover != rhs.cover {
             return false
         }
+        if lhs.coverImg != rhs.coverImg {
+            return false
+        }
         if lhs.tags != rhs.tags {
             return false
         }
@@ -13100,6 +13132,7 @@ extension PageSummary: Equatable, Hashable {
         hasher.combine(icon)
         hasher.combine(favorite)
         hasher.combine(cover)
+        hasher.combine(coverImg)
         hasher.combine(tags)
         hasher.combine(pdfId)
         hasher.combine(isTemplate)
@@ -13125,6 +13158,7 @@ public struct FfiConverterTypePageSummary: FfiConverterRustBuffer {
                 icon: FfiConverterString.read(from: &buf), 
                 favorite: FfiConverterBool.read(from: &buf), 
                 cover: FfiConverterString.read(from: &buf), 
+                coverImg: FfiConverterOptionString.read(from: &buf), 
                 tags: FfiConverterSequenceString.read(from: &buf), 
                 pdfId: FfiConverterOptionString.read(from: &buf), 
                 isTemplate: FfiConverterBool.read(from: &buf), 
@@ -13142,6 +13176,7 @@ public struct FfiConverterTypePageSummary: FfiConverterRustBuffer {
         FfiConverterString.write(value.icon, into: &buf)
         FfiConverterBool.write(value.favorite, into: &buf)
         FfiConverterString.write(value.cover, into: &buf)
+        FfiConverterOptionString.write(value.coverImg, into: &buf)
         FfiConverterSequenceString.write(value.tags, into: &buf)
         FfiConverterOptionString.write(value.pdfId, into: &buf)
         FfiConverterBool.write(value.isTemplate, into: &buf)
@@ -20879,6 +20914,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_set_clock_offset() != 60278) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_set_cover_image() != 56527) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_set_deck_config() != 55597) {

@@ -1522,6 +1522,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1986,6 +1988,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_card_suspended(
 fun uniffi_impala_ffi_checksum_method_impalacore_set_change_listener(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_clock_offset(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_cover_image(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_deck_config(
 ): Short
@@ -2562,6 +2566,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_change_listener(`ptr`: Pointer,`l
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_clock_offset(`ptr`: Pointer,`ms`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_cover_image(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_set_deck_config(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`conf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,`schema`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3553,6 +3559,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_clock_offset() != 60278.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_cover_image() != 56527.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_deck_config() != 55597.toShort()) {
@@ -8507,6 +8516,12 @@ public interface ImpalaCoreInterface {
     fun `setClockOffset`(`ms`: kotlin.Long)
     
     /**
+     * Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
+     * Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
+     */
+    fun `setCoverImage`(`pageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `name`: kotlin.String): kotlin.String
+    
+    /**
      * Optionen für einen Stapel (samt Unterstapeln, die nichts Eigenes haben) oder – mit `None` –
      * für alle speichern (`settingsSet { deckConf }`). Schwelle mindestens 1.
      */
@@ -10826,6 +10841,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 }
     }
     
+    
+
+    
+    /**
+     * Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
+     * Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
+     */
+    @Throws(CoreException::class)override fun `setCoverImage`(`pageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `name`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_cover_image(
+        it, FfiConverterString.lower(`pageId`),FfiConverterByteArray.lower(`bytes`),FfiConverterString.lower(`mime`),FfiConverterString.lower(`name`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -15422,6 +15454,10 @@ data class PageSummary (
      */
     var `cover`: kotlin.String, 
     /**
+     * Eigenes Cover-Bild (Blob-ID `cover:…`, Bytes über `file`), statt `cover`.
+     */
+    var `coverImg`: kotlin.String?, 
+    /**
      * Schlagwörter der Seite.
      */
     var `tags`: List<kotlin.String>, 
@@ -15454,6 +15490,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
@@ -15471,6 +15508,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.allocationSize(value.`icon`) +
             FfiConverterBoolean.allocationSize(value.`favorite`) +
             FfiConverterString.allocationSize(value.`cover`) +
+            FfiConverterOptionalString.allocationSize(value.`coverImg`) +
             FfiConverterSequenceString.allocationSize(value.`tags`) +
             FfiConverterOptionalString.allocationSize(value.`pdfId`) +
             FfiConverterBoolean.allocationSize(value.`isTemplate`) +
@@ -15487,6 +15525,7 @@ public object FfiConverterTypePageSummary: FfiConverterRustBuffer<PageSummary> {
             FfiConverterString.write(value.`icon`, buf)
             FfiConverterBoolean.write(value.`favorite`, buf)
             FfiConverterString.write(value.`cover`, buf)
+            FfiConverterOptionalString.write(value.`coverImg`, buf)
             FfiConverterSequenceString.write(value.`tags`, buf)
             FfiConverterOptionalString.write(value.`pdfId`, buf)
             FfiConverterBoolean.write(value.`isTemplate`, buf)

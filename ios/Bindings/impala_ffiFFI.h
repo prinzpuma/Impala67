@@ -1537,6 +1537,11 @@ void uniffi_impala_ffi_fn_method_impalacore_set_change_listener(void*_Nonnull pt
 void uniffi_impala_ffi_fn_method_impalacore_set_clock_offset(void*_Nonnull ptr, int64_t ms, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_COVER_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_COVER_IMAGE
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_set_cover_image(void*_Nonnull ptr, RustBuffer page_id, RustBuffer bytes, RustBuffer mime, RustBuffer name, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_DECK_CONFIG
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_DECK_CONFIG
 void uniffi_impala_ffi_fn_method_impalacore_set_deck_config(void*_Nonnull ptr, RustBuffer deck, RustBuffer conf, RustCallStatus *_Nonnull out_status
@@ -3652,6 +3657,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_change_listener(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_CLOCK_OFFSET
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_CLOCK_OFFSET
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_clock_offset(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_COVER_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_COVER_IMAGE
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_cover_image(void
     
 );
 #endif

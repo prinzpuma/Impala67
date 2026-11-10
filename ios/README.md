@@ -69,12 +69,16 @@ Wie `DeskTree.kt`/`TreeDrag.kt`: Reihenfolge, Zyklen und Arbeitsbereiche prüft 
 ## Bibliothek
 
 Wie web/library.js eine **Hauptansicht** (kein Fenster; `ShellModel.libraryOpen` wie `S.view = "library"`,
-jedes Öffnen eines Tabs schließt sie). Oben Titel und Ansichten (`LibraryMode`): **Notion** (Seitenbaum je
-Arbeitsbereich, Filter Alle/Favoriten/PDFs/Vorlagen mit Anzahl, Klappzustand wie die Seitenleiste),
-**GoodNotes** (Heft-Regal mit Covern `COVER_PRESETS`, „Neu“ mit Name und Cover, ••• Heftoptionen: Cover,
-Archivieren, Papierkorb), **Archiv** (Filter Alle/Seiten/Hefte, „Aus Archiv holen“), **Gemini Notebook**.
-Darunter immer dieselbe Werkzeugzeile: links Filter, rechts Suche. Ordner des Heft-Regals (`gnFolders`)
-fehlen noch in der UniFFI-Schnittstelle; die Hefte stehen deshalb flach.
+jedes Öffnen eines Tabs schließt sie). Oben Titel mit Zähler („n Seiten · m Hefte“), darunter ein warmes
+Papier-Panel (`Library/ShelfStyle.swift`, Farben aus `web/css/shelf.css`) mit einer Leiste: Ansichten als Reiter
+(`LibraryMode`) und Suche, darunter Filter bzw. Pfad. **Notion** (Seitenbaum je Arbeitsbereich als Karte mit
+Führungslinien, Symbol-Kacheln und Typ-Marke, Filter Alle/Favoriten/PDFs/Vorlagen mit Anzahl, Klappzustand wie
+die Seitenleiste), **GoodNotes** (`Library/HeftShelf.swift`: Hefte und Mappen stehen auf Holzbrettern, je Heft ein
+eigenes Cover aus der ID wie `coverLook`, Pfad „Dokumente / Ordner“, „Neu“ für Heft oder Ordner, Deko am letzten
+Brett, ••• Heftoptionen), **Archiv** (Filter Alle/Seiten/Hefte, „Aus Archiv holen“), **Gemini Notebook**.
+**Eigenes Cover-Bild**: füllt das ganze Heft-Cover ohne Namensschild und steht in „Neues Heft“ und den
+Heftoptionen an erster Stelle (Foto → JPEG ≤ 1600 px → `setCoverImage`, Blob `cover:…`, synchronisiert);
+im Seitenbaum ersetzt es die Symbol-Kachel. Eine Farbe wählen entfernt das Bild wie in der PWA.
 Halten: Öffnen, Als Seite öffnen (PDF), Favorit, Archivieren, Papierkorb. Antippen öffnet das PDF **nativ mit PDFKit**
 (zoomt aus der Zeile; fortlaufend, an die Breite angepasst, Seitenzahl „n / m“ in Liquid Glass, Teilen,
 „Als Seite öffnen“). Fehlt die Datei noch (Sync), steht „PDF nicht gefunden“. „PDF hinzufügen“ nimmt

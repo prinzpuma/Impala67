@@ -27,8 +27,8 @@ enum LibraryMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Bibliothek als Hauptansicht wie in der PWA (`S.view = "library"`, nicht als Fenster): oben Titel und
-/// Ansichten, darunter eine feste Werkzeugzeile (links Filter, rechts Suche), dann der Inhalt.
+/// Bibliothek als Hauptansicht wie in der PWA (`S.view = "library"`, nicht als Fenster): oben Titel mit Zähler,
+/// darunter ein warmes Papier-Panel mit einer Leiste (Ansichten + Suche), Filter bzw. Pfad und dem Inhalt.
 /// PDFs öffnen nativ mit PDFKit, alles andere öffnet die Seite im Tab.
 struct LibraryScreen: View {
     @Environment(ImpalaStore.self) private var store
@@ -38,7 +38,7 @@ struct LibraryScreen: View {
     @State private var query = ""
     @State private var importing = false
     @State private var failed = false
-    @State private var newHeft = false
+    @State private var counts: (pages: Int, hefte: Int)?
     @Namespace private var zoom
 
     private var mode: LibraryMode { LibraryMode(rawValue: modeRaw) ?? .notion }
@@ -50,12 +50,21 @@ struct LibraryScreen: View {
                 Group {
                     switch mode {
                     case .notion: NotionTree(query: $query, onOpen: open, onImport: { importing = true })
-                    case .hefte: HeftShelf(query: $query, onOpen: open, onNew: { newHeft = true })
+                    case .hefte: HeftShelf(query: $query, onOpen: open)
                     case .archive: ArchiveList(query: $query, onOpen: open)
-                    case .nlm: NotebookView()
+                    case .nlm:
+                        VStack(spacing: 0) {
+                            LibToolbar(query: $query, prompt: nil) { EmptyView() } trailing: { EmptyView() }
+                            NotebookView(background: .clear)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Shelf.paper)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Shelf.edge, lineWidth: 1))
+                .padding(.horizontal, Space.s6)
+                .padding(.bottom, Space.s4)
             }
             .background(Impala.panel)
             .toolbar(.hidden, for: .navigationBar)
@@ -68,35 +77,43 @@ struct LibraryScreen: View {
         }
         .environment(\.libraryZoom, zoom)
         .onChange(of: modeRaw) { query = "" }
+        .task(id: store.pageMetaRevision) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) { () -> (pages: Int, hefte: Int) in
+                let all = core.recentPages(limit: UInt32.max)
+                let hefte = all.filter { $0.kind == .heft }.count
+                return (pages: all.count - hefte, hefte: hefte)
+            }.value
+            if !Task.isCancelled { counts = next }
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             importPdfs(urls)
         }
         .alert("PDF-Datei konnte nicht geladen werden.", isPresented: $failed) { Button("OK", role: .cancel) {} }
-        .sheet(isPresented: $newHeft) {
-            NewHeftSheet { title, cover in
-                guard let id = attempt("createHeft", { try store.core.createHeft(title: title, parentId: nil, workspaceId: nil) }) else { return }
-                store.core.patchPage(id, ["cover": cover])
-                shell.open(id)
-            }
-        }
     }
 
+    /// Titel mit Zähler wie `.lib-head`: „Bibliothek  12 Seiten · 3 Hefte“.
     private var header: some View {
-        VStack(alignment: .leading, spacing: Space.s3) {
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text("Bibliothek")
                 .font(.system(size: TextSize.xl, weight: .bold, design: .rounded))
                 .foregroundStyle(Impala.text)
-            Picker("Ansicht", selection: $modeRaw) {
-                ForEach(LibraryMode.allCases) { m in
-                    Text(m.label).tag(m.rawValue)
-                }
+            if let counts {
+                Text(Self.count(counts.pages, "Seite", "Seiten") + " · " + Self.count(counts.hefte, "Heft", "Hefte"))
+                    .font(.system(size: TextSize.sm).monospacedDigit())
+                    .foregroundStyle(Impala.text2)
+                    .contentTransition(.numericText())
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 620)
         }
         .padding(.horizontal, Space.s6)
         .padding(.top, Space.s6)
+        .animation(.snappy, value: counts?.pages)
+        .animation(.snappy, value: counts?.hefte)
+    }
+
+    private static func count(_ n: Int, _ one: String, _ many: String) -> String {
+        "\(n) \(n == 1 ? one : many)"
     }
 
     /// PDF-Seiten nativ lesen, alles andere als Tab öffnen.
@@ -129,48 +146,89 @@ extension EnvironmentValues {
 // MARK: Werkzeugzeile
 
 /// Filter-Chip mit Anzahl wie `.lib-tab` + `.lib-tab-n`.
-private struct LibFilter: Identifiable {
+struct LibFilter: Identifiable {
     let id: String
     let label: String
     let count: Int
 }
 
-/// Links Filter bzw. Aktion, rechts Suche – in jeder Ansicht an derselben Stelle (`libToolbarHtml`).
-private struct LibToolbar<Trailing: View>: View {
-    let filters: [LibFilter]
-    @Binding var selection: String
+/// Leiste wie `libToolbarHtml`: oben die Ansichten als Reiter und rechts Suche bzw. Aktion (eine helle Pille),
+/// darunter links Filter oder Pfad. In jeder Ansicht an derselben Stelle.
+struct LibToolbar<Left: View, Trailing: View>: View {
+    @AppStorage("impala67LibMode") private var modeRaw = LibraryMode.notion.rawValue
     @Binding var query: String
-    let prompt: String
-    @ViewBuilder let trailing: () -> Trailing
+    /// `nil` = keine Suche (Gemini Notebook).
+    let prompt: String?
+    let left: Left
+    let trailing: Trailing
+
+    init(query: Binding<String>, prompt: String?, @ViewBuilder left: () -> Left, @ViewBuilder trailing: () -> Trailing) {
+        _query = query
+        self.prompt = prompt
+        self.left = left()
+        self.trailing = trailing()
+    }
 
     var body: some View {
-        HStack(spacing: Space.s2) {
-            ScrollView(.horizontal) {
-                HStack(spacing: Space.s1) {
-                    ForEach(filters) { f in
-                        Button {
-                            withAnimation(.snappy) { selection = f.id }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(f.label).font(.system(size: TextSize.sm, weight: .medium))
-                                Text("\(f.count)").font(.system(size: TextSize.xs).monospacedDigit()).foregroundStyle(Impala.text2)
-                            }
-                            .foregroundStyle(selection == f.id ? Impala.text : Impala.text2)
-                            .padding(.horizontal, Space.s3)
-                            .frame(minHeight: 32)
-                            .background(selection == f.id ? Impala.activeTint : .clear, in: Capsule())
-                            .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 14) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.s2) {
+                    modes
+                    search
+                    trailing
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    ScrollView(.horizontal) { modes }.scrollIndicators(.hidden)
+                    HStack(spacing: Space.s2) {
+                        search
+                        trailing
                     }
                 }
             }
-            .scrollIndicators(.hidden)
-            trailing()
-            HStack(spacing: 6) {
-                Icon("search", size: 14).foregroundStyle(Impala.text2)
+            .padding(6)
+            .background(Shelf.sheet, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Shelf.edge, lineWidth: 1))
+            .shadow(color: Color(uiColor: UIColor(hex: 0x3C230F, alpha: 0.18)), radius: 4, y: 2)
+            left
+        }
+        .padding(.horizontal, 26)
+        .padding(.top, 16)
+    }
+
+    /// Ansichten als Reiter (`.lib-modes`): aktiver Reiter warm getönt.
+    private var modes: some View {
+        HStack(spacing: 2) {
+            ForEach(LibraryMode.allCases) { m in
+                Button {
+                    withAnimation(.snappy) { modeRaw = m.rawValue }
+                } label: {
+                    HStack(spacing: 6) {
+                        Icon(m.icon, size: 15)
+                        Text(m.label).lineLimit(1)
+                    }
+                    .font(.system(size: TextSize.sm, weight: .semibold))
+                    .foregroundStyle(modeRaw == m.rawValue ? Shelf.ink : Impala.text2)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(modeRaw == m.rawValue ? Shelf.tint2 : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityAddTraits(modeRaw == m.rawValue ? .isSelected : [])
+            }
+        }
+        .fixedSize()
+        .sensoryFeedback(.selection, trigger: modeRaw)
+    }
+
+    @ViewBuilder
+    private var search: some View {
+        if let prompt {
+            HStack(spacing: Space.s2) {
+                Icon("search", size: 15).foregroundStyle(Impala.text2)
                 TextField(prompt, text: $query)
-                    .font(.system(size: TextSize.sm))
+                    .font(.system(size: 14))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if !query.isEmpty {
@@ -180,28 +238,76 @@ private struct LibToolbar<Trailing: View>: View {
                 }
             }
             .padding(.horizontal, Space.s3)
-            .frame(width: 240, height: 34)
-            .background(Impala.surface, in: Capsule())
+            .frame(minWidth: 180, maxWidth: .infinity)
+            .frame(height: 36)
+            .background(Shelf.tint, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        } else {
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, Space.s6)
     }
 }
 
-/// Knopf rechts in der Werkzeugzeile (z. B. „+ Neu“).
+/// Filter-Chips mit Anzahl (`.lib-tabs`), warm getönt wie das Panel.
+struct LibFilterChips: View {
+    let filters: [LibFilter]
+    @Binding var selection: String
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Space.s1) {
+                ForEach(filters) { f in
+                    Button {
+                        withAnimation(.snappy) { selection = f.id }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(f.label).font(.system(size: TextSize.sm, weight: .semibold))
+                            Text("\(f.count)")
+                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 1)
+                                .background(Shelf.tint2, in: Capsule())
+                        }
+                        .foregroundStyle(selection == f.id ? Shelf.ink : Impala.text2)
+                        .padding(.horizontal, Space.s3)
+                        .frame(minHeight: 32)
+                        .background(selection == f.id ? Shelf.tint2 : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
+/// Knopf rechts in der Leiste (z. B. „PDF hinzufügen“).
 private struct LibAction: View {
     let title: String
     let icon: String
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { Label { Text(title) } icon: { Image("i-\(icon)").renderingMode(.template) } }
-            .buttonStyle(.glass)
-            .font(.system(size: TextSize.sm, weight: .medium))
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Icon(icon, size: 15)
+                Text(title).lineLimit(1)
+            }
+            .font(.system(size: TextSize.sm, weight: .semibold))
+            .foregroundStyle(Shelf.ink)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Shelf.tint, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .fixedSize()
     }
 }
 
 /// Suche wie `renderNotionTree`: Titel oder Schlagwort enthält die Suche.
-private func libMatches(_ p: PageSummary, _ query: String) -> Bool {
+func libMatches(_ p: PageSummary, _ query: String) -> Bool {
     let q = query.trimmingCharacters(in: .whitespaces).lowercased()
     return q.isEmpty || p.title.lowercased().contains(q) || p.tags.contains { $0.lowercased().contains(q) }
 }
@@ -243,33 +349,38 @@ private struct NotionTree: View {
     var body: some View {
         let l = loaded ?? Loaded()
         let sections = l.sections
-        VStack(spacing: Space.s3) {
-            LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle", count: l.all),
-                LibFilter(id: "fav", label: "Favoriten", count: l.fav),
-                LibFilter(id: "pdf", label: "PDFs", count: l.pdf),
-                LibFilter(id: "tpl", label: "Vorlagen", count: l.tpl),
-            ], selection: $smart, query: $query, prompt: "Seiten suchen…") {
+        VStack(spacing: 0) {
+            LibToolbar(query: $query, prompt: "Seiten suchen…") {
+                LibFilterChips(filters: [
+                    LibFilter(id: "all", label: "Alle", count: l.all),
+                    LibFilter(id: "fav", label: "Favoriten", count: l.fav),
+                    LibFilter(id: "pdf", label: "PDFs", count: l.pdf),
+                    LibFilter(id: "tpl", label: "Vorlagen", count: l.tpl),
+                ], selection: $smart)
+            } trailing: {
                 LibAction(title: "PDF hinzufügen", icon: "upload", action: onImport)
             }
-            List {
-                ForEach(sections, id: \.ws.id) { section in
-                    Section(section.ws.name) {
-                        ForEach(section.rows) { row in
-                            TreeLine(row: row, onToggle: { toggle(row) })
-                                .contentShape(Rectangle())
-                                .onTapGesture { onOpen(row.page) }
-                                .hoverEffect(.highlight)
-                                .modifier(ZoomSource(id: row.page.id, ns: zoom))
-                                .contextMenu { PageMenu(page: row.page, onOpen: onOpen) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    ForEach(sections, id: \.ws.id) { section in
+                        TreeSection(title: section.ws.name, count: section.rows.count) {
+                            ForEach(section.rows) { row in
+                                TreeLine(row: row, onToggle: { toggle(row) })
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { onOpen(row.page) }
+                                    .hoverEffect(.highlight)
+                                    .modifier(ZoomSource(id: row.page.id, ns: zoom))
+                                    .contextMenu { PageMenu(page: row.page, onOpen: onOpen) }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 26)
+                .padding(.top, 18)
+                .padding(.bottom, 26)
+                // Auf-/Zuklappen und neue Seiten: Zeilen gleiten (Animation an den geladenen Zeilen, wie PageTree).
+                .animation(.snappy(duration: 0.28), value: sections.flatMap { $0.rows.map(\.id) })
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            // Auf-/Zuklappen und neue Seiten: Zeilen gleiten (Animation an den geladenen Zeilen, wie PageTree).
-            .animation(.snappy(duration: 0.28), value: sections.flatMap { $0.rows.map(\.id) })
             .overlay {
                 if loaded != nil, sections.isEmpty { ContentUnavailableView("Keine Seiten für diesen Filter", image: "i-search") }
             }
@@ -345,7 +456,50 @@ private struct NotionTree: View {
     }
 }
 
-/// Zeile wie `.notion-tree-row`: Pfeil, Symbol, Titel, „Heft/Seite · Datum“.
+/// Ordner-Karte im Seitenbaum (`.notion-tree-workspace`): Name mit Anzahl, darunter die Zeilen auf hellem Blatt.
+private struct TreeSection<Rows: View>: View {
+    let title: String
+    let count: Int
+    @ViewBuilder let rows: () -> Rows
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: Space.s2) {
+                Text(title)
+                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Shelf.ink)
+                Text("\(count)")
+                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Impala.text2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+                    .background(Shelf.tint, in: Capsule())
+            }
+            .padding(.horizontal, 2)
+            LazyVStack(alignment: .leading, spacing: 0) { rows() }
+                .padding(6)
+                .background(Shelf.sheet, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Shelf.edge, lineWidth: 1))
+                .shadow(color: Color(uiColor: UIColor(hex: 0x3C230F, alpha: 0.12)), radius: 4, y: 2)
+        }
+    }
+}
+
+/// Art der Seite als kleine Marke (`.lib-kind`); Hefte in Akzentfarbe.
+private struct KindBadge: View {
+    let page: PageSummary
+
+    var body: some View {
+        Text(page.kind == .heft ? "Heft" : page.pdfId != nil ? "PDF" : "Seite")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(page.kind == .heft ? Impala.accent : Impala.text2)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 2)
+            .background(Shelf.tint, in: Capsule())
+    }
+}
+
+/// Zeile wie `.notion-tree-row`: Führungslinien je Ebene, Pfeil, Symbol-Kachel, Titel, Marke und Datum.
 private struct TreeLine: View {
     let row: NotionTree.Row
     let onToggle: () -> Void
@@ -355,7 +509,7 @@ private struct TreeLine: View {
             Group {
                 if row.hasKids {
                     Button(action: onToggle) {
-                        Icon("chevron-right", size: 12)
+                        Icon("chevron-right", size: 13)
                             .rotationEffect(.degrees(row.collapsed ? 0 : 90))
                             .frame(width: 22, height: 28)
                             .contentShape(Rectangle())
@@ -369,44 +523,67 @@ private struct TreeLine: View {
             .foregroundStyle(Impala.text2)
             PageGlyph(page: row.page)
             Text(PageStyle.title(row.page))
-                .font(.system(size: TextSize.base, weight: .medium))
+                .font(.system(size: TextSize.base, weight: row.depth == 0 ? .semibold : .medium))
                 .foregroundStyle(Impala.text)
                 .lineLimit(1)
             if row.page.favorite { Icon("star", size: 12).foregroundStyle(Impala.accent) }
             Spacer(minLength: Space.s2)
-            Text((row.page.kind == .heft ? "Heft" : row.page.pdfId != nil ? "PDF" : "Seite") + " · " + ChatList.when(row.page.updated))
-                .font(.system(size: TextSize.xs))
+            KindBadge(page: row.page)
+            Text(ChatList.when(row.page.updated))
+                .font(.system(size: TextSize.xs).monospacedDigit())
                 .foregroundStyle(Impala.text2)
                 .lineLimit(1)
+                .frame(minWidth: 58, alignment: .trailing)
         }
-        .padding(.leading, CGFloat(row.depth) * 18)
+        .frame(minHeight: 42)
+        .padding(.trailing, 10)
+        .padding(.leading, 6 + CGFloat(row.depth) * 22)
+        .background(alignment: .leading) {
+            // Führungslinien genau unter dem Pfeil der Elternzeile
+            HStack(spacing: 0) {
+                ForEach(0..<row.depth, id: \.self) { _ in
+                    Rectangle().fill(Impala.edgeSoft).frame(width: 1).padding(.leading, 10).frame(width: 22, alignment: .leading)
+                }
+            }
+            .padding(.leading, 6)
+        }
         .animation(.snappy, value: row.collapsed)
     }
 }
 
-/// Emoji der Seite oder Symbol nach Art.
+/// Symbol-Kachel (`.notion-tree-icon`): eigenes Cover-Bild des Hefts, Emoji oder Symbol nach Art.
 private struct PageGlyph: View {
     let page: PageSummary
 
     var body: some View {
         Group {
-            if let emoji = PageStyle.emoji(page) {
-                Text(emoji).font(.system(size: 15))
+            if let img = page.coverImg {
+                CoverImage(id: img)
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else if let emoji = PageStyle.emoji(page) {
+                Text(emoji).font(.system(size: 14))
             } else {
-                Icon(page.kind == .heft ? "notebook" : page.pdfId != nil ? "file" : "note", size: 16)
+                Icon(page.kind == .heft ? "notebook" : page.pdfId != nil ? "file" : "note", size: 15)
+                    .foregroundStyle(page.kind == .heft ? Impala.accent : Impala.text2)
             }
         }
-        .foregroundStyle(Impala.text2)
-        .frame(width: 22)
+        .frame(width: 28, height: 28)
+        .background(Shelf.tint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }
 
 /// Menü beim Halten einer Bibliothekszeile bzw. Kachel.
-private struct PageMenu: View {
+struct PageMenu: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     let page: PageSummary
     let onOpen: (PageSummary) -> Void
+
+    init(page: PageSummary, onOpen: @escaping (PageSummary) -> Void) {
+        self.page = page
+        self.onOpen = onOpen
+    }
 
     var body: some View {
         MenuItem(page.pdfId != nil ? "PDF öffnen" : "Öffnen", icon: page.pdfId != nil ? "book-open" : "note") { onOpen(page) }
@@ -436,389 +613,6 @@ private struct ZoomSource: ViewModifier {
     }
 }
 
-// MARK: GoodNotes
-
-/// Cover-Presets der PWA (`COVER_PRESETS`, Verläufe aus styles.css `.cover-*`).
-enum HeftCover {
-    static let presets = ["sunset", "ocean", "forest", "grape", "mono"]
-
-    static func colors(_ name: String) -> [Color] {
-        let pair: (UInt32, UInt32) = switch name {
-        case "sunset": (0xFF9A4D, 0xFF5F6D)
-        case "ocean": (0x2B5876, 0x4E4376)
-        case "forest": (0x134E5E, 0x71B280)
-        case "grape": (0x6A11CB, 0x2575FC)
-        default: (0x3A3A3A, 0x101010)
-        }
-        return [Color(uiColor: UIColor(hex: pair.0)), Color(uiColor: UIColor(hex: pair.1))]
-    }
-
-    /// Wie `defaultCover`: fester Verlauf aus Titel und ID, wenn keiner gewählt ist.
-    static func resolved(_ p: PageSummary) -> String {
-        if presets.contains(p.cover) { return p.cover }
-        var h: UInt32 = 0
-        for c in (p.title + p.id).utf16 { h = h &* 31 &+ UInt32(c) }
-        return presets[Int(h % UInt32(presets.count))]
-    }
-}
-
-/// Heft-Regal wie `renderHefteShelf`: Hefte als Notizbücher mit Cover, Ordner-Hierarchie und „+ Neu“.
-private struct HeftShelf: View {
-    @Environment(ImpalaStore.self) private var store
-    @Environment(\.libraryZoom) private var zoom
-    @Binding var query: String
-    let onOpen: (PageSummary) -> Void
-    let onNew: () -> Void
-    @State private var options: PageSummary?
-    @State private var filter = "all"
-    @State private var folderId: String? = nil
-    @State private var showNewFolder = false
-    @State private var newFolderTitle = ""
-
-    /// Gelesenes Ergebnis: Ordner (mit Inhaltszahl), gefilterte Hefte (mit Seitenzahl), Filterzähler, Brotkrumen.
-    struct Loaded {
-        var folders: [(folder: HeftFolder, count: Int)] = []
-        var shown: [(page: PageSummary, pages: Int)] = []
-        var all = 0, fav = 0
-        var crumbs: [HeftFolder] = []
-    }
-
-    private struct LoadKey: Hashable {
-        let meta: Int, ui: Int, query: String, filter: String, folder: String?
-    }
-
-    /// Im Hintergrund gelesen (Ordner, Hefte, Seitenzahl je Karte); der Body rechnet nur noch aus diesem Zustand.
-    @State private var loaded: Loaded?
-
-    var body: some View {
-        let l = loaded ?? Loaded()
-        let folders = l.folders, shown = l.shown, crumbs = l.crumbs
-
-        VStack(spacing: Space.s3) {
-            LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle Hefte", count: l.all),
-                LibFilter(id: "fav", label: "Favoriten", count: l.fav),
-            ], selection: $filter, query: $query, prompt: "Suchen") {
-                Menu {
-                    Button(action: onNew) {
-                        Label("Neues Heft", systemImage: "book")
-                    }
-                    Button {
-                        newFolderTitle = ""
-                        showNewFolder = true
-                    } label: {
-                        Label("Neuer Ordner", systemImage: "folder.badge.plus")
-                    }
-                } label: {
-                    HStack(spacing: Space.s1) {
-                        Icon("plus", size: 14)
-                        Text("Neu")
-                    }
-                    .font(.system(size: TextSize.sm, weight: .semibold))
-                    .padding(.horizontal, Space.s3)
-                    .frame(height: 32)
-                    .foregroundStyle(Impala.onAccent)
-                    .background(Impala.accent, in: RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
-                }
-            }
-
-            if !crumbs.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Space.s2) {
-                        Button("Dokumente") { folderId = nil }
-                            .font(.system(size: TextSize.sm, weight: .medium))
-                            .foregroundStyle(Impala.accent)
-                        ForEach(crumbs, id: \.id) { f in
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Impala.text2)
-                            Button(f.title) { folderId = f.id }
-                                .font(.system(size: TextSize.sm, weight: f.id == folderId ? .bold : .medium))
-                                .foregroundStyle(f.id == folderId ? Impala.text : Impala.accent)
-                        }
-                    }
-                    .padding(.horizontal, Space.s6)
-                }
-            }
-
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: Space.s6, alignment: .top)],
-                          alignment: .leading, spacing: Space.s6) {
-                    ForEach(folders, id: \.folder.id) { entry in
-                        let f = entry.folder
-                        FolderCard(folder: f, count: entry.count)
-                            .onTapGesture { folderId = f.id }
-                            .contextMenu {
-                                Button("Löschen", role: .destructive) {
-                                    _ = attempt("heftFolderDelete", { try store.core.heftFolderDelete(id: f.id) })
-                                }
-                            }
-                    }
-                    ForEach(shown, id: \.page.id) { entry in
-                        let p = entry.page
-                        HeftCard(page: p, pages: entry.pages) { options = p }
-                            .onTapGesture { onOpen(p) }
-                            .hoverEffect(.lift)
-                            .contextMenu { PageMenu(page: p, onOpen: onOpen) }
-                    }
-                }
-                .padding(.horizontal, Space.s6)
-                .padding(.bottom, Space.s6)
-                // Karten gleiten, wenn sich die geladene Auswahl ändert (wie PageTree an den Zeilen).
-                .animation(.snappy(duration: 0.28), value: folders.map(\.folder.id) + shown.map(\.page.id))
-            }
-            .overlay {
-                if loaded != nil, folders.isEmpty && shown.isEmpty {
-                    ContentUnavailableView {
-                        Label { Text(l.all == 0 ? "Noch keine Hefte" : "Keine Hefte für diese Suche") } icon: { Icon("notebook", size: 40).foregroundStyle(Impala.text2) }
-                    } actions: {
-                        if l.all == 0 { Button("Neues Heft", action: onNew).buttonStyle(.glassProminent) }
-                    }
-                }
-            }
-        }
-        .task(id: LoadKey(meta: store.pageMetaRevision, ui: store.uiRevision, query: query, filter: filter, folder: folderId)) {
-            let core = store.core
-            let query = query, filter = filter, folderId = folderId
-            // Suche entprellt: erst nach kurzer Tipp-Pause lesen.
-            if !query.isEmpty {
-                try? await Task.sleep(for: .milliseconds(150))
-                if Task.isCancelled { return }
-            }
-            let next = await Task.detached(priority: .userInitiated) {
-                Self.load(core: core, folderId: folderId, filter: filter, query: query)
-            }.value
-            if !Task.isCancelled { loaded = next }
-        }
-        .alert("Neuer Ordner", isPresented: $showNewFolder) {
-            TextField("Ordnername", text: $newFolderTitle)
-            Button("Abbrechen", role: .cancel) { newFolderTitle = "" }
-            Button("Erstellen") {
-                let title = newFolderTitle.trimmingCharacters(in: .whitespaces)
-                if !title.isEmpty {
-                    _ = attempt("heftFolderCreate", { try store.core.heftFolderCreate(title: title, parentId: folderId) })
-                }
-                newFolderTitle = ""
-            }
-        }
-        .sheet(item: $options) { HeftOptionsSheet(page: $0) }
-    }
-
-    private nonisolated static func load(core: ImpalaCore, folderId: String?, filter: String, query: String) -> Loaded {
-        let searching = !query.isEmpty
-        let folders = searching ? [] : core.heftFolders(parentId: folderId)
-        let raw = searching ? core.recentPages(limit: UInt32.max).filter { $0.kind == .heft } : core.heftInFolder(folderId: folderId)
-        let shown = raw.filter { (filter == "all" || $0.favorite) && libMatches($0, query) }
-        return Loaded(
-            folders: folders.map { (folder: $0, count: core.heftInFolder(folderId: $0.id).count) },
-            shown: shown.map { (page: $0, pages: core.heftPageIds(pageId: $0.id).count) },
-            all: raw.count,
-            fav: raw.filter(\.favorite).count,
-            crumbs: folderId.map { core.heftFolderPath(folderId: $0) } ?? []
-        )
-    }
-}
-
-/// Ordnerkarte im GoodNotes-Regal.
-private struct FolderCard: View {
-    let folder: HeftFolder
-    let count: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.s2) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .fill(Impala.surface)
-                    .frame(height: 140)
-                    .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Impala.edge))
-                VStack(spacing: Space.s2) {
-                    Icon("archive", size: 36)
-                        .foregroundStyle(Impala.accent)
-                    if count > 0 {
-                        Text("\(count) Objekte")
-                            .font(.system(size: TextSize.xs))
-                            .foregroundStyle(Impala.text2)
-                    }
-                }
-            }
-            Text(folder.title)
-                .font(.system(size: TextSize.sm, weight: .semibold))
-                .foregroundStyle(Impala.text)
-                .lineLimit(1)
-        }
-        .frame(width: 150)
-        .contentShape(Rectangle())
-    }
-}
-
-/// Notizbuch wie `libCoverHtml`: Rücken, Verlauf, Titel auf dem Cover, darunter Titel und
-/// „Heft · n Seiten · Datum“; ••• öffnet die Heftoptionen.
-private struct HeftCard: View {
-    let page: PageSummary
-    let pages: Int
-    let onOptions: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.s2) {
-            ZStack(alignment: .topTrailing) {
-                HStack(spacing: 0) {
-                    Rectangle().fill(.black.opacity(0.28)).frame(width: 9)
-                    ZStack(alignment: .bottomLeading) {
-                        LinearGradient(colors: HeftCover.colors(HeftCover.resolved(page)), startPoint: .topLeading, endPoint: .bottomTrailing)
-                        VStack(alignment: .leading, spacing: Space.s2) {
-                            if let emoji = PageStyle.emoji(page) { Text(emoji).font(.system(size: 22)) }
-                            Text(PageStyle.title(page))
-                                .font(.system(size: TextSize.sm, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(3)
-                        }
-                        .padding(Space.s3)
-                    }
-                }
-                .aspectRatio(0.76, contentMode: .fit)
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4, bottomTrailingRadius: Radius.sm, topTrailingRadius: Radius.sm, style: .continuous))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-                HStack(spacing: 4) {
-                    if page.favorite { Icon("star", size: 12).foregroundStyle(.white) }
-                    Button(action: onOptions) {
-                        Text("•••").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 32, height: 26)
-                            .background(.black.opacity(0.25), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Heftoptionen")
-                }
-                .padding(Space.s2)
-            }
-            Text(PageStyle.title(page))
-                .font(.system(size: TextSize.sm, weight: .semibold))
-                .foregroundStyle(Impala.text)
-                .lineLimit(1)
-            Text("Heft · \(max(pages, 1)) Seite\(pages == 1 ? "" : "n") · " + ChatList.when(page.updated))
-                .font(.system(size: TextSize.xs))
-                .foregroundStyle(Impala.text2)
-                .lineLimit(1)
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-/// Cover-Auswahl für die Hefte (`cover-grid` der PWA).
-private struct CoverPicker: View {
-    @Binding var cover: String
-
-    var body: some View {
-        HStack(spacing: Space.s3) {
-            ForEach(HeftCover.presets, id: \.self) { c in
-                Button { withAnimation(.snappy) { cover = c } } label: {
-                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
-                        .fill(LinearGradient(colors: HeftCover.colors(c), startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 44, height: 58)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: Radius.xs + 3, style: .continuous)
-                                .strokeBorder(cover == c ? Impala.accent : .clear, lineWidth: 2.5)
-                                .padding(-4)
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(c)
-                .accessibilityAddTraits(cover == c ? .isSelected : [])
-            }
-        }
-        .padding(.vertical, Space.s2)
-        .sensoryFeedback(.selection, trigger: cover)
-    }
-}
-
-/// „Neues Heft“ (`openShelfHeftDialog`): Name und Cover.
-private struct NewHeftSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let onCreate: (String, String) -> Void
-    @State private var title = "Neues Heft"
-    @State private var cover = HeftCover.presets[0]
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Name") { TextField("Heftname", text: $title) }
-                Section("Cover") { CoverPicker(cover: $cover) }
-            }
-            .navigationTitle("Neues Heft")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Heft erstellen") {
-                        let t = title.trimmingCharacters(in: .whitespaces)
-                        onCreate(t.isEmpty ? "Neues Heft" : t, cover)
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
-/// „Heftoptionen“ (`openLibCoverPicker`): Cover, Cover entfernen, Archivieren, In Papierkorb.
-private struct HeftOptionsSheet: View {
-    @Environment(ImpalaStore.self) private var store
-    @Environment(ShellModel.self) private var shell
-    @Environment(\.dismiss) private var dismiss
-    let page: PageSummary
-    @State private var cover = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    CoverPicker(cover: $cover)
-                    Button("Cover entfernen") { cover = "" }.disabled(page.cover.isEmpty && cover.isEmpty)
-                } header: {
-                    Text("Cover")
-                }
-                Section("Ordner") {
-                    let folders = store.core.heftFolders(parentId: nil)
-                    Picker("In Ordner verschieben", selection: Binding(get: { "" }, set: { target in
-                        if !target.isEmpty {
-                            _ = attempt("heftMoveToFolder", { try store.core.heftMoveToFolder(heftId: page.id, folderId: target == "root" ? nil : target, order: nil) })
-                            dismiss()
-                        }
-                    })) {
-                        Text("Auswählen…").tag("")
-                        Text("Hauptbereich (kein Ordner)").tag("root")
-                        ForEach(folders, id: \.id) { f in Text(f.title).tag(f.id) }
-                    }
-                }
-                Section {
-                    Button { archive() } label: { Label { Text("Archivieren") } icon: { Image("i-archive").renderingMode(.template) } }
-                    Button(role: .destructive) { trash() } label: { Label { Text("In Papierkorb") } icon: { Image("i-trash").renderingMode(.template) } }
-                }
-            }
-            .navigationTitle("Heftoptionen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
-            .onAppear { cover = page.cover }
-            .onChange(of: cover) { _, c in
-                if c != page.cover { store.core.patchPage(page.id, ["cover": c.isEmpty ? nil : c]) }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private func archive() {
-        shell.close(page.id)
-        attempt("archivePage", { try store.core.archivePage(id: page.id) })
-        dismiss()
-    }
-
-    private func trash() {
-        shell.close(page.id)
-        attempt("trashPage", { try store.core.trashPage(id: page.id) })
-        dismiss()
-    }
-}
-
 // MARK: Archiv
 
 /// Archiv wie `renderArchiveLibrary`: archivierte Seiten und Hefte, Filter nach Art, Suche,
@@ -836,36 +630,55 @@ private struct ArchiveList: View {
         let shown = all.filter { p in
             (filter == "all" || (filter == "heft") == (p.kind == .heft)) && libMatches(p, query)
         }
-        VStack(spacing: Space.s3) {
-            LibToolbar(filters: [
-                LibFilter(id: "all", label: "Alle", count: all.count),
-                LibFilter(id: "page", label: "Seiten", count: all.filter { $0.kind != .heft }.count),
-                LibFilter(id: "heft", label: "Hefte", count: all.filter { $0.kind == .heft }.count),
-            ], selection: $filter, query: $query, prompt: "Archiv durchsuchen…") { EmptyView() }
-            List(shown) { p in
-                HStack(spacing: Space.s2) {
-                    PageGlyph(page: p)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(PageStyle.title(p)).font(.system(size: TextSize.base, weight: .medium)).foregroundStyle(Impala.text).lineLimit(1)
-                        Text((p.kind == .heft ? "Heft" : "Seite") + " · " + ChatList.when(p.updated))
-                            .font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
+        VStack(spacing: 0) {
+            LibToolbar(query: $query, prompt: "Archiv durchsuchen…") {
+                LibFilterChips(filters: [
+                    LibFilter(id: "all", label: "Alle", count: all.count),
+                    LibFilter(id: "page", label: "Seiten", count: all.filter { $0.kind != .heft }.count),
+                    LibFilter(id: "heft", label: "Hefte", count: all.filter { $0.kind == .heft }.count),
+                ], selection: $filter)
+            } trailing: { EmptyView() }
+            ScrollView {
+                if !shown.isEmpty {
+                    TreeSection(title: "Archiv", count: shown.count) {
+                        ForEach(shown) { p in
+                            HStack(spacing: Space.s2) {
+                                PageGlyph(page: p)
+                                Text(PageStyle.title(p))
+                                    .font(.system(size: TextSize.base, weight: .semibold))
+                                    .foregroundStyle(Impala.text)
+                                    .lineLimit(1)
+                                Spacer(minLength: Space.s2)
+                                KindBadge(page: p)
+                                Text(ChatList.when(p.updated))
+                                    .font(.system(size: TextSize.xs).monospacedDigit())
+                                    .foregroundStyle(Impala.text2)
+                                    .lineLimit(1)
+                                Button {
+                                    attempt("unarchivePage", { try store.core.unarchivePage(id: p.id) })
+                                } label: {
+                                    Label { Text("Aus Archiv holen") } icon: { Image("i-undo").renderingMode(.template) }
+                                        .font(.system(size: TextSize.sm, weight: .medium))
+                                        .foregroundStyle(Shelf.ink)
+                                        .padding(.horizontal, 10)
+                                        .frame(height: 30)
+                                        .background(Shelf.tint, in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .frame(minHeight: 46)
+                            .padding(.horizontal, 10)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onOpen(p) }
+                            .hoverEffect(.highlight)
+                        }
                     }
-                    Spacer(minLength: Space.s2)
-                    Button {
-                        attempt("unarchivePage", { try store.core.unarchivePage(id: p.id) })
-                    } label: {
-                        Label { Text("Aus Archiv holen") } icon: { Image("i-undo").renderingMode(.template) }
-                    }
-                    .buttonStyle(.glass)
-                    .font(.system(size: TextSize.sm))
+                    .padding(.horizontal, 26)
+                    .padding(.top, 18)
+                    .padding(.bottom, 26)
+                    .animation(.snappy(duration: 0.28), value: shown.map(\.id))
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { onOpen(p) }
-                .hoverEffect(.highlight)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .animation(.snappy(duration: 0.28), value: shown.map(\.id))
             .overlay {
                 if loaded != nil, shown.isEmpty {
                     ContentUnavailableView {

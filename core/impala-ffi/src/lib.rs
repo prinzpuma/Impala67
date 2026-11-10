@@ -110,6 +110,8 @@ pub struct PageSummary {
     pub favorite: bool,
     /// Cover (Farbe/Verlauf/Muster wie in der PWA), leer ohne.
     pub cover: String,
+    /// Eigenes Cover-Bild (Blob-ID `cover:…`, Bytes über `file`), statt `cover`.
+    pub cover_img: Option<String>,
     /// Schlagwörter der Seite.
     pub tags: Vec<String>,
     /// Blob-ID des PDFs bei PDF-Seiten (Bibliothek).
@@ -179,6 +181,7 @@ fn summary(pg: &Page) -> PageSummary {
         icon: pg.extra.get("icon").and_then(Value::as_str).unwrap_or("").to_owned(),
         favorite: pg.extra.get("favorite").is_some_and(|v| v.as_bool().unwrap_or(false)),
         cover: pg.extra.get("cover").and_then(Value::as_str).unwrap_or("").to_owned(),
+        cover_img: pg.extra.get("coverImg").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
         tags: pg
             .extra
             .get("tags")
@@ -549,6 +552,21 @@ impl ImpalaCore {
         Ok(id)
     }
 
+    /// Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
+    /// Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
+    pub fn set_cover_image(&self, page_id: String, bytes: Vec<u8>, mime: String, name: String) -> Result<String, CoreError> {
+        let mut inner = self.lock();
+        if !inner.model.state().pages.contains_key(&page_id) {
+            return Err(invalid(format!("Unbekannte Seite {page_id}")));
+        }
+        let id = format!("cover:{}", uuid::Uuid::new_v4());
+        let meta = json!({ "name": name, "size": bytes.len(), "type": mime });
+        let blob = impala_storage::Blob { bytes, meta: Some(meta) };
+        inner.storage.apply(vec![impala_storage::Write::PutBlob(id.clone(), blob)])?;
+        inner.dispatch("pageUpdate", json!({ "id": page_id, "patch": { "coverImg": id, "cover": null } }))?;
+        Ok(id)
+    }
+
     /// Gespeichertes Bild bzw. Datei (`img:â€¦`, `file:â€¦`); `None`, solange es noch nicht geladen ist.
     pub fn file(&self, id: String) -> Result<Option<FileData>, CoreError> {
         let blob = self.lock().storage.blob(&id)?;
@@ -629,6 +647,13 @@ mod tests {
         let f = core.file(img).unwrap().unwrap();
         assert_eq!((f.bytes, f.mime.as_str(), f.name.as_str()), (vec![1, 2, 3], "image/png", "a.png"));
         assert!(core.file("img:fehlt".into()).unwrap().is_none());
+        let heft = core.create_heft("H".into(), None, None).unwrap();
+        let cover = core.set_cover_image(heft.clone(), vec![9], "image/jpeg".into(), "c.jpg".into()).unwrap();
+        assert!(cover.starts_with("cover:"));
+        let pg = core.page(heft).unwrap().summary;
+        assert_eq!((pg.cover_img.as_deref(), pg.cover.as_str()), (Some(cover.as_str()), ""));
+        assert_eq!(core.file(cover).unwrap().unwrap().bytes, [9]);
+        assert!(core.set_cover_image("fehlt".into(), vec![1], "image/png".into(), String::new()).is_err());
     }
 
     #[test]

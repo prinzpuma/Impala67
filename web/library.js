@@ -51,16 +51,15 @@ function coverLook(pg) {
 		'" style="--ch:' + hue + ";--cs:" + sat + "%;--cl:" + light + "%";
 }
 
-// Portrait-Notebook im Schulheft-Stil: Rücken + Cover (Bild oder Stoff-Farbe) + helles
-// Namensschild mit Linien, wie auf einem Composition Book.
+// Portrait-Notebook im Schulheft-Stil: Rücken + Stoff-Cover mit hellem Namensschild wie auf einem
+// Composition Book. Ein eigenes Bild füllt das ganze Cover ohne Schild – es ist das Gesicht des Hefts.
 export function libCoverHtml(pg) {
 	const title = (pg.title || "Ohne Titel").trim();
+	const spine = '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>';
+	if (pg.coverImg) return spine + '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '" role="img" aria-label="' + U.esc(title) + '"></div></div>';
 	const short = title.length > 28 ? title.slice(0, 28) + "…" : title;
 	const label = '<span class="lib-cover-label"><b>' + U.esc(short) + '</b><i aria-hidden="true"></i><i aria-hidden="true"></i></span>';
-	const cover = pg.coverImg
-		? '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '">'
-		: '<div class="lib-cover ' + coverLook(pg) + '">';
-	return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' + cover + label + "</div></div>";
+	return spine + '<div class="lib-cover ' + coverLook(pg) + '">' + label + "</div></div>";
 }
 
 // Notion-Seite als flaches Dokumentblatt (Icon, Titel, erste Textzeile, Linien) —
@@ -161,10 +160,13 @@ function openShelfHeftDialog() {
 		'<button type="button" class="cover-swatch cover-' + c + (i === 0 ? " active" : "") +
 		'" data-libnewcover="' + c + '" title="Cover auswählen"></button>').join("");
 	S.libNewCover = COVER_PRESETS[0];
+	S.libNewCoverFile = null;
 	o.innerHTML = '<div class="modal modal-sm lib-create-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<h3>Neues Heft</h3><input id="libHeftName" value="Neues Heft" aria-label="Heftname" autocomplete="off">' +
-		'<label class="lib-create-label">Cover</label><div class="cover-grid lib-create-covers">' + swatches + '</div>' +
+		'<label class="lib-create-label">Eigenes Cover</label><div class="lib-create-img">' +
+		'<button type="button" id="btnLibNewCoverImg">' + lead("image") + 'Eigenes Bild wählen</button><span id="libNewCoverImgName" class="hint"></span></div>' +
+		'<label class="lib-create-label">Oder eine Farbe</label><div class="cover-grid lib-create-covers">' + swatches + '</div>' +
 		'<div class="modal-actions"><button id="btnCloseOverlay">Abbrechen</button><button class="primary" data-libcreateheft="1">Heft erstellen</button></div></div>';
 	const inp = U.el("libHeftName");
 	if (inp) {
@@ -191,19 +193,22 @@ function openLibCoverPicker(pageId) {
 		'<button type="button" class="cover-swatch cover-' + c + (pg.cover === c && !pg.coverImg ? " active" : "") +
 		'" data-libcoverset="' + c + '" title="' + c + '"></button>').join("");
 	o.hidden = false;
-	o.innerHTML = '<div class="modal modal-sm">' +
+	o.innerHTML = '<div class="modal modal-sm lib-create-modal">' +
 		'<button class="modal-x" id="btnCloseOverlay" title="Schließen">✕</button>' +
 		'<h3>Heftoptionen</h3><p class="hint">„' + U.esc(pg.title || "Heft") + '“</p>' +
-		'<div class="cover-grid">' + swatches + "</div>" +
-		'<p class="hint">Oder ein eigenes Bild als Deckblatt (wird lokal gespeichert):</p>' +
-		'<div class="row-btns"><button type="button" id="btnLibCoverUpload">' + lead("image") + 'Eigenes Bild wählen</button></div>' +
+		'<div class="lib-cover-hero"><div class="lib-cover-preview">' + libCoverHtml(pg) + "</div>" +
+		'<div class="lib-cover-hero-text"><b>Eigenes Cover</b><p class="hint">' +
+		(pg.coverImg ? "Dein Bild ist das Cover dieses Hefts." : "Ein eigenes Bild füllt das ganze Cover – so erkennst du das Heft im Regal sofort.") + "</p>" +
+		'<button type="button" class="primary" id="btnLibCoverUpload">' + lead("image") + (pg.coverImg ? "Anderes Bild wählen" : "Eigenes Bild wählen") + "</button></div></div>" +
+		'<label class="lib-create-label">' + (pg.coverImg ? "Oder eine Farbe" : "Farbe") + '</label><div class="cover-grid">' + swatches + "</div>" +
 		'<div class="modal-actions">' +
-		'<button type="button" data-libcoverset="">Cover entfernen</button>' +
+		'<button type="button" data-libcoverset="">' + (pg.coverImg ? "Bild entfernen" : "Farbe zurücksetzen") + "</button>" +
 		(pg.archived
 			? '<button type="button" data-pageunarchive="' + pg.id + '">' + lead("undo") + 'Aus Archiv holen</button>'
 			: '<button type="button" data-libheftarchive="' + pg.id + '">' + lead("archive") + 'Archivieren</button>') +
 		'<button type="button" class="danger" data-libhefttrash="' + pg.id + '">In Papierkorb</button>' +
-		'<button type="button" id="btnCloseOverlay">Schließen</button></div></div>'; 
+		'<button type="button" id="btnCloseOverlay">Schließen</button></div></div>';
+	hydrateCovers(o);
 }
 
 // ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 🗄 Archiv · 📥 Gemini Notebook ----------
@@ -266,7 +271,9 @@ function treeRowsHtml(pages, depth, kidsOf, visible, rowMeta, rowActions) {
 			: '<span class="notion-tree-caret spacer"></span>';
 		const row = '<div class="notion-tree-row' + (pg.kind === "heft" ? " is-heft" : "") + '" data-page="' + pg.id + '" style="--tree-depth:' + depth + '">' +
 			caret +
-			'<span class="notion-tree-icon">' + pageIcon(pg) + "</span>" +
+			(pg.coverImg
+				? '<span class="notion-tree-icon has-img" data-coverimg="' + U.esc(pg.coverImg) + '"></span>'
+				: '<span class="notion-tree-icon">' + pageIcon(pg) + "</span>") +
 			'<span class="notion-tree-title">' + U.esc(pg.title || "Ohne Titel") + "</span>" +
 			'<span class="notion-tree-meta">' + rowMeta(pg) + "</span>" + (rowActions ? rowActions(pg) : "") + "</div>";
 		return row + (collapsed ? "" : treeRowsHtml(kids, depth + 1, kidsOf, visible, rowMeta, rowActions));
@@ -312,7 +319,7 @@ function renderNotionTree(main) {
 		html += treeSectionHtml(ws.name, rows);
 	});
 	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
-	U.morph(main, html + "</div></div>");
+	U.morph(main, html + "</div></div>");	hydrateCovers(main);
 }
 
 export async function exportWorkspaceZip(wsId) {
@@ -523,7 +530,7 @@ export function renderArchiveLibrary(main) {
 		html += treeSectionHtml(ws.name, rows);
 	});
 	if (!html.includes("notion-tree-row")) html += '<div class="empty small">Keine Treffer für diese Suche im Archiv.</div>';
-	U.morph(main, html + "</div></div>");
+	U.morph(main, html + "</div></div>");	hydrateCovers(main);
 }
 
 // Ansichts-Umschalter + NotebookLM-Mediathek: eigene Delegation (Styles: css/library.css).
@@ -540,7 +547,20 @@ document.addEventListener("click", async (e) => {
 	}
 	if ((el = hit("[data-libnewcover]"))) {
 		S.libNewCover = el.dataset.libnewcover;
+		S.libNewCoverFile = null;
+		const name = U.el("libNewCoverImgName");
+		if (name) name.textContent = "";
 		document.querySelectorAll("[data-libnewcover]").forEach((x) => x.classList.toggle("active", x.dataset.libnewcover === S.libNewCover));
+		return;
+	}
+	if ((el = hit("#btnLibNewCoverImg"))) {
+		// Eigenes Bild hat Vorrang vor der Farbe; gespeichert wird es erst beim Erstellen.
+		const file = await U.pickImageFile();
+		if (!file) return;
+		S.libNewCoverFile = file;
+		const name = U.el("libNewCoverImgName");
+		if (name) name.textContent = file.name;
+		document.querySelectorAll("[data-libnewcover]").forEach((x) => x.classList.remove("active"));
 		return;
 	}
 	if ((el = hit("[data-libcreatefolder]"))) {
@@ -558,8 +578,19 @@ document.addEventListener("click", async (e) => {
 		const title = (inp && inp.value.trim()) || "Neues Heft";
 		const gnFolderId = typeof S.libFolder === "string" ? S.libFolder : null;
 		const id = U.uid();
-		await STATE.dispatch("pageCreate", { id, title, parentId: null, content: "", cover: S.libNewCover || COVER_PRESETS[0], tags: [], workspaceId: S.currentWorkspaceId || "default", gnFolderId, gnOrder: Date.now(), kind: "heft" });
+		let coverImg = null;
+		if (S.libNewCoverFile) {
+			try {
+				coverImg = "cover:" + U.uid();
+				await DB.putBlob(coverImg, await U.readAsBuffer(S.libNewCoverFile), { name: S.libNewCoverFile.name, type: S.libNewCoverFile.type });
+			} catch (err) {
+				coverImg = null;
+				U.toast("Bild konnte nicht als Cover gesetzt werden: " + (err && err.message ? err.message : err), "error");
+			}
+		}
+		await STATE.dispatch("pageCreate", { id, title, parentId: null, content: "", cover: coverImg ? null : (S.libNewCover || COVER_PRESETS[0]), coverImg, tags: [], workspaceId: S.currentWorkspaceId || "default", gnFolderId, gnOrder: Date.now(), kind: "heft" });
 		S.libNewCover = null;
+		S.libNewCoverFile = null;
 		U.closeOverlay();
 		TABS.openPage(id);
 		return;

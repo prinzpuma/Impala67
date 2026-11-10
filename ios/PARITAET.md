@@ -237,7 +237,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ❌ | fehlt |
 | Verlauf-Dialog mit Wiederherstellen | ❌ | fehlt |
-| Icon- und Cover-Wahl für Seiten | ❌ | Cover nur für Hefte in der Bibliothek |
+| Icon- und Cover-Wahl für Seiten | ❌ | Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
 
 ### 1.15 Menüs
 | Punkt | Status | Fundstelle / Notiz |
@@ -276,8 +276,10 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 ### 1.19 Bibliothek, PDF, Graph, Gemini Notebook
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
-| Bibliothek: Ansichten, Filter, PDF hinzufügen | ✅ | `Library/LibraryScreen.swift:237-241` |
-| Ordner (Heft-Regal) | ❌ | fehlt in UniFFI (`ios/README.md`) |
+| Bibliothek: Ansichten, Filter, PDF hinzufügen | ✅ | `Library/LibraryScreen.swift` (Papier-Panel, Reiter, Baum als Karten) |
+| Heft-Regal: Holzbretter, Cover je Heft, Mappen, Deko | ✅ | `Library/HeftShelf.swift`, `Library/ShelfStyle.swift` |
+| Eigenes Cover-Bild (Heft) | ✅ | `setCoverImage`, Heftoptionen und „Neues Heft“ |
+| Ordner (Heft-Regal) | 🟡 | Anlegen, Öffnen, Löschen, Verschieben über Heftoptionen; kein Ziehen |
 | PDF-Ansicht: Zoom, Teilen | ✅ | `Library/PdfScreen.swift` |
 | Wissensgraph: Modi, Suche, Analyse | 🟡 | nur Erkunden |
 | Gemini Notebook mit Inbox | 🟡 | keine Inbox (`Graph/NotebookView.swift`) |
