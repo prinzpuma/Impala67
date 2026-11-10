@@ -51,6 +51,22 @@ body.light .lib-docs {
 	background-attachment: local;
 }
 .lib-docs .gn-grid:empty { min-height: 56px; background: none }
+
+/* Deko am rechten Ende des letzten Bretts: Topfpflanze oder Bücherstapel (wechselt mit der Anzahl
+   der Objekte). Das Pseudo-Element ist ein Rasterfeld in der letzten Spalte und steht auf dem Brett. */
+.lib-docs .gn-grid::after {
+	content: "";
+	grid-column: -2;
+	height: var(--gn-book-h);
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 100'%3E%3Cpath d='M40 66C38 44 26 34 12 30c2 16 12 28 28 36Z' fill='%236f9a6a'/%3E%3Cpath d='M40 66c2-26 14-40 28-44 0 20-12 36-28 44Z' fill='%2385b07c'/%3E%3Cpath d='M40 68c-4-20-2-40 2-56 8 18 6 40-2 56Z' fill='%235d8a5c'/%3E%3Cpath d='M25 66h30l-4 34H29z' fill='%23c98562'/%3E%3Crect x='21' y='60' width='38' height='9' rx='3' fill='%23d99a76'/%3E%3C/svg%3E") bottom center / 92px auto no-repeat;
+	filter: drop-shadow(0 2px 2px rgb(0 0 0 / .2));
+	pointer-events: none;
+}
+.lib-docs .gn-grid:has(> :nth-child(even):last-child)::after {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 100'%3E%3Crect x='8' y='84' width='64' height='16' rx='2.5' fill='%237f98b4'/%3E%3Crect x='60' y='87' width='12' height='10' fill='%23fbf7ee'/%3E%3Crect x='14' y='69' width='54' height='15' rx='2.5' fill='%23c48e84'/%3E%3Crect x='14' y='72' width='11' height='9' fill='%23fbf7ee'/%3E%3Crect x='11' y='56' width='52' height='13' rx='2.5' fill='%23cfa970'/%3E%3Crect x='52' y='59' width='11' height='7' fill='%23fbf7ee'/%3E%3Ccircle cx='38' cy='44' r='12' fill='%23c98562'/%3E%3Cpath d='M38 32c-2-8 2-14 8-16-1 7-3 12-8 16Z' fill='%236f9a6a'/%3E%3C/svg%3E");
+}
+.lib-docs .gn-grid:empty::after { display: none }
+@media (max-width: 600px) { .lib-docs .gn-grid::after { display: none } }
 .lib-docs .gn-grid + .empty { margin: 0 0 8px }
 
 /* Neu-Knopf in der Leiste */

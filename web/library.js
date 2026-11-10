@@ -305,14 +305,7 @@ function renderNotionTree(main) {
 	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
 	const tabs = '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
 		'<button class="lib-tab' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
-	// Oberstes Regalbrett: die zuletzt bearbeiteten Seiten und Hefte (nur ohne Filter/Suche).
-	if (!q && !smart && !S.libTag && allPages.length > 2) {
-		const recent = allPages.slice().sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || ""))).slice(0, 8);
-		html += '<section class="lib-section"><div class="lib-section-title">Zuletzt bearbeitet</div>' +
-			'<div class="lib-grid gn-grid lib-recent">' + recent.map(libCardHtml).join("") + "</div></section>";
-	}
-	wsIds.forEach((wsId) => {
+	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';	wsIds.forEach((wsId) => {
 		const rows = treeRowsHtml(STATE.childrenOf(null, wsId), 0, (pg) => STATE.childrenOf(pg.id, wsId), visible, notionMeta);
 		if (!rows) return;
 		const ws = S.workspaces[wsId] || { name: "Privat" };
@@ -320,7 +313,6 @@ function renderNotionTree(main) {
 	});
 	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
 	U.morph(main, html + "</div></div>");
-	hydrateCovers(main);
 }
 
 export async function exportWorkspaceZip(wsId) {
