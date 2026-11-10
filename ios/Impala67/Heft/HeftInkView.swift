@@ -1,7 +1,9 @@
+import PencilKit
 import UIKit
 
-/// Sichtbare gespeicherte Striche wie die PWA: gezeichnet mit `HeftInk.draw` (= `drawStroke` in heft.js,
-/// Breite je Teilstück aus dem Druck) in eine Seiten-Bitmap fester Auflösung; bei starkem Zoom kommt wie
+/// Sichtbare gespeicherte Striche: von PencilKit selbst mit derselben Tinte wie beim Schreiben gezeichnet
+/// (`PKDrawing.image`, sonst sähe die Schrift nach dem Neuladen anders aus als beim Schreiben) in eine
+/// Seiten-Bitmap fester Auflösung; bei starkem Zoom kommt wie
 /// die Detail-Kacheln in heft-viewport.js eine scharfe Bitmap des sichtbaren Ausschnitts darüber.
 /// Während einer Geste wird nur die fertige Bitmap mitskaliert (billig); gezeichnet wird im Hintergrund.
 ///
@@ -219,7 +221,8 @@ final class HeftInkView: UIView {
     private static func bounds(_ s: HeftStroke, _ t: CGAffineTransform) -> CGRect {
         let raw = HeftInk.bounds([s])
         guard !raw.isNull else { return .null }
-        let width = CGFloat(s.tool == "marker" ? s.size * 3 : s.size * 1.6)
+        // Großzügig: Apples Füller wird bei starkem Druck breiter als `size`.
+        let width = CGFloat(s.tool == "marker" ? s.size * 3 : s.size * 2.5)
         let scale = max(1, sqrt(abs(t.a * t.d - t.b * t.c)))
         let pad = width * scale / 2 + 2
         return raw.applying(t).insetBy(dx: -pad, dy: -pad)
@@ -325,15 +328,25 @@ final class HeftInkRenderer: @unchecked Sendable {
                 return i.isNull || i.isEmpty ? nil : snap(i)
             }
             guard !areas.isEmpty else { return false }
+            UIGraphicsPushContext(ctx)
+            defer { UIGraphicsPopContext() }
             for area in areas {
                 ctx.saveGState()
                 ctx.clip(to: area)
                 ctx.clear(area)
+                var strokes: [PKStroke] = []
                 for item in items where item.bounds.intersects(area) {
-                    ctx.saveGState()
-                    if item.transform != .identity { ctx.concatenate(item.transform) }
-                    HeftInk.draw([item.data], in: ctx)
-                    ctx.restoreGState()
+                    guard var pk = HeftInk.pkStroke(item.data, seed: 0) else { continue }
+                    pk.transform = item.transform
+                    strokes.append(pk)
+                }
+                if !strokes.isEmpty {
+                    // Papier ist immer hell; im Dunkelmodus kehrte PencilKit die Farben sonst um.
+                    var image: UIImage?
+                    UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+                        image = PKDrawing(strokes: strokes).image(from: area, scale: scale)
+                    }
+                    image?.draw(in: area)
                 }
                 ctx.restoreGState()
             }

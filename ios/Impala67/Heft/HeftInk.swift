@@ -14,15 +14,24 @@ enum HeftInk {
         CGFloat(max(0.5, size * (0.4 + pressure * 1.2)))
     }
 
-    /// Druck aus der Punktbreite – Umkehrung von [width], damit Hin- und Rückweg verlustfrei sind.
-    static func pressure(width: CGFloat, size: Double) -> Float {
-        guard size > 0 else { return 0.5 }
-        return Float(min(1, max(0, (Double(width) / size - 0.4) / 1.2)))
+    /// Druck (0–1, 0,5 = normal) aus der Andruckkraft des Apple Pencil (normal ≈ 1). PencilKit legt die
+    /// Stärke des Füllers nicht in die Punktbreite (die ist über den ganzen Strich gleich), sondern in die
+    /// Kraft; ohne sie wurde jeder gespeicherte Strich zur gleichmäßig dicken Linie.
+    static func pressure(force: CGFloat) -> Float {
+        Float(min(1, max(0, force / 2)))
     }
 
-    /// Deckkraft der Tinte gespeicherter Striche im Canvas: PencilKit macht aus dicht gespeicherten Punkten
-    /// (ältere PWA-Striche: 0,1–0,2 pt Abstand, viele doppelt) blasse bis unsichtbare Linien. Sichtbar zeichnet
-    /// sie deshalb [HeftInkView] wie die PWA; PencilKit behält sie fast durchsichtig für Radierer und Lasso.
+    /// Umkehrung von [pressure(force:)].
+    static func force(pressure: Double) -> CGFloat {
+        CGFloat(min(2, max(0.05, pressure * 2)))
+    }
+
+    /// Gleichmäßiges Schreibtempo für gespeicherte Striche (pt/s). Der Füller wird bei schnellen Strichen
+    /// dünner; feste Zeitabstände je Punkt machten das Tempo von der Punktdichte abhängig (verzerrte Schrift).
+    static let replaySpeed: Double = 150
+
+    /// Deckkraft der Tinte gespeicherter Striche im Canvas: Sichtbar zeichnet sie [HeftInkView] als Bitmap;
+    /// PencilKit behält sie fast durchsichtig für Radierer und Lasso.
     static let hiddenAlpha: CGFloat = 0.01
 
     /// Gespeicherter (von [HeftInkView] gezeichneter) Strich statt frischer Stifteingabe?
@@ -39,38 +48,37 @@ enum HeftInk {
         let n = p.count / 3
         guard n > 0 else { return nil }
         let marker = s.tool == "marker"
+        let pen = s.tool == "pen"
         let color = UIColor(css: s.color)
-        // Gleichmäßige Linie wie die PWA (`drawStroke`: Segmente mit runder Kappe). Die Füller-Tinte formt
-        // Striche nach Tempo und Kraft – bei gespeicherten Strichen (feste Zeitabstände, doppelte Punkte)
-        // sah ältere Schrift damit verzerrt aus.
-        let alpha = hidden ? hiddenAlpha : (marker ? markerAlpha : 1)
-        let ink = PKInk(marker ? .marker : .monoline, color: color.withAlphaComponent(alpha))
+        // Dieselbe Tinte wie beim Schreiben (Apples Füller bzw. Marker), damit ein gespeicherter Strich genauso
+        // aussieht wie frisch geschrieben. Formen: gleichmäßige Linie.
+        let alpha = hidden ? hiddenAlpha : 1
+        let ink = PKInk(marker ? .marker : pen ? .pen : .monoline, color: color.withAlphaComponent(alpha))
+        let w = CGFloat(marker ? s.size * 3 : s.size)
         var points: [PKStrokePoint] = []
         points.reserveCapacity(n + 1)
         var last: CGPoint?
+        var time: TimeInterval = 0
         for i in 0..<n {
             let loc = CGPoint(x: CGFloat(p[i * 3]) + offset.x, y: CGFloat(p[i * 3 + 1]) + offset.y)
             // Doppelte Punkte (Stift steht still) weglassen; PencilKit glättet sonst Knoten hinein.
             if let last, i < n - 1, abs(loc.x - last.x) < 0.05, abs(loc.y - last.y) < 0.05 { continue }
+            if let last { time += max(0.001, Double(hypot(loc.x - last.x, loc.y - last.y)) / replaySpeed) }
             last = loc
             var pr = Double(p[i * 3 + 2])
-            if pr.isNaN { pr = 0.5 }
-            pr = s.tool == "shape" ? 0.5 : min(1, max(0, pr))
-            let w = marker ? CGFloat(s.size * 3) : width(size: s.size, pressure: pr)
+            // 0 = unbekannt (Finger ohne Kraft), wie `|| 0.5` in heft.js.
+            if pr.isNaN || pr <= 0 { pr = 0.5 }
+            // Die Breite steckt bei allen Werkzeugen in `size`; der Druck wirkt nur beim Füller (als Kraft).
             points.append(PKStrokePoint(
-                location: loc,
-                timeOffset: TimeInterval(points.count) * 0.008,
-                size: CGSize(width: w, height: w),
-                // Feste, normale Kraft: Der Druck steckt schon in `size`. Als Kraft weitergereicht machte ein
-                // niedriger Druck (Stifte ohne Druckstufen speichern 0,12) die Striche blass bis unsichtbar.
-                opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
+                location: loc, timeOffset: time, size: CGSize(width: w, height: w),
+                opacity: 1, force: pen ? force(pressure: pr) : 1, azimuth: 0, altitude: .pi / 2
             ))
         }
         // Ein einzelner Punkt (Tupfer, i-Punkt) braucht einen zweiten, sonst zeichnet PencilKit nichts.
         if points.count == 1, let only = points.first {
             points.append(PKStrokePoint(
                 location: CGPoint(x: only.location.x + 0.01, y: only.location.y), timeOffset: 0.008,
-                size: only.size, opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
+                size: only.size, opacity: 1, force: only.force, azimuth: 0, altitude: .pi / 2
             ))
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date())
@@ -95,38 +103,28 @@ enum HeftInk {
         let marker = stroke.ink.inkType == .marker
         // Punkte auf der Kurve, so wie PencilKit sie zeichnet. Die Kontrollpunkte (`for point in stroke.path`)
         // liegen neben der Linie; durch sie gezeichnet wirkte die Schrift nach dem Neuladen eckig und verzogen.
-        var locs: [CGPoint] = []
-        var widths: [CGFloat] = []
-        for point in stroke.path.interpolatedPoints(by: .distance(1.5)) {
-            locs.append(point.location.applying(stroke.transform))
-            widths.append(point.size.width)
-        }
-        if locs.isEmpty {
-            for point in stroke.path {
-                locs.append(point.location.applying(stroke.transform))
-                widths.append(point.size.width)
-            }
-        }
-        // Stift: `size` = Breite bei Druck 0,5. Ohne Vorgabe die mittlere Punktbreite des Strichs: dann trifft
-        // die Rückrechnung (0,4–1,6 × size) die echten Breiten, statt sie an der Werkzeugbreite abzuschneiden
-        // (zu dicke, „überzeichnete“ Schrift nach dem Neuladen). Marker: size × 3 = Werkzeugbreite.
+        var pts: [PKStrokePoint] = Array(stroke.path.interpolatedPoints(by: .distance(1.5)))
+        if pts.isEmpty { pts = Array(stroke.path) }
+        // Stift: `size` = Punktbreite, die PencilKit beim Schreiben hatte (über den Strich gleich; ohne Vorgabe
+        // ihr Mittelwert), damit der gespeicherte Strich mit derselben Breite neu gezeichnet wird. Die Stärke des
+        // Strichs steckt im Druck (aus der Kraft). Marker: size × 3 = Werkzeugbreite.
         let size: Double
         if marker {
             size = Double(toolWidth / 3)
-        } else if keepSize || widths.isEmpty {
+        } else if keepSize || pts.isEmpty {
             size = Double(toolWidth)
         } else {
-            size = max(0.3, Double(widths.sorted()[widths.count / 2]))
+            size = max(0.3, Double(pts.map(\.size.width).sorted()[pts.count / 2]))
         }
-        let rounded = (size * 100).rounded() / 100
         var out: [Float] = []
-        out.reserveCapacity(locs.count * 3)
-        for (loc, w) in zip(locs, widths) {
+        out.reserveCapacity(pts.count * 3)
+        for point in pts {
+            let loc = point.location.applying(stroke.transform)
             out.append(Float(loc.x - offset.x))
             out.append(Float(loc.y - offset.y))
-            out.append(marker ? 0.5 : pressure(width: w, size: rounded))
+            out.append(marker ? 0.5 : pressure(force: point.force))
         }
-        return (marker ? "marker" : "pen", stroke.ink.color.cssHex, rounded, out)
+        return (marker ? "marker" : "pen", stroke.ink.color.cssHex, (size * 100).rounded() / 100, out)
     }
 
     // MARK: Zeichnen wie die PWA (`drawStroke` in web/heft.js)
