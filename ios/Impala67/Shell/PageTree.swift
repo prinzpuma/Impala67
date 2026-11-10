@@ -96,6 +96,12 @@ struct PageTree: View {
         MenuItem(page.isTemplate ? "Vorlage entfernen" : "Als Vorlage", icon: "template") {
             store.core.patchPage(page.id, ["isTemplate": !page.isTemplate])
         }
+        if page.kind != .heft {
+            let isDb = rows.dbPages.contains(page.id)
+            MenuItem(isDb ? "Übersicht aufheben" : "Als Vorlesungsübersicht", icon: "grid") {
+                attempt("setPageDb", { try store.core.setPageDb(id: page.id, schema: isDb ? nil : lectureSchema) })
+            }
+        }
         MenuItem(page.favorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
             store.core.patchPage(page.id, ["favorite": !page.favorite])
         }
@@ -289,6 +295,8 @@ struct TreeRows: RandomAccessCollection {
 
     private var rows: [Row] = []
     private var open: [String: Bool] = [:]
+    /// Seiten mit Datenbankansicht („Als Vorlesungsübersicht“), für das ⋯-Menü.
+    private(set) var dbPages: Set<String> = []
 
     var startIndex: Int { rows.startIndex }
     var endIndex: Int { rows.endIndex }
@@ -308,6 +316,7 @@ struct TreeRows: RandomAccessCollection {
         let all = core.recentPages(limit: UInt32.max)
         let favorites = all.filter(\.favorite)
         let parentIds = Set(all.compactMap(\.parentId))
+        t.dbPages = Set(all.filter { $0.kind != .heft && core.pageDb(id: $0.id) != nil }.map(\.id))
         if !favorites.isEmpty {
             t.rows.append(Row(id: "head:fav", kind: .head(title: "★ Favoriten", collapseKey: nil, workspaceId: nil)))
             for p in favorites { t.rows.append(Row(id: "fav:\(p.id)", kind: .page(p, depth: 0, hasKids: false))) }

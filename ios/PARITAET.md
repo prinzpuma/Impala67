@@ -101,7 +101,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
 Größte Lücken neben der Leistung: Seitenverlauf (Notiz und Heft), Seiten-Icon/Cover,
-Datenbankansicht/Vorlesungsübersicht, Fächer, Schulnoten, Lernanalyse, Daily-Notizen,
+Fächer, Schulnoten, Lernanalyse, Daily-Notizen,
 Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ---
@@ -141,7 +141,8 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 |---|---|---|
 | In neuem Tab öffnen | ✅ | `PageTree.swift:90` |
 | Duplizieren, Als Vorlage, Favorit | ✅ | `PageTree.swift:92-101` in PWA-Reihenfolge · am Gerät ungeprüft |
-| Vorlesungsübersicht, Fach… | ❌ | fehlt |
+| Vorlesungsübersicht | ✅ | `PageTree.swift` |
+| Fach… | ❌ | fehlt |
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Aus Archiv holen | 🟡 | Nur in der Bibliothek |
 | Archivieren / Löschen | ✅ | `PageTree.swift:103-110` · am Gerät ungeprüft |
@@ -195,7 +196,8 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Stern Favorit | ✅ | `NoteEditor.swift:398-411` |
 | ⋯: PDF, Markdown, Link, Karten aus Markierungen, Duplizieren, Archiv, Papierkorb | ✅ | `NoteEditor.swift:414-456` |
 | ⋯: Vorlage, Verschieben, Rückgängig/Wiederholen, Icon | ✅ | `Notes/NoteEditor.swift:551-645` im ⋯-Menü wie in PWA `moreMenuHtml` · am Gerät ungeprüft |
-| ⋯: Vorlesungsübersicht, Fach, Verlauf | ❌ | fehlen im Kern (bewusst nicht umgesetzt) |
+| ⋯: Vorlesungsübersicht | ✅ | `NoteEditor.swift` |
+| ⋯: Fach, Verlauf | ❌ | fehlen im Kern (bewusst nicht umgesetzt) |
 | Rückverweise und Brotkrumen | ✅ | `NoteEditor.swift:73, 366-374` |
 
 ### 1.11 KI-Panel
@@ -369,7 +371,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | PDF-Text beim Hochladen übernehmen | ❌ | fehlt |
 | Heft-Block mit Vorschau | 🟡 | ohne Vorschau |
 | Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift` |
-| Datenbankansicht (Vorlesungsübersicht) | ❌ | fehlt |
+| Datenbankansicht (Vorlesungsübersicht) | ✅ | `DatabaseView.swift`: Karten in Liquid Glass, Auswahl-Menü, Kalender |
 
 ---
 

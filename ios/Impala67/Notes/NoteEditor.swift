@@ -56,6 +56,7 @@ private struct NoteBody: View {
     @State private var linkURL = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var showIconPicker = false
+    @State private var isDbPage = false
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
     var body: some View {
@@ -72,6 +73,8 @@ private struct NoteBody: View {
                     .onSubmit { model.focusFirst() }
                     .riseIn(0)
                 BacklinksChip(pageId: model.pageId)
+                // Datenbank-Seite: Unterseiten als Karten vor den Blöcken (render.js `dbViewHtml`).
+                if isDbPage { DatabaseView(pageId: model.pageId) }
                 blockList
                     .riseIn(1)
                 ChildPagesList(pageId: model.pageId, blocks: model.blocks)
@@ -88,6 +91,9 @@ private struct NoteBody: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .task(id: "\(model.pageId):\(store.pageMetaRevision)") {
+            isDbPage = store.core.pageDb(id: model.pageId) != nil
+        }
         // Bilder aus anderen Apps hineinziehen: hinter den aktiven Block bzw. ans Ende.
         .onDrop(of: [.image], isTargeted: nil) { providers in
             let after = model.activeId
@@ -473,6 +479,7 @@ private struct PageChrome: View {
     @State private var summary: PageSummary?
     @State private var isArchived = false
     @State private var marks = 0
+    @State private var isDb = false
 
     var body: some View {
         let isFavorite = summary?.favorite == true
@@ -636,6 +643,10 @@ private struct PageChrome: View {
                         toggleTemplate()
                     }
 
+                    MenuItem(isDb ? "Übersicht aufheben" : "Als Vorlesungsübersicht", icon: "grid") {
+                        attempt("setPageDb", { try store.core.setPageDb(id: model.pageId, schema: isDb ? nil : lectureSchema) })
+                    }
+
                     MenuItem("Verschieben nach…", icon: "folder-move") {
                         if let summary { movingPage = summary }
                     }
@@ -671,15 +682,16 @@ private struct PageChrome: View {
         .task(id: "\(model.pageId):\(store.pageMetaRevision):\(store.pagesRevision)") {
             let pageId = model.pageId
             let core = store.core
-            let loaded = await Task.detached(priority: .userInitiated) { () -> (PageSummary?, Bool, Int) in
-                guard let detail = core.page(id: pageId) else { return (nil, false, 0) }
+            let loaded = await Task.detached(priority: .userInitiated) { () -> (PageSummary?, Bool, Int, Bool) in
+                guard let detail = core.page(id: pageId) else { return (nil, false, 0, false) }
                 let marksCount = highlightCount(detail.content)
-                return (detail.summary, detail.archived, marksCount)
+                return (detail.summary, detail.archived, marksCount, core.pageDb(id: pageId) != nil)
             }.value
             if !Task.isCancelled {
                 summary = loaded.0
                 isArchived = loaded.1
                 marks = loaded.2
+                isDb = loaded.3
             }
         }
     }
