@@ -46,10 +46,10 @@ export async function checkAI() {
 // damit Theme, Akzent, Dichte und Bewegung nicht durch den Drive-Sync überschrieben werden.
 // Akzent als RGB-Tripel je Theme. Hell ist kräftiger, damit Weiß darauf mind. 4,5:1 Kontrast hat.
 const ACCENT_THEMES = {
-	blue:   { dark: "107 140 174", light: "36 120 199" },
-	violet: { dark: "143 130 169", light: "124 113 147" },
-	green:  { dark: "110 140 117", light: "98 125 105" },
-	orange: { dark: "176 127 89", light: "151 109 77" },
+	blue:   { dark: "110 160 220", light: "38 104 176" },
+	orange: { dark: "236 128 72", light: "196 84 32" },
+	violet: { dark: "164 140 220", light: "112 84 170" },
+	green:  { dark: "120 180 130", light: "52 120 78" },
 };
 
 // Standard: Theme automatisch vom Betriebssystem übernehmen. Nur ein explizites
@@ -91,7 +91,7 @@ export function applyAppearance() {
 	const isLight = theme === "light";
 	document.body.classList.toggle("light", theme === "light");
 	document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-		m.content = theme === "light" ? "#f2efe9" : "#05070d";
+		m.content = theme === "light" ? "#f9f8f6" : "#1a1a19";
 	});
 	document.body.classList.toggle("density-compact", density === "compact");
 	document.body.classList.toggle("perf-mode", motion === "reduced");
@@ -105,7 +105,7 @@ export function applyAppearance() {
 	const rgb = isLight ? accent.light : accent.dark;
 	document.body.style.setProperty("--accent-rgb", rgb);
 	document.body.style.setProperty("--accent", `rgb(${rgb})`);
-	document.body.style.setProperty("--accent-soft", isLight ? `color-mix(in srgb, rgb(${rgb}) 15%, #fff)` : `rgb(${rgb} / .14)`);
+	document.body.style.setProperty("--accent-soft", isLight ? `color-mix(in srgb, rgb(${rgb}) 14%, var(--panel-solid))` : `rgb(${rgb} / .14)`);
 	document.body.style.setProperty("--accent-border", `rgb(${rgb} / ${isLight ? ".36" : ".25"})`);
 }
 

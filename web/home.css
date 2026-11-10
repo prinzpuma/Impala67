@@ -52,7 +52,7 @@ body.light .hv-alert { color: #8a6412; background: #f8eecf }
 .hv-prev.heft img { width: 100%; height: 100%; object-fit: cover; object-position: top }
 .hv-prev.heft img:not([src]) { visibility: hidden }
 .hv-prev.text { background: var(--panel-solid); padding: var(--space-4) var(--space-4) 0; font-size: var(--text-3xs); line-height: 1.45; color: var(--text2); -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent) }
-body:not(.light) .hv-prev.text { background: #222 }
+body:not(.light) .hv-prev.text { background: var(--bubble) }
 .hv-prev.text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .hv-prev.pdf { background: var(--surface); align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text2); letter-spacing: .1em }
 .hv-continue.empty .hv-prev { align-items: center; justify-content: center; mask-image: none; -webkit-mask-image: none; box-shadow: 0 0 0 1px var(--edge) inset; background: none }

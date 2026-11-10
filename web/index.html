@@ -79,8 +79,8 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="stylesheet" href="mobile-content.css?build=2">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#f2efe9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f9f8f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <!-- Favicon & Touch-Icon -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -123,7 +123,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 		var sidebarWidth = Number(localStorage.getItem("impala67.sidebarWidth") || 0);
 		if (sidebarWidth) document.body.style.setProperty("--sidebar-w", Math.max(200, Math.min(420, sidebarWidth)) + "px");
 		document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
-			m.content = theme === "light" ? "#f2efe9" : "#05070d";
+			m.content = theme === "light" ? "#f9f8f6" : "#1a1a19";
 		});
 	} catch (_) { /* Private-/gesperrter Speicher: sichere CSS-Standards verwenden. */ }
 })();
