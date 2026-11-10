@@ -1904,8 +1904,6 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 .library.anki .lib-head .mode-btns button.active::before { inset: auto 0 0; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: none }
 .lib-tab-n { padding: 0 7px; border-radius: var(--radius-pill); background: var(--b-tint-2); opacity: 1 }
 .lib-tab.active .lib-tab-n { color: var(--text) }
-.lib-mode { border: 0; border-radius: var(--radius-pill); padding: 5px 14px; font-weight: 600; background: var(--b-tint); color: var(--text) }
-.lib-mode.active { background: var(--accent); color: var(--on-accent) }
 
 /* 8. Seitenleiste, Tab-Leiste, Kopfzeile */
 .notion-tree-workspace { border-top: 0; margin-top: 12px }

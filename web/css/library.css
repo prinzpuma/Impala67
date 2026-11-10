@@ -1,0 +1,136 @@
+/* library.css — Bibliothek: gemeinsamer Kopf (Titel, Ansichts-Reiter, Werkzeugzeile, Suche),
+   Seitenbaum (Notion + Archiv), Gemini-Notebook-Mediathek, Dialoge und Drag-and-drop.
+   Das Bücherregal der GoodNotes-Ansicht steht in shelf.css (lädt danach und überschreibt). */
+
+/* ---------- Kopf: Titel + Zähler, darunter die Ansichten als Reiter mit Akzentstrich ---------- */
+.library.lib-docs .lib-head { display: block; margin: 0 0 var(--space-4); padding: 0; border: 0 }
+.lib-docs .lib-head-left { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px }
+.lib-docs .lib-head-left h1 { margin: 0 }
+.lib-docs .lib-sub { color: var(--text2); font-size: var(--text-sm); font-variant-numeric: tabular-nums }
+.lib-modes { flex: 1 0 100%; display: flex; gap: 26px; margin: 12px 0 0; overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--edge-soft) }
+.lib-modes::-webkit-scrollbar { display: none }
+body .lib-modes .lib-mode { position: relative; flex: none; display: inline-flex; align-items: center; gap: 2px; height: 42px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--text2); font-size: var(--text-base); font-weight: 600; white-space: nowrap; cursor: pointer; transition: color .15s ease }
+body .lib-modes .lib-mode:hover { color: var(--text); background: none }
+body .lib-modes .lib-mode.active { color: var(--text) }
+.lib-modes .lib-mode.active::after { content: ""; position: absolute; inset: auto 0 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--accent) }
+.lib-modes .lib-mode.active .i { color: var(--accent) }
+
+/* ---------- Werkzeugzeile: links Filter bzw. Pfad, rechts Suche ---------- */
+.lib-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-height: 40px; margin: 0 0 var(--space-4) }
+.lib-toolbar-left { display: flex; align-items: center; flex-wrap: wrap; min-width: 0 }
+.lib-toolbar .lib-tabs, .lib-toolbar .gn-crumbs { margin: 0 }
+.lib-toolbar .lib-tabs:empty { display: none }
+.lib-toolbar .lib-head-tools { margin-left: auto; flex-wrap: nowrap }
+.lib-search { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--panel-solid); box-shadow: var(--b-card); color: var(--text2); cursor: text; transition: box-shadow .15s ease }
+.lib-search:focus-within { box-shadow: 0 0 0 1px var(--accent-border), 0 0 0 4px var(--accent-soft) }
+.lib-search .i { flex: none; width: 16px; height: 16px }
+.library .lib-search #libFilter { width: 220px; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--text); font-size: 14px }
+
+/* ---------- Inhalt + Leerzustand ---------- */
+.lib-body { margin: 0 }
+.lib-body > .empty { margin: 0; padding: 52px 24px; border: 1px dashed var(--edge); border-radius: 18px; color: var(--text2); text-align: center; line-height: 1.5 }
+.gn-shelf .lib-body > .empty { padding: 26px 0 18px; border: 0 }
+
+/* ---------- Seitenbaum (Notion + Archiv): je Ordner eine Karte mit ruhigen Zeilen ---------- */
+.notion-tree-workspace { margin-top: 22px }
+.lib-body > .notion-tree-workspace:first-child { margin-top: 0 }
+.notion-tree-workspace-name { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 6px 8px; color: var(--text2); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase }
+.notion-tree-workspace-name span { padding: 1px 7px; border-radius: 999px; background: var(--b-tint); font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums }
+.notion-tree-list { padding: 6px; border-radius: 18px; background: var(--panel-solid); box-shadow: var(--b-card) }
+.notion-tree-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 42px;
+	padding: 4px 10px 4px calc(6px + var(--tree-depth) * 22px);
+	border-radius: 11px;
+	color: inherit;
+	cursor: pointer;
+	/* Führungslinien je Ebene, genau unter dem Pfeil der Elternzeile */
+	background: repeating-linear-gradient(to right, transparent 0 10px, var(--edge-soft) 10px 11px, transparent 11px 22px) 6px 0 / calc(var(--tree-depth) * 22px) 100% no-repeat;
+	transition: background-color .12s ease;
+}
+.notion-tree-row:hover { background-color: var(--b-hover-bg) }
+.notion-tree-caret { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text2); cursor: pointer }
+.notion-tree-caret .i { width: 13px; height: 13px; margin: 0; transition: transform .16s var(--b-ease) }
+.notion-tree-caret.open .i { transform: rotate(90deg) }
+.notion-tree-caret:hover { background: var(--b-tint-2); color: var(--text) }
+.notion-tree-caret.spacer, .notion-tree-caret.spacer:hover { background: transparent; cursor: inherit }
+.notion-tree-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--b-tint); font-size: 14px; line-height: 1 }
+.notion-tree-icon .i { margin: 0 }
+.notion-tree-row.is-heft .notion-tree-icon { color: var(--accent) }
+.notion-tree-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600 }
+.notion-tree-row:not([style*="depth:0"]) .notion-tree-title { font-weight: 500 }
+.notion-tree-meta { flex: none; display: flex; align-items: center; gap: 10px; margin-left: auto; padding-left: 12px; color: var(--text2); font-size: 12px; white-space: nowrap }
+.lib-kind { padding: 2px 9px; border-radius: 999px; background: var(--b-tint); font-size: 11px; font-weight: 600 }
+.notion-tree-row.is-heft .lib-kind { color: var(--accent) }
+.lib-date { min-width: 58px; text-align: right; font-variant-numeric: tabular-nums }
+.archive-row-actions { flex: none; display: flex; align-items: center; gap: 4px; margin-left: 4px }
+@media (hover: hover) {
+	.archive-row-actions { opacity: 0; transition: opacity .12s ease }
+	.notion-tree-row:hover .archive-row-actions, .archive-row-actions:focus-within { opacity: 1 }
+}
+
+/* ---------- Gemini-Notebook-Dateien ---------- */
+.nlm-lib-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--edge-soft); border-radius: 12px; margin-bottom: 8px }
+.nlm-lib-row.nlm-lib-inbox { border-color: var(--accent-border); background: var(--accent-soft) }
+.nlm-lib-icon { flex: none; font-size: 22px }
+.nlm-lib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
+.nlm-lib-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.nlm-lib-sub { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.nlm-lib-btns { display: flex; gap: 4px; flex: none }
+.nlm-lib-btns button { min-height: 0; border: none; background: var(--b-tint); border-radius: 8px; padding: 5px 8px; cursor: pointer; color: inherit }
+.nlm-lib-btns button:hover { background: var(--b-tint-3) }
+/* In der Bibliothek: eine Karte mit Zeilen wie im Seitenbaum */
+.lib-nlm .lib-body:has(.nlm-lib-row) { padding: 6px; border-radius: 18px; background: var(--panel-solid); box-shadow: var(--b-card) }
+.lib-nlm .nlm-lib-row { min-height: 58px; margin: 0; padding: 8px 10px; border: 0; border-radius: 11px; background: transparent; transition: background-color .12s ease }
+.lib-nlm .nlm-lib-row:hover { background: var(--b-hover-bg) }
+.lib-nlm .nlm-lib-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--b-tint); color: var(--accent); font-size: 18px }
+.lib-nlm .nlm-lib-inbox .nlm-lib-icon { background: var(--accent); color: var(--on-accent) }
+.lib-nlm .nlm-lib-btns button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 10px; background: transparent; color: var(--text2) }
+.lib-nlm .nlm-lib-btns button:hover { background: var(--b-tint-2); color: var(--text) }
+.lib-nlm .nlm-lib-btns .i { margin: 0 }
+
+/* ---------- Heft-Kacheln, Dialoge ---------- */
+.lib-card-visual { position: relative }
+.lib-cover-btn { position: absolute; right: 5px; bottom: 5px; z-index: 3; min-height: 26px; padding: 0 7px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; background: rgba(15,16,19,.58); color: #fff; font-size: 10px; letter-spacing: 1px; opacity: 0; cursor: pointer; backdrop-filter: blur(6px); transition: opacity .12s }
+.lib-card:hover .lib-cover-btn, .lib-cover-btn:focus { opacity: 1 }
+.lib-create-modal { gap: 14px }
+.lib-create-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.lib-create-choices button { min-height: 130px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; text-align: left; background: var(--surface-subtle); border: 1px solid var(--edge-soft); border-radius: 14px }
+.lib-create-choices button:hover { border-color: var(--accent-border); background: var(--accent-soft) }
+.lib-create-choices span { font-size: 24px }
+.lib-create-choices b { font-size: 14px }
+.lib-create-choices small { font-size: 11.5px; color: var(--text2); line-height: 1.35 }
+.lib-create-label { font-size: 12px; color: var(--text2); font-weight: 650; margin-bottom: -7px }
+.lib-create-covers .cover-swatch.active { outline: 2px solid var(--accent); outline-offset: 2px }
+
+/* ---------- GoodNotes-Ablage: Pfad, Ordnermenü, Drag-and-drop ---------- */
+.lib-shelf-hint { margin-top: 14px; opacity: .55 }
+.gn-crumbs { margin: 0 }
+.gn-crumb-root, .gn-crumb { min-height: 0; padding: 0; background: transparent; color: var(--text2); font-size: 13px }
+.gn-crumb-root:hover, .gn-crumb:hover { background: transparent; color: var(--text); text-decoration: underline }
+.gn-folder { position: relative }
+.gn-folder-more { position: absolute; right: 0; bottom: -2px; min-height: 24px; padding: 0 5px; background: transparent; color: var(--text2); font-size: 10px; letter-spacing: 1px; opacity: 0 }
+.gn-folder:hover .gn-folder-more, .gn-folder-more:focus { opacity: 1 }
+.gn-folder-more:hover { color: var(--text); background: var(--surface-hover) }
+.gn-grid.gn-drop-active { outline: 2px dashed var(--accent); outline-offset: 10px; border-radius: 12px }
+.gn-folder, .gn-card { user-select: none; -webkit-user-select: none }
+.gn-folder[draggable=true], .gn-card[draggable=true] { cursor: grab }
+.gn-folder[draggable=true]:active, .gn-card[draggable=true]:active { cursor: grabbing }
+.gn-card .lib-into { display: none }
+.gn-folder.gn-drop-target .lib-folder-visual, .gn-card.gn-drop-target .lib-notebook { filter: drop-shadow(0 0 0 2px var(--accent)) drop-shadow(0 10px 22px rgba(76,141,255,.35)) }
+.gn-folder.gn-dragging, .gn-card.gn-dragging { opacity: .35 }
+
+@media (max-width: 640px) {
+	.lib-modes { gap: 20px }
+	.lib-toolbar .lib-head-tools { width: 100% }
+	.lib-search { flex: 1; min-width: 0 }
+	.library .lib-search #libFilter { width: 100%; min-width: 0 }
+	.notion-tree-row { min-height: 46px }
+	.notion-tree-meta .lib-kind { display: none }
+	.lib-archive .notion-tree-meta { display: none }
+	.archive-row-actions { margin-left: auto; opacity: 1 }
+	.archive-row-actions .mini { font-size: 0 }
+	.archive-row-actions .mini .i { margin: 0 }
+}
