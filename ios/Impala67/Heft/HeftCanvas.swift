@@ -39,7 +39,9 @@ struct HeftCanvas: UIViewRepresentable {
         canvas.backgroundColor = .clear
         canvas.minimumZoomScale = 0.25
         canvas.maximumZoomScale = 5
-        canvas.bouncesZoom = true
+        // Harte Zoomgrenze wie `heft-viewport.js` (clamp): kein Zurückfedern über die Grenze hinaus,
+        // das beim Zurückspringen zusätzlich die mitlaufenden Seitenränder verschiebt.
+        canvas.bouncesZoom = false
         canvas.alwaysBounceVertical = true
         // Doppeltipp mit dem Finger zoomt (der Stift zeichnet weiter).
         let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
@@ -545,9 +547,18 @@ struct HeftCanvas: UIViewRepresentable {
         /// Nach jedem Layout des Canvas (auch bei jedem Scroll-Bild): einmal einpassen, bei neuer Breite zentrieren.
         func layoutChanged() {
             guard let canvas, canvas.bounds.width > 0 else { return }
-            fitWidth()
-            if canvas.bounds.width != lastWidth {
+            let widthChanged = canvas.bounds.width != lastWidth
+            if widthChanged {
                 lastWidth = canvas.bounds.width
+                // Zoomgrenzen wie `ZOOM_MIN`/`ZOOM_MAX` der PWA: 0,4× bis 6× der Passbreite.
+                let fit = (canvas.bounds.width - 2 * Self.gutter) / Self.pageSize.width
+                if fit > 0 {
+                    canvas.minimumZoomScale = fit * 0.4
+                    canvas.maximumZoomScale = fit * 6
+                }
+            }
+            fitWidth()
+            if widthChanged {
                 layoutPage()
                 windowChanged()
             }
@@ -559,7 +570,6 @@ struct HeftCanvas: UIViewRepresentable {
             guard !fitted, let canvas, canvas.bounds.width > 0, !order.isEmpty else { return }
             fitted = true
             let scale = (canvas.bounds.width - 2 * Self.gutter) / Self.pageSize.width
-            canvas.minimumZoomScale = min(scale, 1) * 0.5
             canvas.setZoomScale(scale, animated: false)
             canvas.contentSize = CGSize(width: contentSize.width * scale, height: contentSize.height * scale)
             layoutPage()
