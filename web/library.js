@@ -35,21 +35,16 @@ export function folderTone(key) {
 	return FOLDER_TONES[h % FOLDER_TONES.length];
 }
 
-// Portrait-Notebook: Rücken + Cover (Bild oder Verlauf) + Titel-Label auf dem Cover.
+// Portrait-Notebook im Schulheft-Stil: Rücken + Cover (Bild oder Stoff-Farbe) + helles
+// Namensschild mit Linien, wie auf einem Composition Book.
 export function libCoverHtml(pg) {
-	const pgIcon = pageIcon(pg);
 	const title = (pg.title || "Ohne Titel").trim();
 	const short = title.length > 28 ? title.slice(0, 28) + "…" : title;
-	if (pg.coverImg) {
-		return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' +
-			'<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '">' +
-			'<span class="lib-cover-shade"></span><span class="lib-cover-label">' + U.esc(short) + "</span></div></div>";
-	}
-	const preset = pg.cover || defaultCover(pg);
-	return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' +
-		'<div class="lib-cover cover-' + U.esc(preset) + '">' +
-		'<span class="lib-cover-icon">' + pgIcon + "</span>" +
-		'<span class="lib-cover-label">' + U.esc(short) + "</span></div></div>";
+	const label = '<span class="lib-cover-label"><b>' + U.esc(short) + '</b><i aria-hidden="true"></i><i aria-hidden="true"></i></span>';
+	const cover = pg.coverImg
+		? '<div class="lib-cover has-img" data-coverimg="' + U.esc(pg.coverImg) + '">'
+		: '<div class="lib-cover cover-' + U.esc(pg.cover || defaultCover(pg)) + '">';
+	return '<div class="lib-notebook"><div class="lib-spine" aria-hidden="true"></div>' + cover + label + "</div></div>";
 }
 
 // Notion-Seite als flaches Dokumentblatt (Icon, Titel, erste Textzeile, Linien) —
@@ -402,7 +397,9 @@ export function renderHefteShelf(main) {
 		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + gnAncestors(folderId).map((f) =>
 			'<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>").join("");
 	let html = '<div class="library lib-docs lib-shelf gn-shelf" data-key="lib:shelf">' + libHeadHtml() +
-		libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>", '<button class="lib-new-action" data-libshelfnew="1">+ Neu</button>' + libSearchHtml("Suchen")) +
+		libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>",
+			'<label class="gn-search">' + icon("search") + libSearchHtml("Hefte suchen") + "</label>" +
+			'<button class="gn-new" data-libshelfnew="1">' + icon("plus") + "<span>Neu</span></button>") +
 		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
 			? gnFolderHtml(item.value)
 			: libCardHtml(item.value).replace('class="lib-card"', 'class="lib-card gn-card" draggable="true" data-gnitem="p:' + item.value.id + '" data-gnorder="' + item.order + '"'))
@@ -531,8 +528,6 @@ libStyle.textContent = [
 	".notion-tree-icon{flex:none}",
 	".notion-tree-title{font-weight:560;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 	".notion-tree-meta{margin-left:auto;padding-left:12px;font-size:12px;opacity:.55;white-space:nowrap}",
-	".lib-new-action{min-height:34px;padding:5px 12px;border-radius:8px;background:#2783df;color:#fff;font-size:13px;font-weight:650}",
-	".lib-new-action:hover{background:#3692ef}",
 	".lib-cover-btn{position:absolute;right:5px;bottom:5px;z-index:3;min-height:26px;padding:0 7px;border:1px solid rgba(255,255,255,.22);border-radius:7px;background:rgba(15,16,19,.58);color:#fff;font-size:10px;letter-spacing:1px;opacity:0;cursor:pointer;backdrop-filter:blur(6px);transition:opacity .12s}",
 	".lib-card-visual{position:relative}",
 	".lib-card:hover .lib-cover-btn,.lib-cover-btn:focus{opacity:1}",
@@ -560,16 +555,14 @@ libStyle.textContent = [
 	".notion-tree-row{padding-left:calc(var(--tree-depth) * 22px)}",
 	".gn-crumbs{margin:0}.gn-crumb-root,.gn-crumb{min-height:0;padding:0;background:transparent;color:var(--text2);font-size:13px}.gn-crumb-root:hover,.gn-crumb:hover{background:transparent;color:var(--text);text-decoration:underline}",
 	".gn-folder-more{position:absolute;right:0;bottom:-2px;min-height:24px;padding:0 5px;background:transparent;color:var(--text2);font-size:10px;letter-spacing:1px;opacity:0}.gn-folder{position:relative}.gn-folder:hover .gn-folder-more,.gn-folder-more:focus{opacity:1}.gn-folder-more:hover{color:var(--text);background:var(--surface-hover)}",
-	".gn-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:28px 24px;min-height:0;align-items:start}",
-	".gn-grid:empty{min-height:56px}",
-	".gn-grid+.empty{margin:0 0 8px}",
+	// Raster und Regalbretter der GoodNotes-Ansicht: css/shelf.css
 	".gn-grid.gn-drop-active{outline:2px dashed var(--accent);outline-offset:10px;border-radius:12px}",
 	".gn-folder,.gn-card{user-select:none;-webkit-user-select:none}.gn-folder[draggable=true],.gn-card[draggable=true]{cursor:grab}.gn-folder[draggable=true]:active,.gn-card[draggable=true]:active{cursor:grabbing}",
 	".gn-card .lib-into{display:none}",
 	".gn-folder.gn-drop-target .lib-folder-visual,.gn-card.gn-drop-target .lib-notebook{filter:drop-shadow(0 0 0 2px var(--accent)) drop-shadow(0 10px 22px rgba(76,141,255,.35))}",
 	".gn-folder.gn-dragging,.gn-card.gn-dragging{opacity:.35}",
 	".archive-row-actions{display:flex;gap:4px;margin-left:8px;flex:none;align-items:center}",
-	"@media(max-width:640px){.gn-toolbar{align-items:flex-start;flex-direction:column}.gn-toolbar-actions{width:100%}.gn-toolbar-actions #libFilter{flex:1;min-width:0}.gn-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:22px 16px}}",
+	"@media(max-width:640px){.gn-toolbar{align-items:flex-start;flex-direction:column}.gn-toolbar-actions{width:100%}.gn-toolbar-actions #libFilter{flex:1;min-width:0}}",
 ].join("\n");
 document.head.appendChild(libStyle);
 

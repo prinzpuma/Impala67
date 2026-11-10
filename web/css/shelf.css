@@ -1,0 +1,170 @@
+/* shelf.css — GoodNotes-Ansicht der Bibliothek als gemütliches Bücherregal.
+   Warmes Papier-Panel, Hefte stehen auf Holzbrettern. Die Bretter sind ein wiederholter
+   Hintergrund des Rasters (feste Zeilenhöhe), dadurch laufen sie über die ganze Breite
+   und brauchen kein eigenes Element. Farben werden aus den App-Tokens abgeleitet. */
+
+.gn-shelf {
+	--gn-paper: color-mix(in srgb, var(--panel-solid) 86%, #c9a77c);
+	--gn-paper-edge: rgb(201 167 124 / .16);
+	--gn-wood-top: color-mix(in srgb, var(--panel-solid) 42%, #c49a6c);
+	--gn-wood: color-mix(in srgb, var(--panel-solid) 48%, #8a6440);
+	--gn-ink: color-mix(in srgb, var(--text) 82%, #c9a77c);
+	--gn-btn: #a8754c;
+	--gn-btn-hover: #b98459;
+	--gn-book-h: 196px;
+	--gn-folder-h: 118px;
+	--gn-ledge: 12px;
+	--gn-row-h: 266px;
+	--gn-row-gap: 24px;
+	--gn-top: 0px;
+}
+body.light .gn-shelf {
+	--gn-paper: color-mix(in srgb, var(--panel-solid) 74%, #ead8bd);
+	--gn-paper-edge: rgb(150 112 70 / .14);
+	--gn-wood-top: #ead9bd;
+	--gn-wood: #cfb38b;
+	--gn-ink: color-mix(in srgb, var(--text) 80%, #8a6440);
+}
+@media (max-width: 600px) {
+	.gn-shelf { --gn-book-h: 168px; --gn-folder-h: 100px; --gn-row-h: 236px; --gn-row-gap: 20px }
+}
+
+.gn-shelf .lib-body {
+	padding: 22px 26px 24px;
+	border-radius: 22px;
+	background: var(--gn-paper);
+	box-shadow: inset 0 0 0 1px var(--gn-paper-edge), var(--b-card);
+}
+
+/* Raster mit fester Zeilenhöhe, darunter je Zeile ein Brett (heller Rand + Vorderkante + Schatten) */
+.gn-shelf .gn-grid {
+	--gn-l0: calc(var(--gn-top) + var(--gn-book-h));
+	grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+	grid-auto-rows: var(--gn-row-h);
+	gap: var(--gn-row-gap) 26px;
+	align-items: start;
+	min-height: 0;
+	margin: 0 -14px;
+	padding: var(--gn-top) 14px 0;
+	background-image: linear-gradient(to bottom,
+		transparent var(--gn-l0),
+		var(--gn-wood-top) var(--gn-l0), var(--gn-wood-top) calc(var(--gn-l0) + 3px),
+		var(--gn-wood) calc(var(--gn-l0) + 3px), var(--gn-wood) calc(var(--gn-l0) + var(--gn-ledge)),
+		rgb(0 0 0 / .13) calc(var(--gn-l0) + var(--gn-ledge)), transparent calc(var(--gn-l0) + var(--gn-ledge) + 9px));
+	background-size: 100% calc(var(--gn-row-h) + var(--gn-row-gap));
+	background-repeat: repeat-y;
+	background-attachment: local;
+}
+.gn-shelf .gn-grid:empty { min-height: 56px; background: none }
+.gn-shelf .gn-grid + .empty { margin: 0 0 8px }
+
+/* Werkzeugzeile: Suche als Papier-Pille mit Lupe, „Neu" als warmer Knopf */
+.gn-shelf .lib-head-tools { gap: 8px }
+.gn-search {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 38px;
+	padding: 0 14px;
+	border-radius: 999px;
+	background: var(--gn-paper);
+	box-shadow: inset 0 0 0 1px var(--gn-paper-edge);
+	color: var(--text2);
+	cursor: text;
+	transition: box-shadow .15s ease;
+}
+.gn-search:focus-within { box-shadow: inset 0 0 0 1px var(--gn-wood), 0 0 0 3px rgb(196 154 108 / .22) }
+.gn-search .i { flex: none; width: 16px; height: 16px }
+.gn-shelf .gn-search #libFilter { width: 200px; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--text); font-size: 14px }
+.gn-new {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 38px;
+	min-height: 0;
+	padding: 0 16px 0 12px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--gn-btn);
+	color: #fffaf2;
+	font-size: 14px;
+	font-weight: 650;
+	box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 2px 6px -2px rgb(60 35 15 / .45);
+}
+.gn-new:hover { background: var(--gn-btn-hover) }
+.gn-new .i { width: 16px; height: 16px; stroke-width: 2.4 }
+
+/* Ordner: Mappe mit Reiter, herausschauendem Blatt und kleinem Namensschild wie auf den Heften */
+.gn-shelf .gn-folder { --folder: #8c9db0 }
+.gn-shelf .gn-folder.tone-sky { --folder: #7f98b4 }
+.gn-shelf .gn-folder.tone-mint { --folder: #8aab90 }
+.gn-shelf .gn-folder.tone-lilac { --folder: #a493b3 }
+.gn-shelf .gn-folder.tone-sand { --folder: #cfa970 }
+.gn-shelf .gn-folder.tone-rose { --folder: #c48e84 }
+.gn-shelf .gn-folder.tone-slate { --folder: #7d8186 }
+.gn-shelf .lib-folder-visual::after {
+	content: "";
+	position: absolute;
+	inset: 14px 0 0;
+	border-radius: 6px 10px 8px 8px;
+	background: color-mix(in srgb, var(--folder) 72%, #2a2016);
+}
+.gn-shelf .lib-folder-tab {
+	z-index: 1;
+	top: 4px;
+	width: 44%;
+	height: 22px;
+	border-radius: 7px 9px 0 0;
+	background: color-mix(in srgb, var(--folder) 72%, #2a2016);
+	box-shadow: none;
+}
+.gn-shelf .lib-folder-visual::before {
+	content: "";
+	position: absolute;
+	z-index: 2;
+	left: 9%;
+	right: 11%;
+	top: 20px;
+	bottom: 18px;
+	border-radius: 3px;
+	background: repeating-linear-gradient(to bottom, transparent 0 9px, rgb(44 40 35 / .14) 9px 10px), #fbf7ee;
+	transform: rotate(-2.5deg);
+	box-shadow: 0 1px 3px rgb(0 0 0 / .18);
+}
+.gn-shelf .lib-folder-body {
+	z-index: 3;
+	top: 36%;
+	border-radius: 4px 4px 9px 9px;
+	background: repeating-linear-gradient(45deg, rgb(255 255 255 / .04) 0 2px, transparent 2px 5px), linear-gradient(170deg, color-mix(in srgb, var(--folder) 86%, #fff), var(--folder));
+	box-shadow: inset 0 1px 0 rgb(255 255 255 / .28), 0 -1px 3px rgb(0 0 0 / .12);
+}
+.gn-shelf .lib-folder-body::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 42%;
+	height: 22px;
+	transform: translate(-50%, -50%);
+	border-radius: 4px;
+	background: linear-gradient(transparent 9px, rgb(44 40 35 / .25) 9px 10px, transparent 10px 15px, rgb(44 40 35 / .25) 15px 16px, transparent 16px), #fbf7ee;
+	box-shadow: 0 0 0 1.5px #fbf7ee, 0 0 0 2.5px rgb(44 40 35 / .45), 0 2px 5px rgb(0 0 0 / .2);
+}
+.gn-shelf .lib-folder:hover .lib-folder-visual { transform: translateY(-3px) }
+
+/* Hefte und Ordner stehen auf dem Brett; Titel darunter */
+body .library.gn-shelf .lib-card { padding: 0; min-height: 0; background: transparent; box-shadow: none }
+body .library.gn-shelf .lib-card:hover { background: transparent; box-shadow: none }
+.gn-shelf .lib-notebook { height: var(--gn-book-h); transform-origin: bottom center }
+.gn-shelf .lib-card-title { margin-top: calc(var(--gn-ledge) + 10px); color: var(--gn-ink) }
+.gn-shelf .lib-folder-visual { height: var(--gn-folder-h); margin-top: calc(var(--gn-book-h) - var(--gn-folder-h)) }
+.gn-shelf .lib-folder-name { margin-top: var(--gn-ledge); color: var(--gn-ink) }
+.gn-shelf .gn-folder-more { bottom: auto; top: calc(var(--gn-book-h) + var(--gn-ledge) + 2px) }
+
+@media (max-width: 600px) {
+	.gn-shelf .lib-body { padding: 16px 16px 18px; border-radius: 18px }
+	.gn-shelf .gn-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--gn-row-gap) 16px; margin: 0 -8px; padding-inline: 8px }
+	.gn-shelf .lib-head-tools { width: 100% }
+	.gn-search { flex: 1; min-width: 0 }
+	.gn-shelf .gn-search #libFilter { width: 100%; min-width: 0 }
+}

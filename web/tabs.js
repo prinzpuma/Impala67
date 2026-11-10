@@ -295,6 +295,15 @@ export async function restoreSession() {
 	S.navHistory = [];
 	S.navIndex = -1;
 	if (hasHistory()) { try { window.history.replaceState(navState(), ""); } catch { /* ignore */ } }
+	// Geräte-Einstellung „In der Heft-Bibliothek starten": Tabs bleiben offen, angezeigt wird das Regal.
+	let startLibrary = false;
+	try { startLibrary = localStorage.getItem("impala67StartLibrary") === "on"; } catch { /* ignore */ }
+	if (startLibrary) {
+		S.view = "library";
+		S.libMode = "hefte";
+		S.libFolder = null;
+		return;
+	}
 	if (active) {
 		openPage(active, { restoreSession: true });
 	}

@@ -1164,6 +1164,7 @@ document.addEventListener("change", (e) => {
 	const id = e.target && e.target.id;
 	if (id === "inpHomeArticle") STATE.dispatch("settingsSet", { homeArticle: e.target.checked });
 	else if (id === "inpRelatedPages") STATE.dispatch("settingsSet", { relatedPages: e.target.checked });
+	else if (id === "inpStartLibrary") localStorage.setItem("impala67StartLibrary", e.target.checked ? "on" : "off");
 	else if (id === "inpHomeTopics") STATE.dispatch("settingsSet", { homeArticleTopics: e.target.value.trim() }).then(() => U.toast("Themen gespeichert.", "success"));
 });
 
