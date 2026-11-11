@@ -589,14 +589,10 @@ body.tabs-in-sidebar .heft-scroll {
 :root body .heft-pages-seg.is-history::before { transform: translateX(calc(100% + 2px)) }
 :root body .heft-pages-seg .heft-seg, :root body .heft-pages-seg .heft-seg.active { background: transparent; box-shadow: none }
 body.perf-mode .heft-pages-seg::before { transition: none }
-/* Inhalt: dünne, leise Scrollleiste ohne Pfeile; Seiten heben sich nicht beim Überfahren */
+/* Inhalt: Seiten heben sich nicht beim Überfahren (Scrollleiste kommt global aus base.css) */
 :root body .heft-pop-grid {
 	background: transparent; gap: 26px 18px; padding: 16px 22px 30px; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
-	scrollbar-color: auto; /* globale Farbe würde in Chrome die WebKit-Leiste (ohne Pfeile) abschalten */
 }
-:root body .heft-pop-grid::-webkit-scrollbar { width: 8px; background: transparent }
-:root body .heft-pop-grid::-webkit-scrollbar-button { display: none }
-:root body .heft-pop-grid::-webkit-scrollbar-thumb { border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 18%, transparent) }
 :root body .heft-pop-thumb, :root body .heft-pop-thumb:hover { transform: none; transition: none }
 :root body .heft-pop-thumb canvas { border-radius: var(--radius-xs); box-shadow: 0 0 0 1px rgb(0 0 0 / .14), 0 10px 22px -14px rgb(0 0 0 / .7); transition: box-shadow .15s var(--b-ease) }
 :root body .heft-pop-thumb:hover canvas { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent), 0 10px 22px -14px rgb(0 0 0 / .7) }

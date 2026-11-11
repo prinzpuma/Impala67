@@ -62,6 +62,11 @@ button:not(:disabled):active, .tabchip:active, .lib-card:active, .cal-day:active
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: content-box }
 ::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
 ::-webkit-scrollbar-corner { background: transparent }
+/* Nur ohne ::-webkit-Leiste (Firefox): Standard-Eigenschaften. In Chrome würden sie die Regeln
+   oben abschalten und die Windows-Leiste mit Pfeilen zurückbringen. */
+@supports not selector(::-webkit-scrollbar) {
+	:root { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent }
+}
 
 /* iOS/iPadOS: Gummiband-Scrollen der ganzen App und Doppeltipp-Z… */
 html, body { overscroll-behavior: none }
