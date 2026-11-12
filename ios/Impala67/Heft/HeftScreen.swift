@@ -103,10 +103,12 @@ struct HeftScreen: View {
                     corner
                 }
                 if link.selection != nil { SelectBar(link: link) }
+                if tools.tool == .lasso && (link.lassoCount > 0 || link.canPaste) { LassoBar(link: link) }
                 if let busy { hint(busy) }
             }
             .padding(Space.s3)
             .animation(.snappy, value: link.selection)
+            .animation(.snappy, value: link.lassoCount > 0)
         }
         .clipped()
         // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`) und Startseite beim
@@ -327,6 +329,47 @@ struct HeftScreen: View {
             work()
             busy = nil
         }
+    }
+}
+
+/// Leiste zur Lasso-Auswahl wie in GoodNotes: Farbe, Duplizieren, Kopieren, Ausschneiden, Löschen;
+/// ohne Auswahl „Einfügen“, sobald etwas kopiert ist.
+private struct LassoBar: View {
+    let link: HeftCanvasLink
+
+    var body: some View {
+        HStack(spacing: Space.s3) {
+            if link.lassoCount > 0 {
+                Text(link.lassoCount == 1 ? "1 Strich" : "\(link.lassoCount) Striche")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+                Menu {
+                    ForEach(HeftPalette.colors, id: \.css) { c in
+                        Button(c.name) { link.coordinator?.lassoColor(c.css) }
+                    }
+                } label: {
+                    Icon("palette", size: 16)
+                }
+                .accessibilityLabel("Farbe")
+                Button { link.coordinator?.lassoDuplicate() } label: { Icon("pages-stack", size: 16) }
+                    .accessibilityLabel("Duplizieren")
+                Button { link.coordinator?.lassoCopy() } label: { Icon("copy", size: 16) }
+                    .accessibilityLabel("Kopieren")
+                Button("Ausschneiden") { link.coordinator?.lassoCut() }
+                Button(role: .destructive) { link.coordinator?.lassoDelete() } label: { Icon("trash", size: 16) }
+                    .accessibilityLabel("Löschen")
+                Button("Fertig") { link.coordinator?.clearLasso() }
+                    .fontWeight(.semibold)
+            } else {
+                Button("Einfügen") { link.coordinator?.lassoPaste() }
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.system(size: TextSize.sm))
+        .padding(.horizontal, Space.s3)
+        .frame(minHeight: 40)
+        .impalaGlass(interactive: true)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 

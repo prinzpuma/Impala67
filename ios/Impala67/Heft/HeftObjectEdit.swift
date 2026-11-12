@@ -311,6 +311,9 @@ final class HeftCanvasLink {
     /// Rückgängig/Wiederholen möglich (Knöpfe der Werkzeug-Pille).
     var canUndo = false
     var canRedo = false
+    /// Mit dem Lasso ausgewählte Striche; Einfügen möglich (Kopieren/Ausschneiden vorher).
+    var lassoCount = 0
+    var canPaste = false
     @ObservationIgnored weak var coordinator: HeftCanvas.Coordinator?
 }
 

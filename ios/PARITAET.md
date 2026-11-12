@@ -94,7 +94,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 |---|---|---|---|---|
 | 1. Shell & Navigation | 80 | 21 | 6 | 75 % |
 | 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
-| 3. Heft | 24 | 7 | 4 | 69 % |
+| 3. Heft | 25 | 7 | 3 | 71 % |
 | 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
 | 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
 
@@ -388,7 +388,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | 3 Stift-Favoriten, Marker, Radierer, Lasso, Farben, Dicke, Nur-Stift | ✅ | `Heft/HeftToolbar.swift` |
 | Leiste einklappen | ✅ | `HeftToolbar.swift` (`collapsed`) |
 | Lineal | ⚪ | nur iPad (PencilKit) |
-| Laser | ❌ | fehlt |
+| Laser | ✅ | rote, verblassende Spur, nie gespeichert (`Heft/HeftLasso.swift` `HeftLaserLayer`) · am Gerät ungeprüft |
 | Rückgängig/Wiederholen | ✅ | `HeftToolbar.swift`, `HeftCanvas.swift` (`undo`/`redo`) |
 | Bilder-Menü (Auswahl, Text, Bild, Kamera, Handschrift) | ✅ | `Heft/HeftScreen.swift:160-177` |
 
@@ -406,7 +406,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 |---|---|---|
 | Bilder/Texte auswählen, verschieben, skalieren | ✅ | `Heft/HeftObjectEdit.swift:24-110` |
 | Text direkt auf der Seite schreiben | 🟡 | Sheet statt direkt |
-| Lasso: Duplizieren | 🟡 | fehlt (Text, Löschen da) |
+| Lasso wie GoodNotes: Umkreisen, Rahmen mit Griffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen (mit Rückgängig) | 🟡 | eigenes Lasso statt `PKLassoTool` (`Heft/HeftLasso.swift`); nur Striche, Bilder/Textfelder noch nicht · am Gerät ungeprüft |
 | Entf löscht Auswahl | 🟡 | nur über Leiste |
 
 ### 3.4 Seitenübersicht

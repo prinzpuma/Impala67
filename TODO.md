@@ -54,10 +54,10 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 ## 2. Jetzt am nötigsten (Priorisierte nächste Schritte)
 
 ### iPad-Wunschliste (Nutzer, 12.11.2026) – Ziel: Heft so gut wie GoodNotes
-- [ ] **Lasso wie GoodNotes**: Das jetzige Lasso reicht selbst für die Grundfunktionen nicht (Auswählen, Verschieben, Größe, Duplizieren, Ausschneiden/Kopieren, Löschen, Farbe).
+- [ ] **Lasso wie GoodNotes**: eigenes Lasso gebaut (`ios/Impala67/Heft/HeftLasso.swift`: Umkreisen, Rahmen mit Eckgriffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen, Rückgängig) – am Gerät prüfen; offen: Bilder/Textfelder mitnehmen, Drehen.
 - [ ] **Text direkt auf der Seite** schreiben und bearbeiten (wie GoodNotes) statt im Sheet.
-- [ ] **Neue Seite durch Weiterziehen** am Heft-Ende.
-- [ ] **Laserpointer** im Heft.
+- [x] **Neue Seite durch Weiterziehen** am Heft-Ende (gab es schon: `scrollViewDidEndDragging`, ab 70 pt).
+- [x] **Laserpointer** im Heft (`HeftLaserLayer`) – am Gerät prüfen.
 - [ ] **Cover für Notizen** (Farbe/Bild) – soll richtig gut aussehen.
 - [ ] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig).
 - [x] **Aktivitäts-Heatmap** und **Kartenbrowser mit Sortierung** (Intervall, Fehler) auf dem iPad – am Gerät prüfen.

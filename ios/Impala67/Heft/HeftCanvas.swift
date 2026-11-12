@@ -120,6 +120,14 @@ struct HeftCanvas: UIViewRepresentable {
         private let images = HeftObjectsView(.images)
         private let texts = HeftObjectsView(.texts)
         private let select = HeftSelectLayer()
+        private let lasso = HeftLassoLayer()
+        private let laser = HeftLaserLayer()
+        /// Scroll-Geste der Leinwand vor Lasso/Laser (wird danach wiederhergestellt).
+        private var panDefaults: (types: [NSNumber], min: Int)?
+        /// Mit dem Lasso ausgewählte Striche (PencilKit-Schlüssel).
+        private var lassoSeeds: Set<UInt32> = []
+        /// Kopierte Striche (alle Hefte dieser Sitzung), mit ihren Kerndaten.
+        private static var clipboard: [(stroke: PKStroke, data: HeftStroke)] = []
         private var papers: [String: HeftPaperView] = [:]
         private var inks: [String: HeftInkView] = [:]
         private let hold = HoldWatcher(target: nil, action: nil)
@@ -175,6 +183,24 @@ struct HeftCanvas: UIViewRepresentable {
             guard s != appliedTools, let canvas else { return }
             appliedTools = s
             canvas.tool = s.pkTool
+            // Eigenes Lasso statt PencilKits: PencilKit zeichnet dann nichts.
+            let lassoOn = s.tool == .lasso
+            canvas.drawingGestureRecognizer.isEnabled = !lassoOn && s.tool != .laser
+            if !lassoOn { clearLasso() }
+            lasso.active = lassoOn
+            laser.active = s.tool == .laser
+            // Lasso/Laser: der Stift (und ein Finger, falls er zeichnen darf) gehört ihnen, Scrollen bleibt
+            // beim Finger bzw. bei zwei Fingern – wie beim Schreiben.
+            let pan = canvas.panGestureRecognizer
+            if lassoOn || s.tool == .laser {
+                if panDefaults == nil { panDefaults = (pan.allowedTouchTypes, pan.minimumNumberOfTouches) }
+                pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+                pan.minimumNumberOfTouches = s.onlyPen ? 1 : 2
+            } else if let d = panDefaults {
+                pan.allowedTouchTypes = d.types
+                pan.minimumNumberOfTouches = d.min
+                panDefaults = nil
+            }
             canvas.drawingPolicy = s.onlyPen ? .pencilOnly : .anyInput
             canvas.isRulerActive = s.ruler
         }
@@ -235,6 +261,16 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.insertSubview(under, at: 0)
             canvas.addSubview(texts)
             canvas.addSubview(select)
+            canvas.addSubview(lasso)
+            canvas.addSubview(laser)
+            canvas.addGestureRecognizer(laser.draw)
+            canvas.panGestureRecognizer.require(toFail: lasso.pan)
+            canvas.addGestureRecognizer(lasso.draw)
+            canvas.addGestureRecognizer(lasso.tap)
+            lasso.onLasso = { [weak self] polygon in self?.lassoSelect(polygon) }
+            lasso.onBegin = { [weak self] in self?.lassoSnapshot() }
+            lasso.onCommit = { [weak self] t in self?.lassoCommit(t) }
+            lasso.onClear = { [weak self] in self?.clearLasso() }
             // Ziehen auf der Auswahl verschiebt sie; sonst scrollt die Fläche.
             canvas.panGestureRecognizer.require(toFail: select.pan)
             select.onSelect = { [weak self] item in self?.link?.selection = item }
@@ -251,6 +287,8 @@ struct HeftCanvas: UIViewRepresentable {
                 default: return !UIPencilInteraction.prefersPencilOnlyDrawing
                 }
             }
+            lasso.fingerDraws = select.fingerDraws
+            laser.fingerDraws = select.fingerDraws
             select.onHoldBegan = { [weak canvas] in
                 // Ab- und wieder Anschalten bricht den angefangenen Strich bzw. das Scrollen dieses Fingers ab.
                 guard let canvas else { return }
@@ -332,6 +370,9 @@ struct HeftCanvas: UIViewRepresentable {
             images.configure(size: contentSize, pages: []) { _ in nil }
             texts.configure(size: contentSize, pages: []) { _ in nil }
             select.configure(size: contentSize, pages: [])
+            lasso.configure(size: contentSize)
+            laser.configure(size: contentSize)
+            clearLasso()
             let z = canvas.zoomScale
             canvas.contentSize = CGSize(width: contentSize.width * z, height: contentSize.height * z)
             layoutPage()
@@ -548,10 +589,10 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Sichtbare Striche nachziehen: gespeicherte (in PencilKit durchsichtige) Striche je Seite in
         /// Zeichenreihenfolge, mit ihren Kerndaten und der Lage seit dem Laden (Lasso-Verschieben).
-        private func updateInk() {
+        private func updateInk(hiding hidden: Set<UInt32> = []) {
             guard let canvas, !inks.isEmpty else { return }
             var lists: [String: [(data: HeftStroke, transform: CGAffineTransform)]] = [:]
-            for stroke in canvas.drawing.strokes where HeftInk.isHidden(stroke) {
+            for stroke in canvas.drawing.strokes where HeftInk.isHidden(stroke) && !hidden.contains(stroke.randomSeed) {
                 guard let k = known[stroke.randomSeed], inks[k.page] != nil else { continue }
                 let t: CGAffineTransform = k.drawn == stroke.transform ? .identity : k.drawn.inverted().concatenating(stroke.transform)
                 lists[k.page, default: []].append((data: k.data, transform: t))
@@ -656,6 +697,8 @@ struct HeftCanvas: UIViewRepresentable {
             images.follow(zoom: z)
             texts.follow(zoom: z)
             select.follow(zoom: z)
+            lasso.follow(zoom: z)
+            laser.follow(zoom: z)
             let w = Self.pageSize.width * z
             let side = max(Self.gutter, (canvas.bounds.width - w) / 2)
             let inset = UIEdgeInsets(top: Self.topInset, left: side, bottom: Self.gutter + 80, right: side)
@@ -689,6 +732,8 @@ struct HeftCanvas: UIViewRepresentable {
             // damit neu geschriebene Striche schon ihre Kerndaten haben).
             updateInk()
             refreshUndo()
+            // Rückgängig, fremde Änderung: Auswahlrahmen folgt den verbliebenen Strichen.
+            if !lassoSeeds.isEmpty { refreshLasso() }
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
@@ -800,6 +845,166 @@ struct HeftCanvas: UIViewRepresentable {
             HeftOcr.schedule(core: core, pageId: pageId, heftPageId: page)
             if AppHaptics.isEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             return true
+        }
+
+        // MARK: Lasso (HeftLasso.swift)
+
+        /// Striche, die überwiegend im Lasso liegen, auswählen.
+        private func lassoSelect(_ polygon: [CGPoint]) {
+            guard let canvas else { return }
+            var minX = CGFloat.infinity, minY = CGFloat.infinity, maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
+            for p in polygon {
+                minX = min(minX, p.x); minY = min(minY, p.y); maxX = max(maxX, p.x); maxY = max(maxY, p.y)
+            }
+            let bounds = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            lassoSeeds = Set(canvas.drawing.strokes.filter { stroke in
+                known[stroke.randomSeed] != nil && stroke.renderBounds.intersects(bounds) && HeftLassoLayer.contains(polygon, stroke: stroke)
+            }.map(\.randomSeed))
+            refreshLasso()
+        }
+
+        private func lassoStrokes() -> [PKStroke] {
+            guard let canvas, !lassoSeeds.isEmpty else { return [] }
+            return canvas.drawing.strokes.filter { lassoSeeds.contains($0.randomSeed) }
+        }
+
+        /// Rahmen um die ausgewählten Striche zeigen und die Leiste nachführen.
+        private func refreshLasso() {
+            let list = lassoStrokes()
+            lassoSeeds = Set(list.map(\.randomSeed))
+            lasso.show(list.isEmpty ? nil : list.reduce(CGRect.null) { $0.union($1.renderBounds) })
+            if link?.lassoCount != list.count { link?.lassoCount = list.count }
+        }
+
+        func clearLasso() {
+            guard !lassoSeeds.isEmpty || lasso.box != nil else { return }
+            lassoSeeds = []
+            lasso.show(nil)
+            if link?.lassoCount != 0 { link?.lassoCount = 0 }
+        }
+
+        /// Sichtbare Tinte der Auswahl als Bild (Vorschau beim Ziehen); die Originale werden so lange ausgeblendet.
+        private func lassoSnapshot() -> UIImage? {
+            guard let canvas, let box = lasso.box else { return nil }
+            var visible: [PKStroke] = []
+            for s in lassoStrokes() {
+                guard let k = known[s.randomSeed],
+                      var v = HeftInk.pkStroke(k.data, seed: s.randomSeed, offset: origin(of: k.page)) else { continue }
+                let t: CGAffineTransform = k.drawn == s.transform ? .identity : k.drawn.inverted().concatenating(s.transform)
+                v.transform = v.transform.concatenating(t)
+                visible.append(v)
+            }
+            let scale = min(canvas.traitCollection.displayScale * canvas.zoomScale, 4)
+            let image = PKDrawing(strokes: visible).image(from: box, scale: scale)
+            updateInk(hiding: lassoSeeds)
+            return image
+        }
+
+        /// Verschieben/Skalieren übernehmen: über die Zeichnung, damit der Abgleich schreibt und Rückgängig greift.
+        private func lassoCommit(_ t: CGAffineTransform) {
+            guard let canvas else { return }
+            guard !t.isIdentity else {
+                updateInk()
+                refreshLasso()
+                return
+            }
+            var all = canvas.drawing.strokes
+            for i in all.indices where lassoSeeds.contains(all[i].randomSeed) {
+                all[i].transform = all[i].transform.concatenating(t)
+            }
+            setDrawing(PKDrawing(strokes: all))
+            refreshLasso()
+        }
+
+        /// Zeichnung setzen wie eine Änderung mit dem Stift: Abgleich schreibt in den Kern, Rückgängig stellt her.
+        private func setDrawing(_ drawing: PKDrawing) {
+            guard let canvas else { return }
+            let old = canvas.drawing
+            canvas.undoManager?.registerUndo(withTarget: self) { me in me.setDrawing(old) }
+            canvas.drawing = drawing
+        }
+
+        func lassoDelete() {
+            guard let canvas, !lassoSeeds.isEmpty else { return }
+            let keep = canvas.drawing.strokes.filter { !lassoSeeds.contains($0.randomSeed) }
+            clearLasso()
+            setDrawing(PKDrawing(strokes: keep))
+        }
+
+        func lassoCopy() {
+            Self.clipboard = lassoStrokes().compactMap { s in known[s.randomSeed].map { (stroke: s, data: $0.data) } }
+            link?.canPaste = !Self.clipboard.isEmpty
+        }
+
+        func lassoCut() {
+            lassoCopy()
+            lassoDelete()
+        }
+
+        /// Auswahl versetzt kopieren; die Kopie ist danach ausgewählt.
+        func lassoDuplicate() {
+            let items = lassoStrokes().compactMap { s in known[s.randomSeed].map { (stroke: s, data: $0.data) } }
+            insert(items, by: CGPoint(x: 30, y: 30))
+        }
+
+        /// Kopierte Striche mittig in den sichtbaren Ausschnitt einfügen.
+        func lassoPaste() {
+            guard let canvas, !Self.clipboard.isEmpty else { return }
+            let z = max(canvas.zoomScale, 0.01)
+            let c = CGPoint(x: (canvas.contentOffset.x + canvas.bounds.width / 2) / z,
+                            y: (canvas.contentOffset.y + canvas.bounds.height / 2) / z)
+            let b = Self.clipboard.reduce(CGRect.null) { $0.union($1.stroke.renderBounds) }
+            insert(Self.clipboard, by: CGPoint(x: c.x - b.midX, y: c.y - b.midY))
+        }
+
+        private func insert(_ items: [(stroke: PKStroke, data: HeftStroke)], by d: CGPoint) {
+            guard let canvas, !items.isEmpty else { return }
+            let old = canvas.drawing
+            var added: [PKStroke] = []
+            for item in items {
+                var c = item.stroke
+                c.randomSeed = UInt32.random(in: 1...UInt32.max)
+                c.transform = item.stroke.transform.concatenating(CGAffineTransform(translationX: d.x, y: d.y))
+                added.append(c)
+            }
+            applying = true
+            canvas.drawing = PKDrawing(strokes: old.strokes + added)
+            applying = false
+            for (c, item) in zip(added, items) {
+                guard let page = pageOf(c) else { continue }
+                addStroke(c, original: (page: page, data: item.data))
+            }
+            canvas.undoManager?.registerUndo(withTarget: self) { me in me.setDrawing(old) }
+            updateInk()
+            refreshUndo()
+            lassoSeeds = Set(added.map(\.randomSeed))
+            refreshLasso()
+        }
+
+        /// Farbe der Auswahl ändern (neu schreiben mit gleicher Lage; Rückgängig stellt die alten Farben her).
+        func lassoColor(_ css: String) {
+            var colors: [UInt32: String] = [:]
+            for seed in lassoSeeds { colors[seed] = css }
+            recolor(colors)
+        }
+
+        private func recolor(_ colors: [UInt32: String]) {
+            guard let canvas else { return }
+            var before: [UInt32: String] = [:]
+            for s in canvas.drawing.strokes {
+                guard let css = colors[s.randomSeed], let k = known[s.randomSeed], k.data.color != css else { continue }
+                before[s.randomSeed] = k.data.color
+                removeStrokes([(page: k.page, id: k.id)])
+                known[s.randomSeed] = nil
+                var data = k.data
+                data.color = css
+                addStroke(s, original: (page: k.page, data: data))
+            }
+            guard !before.isEmpty else { return }
+            canvas.undoManager?.registerUndo(withTarget: self) { me in me.recolor(before) }
+            updateInk()
+            refreshUndo()
+            for page in Set(before.keys.compactMap { known[$0]?.page }) { HeftOcr.schedule(core: core, pageId: pageId, heftPageId: page) }
         }
 
         // MARK: Bilder und Textfelder

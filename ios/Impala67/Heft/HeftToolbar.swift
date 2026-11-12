@@ -1,9 +1,9 @@
 import PencilKit
 import SwiftUI
 
-/// Werkzeug des Hefts (wie `tool` in web/heft.js; Laserpointer gibt es hier nicht).
+/// Werkzeug des Hefts (wie `tool` in web/heft.js). Lasso und Laser zeichnen nicht (HeftLasso.swift).
 enum HeftTool: String, Codable {
-    case pen, marker, eraser, lasso
+    case pen, marker, eraser, lasso, laser
 }
 
 /// Stift-Favorit der PWA (`DEFAULT_PENS` in heft-tools.js): eigene Farbe und Dicke.
@@ -28,7 +28,7 @@ struct HeftToolSetting: Equatable {
         case .pen: return PKInkingTool(.pen, color: UIColor(css: color), width: size)
         case .marker: return PKInkingTool(.marker, color: UIColor(css: color), width: size * 3)
         case .eraser: return PKEraserTool(.vector, width: eraserSize * 2)
-        case .lasso: return PKLassoTool()
+        case .lasso, .laser: return PKLassoTool()
         }
     }
 }
@@ -110,8 +110,8 @@ final class HeftTools {
         case .pen, .marker:
             expanded = tool == t && !expanded
             select(t)
-        case .lasso:
-            select(.lasso)
+        case .lasso, .laser:
+            select(t)
             expanded = false
         }
     }
@@ -150,7 +150,7 @@ final class HeftTools {
             expanded = false
         case .showColorPalette, .showInkAttributes, .showContextualPalette:
             collapsed = false
-            if tool == .lasso { select(.pen) }
+            if tool == .lasso || tool == .laser { select(.pen) }
             expanded.toggle()
         default:
             break
@@ -185,7 +185,7 @@ struct HeftToolPill: View {
                 .frame(height: 48)
                 .impalaGlass(interactive: true)
             }
-            if !tools.collapsed && tools.expanded && tools.tool != .lasso {
+            if !tools.collapsed && tools.expanded && tools.tool != .lasso && tools.tool != .laser {
                 tray.transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -212,6 +212,9 @@ struct HeftToolPill: View {
         }
         ToolButton(active: tools.tool == .lasso, label: "Lasso – Striche auswählen", action: { tools.pick(.lasso) }) {
             Icon("lasso", size: 18)
+        }
+        ToolButton(active: tools.tool == .laser, label: "Laserpointer – zeigen, ohne zu schreiben", action: { tools.pick(.laser) }) {
+            Icon("laser", size: 18)
         }
         ToolButton(active: tools.ruler, label: "Lineal", action: { tools.ruler.toggle() }) {
             Image(systemName: "ruler").font(.system(size: 16))
@@ -240,6 +243,7 @@ struct HeftToolPill: View {
                     PenGlyph(icon: tools.tool == .marker ? "marker" : "pen-tool", color: tools.color, size: tools.size)
                 case .eraser: Icon("eraser", size: 18)
                 case .lasso: Icon("lasso", size: 18)
+                case .laser: Icon("laser", size: 18)
                 }
                 Icon("chevron-down", size: 11).foregroundStyle(Impala.text2)
             }
