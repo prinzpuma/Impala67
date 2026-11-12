@@ -160,7 +160,11 @@ impl ImpalaCore {
 
     /// Seiten, die per `[[Titel]]` auf diese verweisen.
     pub fn backlinks(&self, id: String) -> Vec<PageSummary> {
-        summaries(self.lock().model.state().backlinks_of(&id))
+        let mut inner = self.lock();
+        let Inner { model, search, .. } = &mut *inner;
+        let ids = search.backlinks(model, &id);
+        let state = model.state();
+        summaries(ids.iter().filter_map(|i| state.pages.get(i)).collect())
     }
 
     /// Alle Verweise zwischen aktiven Seiten auf einmal (für den Graphen): dieselbe Regel wie

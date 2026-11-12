@@ -33,6 +33,8 @@ struct Entry {
     raw: String,
     hay: String,
     title_lc: String,
+    /// Bereich des Seiteninhalts in `hay` (Rücklinks suchen nur dort).
+    content_lc: std::ops::Range<usize>,
 }
 
 /// Treffer; `terms` sind bei Tippfehler-Treffern die getroffenen Wortformen (zum Markieren).
@@ -57,6 +59,15 @@ impl NoteIndex {
         Self::default()
     }
 
+    /// Ist die Seite mit diesem Stand schon indiziert? Dann reicht [`Self::set_flags`] – der
+    /// Aufrufer muss Titel und Inhalt nicht erst kopieren (Abgleich vor jeder Suche).
+    pub fn is_current(&self, id: &str, updated: &str, title: &str, ocr: &str) -> bool {
+        self.slot_of
+            .get(id)
+            .and_then(|&s| self.entries[s].as_ref())
+            .is_some_and(|e| e.doc.updated == updated && e.doc.title == title && e.doc.ocr == ocr)
+    }
+
     /// Seite aufnehmen oder aktualisieren (Position bleibt, wie bei einem JS-Objekt).
     pub fn set_page(&mut self, doc: NoteDoc) {
         let slot = self.slot_of.get(&doc.id).copied();
@@ -75,7 +86,16 @@ impl NoteIndex {
             format!("{}\n{}\n{}", doc.title, doc.content, doc.ocr)
         };
         self.fuzzy.set_page(&doc.id, &raw);
-        let entry = Entry { hay: lower(&raw), title_lc: lower(&doc.title), raw, doc };
+        // Stückweise klein geschrieben = wie lower(raw): die Trenner sind keine Buchstaben, also
+        // wirkt auch die Schluss-Sigma-Regel gleich.
+        let title_lc = lower(&doc.title);
+        let mut hay = format!("{title_lc}\n{}", lower(&doc.content));
+        let content_lc = title_lc.len() + 1..hay.len();
+        if !doc.ocr.is_empty() {
+            hay.push('\n');
+            hay.push_str(&lower(&doc.ocr));
+        }
+        let entry = Entry { hay, title_lc, content_lc, raw, doc };
         match slot {
             Some(s) => self.entries[s] = Some(entry),
             None => {
@@ -96,6 +116,18 @@ impl NoteIndex {
             }
             None => false,
         }
+    }
+
+    /// Seiten außerhalb des Archivs (ohne `exclude`), deren Inhalt `title` enthält, ohne
+    /// Groß-/Kleinschreibung (Rücklink-Regel, `impala_markdown::links_to`), in Indexreihenfolge.
+    pub fn mentioning(&self, title: &str, exclude: &str) -> Vec<&str> {
+        let needle = lower(title);
+        self.entries
+            .iter()
+            .flatten()
+            .filter(|e| !e.doc.in_archive && e.doc.id != exclude && e.hay[e.content_lc.clone()].contains(&needle))
+            .map(|e| e.doc.id.as_str())
+            .collect()
     }
 
     /// Seite entfernen (gelöscht oder im Papierkorb).

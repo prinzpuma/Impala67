@@ -97,6 +97,15 @@ pub struct Model {
     applied_after_load: HashSet<String>,
     /// Gerade offener Chat (UI); hält dessen Tab, auch bevor die Sitzung gespeichert ist.
     pub current_chat_id: Option<String>,
+    /// Stand des Zustands, siehe [`Model::revision`].
+    revision: u64,
+}
+
+/// Quelle für [`Model::revision`]: über alle Modelle eindeutig, damit ein neu geladenes Modell
+/// nie den Stand eines alten wiederholt.
+static REVISIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+fn next_revision() -> u64 {
+    REVISIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Default for Model {
@@ -116,6 +125,7 @@ impl Default for Model {
             loaded_seq: 0,
             applied_after_load: HashSet::new(),
             current_chat_id: None,
+            revision: next_revision(),
         }
     }
 }
@@ -171,6 +181,7 @@ impl Model {
 
     /// Zustand direkt ändern – nur für Werkzeuge/Tests; die App ändert ihn über Events.
     pub fn state_mut(&mut self) -> &mut State {
+        self.revision = next_revision();
         &mut self.state
     }
 
@@ -193,7 +204,14 @@ impl Model {
     }
 
     /// Ein Event anwenden (`reduce`). `loading`: Teil des Start-Replays.
+    /// Ändert sich mit jedem angewandten Event (und jedem schreibenden Zugriff auf den Zustand):
+    /// abgeleitete Daten wie der Suchindex sind bei gleichem Wert noch aktuell.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     fn reduce(&mut self, ev: LogEvent, loading: bool) -> Effects {
+        self.revision = next_revision();
         if !loading
             && js::lt(&ev.t, &self.loaded_time)
             && !(self.order_complete && order::reorder_safe(&ev, Some(&self.order)))

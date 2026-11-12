@@ -5,13 +5,24 @@
 
 use impala_search::{NoteDoc, NoteHit, NoteIndex};
 
+use std::collections::HashSet;
+
 use crate::model::Model;
+
+/// Handschrift-Text eines Hefts (wie `heftMeta.ocrText`), ohne die übrigen Kennzahlen zu rechnen.
+fn ocr_text(model: &Model, id: &str) -> String {
+    model.state().hefte.get(id).map_or_else(String::new, |doc| {
+        doc.pages.iter().map(|p| p.ocr_text.as_str()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join("\n")
+    })
+}
 
 #[derive(Default)]
 pub struct NoteSearch {
     index: NoteIndex,
     /// Seiten-IDs im Index, in Indexreihenfolge.
     order: Vec<String>,
+    /// [`Model::revision`] beim letzten Abgleich: gleich = nichts zu tun.
+    synced: Option<u64>,
 }
 
 impl NoteSearch {
@@ -19,25 +30,17 @@ impl NoteSearch {
         Self::default()
     }
 
-    /// Index an den Zustand angleichen.
+    /// Index an den Zustand angleichen. Unveränderte Seiten (gleicher Stempel, Titel, OCR-Text)
+    /// werden nicht kopiert – vorher lief vor JEDER Suche eine Kopie aller Seiteninhalte.
     pub fn refresh(&mut self, model: &Model) {
+        if self.synced == Some(model.revision()) {
+            return;
+        }
+        self.synced = Some(model.revision());
         let state = model.state();
-        let docs: Vec<NoteDoc> = state
-            .pages
-            .iter()
-            .filter(|(_, p)| !p.is_trashed())
-            .map(|(id, p)| NoteDoc {
-                id: id.clone(),
-                title: p.title().to_owned(),
-                content: p.content().to_owned(),
-                ocr: model.heft_meta(id).map(|m| m.ocr_text).unwrap_or_default(),
-                updated: p.updated().to_owned(),
-                archived: p.is_archived(),
-                in_archive: state.is_page_archived(id),
-            })
-            .collect();
-        let ids: Vec<&str> = docs.iter().map(|d| d.id.as_str()).collect();
-        let present: std::collections::HashSet<&str> = ids.iter().copied().collect();
+        let live: Vec<(&String, &crate::types::Page)> = state.pages.iter().filter(|(_, p)| !p.is_trashed()).collect();
+        let ids: Vec<&str> = live.iter().map(|(id, _)| id.as_str()).collect();
+        let present: HashSet<&str> = ids.iter().copied().collect();
         let kept: Vec<&str> = self.order.iter().map(String::as_str).filter(|id| present.contains(id)).collect();
         // Bleibende Seiten müssen vorn in gleicher Reihenfolge stehen, neue nur hinten dazukommen.
         if ids.len() < kept.len() || ids[..kept.len()] != kept[..] {
@@ -49,12 +52,37 @@ impl NoteSearch {
             }
             self.order.retain(|id| present.contains(id.as_str()));
         }
-        for doc in docs {
-            if !self.order.contains(&doc.id) {
-                self.order.push(doc.id.clone());
+        let known: HashSet<&str> = self.order.iter().map(String::as_str).collect();
+        let added: Vec<String> = ids.iter().filter(|id| !known.contains(*id)).map(|id| (*id).to_owned()).collect();
+        self.order.extend(added);
+        for (id, p) in live {
+            let ocr = ocr_text(model, id);
+            let (archived, in_archive) = (p.is_archived(), state.is_page_archived(id));
+            if self.index.is_current(id, p.updated(), p.title(), &ocr) {
+                self.index.set_flags(id, archived, in_archive);
+                continue;
             }
-            self.index.set_page(doc);
+            self.index.set_page(NoteDoc {
+                id: id.clone(),
+                title: p.title().to_owned(),
+                content: p.content().to_owned(),
+                ocr,
+                updated: p.updated().to_owned(),
+                archived,
+                in_archive,
+            });
         }
+    }
+
+    /// Rücklinks (`backlinksOf`) aus dem Index: der Inhalt jeder Seite liegt dort schon klein
+    /// geschrieben. [`crate::types::State::backlinks_of`] schrieb bei jeder Abfrage alle Seiten neu klein.
+    pub fn backlinks(&mut self, model: &Model, id: &str) -> Vec<String> {
+        let Some(title) = model.state().pages.get(id).map(|p| p.title().to_owned()) else { return Vec::new() };
+        if title.is_empty() || title == "Ohne Titel" {
+            return Vec::new();
+        }
+        self.refresh(model);
+        self.index.mentioning(&title, id).into_iter().map(str::to_owned).collect()
     }
 
     /// Suche (`searchNotes`); `include_archived`: auch archivierte Seiten.

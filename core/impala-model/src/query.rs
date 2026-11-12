@@ -197,19 +197,6 @@ impl State {
         partial
     }
 
-    /// Seiten, deren Inhalt den Titel der Zielseite erwähnt.
-    pub fn backlinks_of(&self, id: &str) -> Vec<&Page> {
-        let Some(target) = self.pages.get(id) else { return Vec::new() };
-        let title = target.title();
-        if title.is_empty() || title == "Ohne Titel" {
-            return Vec::new();
-        }
-        self.active_pages()
-            .into_iter()
-            .filter(|p| p.id() != id && impala_markdown::links_to(p.content(), title))
-            .collect()
-    }
-
     /// Aktive Karten: weder gelöscht noch selbst/über den Stapel archiviert.
     pub fn active_cards(&self) -> Vec<&Card> {
         self.cards.values().filter(|c| !c.is_trashed() && !self.is_card_archived(c)).collect()

@@ -345,7 +345,8 @@ fn abfragen_und_lernen_wie_js() {
             assert_eq!(json!(st.find_page(t, false).map(|p| p.id())), f[2], "{}", at(&format!("findPage {t}")));
         }
         for b in q["backlinks"].as_array().unwrap() {
-            assert_same(&ids(st.backlinks_of(b["id"].as_str().unwrap())), &b["ids"], &at(&format!("backlinksOf {b}")));
+            let via_index = impala_model::search::NoteSearch::new().backlinks(&model, b["id"].as_str().unwrap());
+            assert_same(&json!(via_index), &b["ids"], &at(&format!("backlinksOf {b}")));
         }
         for a in q["ancestors"].as_array().unwrap() {
             assert_same(&ids(st.ancestors_of(a["id"].as_str().unwrap())), &a["ids"], &at("ancestorsOf"));

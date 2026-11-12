@@ -721,8 +721,8 @@ impl ModelCore {
     }
 
     #[wasm_bindgen(js_name = backlinksOf)]
-    pub fn backlinks_of(&self, id: &str) -> String {
-        ids_of(self.m.state().backlinks_of(id))
+    pub fn backlinks_of(&mut self, id: &str) -> String {
+        text(&self.search.backlinks(&self.m, id))
     }
 
     #[wasm_bindgen(js_name = sortKeyOf)]
