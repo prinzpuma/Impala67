@@ -159,8 +159,9 @@ private fun TableBlock(rows: List<List<String>>, ctx: ReadContext) {
             Row(Modifier.height(IntrinsicSize.Min)) {
                 row.forEach { cell ->
                     Box(Modifier.width(150.dp).fillMaxHeight().border(0.5.dp, c.edge).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                        val styled = remember(styler, cell) { styler.build(cell.replace(BR, "\n")) }
                         MathText(
-                            styler.build(cell.replace(BR, "\n")),
+                            styled,
                             style = TextStyle(color = c.text, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = if (r == 0) FontWeight.SemiBold else null),
                         )
                     }
@@ -202,7 +203,8 @@ private fun ToggleBlock(id: String, k: MdBlockKind.Toggle, ctx: ReadContext) {
             Box(Modifier.size(24.dp).padding(top = 2.dp), contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_i_chevron_right), if (open) "Zuklappen" else "Aufklappen", Modifier.size(16.dp).rotate(if (open) 90f else 0f), tint = c.text2)
             }
-            MathText(styler.build(k.summary), Modifier.weight(1f), style = TextStyle(color = c.text, fontSize = 16.sp, lineHeight = 25.sp))
+            val styled = remember(styler, k.summary) { styler.build(k.summary) }
+            MathText(styled, Modifier.weight(1f), style = TextStyle(color = c.text, fontSize = 16.sp, lineHeight = 25.sp))
         }
         AnimatedVisibility(open) {
             BlockList(k.children, ctx.forChildren(), Modifier.padding(start = 24.dp))

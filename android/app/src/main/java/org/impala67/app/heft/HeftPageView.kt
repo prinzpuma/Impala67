@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -54,8 +53,6 @@ private val PageShape = RoundedCornerShape(Radius.xs)
 fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Modifier) {
     val data by vm.page(heftPageId).collectAsStateWithLifecycle()
     val cache = remember { StrokeCache() }
-    val strokeLayer = remember { PageStrokeLayer() }
-    DisposableEffect(strokeLayer) { onDispose { strokeLayer.release() } }
     val pending = remember { mutableStateListOf<HeftStroke>() }
     var erased by remember { mutableStateOf(emptySet<String>()) }
     var ring by remember { mutableStateOf<Offset?>(null) }
@@ -65,20 +62,21 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     val ink = Impala.colors.accent
 
     val saved = data?.strokes.orEmpty()
+    val savedIds = remember(saved) { saved.mapTo(HashSet()) { it.id } }
     LaunchedEffect(vm.overlayResetRev) {
         if (vm.overlayResetRev > 0) {
             pending.clear()
             erased = emptySet()
         }
     }
-    LaunchedEffect(saved) {
-        val ids = saved.mapTo(HashSet()) { it.id }
-        pending.removeAll { it.id in ids }
-        erased = erased.filterTo(HashSet()) { it in ids }
-        cache.retain(ids + pending.map { it.id })
+    LaunchedEffect(savedIds) {
+        erased = erased.filterTo(HashSet()) { it in savedIds }
+        cache.retain(savedIds + pending.map { it.id })
     }
     val pendingSnapshot = pending.toList()
-    val visible = remember(saved, pendingSnapshot, erased) { saved.filter { it.id !in erased } + pendingSnapshot }
+    val visible = remember(saved, savedIds, pendingSnapshot, erased) {
+        saved.filter { it.id !in erased } + pendingSnapshot.filter { it.id !in savedIds && it.id !in erased }
+    }
     // Lasso-Vorschau: Striche, die noch an der alten Stelle liegen, zeichnet die Seite verschoben.
     val sel = vm.lasso?.takeIf { it.heftPageId == heftPageId }
     val drag = sel?.drag
@@ -86,7 +84,6 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         drag?.marks?.let { marks -> visible.filter { marks[it.id] == it.mark() }.mapTo(HashSet()) { it.id } }.orEmpty()
     }
     val settled = remember(saved, erased, moving) { saved.filter { it.id !in erased && it.id !in moving } }
-    val pendingStrokes = remember(pendingSnapshot, moving) { pendingSnapshot.filter { it.id !in moving }.mapNotNull(cache::get) }
     val moved = remember(visible, moving) { visible.filter { it.id in moving }.mapNotNull(cache::get) }
     val gesture = remember { LassoGesture(vm, heftPageId) }
     val objects = remember { ObjGesture(vm, heftPageId) }
@@ -117,8 +114,19 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     ) {
         val k = constraints.maxWidth / HeftPage.WIDTH
         scale[0] = k
-        val bmpW = constraints.maxWidth.coerceIn(512, 2048)
-        val settledImage = remember(settled, bmpW) { strokeLayer.imageFor(settled, cache, bmpW) }
+        // Gestufte Bitmap-Breite: vermeidet Komplett-Neuzeichnen nach jedem Pinch-Zoom.
+        val bmpW = when {
+            constraints.maxWidth <= 640 -> 512
+            constraints.maxWidth <= 1280 -> 1024
+            else -> 1536
+        }
+        val layer = rememberStrokeLayer(settled, cache, bmpW)
+        LaunchedEffect(layer.drawnKeys, erased) {
+            if (pending.isNotEmpty()) pending.removeAll { it.id in layer.drawnKeys || it.id in erased }
+        }
+        val pendingStrokes = remember(pendingSnapshot, layer.drawnKeys, erased, moving) {
+            pendingSnapshot.filter { it.id !in layer.drawnKeys && it.id !in erased && it.id !in moving }.mapNotNull(cache::get)
+        }
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
         val stored = data?.images.orEmpty()
@@ -144,7 +152,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         Canvas(Modifier.fillMaxSize()) {
             drawPaper(paper, ink, k)
             drawHeftImages(images, bitmaps, k)
-            settledImage?.let {
+            layer.image?.let {
                 drawImage(
                     image = it,
                     dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),

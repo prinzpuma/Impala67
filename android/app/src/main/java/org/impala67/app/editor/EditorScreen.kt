@@ -65,11 +65,13 @@ fun EditorScreen(
     // Tablet (Seitenzeile wie die PWA): Griff mit „+“ und „⋮⋮“ links neben den Blöcken.
     val gutter = chromeActions != null
     val active = vm.active
-    val ctx = remember(store, onLink, onOpenPage, active, menus) {
+    val selectedId = active?.takeIf { it.mode == EditMode.Select }?.id
+    val editingId = active?.takeIf { it.mode == EditMode.Text }?.id
+    val ctx = remember(store, onLink, onOpenPage, selectedId, editingId, menus) {
         ReadContext(
             store = store, onLink = onLink, onOpenPage = onOpenPage,
-            selectedId = active?.takeIf { it.mode == EditMode.Select }?.id,
-            editingId = active?.takeIf { it.mode == EditMode.Text }?.id,
+            selectedId = selectedId,
+            editingId = editingId,
             onTap = vm::tap, onEditRaw = vm::editRaw, onToggleTodo = vm::toggleTodo, onToggleOpen = vm::toggleOpen,
             onTableEdit = vm::setTable,
             editSlot = { block, style, mod -> vm.active?.takeIf { it.id == block.id }?.let { BlockTextField(block, it, vm, menus, style, mod) } },

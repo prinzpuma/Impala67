@@ -1,6 +1,15 @@
 package org.impala67.app.heft
 
 import android.graphics.Bitmap
+import android.graphics.PorterDuff
+import android.graphics.RectF
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.ink.brush.Brush
@@ -10,7 +19,14 @@ import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.impala67.app.diag.Profiler
 import uniffi.impala_ffi.HeftStroke
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -71,53 +87,105 @@ object HeftInk {
     }
 }
 
-/** Gezeichnete ink-Striche je Strich-ID; ein geänderter Strich (Farbe, Breite, Punktzahl, Lage) wird neu gebaut. */
+/** Gezeichnete ink-Striche samt Rahmen je Strich-ID; geänderte Striche werden bei Bedarf neu gebaut. */
 class StrokeCache {
-    private class Entry(val key: String, val stroke: Stroke)
+    class Entry(val key: String, val stroke: Stroke, val bounds: RectF)
 
     private val entries = HashMap<String, Entry>()
 
-    fun get(s: HeftStroke): Stroke? {
+    @Synchronized
+    fun entry(s: HeftStroke): Entry? {
         val key = strokeKey(s)
-        entries[s.id]?.takeIf { it.key == key }?.let { return it.stroke }
+        entries[s.id]?.takeIf { it.key == key }?.let { return it }
         val stroke = HeftInk.stroke(s) ?: return null
-        entries[s.id] = Entry(key, stroke)
-        return stroke
+        val created = Entry(key, stroke, strokeBounds(s))
+        entries[s.id] = created
+        return created
     }
 
+    fun get(s: HeftStroke): Stroke? = entry(s)?.stroke
+
     /** Verwaiste Einträge verwerfen (nur die IDs der sichtbaren Seite bleiben). */
-    fun retain(ids: Set<String>) = entries.keys.retainAll(ids)
+    @Synchronized
+    fun retain(ids: Set<String>) {
+        entries.keys.retainAll(ids)
+    }
 }
 
 private fun strokeKey(s: HeftStroke): String = "${s.tool}|${s.color}|${s.size}|${s.points.size}|${s.mark()}"
 
+/** Umgebendes Rechteck eines Strichs in Seiteneinheiten inklusive Pinselbreite. */
+private fun strokeBounds(s: HeftStroke): RectF {
+    val p = s.points
+    val n = p.size / 3
+    if (n == 0) return RectF()
+    var minX = p[0]
+    var maxX = p[0]
+    var minY = p[1]
+    var maxY = p[1]
+    for (i in 1 until n) {
+        val x = p[i * 3]
+        val y = p[i * 3 + 1]
+        if (x < minX) minX = x else if (x > maxX) maxX = x
+        if (y < minY) minY = y else if (y > maxY) maxY = y
+    }
+    val pad = (s.size * 2.2 + 4.0).toFloat()
+    return RectF(minX - pad, minY - pad, maxX + pad, maxY + pad)
+}
+
+/** Fertig gerenderter Stand der Strich-Schicht samt den darin enthaltenen Strich-Schlüsseln. */
+class StrokeLayerSnapshot(
+    val image: ImageBitmap? = null,
+    val drawnKeys: Map<String, String> = emptyMap(),
+)
+
 /**
  * Zwischengespeicherte Bitmap der gesetzten Striche einer Seite (ohne `pending`, `erased`, `moving`).
- * Solange nur neue Striche angehängt werden und die Breite gleich bleibt, zeichnet die Schicht nur
- * das Neue nach – Pan/Zoom, Radierer-Ring, Lasso- und Form-Vorschau kosten nur noch ein `drawImage`.
+ * Rendert auf einem Hintergrund-Thread: neue Striche werden angehängt, beim Radieren oder Greifen mit
+ * dem Lasso wird nur das betroffene Teilrechteck (`dirty`) gelöscht und neu gezeichnet.
  */
 class PageStrokeLayer {
+    private class DrawnStroke(val id: String, val key: String, val bounds: RectF)
+
+    private val mutex = Mutex()
     private var bitmap: Bitmap? = null
-    private var image: ImageBitmap? = null
     private var canvas: android.graphics.Canvas? = null
     private var width = 0
     private var height = 0
-    private val drawn = ArrayList<Pair<String, String>>()
+    private val drawn = ArrayList<DrawnStroke>()
+    private var current = StrokeLayerSnapshot()
 
-    fun imageFor(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): ImageBitmap? {
+    suspend fun render(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot =
+        withContext(Dispatchers.Default) {
+            mutex.withLock {
+                Profiler.measure("heft", "strokeLayer") {
+                    renderLocked(strokes, cache, targetWidth)
+                }
+            }
+        }
+
+    private fun renderLocked(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot {
         if (strokes.isEmpty() || targetWidth <= 0) {
-            release()
-            return null
+            drawn.clear()
+            bitmap = null
+            canvas = null
+            width = 0
+            height = 0
+            current = StrokeLayerSnapshot()
+            return current
         }
         val targetHeight = (targetWidth / HeftPage.RATIO).roundToInt().coerceAtLeast(1)
-        val keys = strokes.map { it.id to strokeKey(it) }
+        val resolved = ArrayList<Pair<String, StrokeCache.Entry>>(strokes.size)
+        for (s in strokes) {
+            val e = cache.entry(s) ?: continue
+            resolved += s.id to e
+        }
         val sizeChanged = targetWidth != width || targetHeight != height || bitmap == null
-        val prefixMatches = !sizeChanged && keys.size >= drawn.size &&
-            drawn.indices.all { i -> keys[i] == drawn[i] }
-        if (prefixMatches && keys.size == drawn.size) return image
+        val prefixMatches = !sizeChanged && resolved.size >= drawn.size &&
+            drawn.indices.all { i -> resolved[i].first == drawn[i].id && resolved[i].second.key == drawn[i].key }
+        if (prefixMatches && resolved.size == drawn.size) return current
 
         if (sizeChanged) {
-            bitmap?.recycle()
             val fresh = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
             bitmap = fresh
             canvas = android.graphics.Canvas(fresh)
@@ -125,36 +193,98 @@ class PageStrokeLayer {
             height = targetHeight
             drawn.clear()
         }
-        val native = canvas ?: return null
+        val native = canvas ?: return current
         val k = targetWidth / HeftPage.WIDTH
         val matrix = android.graphics.Matrix().apply { setScale(k, k) }
-        val start = if (prefixMatches) {
-            drawn.size
+
+        if (prefixMatches) {
+            val saved = native.save()
+            native.concat(matrix)
+            for (i in drawn.size until resolved.size) {
+                val (id, e) = resolved[i]
+                HeftInk.renderer.draw(native, e.stroke, matrix)
+                drawn += DrawnStroke(id, e.key, e.bounds)
+            }
+            native.restoreToCount(saved)
         } else {
-            bitmap?.eraseColor(android.graphics.Color.TRANSPARENT)
+            val dirty = if (!sizeChanged && drawn.isNotEmpty()) dirtyRegion(drawn, resolved) else null
+            if (dirty != null) {
+                val saved = native.save()
+                native.clipRect(
+                    floor(dirty.left * k) - 2f,
+                    floor(dirty.top * k) - 2f,
+                    ceil(dirty.right * k) + 2f,
+                    ceil(dirty.bottom * k) + 2f,
+                )
+                native.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                native.concat(matrix)
+                for ((_, e) in resolved) {
+                    if (RectF.intersects(e.bounds, dirty)) {
+                        HeftInk.renderer.draw(native, e.stroke, matrix)
+                    }
+                }
+                native.restoreToCount(saved)
+            } else {
+                if (!sizeChanged) bitmap?.eraseColor(android.graphics.Color.TRANSPARENT)
+                val saved = native.save()
+                native.concat(matrix)
+                for ((_, e) in resolved) {
+                    HeftInk.renderer.draw(native, e.stroke, matrix)
+                }
+                native.restoreToCount(saved)
+            }
             drawn.clear()
-            0
+            for ((id, e) in resolved) drawn += DrawnStroke(id, e.key, e.bounds)
         }
-        val saved = native.save()
-        native.concat(matrix)
-        for (i in start until strokes.size) {
-            cache.get(strokes[i])?.let { HeftInk.renderer.draw(native, it, matrix) }
+
+        val snap = bitmap?.copy(Bitmap.Config.ARGB_8888, false)?.apply { prepareToDraw() }?.asImageBitmap()
+        val keys = HashMap<String, String>(drawn.size).apply { for (d in drawn) put(d.id, d.key) }
+        current = StrokeLayerSnapshot(snap, keys)
+        return current
+    }
+
+    /**
+     * Vereinigtes Rechteck aller entfernten, geänderten oder neu hinzugekommenen Striche, sofern sich
+     * höchstens 32 Striche geändert haben; sonst `null` (Komplett-Neuzeichnen ist dann günstiger).
+     */
+    private fun dirtyRegion(
+        oldList: List<DrawnStroke>,
+        newList: List<Pair<String, StrokeCache.Entry>>,
+    ): RectF? {
+        val oldMap = HashMap<String, DrawnStroke>(oldList.size)
+        for (d in oldList) oldMap[d.id] = d
+        val newMap = HashMap<String, StrokeCache.Entry>(newList.size)
+        for ((id, e) in newList) newMap[id] = e
+        val dirty = RectF()
+        var changed = 0
+        for (d in oldList) {
+            if (newMap[d.id]?.key != d.key) {
+                dirty.union(d.bounds)
+                if (++changed > 32) return null
+            }
         }
-        native.restoreToCount(saved)
-        drawn.addAll(keys.subList(start, keys.size))
-        bitmap?.prepareToDraw()
-        val updated = bitmap?.asImageBitmap()
-        image = updated
-        return updated
+        for ((id, e) in newList) {
+            if (oldMap[id]?.key != e.key) {
+                dirty.union(e.bounds)
+                if (++changed > 32) return null
+            }
+        }
+        return dirty.takeUnless { it.isEmpty }
     }
 
     fun release() {
-        drawn.clear()
-        bitmap?.recycle()
-        bitmap = null
-        image = null
-        canvas = null
-        width = 0
-        height = 0
+        current = StrokeLayerSnapshot()
     }
+}
+
+/** Hält die Strich-Bitmap einer Heftseite im Hintergrund aktuell. */
+@Composable
+fun rememberStrokeLayer(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot {
+    val layer = remember { PageStrokeLayer() }
+    DisposableEffect(layer) { onDispose { layer.release() } }
+    var snapshot by remember { mutableStateOf(StrokeLayerSnapshot()) }
+    LaunchedEffect(strokes, targetWidth) {
+        snapshot = layer.render(strokes, cache, targetWidth)
+    }
+    return snapshot
 }

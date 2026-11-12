@@ -14,11 +14,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import uniffi.impala_ffi.ChangeListener
 import uniffi.impala_ffi.Changes
 import uniffi.impala_ffi.ImpalaCore
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Dünne Schicht über dem Rust-Kern (wie `STATE` in web/state.js): Lesen über [query], Schreiben nur
@@ -29,6 +31,7 @@ class ImpalaStore(val core: ImpalaCore, val scope: CoroutineScope) {
     // Unbegrenzt, damit tryEmit nie scheitert: ein fester Puffer verwarf bei einem Sync-Schwall
     // still Meldungen, und Ansichten blieben veraltet. Die Abnehmer sind schnell ([query] fasst zusammen).
     private val _changes = MutableSharedFlow<Changes>(extraBufferCapacity = Channel.UNLIMITED)
+    private val writesSinceCheckpoint = AtomicInteger(0)
 
     /** Jede angewandte Änderung. Kommt aus beliebigen Threads an; der Rückruf kehrt sofort zurück. */
     val changes: SharedFlow<Changes> = _changes
@@ -52,16 +55,27 @@ class ImpalaStore(val core: ImpalaCore, val scope: CoroutineScope) {
             .map { }
             .onStart { emit(Unit) }
             .conflate()
-            .map { read(core) }
+            .map { Profiler.measure("core", "query") { read(core) } }
             .flowOn(Dispatchers.IO)
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Schreibender Aufruf im Hintergrund (z. B. `store.write { it.markHomeArticleRead(id) }`). */
-    suspend fun <T> write(block: (ImpalaCore) -> T): T = withContext(Dispatchers.IO) { Profiler.measure("core") { block(core) } }
+    suspend fun <T> write(block: (ImpalaCore) -> T): T = withContext(Dispatchers.IO) {
+        val out = Profiler.measure("core", "write") { block(core) }
+        if (writesSinceCheckpoint.incrementAndGet() >= CHECKPOINT_INTERVAL) {
+            writesSinceCheckpoint.set(0)
+            scope.launch(Dispatchers.IO) { runCatching { core.saveCheckpoint() } }
+        }
+        out
+    }
 
     /** Beliebiges Event wie `STATE.dispatch(kind, payload)` in der PWA; liefert die Event-ID. */
     suspend fun dispatch(kind: String, payload: Map<String, Any?>): String =
         write { it.dispatch(kind, JSONObject(payload).toString()) }
+
+    private companion object {
+        const val CHECKPOINT_INTERVAL = 300
+    }
 }
 
 /** Gruppen von Änderungen für [ImpalaStore.query]. */

@@ -187,8 +187,9 @@ class CloudSyncController(
 
     // --- intern ---
 
-    private fun refreshSettings(store: ImpalaStore) {
-        val s = runCatching { JSONObject(store.core.settingsJson()) }.getOrDefault(JSONObject())
+    private suspend fun refreshSettings(store: ImpalaStore) {
+        val raw = runCatching { store.write { it.settingsJson() } }.getOrDefault("{}")
+        val s = runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
         _ui.update { it.copy(url = s.optString("cfUrl"), syncKey = s.optString("cfSyncKey")) }
         autoConnect(s.optString("cfUrl"), s.optString("cfSyncKey"))
     }

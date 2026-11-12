@@ -100,17 +100,21 @@ class HomeViewModel(private val store: ImpalaStore, private val prefs: DevicePre
 
         /** Täglich eine andere schon gelernte Karte (nur zum Aufdecken, der Lernplan bleibt unberührt). */
         fun recall(cards: List<CardInfo>): Recall? {
-            val pool = cards.filter { !it.suspended && it.stage == CardStage.REVIEW && markdownCardText(it.front).length >= 3 }
+            val pool = cards.filter { !it.suspended && it.stage == CardStage.REVIEW && it.front.trim().length >= 3 }
             if (pool.size < 5) return null
             val offset = TimeZone.getDefault().getOffset(System.currentTimeMillis())
             val day = (System.currentTimeMillis() + offset) / 86_400_000L
-            val card = pool[(((day * 2654435761L) and 0xFFFFFFFFL) % pool.size).toInt()]
-            val cloze = CLOZE.containsMatchIn(card.front)
-            val question = markdownCardText(if (cloze) card.front.replace(CLOZE, "＿＿＿") else card.front)
-            val answer = if (cloze) CLOZE.findAll(card.front).joinToString(" · ") { markdownCardText(it.groupValues[1]) }
-            else markdownCardText(card.back)
-            if (answer.isEmpty()) return null
-            return Recall(card.id, HomeText.cut(question, 140), HomeText.cut(answer, 220))
+            val start = (((day * 2654435761L) and 0xFFFFFFFFL) % pool.size).toInt()
+            for (step in pool.indices) {
+                val card = pool[(start + step) % pool.size]
+                if (markdownCardText(card.front).length < 3) continue
+                val cloze = CLOZE.containsMatchIn(card.front)
+                val question = markdownCardText(if (cloze) card.front.replace(CLOZE, "＿＿＿") else card.front)
+                val answer = if (cloze) CLOZE.findAll(card.front).joinToString(" · ") { markdownCardText(it.groupValues[1]) }
+                else markdownCardText(card.back)
+                if (answer.isNotEmpty()) return Recall(card.id, HomeText.cut(question, 140), HomeText.cut(answer, 220))
+            }
+            return null
         }
     }
 }

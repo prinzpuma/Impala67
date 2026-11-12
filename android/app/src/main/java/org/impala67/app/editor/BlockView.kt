@@ -133,7 +133,8 @@ private fun TextBlock(block: MdBlock, ctx: ReadContext, editing: Boolean, modifi
         if (text.isEmpty()) {
             Text(placeholderFor(block).ifEmpty { " " }, modifier, style = style.copy(color = c.text2.copy(alpha = 0.45f)))
         } else {
-            MathText(styler.build(text), modifier, style = style)
+            val styled = remember(styler, text) { styler.build(text) }
+            MathText(styled, modifier, style = style)
         }
     }
 }

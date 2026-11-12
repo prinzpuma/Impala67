@@ -100,7 +100,11 @@ fun AppShell(store: ImpalaStore, prefs: DevicePrefs) {
     val config = LocalConfiguration.current
     val landscape = config.screenWidthDp > config.screenHeightDp
     val desk = config.screenWidthDp >= DESK_MIN_WIDTH_DP || (landscape && config.screenWidthDp >= DESK_LANDSCAPE_MIN_WIDTH_DP)
-    SideEffect { nav.desk = desk; org.impala67.app.diag.Profiler.bootReady() }
+    SideEffect {
+        nav.desk = desk
+        org.impala67.app.diag.Profiler.setScreen(current.javaClass.simpleName.removeSuffix("Route").lowercase())
+        org.impala67.app.diag.Profiler.bootReady()
+    }
     // Shortcut oder „Teilen mit Impala67“ (MainActivity): einmal ausführen, dann abholen.
     val context = LocalContext.current
     val app = context.applicationContext as ImpalaApp

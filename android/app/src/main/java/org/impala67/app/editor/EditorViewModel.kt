@@ -96,19 +96,28 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
         viewModelScope.launch { header.filterNotNull().collect { applyRemote(it.page) } }
     }
 
-    private fun applyRemote(page: PageDetail?) {
+    private suspend fun applyRemote(page: PageDetail?) {
         if (page == null) { if (!loaded) missing = true; return }
-        val idle = !dirtyContent && !dirtyTitle && SystemClock.uptimeMillis() - lastEdit > 1_500
         if (!loaded) {
-            title = page.summary.title; lastTitle = title
-            blocks = markdownToBlocks(page.content); lastMarkdown = page.content
-            loaded = true; missing = false
-        } else if (idle) {
+            val content = page.content
+            val parsed = withContext(Dispatchers.Default) { markdownToBlocks(content) }
+            if (!loaded) {
+                title = page.summary.title; lastTitle = title
+                blocks = parsed; lastMarkdown = content
+                loaded = true; missing = false
+            }
+        } else {
+            val idle = !dirtyContent && !dirtyTitle && SystemClock.uptimeMillis() - lastEdit > 1_500
+            if (!idle) return
             if (page.summary.title != lastTitle) { title = page.summary.title; lastTitle = title }
             if (page.content != lastMarkdown) {
-                blocks = markdownToBlocks(page.content); lastMarkdown = page.content
-                undoStack.clear(); redoStack.clear(); updateHistoryFlags()
-                if (active != null && blocks.none { it.id == active?.id }) active = null
+                val content = page.content
+                val parsed = withContext(Dispatchers.Default) { markdownToBlocks(content) }
+                if (!dirtyContent && !dirtyTitle && SystemClock.uptimeMillis() - lastEdit > 1_500) {
+                    blocks = parsed; lastMarkdown = content
+                    undoStack.clear(); redoStack.clear(); updateHistoryFlags()
+                    if (active != null && blocks.none { it.id == active?.id }) active = null
+                }
             }
         }
     }

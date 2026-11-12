@@ -1,5 +1,7 @@
 package org.impala67.app.editor
 
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import org.impala67.app.notes.pageTitle
 import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
@@ -186,7 +188,9 @@ internal fun EditorViewModel.insertMediaBlock(afterId: String?, kind: MdBlockKin
 
 /** Slash „Heft“: neues Heft als Unterseite anlegen und dahinter einbetten. */
 private fun EditorViewModel.insertHeft(afterId: String) {
-    val heftId = runCatching { store.core.createHeft("Heft", pageId, null) }.getOrNull() ?: return
-    val i = blocks.indexOfFirst { it.id == afterId }.takeIf { it >= 0 } ?: return
-    mutate(true) { list -> list.take(i + 1) + newBlock(MdBlockKind.Heft(heftId)) + list.drop(i + 1) }
+    viewModelScope.launch {
+        val heftId = runCatching { store.write { it.createHeft("Heft", pageId, null) } }.getOrNull() ?: return@launch
+        val i = blocks.indexOfFirst { it.id == afterId }.takeIf { it >= 0 } ?: return@launch
+        mutate(true) { list -> list.take(i + 1) + newBlock(MdBlockKind.Heft(heftId)) + list.drop(i + 1) }
+    }
 }

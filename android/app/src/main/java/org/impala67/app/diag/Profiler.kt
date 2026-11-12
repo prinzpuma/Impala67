@@ -30,6 +30,8 @@ object Profiler {
     private val buffer = ArrayDeque<ProfileEntry>()
     @Volatile var enabled = false
         private set
+    @Volatile var screen = "home"
+        private set
     /** „Alle Messpunkte“ statt nur Auffälligkeiten (Snapshot-Zustand, damit die Einstellung neu zeichnet). */
     var allPoints by mutableStateOf(false)
     private var processStart = SystemClock.elapsedRealtime()
@@ -45,10 +47,14 @@ object Profiler {
         override fun doFrame(nanos: Long) {
             if (!enabled) { lastFrame = 0; return }
             val now = nanos / 1_000_000
-            if (lastFrame > 0 && now - lastFrame > LAG_MS) record("main-thread-stall", now - lastFrame, "Bildwechsel")
+            if (lastFrame > 0 && now - lastFrame > LAG_MS) record("main-thread-stall", now - lastFrame, "Bildwechsel ($screen)")
             lastFrame = now
             Choreographer.getInstance().postFrameCallback(this)
         }
+    }
+
+    fun setScreen(name: String) {
+        screen = name
     }
 
     /** Beim Start der App: Absturzerkennung (`noteUncleanExit`) und Fehler-Haken. */
@@ -67,6 +73,15 @@ object Profiler {
 
     /** Sichtbar (onStart) bzw. sauber im Hintergrund (onStop). */
     fun setRunning(running: Boolean) {
+        lastFrame = 0
+        if (running) {
+            if (enabled) {
+                Choreographer.getInstance().removeFrameCallback(frame)
+                Choreographer.getInstance().postFrameCallback(frame)
+            }
+        } else {
+            Choreographer.getInstance().removeFrameCallback(frame)
+        }
         app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.putBoolean("running", running)?.apply()
         if (!running) persist()
     }
@@ -74,7 +89,9 @@ object Profiler {
     fun setEnabled(on: Boolean) {
         if (on == enabled) return
         enabled = on
+        lastFrame = 0
         if (on) Choreographer.getInstance().postFrameCallback(frame)
+        else Choreographer.getInstance().removeFrameCallback(frame)
     }
 
     /** Erstes Bild der Oberfläche: Startdauer (`boot-ready`). */

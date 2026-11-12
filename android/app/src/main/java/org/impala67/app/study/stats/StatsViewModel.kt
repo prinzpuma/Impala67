@@ -17,7 +17,7 @@ import org.json.JSONObject
 data class StatsView(val stats: StatsData, val patterns: PatternData, val titles: Map<String, String>)
 
 class StatsViewModel(private val store: ImpalaStore, private val prefs: DevicePrefs) : ViewModel() {
-    val view: StateFlow<StatsView?> = store.query(Touches.any(Touches.cards, Touches.pages)) { core ->
+    val view: StateFlow<StatsView?> = store.query(Touches.any(Touches.cards, Touches.pagesMeta)) { core ->
         val data = LearnData.parse(core.learningStatsJson())
         val live = core.recentPages(UInt.MAX_VALUE).associate { it.id to it.title }
         StatsView(data.stats(), data.patterns(live.keys), live)
