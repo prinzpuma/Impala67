@@ -422,14 +422,9 @@ private struct NotionTree: View {
     /// Sichtbar = passt selbst oder hat eine passende Unterseite (je Durchlauf gemerkt).
     private nonisolated static func build(core: ImpalaCore, smart: String, query: String) -> [(ws: WorkspaceInfo, rows: [Row])] {
         let open = core.treeOpen()
-        var kidsMemo: [String: [PageSummary]] = [:]
+        let children = PageChildren(core)
         var visibleMemo: [String: Bool] = [:]
-        func kids(_ p: PageSummary) -> [PageSummary] {
-            if let k = kidsMemo[p.id] { return k }
-            let k = core.childrenOf(parentId: p.id, workspaceId: nil)
-            kidsMemo[p.id] = k
-            return k
-        }
+        func kids(_ p: PageSummary) -> [PageSummary] { children.of(p) }
         func visible(_ p: PageSummary) -> Bool {
             if let v = visibleMemo[p.id] { return v }
             let v = ownMatch(p, smart: smart, query: query) || kids(p).contains(where: visible)
@@ -446,7 +441,7 @@ private struct NotionTree: View {
         }
         return core.workspaces().compactMap { ws -> (ws: WorkspaceInfo, rows: [Row])? in
             var rows: [Row] = []
-            branch(core.childrenOf(parentId: nil, workspaceId: ws.id), 0, &rows)
+            branch(children.roots(ws.id), 0, &rows)
             return rows.isEmpty ? nil : (ws: ws, rows: rows)
         }
     }

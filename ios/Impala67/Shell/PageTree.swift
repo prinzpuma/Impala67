@@ -318,17 +318,17 @@ struct TreeRows: RandomAccessCollection {
         t.open = core.treeOpen()
         let all = core.recentPages(limit: UInt32.max)
         let favorites = all.filter(\.favorite)
-        let parentIds = Set(all.compactMap(\.parentId))
+        let children = PageChildren(core)
         t.dbPages = Set(all.filter { $0.kind != .heft && core.pageDb(id: $0.id) != nil }.map(\.id))
         if !favorites.isEmpty {
             t.rows.append(Row(id: "head:fav", kind: .head(title: "★ Favoriten", collapseKey: nil, workspaceId: nil)))
             for p in favorites { t.rows.append(Row(id: "fav:\(p.id)", kind: .page(p, depth: 0, hasKids: false))) }
         }
-        func branch(_ parent: String?, _ ws: String?, _ depth: Int) {
-            for p in core.childrenOf(parentId: parent, workspaceId: ws) {
-                let kids = depth < maxDepth && parentIds.contains(p.id)
-                t.rows.append(Row(id: "tree:\(p.id)", kind: .page(p, depth: depth, hasKids: kids)))
-                if kids && !t.isCollapsed(p.id) { branch(p.id, nil, depth + 1) }
+        func branch(_ list: [PageSummary], _ depth: Int) {
+            for p in list {
+                let sub = depth < maxDepth ? children.of(p) : []
+                t.rows.append(Row(id: "tree:\(p.id)", kind: .page(p, depth: depth, hasKids: !sub.isEmpty)))
+                if !sub.isEmpty && !t.isCollapsed(p.id) { branch(sub, depth + 1) }
             }
         }
         for ws in core.workspaces() {
@@ -336,7 +336,7 @@ struct TreeRows: RandomAccessCollection {
             t.rows.append(Row(id: "head:\(key)", kind: .head(title: ws.name, collapseKey: key, workspaceId: ws.id)))
             guard !t.isCollapsed(key) else { continue }
             let before = t.rows.count
-            branch(nil, ws.id, 0)
+            branch(children.roots(ws.id), 0)
             if t.rows.count == before { t.rows.append(Row(id: "empty:\(ws.id)", kind: .empty(workspaceId: ws.id))) }
         }
         return t

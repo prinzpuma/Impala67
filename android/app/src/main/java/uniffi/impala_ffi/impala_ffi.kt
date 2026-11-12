@@ -1524,6 +1524,18 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1546,6 +1558,8 @@ fun uniffi_impala_ffi_checksum_func_conflict_diff_rows(
 fun uniffi_impala_ffi_checksum_func_core_lock_holder(
 ): Short
 fun uniffi_impala_ffi_checksum_func_core_long_lock_holds(
+): Short
+fun uniffi_impala_ffi_checksum_func_default_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_func_download_local_embedding_model(
 ): Short
@@ -1607,6 +1621,8 @@ fun uniffi_impala_ffi_checksum_func_heft_shape_outline(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_snapshot_first_page(
 ): Short
+fun uniffi_impala_ffi_checksum_func_known_subjects(
+): Short
 fun uniffi_impala_ffi_checksum_func_local_embedding_model(
 ): Short
 fun uniffi_impala_ffi_checksum_func_markdown_card_text(
@@ -1620,6 +1636,8 @@ fun uniffi_impala_ffi_checksum_func_markdown_teaser(
 fun uniffi_impala_ffi_checksum_func_markdown_to_blocks(
 ): Short
 fun uniffi_impala_ffi_checksum_func_merge_texts(
+): Short
+fun uniffi_impala_ffi_checksum_func_overview_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_func_scan_detect(
 ): Short
@@ -1939,6 +1957,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_orphan_trashed_cards(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_children_index(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_db(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_history(
@@ -1946,6 +1966,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_page_history(
 fun uniffi_impala_ffi_checksum_method_impalacore_page_links(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_props(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subtree(
 ): Short
@@ -1996,6 +2018,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_deck_config(
 fun uniffi_impala_ffi_checksum_method_impalacore_set_page_db(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_page_prop(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_set_page_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_set_tree_open(
 ): Short
@@ -2516,6 +2540,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_orphan_trashed_cards(`ptr`: Pointer,u
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_children_index(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_history(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2523,6 +2549,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_page_history(`ptr`: Pointer,`id`: Rus
 fun uniffi_impala_ffi_fn_method_impalacore_page_links(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_props(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_subject(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_subtree(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2573,6 +2601,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_deck_config(`ptr`: Pointer,`deck`
 fun uniffi_impala_ffi_fn_method_impalacore_set_page_db(`ptr`: Pointer,`id`: RustBuffer.ByValue,`schema`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_page_prop(`ptr`: Pointer,`id`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_set_page_subject(`ptr`: Pointer,`id`: RustBuffer.ByValue,`subject`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_set_tree_open(`ptr`: Pointer,`key`: RustBuffer.ByValue,`open`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -2674,6 +2704,8 @@ fun uniffi_impala_ffi_fn_func_core_lock_holder(uniffi_out_err: UniffiRustCallSta
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_core_long_lock_holds(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_default_subject(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_download_local_embedding_model(`modelDir`: RustBuffer.ByValue,`listener`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_func_drive_action_state(`hasClient`: Byte,`connected`: Byte,`needsLogin`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -2734,6 +2766,8 @@ fun uniffi_impala_ffi_fn_func_heft_shape_outline(`shape`: RustBuffer.ByValue,uni
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_snapshot_first_page(`snapshot`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_known_subjects(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_local_embedding_model(`modelDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_card_text(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2747,6 +2781,8 @@ fun uniffi_impala_ffi_fn_func_markdown_teaser(`body`: RustBuffer.ByValue,uniffi_
 fun uniffi_impala_ffi_fn_func_markdown_to_blocks(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_merge_texts(`base`: RustBuffer.ByValue,`mine`: RustBuffer.ByValue,`theirs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_overview_subject(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_scan_detect(`img`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2898,6 +2934,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_default_subject() != 39744.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_download_local_embedding_model() != 22098.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2988,6 +3027,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_heft_snapshot_first_page() != 65107.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_known_subjects() != 19235.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3007,6 +3049,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_merge_texts() != 21845.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_overview_subject() != 28504.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_scan_detect() != 8517.toShort()) {
@@ -3486,6 +3531,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page() != 6888.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_children_index() != 18211.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_db() != 21526.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3496,6 +3544,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_subject() != 38412.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100.toShort()) {
@@ -3571,6 +3622,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_page_prop() != 15143.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_page_subject() != 6581.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_set_tree_open() != 43668.toShort()) {
@@ -8381,6 +8435,13 @@ public interface ImpalaCoreInterface {
     fun `page`(`id`: kotlin.String): PageDetail?
     
     /**
+     * Alle sichtbaren Kinderlisten auf einmal (je Elternseite und Workspace, Seitenleisten-
+     * Reihenfolge): für Seitenbaum und Bibliothek. Je Knoten [`Self::children_of`] zu rufen
+     * durchsucht jedes Mal alle Seiten, der ganze Baum kostete so quadratisch viel.
+     */
+    fun `pageChildrenIndex`(): List<ChildList>
+    
+    /**
      * Spalten der Datenbank-Seite `id`; `None`, wenn die Seite keine Datenbank ist.
      */
     fun `pageDb`(`id`: kotlin.String): List<DbColumn>?
@@ -8401,6 +8462,11 @@ public interface ImpalaCoreInterface {
      * Eigenschaften (`props`) einer Seite als Text.
      */
     fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String>
+    
+    /**
+     * Fach einer Seite samt festgelegtem Wert und automatischer Erkennung; `None` = unbekannte Seite.
+     */
+    fun `pageSubject`(`id`: kotlin.String): PageSubject?
     
     /**
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
@@ -8536,6 +8602,12 @@ public interface ImpalaCoreInterface {
      * Einen Zellwert setzen; die übrigen Eigenschaften bleiben (app.js, `.db-cell`).
      */
     fun `setPageProp`(`id`: kotlin.String, `name`: kotlin.String, `value`: kotlin.String)
+    
+    /**
+     * Fach festlegen (gilt auch für Unterseiten) oder mit `None` zurück auf automatisch.
+     * Gleicher Wert wie bisher: kein Event.
+     */
+    fun `setPageSubject`(`id`: kotlin.String, `subject`: kotlin.String?)
     
     /**
      * Einen Eintrag auf- oder zuklappen (`COLLAPSE.toggle` in der PWA).
@@ -10455,6 +10527,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Alle sichtbaren Kinderlisten auf einmal (je Elternseite und Workspace, Seitenleisten-
+     * Reihenfolge): für Seitenbaum und Bibliothek. Je Knoten [`Self::children_of`] zu rufen
+     * durchsucht jedes Mal alle Seiten, der ganze Baum kostete so quadratisch viel.
+     */override fun `pageChildrenIndex`(): List<ChildList> {
+            return FfiConverterSequenceTypeChildList.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_children_index(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Spalten der Datenbank-Seite `id`; `None`, wenn die Seite keine Datenbank ist.
      */override fun `pageDb`(`id`: kotlin.String): List<DbColumn>? {
             return FfiConverterOptionalSequenceTypeDbColumn.lift(
@@ -10509,6 +10598,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_props(
+        it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Fach einer Seite samt festgelegtem Wert und automatischer Erkennung; `None` = unbekannte Seite.
+     */override fun `pageSubject`(`id`: kotlin.String): PageSubject? {
+            return FfiConverterOptionalTypePageSubject.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_subject(
         it, FfiConverterString.lower(`id`),_status)
 }
     }
@@ -10901,6 +11005,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_page_prop(
         it, FfiConverterString.lower(`id`),FfiConverterString.lower(`name`),FfiConverterString.lower(`value`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Fach festlegen (gilt auch für Unterseiten) oder mit `None` zurück auf automatisch.
+     * Gleicher Wert wie bisher: kein Event.
+     */
+    @Throws(CoreException::class)override fun `setPageSubject`(`id`: kotlin.String, `subject`: kotlin.String?)
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_set_page_subject(
+        it, FfiConverterString.lower(`id`),FfiConverterOptionalString.lower(`subject`),_status)
 }
     }
     
@@ -13322,6 +13442,45 @@ public object FfiConverterTypeChatMessage: FfiConverterRustBuffer<ChatMessage> {
 
 
 /**
+ * Sichtbare Unterseiten einer Elternseite (`None`: Wurzeln) in einem Workspace.
+ */
+data class ChildList (
+    var `parentId`: kotlin.String?, 
+    var `workspaceId`: kotlin.String, 
+    var `pages`: List<PageSummary>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeChildList: FfiConverterRustBuffer<ChildList> {
+    override fun read(buf: ByteBuffer): ChildList {
+        return ChildList(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypePageSummary.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ChildList) = (
+            FfiConverterOptionalString.allocationSize(value.`parentId`) +
+            FfiConverterString.allocationSize(value.`workspaceId`) +
+            FfiConverterSequenceTypePageSummary.allocationSize(value.`pages`)
+    )
+
+    override fun write(value: ChildList, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`parentId`, buf)
+            FfiConverterString.write(value.`workspaceId`, buf)
+            FfiConverterSequenceTypePageSummary.write(value.`pages`, buf)
+    }
+}
+
+
+
+/**
  * Eine angebotene Entscheidung.
  */
 data class ConflictChoice (
@@ -15427,6 +15586,61 @@ public object FfiConverterTypePageLink: FfiConverterRustBuffer<PageLink> {
             FfiConverterString.write(value.`from`, buf)
             FfiConverterString.write(value.`to`, buf)
             FfiConverterBoolean.write(value.`child`, buf)
+    }
+}
+
+
+
+/**
+ * Fach einer Seite für Menü und Dialog.
+ */
+data class PageSubject (
+    /**
+     * Wirksames Fach (festgelegt, geerbt oder erkannt).
+     */
+    var `name`: kotlin.String, 
+    /**
+     * Herkunft wie in der PWA (`manual`, `inherited`, `title`, `children`, `fallback` …).
+     */
+    var `source`: kotlin.String, 
+    /**
+     * Festgelegter Wert der Seite selbst in Anzeigeform (`FACH.clean`); `None` = automatisch.
+     */
+    var `chosen`: kotlin.String?, 
+    /**
+     * Was die Erkennung ohne festgelegten Wert ergäbe („Automatisch (erkannt: …)“).
+     */
+    var `automatic`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePageSubject: FfiConverterRustBuffer<PageSubject> {
+    override fun read(buf: ByteBuffer): PageSubject {
+        return PageSubject(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PageSubject) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`source`) +
+            FfiConverterOptionalString.allocationSize(value.`chosen`) +
+            FfiConverterString.allocationSize(value.`automatic`)
+    )
+
+    override fun write(value: PageSubject, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`source`, buf)
+            FfiConverterOptionalString.write(value.`chosen`, buf)
+            FfiConverterString.write(value.`automatic`, buf)
     }
 }
 
@@ -19912,6 +20126,38 @@ public object FfiConverterOptionalTypePageDetail: FfiConverterRustBuffer<PageDet
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypePageSubject: FfiConverterRustBuffer<PageSubject?> {
+    override fun read(buf: ByteBuffer): PageSubject? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypePageSubject.read(buf)
+    }
+
+    override fun allocationSize(value: PageSubject?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypePageSubject.allocationSize(value)
+        }
+    }
+
+    override fun write(value: PageSubject?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypePageSubject.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypePageSummary: FfiConverterRustBuffer<PageSummary?> {
     override fun read(buf: ByteBuffer): PageSummary? {
         if (buf.get().toInt() == 0) {
@@ -20350,6 +20596,34 @@ public object FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer<List<C
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeChatMessage.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeChildList: FfiConverterRustBuffer<List<ChildList>> {
+    override fun read(buf: ByteBuffer): List<ChildList> {
+        val len = buf.getInt()
+        return List<ChildList>(len) {
+            FfiConverterTypeChildList.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ChildList>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeChildList.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ChildList>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeChildList.write(it, buf)
         }
     }
 }
@@ -21405,6 +21679,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * „Sonstiges“ für die Auswahl.
+         */ fun `defaultSubject`(): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_default_subject(
+        _status)
+}
+    )
+    }
+    
+
+        /**
          * Lädt das lokale Modell von Hugging Face nach `model_dir` (blockierend, Hintergrund-Thread).
          * Vorhandene Dateien bleiben; halbe Downloads (`*.part`) werden verworfen.
          */
@@ -21776,6 +22062,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * Die echten Fächer der Auswahl (ohne „Übersicht“ und „Sonstiges“).
+         */ fun `knownSubjects`(): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_known_subjects(
+        _status)
+}
+    )
+    }
+    
+
+        /**
          * Stand des lokalen Modells im Verzeichnis `model_dir`.
          */ fun `localEmbeddingModel`(`modelDir`: kotlin.String): LocalEmbeddingModel {
             return FfiConverterTypeLocalEmbeddingModel.lift(
@@ -21855,6 +22153,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_merge_texts(
         FfiConverterString.lower(`base`),FfiConverterString.lower(`mine`),FfiConverterString.lower(`theirs`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * „Übersicht“ (Sammelseite) für die Auswahl.
+         */ fun `overviewSubject`(): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_overview_subject(
+        _status)
 }
     )
     }

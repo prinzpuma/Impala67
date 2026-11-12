@@ -97,6 +97,14 @@ pub enum PageKind {
     Heft,
 }
 
+/// Sichtbare Unterseiten einer Elternseite (`None`: Wurzeln) in einem Workspace.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ChildList {
+    pub parent_id: Option<String>,
+    pub workspace_id: String,
+    pub pages: Vec<PageSummary>,
+}
+
 /// Seite ohne Inhalt: Listen, Seitenbaum, Brotkrumen.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct PageSummary {
@@ -485,6 +493,24 @@ impl ImpalaCore {
         summaries(inner.model.state().children_of(parent_id.as_deref(), workspace_id.as_deref(), None))
     }
 
+    /// Alle sichtbaren Kinderlisten auf einmal (je Elternseite und Workspace, Seitenleisten-
+    /// Reihenfolge): für Seitenbaum und Bibliothek. Je Knoten [`Self::children_of`] zu rufen
+    /// durchsucht jedes Mal alle Seiten, der ganze Baum kostete so quadratisch viel.
+    pub fn page_children_index(&self) -> Vec<ChildList> {
+        let inner = self.lock();
+        inner
+            .model
+            .state()
+            .sidebar_children()
+            .into_iter()
+            .map(|((parent, ws), kids)| ChildList {
+                parent_id: (!parent.is_empty()).then(|| parent.to_owned()),
+                workspace_id: ws.to_owned(),
+                pages: summaries(kids),
+            })
+            .collect()
+    }
+
     /// Elternkette (Wurzel zuerst) fÃ¼r Brotkrumen.
     pub fn ancestors_of(&self, id: String) -> Vec<PageSummary> {
         summaries(self.lock().model.state().ancestors_of(&id))
@@ -555,7 +581,13 @@ impl ImpalaCore {
 
     /// Eigenes Bild als Cover der Seite bzw. des Hefts (wie `btnLibCoverUpload` in web/library.js):
     /// Blob `cover:…` speichern und `coverImg` setzen; die gewählte Farbe entfällt.
-    pub fn set_cover_image(&self, page_id: String, bytes: Vec<u8>, mime: String, name: String) -> Result<String, CoreError> {
+    pub fn set_cover_image(
+        &self,
+        page_id: String,
+        bytes: Vec<u8>,
+        mime: String,
+        name: String,
+    ) -> Result<String, CoreError> {
         let mut inner = self.lock();
         if !inner.model.state().pages.contains_key(&page_id) {
             return Err(invalid(format!("Unbekannte Seite {page_id}")));
@@ -628,6 +660,12 @@ mod tests {
         assert_eq!(roots.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(), ["Mathe"]);
         let kids = core.children_of(Some(root.clone()), None);
         assert_eq!(kids[0].id, child);
+        // Index liefert dieselben Listen wie die Einzelabfrage.
+        let index = core.page_children_index();
+        let of =
+            |parent: Option<&str>| index.iter().find(|l| l.parent_id.as_deref() == parent).map(|l| l.pages.clone());
+        assert_eq!(of(None), Some(roots.clone()));
+        assert_eq!(of(Some(&root)), Some(kids.clone()));
         assert_eq!(core.ancestors_of(child.clone())[0].id, root);
         let detail = core.page(child.clone()).unwrap();
         assert_eq!(detail.content, "Riemann-Summe und Stammfunktion");

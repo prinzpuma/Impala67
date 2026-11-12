@@ -3681,6 +3681,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func page(id: String)  -> PageDetail?
     
     /**
+     * Alle sichtbaren Kinderlisten auf einmal (je Elternseite und Workspace, Seitenleisten-
+     * Reihenfolge): für Seitenbaum und Bibliothek. Je Knoten [`Self::children_of`] zu rufen
+     * durchsucht jedes Mal alle Seiten, der ganze Baum kostete so quadratisch viel.
+     */
+    func pageChildrenIndex()  -> [ChildList]
+    
+    /**
      * Spalten der Datenbank-Seite `id`; `None`, wenn die Seite keine Datenbank ist.
      */
     func pageDb(id: String)  -> [DbColumn]?
@@ -5337,6 +5344,18 @@ open func page(id: String) -> PageDetail?  {
     return try!  FfiConverterOptionTypePageDetail.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_page(self.uniffiClonePointer(),
         FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Alle sichtbaren Kinderlisten auf einmal (je Elternseite und Workspace, Seitenleisten-
+     * Reihenfolge): für Seitenbaum und Bibliothek. Je Knoten [`Self::children_of`] zu rufen
+     * durchsucht jedes Mal alle Seiten, der ganze Baum kostete so quadratisch viel.
+     */
+open func pageChildrenIndex() -> [ChildList]  {
+    return try!  FfiConverterSequenceTypeChildList.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_page_children_index(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -8627,6 +8646,87 @@ public func FfiConverterTypeChatMessage_lift(_ buf: RustBuffer) throws -> ChatMe
 #endif
 public func FfiConverterTypeChatMessage_lower(_ value: ChatMessage) -> RustBuffer {
     return FfiConverterTypeChatMessage.lower(value)
+}
+
+
+/**
+ * Sichtbare Unterseiten einer Elternseite (`None`: Wurzeln) in einem Workspace.
+ */
+public struct ChildList {
+    public var parentId: String?
+    public var workspaceId: String
+    public var pages: [PageSummary]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(parentId: String?, workspaceId: String, pages: [PageSummary]) {
+        self.parentId = parentId
+        self.workspaceId = workspaceId
+        self.pages = pages
+    }
+}
+
+#if compiler(>=6)
+extension ChildList: Sendable {}
+#endif
+
+
+extension ChildList: Equatable, Hashable {
+    public static func ==(lhs: ChildList, rhs: ChildList) -> Bool {
+        if lhs.parentId != rhs.parentId {
+            return false
+        }
+        if lhs.workspaceId != rhs.workspaceId {
+            return false
+        }
+        if lhs.pages != rhs.pages {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(parentId)
+        hasher.combine(workspaceId)
+        hasher.combine(pages)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChildList: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChildList {
+        return
+            try ChildList(
+                parentId: FfiConverterOptionString.read(from: &buf), 
+                workspaceId: FfiConverterString.read(from: &buf), 
+                pages: FfiConverterSequenceTypePageSummary.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChildList, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.parentId, into: &buf)
+        FfiConverterString.write(value.workspaceId, into: &buf)
+        FfiConverterSequenceTypePageSummary.write(value.pages, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChildList_lift(_ buf: RustBuffer) throws -> ChildList {
+    return try FfiConverterTypeChildList.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChildList_lower(_ value: ChildList) -> RustBuffer {
+    return FfiConverterTypeChildList.lower(value)
 }
 
 
@@ -19010,6 +19110,31 @@ fileprivate struct FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeChildList: FfiConverterRustBuffer {
+    typealias SwiftType = [ChildList]
+
+    public static func write(_ value: [ChildList], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChildList.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChildList] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ChildList]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChildList.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeConflictChoice: FfiConverterRustBuffer {
     typealias SwiftType = [ConflictChoice]
 
@@ -21046,6 +21171,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page() != 6888) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_page_children_index() != 18211) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_db() != 21526) {

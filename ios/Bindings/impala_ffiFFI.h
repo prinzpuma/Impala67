@@ -1412,6 +1412,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_orphan_trashed_cards(void*_Non
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_CHILDREN_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_CHILDREN_INDEX
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_children_index(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_DB
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_DB
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_db(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -3553,6 +3558,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_orphan_trashed_cards(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_CHILDREN_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_CHILDREN_INDEX
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_children_index(void
     
 );
 #endif
