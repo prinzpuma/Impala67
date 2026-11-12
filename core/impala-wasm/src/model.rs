@@ -85,7 +85,10 @@ impl Storage for Prefetched {
     fn events_after(&self, after: u64, up_to: Option<u64>, limit: Option<usize>) -> Result<Vec<Object>, Error> {
         let source = match &self.all {
             Some(all) => all,
-            None if after == self.tail_after => &self.tail,
+            // Auch spätere Startpunkte: `save_checkpoint` liest den Rest in Portionen. Vorher galt
+            // nur `after == tail_after` – ab 2000 Events nach dem Checkpoint scheiterte jedes
+            // Speichern („need-all-events“), der Rest wuchs und jeder Start spielte mehr nach.
+            None if after >= self.tail_after => &self.tail,
             None => return Err(Error::Backend(NEED_ALL.into())),
         };
         let in_range = |e: &&Object| {

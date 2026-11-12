@@ -232,6 +232,7 @@ export const STATE = (() => {
 			for (const ev of list) U.observeTime(ev.t);
 			const applied = JSON.parse(M.applyRemote(JSON.stringify(list)));
 			const ordered = applied.map(({ i, touched }) => { afterApply(list[i], touched, REMOTE); return list[i]; });
+			countForCheckpoint(ordered.length);
 			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: ordered.length } });
 			emitRemoteApplied(new Set(ordered.map((ev) => ev?.type).filter((t) => typeof t === "string")), ordered);
 			if (!M.replayOrdered()) reloadSorted(ordered);
@@ -286,6 +287,7 @@ export const STATE = (() => {
 			throw e;
 		}
 		afterApply(ev, JSON.parse(M.applyLocal(json)), meta);
+		countForCheckpoint(1);
 		// boot.js setzt einmalig: STATE.onChange = () => RENDER.render();
 		if (typeof STATE.onChange === "function") STATE.onChange(type, ev);
 		for (const fn of _dispatchHooks.after) {
@@ -502,6 +504,17 @@ export const STATE = (() => {
 		onError: (error) => console.warn("[state] Start-Checkpoint fehlgeschlagen:", error),
 	});
 	const scheduleCheckpoint = () => checkpointScheduler.schedule();
+	// Vorher gab es nur den einen Checkpoint kurz nach dem Start: Alles aus einer langen Sitzung
+	// (oder mehreren kurzen unter 10 s) spielte der nächste Start Event für Event nach. Jetzt
+	// nach je CHECKPOINT_EVERY neuen Events erneut, wie gehabt erst bei Ruhe und Leerlauf.
+	const CHECKPOINT_EVERY = 300;
+	let _sinceCheckpoint = 0;
+	function countForCheckpoint(n) {
+		_sinceCheckpoint += n;
+		if (_sinceCheckpoint < CHECKPOINT_EVERY) return;
+		_sinceCheckpoint = 0;
+		scheduleCheckpoint();
+	}
 
 	// ---- Migration --------------------------------------------------------------------------
 	// Alte localStorage-Ablage der Zugangsdaten einmalig ins Log übernehmen.
