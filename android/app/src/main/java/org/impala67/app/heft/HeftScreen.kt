@@ -59,6 +59,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -82,6 +83,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,6 +146,8 @@ fun HeftScreen(
     var insertPos by remember { mutableStateOf(InsertPos.AFTER) }
 
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.flushStrokes() }
+    DisposableEffect(vm) { onDispose { vm.flushStrokes() } }
     // Lesemodus nur auf dem Telefon (mobile.js); auf dem Tablet schreibt der Stift immer.
     LaunchedEffect(desk) { if (desk) vm.setReading(false) else vm.openForReading() }
     LaunchedEffect(pages, focus) {

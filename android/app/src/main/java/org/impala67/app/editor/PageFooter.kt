@@ -102,7 +102,7 @@ internal fun PageFooter(
 @Composable
 private fun ChildPages(store: ImpalaStore, pageId: String, blocks: List<MdBlock>, onOpenPage: (String) -> Unit) {
     val c = Impala.colors
-    val children by remember(store, pageId) { store.query(Touches.pages) { core -> childPages(core, pageId) } }
+    val children by remember(store, pageId) { store.query(Touches.pagesMeta) { core -> childPages(core, pageId) } }
         .collectAsStateWithLifecycle()
     val embedded = remember(blocks) { buildSet { collectHefte(blocks) } }
     val kids = children.orEmpty().filter { it.id !in embedded }

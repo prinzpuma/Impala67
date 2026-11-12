@@ -28,7 +28,7 @@ data class Shelf(val path: List<HeftFolder>, val folders: List<Pair<HeftFolder, 
 class LibraryViewModel(private val store: ImpalaStore) : ViewModel() {
     /** Aktive Seiten mit PDF (`pdfId`), neueste zuerst – wie der Tab „PDFs“ der PWA. */
     val pages: StateFlow<List<PageSummary>?> =
-        store.query(Touches.pages) { core -> core.recentPages(UInt.MAX_VALUE).filter { it.pdfId != null } }
+        store.query(Touches.pagesMeta) { core -> core.recentPages(UInt.MAX_VALUE).filter { it.pdfId != null } }
 
     /** Offener Ordner im Regal (`S.libFolder`); `null` = Stamm. */
     private val _folder = MutableStateFlow<String?>(null)
@@ -38,7 +38,7 @@ class LibraryViewModel(private val store: ImpalaStore) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val shelf: StateFlow<Shelf?> = _folder.flatMapLatest { id ->
-        store.query({ c -> Touches.pages(c) || c.heftFolders }) { core ->
+        store.query({ c -> Touches.pagesMeta(c) || c.heftFolders }) { core ->
             val folders = core.heftFolders(id).map { f -> f to (core.heftFolders(f.id).size + core.heftInFolder(f.id).size) }
             Shelf(id?.let { core.heftFolderPath(it) }.orEmpty(), folders, core.heftInFolder(id))
         }

@@ -40,7 +40,7 @@ import uniffi.impala_ffi.PageSummary
 
 /** Papierkorb-Seiten lesen, wiederherstellen und endgültig löschen (in der PWA: Ansicht „Papierkorb“). */
 class TrashViewModel(private val store: ImpalaStore) : ViewModel() {
-    val pages: StateFlow<List<PageSummary>?> = store.query(Touches.pages) { it.trashedPages() }
+    val pages: StateFlow<List<PageSummary>?> = store.query(Touches.pagesMeta) { it.trashedPages() }
 
     fun restore(id: String) = write { store.write { it.restorePage(id) } }
 

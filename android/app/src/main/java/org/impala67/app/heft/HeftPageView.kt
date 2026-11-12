@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -23,12 +24,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlin.math.max
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.authoring.InProgressStrokesView
@@ -50,6 +54,8 @@ private val PageShape = RoundedCornerShape(Radius.xs)
 fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Modifier) {
     val data by vm.page(heftPageId).collectAsStateWithLifecycle()
     val cache = remember { StrokeCache() }
+    val strokeLayer = remember { PageStrokeLayer() }
+    DisposableEffect(strokeLayer) { onDispose { strokeLayer.release() } }
     val pending = remember { mutableStateListOf<HeftStroke>() }
     var erased by remember { mutableStateOf(emptySet<String>()) }
     var ring by remember { mutableStateOf<Offset?>(null) }
@@ -59,20 +65,28 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     val ink = Impala.colors.accent
 
     val saved = data?.strokes.orEmpty()
+    LaunchedEffect(vm.overlayResetRev) {
+        if (vm.overlayResetRev > 0) {
+            pending.clear()
+            erased = emptySet()
+        }
+    }
     LaunchedEffect(saved) {
         val ids = saved.mapTo(HashSet()) { it.id }
         pending.removeAll { it.id in ids }
         erased = erased.filterTo(HashSet()) { it in ids }
         cache.retain(ids + pending.map { it.id })
     }
-    val visible = remember(saved, pending.size, erased) { saved.filter { it.id !in erased } + pending }
+    val pendingSnapshot = pending.toList()
+    val visible = remember(saved, pendingSnapshot, erased) { saved.filter { it.id !in erased } + pendingSnapshot }
     // Lasso-Vorschau: Striche, die noch an der alten Stelle liegen, zeichnet die Seite verschoben.
     val sel = vm.lasso?.takeIf { it.heftPageId == heftPageId }
     val drag = sel?.drag
     val moving = remember(visible, drag?.marks) {
         drag?.marks?.let { marks -> visible.filter { marks[it.id] == it.mark() }.mapTo(HashSet()) { it.id } }.orEmpty()
     }
-    val strokes = remember(visible, moving) { visible.filter { it.id !in moving }.mapNotNull(cache::get) }
+    val settled = remember(saved, erased, moving) { saved.filter { it.id !in erased && it.id !in moving } }
+    val pendingStrokes = remember(pendingSnapshot, moving) { pendingSnapshot.filter { it.id !in moving }.mapNotNull(cache::get) }
     val moved = remember(visible, moving) { visible.filter { it.id in moving }.mapNotNull(cache::get) }
     val gesture = remember { LassoGesture(vm, heftPageId) }
     val objects = remember { ObjGesture(vm, heftPageId) }
@@ -103,6 +117,8 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
     ) {
         val k = constraints.maxWidth / HeftPage.WIDTH
         scale[0] = k
+        val bmpW = constraints.maxWidth.coerceIn(512, 2048)
+        val settledImage = remember(settled, bmpW) { strokeLayer.imageFor(settled, cache, bmpW) }
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
         val stored = data?.images.orEmpty()
@@ -128,7 +144,14 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         Canvas(Modifier.fillMaxSize()) {
             drawPaper(paper, ink, k)
             drawHeftImages(images, bitmaps, k)
-            drawInkStrokes(strokes, k)
+            settledImage?.let {
+                drawImage(
+                    image = it,
+                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    filterQuality = FilterQuality.Low,
+                )
+            }
+            drawInkStrokes(pendingStrokes, k)
             if (drag != null && moved.isNotEmpty()) {
                 withTransform({
                     scale(k, k, Offset.Zero)

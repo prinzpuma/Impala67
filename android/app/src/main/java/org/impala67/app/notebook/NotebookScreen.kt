@@ -68,7 +68,7 @@ fun NotebookScreen(store: ImpalaStore, currentPageId: String?, onOpenPage: (Stri
     val scope = rememberCoroutineScope()
     val inbox = remember(context) { NotebookInbox(context.applicationContext) }
     val files by inbox.files.collectAsStateWithLifecycle()
-    val pages by remember(store) { store.query(Touches.pages) { it.recentPages(UInt.MAX_VALUE) } }.collectAsStateWithLifecycle()
+    val pages by remember(store) { store.query(Touches.pagesMeta) { it.recentPages(UInt.MAX_VALUE) } }.collectAsStateWithLifecycle()
     var picker by remember { mutableStateOf(false) }
     var placing by remember { mutableStateOf<NlmFile?>(null) }
     var fresh by remember { mutableStateOf<NlmFile?>(null) }

@@ -51,7 +51,7 @@ import uniffi.impala_ffi.PageSummary
 
 /** Archivierte Seiten und Hefte lesen, zurückholen oder in den Papierkorb legen. */
 class ArchiveViewModel(private val store: ImpalaStore) : ViewModel() {
-    val pages: StateFlow<List<PageSummary>?> = store.query(Touches.pages) { it.archivedPages() }
+    val pages: StateFlow<List<PageSummary>?> = store.query(Touches.pagesMeta) { it.archivedPages() }
 
     fun restore(id: String) = write { store.write { it.unarchivePage(id) } }
 

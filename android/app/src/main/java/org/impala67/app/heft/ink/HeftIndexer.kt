@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.heft.HeftActivity
 
 /**
  * Macht Heftseiten durchsuchbar (Gegenstück zu `heft-indexer.js`, Quelle `"android"`):
@@ -28,6 +29,7 @@ class HeftIndexer(
         jobs.remove(heftPageId)?.cancel()
         jobs[heftPageId] = scope.launch {
             delay(DEBOUNCE_MS)
+            waitWhileWriting()
             try {
                 indexOne(store, recognizer, heftId, heftPageId)
             } catch (e: CancellationException) {
@@ -45,13 +47,20 @@ class HeftIndexer(
     companion object {
         private const val TAG = "HeftIndexer"
         private const val SRC = "android"
-        // Akkuschonend: 15 s nach dem letzten Strich, 6 s Pause zwischen Hintergrund-Seiten.
+        // Akkuschonend: 15 s nach dem letzten Strich, 6 s Pause zwischen Hintergrund-Seiten, ruht beim Schreiben.
         private const val DEBOUNCE_MS = 15_000L
         private const val BG_START_DELAY_MS = 8_000L
         private const val BG_PAUSE_MS = 6_000L
+        private const val WRITING_QUIET_MS = 5_000L
 
         @Volatile
         private var bgJob: Job? = null
+
+        private suspend fun waitWhileWriting() {
+            while (HeftActivity.isWriting(WRITING_QUIET_MS)) {
+                delay(2_000L)
+            }
+        }
 
         private suspend fun indexOne(
             store: ImpalaStore,
@@ -74,19 +83,24 @@ class HeftIndexer(
                 delay(BG_START_DELAY_MS)
                 val tried = HashSet<String>()
                 HandwritingRecognizer().use { rec ->
-                    while (true) {
-                        val next = store.write { it.heftOcrJobs(SRC) }
-                            .firstOrNull { tried.add("${it.pageId}:${it.heftPageId}:${it.contentKey}") }
-                            ?: break
-                        try {
-                            indexOne(store, rec, next.pageId, next.heftPageId)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Hintergrund-Erkennung übersprungen", e)
-                            break
+                    var failed = false
+                    while (!failed) {
+                        val jobs = store.write { it.heftOcrJobs(SRC) }
+                            .filter { tried.add("${it.pageId}:${it.heftPageId}:${it.contentKey}") }
+                        if (jobs.isEmpty()) break
+                        for (next in jobs) {
+                            waitWhileWriting()
+                            try {
+                                indexOne(store, rec, next.pageId, next.heftPageId)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Hintergrund-Erkennung übersprungen", e)
+                                failed = true
+                                break
+                            }
+                            delay(BG_PAUSE_MS)
                         }
-                        delay(BG_PAUSE_MS)
                     }
                 }
             }

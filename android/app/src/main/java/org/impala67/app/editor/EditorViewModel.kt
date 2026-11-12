@@ -56,7 +56,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     internal var selectionStart = 0; private set
     internal var selectionEnd = 0; private set
 
-    val header: StateFlow<PageHeaderData?> = store.query(Touches.pages) { core ->
+    val header: StateFlow<PageHeaderData?> = store.query(Touches.page(pageId)) { core ->
         val page = core.page(pageId)
         PageHeaderData(
             page,
@@ -67,7 +67,7 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
     }
 
     /** Ziele für das „[[“-Menü (`STATE.activePages()`); erst beim ersten Öffnen gelesen. */
-    val linkPages: StateFlow<List<PageSummary>?> by lazy { store.query(Touches.pages) { it.recentPages(UInt.MAX_VALUE) } }
+    val linkPages: StateFlow<List<PageSummary>?> by lazy { store.query(Touches.pagesMeta) { it.recentPages(UInt.MAX_VALUE) } }
 
     private val undoStack = ArrayDeque<List<MdBlock>>()
     private val redoStack = ArrayDeque<List<MdBlock>>()

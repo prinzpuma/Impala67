@@ -1,6 +1,7 @@
 package org.impala67.app.ui.desk
 
 import uniffi.impala_ffi.ImpalaCore
+import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 import uniffi.impala_ffi.WorkspaceInfo
 
@@ -31,14 +32,12 @@ private const val MAX_DEPTH = 8
 internal fun readDeskTree(core: ImpalaCore): DeskTree {
     val workspaces = core.workspaces()
     val kids = HashMap<String, List<PageSummary>>()
-    fun walk(parent: PageSummary?, ws: String, depth: Int) {
-        val list = core.childrenOf(parent?.id, ws)
-        kids[parent?.id ?: wsKey(ws)] = list
-        if (depth < MAX_DEPTH) list.forEach { walk(it, ws, depth + 1) }
+    for (entry in core.pageChildrenIndex()) {
+        kids[entry.parentId ?: wsKey(entry.workspaceId)] = entry.pages
     }
-    workspaces.forEach { walk(null, it.id, 0) }
-    val favorites = core.recentPages(UInt.MAX_VALUE).filter { it.favorite }
-    val db = kids.values.flatten().filter { core.pageDb(it.id) != null }.mapTo(HashSet()) { it.id }
+    val all = core.recentPages(UInt.MAX_VALUE)
+    val favorites = all.filter { it.favorite }
+    val db = all.filter { it.kind != PageKind.HEFT && core.pageDb(it.id) != null }.mapTo(HashSet()) { it.id }
     return DeskTree(workspaces, favorites, kids, db, core.treeOpen())
 }
 

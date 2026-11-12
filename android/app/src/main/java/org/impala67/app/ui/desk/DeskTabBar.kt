@@ -60,7 +60,7 @@ data class TabInfo(val title: String, val icon: Int, val emoji: String?)
 @Composable
 internal fun rememberTabInfo(store: ImpalaStore): (String) -> TabInfo {
     val pages by remember(store) {
-        store.query(Touches.pages) { core -> core.recentPages(UInt.MAX_VALUE).associateBy { it.id } }
+        store.query(Touches.pagesMeta) { core -> core.recentPages(UInt.MAX_VALUE).associateBy { it.id } }
     }.collectAsStateWithLifecycle()
     val chats by remember(store) { store.query(Touches.chats) { core -> core.chats().associateBy { it.id } } }.collectAsStateWithLifecycle()
     return { tab ->

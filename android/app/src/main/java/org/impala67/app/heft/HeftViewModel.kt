@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,7 +46,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** Erkennt die Handschrift einer Seite nach Strich-Änderungen und macht sie durchsuchbar. */
     private val indexer = HeftIndexer(store, viewModelScope, pageId)
 
-    val title: StateFlow<String?> = store.query(Touches.pages) { it.page(pageId)?.summary?.title }
+    val title: StateFlow<String?> = store.query(Touches.pagesMeta) { it.page(pageId)?.summary?.title }
 
     /** IDs der Heftseiten in Reihenfolge. */
     val pageIds: StateFlow<List<String>?> = store.query(touched) { it.heftPageIds(pageId) }
@@ -68,6 +69,9 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         private set
     var canRedo by mutableStateOf(false)
         private set
+    /** Erhöht sich bei Undo/Redo/Wiederherstellen/Fehler, damit `HeftPageView` unbestätigte Striche abräumt. */
+    var overlayResetRev by mutableStateOf(0)
+        private set
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
@@ -77,6 +81,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     private val undoStack = ArrayDeque<String>()
     private val redoStack = ArrayDeque<String>()
     private val writes = Mutex()
+    private val strokeBatch = ArrayList<HeftChange>()
+    private var batchJob: Job? = null
 
     // ---- Werkzeuge (heft.js: tool, color, size, pens, penSlot) ----
 
@@ -154,7 +160,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     @JvmName("updateWriting")
     fun setWriting(on: Boolean) {
         writingOff?.cancel()
-        if (on) { writing = true; return }
+        if (on) { HeftActivity.noteWrite(); writing = true; return }
         if (!writing) return
         writingOff = viewModelScope.launch { delay(700); writing = false }
     }
@@ -191,33 +197,45 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     // ---- Schreiben ----
 
-    /** Fertigen Strich speichern; Punkte im Kernformat `[x, y, druck, …]`. */
+    /** Fertigen Strich gesammelt speichern (350 ms Bündel); Punkte im Kernformat `[x, y, druck, …]`. */
     fun addStroke(heftPageId: String, tool: String, color: String, size: Double, points: List<Float>, id: String) {
-        edit { HeftChange.AddStroke(heftPageId, HeftStroke(id, tool, color, size, points, null)) }
-        indexer.schedule(heftPageId)
+        HeftActivity.noteWrite()
+        queueStroke(HeftChange.AddStroke(heftPageId, HeftStroke(id, tool, color, size, points, null)))
     }
 
     /** Gehaltene und erkannte Form (Linie, Rechteck, Dreieck, Pfeil, Ellipse) als Strich `shape` speichern. */
     fun addShape(heftPageId: String, color: String, size: Double, shape: HeftShape, id: String) {
-        edit { HeftChange.AddStroke(heftPageId, HeftStroke(id, "shape", color, size, emptyList(), shape)) }
-        indexer.schedule(heftPageId)
+        HeftActivity.noteWrite()
+        queueStroke(HeftChange.AddStroke(heftPageId, HeftStroke(id, "shape", color, size, emptyList(), shape)))
     }
 
     fun removeStrokes(heftPageId: String, ids: List<String>) {
         if (ids.isNotEmpty()) {
+            HeftActivity.noteWrite()
             edit { HeftChange.RemoveStrokes(heftPageId, ids) }
             indexer.schedule(heftPageId)
         }
     }
 
+    /** Offene Striche aus dem 350-ms-Puffer sofort schreiben (z. B. beim Weglegen der App). */
+    fun flushStrokes() {
+        val pending = takeStrokeBatch() ?: return
+        commitBatchAsync(store.scope, pending, scheduleOcr = true)
+    }
+
     override fun onCleared() {
+        val pending = takeStrokeBatch()
+        if (pending != null) commitBatchAsync(store.scope, pending, scheduleOcr = false)
         indexer.close()
         super.onCleared()
     }
 
-    /** Striche unter dem Radierer, oberster zuerst (nur Lesen, schreibt nichts). */
-    suspend fun strokesAt(heftPageId: String, x: Double, y: Double, radius: Double): List<String> =
-        store.write { runCatching { it.heftStrokesAt(pageId, heftPageId, x, y, radius) }.getOrDefault(emptyList()) }
+    /** Striche unter dem Radierer, oberster zuerst (nur Lesen, schreibt zuvor offene Striche). */
+    suspend fun strokesAt(heftPageId: String, x: Double, y: Double, radius: Double): List<String> {
+        val pending = takeStrokeBatch()
+        if (pending != null) writes.withLock { commitBatchLocked(pending) }
+        return store.write { runCatching { it.heftStrokesAt(pageId, heftPageId, x, y, radius) }.getOrDefault(emptyList()) }
+    }
 
     /** Neue Seite nach Position `at` (`null`: hinten). */
     fun addPage(at: Int?, paper: Paper): String {
@@ -227,11 +245,15 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     }
 
     /** Gescannte Seiten ab Position [at] als Heftseiten einfügen; liefert die erste neue Seiten-ID. */
-    suspend fun addScanned(at: Int, scans: List<ScannedPage>): String? = writes.withLock {
-        runCatching { store.write { it.insertScannedPages(pageId, at, scans) } }
-            .onSuccess { changed() }
-            .onFailure { _messages.tryEmit(it.message ?: "Scan nicht eingefügt") }
-            .getOrNull()
+    suspend fun addScanned(at: Int, scans: List<ScannedPage>): String? {
+        val pending = takeStrokeBatch()
+        return writes.withLock {
+            commitBatchLocked(pending)
+            runCatching { store.write { it.insertScannedPages(pageId, at, scans) } }
+                .onSuccess { changed() }
+                .onFailure { _messages.tryEmit(it.message ?: "Scan nicht eingefügt") }
+                .getOrNull()
+        }
     }
 
     // ---- Verlauf (heft-storage.js: lokale Stände, nicht synchronisiert) ----
@@ -259,13 +281,15 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     fun restore(snap: HeftSnap) {
         lasso = null
         objSel = null
+        val pending = takeStrokeBatch()
         viewModelScope.launch {
             writes.withLock {
+                commitBatchLocked(pending)
                 runCatching {
                     val json = withContext(Dispatchers.IO) { snap.file.readText() }
                     backupNow()
                     store.write { it.heftRestore(pageId, json) }
-                }.onSuccess { record(it); _messages.tryEmit("Heft-Stand wiederhergestellt") }
+                }.onSuccess { record(it); overlayResetRev++; _messages.tryEmit("Heft-Stand wiederhergestellt") }
                     .onFailure { _messages.tryEmit("Wiederherstellen fehlgeschlagen: " + (it.message ?: "Stand fehlt oder ist beschädigt")) }
             }
         }
@@ -283,8 +307,10 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
      * die Regel im Kern (`change_op`) für Stapel nachziehen, dann in einem Schritt löschen.
      */
     fun removePages(heftPageIds: List<String>) {
+        val pending = takeStrokeBatch()
         viewModelScope.launch {
             writes.withLock {
+                commitBatchLocked(pending)
                 // Wie die PWA vorher sichern: Gelöschtes ist über den Verlauf wiederherstellbar.
                 runCatching { backupNow() }
                 for (id in heftPageIds) {
@@ -511,12 +537,55 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     fun redo() { lasso = null; objSel = null; replay(redoStack, undoStack) }
 
+    private data class StrokeBatch(val changes: List<HeftChange>, val pages: Set<String>)
+
+    private fun queueStroke(change: HeftChange.AddStroke) {
+        strokeBatch += change
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            delay(STROKE_BATCH_MS)
+            val pending = takeStrokeBatch() ?: return@launch
+            commitBatchAsync(viewModelScope, pending, scheduleOcr = true)
+        }
+    }
+
+    private fun takeStrokeBatch(): StrokeBatch? {
+        batchJob?.cancel()
+        batchJob = null
+        if (strokeBatch.isEmpty()) return null
+        val changes = strokeBatch.toList()
+        val pages = strokeBatch.mapNotNullTo(HashSet()) { (it as? HeftChange.AddStroke)?.page }
+        strokeBatch.clear()
+        return StrokeBatch(changes, pages)
+    }
+
+    private fun commitBatchAsync(targetScope: CoroutineScope, pending: StrokeBatch, scheduleOcr: Boolean) {
+        targetScope.launch {
+            writes.withLock { commitBatchLocked(pending, scheduleOcr) }
+        }
+    }
+
+    private suspend fun commitBatchLocked(pending: StrokeBatch?, scheduleOcr: Boolean = true) {
+        if (pending == null) return
+        runCatching { store.write { it.heftApply(pageId, pending.changes) } }
+            .onSuccess { edit ->
+                record(edit)
+                if (scheduleOcr) pending.pages.forEach(indexer::schedule)
+            }
+            .onFailure {
+                overlayResetRev++
+                _messages.tryEmit(it.message ?: "Änderung nicht möglich")
+            }
+    }
+
     private fun edit(change: () -> HeftChange) = write { it.heftApply(pageId, listOf(change())) }
 
     /** Eine Änderung schreiben und ihre Umkehr merken; [after] läuft nach Erfolg mit dem Ergebnis, [failed] sonst. */
     private fun write(after: suspend (HeftEdit) -> Unit = {}, failed: () -> Unit = {}, block: (ImpalaCore) -> HeftEdit) {
+        val pending = takeStrokeBatch()
         viewModelScope.launch {
             writes.withLock {
+                commitBatchLocked(pending)
                 runCatching { store.write(block) }
                     .onSuccess { record(it); after(it) }
                     .onFailure { failed(); _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
@@ -537,11 +606,16 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     /** Umkehr anwenden; deren Umkehr (Wiederholen bzw. wieder Rückgängig) wandert auf den anderen Stapel. */
     private fun replay(from: ArrayDeque<String>, to: ArrayDeque<String>) {
+        val pending = takeStrokeBatch()
         viewModelScope.launch {
             writes.withLock {
+                commitBatchLocked(pending)
                 val ops = from.removeLastOrNull() ?: return@withLock
                 runCatching { store.write { it.heftApplyOps(pageId, ops) } }
-                    .onSuccess { if (it.undo != "[]") { to.addLast(it.undo); while (to.size > UNDO_LIMIT) to.removeFirst() } }
+                    .onSuccess {
+                        overlayResetRev++
+                        if (it.undo != "[]") { to.addLast(it.undo); while (to.size > UNDO_LIMIT) to.removeFirst() }
+                    }
                     .onFailure { _messages.tryEmit(it.message ?: "Änderung nicht möglich") }
                 refreshStacks()
             }
@@ -555,6 +629,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     private companion object {
         const val UNDO_LIMIT = 100
+        const val STROKE_BATCH_MS = 350L
     }
 }
 

@@ -67,6 +67,9 @@ class ImpalaStore(val core: ImpalaCore, val scope: CoroutineScope) {
 /** Gruppen von Änderungen für [ImpalaStore.query]. */
 object Touches {
     val pages: (Changes) -> Boolean = { it.pagesAll || it.pages.isNotEmpty() || it.workspaces }
+    /** Titel, Icon, Ort, Favorit, Archiv, neue/gelöschte Seiten – reine Inhaltsänderungen (Tippen im Editor, Heft-Striche) nicht. */
+    val pagesMeta: (Changes) -> Boolean = { it.pagesAll || it.pagesMeta || it.workspaces }
+    fun page(id: String): (Changes) -> Boolean = { it.pagesAll || it.pagesMeta || it.workspaces || id in it.pages }
     val cards: (Changes) -> Boolean = { it.cardsAll || it.cards.isNotEmpty() || it.decks || it.reviews }
     val learning: (Changes) -> Boolean = { it.learningSessions }
     val articles: (Changes) -> Boolean = { it.homeArticles }

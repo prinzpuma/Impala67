@@ -111,7 +111,7 @@ private class DbData(val number: DbColumn?, val columns: List<DbColumn>, val row
 @Composable
 internal fun DatabaseView(store: ImpalaStore, pageId: String, onOpenPage: (String) -> Unit, modifier: Modifier = Modifier) {
     val data by remember(store, pageId) {
-        store.query(Touches.pages) { core ->
+        store.query(Touches.pagesMeta) { core ->
             core.pageDb(pageId)?.let { schema ->
                 val all = schema.filter { it.kind != "title" }
                 val number = all.firstOrNull { it.kind == "number" }

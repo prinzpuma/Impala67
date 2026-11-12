@@ -1,5 +1,8 @@
 package org.impala67.app.heft
 
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.ink.brush.Brush
 import androidx.ink.brush.InputToolType
 import androidx.ink.brush.StockBrushes
@@ -8,6 +11,7 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import uniffi.impala_ffi.HeftStroke
+import kotlin.math.roundToInt
 
 /**
  * Brücke zwischen dem Strichformat des Kerns (`HeftStroke`: Werkzeug, CSS-Farbe, Breite, flache
@@ -67,14 +71,14 @@ object HeftInk {
     }
 }
 
-/** Gezeichnete ink-Striche je Strich-ID; ein geänderter Strich (Farbe, Breite, Punktzahl) wird neu gebaut. */
+/** Gezeichnete ink-Striche je Strich-ID; ein geänderter Strich (Farbe, Breite, Punktzahl, Lage) wird neu gebaut. */
 class StrokeCache {
     private class Entry(val key: String, val stroke: Stroke)
 
     private val entries = HashMap<String, Entry>()
 
     fun get(s: HeftStroke): Stroke? {
-        val key = "${s.tool}|${s.color}|${s.size}|${s.points.size}"
+        val key = strokeKey(s)
         entries[s.id]?.takeIf { it.key == key }?.let { return it.stroke }
         val stroke = HeftInk.stroke(s) ?: return null
         entries[s.id] = Entry(key, stroke)
@@ -83,4 +87,74 @@ class StrokeCache {
 
     /** Verwaiste Einträge verwerfen (nur die IDs der sichtbaren Seite bleiben). */
     fun retain(ids: Set<String>) = entries.keys.retainAll(ids)
+}
+
+private fun strokeKey(s: HeftStroke): String = "${s.tool}|${s.color}|${s.size}|${s.points.size}|${s.mark()}"
+
+/**
+ * Zwischengespeicherte Bitmap der gesetzten Striche einer Seite (ohne `pending`, `erased`, `moving`).
+ * Solange nur neue Striche angehängt werden und die Breite gleich bleibt, zeichnet die Schicht nur
+ * das Neue nach – Pan/Zoom, Radierer-Ring, Lasso- und Form-Vorschau kosten nur noch ein `drawImage`.
+ */
+class PageStrokeLayer {
+    private var bitmap: Bitmap? = null
+    private var image: ImageBitmap? = null
+    private var canvas: android.graphics.Canvas? = null
+    private var width = 0
+    private var height = 0
+    private val drawn = ArrayList<Pair<String, String>>()
+
+    fun imageFor(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): ImageBitmap? {
+        if (strokes.isEmpty() || targetWidth <= 0) {
+            release()
+            return null
+        }
+        val targetHeight = (targetWidth / HeftPage.RATIO).roundToInt().coerceAtLeast(1)
+        val keys = strokes.map { it.id to strokeKey(it) }
+        val sizeChanged = targetWidth != width || targetHeight != height || bitmap == null
+        val prefixMatches = !sizeChanged && keys.size >= drawn.size &&
+            drawn.indices.all { i -> keys[i] == drawn[i] }
+        if (prefixMatches && keys.size == drawn.size) return image
+
+        if (sizeChanged) {
+            bitmap?.recycle()
+            val fresh = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+            bitmap = fresh
+            canvas = android.graphics.Canvas(fresh)
+            width = targetWidth
+            height = targetHeight
+            drawn.clear()
+        }
+        val native = canvas ?: return null
+        val k = targetWidth / HeftPage.WIDTH
+        val matrix = android.graphics.Matrix().apply { setScale(k, k) }
+        val start = if (prefixMatches) {
+            drawn.size
+        } else {
+            bitmap?.eraseColor(android.graphics.Color.TRANSPARENT)
+            drawn.clear()
+            0
+        }
+        val saved = native.save()
+        native.concat(matrix)
+        for (i in start until strokes.size) {
+            cache.get(strokes[i])?.let { HeftInk.renderer.draw(native, it, matrix) }
+        }
+        native.restoreToCount(saved)
+        drawn.addAll(keys.subList(start, keys.size))
+        bitmap?.prepareToDraw()
+        val updated = bitmap?.asImageBitmap()
+        image = updated
+        return updated
+    }
+
+    fun release() {
+        drawn.clear()
+        bitmap?.recycle()
+        bitmap = null
+        image = null
+        canvas = null
+        width = 0
+        height = 0
+    }
 }

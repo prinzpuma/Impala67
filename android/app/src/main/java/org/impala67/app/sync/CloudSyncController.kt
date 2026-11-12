@@ -22,6 +22,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.heft.HeftActivity
 import org.impala67.app.settings.DevicePrefs
 import org.json.JSONObject
 import uniffi.impala_ffi.CloudSync
@@ -242,10 +243,16 @@ class CloudSyncController(
             _ui.update { it.copy(progress = SyncProgress(label, current.toLong(), total.toLong())) }
         }
 
-        // Lokale Änderung: kurz bündeln, damit Tippen nicht jeden Buchstaben einzeln sendet.
+        // Lokale Änderung: kurz bündeln; beim Schreiben im Heft warten, bis 3,5 s Ruhe herrscht.
         override fun onSyncNeeded() {
             debounceJob?.cancel()
-            debounceJob = scope.launch { delay(CHANGE_DEBOUNCE_MS); syncNow() }
+            debounceJob = scope.launch {
+                delay(CHANGE_DEBOUNCE_MS)
+                while (HeftActivity.isWriting(HEFT_QUIET_MS)) {
+                    delay(500L)
+                }
+                syncNow()
+            }
         }
     }
 
@@ -344,6 +351,7 @@ class CloudSyncController(
 
     private companion object {
         const val CHANGE_DEBOUNCE_MS = 1_500L
+        const val HEFT_QUIET_MS = 3_500L
         const val MAX_RETRIES = 5u
         const val BACKGROUND_PASS_TIMEOUT_MS = 8 * 60_000L
     }

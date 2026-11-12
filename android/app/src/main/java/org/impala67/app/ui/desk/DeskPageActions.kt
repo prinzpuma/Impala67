@@ -76,9 +76,9 @@ fun PageActions(store: ImpalaStore, nav: ShellNav, pageId: String, favorite: Boo
     val clipboard = LocalClipboard.current
     // Gleiche Instanz wie im Editor darunter (PageActions läuft in dessen `chromeActions`).
     val editor: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
-    val summary by remember(store, pageId) { store.query(Touches.pages) { it.page(pageId)?.summary } }.collectAsStateWithLifecycle()
-    val marks by remember(store, pageId) { store.query(Touches.pages) { highlightCount(it.page(pageId)?.content.orEmpty()) } }.collectAsStateWithLifecycle()
-    val isDb by remember(store, pageId) { store.query(Touches.pages) { it.pageDb(pageId) != null } }.collectAsStateWithLifecycle()
+    val summary by remember(store, pageId) { store.query(Touches.pagesMeta) { it.page(pageId)?.summary } }.collectAsStateWithLifecycle()
+    val marks by remember(store, pageId) { store.query(Touches.page(pageId)) { highlightCount(it.page(pageId)?.content.orEmpty()) } }.collectAsStateWithLifecycle()
+    val isDb by remember(store, pageId) { store.query(Touches.pagesMeta) { it.pageDb(pageId) != null } }.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<PageDialog?>(null) }
     var moving by remember { mutableStateOf<PageSummary?>(null) }

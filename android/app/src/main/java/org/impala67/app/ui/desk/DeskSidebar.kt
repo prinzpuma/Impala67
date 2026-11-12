@@ -151,7 +151,7 @@ private fun SidebarTabs(store: ImpalaStore, nav: ShellNav) {
 
 @Composable
 private fun PageTree(store: ImpalaStore, nav: ShellNav) {
-    val tree by remember(store) { store.query(Touches.any(Touches.pages, Touches.ui), ::readDeskTree) }.collectAsStateWithLifecycle()
+    val tree by remember(store) { store.query(Touches.any(Touches.pagesMeta, Touches.ui), ::readDeskTree) }.collectAsStateWithLifecycle()
     var renaming by remember { mutableStateOf<String?>(null) }
     var moving by remember { mutableStateOf<PageSummary?>(null) }
     val drag = remember { TreeDrag() }
