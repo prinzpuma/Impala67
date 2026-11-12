@@ -56,6 +56,9 @@ private struct NoteBody: View {
     @State private var linkURL = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var showIconPicker = false
+    @State private var showCoverPicker = false
+    /// Cover der Seite (`cover` bzw. eigenes Bild `coverImg`), mit den Metadaten neu gelesen.
+    @State private var cover: (name: String, img: String?) = ("", nil)
     @State private var isDbPage = false
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
@@ -65,7 +68,28 @@ private struct NoteBody: View {
             VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
                 PageChrome(model: model, onPickIcon: { showIconPicker = true })
                 ArchivedBanner(pageId: model.pageId) { model.showToast($0, style: .success) }
-                NoteEmoji(pageId: model.pageId) { showIconPicker = true }
+                if !cover.name.isEmpty || cover.img != nil {
+                    NoteCover(cover: cover.name, coverImg: cover.img) { showCoverPicker = true }
+                        // Icon ragt wie in der PWA unten ins Cover (`.page-cover + .page-heading`).
+                        .padding(.bottom, -38)
+                    NoteEmoji(pageId: model.pageId, onCover: true) { showIconPicker = true }
+                        .padding(.horizontal, Space.s4)
+                } else {
+                    HStack(spacing: Space.s4) {
+                        NoteEmoji(pageId: model.pageId) { showIconPicker = true }
+                        Button { showCoverPicker = true } label: {
+                            HStack(spacing: Space.s1) {
+                                Icon("image", size: 14)
+                                Text("Cover hinzufügen").font(.system(size: TextSize.xs, weight: .medium))
+                            }
+                            .foregroundStyle(Impala.text2.opacity(0.45))
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                    }
+                }
                 TextField("Unbenannt", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(Impala.text)
@@ -93,6 +117,9 @@ private struct NoteBody: View {
         .scrollDismissesKeyboard(.interactively)
         .task(id: "\(model.pageId):\(store.pageMetaRevision)") {
             isDbPage = store.core.pageDb(id: model.pageId) != nil
+            if let s = store.core.page(id: model.pageId)?.summary {
+                withAnimation(.snappy) { cover = (s.cover, s.coverImg) }
+            }
         }
         // Bilder aus anderen Apps hineinziehen: hinter den aktiven Block bzw. ans Ende.
         .onDrop(of: [.image], isTargeted: nil) { providers in
@@ -143,6 +170,9 @@ private struct NoteBody: View {
         }
         .sheet(isPresented: $showIconPicker) {
             IconPickerSheet(pageId: model.pageId)
+        }
+        .sheet(isPresented: $showCoverPicker) {
+            NoteCoverSheet(pageId: model.pageId, cover: cover.name, coverImg: cover.img)
         }
         .alert("Link einfügen", isPresented: Binding(get: { model.linkPrompt != nil }, set: { if !$0 { model.finishLink(nil) } })) {
             TextField("Link-Adresse", text: $linkURL)
@@ -367,6 +397,8 @@ private struct ArchivedBanner: View {
 private struct NoteEmoji: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String
+    /// Ragt ins Cover: Icon auf eigenem Hintergrund wie `.page-cover + .page-heading .page-icon`.
+    var onCover = false
     let onPick: () -> Void
     @State private var emoji: String?
 
@@ -375,6 +407,14 @@ private struct NoteEmoji: View {
             if let emoji {
                 Button(action: onPick) {
                     Text(emoji).font(.system(size: 52))
+                        .padding(onCover ? 8 : 0)
+                        .background {
+                            if onCover {
+                                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                    .fill(Impala.panel)
+                                    .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
@@ -386,8 +426,10 @@ private struct NoteEmoji: View {
                         Text("Icon hinzufügen")
                             .font(.system(size: TextSize.xs, weight: .medium))
                     }
-                    .foregroundStyle(Impala.text2.opacity(0.45))
-                    .padding(.vertical, 2)
+                    .foregroundStyle(onCover ? Impala.text2 : Impala.text2.opacity(0.45))
+                    .padding(.vertical, onCover ? 6 : 2)
+                    .padding(.horizontal, onCover ? 10 : 0)
+                    .background { if onCover { Capsule().fill(Impala.panel) } }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

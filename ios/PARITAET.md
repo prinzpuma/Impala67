@@ -92,8 +92,8 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
-| 1. Shell & Navigation | 80 | 21 | 6 | 75 % |
-| 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
+| 1. Shell & Navigation | 81 | 20 | 6 | 76 % |
+| 2. Seiten & Editor | 36 | 8 | 6 | 72 % |
 | 3. Heft | 25 | 7 | 3 | 71 % |
 | 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
 | 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
@@ -238,7 +238,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ✅ | zeigt zusätzlich, woher das Fach kommt; Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Verlauf-Dialog mit Wiederherstellen | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
-| Icon- und Cover-Wahl für Seiten | 🟡 | Icon da (siehe Icon-Auswahl im Editor); Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
+| Icon- und Cover-Wahl für Seiten | ✅ | Icon und Cover (9 Muster wie die PWA oder eigenes Bild) im Editor (`Notes/NoteCover.swift`) · am Gerät ungeprüft |
 
 ### 1.15 Menüs
 | Punkt | Status | Fundstelle / Notiz |
@@ -307,7 +307,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Brotkrumen (Arbeitsbereich, Ahnen, Titel) | ✅ | `Notes/NoteEditor.swift:565-640` |
 | Archiv-Banner mit Wiederherstellen | ✅ | `NoteEditor.swift:301-325` |
 | Icon-Auswahl | ✅ | `Notes/NoteEditor.swift:357-465` `NoteEmoji` (Klick öffnet Picker), `IconPickerSheet` mit 24 Emojis, Entfernen, Schließen über `patchPage` / `pageUpdate`-Event; auch im ⋯-Menü · am Gerät ungeprüft |
-| Cover (Vorlagen, eigenes Bild) | ❌ | fehlt für Notizen |
+| Cover (Vorlagen, eigenes Bild) | ✅ | `Notes/NoteCover.swift`: Muster wie `.cover-*` der PWA, eigenes Bild, Icon ragt ins Cover · am Gerät ungeprüft |
 | Platzhalter „Unbenannt“ | ✅ | `Notes/NoteEditor.swift:68` `TextField("Unbenannt", ...)`, `PageStyle.swift:9` · am Gerät ungeprüft |
 | Teilen-Menü (PDF, MD, Link) | ✅ | `Notes/NoteEditor.swift:513-535` Menu mit PDF, Markdown und Link wie `shareMenuHtml` der PWA · am Gerät ungeprüft |
 | Als Vorlage im ⋯ | ✅ | `NoteEditor.swift` (`PageChrome`) & Seitenbaum |
