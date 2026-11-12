@@ -92,16 +92,16 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
-| 1. Shell & Navigation | 65 | 24 | 13 | 64 % |
-| 2. Seiten & Editor | 29 | 11 | 10 | 58 % |
-| 3. Heft | 17 | 10 | 10 | 46 % |
-| 4. KI-Chat & Karten/Lernen | 22 | 10 | 12 | 50 % |
-| 5. Einstellungen, Sync, Backup | 16 | 5 | 7 | 57 % |
+| 1. Shell & Navigation | 80 | 21 | 7 | 74 % |
+| 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
+| 3. Heft | 22 | 10 | 7 | 56 % |
+| 4. KI-Chat & Karten/Lernen | 22 | 11 | 11 | 50 % |
+| 5. Einstellungen, Sync, Backup | 15 | 6 | 7 | 54 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
-Größte Lücken neben der Leistung: Seiten-Icon/Cover,
-Fächerliste in den Einstellungen, Schulnoten, Lernanalyse, Daily-Notizen,
+Größte Lücken neben der Leistung: Seiten-Cover,
+Fächerliste in den Einstellungen (Fach-Zuordnung ist erledigt), Schulnoten, Lernanalyse, Daily-Notizen,
 Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ---
@@ -238,7 +238,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ✅ | zeigt zusätzlich, woher das Fach kommt; Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Verlauf-Dialog mit Wiederherstellen | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
-| Icon- und Cover-Wahl für Seiten | ❌ | Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
+| Icon- und Cover-Wahl für Seiten | 🟡 | Icon da (siehe Icon-Auswahl im Editor); Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
 
 ### 1.15 Menüs
 | Punkt | Status | Fundstelle / Notiz |
@@ -373,7 +373,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Video/Audio, PDF-Ansicht im Block | ❌ | nur Datei-Zeile |
 | PDF-Text beim Hochladen übernehmen | ❌ | fehlt |
 | Heft-Block mit Vorschau | 🟡 | ohne Vorschau |
-| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift`; Vektoren von Apples Satzmodell statt Bekko (`Notes/SemanticIndex.swift`, nur lokal) · am Gerät ungeprüft |
+| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift`; Vektoren von Apples Satzmodell statt Bekko (`Notes/SemanticIndex.swift`, nur lokal, Index im Hintergrund) · am Gerät ungeprüft |
 | Datenbankansicht (Vorlesungsübersicht) | ✅ | `DatabaseView.swift`: Karten in Liquid Glass, Auswahl-Menü, Kalender |
 
 ---
@@ -435,7 +435,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Papierarten | ✅ | `Heft/HeftPaper.swift` |
 | Seiten untereinander scrollen | 🟡 | Einzelseite mit ‹ › |
 | Seite löschen/verschieben | ✅ | `HeftPagesSheet.swift`, `HeftScreen.swift:300` |
-| ⋯-Menü (Favorit, Verlauf, Icon, Duplizieren) | 🟡 | nur Export und Link |
+| ⋯-Menü (Favorit, Icon, Duplizieren) | 🟡 | nur Export und Link; Verlauf als Reiter „Verlauf“ der Seitenübersicht (siehe 3.4) |
 | Automatische Sicherung (Verlauf) | ✅ | höchstens alle 10 Min., 20 Stände / 24 h, nur lokal (`Heft/HeftHistory.swift`) · am Gerät ungeprüft |
 
 ### 3.7 Import, Export, Scanner, Handschrift
@@ -524,7 +524,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Wochenwidget, Ziele, Serie | ✅ | `Home/HomeWeek.swift`, `Home/LearningTime.swift` |
 | Erfassung, „Lernst du noch?“ | ✅ | `LearningTime.swift:131, 256-265` |
 | Pausen-Erinnerung nach 40 min | 🟡 | nur Schalter, keine Logik |
-| Fächer (Liste, Zuordnung, Menüeintrag) | ❌ | fehlt |
+| Fächer (Liste, Zuordnung, Menüeintrag) | 🟡 | Zuordnung und Menüeintrag vorhanden: Fach-Dialog über „Fach…“ im Seitenbaum und im ⋯-Menü der Notiz (`Notes/SubjectSheet.swift`, Erkennung im Kern `impala-fach`); Fächerliste in den Einstellungen fehlt |
 | Schulnoten | ❌ | fehlt (Kern-API vorhanden) |
 
 ---

@@ -979,6 +979,16 @@ struct HeftCanvas: UIViewRepresentable {
             if !pages.isEmpty { write { core, pageId in HeftHistory.maybeSnapshot(core: core, pageId: pageId) } }
         }
 
+        /// Offene Striche schreiben und `op` dahinter in der Schreib-Warteschlange ausführen, z. B. einen
+        /// Stand aus dem Heft-Verlauf übernehmen: Nichts Älteres landet danach noch über dem Ergebnis.
+        func afterWrites<T>(_ op: @escaping @Sendable (ImpalaCore, String) -> T) async -> T {
+            flush()
+            let (core, pageId) = (core, pageId)
+            return await withCheckedContinuation { cont in
+                writer.async { cont.resume(returning: op(core, pageId)) }
+            }
+        }
+
         /// Kern-Aufruf in der Schreib-Warteschlange (feste Reihenfolge, auch vor jedem Laden).
         private func write(_ op: @escaping @Sendable (ImpalaCore, String) -> Void) {
             let (core, pageId) = (core, pageId)

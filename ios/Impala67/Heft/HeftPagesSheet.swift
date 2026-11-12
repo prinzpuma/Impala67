@@ -20,6 +20,8 @@ struct HeftPagesSheet: View {
     let onAdd: (HeftPaperKind?) -> Void
     /// Nach Verschieben, Löschen oder Papierwechsel: Seitenliste neu lesen.
     let onChanged: () -> Void
+    /// Schreib-Warteschlange des offenen Hefts (für das Wiederherstellen aus dem Verlauf).
+    var writes: HeftCanvas.Coordinator?
 
     /// Reiter oben wie `heft-pages-seg` der PWA: Seiten oder Verlauf (gesicherte Stände).
     @State private var tab = Tab.pages
@@ -57,7 +59,7 @@ struct HeftPagesSheet: View {
                     .padding(.top, Space.s3)
                 }
                 if tab == .history && !picking {
-                    HeftHistoryGrid(pageId: pageId, tileWidth: Self.tileWidth) {
+                    HeftHistoryGrid(pageId: pageId, tileWidth: Self.tileWidth, writes: writes) {
                         onChanged()
                         dismiss()
                     }

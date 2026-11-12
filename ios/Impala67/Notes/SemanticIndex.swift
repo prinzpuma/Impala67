@@ -53,17 +53,12 @@ enum SemanticIndex {
         }
     }
 
-    /// Geänderte und neue Seiten einbetten (im Hintergrund aufrufen). `true`, wenn sich der Index änderte.
-    static func update(_ core: ImpalaCore) -> Bool {
-        guard let search = shared(core) else { return false }
-        var changed = false
-        // In Stücken, damit ein großer Erstlauf die Kern-Sperre nie lange am Stück hält.
-        for _ in 0..<1000 {
-            guard let report = attempt("semanticUpdate", { try search.update(maxPages: 20) }) else { break }
-            if report.indexed > 0 || report.removed > 0 { changed = true }
-            if report.remaining == 0 { break }
-        }
-        return changed
+    /// Bis zu 20 geänderte oder neue Seiten einbetten (im Hintergrund aufrufen). Kleine Stücke, damit ein
+    /// großer Erstlauf die Kern-Sperre nie lange am Stück hält. `done`: nichts mehr offen (oder Fehler).
+    static func updateChunk(_ core: ImpalaCore) -> (changed: Bool, done: Bool) {
+        guard let search = shared(core),
+              let report = attempt("semanticUpdate", { try search.update(maxPages: 20) }) else { return (false, true) }
+        return (report.indexed > 0 || report.removed > 0, report.remaining == 0)
     }
 
     /// Seiten, die noch eingebettet werden müssen; `nil` = Modell fehlt.
@@ -101,8 +96,12 @@ final class SemanticStatus {
         running = true
         repeat {
             again = false
-            let changed = await Task.detached(priority: .utility) { SemanticIndex.update(core) }.value
-            if changed { revision += 1 }
+            // Je Stück hochzählen: „Verwandt“ und der Zähler in den Einstellungen folgen dem Fortschritt.
+            for _ in 0..<1000 {
+                let step = await Task.detached(priority: .utility) { SemanticIndex.updateChunk(core) }.value
+                if step.changed { revision += 1 }
+                if step.done { break }
+            }
         } while again
         running = false
     }

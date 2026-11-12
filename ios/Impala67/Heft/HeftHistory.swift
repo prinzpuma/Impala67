@@ -103,6 +103,8 @@ enum HeftHistory {
 struct HeftHistoryGrid: View {
     let pageId: String
     let tileWidth: CGFloat
+    /// Schreib-Warteschlange des offenen Hefts: Wiederherstellen läuft hinter noch offenen Strichen.
+    let writes: HeftCanvas.Coordinator?
     let onRestored: () -> Void
     @Environment(ImpalaStore.self) private var store
     @Environment(\.displayScale) private var displayScale
@@ -184,9 +186,20 @@ struct HeftHistoryGrid: View {
         }
     }
 
+    /// Im Hintergrund (ganzes Heft sichern und übernehmen) und hinter allen offenen Schreibvorgängen.
     private func restore(_ e: HeftHistory.Entry) {
         confirm = nil
-        if HeftHistory.restore(core: store.core, pageId: pageId, entry: e) { onRestored() } else { failed = true }
+        let core = store.core, pid = pageId
+        let op: @Sendable (ImpalaCore, String) -> Bool = { core, pid in HeftHistory.restore(core: core, pageId: pid, entry: e) }
+        Task {
+            let ok: Bool
+            if let writes {
+                ok = await writes.afterWrites(op)
+            } else {
+                ok = await Task.detached(priority: .userInitiated) { op(core, pid) }.value
+            }
+            if ok { onRestored() } else { failed = true }
+        }
     }
 
     /// „12.11., 14:30“ wie `fmt` in heft-pages-ui.js.

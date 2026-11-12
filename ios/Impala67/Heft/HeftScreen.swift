@@ -136,7 +136,8 @@ struct HeftScreen: View {
             HeftPagesSheet(
                 pageId: pageId, pageIds: pageIds, currentId: currentId, revision: revision,
                 onJump: jump, onAdd: { addPage($0) },
-                onChanged: { loadPages(); revision += 1 }
+                onChanged: { loadPages(); revision += 1 },
+                writes: link.coordinator
             )
             .presentationSizing(.form)
             .navigationTransition(.zoom(sourceID: "heft-pages", in: namespace))
