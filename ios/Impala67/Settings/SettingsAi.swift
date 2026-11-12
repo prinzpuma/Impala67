@@ -466,6 +466,8 @@ private struct AiLocalSection: View {
     @Environment(ImpalaStore.self) private var store
     /// Offene Erkennungsaufträge; laufen über alle Hefte, daher im Hintergrund gezählt (`.task` unten).
     @State private var jobCount = 0
+    /// Offene Seiten des semantischen Index; `nil` = kein Modell. Startwert 0 bis zur ersten Lesung.
+    @State private var semanticPending: Int? = 0
 
     var body: some View {
         SettingsCardGroup(
@@ -479,9 +481,9 @@ private struct AiLocalSection: View {
             )
             SettingsDivider()
             SettingsRow(
-                title: "Semantische Suche & Verwandte Seiten",
-                description: "Vektorsuche und inhaltliche Verknüpfungen direkt auf dem Gerät",
-                leading: { StatusIndicator(tone: .ok) }
+                title: "Verwandte Seiten",
+                description: semanticText,
+                leading: { StatusIndicator(tone: semanticPending == nil ? .warn : .ok) }
             )
         }
         // Neue Aufträge entstehen bei Heftänderungen (auch von anderen Geräten), erledigte beim Erkennen.
@@ -490,6 +492,16 @@ private struct AiLocalSection: View {
             let next = await Task.detached(priority: .utility) { core.heftOcrJobs(src: "apple").count }.value
             if !Task.isCancelled { jobCount = next }
         }
+        .task(id: SemanticStatus.shared.revision) {
+            let core = store.core
+            let next = await Task.detached(priority: .utility) { SemanticIndex.pending(core) }.value
+            if !Task.isCancelled { semanticPending = next }
+        }
+    }
+
+    private var semanticText: String {
+        guard let n = semanticPending else { return "Apples Satzmodell fehlt auf diesem Gerät" }
+        return "100 % lokal (Apples Satzmodell, ohne Download) · " + (n == 0 ? "Alle Notizen eingeordnet" : "\(n) Seiten offen")
     }
 }
 

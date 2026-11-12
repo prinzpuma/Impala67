@@ -146,7 +146,7 @@ struct RelatedPagesRow: View {
         VStack(alignment: .leading, spacing: 0) {
             if !related.isEmpty { row }
         }
-        .task(id: "\(pageId)|\(store.settingsRevision)") { await loadRelated() }
+        .task(id: "\(pageId)|\(store.settingsRevision)|\(SemanticStatus.shared.revision)") { await loadRelated() }
     }
 
     private var row: some View {
@@ -199,25 +199,8 @@ struct RelatedPagesRow: View {
         }
         let core = store.core
         let id = pageId
-        let ids = await Task.detached(priority: .utility) { RelatedSearch.pageIds(core: core, pageId: id) }.value
+        let ids = await Task.detached(priority: .utility) { SemanticIndex.related(core, pageId: id) }.value
         guard !Task.isCancelled else { return }
         related = ids.compactMap { store.core.page(id: $0)?.summary }
-    }
-}
-
-/// Ein semantischer Index für die App (`SemanticSearch` des Kerns wie `SemanticIndex.kt` in Android; der
-/// Kern hält die Vektoren zwischengespeichert). Ohne Embedding-Modell oder gespeicherte Vektoren: leer.
-enum RelatedSearch {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var search: SemanticSearch?
-
-    static func pageIds(core: ImpalaCore, pageId: String) -> [String] {
-        lock.withLock {
-            // `try?`: Fehlt das Embedding-Modell oder gibt es noch keine Vektoren, ist das kein Fehler,
-            // sondern der Normalfall am iPad – nichts für den Profiler.
-            if search == nil { search = try? SemanticSearch.withCloudEmbeddings(core: core) }
-            guard let search else { return [] }
-            return ((try? search.relatedPages(pageId: pageId, k: 3)) ?? []).map(\.pageId)
-        }
     }
 }

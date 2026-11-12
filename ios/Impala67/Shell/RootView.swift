@@ -91,6 +91,8 @@ struct RootView: View {
             .onChange(of: store.uiRevision) { shell.reload() }
             // Stapel und Lernschlange einmal je Kartenänderung, im Hintergrund (Stapelbaum, Übersicht, Suche).
             .task(id: store.cardsRevision) { await shell.cards.refresh(core: store.core) }
+            // Semantischer Index („Verwandt“): nach Seitenänderungen entprellt im Hintergrund nachführen.
+            .task(id: [store.pagesRevision, store.settingsRevision]) { await SemanticStatus.shared.pagesChanged(core: store.core) }
             .onChange(of: store.chatsRevision) { shell.chat.reloadIfIdle() }
             .task(id: [store.pageMetaRevision, store.chatsRevision]) { shell.refreshTabInfos() }
         } else {

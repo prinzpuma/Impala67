@@ -377,7 +377,7 @@ Signatur gilt 7 Tage und muss dann erneuert werden.
   Hintergrund-Durchgang, Kopplungs-Link (`#cf-pair=`) als Universal Link öffnen, Verdichten, weitere
   Einstellungen.
 - KI-Chat: Karteikarten-Kontext (`AiAnki`), ★-Favoriten im Modellmenü, Mehrfachauswahl in der
-  Chat-Liste, `calculate`. Später: semantische Suche/RAG (lokales Embedding-Modell, `SemanticSearch`).
+  Chat-Liste, `calculate`. „Verwandt“ über `SemanticSearch` mit Apples Satzmodell (`Notes/SemanticIndex.swift`); später Suche nach Bedeutung und RAG im Chat.
 - Notiz-Editor: Datenbank-Ansicht, Mehrfachauswahl von Blöcken, Kopfzeile „Teilen ★ ⋯“ der PWA
   (Markdown/PDF-Export der Notiz). Später: „Verwandt“-Leiste (braucht den semantischen Index).
 - Heft: Verlauf, Rückgängig für Bild-/Textfeld-Änderungen (PencilKit kennt nur Striche), Formvorschau

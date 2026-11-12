@@ -373,7 +373,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Video/Audio, PDF-Ansicht im Block | ❌ | nur Datei-Zeile |
 | PDF-Text beim Hochladen übernehmen | ❌ | fehlt |
 | Heft-Block mit Vorschau | 🟡 | ohne Vorschau |
-| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift` |
+| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift`; Vektoren von Apples Satzmodell statt Bekko (`Notes/SemanticIndex.swift`, nur lokal) · am Gerät ungeprüft |
 | Datenbankansicht (Vorlesungsübersicht) | ✅ | `DatabaseView.swift`: Karten in Liquid Glass, Auswahl-Menü, Kalender |
 
 ---
@@ -546,7 +546,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | „+ Fach“-Chips | ❌ | fehlt |
 | KI: Modell, Suche, manuelle ID, Quellen, Schnellvorlagen | ✅ | `Settings/SettingsAi.swift` |
 | KI: Modell-Favoriten, Gruppen, Status-Banner | ❌ | fehlt |
-| Semantische Suche | ✅ | `SettingsAi.swift:323-324` |
+| Semantische Suche | 🟡 | Status „Verwandte Seiten“ in `SettingsAi.swift`; Suche nach Bedeutung im Suchfeld fehlt noch |
 | Handschrift: Export, Abschreiben | ❌ | fehlt |
 | Lernen und Experimente (bis auf Pre-Testing, Wissenslücken) | ✅ | `Settings/SettingsLearning.swift` |
 | Experimente Pre-Testing, Wissenslücken-Detektor | ❌ | fehlt |
