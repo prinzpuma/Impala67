@@ -94,7 +94,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 |---|---|---|---|---|
 | 1. Shell & Navigation | 81 | 20 | 6 | 76 % |
 | 2. Seiten & Editor | 37 | 9 | 4 | 74 % |
-| 3. Heft | 25 | 7 | 3 | 71 % |
+| 3. Heft | 26 | 6 | 3 | 74 % |
 | 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
 | 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
 
@@ -405,7 +405,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Bilder/Texte auswählen, verschieben, skalieren | ✅ | `Heft/HeftObjectEdit.swift:24-110` |
-| Text direkt auf der Seite schreiben | 🟡 | Sheet statt direkt |
+| Text direkt auf der Seite schreiben | ✅ | Text-Werkzeug wie GoodNotes: Antippen setzt bzw. öffnet ein Feld, Schreiben direkt in Seitenschrift (`Heft/HeftTextInline.swift`) · am Gerät ungeprüft |
 | Lasso wie GoodNotes: Umkreisen, Rahmen mit Griffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen (mit Rückgängig) | 🟡 | eigenes Lasso statt `PKLassoTool` (`Heft/HeftLasso.swift`); nur Striche, Bilder/Textfelder noch nicht · am Gerät ungeprüft |
 | Entf löscht Auswahl | 🟡 | nur über Leiste |
 

@@ -122,6 +122,10 @@ struct HeftCanvas: UIViewRepresentable {
         private let select = HeftSelectLayer()
         private let lasso = HeftLassoLayer()
         private let laser = HeftLaserLayer()
+        /// Text direkt auf der Seite (HeftTextInline.swift) und was gerade bearbeitet wird (Seitenkoordinaten).
+        private let inline = HeftInlineText()
+        private var inlineEdit: (textId: String?, page: String, origin: CGPoint)?
+        private let textTap = UITapGestureRecognizer()
         /// Scroll-Geste der Leinwand vor Lasso/Laser (wird danach wiederhergestellt).
         private var panDefaults: (types: [NSNumber], min: Int)?
         /// Mit dem Lasso ausgewählte Striche (PencilKit-Schlüssel).
@@ -185,14 +189,18 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.tool = s.pkTool
             // Eigenes Lasso statt PencilKits: PencilKit zeichnet dann nichts.
             let lassoOn = s.tool == .lasso
-            canvas.drawingGestureRecognizer.isEnabled = !lassoOn && s.tool != .laser
+            let textOn = s.tool == .text
+            canvas.drawingGestureRecognizer.isEnabled = !lassoOn && s.tool != .laser && !textOn
+            textTap.isEnabled = textOn
+            select.canvasTap.isEnabled = !textOn
+            if !textOn { endInline() }
             if !lassoOn { clearLasso() }
             lasso.active = lassoOn
             laser.active = s.tool == .laser
             // Lasso/Laser: der Stift (und ein Finger, falls er zeichnen darf) gehört ihnen, Scrollen bleibt
             // beim Finger bzw. bei zwei Fingern – wie beim Schreiben.
             let pan = canvas.panGestureRecognizer
-            if lassoOn || s.tool == .laser {
+            if lassoOn || s.tool == .laser || textOn {
                 if panDefaults == nil { panDefaults = (pan.allowedTouchTypes, pan.minimumNumberOfTouches) }
                 pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
                 pan.minimumNumberOfTouches = s.onlyPen ? 1 : 2
@@ -264,6 +272,10 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.addSubview(lasso)
             canvas.addSubview(laser)
             canvas.addGestureRecognizer(laser.draw)
+            textTap.addTarget(self, action: #selector(textTapped(_:)))
+            textTap.isEnabled = false
+            canvas.addGestureRecognizer(textTap)
+            inline.onEnd = { [weak self] text in self?.finishInline(text) }
             canvas.panGestureRecognizer.require(toFail: lasso.pan)
             canvas.addGestureRecognizer(lasso.draw)
             canvas.addGestureRecognizer(lasso.tap)
@@ -699,6 +711,7 @@ struct HeftCanvas: UIViewRepresentable {
             select.follow(zoom: z)
             lasso.follow(zoom: z)
             laser.follow(zoom: z)
+            if inlineEdit != nil { inline.follow(zoom: z) }
             let w = Self.pageSize.width * z
             let side = max(Self.gutter, (canvas.bounds.width - w) / 2)
             let inset = UIEdgeInsets(top: Self.topInset, left: side, bottom: Self.gutter + 80, right: side)
@@ -1112,9 +1125,89 @@ struct HeftCanvas: UIViewRepresentable {
             if let tid = new?.ids.first { selectAfterReload(.text(tid)) }
         }
 
-        private func editText(_ id: String) {
-            guard let t = text(id) else { return }
-            link?.textEdit = HeftTextEdit(textId: t.id, text: t.text)
+        /// Antippen eines ausgewählten Textfelds: direkt auf der Seite weiterschreiben.
+        func editText(_ id: String) {
+            guard let t = text(id), let page = objectPage[id] else { return }
+            clearSelection()
+            beginInline(textId: id, page: page, at: CGPoint(x: t.x, y: t.y), text: t.text,
+                        width: CGFloat(t.w ?? 400), size: CGFloat(t.size ?? 30), color: t.color ?? currentTextColor)
+        }
+
+        // MARK: Text direkt auf der Seite (HeftTextInline.swift)
+
+        /// Farbe neuer Textfelder: die zuletzt gewählte Stiftfarbe.
+        private var currentTextColor: String { appliedTools?.color ?? HeftPalette.colors[0].css }
+
+        /// Text-Werkzeug: Antippen eines Textfelds bearbeitet es, sonst entsteht dort ein neues.
+        @objc private func textTapped(_ g: UITapGestureRecognizer) {
+            guard let canvas else { return }
+            if inlineEdit != nil {
+                endInline()
+                return
+            }
+            let z = max(canvas.zoomScale, 0.01)
+            let loc = g.location(in: canvas)
+            let c = CGPoint(x: loc.x / z, y: loc.y / z)
+            for page in objectPages {
+                guard let data = loaded[page] else { continue }
+                let o = origin(of: page)
+                if let t = data.texts.first(where: { !$0.text.isEmpty && HeftTextStyle.frame($0).offsetBy(dx: o.x, dy: o.y).contains(c) }) {
+                    beginInline(textId: t.id, page: page, at: CGPoint(x: t.x, y: t.y), text: t.text,
+                                width: CGFloat(t.w ?? 400), size: CGFloat(t.size ?? 30), color: t.color ?? currentTextColor)
+                    return
+                }
+            }
+            guard let page = pageAt(c) else { return }
+            let o = origin(of: page)
+            // Erste Zeile so, dass der Tipp in ihrer Mitte liegt.
+            let x = min(max(c.x - o.x - HeftTextStyle.pad, 0), Self.pageSize.width - 120)
+            let y = min(max(c.y - o.y - HeftTextStyle.pad - 21, 0), Self.pageSize.height - 60)
+            beginInline(textId: nil, page: page, at: CGPoint(x: x, y: y), text: "",
+                        width: min(400, Self.pageSize.width - x), size: 30, color: currentTextColor)
+        }
+
+        /// Neues Textfeld mitten im sichtbaren Bereich (Menü „+“ → Text).
+        func newInlineText() {
+            guard let target = visibleTarget() else { return }
+            let x = max(0, target.point.x - 200), y = max(0, target.point.y - 30)
+            beginInline(textId: nil, page: target.heftPageId, at: CGPoint(x: x, y: y), text: "",
+                        width: 400, size: 30, color: currentTextColor)
+        }
+
+        private func beginInline(textId: String?, page: String, at p: CGPoint, text: String, width: CGFloat, size: CGFloat, color: String) {
+            guard let canvas else { return }
+            endInline()
+            inlineEdit = (textId: textId, page: page, origin: p)
+            texts.hiddenId = textId
+            let o = origin(of: page)
+            inline.begin(text: text, origin: CGPoint(x: p.x + o.x, y: p.y + o.y), width: width, size: size,
+                         color: UIColor(css: color), zoom: canvas.zoomScale)
+            if inline.superview == nil { canvas.addSubview(inline) }
+            inline.becomeFirstResponder()
+        }
+
+        /// Bearbeitung beenden (Werkzeugwechsel, Tipp daneben); übernimmt den Text.
+        func endInline() {
+            guard inlineEdit != nil else { return }
+            if inline.isFirstResponder { _ = inline.resignFirstResponder() } else { finishInline(inline.text ?? "") }
+        }
+
+        private func finishInline(_ text: String) {
+            guard let edit = inlineEdit else { return }
+            inlineEdit = nil
+            inline.removeFromSuperview()
+            texts.hiddenId = nil
+            let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if let id = edit.textId {
+                // Leer = Feld löschen (in `setText`).
+                if self.text(id)?.text != text { setText(id, to: text) }
+            } else if !empty {
+                _ = attempt("heftAddText", { try core.heftAddText(pageId: pageId, heftPageId: edit.page, text: text,
+                                                  x: Double(edit.origin.x), y: Double(edit.origin.y), w: 400,
+                                                  color: currentTextColor, size: 30) })
+                load([edit.page], force: true)
+            }
+            canvas?.becomeFirstResponder()
         }
 
 

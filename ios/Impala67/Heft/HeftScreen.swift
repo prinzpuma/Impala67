@@ -301,8 +301,9 @@ struct HeftScreen: View {
         link.coordinator?.selectAfterReload(.image(imageId))
     }
 
+    /// Neues Textfeld direkt auf der Seite (wie GoodNotes); ohne Leinwand über das Blatt.
     private func newText() {
-        link.textEdit = HeftTextEdit(textId: nil, text: "")
+        if let canvas = link.coordinator { canvas.newInlineText() } else { link.textEdit = HeftTextEdit(textId: nil, text: "") }
     }
 
     /// Textfeld speichern; die Seite des Felds kennt der Canvas (alle Seiten liegen in einer Fläche).
@@ -383,9 +384,7 @@ private struct SelectBar: View {
                 .font(.system(size: TextSize.sm))
                 .foregroundStyle(Impala.text2)
             if case .text(let id) = link.selection {
-                Button("Text bearbeiten") {
-                    if let t = link.coordinator?.text(id) { link.textEdit = HeftTextEdit(textId: t.id, text: t.text) }
-                }
+                Button("Text bearbeiten") { link.coordinator?.editText(id) }
             }
             Button(role: .destructive) { link.coordinator?.deleteSelection() } label: { Icon("trash", size: 16) }
                 .accessibilityLabel("Löschen")

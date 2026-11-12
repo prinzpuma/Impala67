@@ -55,7 +55,7 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 
 ### iPad-Wunschliste (Nutzer, 12.11.2026) – Ziel: Heft so gut wie GoodNotes
 - [ ] **Lasso wie GoodNotes**: eigenes Lasso gebaut (`ios/Impala67/Heft/HeftLasso.swift`: Umkreisen, Rahmen mit Eckgriffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen, Rückgängig) – am Gerät prüfen; offen: Bilder/Textfelder mitnehmen, Drehen.
-- [ ] **Text direkt auf der Seite** schreiben und bearbeiten (wie GoodNotes) statt im Sheet.
+- [x] **Text direkt auf der Seite** (Text-Werkzeug „T“, Antippen setzt bzw. öffnet ein Feld; `ios/Impala67/Heft/HeftTextInline.swift`) – am Gerät prüfen.
 - [x] **Neue Seite durch Weiterziehen** am Heft-Ende (gab es schon: `scrollViewDidEndDragging`, ab 70 pt).
 - [x] **Laserpointer** im Heft (`HeftLaserLayer`) – am Gerät prüfen.
 - [x] **Cover für Notizen** (9 Muster wie die PWA, eigenes Bild, Icon ragt ins Cover; `ios/Impala67/Notes/NoteCover.swift`) – am Gerät prüfen, ob es gut genug aussieht.
