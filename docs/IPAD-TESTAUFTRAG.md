@@ -30,7 +30,7 @@ am Gerät geprüft; offene Punkte und neue Lücken stehen im Bericht vom 07.11.2
   `toggle_sidebar`, `trigger_sync`, **`go_back`** (wie ‹, schließt zuerst Sheets),
   **`dismiss`** (schließt Sheet oder obersten Dialog).
 - Messen: `impala_get_performance_trace`, `impala_get_diagnostics` (Speicher, Kern, Sync).
-- Daten: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_search`.
+- Daten: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`, `impala_list_flashcards`, `impala_create_flashcard`.
 
 ## 0. Bridge selbst (zuerst, nach dem neuen Build)
 

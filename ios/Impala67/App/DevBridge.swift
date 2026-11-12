@@ -163,6 +163,18 @@ final class DevBridge {
                 return ["query": query, "count": hits.count,
                         "results": hits.map { ["id": $0.pageId, "title": $0.title, "snippet": $0.snippet, "score": $0.score] }]
             }
+        case "impala_create_page":
+            let out = await offMain { Self.createPage(core, args: Self.strings(args)) }
+            if let id = (out as? [String: Any])?["id"] as? String { shell?.open(id) }
+            return out
+        case "impala_update_page":
+            let archived = args["archived"] as? Bool
+            return await offMain { Self.updatePage(core, args: Self.strings(args), archived: archived) }
+        case "impala_create_flashcard":
+            return await offMain { Self.createFlashcard(core, args: Self.strings(args)) }
+        case "impala_list_flashcards":
+            let limit = (args["limit"] as? Int) ?? 50
+            return await offMain { Self.listFlashcards(core, args: Self.strings(args), limit: limit) }
         case "impala_screenshot":
             return screenshot(scale: (args["scale"] as? Double) ?? 0.5)
         case "impala_run_ui_action":
@@ -257,6 +269,115 @@ final class DevBridge {
             }
         }
         return out
+    }
+
+    // MARK: Schreiben (wie `web/mcp-bridge.js`)
+
+    /// Nur die Text-Argumente, damit sie `Sendable` in den Hintergrund reisen.
+    nonisolated private static func strings(_ args: [String: Any]) -> [String: String] {
+        args.compactMapValues { $0 as? String }
+    }
+
+    /// Seite per ID oder (ohne Papierkorb) per Titel, Groß-/Kleinschreibung egal.
+    nonisolated private static func findPage(_ core: ImpalaCore, id: String?, title: String?) -> PageDetail? {
+        if let id, !id.isEmpty, let d = core.page(id: id), !d.trashed { return d }
+        guard let t = title?.trimmingCharacters(in: .whitespaces).lowercased(), !t.isEmpty else { return nil }
+        return core.recentPages(limit: 100_000).first { $0.title.lowercased() == t }.flatMap { core.page(id: $0.id) }
+    }
+
+    nonisolated private static func fail(_ error: Error, _ op: String) -> [String: Any] {
+        ["error": "\(op) fehlgeschlagen: \(error)"]
+    }
+
+    nonisolated private static func createPage(_ core: ImpalaCore, args: [String: String]) -> [String: Any] {
+        let title = (args["title"] ?? "").trimmingCharacters(in: .whitespaces)
+        let name = title.isEmpty ? "Neue Notiz" : title
+        let heft = args["kind"] == "heft"
+        var parentId = args["parentId"].flatMap { core.page(id: $0) }?.summary.id
+        if parentId == nil, let pt = args["parent_title"] {
+            parentId = findPage(core, id: nil, title: pt)?.summary.id
+            if parentId == nil { return ["error": "Elternseite nicht gefunden: \(pt)"] }
+        }
+        do {
+            let id = heft
+                ? try core.createHeft(title: name, parentId: parentId, workspaceId: nil)
+                : try core.createPage(title: name, content: args["content"] ?? "", parentId: parentId, workspaceId: nil)
+            var out: [String: Any] = ["ok": true, "id": id, "title": name, "kind": heft ? "heft" : "notion", "parentId": parentId ?? NSNull()]
+            if heft, let text = args["content"]?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty,
+               let first = core.heftPageIds(pageId: id).first {
+                _ = try core.heftAddText(pageId: id, heftPageId: first, text: text, x: 20, y: 50, w: nil, color: nil, size: nil)
+            }
+            if args["subject"] != nil { out["note"] = "Fach wird auf dem iPad noch nicht gesetzt (fehlt im Kern)." }
+            return out
+        } catch { return fail(error, "Anlegen") }
+    }
+
+    nonisolated private static func updatePage(_ core: ImpalaCore, args: [String: String], archived: Bool?) -> [String: Any] {
+        guard let page = findPage(core, id: args["id"], title: args["title"]) else {
+            return ["error": "Notiz nicht gefunden: \(args["id"] ?? args["title"] ?? "")"]
+        }
+        let id = page.summary.id
+        let newTitle = args["new_title"]?.trimmingCharacters(in: .whitespaces)
+        let text = args["append_content"] ?? args["content"]
+        var changed: [String] = []
+        do {
+            if page.summary.kind == .heft {
+                // Striche nie anfassen: Text kommt als neue Textbox auf die erste Heftseite.
+                if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+                    guard let first = core.heftPageIds(pageId: id).first else { return ["error": "Heft hat keine Seite für die Textbox."] }
+                    _ = try core.heftAddText(pageId: id, heftPageId: first, text: t, x: 20, y: 50, w: nil, color: nil, size: nil)
+                    changed.append("textbox")
+                }
+                if let newTitle, !newTitle.isEmpty { try core.updatePage(id: id, title: newTitle, content: nil); changed.append("title") }
+            } else {
+                var content: String?
+                if let add = args["append_content"] {
+                    content = (page.content.isEmpty ? "" : page.content + "\n\n") + add.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else if let c = args["content"] {
+                    content = c
+                }
+                let title = newTitle.flatMap { $0.isEmpty ? nil : $0 }
+                if title != nil || content != nil {
+                    try core.updatePage(id: id, title: title, content: content)
+                    if title != nil { changed.append("title") }
+                    if content != nil { changed.append("content") }
+                }
+            }
+            if let archived, archived != page.archived {
+                if archived { try core.archivePage(id: id) } else { try core.unarchivePage(id: id) }
+                changed.append(archived ? "archived" : "unarchived")
+            }
+        } catch { return fail(error, "Ändern") }
+        var out: [String: Any] = ["ok": true, "id": id, "changed": changed]
+        if args["subject"] != nil { out["note"] = "Fach wird auf dem iPad noch nicht gesetzt (fehlt im Kern)." }
+        return out
+    }
+
+    nonisolated private static func createFlashcard(_ core: ImpalaCore, args: [String: String]) -> [String: Any] {
+        let front = (args["front"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let back = (args["back"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !front.isEmpty else { return ["error": "Vorderseite (front) fehlt."] }
+        let deck = (args["deck"] ?? "").trimmingCharacters(in: .whitespaces)
+        let pageId = args["page_title"].flatMap { findPage(core, id: nil, title: $0) }?.summary.id
+        do {
+            let id = try core.createCard(front: front, back: back, deck: deck.isEmpty ? "Standard" : deck, pageId: pageId)
+            return ["ok": true, "id": id, "front": front, "back": back, "deck": deck.isEmpty ? "Standard" : deck, "pageId": pageId ?? NSNull()]
+        } catch { return fail(error, "Karte anlegen") }
+    }
+
+    /// Wie die PWA: Stapel passt bei gleichem Namen, Unterstapel oder Teilwort; Suche in Vorder- und Rückseite.
+    nonisolated private static func listFlashcards(_ core: ImpalaCore, args: [String: String], limit: Int) -> [String: Any] {
+        var pool = core.decks().flatMap { core.cardsInDeck(deck: $0.name) }
+        if let d = args["deck"]?.trimmingCharacters(in: .whitespaces).lowercased(), !d.isEmpty {
+            pool = pool.filter { let n = $0.deck.lowercased(); return n == d || n.hasPrefix(d + "::") || n.contains(d) }
+        }
+        if let q = args["query"]?.trimmingCharacters(in: .whitespaces).lowercased(), !q.isEmpty {
+            pool = pool.filter { $0.front.lowercased().contains(q) || $0.back.lowercased().contains(q) }
+        }
+        let cards = pool.prefix(max(1, min(200, limit))).map {
+            ["id": $0.id, "front": $0.front, "back": $0.back, "deck": $0.deck] as [String: Any]
+        }
+        return ["total": pool.count, "count": cards.count, "cards": Array(cards)]
     }
 
     private func screenshot(scale: Double) -> [String: Any] {
