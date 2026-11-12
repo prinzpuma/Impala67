@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import kotlin.math.max
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -105,7 +106,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, modifier: Modifier = Mod
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k
         val stored = data?.images.orEmpty()
-        val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, stored, maxSide = constraints.maxWidth.coerceIn(512, 4096))
+        val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, stored, maxSide = imageSide(constraints.maxWidth))
         val liveImg = obj?.live?.takeIf { obj.kind == ObjKind.IMAGE }
         val liveTxt = obj?.live?.takeIf { obj.kind == ObjKind.TEXT }
         val images = if (liveImg == null) stored
@@ -226,3 +227,9 @@ private fun Modifier.fingerPicks(objects: ObjGesture, k: () -> Float, active: ()
     }
 }
 
+
+/**
+ * Dekodiergröße der Bilder in Zweierpotenzen: so dekodiert nicht jede Zoomstufe dieselben Bilder neu
+ * (der Cache-Schlüssel enthält die Größe), und scharf bleiben sie trotzdem.
+ */
+private fun imageSide(width: Int): Int = (Integer.highestOneBit(max(1, width - 1)) shl 1).coerceIn(512, 4096)

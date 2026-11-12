@@ -11,6 +11,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
@@ -23,9 +24,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +42,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -99,6 +98,7 @@ import org.impala67.app.ui.theme.LocalAppearance
 import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.HeftPageData
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -250,6 +250,9 @@ fun HeftScreen(
     ) { inner ->
         BoxWithConstraints(Modifier.padding(inner).fillMaxSize().clipToBounds()) {
             val density = LocalDensity.current
+            val decay = rememberSplineBasedDecay<Offset>()
+            val context = LocalContext.current
+            val wheelStep = remember(context) { android.view.ViewConfiguration.get(context).scaledVerticalScrollFactor }
             val viewW = constraints.maxWidth.toFloat()
             // Mit offener Tastatur (Textfeld) bleibt die Seite so groß wie vorher, statt auf die Resthöhe zu schrumpfen.
             val ime = WindowInsets.isImeVisible
@@ -270,34 +273,41 @@ fun HeftScreen(
             val maxPan by rememberUpdatedState(contentW - viewW)
             val pan = zoom.panX.coerceIn(0f, max(0f, maxPan))
 
-            val panState = rememberScrollableState { delta ->
-                val old = zoom.panX
-                zoom.panX = (old - delta).coerceIn(0f, max(0f, maxPan))
-                old - zoom.panX
+            // Ein Finger (wenn er nicht schreibt) verschiebt frei in alle Richtungen: waagerecht der
+            // Versatz, senkrecht die Liste. Gibt zurück, was davon ging.
+            fun panBy(d: Offset): Offset {
+                val old = zoom.panX.coerceIn(0f, max(0f, maxPan))
+                zoom.panX = (old - d.x).coerceIn(0f, max(0f, maxPan))
+                return Offset(old - zoom.panX, -lazy.dispatchRawDelta(-d.y))
             }
 
-            fun commit(scale: Float, c: Offset) {
+            // Pinch-Ende: neue Stufe festschreiben; die Stelle unter [from] (vor dem Pinch) landet unter [to].
+            fun commit(scale: Float, from: Offset, to: Offset) {
                 val old = zoom.zoom
                 val new = (old * scale).coerceIn(HeftZoom.MIN, HeftZoom.MAX)
                 val ratio = new / old
                 val newPageW = baseW * new
                 val newContentW = max(viewW, newPageW + 2 * margin)
-                // Fixpunkt waagerecht: gleicher Seitenbruchteil unter dem Finger.
+                // Waagerecht: gleicher Seitenbruchteil unter dem Finger (die Spalte beginnt bei -pan, die Seite steht darin mittig).
                 val left = (contentW - pageW) / 2
                 val newLeft = (newContentW - newPageW) / 2
-                zoom.panX = (newLeft + (zoom.panX + c.x - left) * ratio - c.x).coerceIn(0f, max(0f, newContentW - viewW))
-                // Fixpunkt senkrecht: die Seite wächst, die Lücke darunter (gap) bleibt.
+                val oldPan = zoom.panX.coerceIn(0f, max(0f, contentW - viewW))
+                zoom.panX = (newLeft + (oldPan + from.x - left) * ratio - to.x).coerceIn(0f, max(0f, newContentW - viewW))
+                // Senkrecht: die Seite wächst, die Lücke darunter (gap) und der Rand über der ersten Seite bleiben.
+                val topPx = with(density) { top.toPx() }
                 val pageH = pageW / HeftPage.RATIO
                 val newPageH = newPageW / HeftPage.RATIO
                 val itemH = pageH + gap
                 val newItemH = newPageH + gap
-                val u = lazy.firstVisibleItemIndex * itemH + lazy.firstVisibleItemScrollOffset + c.y
-                val index = (u / itemH).toInt()
+                val u = lazy.firstVisibleItemIndex * itemH + lazy.firstVisibleItemScrollOffset + from.y - topPx
+                val index = floor(u / itemH).toInt().coerceAtLeast(0)
                 val r = u - index * itemH
-                val pos = max(0f, index * newItemH + (if (r <= pageH) r * ratio else newPageH + (r - pageH)) - c.y)
+                val newU = index * newItemH + (if (r <= pageH) r * ratio else newPageH + (r - pageH))
+                val pos = max(0f, newU - (to.y - topPx))
                 lazy.requestScrollToItem((pos / newItemH).toInt(), (pos % newItemH).roundToInt())
                 zoom.zoom = new
                 zoom.live = 1f
+                zoom.shift = Offset.Zero
             }
 
             // Doppeltipp: weich auf ca. 2,2× bzw. zurück auf Passbreite (heft-viewport.js `animateZoom`).
@@ -307,12 +317,12 @@ fun HeftScreen(
                 scope.launch {
                     zoom.origin = c
                     if (!reduceMotion) animate(1f, ratio, animationSpec = tween(240)) { v, _ -> zoom.live = v }
-                    commit(ratio, c)
+                    commit(ratio, c, c)
                 }
             }
 
             val gestures = rememberUpdatedState(HeftGestureCallbacks(
-                pinchEnd = { s, c -> commit(s, c) },
+                pinchEnd = { s, from, to -> commit(s, from, to) },
                 doubleTap = { zoomTo(it) },
                 undo = { if (!vm.reading) vm.undo() },
                 redo = { if (!vm.reading) vm.redo() },
@@ -322,21 +332,27 @@ fun HeftScreen(
             Box(
                 Modifier.fillMaxSize()
                     .heftGestures(zoom, gestures)
-                    .scrollable(panState, Orientation.Horizontal),
+                    .heftPan(scope, decay, wheelStep, ::panBy),
             ) {
                 LazyColumn(
                     Modifier
+                        // Links bündig statt mittig, wenn breiter als die Ansicht: x = 0 ist der Spaltenanfang.
+                        .wrapContentWidth(Alignment.Start, unbounded = true)
                         .requiredWidth(with(density) { contentW.toDp() })
                         .fillMaxHeight()
                         .offset { IntOffset(-pan.roundToInt(), 0) }
                         .graphicsLayer {
                             scaleX = zoom.live
                             scaleY = zoom.live
+                            translationX = zoom.shift.x
+                            translationY = zoom.shift.y
                             // Fixpunkt in Spalten-Pixeln (die Spalte ist um den Pan verschoben).
                             transformOrigin = TransformOrigin((zoom.origin.x + pan) / size.width, zoom.origin.y / size.height)
                         },
                     state = lazy,
                     contentPadding = PaddingValues(top = top, bottom = bottom),
+                    // Verschieben übernimmt `heftPan` (frei in alle Richtungen statt nur senkrecht).
+                    userScrollEnabled = false,
                 ) {
                     itemsIndexed(pages, key = { _, id -> id }) { i, id ->
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
