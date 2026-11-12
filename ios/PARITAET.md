@@ -197,7 +197,8 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | ⋯: PDF, Markdown, Link, Karten aus Markierungen, Duplizieren, Archiv, Papierkorb | ✅ | `NoteEditor.swift:414-456` |
 | ⋯: Vorlage, Verschieben, Rückgängig/Wiederholen, Icon | ✅ | `Notes/NoteEditor.swift:551-645` im ⋯-Menü wie in PWA `moreMenuHtml` · am Gerät ungeprüft |
 | ⋯: Vorlesungsübersicht | ✅ | `NoteEditor.swift` |
-| ⋯: Fach, Verlauf | ❌ | fehlen im Kern (bewusst nicht umgesetzt) |
+| ⋯: Verlauf | ✅ | `Notes/PageHistorySheet.swift` (Kern `pageHistory`), Wiederherstellen mit Rückgängig · am Gerät ungeprüft |
+| ⋯: Fach | ❌ | fehlt im Kern (bewusst nicht umgesetzt) |
 | Rückverweise und Brotkrumen | ✅ | `NoteEditor.swift:73, 366-374` |
 
 ### 1.11 KI-Panel
@@ -236,7 +237,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Namenseingabe | 🟡 | Alert |
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ❌ | fehlt |
-| Verlauf-Dialog mit Wiederherstellen | ❌ | fehlt |
+| Verlauf-Dialog mit Wiederherstellen | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
 | Icon- und Cover-Wahl für Seiten | ❌ | Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
 
 ### 1.15 Menüs
@@ -311,7 +312,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Teilen-Menü (PDF, MD, Link) | ✅ | `Notes/NoteEditor.swift:513-535` Menu mit PDF, Markdown und Link wie `shareMenuHtml` der PWA · am Gerät ungeprüft |
 | Als Vorlage im ⋯ | ✅ | `NoteEditor.swift` (`PageChrome`) & Seitenbaum |
 | Verschieben im ⋯ | ✅ | `NoteEditor.swift` (`TreeMoveSheet`) & Seitenbaum |
-| Verlauf (Seitenversionen) | ❌ | fehlt |
+| Verlauf (Seitenversionen) | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
 
 ### 2.2 Grundlagen
 | Punkt | Status | Fundstelle / Notiz |

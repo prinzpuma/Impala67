@@ -162,6 +162,24 @@ final class NoteModel {
         scheduleSave()
     }
 
+    /// Älteren Stand aus dem Seitenverlauf übernehmen: neuer Stand im Kern, Rückgängig holt den alten zurück.
+    func restoreVersion(title newTitle: String, content: String) {
+        let next = markdownToBlocks(markdown: content)
+        undoStack.append(blocks)
+        if undoStack.count > 100 { undoStack.removeFirst() }
+        redoStack.removeAll()
+        activeId = nil
+        menu = nil
+        blocks = next
+        dirtyContent = true
+        if newTitle != title {
+            title = newTitle
+            dirtyTitle = true
+        }
+        lastEdit = .distantPast
+        flush()
+    }
+
     func undo() {
         guard let prev = undoStack.popLast() else { return }
         redoStack.append(blocks)

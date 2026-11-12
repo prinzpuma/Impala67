@@ -476,6 +476,7 @@ private struct PageChrome: View {
     let onPickIcon: () -> Void
     @State private var shareItem: ShareItem?
     @State private var movingPage: PageSummary?
+    @State private var showHistory = false
     @State private var summary: PageSummary?
     @State private var isArchived = false
     @State private var marks = 0
@@ -595,6 +596,10 @@ private struct PageChrome: View {
                     }
                     .disabled(!model.canRedo)
 
+                    MenuItem("Verlauf", icon: "history") {
+                        showHistory = true
+                    }
+
                     Divider()
 
                     MenuItem(isFavorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
@@ -678,6 +683,9 @@ private struct PageChrome: View {
         }
         .sheet(item: $movingPage) { p in
             MovePageSheet(page: p)
+        }
+        .sheet(isPresented: $showHistory) {
+            PageHistorySheet(model: model)
         }
         .task(id: "\(model.pageId):\(store.pageMetaRevision):\(store.pagesRevision)") {
             let pageId = model.pageId
