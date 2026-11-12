@@ -94,9 +94,9 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 |---|---|---|---|---|
 | 1. Shell & Navigation | 80 | 21 | 7 | 74 % |
 | 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
-| 3. Heft | 22 | 10 | 7 | 56 % |
-| 4. KI-Chat & Karten/Lernen | 22 | 11 | 11 | 50 % |
-| 5. Einstellungen, Sync, Backup | 15 | 6 | 7 | 54 % |
+| 3. Heft | 24 | 8 | 7 | 62 % |
+| 4. KI-Chat & Karten/Lernen | 24 | 10 | 10 | 55 % |
+| 5. Einstellungen, Sync, Backup | 15 | 7 | 6 | 54 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
@@ -293,7 +293,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Dichte, Schriftgröße, Bewegung, Tab-Lage, Hell/Dunkel | ✅ | `Theme/Tokens.swift`, `SettingsSheet.swift` |
 | Seitenleiste eingeklappt gemerkt | 🟡 | KI-Panel ja, Seitenleiste nein |
 | Leerzustände Seiten/Stapel/Chats | ✅ | |
-| Wortlaut „Der Papierkorb ist leer.“ / „Das Archiv ist leer.“ | 🟡 | abweichend |
+| Wortlaut „Der Papierkorb ist leer.“ / „Das Archiv ist leer.“ | 🟡 | Papierkorb stimmt (`Shell/ShellSheets.swift:318`); Bibliothek: „Archiv ist leer“ (`Library/LibraryScreen.swift:685`) |
 | Tab-Reihenfolge per Ziehen | ❌ | fehlt |
 | Tabs und Aufklappzustand geräteübergreifend | ✅ | `Shell/ShellModel.swift:187-189` |
 
@@ -424,7 +424,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Druck, Glättung, Radierer ganze Striche | ✅ | `Heft/HeftInk.swift`, `HeftCanvas.swift:91` |
 | Formerkennung nach Halten | 🟡 | 450 statt 550 ms |
 | Finger scrollt, Stift zeichnet | ✅ | `HeftCanvas.swift:29` |
-| Pinch-Zoom | 🟡 | Grenzen 0,25–5 statt 0,4–6 |
+| Pinch-Zoom | ✅ | 0,4–6 × Passbreite wie PWA (`Heft/HeftCanvas.swift:583-587`) |
 | Doppeltipp zoomt 2,2× | ✅ | `Heft/HeftCanvas.swift` `handleDoubleTap` (Finger; Faktoren relativ zur Passbreite wie `heft-viewport.js`) |
 | Trackpad-Scrollen blättert, ⌘+Scrollen zoomt | ❌ | fehlt |
 | Am Ende hochziehen = neue Seite | ✅ | `onPullAdd` (`Heft/HeftScreen.swift`) |
@@ -433,7 +433,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Papierarten | ✅ | `Heft/HeftPaper.swift` |
-| Seiten untereinander scrollen | 🟡 | Einzelseite mit ‹ › |
+| Seiten untereinander scrollen | ✅ | durchgehende Fläche (`Heft/HeftCanvas.swift:5-10`), ‹ › springen nur |
 | Seite löschen/verschieben | ✅ | `HeftPagesSheet.swift`, `HeftScreen.swift:300` |
 | ⋯-Menü (Favorit, Icon, Duplizieren) | 🟡 | nur Export und Link; Verlauf als Reiter „Verlauf“ der Seitenübersicht (siehe 3.4) |
 | Automatische Sicherung (Verlauf) | ✅ | höchstens alle 10 Min., 20 Stände / 24 h, nur lokal (`Heft/HeftHistory.swift`) · am Gerät ungeprüft |
@@ -482,7 +482,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 |---|---|---|
 | Menü Modell / Denkaufwand | 🟡 | ein Menü (`ChatView.swift:322-350`) |
 | Favoriten ★ | ❌ | fehlt |
-| Gruppen je Quelle | 🟡 | eine Liste |
+| Gruppen je Quelle | ✅ | Untermenü je Quelle (`Chat/ChatView.swift:376-389`) |
 | Denkaufwand Automatisch/Reduziert | ❌ | nur Ein/Aus |
 
 ### 4.4 Karten: Übersicht, Editor, Lernen
@@ -493,7 +493,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Gemischt, Feynman | ✅ | `CardsScreen.swift:107-108` |
 | Karten-Editor mit Stapelwahl, Lücken | ✅ | `Cards/CardEditorSheet.swift` |
 | Speichern verlangt Vorderseite | 🟡 | auch nur Rückseite erlaubt |
-| Lückentext aus Seiten-Markierungen | ❌ | fehlt |
+| Lückentext aus Seiten-Markierungen | ✅ | ⋯-Menü „Karten aus Markierungen“ (`Notes/NoteEditor.swift:638`) |
 | Lernen: Antwort zeigen, 1–4, Zähler, Bearbeiten, Aussetzen, Rückgängig | ✅ | `Cards/ReviewScreen.swift` |
 | Optionen im Lernen | ✅ | `ReviewScreen.swift` (Fußleiste) |
 | Selbsteinschätzung Sicher/Unsicher/Geraten | ✅ | `ReviewScreen.swift`: Chips vor dem Aufdecken, decken wie in der PWA nicht selbst auf |
@@ -545,7 +545,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Darstellung komplett (bis auf „+ Fach“-Chips) | ✅ | `SettingsSheet.swift:355-494` |
 | „+ Fach“-Chips | ❌ | fehlt |
 | KI: Modell, Suche, manuelle ID, Quellen, Schnellvorlagen | ✅ | `Settings/SettingsAi.swift` |
-| KI: Modell-Favoriten, Gruppen, Status-Banner | ❌ | fehlt |
+| KI: Modell-Favoriten, Gruppen, Status-Banner | 🟡 | Gruppen und Statuszeile da (`Settings/SettingsAi.swift:26-50`), Favoriten fehlen |
 | Semantische Suche | 🟡 | Status „Verwandte Seiten“ in `SettingsAi.swift`; Suche nach Bedeutung im Suchfeld fehlt noch |
 | Handschrift: Export, Abschreiben | ❌ | fehlt |
 | Lernen und Experimente (bis auf Pre-Testing, Wissenslücken) | ✅ | `Settings/SettingsLearning.swift` |
