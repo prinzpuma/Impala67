@@ -100,7 +100,7 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
   - [x] Rust only in der PWA: FSRS, Markdown, Suche/RAG, Handschrift, Heft-Logik, KI, Kompaktierung.
   - [x] Datenmodell nur noch in Rust (`ModelCore`, NATIV-PLAN 3f); JS-Reducer, Checkpoint-, Reihenfolge- und Konfliktlogik gelöscht.
   - [ ] Heft-Editor: Speichern serialisiert die ganze Arbeitskopie für den Diff (≈ 50 ms bei 2000 Strichen, wie vorher) – nur geänderte Seiten übergeben.
-  - [ ] Start vom Checkpoint ≈ 15–30 % langsamer als die JS-Fassung (Text-Übergabe an WASM, `opt-level = "z"`); Kern-Zustand als Binärformat oder Teile je Sammlung prüfen.
+  - [ ] Start vom Checkpoint ≈ 15–30 % langsamer als die JS-Fassung (Text-Übergabe an WASM, `opt-level = "z"`); Kern-Zustand als Binärformat oder Teile je Sammlung prüfen. Erledigt: Checkpoint liegt als JSON-Text in IndexedDB (kein Objekt-Klonen, kein `JSON.stringify` beim Start, ~10 % schnellerer Start).
   - [ ] Sync: WASM-Größe senken.
   - [x] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe (`core/impala-ffi`).
   - [x] iPad-App nativ (`ios/`, Stand in `ios/README.md`): erster CI-Build und Gerätetest erledigt (07.11.2026, App `2.2.124+25`); Bericht: `docs/IPAD-TESTBERICHT-2026-11-07.md`. Startseite, Heft, Suche, Graph, KI, Bibliothek und Sync wurden am Gerät geprüft.

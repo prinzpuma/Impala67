@@ -186,14 +186,13 @@ impl ModelCore {
 
     // ---- Start ---------------------------------------------------------------------------
 
-    /// Start vorbereiten: `{ info, checkpoint, boundary }` (wie aus IndexedDB gelesen).
+    /// Start vorbereiten: `{ info, boundary }` (wie aus IndexedDB gelesen) und der Checkpoint als
+    /// JSON-Text. Er liegt als Text in IndexedDB: kein Objekt-Klonen beim Lesen, kein
+    /// `JSON.stringify` vor der Übergabe. Unlesbarer Text gilt als fehlender Checkpoint.
     #[wasm_bindgen(js_name = loadBegin)]
-    pub fn load_begin(&mut self, meta: &str) -> Result<(), JsError> {
-        let mut meta: Value = parse(meta)?;
-        let checkpoint = match meta.get_mut("checkpoint").map(Value::take) {
-            Some(Value::Object(cp)) => Some(cp),
-            _ => None,
-        };
+    pub fn load_begin(&mut self, meta: &str, checkpoint: Option<String>) -> Result<(), JsError> {
+        let meta: Value = parse(meta)?;
+        let checkpoint = checkpoint.and_then(|text| serde_json::from_str::<Object>(&text).ok());
         // Ohne Checkpoint gibt es keinen Rest: der Start braucht das ganze Log.
         let tail_after = checkpoint.as_ref().map_or(u64::MAX, |c| seq_of(c.get("maxSeq")));
         self.load = Some(Prefetched {
@@ -353,7 +352,13 @@ impl ModelCore {
             for w in store.writes {
                 match w {
                     Write::PutCheckpoint(_, cp) => {
-                        out["checkpoint"] = Value::Object(cp);
+                        // Text zum Speichern plus die Felder, die JS selbst braucht (db.js, Start).
+                        out["checkpointMeta"] = json!({
+                            "maxSeq": cp.get("maxSeq"),
+                            "heftBlobSizes": cp.get("heftBlobSizes"),
+                            "heftDocHashes": cp.get("heftDocHashes"),
+                        });
+                        out["checkpoint"] = Value::String(Value::Object(cp).to_string());
                     }
                     Write::PutPart(PartKind::HeftBlob, h, d) => {
                         blobs.insert(h, Value::from(d));

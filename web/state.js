@@ -329,7 +329,10 @@ export const STATE = (() => {
 			} else {
 				all = await PERF_PROFILER.run("state.full-event-read", () => DB.allEvents(), {}, 5);
 			}
-			M.loadBegin(JSON.stringify({ info, checkpoint, boundary }));
+			// Gespeichert als { maxSeq, heftDocHashes, heftBlobSizes, json } (Text geht ungeparst an den
+			// Kern); ältere Checkpoints liegen als ganzes Objekt.
+			const checkpointJson = !checkpoint ? undefined : typeof checkpoint.json === "string" ? checkpoint.json : JSON.stringify(checkpoint);
+			M.loadBegin(JSON.stringify({ info, boundary }), checkpointJson);
 			feedEvents(tail, false);
 			if (all) feedEvents(all, true);
 			// Hefte des Checkpoints liegen als eigene Teile; was fehlt, verwirft der Kern den Checkpoint.
@@ -479,7 +482,7 @@ export const STATE = (() => {
 				const unknown = Object.keys(res.blobs).filter((hash) => !blobSeqs[hash]);
 				if (unknown.length) Object.assign(blobSeqs, await DB.heftBlobSeqs(unknown).catch(() => ({})));
 				try {
-					await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint(res.checkpoint, res.blobs, res.hefte, blobSeqs), {
+					await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint({ ...res.checkpointMeta, json: res.checkpoint }, res.blobs, res.hefte, blobSeqs), {
 						eventCount: current.count, newHeftBlobs: Object.keys(res.blobs).length, newHefte: Object.keys(res.hefte).length,
 					}, 5);
 				} catch (error) {

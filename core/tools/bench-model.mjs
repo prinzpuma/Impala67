@@ -28,7 +28,7 @@ const res = { replay: [], live: [], checkpoint: [] };
 for (let run = 0; run < RUNS; run++) {
 	const M = new CORE.ModelCore();
 	let t = performance.now();
-	M.loadBegin(JSON.stringify({ info, checkpoint: null, boundary: null }));
+	M.loadBegin(JSON.stringify({ info, boundary: null }));
 	for (let i = 0; i < stored.length; i += 2000) M.loadEvents(JSON.stringify(stored.slice(i, i + 2000)), true);
 	M.loadFinish("");
 	res.replay.push(performance.now() - t);
@@ -38,7 +38,7 @@ for (let run = 0; run < RUNS; run++) {
 	t = performance.now();
 	for (const ev of live) M.applyRemote(JSON.stringify([ev]));
 	res.live.push(performance.now() - t);
-	if (run === 0) console.log(`Zustand: ${Object.keys(JSON.parse(M.records("pages", "null"))).length} Seiten, Checkpoint ${cp.status}, JSON ${(JSON.stringify(cp.checkpoint).length / 1e6).toFixed(1)} MB`);
+	if (run === 0) console.log(`Zustand: ${Object.keys(JSON.parse(M.records("pages", "null"))).length} Seiten, Checkpoint ${cp.status}, JSON ${(cp.checkpoint.length / 1e6).toFixed(1)} MB`);
 	M.free();
 }
 const f = (x) => x.toFixed(1).padStart(8);

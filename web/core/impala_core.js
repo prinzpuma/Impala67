@@ -1513,15 +1513,20 @@ export class ModelCore {
         }
     }
     /**
-     * Start vorbereiten: `{ info, checkpoint, boundary }` (wie aus IndexedDB gelesen).
+     * Start vorbereiten: `{ info, boundary }` (wie aus IndexedDB gelesen) und der Checkpoint als
+     * JSON-Text. Er liegt als Text in IndexedDB: kein Objekt-Klonen beim Lesen, kein
+     * `JSON.stringify` vor der Übergabe. Unlesbarer Text gilt als fehlender Checkpoint.
      * @param {string} meta
+     * @param {string | null} [checkpoint]
      */
-    loadBegin(meta) {
+    loadBegin(meta, checkpoint) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(meta, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
-            wasm.modelcore_loadBegin(retptr, this.__wbg_ptr, ptr0, len0);
+            var ptr1 = isLikeNone(checkpoint) ? 0 : passStringToWasm0(checkpoint, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.modelcore_loadBegin(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             if (r1) {
