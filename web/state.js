@@ -519,8 +519,14 @@ export const STATE = (() => {
 	const pagesOf = (list) => list.map(page).filter(Boolean);
 	const cardsOf = (list) => list.map(card).filter(Boolean);
 	const childPagesOf = (id) => pagesOf(pageMemo("childPages|" + (id || ""), () => ids(M.childPagesOf(id || undefined))));
-	const childrenOf = (id, wsId) => pagesOf(pageMemo("children|" + (id || "") + "|" + (wsId || "") + "|" + (S.currentWorkspaceId || ""),
-		() => ids(M.childrenOf(id || undefined, wsId || undefined, S.currentWorkspaceId || undefined))));
+	// Alle Kinderlisten aus EINEM Kern-Durchlauf je Seitenstand: Baumansichten (Sidebar, Bibliothek)
+	// fragen jeden Knoten ab — einzeln kostete jede Abfrage einen Durchlauf über alle Seiten.
+	const sidebarChildren = () => pageMemo("sidebarChildren", () =>
+		new Map(ids(M.childrenIndex()).map(([parent, ws, list]) => [parent + "\u0000" + ws, list])));
+	const childrenOf = (id, wsId) => {
+		const ws = M.childWorkspace(id || undefined, wsId || undefined, S.currentWorkspaceId || undefined);
+		return pagesOf(sidebarChildren().get((id || "") + "\u0000" + ws) || []);
+	};
 	const pageSubtreeIds = (id) => new Set(ids(M.pageSubtree(String(id))));
 	const pageInTree = (pageId, rootId) => M.pageInTree(pageId || undefined, String(rootId));
 	const deckInTree = (deck, root) => !!root && CORE.deckInTree(String(deck || ""), String(root));

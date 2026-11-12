@@ -659,6 +659,22 @@ impl ModelCore {
         ids_of(self.m.state().children_of(id.as_deref(), workspace.as_deref(), current.as_deref()))
     }
 
+    /// Kinderlisten aller Knoten auf einmal: `[[Eltern-ID ("" = Wurzel), Workspace, [IDs]], …]`.
+    #[wasm_bindgen(js_name = childrenIndex)]
+    pub fn children_index(&self) -> String {
+        let index = self.m.state().sidebar_children();
+        let list: Vec<(&str, &str, Vec<&str>)> = index
+            .into_iter()
+            .map(|((parent, ws), kids)| (parent, ws, kids.into_iter().map(Page::id).collect()))
+            .collect();
+        text(&list)
+    }
+
+    #[wasm_bindgen(js_name = childWorkspace)]
+    pub fn child_workspace(&self, id: Option<String>, workspace: Option<String>, current: Option<String>) -> String {
+        self.m.state().child_workspace(id.as_deref(), workspace.as_deref(), current.as_deref()).to_owned()
+    }
+
     #[wasm_bindgen(js_name = ancestorsOf)]
     pub fn ancestors_of(&self, id: &str) -> String {
         ids_of(self.m.state().ancestors_of(id))

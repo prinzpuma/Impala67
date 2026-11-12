@@ -85,13 +85,8 @@ impl State {
         workspace: Option<&str>,
         current_workspace: Option<&str>,
     ) -> Vec<&Page> {
+        let ws = self.child_workspace(id, workspace, current_workspace);
         let id = id.filter(|i| !i.is_empty());
-        let parent_ws = id.and_then(|i| self.pages.get(i)).map(Page::workspace);
-        let ws = workspace
-            .filter(|w| !w.is_empty())
-            .or(parent_ws)
-            .or(current_workspace.filter(|w| !w.is_empty()))
-            .unwrap_or("default");
         let mut kids: Vec<&Page> = self
             .pages
             .values()
@@ -100,6 +95,36 @@ impl State {
             .collect();
         kids.sort_by(by_sidebar);
         kids
+    }
+
+    /// Workspace, in dem [`State::children_of`] sucht: der angegebene, sonst der der Elternseite,
+    /// sonst der aktuelle, sonst `default`.
+    pub fn child_workspace<'a>(
+        &'a self,
+        id: Option<&str>,
+        workspace: Option<&'a str>,
+        current_workspace: Option<&'a str>,
+    ) -> &'a str {
+        let parent_ws = id.filter(|i| !i.is_empty()).and_then(|i| self.pages.get(i)).map(Page::workspace);
+        workspace
+            .filter(|w| !w.is_empty())
+            .or(parent_ws)
+            .or(current_workspace.filter(|w| !w.is_empty()))
+            .unwrap_or("default")
+    }
+
+    /// Alle Kinderlisten von [`State::children_of`] in EINEM Durchlauf, Schlüssel
+    /// (Eltern-ID, `""` = Wurzel; Workspace). Für Baumansichten: einzeln abgefragt kostet jeder
+    /// Knoten einen Durchlauf über alle Seiten, der ganze Baum also quadratisch viel.
+    pub fn sidebar_children(&self) -> HashMap<(&str, &str), Vec<&Page>> {
+        let mut index: HashMap<(&str, &str), Vec<&Page>> = HashMap::new();
+        for p in self.pages.values().filter(|p| !p.is_trashed() && !p.is_archived()) {
+            index.entry((p.parent().unwrap_or(""), p.workspace())).or_default().push(p);
+        }
+        for kids in index.values_mut() {
+            kids.sort_by(by_sidebar);
+        }
+        index
     }
 
     /// Elternkette für die Brotkrumen (ohne Papierkorb, Zyklen-sicher).

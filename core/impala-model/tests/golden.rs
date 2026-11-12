@@ -316,9 +316,15 @@ fn abfragen_und_lernen_wie_js() {
         assert_same(&json!(st.page_titles()), &q["pageTitles"], &at("pageTitles"));
         let by_title: Object = st.pages_by_title().into_iter().map(|(t, p)| (t.to_owned(), json!(p.id()))).collect();
         assert_same(&Value::Object(by_title), &q["pagesByTitle"], &at("pagesByTitle"));
+        let index = st.sidebar_children();
         for c in q["children"].as_array().unwrap() {
             let kids = st.children_of(c["id"].as_str(), c["ws"].as_str(), None);
             assert_same(&ids(kids), &c["kids"], &at(&format!("childrenOf {c}")));
+            // Der Index muss dieselben Listen liefern wie die Einzelabfrage.
+            let ws = st.child_workspace(c["id"].as_str(), c["ws"].as_str(), None);
+            let key = (c["id"].as_str().unwrap_or(""), ws);
+            let via_index = index.get(&key).cloned().unwrap_or_default();
+            assert_same(&ids(via_index), &c["kids"], &at(&format!("sidebarChildren {c}")));
         }
         for c in q["childPages"].as_array().unwrap() {
             assert_same(&ids(st.child_pages_of(c["id"].as_str())), &c["kids"], &at("childPagesOf"));
