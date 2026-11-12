@@ -62,7 +62,23 @@ enum HeftExport {
         background: HeftBackground = .paper,
         imagePixels: Int = 4096
     ) -> UIImage? {
-        guard let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }), data.width > 0 else { return nil }
+        guard let data = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return nil }
+        return renderPage(data, core: core, pageId: pageId, width: width, scale: scale, background: background, imagePixels: imagePixels)
+    }
+
+    /// Seite aus fertigen Daten zeichnen (auch ein Stand aus dem Heft-Verlauf). Bilder kommen über den Kern;
+    /// fehlt eines inzwischen im Heft, bleibt die Stelle leer.
+    nonisolated static func renderPage(
+        _ data: HeftPageData,
+        core: ImpalaCore,
+        pageId: String,
+        width: CGFloat,
+        scale: CGFloat = 1,
+        background: HeftBackground = .paper,
+        imagePixels: Int = 4096
+    ) -> UIImage? {
+        guard data.width > 0 else { return nil }
+        let heftPageId = data.id
         let size = CGSize(width: data.width, height: data.height)
         let k = width / size.width
         let format = UIGraphicsImageRendererFormat()

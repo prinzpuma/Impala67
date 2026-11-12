@@ -21,6 +21,8 @@ struct HeftPagesSheet: View {
     /// Nach Verschieben, Löschen oder Papierwechsel: Seitenliste neu lesen.
     let onChanged: () -> Void
 
+    /// Reiter oben wie `heft-pages-seg` der PWA: Seiten oder Verlauf (gesicherte Stände).
+    @State private var tab = Tab.pages
     @State private var thumbs: [String: UIImage] = [:]
     /// Papierart je Seite (für das Häkchen im Menü), mit dem Vorschaubild im Hintergrund gelesen.
     @State private var papers: [String: String] = [:]
@@ -33,6 +35,8 @@ struct HeftPagesSheet: View {
     @State private var share: SharedFile?
     @Environment(\.displayScale) private var displayScale
 
+    private enum Tab: Hashable { case pages, history }
+
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let only: [String]?
@@ -43,16 +47,35 @@ struct HeftPagesSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tileWidth, maximum: 200), spacing: 18)], spacing: 14) {
-                    ForEach(Array(pageIds.enumerated()), id: \.element) { i, id in
-                        tile(id, index: i)
+                if !picking {
+                    Picker("Ansicht", selection: $tab) {
+                        Text("Seiten").tag(Tab.pages)
+                        Text("Verlauf").tag(Tab.history)
                     }
-                    if !picking { addTile }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 280)
+                    .padding(.top, Space.s3)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, Space.s4)
-                .padding(.bottom, 30)
-                .animation(.smooth(duration: 0.3), value: pageIds)
+                if tab == .history && !picking {
+                    HeftHistoryGrid(pageId: pageId, tileWidth: Self.tileWidth) {
+                        onChanged()
+                        dismiss()
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, Space.s3)
+                    .padding(.bottom, 30)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tileWidth, maximum: 200), spacing: 18)], spacing: 14) {
+                        ForEach(Array(pageIds.enumerated()), id: \.element) { i, id in
+                            tile(id, index: i)
+                        }
+                        if !picking { addTile }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, Space.s4)
+                    .padding(.bottom, 30)
+                    .animation(.smooth(duration: 0.3), value: pageIds)
+                }
             }
             .background(Impala.panel)
             .navigationTitle("Seiten")
@@ -64,7 +87,7 @@ struct HeftPagesSheet: View {
                         Button(selected.count == pageIds.count ? "Keine" : "Alle") {
                             selected = selected.count == pageIds.count ? [] : Set(pageIds)
                         }
-                    } else {
+                    } else if tab == .pages {
                         Button("Auswählen") { withAnimation(.snappy) { picking = true } }
                     }
                 }

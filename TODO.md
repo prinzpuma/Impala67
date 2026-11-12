@@ -104,7 +104,7 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
   - [ ] Sync: WASM-Größe senken.
   - [x] UniFFI-Schnittstelle für `impala-core` (Swift/Kotlin), grobe Aufrufe (`core/impala-ffi`).
   - [x] iPad-App nativ (`ios/`, Stand in `ios/README.md`): erster CI-Build und Gerätetest erledigt (07.11.2026, App `2.2.124+25`); Bericht: `docs/IPAD-TESTBERICHT-2026-11-07.md`. Startseite, Heft, Suche, Graph, KI, Bibliothek und Sync wurden am Gerät geprüft.
-    - [ ] Offen laut Bericht: Kartenübersicht (193 ms) und Einstellungen (258 ms) entkoppeln, Kern-Sperre bei Karten-Sync (429 ms) und Kaltstart (789 ms) senken, Versionsverlauf für Hefte (Seiten: `PageHistorySheet`, am Gerät zu prüfen), Bridge am Gerät prüfen (`impala_create_page`/`impala_update_page`/`impala_list_flashcards`/`impala_create_flashcard` neu, `impala_type` nachgebessert), SwiftUI-Menüs barrierefrei machen.
+    - [ ] Offen laut Bericht: Kartenübersicht (193 ms) und Einstellungen (258 ms) entkoppeln, Kern-Sperre bei Karten-Sync (429 ms) und Kaltstart (789 ms) senken, Verlauf am Gerät prüfen (Notizen: `PageHistorySheet`, Hefte: `HeftHistory`), Bridge am Gerät prüfen (`impala_create_page`/`impala_update_page`/`impala_list_flashcards`/`impala_create_flashcard` neu, `impala_type` nachgebessert), SwiftUI-Menüs barrierefrei machen.
     - [ ] Später: semantische Suche auf dem iPad – lokales Embedding-Modell (`SemanticSearch`), „Verwandt“-Leiste unter Notizen, RAG-Quellen im Chat.
   - [x] PWA: RAG-Index als WASM im Worker.
   - [ ] WASM-Größe (2,29 MB mit Datenmodell): `opt-level` (gemessen: `3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in impala-ai ersetzen.

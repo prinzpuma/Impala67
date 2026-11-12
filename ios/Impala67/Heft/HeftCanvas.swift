@@ -975,6 +975,8 @@ struct HeftCanvas: UIViewRepresentable {
                 }
                 HeftOcr.schedule(core: core, pageId: pageId, heftPageId: page)
             }
+            // Heft-Verlauf: höchstens alle 10 Minuten ein Stand, hinter den Schreibvorgängen.
+            if !pages.isEmpty { write { core, pageId in HeftHistory.maybeSnapshot(core: core, pageId: pageId) } }
         }
 
         /// Kern-Aufruf in der Schreib-Warteschlange (feste Reihenfolge, auch vor jedem Laden).

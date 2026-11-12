@@ -416,7 +416,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Auswählen, Löschen mit Bestätigung | ✅ | `HeftPagesSheet.swift:55-92` |
 | Auto-Scroll beim Ziehen | ❌ | fehlt |
 | Export/Import aus der Auswahl | ❌ | nur Löschen |
-| Verlauf (Stände, Wiederherstellen) | ❌ | fehlt |
+| Verlauf (Stände, Wiederherstellen) | ✅ | Reiter „Verlauf“ der Seitenübersicht (`Heft/HeftHistory.swift`), sichert vorher den jetzigen Stand · am Gerät ungeprüft |
 
 ### 3.5 Gesten
 | Punkt | Status | Fundstelle / Notiz |
@@ -436,7 +436,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Seiten untereinander scrollen | 🟡 | Einzelseite mit ‹ › |
 | Seite löschen/verschieben | ✅ | `HeftPagesSheet.swift`, `HeftScreen.swift:300` |
 | ⋯-Menü (Favorit, Verlauf, Icon, Duplizieren) | 🟡 | nur Export und Link |
-| Automatische Sicherung (Verlauf) | ❌ | fehlt |
+| Automatische Sicherung (Verlauf) | ✅ | höchstens alle 10 Min., 20 Stände / 24 h, nur lokal (`Heft/HeftHistory.swift`) · am Gerät ungeprüft |
 
 ### 3.7 Import, Export, Scanner, Handschrift
 | Punkt | Status | Fundstelle / Notiz |
