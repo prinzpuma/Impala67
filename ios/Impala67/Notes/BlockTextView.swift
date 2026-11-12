@@ -158,6 +158,7 @@ final class BlockUITextView: UITextView {
         ("z", .command, .undo, "Rückgängig"),
         ("z", [.command, .shift], .redo, "Wiederholen"),
         ("d", .command, .duplicate, "Duplizieren"),
+        ("a", .command, .selectAll, "Alle Blöcke auswählen"),
         (UIKeyCommand.inputUpArrow, [.command, .shift], .moveUp, "Nach oben"),
         (UIKeyCommand.inputDownArrow, [.command, .shift], .moveDown, "Nach unten"),
     ]

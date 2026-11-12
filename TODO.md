@@ -53,6 +53,18 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 
 ## 2. Jetzt am nötigsten (Priorisierte nächste Schritte)
 
+### iPad-Wunschliste (Nutzer, 12.11.2026) – Ziel: Heft so gut wie GoodNotes
+- [ ] **Lasso wie GoodNotes**: eigenes Lasso gebaut (`ios/Impala67/Heft/HeftLasso.swift`: Umkreisen, Rahmen mit Eckgriffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen, Rückgängig) – am Gerät prüfen; offen: Bilder/Textfelder mitnehmen, Drehen.
+- [x] **Text direkt auf der Seite** (Text-Werkzeug „T“, Antippen setzt bzw. öffnet ein Feld; `ios/Impala67/Heft/HeftTextInline.swift`) – am Gerät prüfen.
+- [x] **Neue Seite durch Weiterziehen** am Heft-Ende (gab es schon: `scrollViewDidEndDragging`, ab 70 pt).
+- [x] **Laserpointer** im Heft (`HeftLaserLayer`) – am Gerät prüfen.
+- [x] **Cover für Notizen** (9 Muster wie die PWA, eigenes Bild, Icon ragt ins Cover; `ios/Impala67/Notes/NoteCover.swift`) – am Gerät prüfen, ob es gut genug aussieht.
+- [x] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig, Blockmenü „Auswählen“, Leiste mit Kopieren/Ausschneiden/Duplizieren/Löschen) – am Gerät prüfen.
+- [x] **Aktivitäts-Heatmap** und **Kartenbrowser mit Sortierung** (Intervall, Fehler) auf dem iPad – am Gerät prüfen.
+- [x] **Lern-Extras standardmäßig aus** (Overlearning-Sperre, Pausen-Erinnerung) in PWA, iPad und Android; Karteikarten und Lernzeit-Messung bleiben an. Dabei behoben: PWA-Pausen-Erinnerung ließ sich nicht abschalten (`lernzeit.js` las „0“, gespeichert wird „off“).
+- Später: Lernanalyse (erst wenn das Design in der PWA passt), Heft-Vorschau in Notizen.
+- Nicht geplant: Anki-.apkg (TXT/CSV reicht), eigener KI-Knopf im Heft (KI-Knopf oben rechts reicht), Daily-Notizen, Abschreiben, „x % analysiert“, Export „Alle Handschrift“, Schulnoten.
+
 ### Priorität 1: Monolithen, CSS-Schichten & Modul-Grenzen aufräumen (KISS & DRY)
 - [x] **Beta-Namensreste & Heft-CSS-Überlagerung bereinigt**:
   - `web/heft-pages-beta.js` und `web/heft-toolbar-beta.js` in `web/heft-pages-ui.js` und `web/heft-toolbar-ui.js` überführt; die gesamte Toolbar-, Tray- und Popover-HTML-Erzeugung aus `web/heft.js` dorthin ausgelagert.

@@ -302,11 +302,17 @@ private struct CardBrowser: View {
     @Environment(ShellModel.self) private var shell
     @State private var query = ""
     @State private var allCards: [CardInfo] = []
+    /// Lernstand je Karte (Intervall, Fehler) für Sortierung und Anzeige.
+    @State private var srs: [String: LearnStats.Card] = [:]
+    /// Sortierung wie die Spalten des PWA-Browsers (`render-anki.js`), gemerkt.
+    @AppStorage("impala67CardSort") private var sort = BrowserSort.due
+    @AppStorage("impala67CardSortAsc") private var ascending = true
 
     var body: some View {
         let cards = shell.cards
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let shown = q.isEmpty ? allCards : allCards.filter { ($0.front + "\n" + $0.back).lowercased().contains(q) }
+        let found = q.isEmpty ? allCards : allCards.filter { ($0.front + "\n" + $0.back).lowercased().contains(q) }
+        let shown = sort.apply(found, srs: srs, ascending: ascending)
         VStack(spacing: 0) {
             HStack {
                 Button { withAnimation(.smooth) { cards.view = .decks } } label: {
@@ -324,6 +330,19 @@ private struct CardBrowser: View {
                     .foregroundStyle(Impala.text)
                     .lineLimit(1)
                 Spacer()
+                Menu {
+                    Picker("Sortieren nach", selection: $sort) {
+                        ForEach(BrowserSort.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    Divider()
+                    Picker("Richtung", selection: $ascending) {
+                        Text("Aufsteigend").tag(true)
+                        Text("Absteigend").tag(false)
+                    }
+                } label: {
+                    Icon(ascending ? "arrow-up" : "arrow-down", size: 17).foregroundStyle(Impala.text2).frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Sortieren: \(sort.label)")
                 Button { cards.editor = CardEditorTarget(cardId: nil, deck: deck) } label: {
                     Icon("plus", size: 17).foregroundStyle(Impala.text2).frame(width: 44, height: 44)
                 }
@@ -340,7 +359,7 @@ private struct CardBrowser: View {
                 .padding(.bottom, Space.s2)
             List {
                 ForEach(shown, id: \.id) { c in
-                    Button { cards.editor = CardEditorTarget(cardId: c.id, deck: c.deck) } label: { CardListRow(card: c, showDeck: c.deck != deck) }
+                    Button { cards.editor = CardEditorTarget(cardId: c.id, deck: c.deck) } label: { CardListRow(card: c, showDeck: c.deck != deck, srs: srs[c.id]) }
                         .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
                         .swipeActions(edge: .trailing) {
@@ -386,10 +405,66 @@ private struct CardBrowser: View {
         .background(Impala.panel)
         .task(id: "\(deck):\(store.cardsRevision)") {
             let core = store.core
-            let loaded = await Task.detached(priority: .userInitiated) {
-                core.cardsInDeckTree(deck: deck, includeTrashed: false).filter { !$0.archived }
+            let (loaded, states) = await Task.detached(priority: .userInitiated) {
+                let list = core.cardsInDeckTree(deck: deck, includeTrashed: false).filter { !$0.archived }
+                let byId = Dictionary(LearnStats.cards(json: core.learningStatsJson()).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                return (list, byId)
             }.value
-            if !Task.isCancelled { allCards = loaded }
+            if !Task.isCancelled {
+                allCards = loaded
+                srs = states
+            }
+        }
+    }
+}
+
+/// Sortierung des Kartenbrowsers wie die Spalten in `render-anki.js` (Fällig, Intervall, Fehler …).
+enum BrowserSort: String, CaseIterable {
+    case due, front, interval, lapses, state
+
+    var label: String {
+        switch self {
+        case .due: "Fällig"
+        case .front: "Vorderseite"
+        case .interval: "Intervall"
+        case .lapses: "Fehler"
+        case .state: "Status"
+        }
+    }
+
+    func apply(_ cards: [CardInfo], srs: [String: LearnStats.Card], ascending: Bool) -> [CardInfo] {
+        func less(_ a: CardInfo, _ b: CardInfo) -> Bool? {
+            switch self {
+            case .due:
+                return a.due == b.due ? nil : a.due < b.due
+            case .front:
+                let r = markdownPlainText(markdown: a.front).localizedCompare(markdownPlainText(markdown: b.front))
+                return r == .orderedSame ? nil : r == .orderedAscending
+            case .interval:
+                let x = srs[a.id]?.stability ?? 0, y = srs[b.id]?.stability ?? 0
+                return x == y ? nil : x < y
+            case .lapses:
+                let x = srs[a.id]?.lapses ?? 0, y = srs[b.id]?.lapses ?? 0
+                return x == y ? nil : x < y
+            case .state:
+                let x = Self.rank(a), y = Self.rank(b)
+                return x == y ? nil : x < y
+            }
+        }
+        // Stabil: Gleichstand behält die Reihenfolge des Kerns.
+        return cards.enumerated().sorted { l, r in
+            guard let lt = less(l.element, r.element) else { return l.offset < r.offset }
+            return ascending ? lt : !lt
+        }.map(\.element)
+    }
+
+    private static func rank(_ c: CardInfo) -> Int {
+        if c.suspended { return 4 }
+        switch c.stage {
+        case .new: return 0
+        case .learning: return 1
+        case .relearning: return 2
+        case .review: return 3
         }
     }
 }
@@ -397,6 +472,7 @@ private struct CardBrowser: View {
 private struct CardListRow: View {
     let card: CardInfo
     let showDeck: Bool
+    var srs: LearnStats.Card?
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.s3) {
@@ -422,6 +498,12 @@ private struct CardListRow: View {
                     } else if card.stage == .new {
                         Text("neu").font(.system(size: 11, weight: .semibold)).foregroundStyle(Impala.success)
                     }
+                }
+                if let srs, card.stage != .new {
+                    // Wie die Spalten Intervall und Fehler der PWA.
+                    Text("\(max(1, Int(srs.stability.rounded()))) T" + (srs.lapses > 0 ? " · \(srs.lapses) Fehler" : ""))
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundStyle(srs.lapses > 0 ? Impala.danger : Impala.text2)
                 }
             }
         }

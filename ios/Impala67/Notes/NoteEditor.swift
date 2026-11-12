@@ -56,6 +56,9 @@ private struct NoteBody: View {
     @State private var linkURL = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var showIconPicker = false
+    @State private var showCoverPicker = false
+    /// Cover der Seite (`cover` bzw. eigenes Bild `coverImg`), mit den Metadaten neu gelesen.
+    @State private var cover: (name: String, img: String?) = ("", nil)
     @State private var isDbPage = false
     @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
 
@@ -65,7 +68,28 @@ private struct NoteBody: View {
             VStack(alignment: .leading, spacing: density == AppDensity.compact.rawValue ? Space.s2 : Space.s3) {
                 PageChrome(model: model, onPickIcon: { showIconPicker = true })
                 ArchivedBanner(pageId: model.pageId) { model.showToast($0, style: .success) }
-                NoteEmoji(pageId: model.pageId) { showIconPicker = true }
+                if !cover.name.isEmpty || cover.img != nil {
+                    NoteCover(cover: cover.name, coverImg: cover.img) { showCoverPicker = true }
+                        // Icon ragt wie in der PWA unten ins Cover (`.page-cover + .page-heading`).
+                        .padding(.bottom, -38)
+                    NoteEmoji(pageId: model.pageId, onCover: true) { showIconPicker = true }
+                        .padding(.horizontal, Space.s4)
+                } else {
+                    HStack(spacing: Space.s4) {
+                        NoteEmoji(pageId: model.pageId) { showIconPicker = true }
+                        Button { showCoverPicker = true } label: {
+                            HStack(spacing: Space.s1) {
+                                Icon("image", size: 14)
+                                Text("Cover hinzufügen").font(.system(size: TextSize.xs, weight: .medium))
+                            }
+                            .foregroundStyle(Impala.text2.opacity(0.45))
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                    }
+                }
                 TextField("Unbenannt", text: Binding(get: { model.title }, set: { model.setTitle($0) }))
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(Impala.text)
@@ -93,6 +117,9 @@ private struct NoteBody: View {
         .scrollDismissesKeyboard(.interactively)
         .task(id: "\(model.pageId):\(store.pageMetaRevision)") {
             isDbPage = store.core.pageDb(id: model.pageId) != nil
+            if let s = store.core.page(id: model.pageId)?.summary {
+                withAnimation(.snappy) { cover = (s.cover, s.coverImg) }
+            }
         }
         // Bilder aus anderen Apps hineinziehen: hinter den aktiven Block bzw. ans Ende.
         .onDrop(of: [.image], isTargeted: nil) { providers in
@@ -105,7 +132,11 @@ private struct NoteBody: View {
         }
         .background(Impala.panel)
         .safeAreaInset(edge: .bottom) {
-            if editing {
+            if model.isPicking {
+                PickBar(model: model)
+                    .padding(.bottom, Space.s3)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if editing {
                 VStack(spacing: Space.s2) {
                     if model.menu != nil {
                         EditorMenuPanel(model: model)
@@ -135,6 +166,7 @@ private struct NoteBody: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2), value: editing)
+        .animation(reduceMotion ? nil : .snappy, value: model.picked)
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.menu?.kind)
         .animation(reduceMotion ? nil : .snappy, value: model.toast)
         .environment(\.openURL, OpenURLAction { url in open(url) })
@@ -143,6 +175,9 @@ private struct NoteBody: View {
         }
         .sheet(isPresented: $showIconPicker) {
             IconPickerSheet(pageId: model.pageId)
+        }
+        .sheet(isPresented: $showCoverPicker) {
+            NoteCoverSheet(pageId: model.pageId, cover: cover.name, coverImg: cover.img)
         }
         .alert("Link einfügen", isPresented: Binding(get: { model.linkPrompt != nil }, set: { if !$0 { model.finishLink(nil) } })) {
             TextField("Link-Adresse", text: $linkURL)
@@ -186,6 +221,22 @@ private struct NoteBody: View {
                     .overlay(alignment: .topLeading) {
                         if dragId == b.id || (dragId == nil && (model.activeId == b.id || hovered == b.id)) {
                             blockGutter(b).offset(x: -48)
+                        }
+                    }
+                    .overlay {
+                        // Mehrfachauswahl: Antippen nimmt den Block dazu bzw. heraus.
+                        if model.isPicking {
+                            let on = model.picked.contains(b.id)
+                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                .fill(on ? Impala.accent.opacity(0.14) : Color.clear)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                        .strokeBorder(on ? Impala.accent.opacity(0.5) : .clear, lineWidth: 1)
+                                }
+                                .padding(-3)
+                                .contentShape(Rectangle())
+                                .onTapGesture { model.togglePick(b.id) }
+                                .accessibilityAddTraits(on ? .isSelected : [])
                         }
                     }
                     .onHover { inside in
@@ -364,9 +415,45 @@ private struct ArchivedBanner: View {
 }
 
 /// Emoji-Icon der Notiz über dem Titel wie in render.js:696-699 (`.page-icon`).
+/// Leiste der Mehrfachauswahl: Anzahl, Kopieren, Ausschneiden, Duplizieren, Löschen, Alle, Fertig.
+private struct PickBar: View {
+    let model: NoteModel
+
+    var body: some View {
+        let n = model.picked.count
+        HStack(spacing: Space.s4) {
+            Text(n == 1 ? "1 Block" : "\(n) Blöcke")
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .monospacedDigit()
+            Button { model.copyPicked() } label: { Icon("copy", size: 16) }
+                .accessibilityLabel("Kopieren")
+                .keyboardShortcut("c", modifiers: .command)
+            Button("Ausschneiden") { model.cutPicked() }
+                .keyboardShortcut("x", modifiers: .command)
+            Button { model.duplicatePicked() } label: { Icon("pages-stack", size: 16) }
+                .accessibilityLabel("Duplizieren")
+            Button(role: .destructive) { model.deletePicked() } label: { Icon("trash", size: 16) }
+                .accessibilityLabel("Löschen")
+                .keyboardShortcut(.delete, modifiers: [])
+            Button("Alle") { model.pickAll() }
+            Button("Fertig") { model.clearPicks() }
+                .fontWeight(.semibold)
+                .keyboardShortcut(.escape, modifiers: [])
+        }
+        .font(.system(size: TextSize.sm))
+        .foregroundStyle(Impala.text2)
+        .padding(.horizontal, Space.s4)
+        .frame(minHeight: 44)
+        .impalaGlass(interactive: true)
+    }
+}
+
 private struct NoteEmoji: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String
+    /// Ragt ins Cover: Icon auf eigenem Hintergrund wie `.page-cover + .page-heading .page-icon`.
+    var onCover = false
     let onPick: () -> Void
     @State private var emoji: String?
 
@@ -375,6 +462,14 @@ private struct NoteEmoji: View {
             if let emoji {
                 Button(action: onPick) {
                     Text(emoji).font(.system(size: 52))
+                        .padding(onCover ? 8 : 0)
+                        .background {
+                            if onCover {
+                                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                    .fill(Impala.panel)
+                                    .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
@@ -386,8 +481,10 @@ private struct NoteEmoji: View {
                         Text("Icon hinzufügen")
                             .font(.system(size: TextSize.xs, weight: .medium))
                     }
-                    .foregroundStyle(Impala.text2.opacity(0.45))
-                    .padding(.vertical, 2)
+                    .foregroundStyle(onCover ? Impala.text2 : Impala.text2.opacity(0.45))
+                    .padding(.vertical, onCover ? 6 : 2)
+                    .padding(.horizontal, onCover ? 10 : 0)
+                    .background { if onCover { Capsule().fill(Impala.panel) } }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

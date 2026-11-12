@@ -17,10 +17,10 @@ import org.impala67.app.ui.theme.Space
 /** Lernen (settings-renderer.js `renderLearning`): Lernverhalten, Beta-Funktionen, Controller. */
 @Composable
 fun LearningSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
-    val overlearn by prefs.overlearn.collectAsStateWithLifecycle(true)
+    val overlearn by prefs.overlearn.collectAsStateWithLifecycle(false)
     val confidence by prefs.confidence.collectAsStateWithLifecycle(false)
     val telemetry by prefs.telemetry.collectAsStateWithLifecycle(true)
-    val breakReminder by prefs.breakReminder.collectAsStateWithLifecycle(true)
+    val breakReminder by prefs.breakReminder.collectAsStateWithLifecycle(false)
     val weekGoal by prefs.weekGoalMinutes.collectAsStateWithLifecycle(300)
 
     SettingsGroup("Lernverhalten") {

@@ -4,10 +4,10 @@ import SwiftUI
 /// Lernverhalten (Overlearning, Selbsteinschätzung, Telemetrie, Pausen-Erinnerung, Wochenziel),
 /// Beta-Lernfunktionen und Controller-Steuerung.
 struct LearningSettingsSections: View {
-    @AppStorage("impala67Overlearn") private var overlearn = true
+    @AppStorage("impala67Overlearn") private var overlearn = false
     @AppStorage("impala67Confidence") private var confidence = false
     @AppStorage("impala67Telemetry") private var telemetry = true
-    @AppStorage("impala67BreakReminder") private var breakReminder = true
+    @AppStorage("impala67BreakReminder") private var breakReminder = false
     @AppStorage(WeekGoal.key) private var weekGoal = 300
 
     @AppStorage("impala67ControllerEnabled") private var controllerEnabled = false

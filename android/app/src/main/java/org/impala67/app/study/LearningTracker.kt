@@ -129,7 +129,7 @@ class LearningTracker(private val store: ImpalaStore) {
 fun LearningTimeHost(store: ImpalaStore, prefs: DevicePrefs, current: NavKey, paused: Boolean, content: @Composable () -> Unit) {
     val tracker = remember(store) { LearningTracker(store) }
     val record by prefs.telemetry.collectAsStateWithLifecycle(true)
-    val breakOn by prefs.breakReminder.collectAsStateWithLifecycle(true)
+    val breakOn by prefs.breakReminder.collectAsStateWithLifecycle(false)
     var foreground by remember { mutableStateOf(true) }
     var idle by remember { mutableStateOf(false) }
     var breakAsk by remember { mutableStateOf(false) }

@@ -592,7 +592,8 @@ export const STATE = (() => {
 	// zeitabhängig); ein ausdrückliches `now` umgeht den Zwischenspeicher.
 	const LEARN_AHEAD_MS = 20 * 60e3;
 	const _snapCache = { rev: -1, t: 0, map: new Map() };
-	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") !== "off"; } catch { return true; } };
+	// Overlearning-Sperre ist standardmäßig aus (nur „on“ schaltet sie ein).
+	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") === "on"; } catch { return false; } };
 	function computeStudySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
 		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).

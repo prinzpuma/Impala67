@@ -92,16 +92,16 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
-| 1. Shell & Navigation | 65 | 24 | 13 | 64 % |
-| 2. Seiten & Editor | 29 | 11 | 10 | 58 % |
-| 3. Heft | 17 | 10 | 10 | 46 % |
-| 4. KI-Chat & Karten/Lernen | 22 | 10 | 12 | 50 % |
-| 5. Einstellungen, Sync, Backup | 16 | 5 | 7 | 57 % |
+| 1. Shell & Navigation | 81 | 20 | 6 | 76 % |
+| 2. Seiten & Editor | 37 | 9 | 4 | 74 % |
+| 3. Heft | 26 | 6 | 3 | 74 % |
+| 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
+| 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
-Größte Lücken neben der Leistung: Seiten-Icon/Cover,
-Fächerliste in den Einstellungen, Schulnoten, Lernanalyse, Daily-Notizen,
+Größte Lücken neben der Leistung: Seiten-Cover,
+Fächerliste in den Einstellungen (Fach-Zuordnung ist erledigt), Schulnoten, Lernanalyse, Daily-Notizen,
 Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ---
@@ -238,7 +238,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Fach-Dialog | ✅ | zeigt zusätzlich, woher das Fach kommt; Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Verlauf-Dialog mit Wiederherstellen | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
-| Icon- und Cover-Wahl für Seiten | ❌ | Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
+| Icon- und Cover-Wahl für Seiten | ✅ | Icon und Cover (9 Muster wie die PWA oder eigenes Bild) im Editor (`Notes/NoteCover.swift`) · am Gerät ungeprüft |
 
 ### 1.15 Menüs
 | Punkt | Status | Fundstelle / Notiz |
@@ -272,7 +272,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Aktionen: Neue Seite, Karten, Hell/Dunkel, Archiv, Papierkorb, Sync, Einstellungen, Gemini | ✅ | `ShellSheets.swift:122-141` |
 | Präfix „Archiv · “ | 🟡 | fehlt |
 | „In neuem Tab öffnen“ | ✅ | Kontextmenü an Suchtreffern (`ShellSheets.swift`); PWA: Palette des „+“-Tabs |
-| Daily-Notiz heute / Daily-Kalender | ❌ | fehlt |
+| Daily-Notiz heute / Daily-Kalender | ⚪ | nicht geplant (Nutzer, 12.11.) |
 
 ### 1.19 Bibliothek, PDF, Graph, Gemini Notebook
 | Punkt | Status | Fundstelle / Notiz |
@@ -293,7 +293,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Dichte, Schriftgröße, Bewegung, Tab-Lage, Hell/Dunkel | ✅ | `Theme/Tokens.swift`, `SettingsSheet.swift` |
 | Seitenleiste eingeklappt gemerkt | 🟡 | KI-Panel ja, Seitenleiste nein |
 | Leerzustände Seiten/Stapel/Chats | ✅ | |
-| Wortlaut „Der Papierkorb ist leer.“ / „Das Archiv ist leer.“ | 🟡 | abweichend |
+| Wortlaut „Der Papierkorb ist leer.“ / „Das Archiv ist leer.“ | 🟡 | Papierkorb stimmt (`Shell/ShellSheets.swift:318`); Bibliothek: „Archiv ist leer“ (`Library/LibraryScreen.swift:685`) |
 | Tab-Reihenfolge per Ziehen | ❌ | fehlt |
 | Tabs und Aufklappzustand geräteübergreifend | ✅ | `Shell/ShellModel.swift:187-189` |
 
@@ -307,7 +307,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Brotkrumen (Arbeitsbereich, Ahnen, Titel) | ✅ | `Notes/NoteEditor.swift:565-640` |
 | Archiv-Banner mit Wiederherstellen | ✅ | `NoteEditor.swift:301-325` |
 | Icon-Auswahl | ✅ | `Notes/NoteEditor.swift:357-465` `NoteEmoji` (Klick öffnet Picker), `IconPickerSheet` mit 24 Emojis, Entfernen, Schließen über `patchPage` / `pageUpdate`-Event; auch im ⋯-Menü · am Gerät ungeprüft |
-| Cover (Vorlagen, eigenes Bild) | ❌ | fehlt für Notizen |
+| Cover (Vorlagen, eigenes Bild) | ✅ | `Notes/NoteCover.swift`: Muster wie `.cover-*` der PWA, eigenes Bild, Icon ragt ins Cover · am Gerät ungeprüft |
 | Platzhalter „Unbenannt“ | ✅ | `Notes/NoteEditor.swift:68` `TextField("Unbenannt", ...)`, `PageStyle.swift:9` · am Gerät ungeprüft |
 | Teilen-Menü (PDF, MD, Link) | ✅ | `Notes/NoteEditor.swift:513-535` Menu mit PDF, Markdown und Link wie `shareMenuHtml` der PWA · am Gerät ungeprüft |
 | Als Vorlage im ⋯ | ✅ | `NoteEditor.swift` (`PageChrome`) & Seitenbaum |
@@ -328,7 +328,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 |---|---|---|
 | „+“ fügt Absatz mit „/“ ein | ✅ | `NoteEditor.swift:191-207` |
 | Griff: Menü, Ziehen verschiebt | ✅ | `NoteEditor.swift:211-238` |
-| Mehrere Blöcke auswählen | ❌ | fehlt |
+| Mehrere Blöcke auswählen | ✅ | Blockmenü „Auswählen (mehrere)“, dann Antippen; Leiste mit Kopieren, Ausschneiden, Duplizieren, Löschen (`Notes/NoteCommands.swift` „Mehrere Blöcke“) · am Gerät ungeprüft |
 | Umwandeln (11 Typen), Duplizieren, Kopieren, Lernkarte | ✅ | `Notes/BlockViews.swift:127-144` |
 | Farbe (Text/Hintergrund) | 🟡 | Textfarbe ungeprüft |
 | Dateien per Ziehen/Einfügen | ✅ | `NoteEditor.swift:90-95` |
@@ -352,7 +352,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | „---“, „```“, „$$“ live | ✅ | `Notes/NoteModel.swift` `edit` (wie `web/editor.js:1064-1085`) |
 | Enter, ⇧Enter, Tab/⇧Tab, Entf, ↑ ↓ | ✅ | `BlockTextView.swift:144-150` |
 | ⌘D, ⇧⌘↑/↓, Esc | ✅ | `BlockTextView.swift:160-162` |
-| ⌘A zweistufig, ⇧⌘0–8 | ❌ | fehlt |
+| ⌘A zweistufig, ⇧⌘0–8 | 🟡 | ⌘A zweistufig da (Text, dann alle Blöcke); ⇧⌘0–8 fehlt |
 | Tabellen-Tastatur | ✅ | `Notes/TableEditor.swift` |
 
 ### 2.6 Blocktypen
@@ -373,7 +373,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Video/Audio, PDF-Ansicht im Block | ❌ | nur Datei-Zeile |
 | PDF-Text beim Hochladen übernehmen | ❌ | fehlt |
 | Heft-Block mit Vorschau | 🟡 | ohne Vorschau |
-| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift`; Vektoren von Apples Satzmodell statt Bekko (`Notes/SemanticIndex.swift`, nur lokal) · am Gerät ungeprüft |
+| Unterseiten, Verwandte Seiten | ✅ | `Notes/NoteFooter.swift`; Vektoren von Apples Satzmodell statt Bekko (`Notes/SemanticIndex.swift`, nur lokal, Index im Hintergrund) · am Gerät ungeprüft |
 | Datenbankansicht (Vorlesungsübersicht) | ✅ | `DatabaseView.swift`: Karten in Liquid Glass, Auswahl-Menü, Kalender |
 
 ---
@@ -388,7 +388,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | 3 Stift-Favoriten, Marker, Radierer, Lasso, Farben, Dicke, Nur-Stift | ✅ | `Heft/HeftToolbar.swift` |
 | Leiste einklappen | ✅ | `HeftToolbar.swift` (`collapsed`) |
 | Lineal | ⚪ | nur iPad (PencilKit) |
-| Laser | ❌ | fehlt |
+| Laser | ✅ | rote, verblassende Spur, nie gespeichert (`Heft/HeftLasso.swift` `HeftLaserLayer`) · am Gerät ungeprüft |
 | Rückgängig/Wiederholen | ✅ | `HeftToolbar.swift`, `HeftCanvas.swift` (`undo`/`redo`) |
 | Bilder-Menü (Auswahl, Text, Bild, Kamera, Handschrift) | ✅ | `Heft/HeftScreen.swift:160-177` |
 
@@ -396,7 +396,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Seitenzähler ‹ n / m › | ✅ | `HeftScreen.swift:263-275` |
-| KI-Knopf im Heft | 🟡 | nur als Kontext |
+| KI-Knopf im Heft | ⚪ | nicht geplant: KI-Knopf oben rechts reicht (Nutzer, 12.11.) |
 | „+“ Seite, Papier wählen/umstellen | ✅ | `HeftScreen.swift:189-199, 512-535` |
 | Position Davor/Danach/Am Ende | ✅ | Plus-Menü (`Heft/HeftScreen.swift` `addPage(at:)`) |
 | Bild/PDF importieren, Scannen | ✅ | `HeftScreen.swift:537-540` |
@@ -405,8 +405,8 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Bilder/Texte auswählen, verschieben, skalieren | ✅ | `Heft/HeftObjectEdit.swift:24-110` |
-| Text direkt auf der Seite schreiben | 🟡 | Sheet statt direkt |
-| Lasso: Duplizieren | 🟡 | fehlt (Text, Löschen da) |
+| Text direkt auf der Seite schreiben | ✅ | Text-Werkzeug wie GoodNotes: Antippen setzt bzw. öffnet ein Feld, Schreiben direkt in Seitenschrift (`Heft/HeftTextInline.swift`) · am Gerät ungeprüft |
+| Lasso wie GoodNotes: Umkreisen, Rahmen mit Griffen, Verschieben, Skalieren, Farbe, Duplizieren, Kopieren/Ausschneiden/Einfügen, Löschen (mit Rückgängig) | 🟡 | eigenes Lasso statt `PKLassoTool` (`Heft/HeftLasso.swift`); nur Striche, Bilder/Textfelder noch nicht · am Gerät ungeprüft |
 | Entf löscht Auswahl | 🟡 | nur über Leiste |
 
 ### 3.4 Seitenübersicht
@@ -424,7 +424,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Druck, Glättung, Radierer ganze Striche | ✅ | `Heft/HeftInk.swift`, `HeftCanvas.swift:91` |
 | Formerkennung nach Halten | 🟡 | 450 statt 550 ms |
 | Finger scrollt, Stift zeichnet | ✅ | `HeftCanvas.swift:29` |
-| Pinch-Zoom | 🟡 | Grenzen 0,25–5 statt 0,4–6 |
+| Pinch-Zoom | ✅ | 0,4–6 × Passbreite wie PWA (`Heft/HeftCanvas.swift:583-587`) |
 | Doppeltipp zoomt 2,2× | ✅ | `Heft/HeftCanvas.swift` `handleDoubleTap` (Finger; Faktoren relativ zur Passbreite wie `heft-viewport.js`) |
 | Trackpad-Scrollen blättert, ⌘+Scrollen zoomt | ❌ | fehlt |
 | Am Ende hochziehen = neue Seite | ✅ | `onPullAdd` (`Heft/HeftScreen.swift`) |
@@ -433,9 +433,9 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Papierarten | ✅ | `Heft/HeftPaper.swift` |
-| Seiten untereinander scrollen | 🟡 | Einzelseite mit ‹ › |
+| Seiten untereinander scrollen | ✅ | durchgehende Fläche (`Heft/HeftCanvas.swift:5-10`), ‹ › springen nur |
 | Seite löschen/verschieben | ✅ | `HeftPagesSheet.swift`, `HeftScreen.swift:300` |
-| ⋯-Menü (Favorit, Verlauf, Icon, Duplizieren) | 🟡 | nur Export und Link |
+| ⋯-Menü (Favorit, Icon, Duplizieren) | 🟡 | nur Export und Link; Verlauf als Reiter „Verlauf“ der Seitenübersicht (siehe 3.4) |
 | Automatische Sicherung (Verlauf) | ✅ | höchstens alle 10 Min., 20 Stände / 24 h, nur lokal (`Heft/HeftHistory.swift`) · am Gerät ungeprüft |
 
 ### 3.7 Import, Export, Scanner, Handschrift
@@ -444,11 +444,11 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Import-Dialog mit Ziel und Position | 🟡 | direkter Dateiwähler |
 | PDF/Bilder als Heftseiten | ✅ | `Heft/HeftImport.swift` |
 | Export PDF/PNG mit Optionen | ✅ | `Heft/HeftExport.swift:298-433` |
-| Export „Alle Handschrift“ (JSON) | ❌ | fehlt |
+| Export „Alle Handschrift“ (JSON) | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Scanner | ⚪ | VisionKit |
 | Hintergrund-Erkennung für Suche/KI | 🟡 | Apple Vision statt ONNX |
-| Fortschritt „x % analysiert“ | ❌ | fehlt |
-| Abschreiben (Schreibübung) | ❌ | fehlt |
+| Fortschritt „x % analysiert“ | ⚪ | nicht geplant (Nutzer, 12.11.) |
+| Abschreiben (Schreibübung) | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Zwei Geräte gleichzeitig | ✅ | `HeftScreen.swift:92` |
 
 ---
@@ -482,7 +482,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 |---|---|---|
 | Menü Modell / Denkaufwand | 🟡 | ein Menü (`ChatView.swift:322-350`) |
 | Favoriten ★ | ❌ | fehlt |
-| Gruppen je Quelle | 🟡 | eine Liste |
+| Gruppen je Quelle | ✅ | Untermenü je Quelle (`Chat/ChatView.swift:376-389`) |
 | Denkaufwand Automatisch/Reduziert | ❌ | nur Ein/Aus |
 
 ### 4.4 Karten: Übersicht, Editor, Lernen
@@ -493,7 +493,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Gemischt, Feynman | ✅ | `CardsScreen.swift:107-108` |
 | Karten-Editor mit Stapelwahl, Lücken | ✅ | `Cards/CardEditorSheet.swift` |
 | Speichern verlangt Vorderseite | 🟡 | auch nur Rückseite erlaubt |
-| Lückentext aus Seiten-Markierungen | ❌ | fehlt |
+| Lückentext aus Seiten-Markierungen | ✅ | ⋯-Menü „Karten aus Markierungen“ (`Notes/NoteEditor.swift:638`) |
 | Lernen: Antwort zeigen, 1–4, Zähler, Bearbeiten, Aussetzen, Rückgängig | ✅ | `Cards/ReviewScreen.swift` |
 | Optionen im Lernen | ✅ | `ReviewScreen.swift` (Fußleiste) |
 | Selbsteinschätzung Sicher/Unsicher/Geraten | ✅ | `ReviewScreen.swift`: Chips vor dem Aufdecken, decken wie in der PWA nicht selbst auf |
@@ -503,7 +503,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Suche, Bearbeiten, Aussetzen, Löschen | ✅ | `CardsScreen.swift:337-363` |
-| Sortierbare Spalten, Intervall/Fehler | ❌ | fehlt |
+| Sortierbare Spalten, Intervall/Fehler | ✅ | Sortiermenü (Fällig, Vorderseite, Intervall, Fehler, Status; gemerkt), Intervall/Fehler je Zeile (`Cards/CardsScreen.swift` `BrowserSort`) · am Gerät ungeprüft |
 | Zeilenaktion Archivieren | ✅ | `CardsScreen.swift:355` |
 | Export TXT/CSV | 🟡 | kein Anki-Paket |
 | Import mit Vorschau und Duplikaten | ✅ | `Cards/CardTransfer.swift:155-193` |
@@ -513,7 +513,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Kennzahlen, 30 Tage, Prognose, Behalten, schwierigste Karten | ✅ | `Cards/StatsScreen.swift:214-309` |
-| Aktivitäts-Heatmap | ❌ | fehlt |
+| Aktivitäts-Heatmap | ✅ | 53 Wochen × 7 Tage wie `heatmapHtml` (`Cards/StatsScreen.swift` `ActivityHeatmap`) · am Gerät ungeprüft |
 | Lern-Analyse im Statistik-Tab (Sitzungen, Tageszeit, Problemzonen, Experimente) | ❌ | fehlt |
 | Lernanalyse auf der Startseite | ❌ | fehlt |
 | Wochenziel-Prognose | 🟡 | Balken ohne Prognose |
@@ -523,8 +523,8 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 |---|---|---|
 | Wochenwidget, Ziele, Serie | ✅ | `Home/HomeWeek.swift`, `Home/LearningTime.swift` |
 | Erfassung, „Lernst du noch?“ | ✅ | `LearningTime.swift:131, 256-265` |
-| Pausen-Erinnerung nach 40 min | 🟡 | nur Schalter, keine Logik |
-| Fächer (Liste, Zuordnung, Menüeintrag) | ❌ | fehlt |
+| Pausen-Erinnerung nach 40 min | 🟡 | nur Schalter (standardmäßig aus wie überall), keine Logik |
+| Fächer (Liste, Zuordnung, Menüeintrag) | 🟡 | Zuordnung und Menüeintrag vorhanden: Fach-Dialog über „Fach…“ im Seitenbaum und im ⋯-Menü der Notiz (`Notes/SubjectSheet.swift`, Erkennung im Kern `impala-fach`); Fächerliste in den Einstellungen fehlt |
 | Schulnoten | ❌ | fehlt (Kern-API vorhanden) |
 
 ---
@@ -545,9 +545,9 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Darstellung komplett (bis auf „+ Fach“-Chips) | ✅ | `SettingsSheet.swift:355-494` |
 | „+ Fach“-Chips | ❌ | fehlt |
 | KI: Modell, Suche, manuelle ID, Quellen, Schnellvorlagen | ✅ | `Settings/SettingsAi.swift` |
-| KI: Modell-Favoriten, Gruppen, Status-Banner | ❌ | fehlt |
+| KI: Modell-Favoriten, Gruppen, Status-Banner | 🟡 | Gruppen und Statuszeile da (`Settings/SettingsAi.swift:26-50`), Favoriten fehlen |
 | Semantische Suche | 🟡 | Status „Verwandte Seiten“ in `SettingsAi.swift`; Suche nach Bedeutung im Suchfeld fehlt noch |
-| Handschrift: Export, Abschreiben | ❌ | fehlt |
+| Handschrift: Export, Abschreiben | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Lernen und Experimente (bis auf Pre-Testing, Wissenslücken) | ✅ | `Settings/SettingsLearning.swift` |
 | Experimente Pre-Testing, Wissenslücken-Detektor | ❌ | fehlt |
 

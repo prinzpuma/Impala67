@@ -103,10 +103,12 @@ struct HeftScreen: View {
                     corner
                 }
                 if link.selection != nil { SelectBar(link: link) }
+                if tools.tool == .lasso && (link.lassoCount > 0 || link.canPaste) { LassoBar(link: link) }
                 if let busy { hint(busy) }
             }
             .padding(Space.s3)
             .animation(.snappy, value: link.selection)
+            .animation(.snappy, value: link.lassoCount > 0)
         }
         .clipped()
         // Angezeigte Seite als Kontext für die KI (Seitenbild, `view_heft_page`) und Startseite beim
@@ -136,7 +138,8 @@ struct HeftScreen: View {
             HeftPagesSheet(
                 pageId: pageId, pageIds: pageIds, currentId: currentId, revision: revision,
                 onJump: jump, onAdd: { addPage($0) },
-                onChanged: { loadPages(); revision += 1 }
+                onChanged: { loadPages(); revision += 1 },
+                writes: link.coordinator
             )
             .presentationSizing(.form)
             .navigationTransition(.zoom(sourceID: "heft-pages", in: namespace))
@@ -298,8 +301,9 @@ struct HeftScreen: View {
         link.coordinator?.selectAfterReload(.image(imageId))
     }
 
+    /// Neues Textfeld direkt auf der Seite (wie GoodNotes); ohne Leinwand über das Blatt.
     private func newText() {
-        link.textEdit = HeftTextEdit(textId: nil, text: "")
+        if let canvas = link.coordinator { canvas.newInlineText() } else { link.textEdit = HeftTextEdit(textId: nil, text: "") }
     }
 
     /// Textfeld speichern; die Seite des Felds kennt der Canvas (alle Seiten liegen in einer Fläche).
@@ -329,6 +333,47 @@ struct HeftScreen: View {
     }
 }
 
+/// Leiste zur Lasso-Auswahl wie in GoodNotes: Farbe, Duplizieren, Kopieren, Ausschneiden, Löschen;
+/// ohne Auswahl „Einfügen“, sobald etwas kopiert ist.
+private struct LassoBar: View {
+    let link: HeftCanvasLink
+
+    var body: some View {
+        HStack(spacing: Space.s3) {
+            if link.lassoCount > 0 {
+                Text(link.lassoCount == 1 ? "1 Strich" : "\(link.lassoCount) Striche")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+                Menu {
+                    ForEach(HeftPalette.colors, id: \.css) { c in
+                        Button(c.name) { link.coordinator?.lassoColor(c.css) }
+                    }
+                } label: {
+                    Icon("palette", size: 16)
+                }
+                .accessibilityLabel("Farbe")
+                Button { link.coordinator?.lassoDuplicate() } label: { Icon("pages-stack", size: 16) }
+                    .accessibilityLabel("Duplizieren")
+                Button { link.coordinator?.lassoCopy() } label: { Icon("copy", size: 16) }
+                    .accessibilityLabel("Kopieren")
+                Button("Ausschneiden") { link.coordinator?.lassoCut() }
+                Button(role: .destructive) { link.coordinator?.lassoDelete() } label: { Icon("trash", size: 16) }
+                    .accessibilityLabel("Löschen")
+                Button("Fertig") { link.coordinator?.clearLasso() }
+                    .fontWeight(.semibold)
+            } else {
+                Button("Einfügen") { link.coordinator?.lassoPaste() }
+                    .fontWeight(.semibold)
+            }
+        }
+        .font(.system(size: TextSize.sm))
+        .padding(.horizontal, Space.s3)
+        .frame(minHeight: 40)
+        .impalaGlass(interactive: true)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
 /// Leiste, solange ein Bild oder Textfeld ausgewählt ist: Text bearbeiten, Löschen, Fertig.
 private struct SelectBar: View {
     let link: HeftCanvasLink
@@ -339,9 +384,7 @@ private struct SelectBar: View {
                 .font(.system(size: TextSize.sm))
                 .foregroundStyle(Impala.text2)
             if case .text(let id) = link.selection {
-                Button("Text bearbeiten") {
-                    if let t = link.coordinator?.text(id) { link.textEdit = HeftTextEdit(textId: t.id, text: t.text) }
-                }
+                Button("Text bearbeiten") { link.coordinator?.editText(id) }
             }
             Button(role: .destructive) { link.coordinator?.deleteSelection() } label: { Icon("trash", size: 16) }
                 .accessibilityLabel("Löschen")

@@ -54,10 +54,10 @@ class DevicePrefs(private val context: Context) {
     val hideSystemBars: Flow<Boolean> = boolFlow(HIDE_SYSTEM_BARS, true)
 
     /** Lernverhalten (`impala67Overlearn`, `impala67Confidence`, `impala67Telemetry`, `impala67BreakReminder`). */
-    val overlearn: Flow<Boolean> = boolFlow(OVERLEARN, true)
+    val overlearn: Flow<Boolean> = boolFlow(OVERLEARN, false)
     val confidence: Flow<Boolean> = boolFlow(CONFIDENCE, false)
     val telemetry: Flow<Boolean> = boolFlow(TELEMETRY, true)
-    val breakReminder: Flow<Boolean> = boolFlow(BREAK_REMINDER, true)
+    val breakReminder: Flow<Boolean> = boolFlow(BREAK_REMINDER, false)
 
     /** Wochenziel in Minuten (lernzeit.js `weekGoalMinutes`), mindestens 30, sonst 300. */
     val weekGoalMinutes: Flow<Int> = store.data.map { (it[WEEK_GOAL] ?: 300).coerceAtLeast(30) }

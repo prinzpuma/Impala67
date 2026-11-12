@@ -17,8 +17,15 @@ final class NoteModel {
     private(set) var cursor: Int?
     /// Zählt bei jedem Aktivieren hoch, damit das Eingabefeld den Fokus (neu) setzt.
     private(set) var focusToken = 0
-    private var undoStack: [[MdBlock]] = []
-    private var redoStack: [[MdBlock]] = []
+    /// Ein Verlaufsschritt; `title` nur, wenn der Schritt auch den Titel änderte (Version wiederherstellen).
+    private struct Step {
+        var blocks: [MdBlock]
+        var title: String?
+    }
+    private var undoStack: [Step] = []
+    private var redoStack: [Step] = []
+    /// Mehrfach ausgewählte (oberste) Blöcke (NoteCommands.swift „Mehrere Blöcke“).
+    var picked: Set<String> = []
 
     /// Auswahl im aktiven Feld (UTF-16), für Umwandeln ohne Sprung und Inline-Formate.
     @ObservationIgnored var selection = NSRange(location: 0, length: 0)
@@ -152,7 +159,7 @@ final class NoteModel {
         let now = Date()
         // Wie `checkpoint` in editor.js: Tippen bis zu einer Pause von 700 ms ist ein Schritt, Struktur sofort.
         if structural || now.timeIntervalSince(lastEdit) > 0.7 {
-            undoStack.append(blocks)
+            undoStack.append(Step(blocks: blocks))
             if undoStack.count > 100 { undoStack.removeFirst() }
         }
         redoStack.removeAll()
@@ -165,7 +172,7 @@ final class NoteModel {
     /// Älteren Stand aus dem Seitenverlauf übernehmen: neuer Stand im Kern, Rückgängig holt den alten zurück.
     func restoreVersion(title newTitle: String, content: String) {
         let next = markdownToBlocks(markdown: content)
-        undoStack.append(blocks)
+        undoStack.append(Step(blocks: blocks, title: newTitle != title ? title : nil))
         if undoStack.count > 100 { undoStack.removeFirst() }
         redoStack.removeAll()
         activeId = nil
@@ -182,18 +189,23 @@ final class NoteModel {
 
     func undo() {
         guard let prev = undoStack.popLast() else { return }
-        redoStack.append(blocks)
+        redoStack.append(Step(blocks: blocks, title: prev.title == nil ? nil : title))
         restore(prev)
     }
 
     func redo() {
         guard let next = redoStack.popLast() else { return }
-        undoStack.append(blocks)
+        undoStack.append(Step(blocks: blocks, title: next.title == nil ? nil : title))
         restore(next)
     }
 
-    private func restore(_ list: [MdBlock]) {
+    private func restore(_ step: Step) {
+        let list = step.blocks
         blocks = list
+        if let t = step.title, t != title {
+            title = t
+            dirtyTitle = true
+        }
         lastEdit = .distantPast
         dirtyContent = true
         scheduleSave()

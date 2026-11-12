@@ -12,6 +12,13 @@ final class HeftObjectsView: UIView {
     /// Ebene bzw. Feld je Element-ID, für die Vorschau beim Verschieben und Skalieren.
     private var views: [String: Any] = [:]
     private var zoom: CGFloat = 1
+    /// Element, das gerade direkt auf der Seite bearbeitet wird (ausgeblendet, auch nach dem Neuladen).
+    var hiddenId: String? {
+        didSet {
+            if let old = oldValue { (views[old] as? UIView)?.isHidden = false }
+            if let id = hiddenId { (views[id] as? UIView)?.isHidden = true }
+        }
+    }
 
     init(_ kind: Kind) {
         self.kind = kind
@@ -58,6 +65,7 @@ final class HeftObjectsView: UIView {
             }
         }
         CATransaction.commit()
+        if let id = hiddenId { (views[id] as? UIView)?.isHidden = true }
         follow(zoom: zoom)
     }
 
