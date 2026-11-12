@@ -304,6 +304,8 @@ fn abfragen_und_lernen_wie_js() {
         let st = model.state();
         let at = |what: &str| format!("Seed {seed}: {what}");
         assert_same(&ids(st.active_pages()), &q["activePages"], &at("activePages"));
+        let favs: Vec<_> = st.active_pages().into_iter().filter(|p| p.truthy("favorite")).collect();
+        assert_same(&ids(st.favorite_pages()), &ids(favs), &at("favoritePages"));
         assert_same(&ids(st.trashed_pages()), &q["trashedPages"], &at("trashedPages"));
         assert_same(&ids(st.archived_pages()), &q["archivedPages"], &at("archivedPages"));
         assert_same(&ids(st.archived_page_roots()), &q["archivedPageRoots"], &at("archivedPageRoots"));

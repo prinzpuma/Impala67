@@ -49,6 +49,15 @@ impl State {
         self.pages.values().filter(|p| !p.is_trashed() && !self.is_page_archived(p.id())).collect()
     }
 
+    /// Favoriten (`!!page.favorite`) unter den aktiven Seiten, Reihenfolge wie [`State::active_pages`].
+    /// Die billige Favoriten-Prüfung zuerst: die Archiv-Prüfung läuft die Elternkette hoch.
+    pub fn favorite_pages(&self) -> Vec<&Page> {
+        self.pages
+            .values()
+            .filter(|p| p.truthy("favorite") && !p.is_trashed() && !self.is_page_archived(p.id()))
+            .collect()
+    }
+
     pub fn trashed_pages(&self) -> Vec<&Page> {
         newest_first(self.pages.values().filter(|p| p.is_trashed()).collect(), |p| {
             p.trashed_at.clone().unwrap_or_default()

@@ -555,6 +555,7 @@ export const STATE = (() => {
 	const sortKeyOf = (pg) => (pg?.id ? M.sortKeyOf(String(pg.id)) : 0);
 	const trashedPages = () => pagesOf(pageMemo("trashed", () => ids(M.trashedPages())));
 	const activePages = () => pagesOf(pageMemo("active", () => ids(M.activePages())));
+	const favoritePages = () => pagesOf(pageMemo("favorites", () => ids(M.favoritePages())));
 	const archivedPages = () => pagesOf(pageMemo("archived", () => ids(M.archivedPages())));
 	const archivedPageRoots = () => pagesOf(pageMemo("archivedRoots", () => ids(M.archivedPageRoots())));
 	const activeCards = () => cardsOf(cardMemo("active", () => ids(M.activeCards())));
@@ -654,7 +655,7 @@ export const STATE = (() => {
 		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftMeta, heftPreview,
 		scheduleCheckpoint, checkpointNow: persistCheckpoint, loadedSeq: () => M.loadedSeq(), loadedTime: () => M.loadedTime(), cardRevision: () => _cardRev, pageRevision: () => _pageRev,
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
-		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, archivedPages, archivedPageRoots, activeCards,
+		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, favoritePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
 		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
 	};

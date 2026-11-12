@@ -637,6 +637,11 @@ impl ModelCore {
 
     // ---- Abfragen (Ergebnis: IDs) -----------------------------------------------------------------
 
+    #[wasm_bindgen(js_name = favoritePages)]
+    pub fn favorite_pages(&self) -> String {
+        ids_of(self.m.state().favorite_pages())
+    }
+
     #[wasm_bindgen(js_name = activePages)]
     pub fn active_pages(&self) -> String {
         ids_of(self.m.state().active_pages())

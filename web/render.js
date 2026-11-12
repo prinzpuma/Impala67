@@ -495,7 +495,7 @@ function renderSidebar() {
 		return;
 	}
 	// ★ Favoriten immer oben, dann Workspaces mit Seitenbaum
-	const favs = STATE.activePages().filter((p) => p.favorite);
+	const favs = STATE.favoritePages();
 	let html = sidebarTabsHtml() + (favs.length ? '<div class="ws-head"><span class="ws-name">★ Favoriten</span></div>' + favs.map((p) => rowHtml(p, 0, p.workspaceId)).join("") : "");
 	for (const ws of Object.values(S.workspaces)) {
 		html += wsHeadHtml(ws);
@@ -1012,7 +1012,7 @@ function renderHome(main) {
 	const dateLine = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 	const lzTotals = (LERNZEIT.totalsByDay && LERNZEIT.totalsByDay()) || null;
 	const lz = (LERNZEIT.statsForHome && (lzTotals ? LERNZEIT.statsForHome(lzTotals) : LERNZEIT.statsForHome())) || { goalPct: 0 };
-	const favPages = pages.filter((p) => p.favorite && !isConflictPage(p));
+	const favPages = STATE.favoritePages().filter((p) => !isConflictPage(p));
 	const homeName = ((S.settings || {}).homeUserName || "").trim();
 	const homeAnalysisHtml = () => { const la = lernanalyseParts(); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
 	// Eine Startseite für alle Geräte (home-view.js) — schmale Bildschirme über die Container-Query in home.css
