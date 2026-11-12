@@ -92,11 +92,11 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
-| 1. Shell & Navigation | 80 | 21 | 7 | 74 % |
+| 1. Shell & Navigation | 80 | 21 | 6 | 75 % |
 | 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
-| 3. Heft | 24 | 8 | 7 | 62 % |
+| 3. Heft | 24 | 7 | 4 | 69 % |
 | 4. KI-Chat & Karten/Lernen | 24 | 10 | 10 | 55 % |
-| 5. Einstellungen, Sync, Backup | 15 | 7 | 6 | 54 % |
+| 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
@@ -272,7 +272,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Aktionen: Neue Seite, Karten, Hell/Dunkel, Archiv, Papierkorb, Sync, Einstellungen, Gemini | ✅ | `ShellSheets.swift:122-141` |
 | Präfix „Archiv · “ | 🟡 | fehlt |
 | „In neuem Tab öffnen“ | ✅ | Kontextmenü an Suchtreffern (`ShellSheets.swift`); PWA: Palette des „+“-Tabs |
-| Daily-Notiz heute / Daily-Kalender | ❌ | fehlt |
+| Daily-Notiz heute / Daily-Kalender | ⚪ | nicht geplant (Nutzer, 12.11.) |
 
 ### 1.19 Bibliothek, PDF, Graph, Gemini Notebook
 | Punkt | Status | Fundstelle / Notiz |
@@ -396,7 +396,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Seitenzähler ‹ n / m › | ✅ | `HeftScreen.swift:263-275` |
-| KI-Knopf im Heft | 🟡 | nur als Kontext |
+| KI-Knopf im Heft | ⚪ | nicht geplant: KI-Knopf oben rechts reicht (Nutzer, 12.11.) |
 | „+“ Seite, Papier wählen/umstellen | ✅ | `HeftScreen.swift:189-199, 512-535` |
 | Position Davor/Danach/Am Ende | ✅ | Plus-Menü (`Heft/HeftScreen.swift` `addPage(at:)`) |
 | Bild/PDF importieren, Scannen | ✅ | `HeftScreen.swift:537-540` |
@@ -444,11 +444,11 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Import-Dialog mit Ziel und Position | 🟡 | direkter Dateiwähler |
 | PDF/Bilder als Heftseiten | ✅ | `Heft/HeftImport.swift` |
 | Export PDF/PNG mit Optionen | ✅ | `Heft/HeftExport.swift:298-433` |
-| Export „Alle Handschrift“ (JSON) | ❌ | fehlt |
+| Export „Alle Handschrift“ (JSON) | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Scanner | ⚪ | VisionKit |
 | Hintergrund-Erkennung für Suche/KI | 🟡 | Apple Vision statt ONNX |
-| Fortschritt „x % analysiert“ | ❌ | fehlt |
-| Abschreiben (Schreibübung) | ❌ | fehlt |
+| Fortschritt „x % analysiert“ | ⚪ | nicht geplant (Nutzer, 12.11.) |
+| Abschreiben (Schreibübung) | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Zwei Geräte gleichzeitig | ✅ | `HeftScreen.swift:92` |
 
 ---
@@ -547,7 +547,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | KI: Modell, Suche, manuelle ID, Quellen, Schnellvorlagen | ✅ | `Settings/SettingsAi.swift` |
 | KI: Modell-Favoriten, Gruppen, Status-Banner | 🟡 | Gruppen und Statuszeile da (`Settings/SettingsAi.swift:26-50`), Favoriten fehlen |
 | Semantische Suche | 🟡 | Status „Verwandte Seiten“ in `SettingsAi.swift`; Suche nach Bedeutung im Suchfeld fehlt noch |
-| Handschrift: Export, Abschreiben | ❌ | fehlt |
+| Handschrift: Export, Abschreiben | ⚪ | nicht geplant (Nutzer, 12.11.) |
 | Lernen und Experimente (bis auf Pre-Testing, Wissenslücken) | ✅ | `Settings/SettingsLearning.swift` |
 | Experimente Pre-Testing, Wissenslücken-Detektor | ❌ | fehlt |
 

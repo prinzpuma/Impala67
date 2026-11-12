@@ -53,6 +53,18 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 
 ## 2. Jetzt am nötigsten (Priorisierte nächste Schritte)
 
+### iPad-Wunschliste (Nutzer, 12.11.2026) – Ziel: Heft so gut wie GoodNotes
+- [ ] **Lasso wie GoodNotes**: Das jetzige Lasso reicht selbst für die Grundfunktionen nicht (Auswählen, Verschieben, Größe, Duplizieren, Ausschneiden/Kopieren, Löschen, Farbe).
+- [ ] **Text direkt auf der Seite** schreiben und bearbeiten (wie GoodNotes) statt im Sheet.
+- [ ] **Neue Seite durch Weiterziehen** am Heft-Ende.
+- [ ] **Laserpointer** im Heft.
+- [ ] **Cover für Notizen** (Farbe/Bild) – soll richtig gut aussehen.
+- [ ] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig).
+- [ ] **Aktivitäts-Heatmap** und **Kartenbrowser mit sortierbaren Spalten** (Intervall, Fehler).
+- [ ] **Alle Lernfunktionen standardmäßig aus** – überall in der App (PWA und iPad), einschaltbar in den Einstellungen.
+- Später: Lernanalyse (erst wenn das Design in der PWA passt), Heft-Vorschau in Notizen.
+- Nicht geplant: Anki-.apkg (TXT/CSV reicht), eigener KI-Knopf im Heft (KI-Knopf oben rechts reicht), Daily-Notizen, Abschreiben, „x % analysiert“, Export „Alle Handschrift“, Schulnoten.
+
 ### Priorität 1: Monolithen, CSS-Schichten & Modul-Grenzen aufräumen (KISS & DRY)
 - [x] **Beta-Namensreste & Heft-CSS-Überlagerung bereinigt**:
   - `web/heft-pages-beta.js` und `web/heft-toolbar-beta.js` in `web/heft-pages-ui.js` und `web/heft-toolbar-ui.js` überführt; die gesamte Toolbar-, Tray- und Popover-HTML-Erzeugung aus `web/heft.js` dorthin ausgelagert.
