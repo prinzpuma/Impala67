@@ -9,6 +9,7 @@ members = [
     "impala-ai",
     "impala-crypto",
     "impala-drive",
+    "impala-fach",
     "impala-ffi",
     "impala-heft",
     "impala-ink",

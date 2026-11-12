@@ -307,7 +307,10 @@ final class DevBridge {
                let first = core.heftPageIds(pageId: id).first {
                 _ = try core.heftAddText(pageId: id, heftPageId: first, text: text, x: 20, y: 50, w: nil, color: nil, size: nil)
             }
-            if args["subject"] != nil { out["note"] = "Fach wird auf dem iPad noch nicht gesetzt (fehlt im Kern)." }
+            if let subject = args["subject"]?.trimmingCharacters(in: .whitespaces), !subject.isEmpty {
+                try core.setPageSubject(id: id, subject: subject)
+                out["subject"] = core.pageSubject(id: id)?.name ?? subject
+            }
             return out
         } catch { return fail(error, "Anlegen") }
     }
@@ -343,14 +346,17 @@ final class DevBridge {
                     if content != nil { changed.append("content") }
                 }
             }
+            if let subject = args["subject"] {
+                let value = subject.trimmingCharacters(in: .whitespaces)
+                try core.setPageSubject(id: id, subject: value.isEmpty ? nil : value)
+                changed.append("subject")
+            }
             if let archived, archived != page.archived {
                 if archived { try core.archivePage(id: id) } else { try core.unarchivePage(id: id) }
                 changed.append(archived ? "archived" : "unarchived")
             }
         } catch { return fail(error, "Ändern") }
-        var out: [String: Any] = ["ok": true, "id": id, "changed": changed]
-        if args["subject"] != nil { out["note"] = "Fach wird auf dem iPad noch nicht gesetzt (fehlt im Kern)." }
-        return out
+        return ["ok": true, "id": id, "changed": changed]
     }
 
     nonisolated private static func createFlashcard(_ core: ImpalaCore, args: [String: String]) -> [String: Any] {

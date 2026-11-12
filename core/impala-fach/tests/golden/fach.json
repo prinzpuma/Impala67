@@ -1,0 +1,1749 @@
+{
+ "known": [
+  "Mathematik",
+  "Deutsch",
+  "Englisch",
+  "Physik",
+  "Chemie",
+  "Biologie",
+  "Geschichte",
+  "Geografie",
+  "Informatik",
+  "Wirtschaft",
+  "Kunst",
+  "Musik",
+  "Religion / Ethik",
+  "Französisch",
+  "Spanisch",
+  "Latein",
+  "Sport",
+  "Elektrotechnik",
+  "Maschinenbau",
+  "Politik"
+ ],
+ "resolve": [
+  [
+   "",
+   null
+  ],
+  [
+   "   ",
+   null
+  ],
+  [
+   "Mathe",
+   "Mathematik"
+  ],
+  [
+   "mathe",
+   "Mathematik"
+  ],
+  [
+   "MATHE",
+   "Mathematik"
+  ],
+  [
+   "Mathe 2",
+   "Mathematik"
+  ],
+  [
+   "Analysis I",
+   "Mathematik"
+  ],
+  [
+   "Info",
+   "Informatik"
+  ],
+  [
+   "ET",
+   "Elektrotechnik"
+  ],
+  [
+   "et",
+   "Elektrotechnik"
+  ],
+  [
+   "Informatik 1",
+   "Informatik"
+  ],
+  [
+   "Funktionen",
+   null
+  ],
+  [
+   "Lineare Algebra und Analysis",
+   "Mathematik"
+  ],
+  [
+   "Physik × Mathe",
+   null
+  ],
+  [
+   "ET × Mathe × Physik",
+   null
+  ],
+  [
+   "Infos",
+   null
+  ],
+  [
+   "Eine Art Bild",
+   null
+  ],
+  [
+   "Kunst und Art",
+   "Kunst"
+  ],
+  [
+   "Art",
+   "Kunst"
+  ],
+  [
+   "Genetik und Evolution",
+   "Biologie"
+  ],
+  [
+   "Python Programmierung",
+   "Informatik"
+  ],
+  [
+   "Weimarer Republik",
+   "Geschichte"
+  ],
+  [
+   "Zelle",
+   null
+  ],
+  [
+   "Bio-Klausur",
+   "Biologie"
+  ],
+  [
+   "mathe,mathe",
+   "Mathematik"
+  ],
+  [
+   "c++ Grundlagen",
+   "Informatik"
+  ],
+  [
+   "Englisch-Vokabeln",
+   "Englisch"
+  ],
+  [
+   "Französisch: Grammaire",
+   "Französisch"
+  ],
+  [
+   "Español",
+   "Spanisch"
+  ],
+  [
+   "Latein ACI",
+   "Latein"
+  ],
+  [
+   "Kirchhoff und Maschenstrom",
+   "Elektrotechnik"
+  ],
+  [
+   "Biegemoment am Balken",
+   "Maschinenbau"
+  ],
+  [
+   "Sozialkunde Grundgesetz",
+   "Politik"
+  ],
+  [
+   "Semester 3",
+   null
+  ],
+  [
+   "Übersicht",
+   null
+  ],
+  [
+   "Stundenplan WS",
+   null
+  ],
+  [
+   "Physik\u0000Test",
+   "Physik"
+  ],
+  [
+   "Physik Test",
+   "Physik"
+  ],
+  [
+   " Chemie ",
+   "Chemie"
+  ],
+  [
+   "İnformatik",
+   null
+  ],
+  [
+   "ẞ",
+   null
+  ],
+  [
+   "MatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMatheMathe",
+   null
+  ],
+  [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxMathe",
+   null
+  ],
+  [
+   "Thermodynamik und Optik",
+   "Physik"
+  ],
+  [
+   "Stochastik Stochastik Genetik",
+   "Mathematik"
+  ],
+  [
+   "Algebra Genetik",
+   null
+  ],
+  [
+   "Mathematik",
+   "Mathematik"
+  ],
+  [
+   "MATHEMATIK",
+   "Mathematik"
+  ],
+  [
+   "mathematik",
+   "Mathematik"
+  ],
+  [
+   "mathe",
+   "Mathematik"
+  ],
+  [
+   "math",
+   "Mathematik"
+  ],
+  [
+   "algebra",
+   "Mathematik"
+  ],
+  [
+   "geometrie",
+   "Mathematik"
+  ],
+  [
+   "geometry",
+   "Mathematik"
+  ],
+  [
+   "analysis",
+   "Mathematik"
+  ],
+  [
+   "algebra und geometrie",
+   "Mathematik"
+  ],
+  [
+   "mathematik literatur",
+   "Mathematik"
+  ],
+  [
+   "Deutsch",
+   "Deutsch"
+  ],
+  [
+   "DEUTSCH",
+   "Deutsch"
+  ],
+  [
+   "deutsch",
+   "Deutsch"
+  ],
+  [
+   "german",
+   "Deutsch"
+  ],
+  [
+   "literatur",
+   "Deutsch"
+  ],
+  [
+   "literaturgeschichte",
+   "Deutsch"
+  ],
+  [
+   "grammatik",
+   "Deutsch"
+  ],
+  [
+   "erörterung",
+   "Deutsch"
+  ],
+  [
+   "literatur und literaturgeschichte",
+   "Deutsch"
+  ],
+  [
+   "deutsch vocab",
+   "Deutsch"
+  ],
+  [
+   "Englisch",
+   "Englisch"
+  ],
+  [
+   "ENGLISCH",
+   "Englisch"
+  ],
+  [
+   "englisch",
+   "Englisch"
+  ],
+  [
+   "english",
+   "Englisch"
+  ],
+  [
+   "vocab",
+   "Englisch"
+  ],
+  [
+   "vocabulary",
+   "Englisch"
+  ],
+  [
+   "grammar",
+   "Englisch"
+  ],
+  [
+   "reading comprehension",
+   "Englisch"
+  ],
+  [
+   "vocab und vocabulary",
+   "Englisch"
+  ],
+  [
+   "englisch mechanik",
+   "Englisch"
+  ],
+  [
+   "Physik",
+   "Physik"
+  ],
+  [
+   "PHYSIK",
+   "Physik"
+  ],
+  [
+   "physik",
+   "Physik"
+  ],
+  [
+   "physics",
+   "Physik"
+  ],
+  [
+   "experimentalphysik",
+   "Physik"
+  ],
+  [
+   "mechanik",
+   "Physik"
+  ],
+  [
+   "optik",
+   "Physik"
+  ],
+  [
+   "optics",
+   "Physik"
+  ],
+  [
+   "elektrizitätslehre",
+   "Physik"
+  ],
+  [
+   "mechanik und optik",
+   "Physik"
+  ],
+  [
+   "physik anorganik",
+   "Physik"
+  ],
+  [
+   "Chemie",
+   "Chemie"
+  ],
+  [
+   "CHEMIE",
+   "Chemie"
+  ],
+  [
+   "chemie",
+   "Chemie"
+  ],
+  [
+   "chemistry",
+   "Chemie"
+  ],
+  [
+   "anorganik",
+   "Chemie"
+  ],
+  [
+   "organik",
+   "Chemie"
+  ],
+  [
+   "anorganische chemie",
+   "Chemie"
+  ],
+  [
+   "organische chemie",
+   "Chemie"
+  ],
+  [
+   "anorganik und organik",
+   "Chemie"
+  ],
+  [
+   "chemie genetik",
+   "Chemie"
+  ],
+  [
+   "Biologie",
+   "Biologie"
+  ],
+  [
+   "BIOLOGIE",
+   "Biologie"
+  ],
+  [
+   "biologie",
+   "Biologie"
+  ],
+  [
+   "bio",
+   "Biologie"
+  ],
+  [
+   "biology",
+   "Biologie"
+  ],
+  [
+   "genetik",
+   "Biologie"
+  ],
+  [
+   "ökologie",
+   "Biologie"
+  ],
+  [
+   "oekologie",
+   "Biologie"
+  ],
+  [
+   "zellbiologie",
+   "Biologie"
+  ],
+  [
+   "genetik und ökologie",
+   "Biologie"
+  ],
+  [
+   "biologie weimarer republik",
+   "Biologie"
+  ],
+  [
+   "Geschichte",
+   "Geschichte"
+  ],
+  [
+   "GESCHICHTE",
+   "Geschichte"
+  ],
+  [
+   "geschichte",
+   "Geschichte"
+  ],
+  [
+   "history",
+   "Geschichte"
+  ],
+  [
+   "historie",
+   "Geschichte"
+  ],
+  [
+   "weimarer republik",
+   "Geschichte"
+  ],
+  [
+   "mittelalter",
+   "Geschichte"
+  ],
+  [
+   "antike",
+   "Geschichte"
+  ],
+  [
+   "weltkriege",
+   "Geschichte"
+  ],
+  [
+   "weimarer republik und mittelalter",
+   "Geschichte"
+  ],
+  [
+   "geschichte klimazonen",
+   "Geschichte"
+  ],
+  [
+   "Geografie",
+   "Geografie"
+  ],
+  [
+   "GEOGRAFIE",
+   "Geografie"
+  ],
+  [
+   "geografie",
+   "Geografie"
+  ],
+  [
+   "geographie",
+   "Geografie"
+  ],
+  [
+   "erdkunde",
+   "Geografie"
+  ],
+  [
+   "klimazonen",
+   "Geografie"
+  ],
+  [
+   "klimazone",
+   "Geografie"
+  ],
+  [
+   "plattentektonik",
+   "Geografie"
+  ],
+  [
+   "vulkanismus",
+   "Geografie"
+  ],
+  [
+   "klimazonen und klimazone",
+   "Geografie"
+  ],
+  [
+   "geografie programmierung",
+   "Geografie"
+  ],
+  [
+   "Informatik",
+   "Informatik"
+  ],
+  [
+   "INFORMATIK",
+   "Informatik"
+  ],
+  [
+   "informatik",
+   "Informatik"
+  ],
+  [
+   "computer science",
+   "Informatik"
+  ],
+  [
+   "computer-science",
+   "Informatik"
+  ],
+  [
+   "programmierung",
+   "Informatik"
+  ],
+  [
+   "programmieren",
+   "Informatik"
+  ],
+  [
+   "python",
+   "Informatik"
+  ],
+  [
+   "javascript",
+   "Informatik"
+  ],
+  [
+   "programmierung und programmieren",
+   "Informatik"
+  ],
+  [
+   "informatik finanzen",
+   "Informatik"
+  ],
+  [
+   "Wirtschaft",
+   "Wirtschaft"
+  ],
+  [
+   "WIRTSCHAFT",
+   "Wirtschaft"
+  ],
+  [
+   "wirtschaft",
+   "Wirtschaft"
+  ],
+  [
+   "wirtschaft & recht",
+   "Wirtschaft"
+  ],
+  [
+   "wirtschaft und recht",
+   "Wirtschaft"
+  ],
+  [
+   "finanzen",
+   "Wirtschaft"
+  ],
+  [
+   "volkswirtschaft",
+   "Wirtschaft"
+  ],
+  [
+   "betriebswirtschaft",
+   "Wirtschaft"
+  ],
+  [
+   "volkswirtschaftslehre",
+   "Wirtschaft"
+  ],
+  [
+   "finanzen und volkswirtschaft",
+   "Wirtschaft"
+  ],
+  [
+   "wirtschaft malerei",
+   "Wirtschaft"
+  ],
+  [
+   "Kunst",
+   "Kunst"
+  ],
+  [
+   "KUNST",
+   "Kunst"
+  ],
+  [
+   "kunst",
+   "Kunst"
+  ],
+  [
+   "art",
+   "Kunst"
+  ],
+  [
+   "bildende kunst",
+   "Kunst"
+  ],
+  [
+   "malerei",
+   "Kunst"
+  ],
+  [
+   "malen",
+   "Kunst"
+  ],
+  [
+   "kunstgeschichte",
+   "Kunst"
+  ],
+  [
+   "skulptur",
+   "Kunst"
+  ],
+  [
+   "malerei und malen",
+   "Kunst"
+  ],
+  [
+   "kunst musiktheorie",
+   "Kunst"
+  ],
+  [
+   "Musik",
+   "Musik"
+  ],
+  [
+   "MUSIK",
+   "Musik"
+  ],
+  [
+   "musik",
+   "Musik"
+  ],
+  [
+   "music",
+   "Musik"
+  ],
+  [
+   "musiktheorie",
+   "Musik"
+  ],
+  [
+   "notenlehre",
+   "Musik"
+  ],
+  [
+   "harmonielehre",
+   "Musik"
+  ],
+  [
+   "instrumentenkunde",
+   "Musik"
+  ],
+  [
+   "musiktheorie und notenlehre",
+   "Musik"
+  ],
+  [
+   "musik evangelisch",
+   "Musik"
+  ],
+  [
+   "Religion / Ethik",
+   "Religion / Ethik"
+  ],
+  [
+   "RELIGION / ETHIK",
+   "Religion / Ethik"
+  ],
+  [
+   "religion / ethik",
+   "Religion / Ethik"
+  ],
+  [
+   "religion/ethik",
+   "Religion / Ethik"
+  ],
+  [
+   "religion",
+   "Religion / Ethik"
+  ],
+  [
+   "evangelisch",
+   "Religion / Ethik"
+  ],
+  [
+   "katholisch",
+   "Religion / Ethik"
+  ],
+  [
+   "theologie",
+   "Religion / Ethik"
+  ],
+  [
+   "moral",
+   "Religion / Ethik"
+  ],
+  [
+   "evangelisch und katholisch",
+   "Religion / Ethik"
+  ],
+  [
+   "religion / ethik vocabulaire",
+   "Religion / Ethik"
+  ],
+  [
+   "Französisch",
+   "Französisch"
+  ],
+  [
+   "FRANZÖSISCH",
+   "Französisch"
+  ],
+  [
+   "französisch",
+   "Französisch"
+  ],
+  [
+   "franzoesisch",
+   "Französisch"
+  ],
+  [
+   "français",
+   "Französisch"
+  ],
+  [
+   "vocabulaire",
+   "Französisch"
+  ],
+  [
+   "grammaire",
+   "Französisch"
+  ],
+  [
+   "passé composé",
+   "Französisch"
+  ],
+  [
+   "imparfait",
+   "Französisch"
+  ],
+  [
+   "vocabulaire und grammaire",
+   "Französisch"
+  ],
+  [
+   "französisch vocabulario",
+   "Französisch"
+  ],
+  [
+   "Spanisch",
+   "Spanisch"
+  ],
+  [
+   "SPANISCH",
+   "Spanisch"
+  ],
+  [
+   "spanisch",
+   "Spanisch"
+  ],
+  [
+   "español",
+   "Spanisch"
+  ],
+  [
+   "espanol",
+   "Spanisch"
+  ],
+  [
+   "vocabulario",
+   "Spanisch"
+  ],
+  [
+   "gramática",
+   "Spanisch"
+  ],
+  [
+   "gramatica",
+   "Spanisch"
+  ],
+  [
+   "subjuntivo",
+   "Spanisch"
+  ],
+  [
+   "vocabulario und gramática",
+   "Spanisch"
+  ],
+  [
+   "spanisch grammatica",
+   "Spanisch"
+  ],
+  [
+   "Latein",
+   "Latein"
+  ],
+  [
+   "LATEIN",
+   "Latein"
+  ],
+  [
+   "latein",
+   "Latein"
+  ],
+  [
+   "lingua latina",
+   "Latein"
+  ],
+  [
+   "latin",
+   "Latein"
+  ],
+  [
+   "grammatica",
+   "Latein"
+  ],
+  [
+   "deklination",
+   "Latein"
+  ],
+  [
+   "konjugation",
+   "Latein"
+  ],
+  [
+   "vokabeln latein",
+   "Latein"
+  ],
+  [
+   "grammatica und deklination",
+   "Latein"
+  ],
+  [
+   "latein sporttheorie",
+   "Latein"
+  ],
+  [
+   "Sport",
+   "Sport"
+  ],
+  [
+   "SPORT",
+   "Sport"
+  ],
+  [
+   "sport",
+   "Sport"
+  ],
+  [
+   "sporttheorie",
+   "Sport"
+  ],
+  [
+   "trainingslehre",
+   "Sport"
+  ],
+  [
+   "bewegungslehre",
+   "Sport"
+  ],
+  [
+   "leichtathletik",
+   "Sport"
+  ],
+  [
+   "sporttheorie und trainingslehre",
+   "Sport"
+  ],
+  [
+   "sport netzwerkanalyse",
+   "Sport"
+  ],
+  [
+   "Elektrotechnik",
+   "Elektrotechnik"
+  ],
+  [
+   "ELEKTROTECHNIK",
+   "Elektrotechnik"
+  ],
+  [
+   "elektrotechnik",
+   "Elektrotechnik"
+  ],
+  [
+   "e-technik",
+   "Elektrotechnik"
+  ],
+  [
+   "etechnik",
+   "Elektrotechnik"
+  ],
+  [
+   "netzwerkanalyse",
+   "Elektrotechnik"
+  ],
+  [
+   "zweipole",
+   "Elektrotechnik"
+  ],
+  [
+   "zweipol",
+   "Elektrotechnik"
+  ],
+  [
+   "wechselstrom",
+   "Elektrotechnik"
+  ],
+  [
+   "netzwerkanalyse und zweipole",
+   "Elektrotechnik"
+  ],
+  [
+   "elektrotechnik statik",
+   "Elektrotechnik"
+  ],
+  [
+   "Maschinenbau",
+   "Maschinenbau"
+  ],
+  [
+   "MASCHINENBAU",
+   "Maschinenbau"
+  ],
+  [
+   "maschinenbau",
+   "Maschinenbau"
+  ],
+  [
+   "technische mechanik",
+   "Maschinenbau"
+  ],
+  [
+   "kontinuumsmechanik",
+   "Maschinenbau"
+  ],
+  [
+   "statik",
+   "Maschinenbau"
+  ],
+  [
+   "balken",
+   "Maschinenbau"
+  ],
+  [
+   "biegemoment",
+   "Maschinenbau"
+  ],
+  [
+   "biegemomente",
+   "Maschinenbau"
+  ],
+  [
+   "statik und balken",
+   "Maschinenbau"
+  ],
+  [
+   "maschinenbau demokratie",
+   "Maschinenbau"
+  ],
+  [
+   "Politik",
+   "Politik"
+  ],
+  [
+   "POLITIK",
+   "Politik"
+  ],
+  [
+   "politik",
+   "Politik"
+  ],
+  [
+   "sozialkunde",
+   "Politik"
+  ],
+  [
+   "gemeinschaftskunde",
+   "Politik"
+  ],
+  [
+   "demokratie",
+   "Politik"
+  ],
+  [
+   "bundestag",
+   "Politik"
+  ],
+  [
+   "bundesrat",
+   "Politik"
+  ],
+  [
+   "grundgesetz",
+   "Politik"
+  ],
+  [
+   "demokratie und bundestag",
+   "Politik"
+  ],
+  [
+   "politik algebra",
+   "Politik"
+  ]
+ ],
+ "clean": [
+  [
+   "",
+   "Sonstiges"
+  ],
+  [
+   "Mathe",
+   "Mathematik"
+  ],
+  [
+   "Übersicht",
+   "Übersicht"
+  ],
+  [
+   "uebersicht",
+   "Übersicht"
+  ],
+  [
+   "Sonstiges",
+   "Sonstiges"
+  ],
+  [
+   "allgemein",
+   "Sonstiges"
+  ],
+  [
+   "Allgemein",
+   "Sonstiges"
+  ],
+  [
+   "Quatsch",
+   "Sonstiges"
+  ],
+  [
+   "  physik ",
+   "Physik"
+  ],
+  [
+   "Info",
+   "Informatik"
+  ]
+ ],
+ "decks": [
+  [
+   "",
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ],
+  [
+   "Standard",
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ],
+  [
+   "Mathematik::Analysis",
+   {
+    "name": "Mathematik",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Uni::Mathe",
+   {
+    "name": "Mathematik",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Vokabeln::Latein",
+   {
+    "name": "Latein",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Biologie",
+   {
+    "name": "Biologie",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Genetik",
+   {
+    "name": "Biologie",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "A::B",
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ],
+  [
+   "  ::Physik",
+   {
+    "name": "Physik",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Info::Netze",
+   {
+    "name": "Informatik",
+    "source": "deck-root"
+   }
+  ],
+  [
+   "Englisch Vocab",
+   {
+    "name": "Englisch",
+    "source": "deck-root"
+   }
+  ]
+ ],
+ "pages": [
+  {
+   "id": "ws-root",
+   "title": "Notizen",
+   "content": "",
+   "updated": "2026-01-01T00:00:00Z",
+   "workspaceId": "w2"
+  },
+  {
+   "id": "manual",
+   "title": "Irgendwas",
+   "content": "",
+   "updated": "2026-01-01T00:00:01Z",
+   "workspaceId": "default",
+   "subject": "Physik"
+  },
+  {
+   "id": "manual-child",
+   "title": "Funktionen",
+   "content": "",
+   "updated": "2026-01-01T00:00:02Z",
+   "workspaceId": "default",
+   "parentId": "manual"
+  },
+  {
+   "id": "manual-grandchild",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:03Z",
+   "workspaceId": "default",
+   "parentId": "manual-child"
+  },
+  {
+   "id": "tag",
+   "title": "Kapitel",
+   "content": "",
+   "updated": "2026-01-01T00:00:04Z",
+   "workspaceId": "default",
+   "tags": [
+    "fach: Chemie"
+   ]
+  },
+  {
+   "id": "tag2",
+   "title": "Kapitel",
+   "content": "",
+   "updated": "2026-01-01T00:00:05Z",
+   "workspaceId": "default",
+   "tags": [
+    "wichtig",
+    "Biologie"
+   ]
+  },
+  {
+   "id": "tag3",
+   "title": "Kapitel",
+   "content": "",
+   "updated": "2026-01-01T00:00:06Z",
+   "workspaceId": "default",
+   "tags": [
+    "Subject :  "
+   ]
+  },
+  {
+   "id": "tag-num",
+   "title": "Kapitel",
+   "content": "",
+   "updated": "2026-01-01T00:00:07Z",
+   "workspaceId": "default",
+   "tags": [
+    5,
+    "fachbereich: Musik"
+   ]
+  },
+  {
+   "id": "overview-field",
+   "title": "Alles",
+   "content": "",
+   "updated": "2026-01-01T00:00:08Z",
+   "workspaceId": "default",
+   "subject": "Übersicht"
+  },
+  {
+   "id": "overview-child",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:09Z",
+   "workspaceId": "default",
+   "parentId": "overview-field"
+  },
+  {
+   "id": "overview-child2",
+   "title": "Notiz",
+   "content": "",
+   "updated": "2026-01-01T00:00:10Z",
+   "workspaceId": "default",
+   "parentId": "overview-field"
+  },
+  {
+   "id": "root",
+   "title": "Informatik 1",
+   "content": "",
+   "updated": "2026-01-01T00:00:11Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "root-child",
+   "title": "Funktionen",
+   "content": "",
+   "updated": "2026-01-01T00:00:12Z",
+   "workspaceId": "default",
+   "parentId": "root"
+  },
+  {
+   "id": "sem",
+   "title": "Semester 3",
+   "content": "",
+   "updated": "2026-01-01T00:00:13Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "sem-a",
+   "title": "Mathe",
+   "content": "",
+   "updated": "2026-01-01T00:00:14Z",
+   "workspaceId": "default",
+   "parentId": "sem"
+  },
+  {
+   "id": "sem-b",
+   "title": "Physik",
+   "content": "",
+   "updated": "2026-01-01T00:00:15Z",
+   "workspaceId": "default",
+   "parentId": "sem"
+  },
+  {
+   "id": "sem-c",
+   "title": "Chemie",
+   "content": "",
+   "updated": "2026-01-01T00:00:16Z",
+   "workspaceId": "default",
+   "parentId": "sem"
+  },
+  {
+   "id": "vote",
+   "title": "Ordner",
+   "content": "",
+   "updated": "2026-01-01T00:00:17Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "vote-a",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:18Z",
+   "workspaceId": "default",
+   "parentId": "vote"
+  },
+  {
+   "id": "vote-b",
+   "title": "Zelle",
+   "content": "",
+   "updated": "2026-01-01T00:00:19Z",
+   "workspaceId": "default",
+   "parentId": "vote"
+  },
+  {
+   "id": "vote-c",
+   "title": "Notiz",
+   "content": "Fotosynthese und Stoffwechsel der Zelle, Genetik und Evolution",
+   "updated": "2026-01-01T00:00:20Z",
+   "workspaceId": "default",
+   "parentId": "vote"
+  },
+  {
+   "id": "vote-d",
+   "title": "Gelöscht",
+   "content": "",
+   "updated": "2026-01-01T00:00:21Z",
+   "workspaceId": "default",
+   "parentId": "vote",
+   "trashed": true,
+   "subject": "Mathe"
+  },
+  {
+   "id": "mixed",
+   "title": "Ordner",
+   "content": "",
+   "updated": "2026-01-01T00:00:22Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "mixed-a",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:23Z",
+   "workspaceId": "default",
+   "parentId": "mixed"
+  },
+  {
+   "id": "mixed-b",
+   "title": "Algebra",
+   "content": "",
+   "updated": "2026-01-01T00:00:24Z",
+   "workspaceId": "default",
+   "parentId": "mixed"
+  },
+  {
+   "id": "mixed-c",
+   "title": "Stochastik",
+   "content": "",
+   "updated": "2026-01-01T00:00:25Z",
+   "workspaceId": "default",
+   "parentId": "mixed"
+  },
+  {
+   "id": "text",
+   "title": "Notiz",
+   "content": "Heute: Ableitung, Integral und Kurvendiskussion. Dann Nullstellen der Funktion.",
+   "updated": "2026-01-01T00:00:26Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "text-weak",
+   "title": "Notiz",
+   "content": "Eine Ableitung.",
+   "updated": "2026-01-01T00:00:27Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "text-long",
+   "title": "Notiz",
+   "content": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x Genetik Genetik Genetik Genetik",
+   "updated": "2026-01-01T00:00:28Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "ws",
+   "title": "Notiz",
+   "content": "",
+   "updated": "2026-01-01T00:00:29Z",
+   "workspaceId": "w-mathe"
+  },
+  {
+   "id": "nothing",
+   "title": "Notiz",
+   "content": "",
+   "updated": "2026-01-01T00:00:30Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "cycle-a",
+   "title": "A",
+   "content": "",
+   "updated": "2026-01-01T00:00:31Z",
+   "workspaceId": "default",
+   "parentId": "cycle-b"
+  },
+  {
+   "id": "cycle-b",
+   "title": "B",
+   "content": "",
+   "updated": "2026-01-01T00:00:32Z",
+   "workspaceId": "default",
+   "parentId": "cycle-a"
+  },
+  {
+   "id": "orphan",
+   "title": "Notiz",
+   "content": "",
+   "updated": "2026-01-01T00:00:33Z",
+   "workspaceId": "default",
+   "parentId": "fehlt"
+  },
+  {
+   "id": "several",
+   "title": "ET × Mathe × Physik",
+   "content": "",
+   "updated": "2026-01-01T00:00:34Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "explicit-unknown",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:35Z",
+   "workspaceId": "default",
+   "subject": "Quatsch"
+  },
+  {
+   "id": "explicit-sonst",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:36Z",
+   "workspaceId": "default",
+   "subject": "Sonstiges"
+  },
+  {
+   "id": "intrinsic",
+   "title": "Ordner",
+   "content": "",
+   "updated": "2026-01-01T00:00:37Z",
+   "workspaceId": "default"
+  },
+  {
+   "id": "intrinsic-a",
+   "title": "x",
+   "content": "",
+   "updated": "2026-01-01T00:00:38Z",
+   "workspaceId": "default",
+   "parentId": "intrinsic",
+   "subject": "Sonstiges"
+  },
+  {
+   "id": "intrinsic-b",
+   "title": "Genetik",
+   "content": "",
+   "updated": "2026-01-01T00:00:39Z",
+   "workspaceId": "default",
+   "parentId": "intrinsic"
+  },
+  {
+   "id": "intrinsic-c",
+   "title": "Zelle",
+   "content": "",
+   "updated": "2026-01-01T00:00:40Z",
+   "workspaceId": "default",
+   "parentId": "intrinsic"
+  }
+ ],
+ "workspaces": {
+  "default": {
+   "id": "default",
+   "name": "Allgemein"
+  },
+  "w2": {
+   "id": "w2",
+   "name": "Uni"
+  },
+  "w-mathe": {
+   "id": "w-mathe",
+   "name": "Mathe"
+  }
+ },
+ "results": {
+  "ws-root": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "manual": {
+   "name": "Physik",
+   "source": "manual"
+  },
+  "manual-child": {
+   "name": "Physik",
+   "source": "inherited"
+  },
+  "manual-grandchild": {
+   "name": "Physik",
+   "source": "inherited"
+  },
+  "tag": {
+   "name": "Chemie",
+   "source": "manual"
+  },
+  "tag2": {
+   "name": "Biologie",
+   "source": "manual"
+  },
+  "tag3": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "tag-num": {
+   "name": "Musik",
+   "source": "manual"
+  },
+  "overview-field": {
+   "name": "Übersicht",
+   "source": "manual"
+  },
+  "overview-child": {
+   "name": "Biologie",
+   "source": "title"
+  },
+  "overview-child2": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "root": {
+   "name": "Informatik",
+   "source": "title"
+  },
+  "root-child": {
+   "name": "Informatik",
+   "source": "page-root"
+  },
+  "sem": {
+   "name": "Übersicht",
+   "source": "overview"
+  },
+  "sem-a": {
+   "name": "Mathematik",
+   "source": "title"
+  },
+  "sem-b": {
+   "name": "Physik",
+   "source": "title"
+  },
+  "sem-c": {
+   "name": "Chemie",
+   "source": "title"
+  },
+  "vote": {
+   "name": "Biologie",
+   "source": "children"
+  },
+  "vote-a": {
+   "name": "Biologie",
+   "source": "title"
+  },
+  "vote-b": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "vote-c": {
+   "name": "Biologie",
+   "source": "content"
+  },
+  "vote-d": {
+   "name": "Mathematik",
+   "source": "manual"
+  },
+  "mixed": {
+   "name": "Mathematik",
+   "source": "children"
+  },
+  "mixed-a": {
+   "name": "Biologie",
+   "source": "title"
+  },
+  "mixed-b": {
+   "name": "Mathematik",
+   "source": "title"
+  },
+  "mixed-c": {
+   "name": "Mathematik",
+   "source": "title"
+  },
+  "text": {
+   "name": "Mathematik",
+   "source": "content"
+  },
+  "text-weak": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "text-long": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "ws": {
+   "name": "Mathematik",
+   "source": "workspace"
+  },
+  "nothing": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "cycle-a": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "cycle-b": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "orphan": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "several": {
+   "name": "Übersicht",
+   "source": "overview"
+  },
+  "explicit-unknown": {
+   "name": "Biologie",
+   "source": "title"
+  },
+  "explicit-sonst": {
+   "name": "Sonstiges",
+   "source": "manual"
+  },
+  "intrinsic": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  },
+  "intrinsic-a": {
+   "name": "Sonstiges",
+   "source": "manual"
+  },
+  "intrinsic-b": {
+   "name": "Biologie",
+   "source": "title"
+  },
+  "intrinsic-c": {
+   "name": "Sonstiges",
+   "source": "fallback"
+  }
+ },
+ "cards": [
+  [
+   {
+    "deck": "Mathematik::Analysis",
+    "pageId": "sem-b"
+   },
+   {
+    "name": "Mathematik",
+    "source": "deck-root"
+   }
+  ],
+  [
+   {
+    "deck": "Standard",
+    "pageId": "sem-b"
+   },
+   {
+    "name": "Physik",
+    "source": "title"
+   }
+  ],
+  [
+   {
+    "deck": "Standard",
+    "pageId": "nothing"
+   },
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ],
+  [
+   {
+    "deck": "Standard",
+    "pageId": "fehlt"
+   },
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ],
+  [
+   {
+    "deck": "Standard"
+   },
+   {
+    "name": "Sonstiges",
+    "source": "fallback"
+   }
+  ]
+ ]
+}

@@ -3703,6 +3703,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func pageProps(id: String)  -> [String: String]
     
     /**
+     * Fach einer Seite samt festgelegtem Wert und automatischer Erkennung; `None` = unbekannte Seite.
+     */
+    func pageSubject(id: String)  -> PageSubject?
+    
+    /**
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
     func pageSubtree(id: String)  -> [String]
@@ -3836,6 +3841,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Einen Zellwert setzen; die übrigen Eigenschaften bleiben (app.js, `.db-cell`).
      */
     func setPageProp(id: String, name: String, value: String) throws 
+    
+    /**
+     * Fach festlegen (gilt auch für Unterseiten) oder mit `None` zurück auf automatisch.
+     * Gleicher Wert wie bisher: kein Event.
+     */
+    func setPageSubject(id: String, subject: String?) throws 
     
     /**
      * Einen Eintrag auf- oder zuklappen (`COLLAPSE.toggle` in der PWA).
@@ -5376,6 +5387,17 @@ open func pageProps(id: String) -> [String: String]  {
 }
     
     /**
+     * Fach einer Seite samt festgelegtem Wert und automatischer Erkennung; `None` = unbekannte Seite.
+     */
+open func pageSubject(id: String) -> PageSubject?  {
+    return try!  FfiConverterOptionTypePageSubject.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_page_subject(self.uniffiClonePointer(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
 open func pageSubtree(id: String) -> [String]  {
@@ -5652,6 +5674,18 @@ open func setPageProp(id: String, name: String, value: String)throws   {try rust
         FfiConverterString.lower(id),
         FfiConverterString.lower(name),
         FfiConverterString.lower(value),$0
+    )
+}
+}
+    
+    /**
+     * Fach festlegen (gilt auch für Unterseiten) oder mit `None` zurück auf automatisch.
+     * Gleicher Wert wie bisher: kein Event.
+     */
+open func setPageSubject(id: String, subject: String?)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_set_page_subject(self.uniffiClonePointer(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(subject),$0
     )
 }
 }
@@ -12991,6 +13025,119 @@ public func FfiConverterTypePageLink_lower(_ value: PageLink) -> RustBuffer {
 
 
 /**
+ * Fach einer Seite für Menü und Dialog.
+ */
+public struct PageSubject {
+    /**
+     * Wirksames Fach (festgelegt, geerbt oder erkannt).
+     */
+    public var name: String
+    /**
+     * Herkunft wie in der PWA (`manual`, `inherited`, `title`, `children`, `fallback` …).
+     */
+    public var source: String
+    /**
+     * Festgelegter Wert der Seite selbst in Anzeigeform (`FACH.clean`); `None` = automatisch.
+     */
+    public var chosen: String?
+    /**
+     * Was die Erkennung ohne festgelegten Wert ergäbe („Automatisch (erkannt: …)“).
+     */
+    public var automatic: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Wirksames Fach (festgelegt, geerbt oder erkannt).
+         */name: String, 
+        /**
+         * Herkunft wie in der PWA (`manual`, `inherited`, `title`, `children`, `fallback` …).
+         */source: String, 
+        /**
+         * Festgelegter Wert der Seite selbst in Anzeigeform (`FACH.clean`); `None` = automatisch.
+         */chosen: String?, 
+        /**
+         * Was die Erkennung ohne festgelegten Wert ergäbe („Automatisch (erkannt: …)“).
+         */automatic: String) {
+        self.name = name
+        self.source = source
+        self.chosen = chosen
+        self.automatic = automatic
+    }
+}
+
+#if compiler(>=6)
+extension PageSubject: Sendable {}
+#endif
+
+
+extension PageSubject: Equatable, Hashable {
+    public static func ==(lhs: PageSubject, rhs: PageSubject) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.source != rhs.source {
+            return false
+        }
+        if lhs.chosen != rhs.chosen {
+            return false
+        }
+        if lhs.automatic != rhs.automatic {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(source)
+        hasher.combine(chosen)
+        hasher.combine(automatic)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePageSubject: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PageSubject {
+        return
+            try PageSubject(
+                name: FfiConverterString.read(from: &buf), 
+                source: FfiConverterString.read(from: &buf), 
+                chosen: FfiConverterOptionString.read(from: &buf), 
+                automatic: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PageSubject, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.source, into: &buf)
+        FfiConverterOptionString.write(value.chosen, into: &buf)
+        FfiConverterString.write(value.automatic, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePageSubject_lift(_ buf: RustBuffer) throws -> PageSubject {
+    return try FfiConverterTypePageSubject.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePageSubject_lower(_ value: PageSubject) -> RustBuffer {
+    return FfiConverterTypePageSubject.lower(value)
+}
+
+
+/**
  * Seite ohne Inhalt: Listen, Seitenbaum, Brotkrumen.
  */
 public struct PageSummary {
@@ -18471,6 +18618,30 @@ fileprivate struct FfiConverterOptionTypePageDetail: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypePageSubject: FfiConverterRustBuffer {
+    typealias SwiftType = PageSubject?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePageSubject.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePageSubject.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypePageSummary: FfiConverterRustBuffer {
     typealias SwiftType = PageSummary?
 
@@ -19753,6 +19924,15 @@ public func coreLongLockHolds() -> [CoreLockHold]  {
 })
 }
 /**
+ * „Sonstiges“ für die Auswahl.
+ */
+public func defaultSubject() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_default_subject($0
+    )
+})
+}
+/**
  * Lädt das lokale Modell von Hugging Face nach `model_dir` (blockierend, Hintergrund-Thread).
  * Vorhandene Dateien bleiben; halbe Downloads (`*.part`) werden verworfen.
  */
@@ -20096,6 +20276,15 @@ public func heftSnapshotFirstPage(snapshot: String) -> HeftPageData?  {
 })
 }
 /**
+ * Die echten Fächer der Auswahl (ohne „Übersicht“ und „Sonstiges“).
+ */
+public func knownSubjects() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_known_subjects($0
+    )
+})
+}
+/**
  * Stand des lokalen Modells im Verzeichnis `model_dir`.
  */
 public func localEmbeddingModel(modelDir: String) -> LocalEmbeddingModel  {
@@ -20166,6 +20355,15 @@ public func mergeTexts(base: String, mine: String, theirs: String) -> String?  {
         FfiConverterString.lower(base),
         FfiConverterString.lower(mine),
         FfiConverterString.lower(theirs),$0
+    )
+})
+}
+/**
+ * „Übersicht“ (Sammelseite) für die Auswahl.
+ */
+public func overviewSubject() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_overview_subject($0
     )
 })
 }
@@ -20251,6 +20449,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_default_subject() != 39744) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_download_local_embedding_model() != 22098) {
@@ -20343,6 +20544,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_heft_snapshot_first_page() != 65107) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_known_subjects() != 19235) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20362,6 +20566,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_merge_texts() != 21845) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_overview_subject() != 28504) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_scan_detect() != 8517) {
@@ -20853,6 +21060,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_page_subject() != 38412) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20926,6 +21136,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_set_page_prop() != 15143) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_set_page_subject() != 6581) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_set_tree_open() != 43668) {

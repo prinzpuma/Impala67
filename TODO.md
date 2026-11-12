@@ -108,6 +108,7 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
     - [ ] Später: semantische Suche auf dem iPad – lokales Embedding-Modell (`SemanticSearch`), „Verwandt“-Leiste unter Notizen, RAG-Quellen im Chat.
   - [x] PWA: RAG-Index als WASM im Worker.
   - [ ] WASM-Größe (2,29 MB mit Datenmodell): `opt-level` (gemessen: `3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in impala-ai ersetzen.
+  - [ ] Fach-Erkennung: `core/impala-fach` (Golden-Tests gegen `web/fach.js`) nutzt bisher nur die iPad-App; PWA auf den Kern umstellen (`web/fach.js` bis auf die Embedding-Einordnung löschen, Ergebnis der Einordnung an den Kern übergeben).
   - [ ] Rust-Kern: Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 - [ ] **JS-Fehler, beim Rust-Kern gefunden** (Details in den Commits auf `claude/rust-kern`):
   - [x] Erst-Sync eines neuen Geräts lädt alles Abgerufene erneut hoch und verdoppelt die Cloud-Belegung; Fehler ohne Status werden endlos wiederholt (beides mit dem Rust-Sync behoben).

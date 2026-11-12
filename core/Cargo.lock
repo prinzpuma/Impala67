@@ -943,6 +943,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "impala-fach"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "impala-ffi"
 version = "0.1.0"
 dependencies = [
@@ -950,6 +958,7 @@ dependencies = [
  "impala-ai",
  "impala-crypto",
  "impala-drive",
+ "impala-fach",
  "impala-heft",
  "impala-markdown",
  "impala-model",

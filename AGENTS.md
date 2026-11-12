@@ -25,7 +25,7 @@
 - **Handschrift & Zeichnen (Heft)**: `web/heft.js`
 - **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
 - **Daten & Sync**: `web/db.js`, `web/state.js` (Ein-/Ausgabe und Abfragen für das Rust-Datenmodell `ModelCore`), `web/state-views.js` (nur lesbare Ansichten in `S`), `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
-- **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`; UniFFI-Hülle für native Apps `core/impala-ffi` (ändert den WASM-Stempel nicht)
+- **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`, Fächer: `core/impala-fach`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`; UniFFI-Hülle für native Apps `core/impala-ffi` (ändert den WASM-Stempel nicht)
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
 - **Native Apps**: `android/` (Kotlin/Compose, Regeln: `android/PORTING.md`), `ios/` (SwiftUI/PencilKit, Stand: `ios/README.md`, Parität: `ios/PARITAET.md`), gemeinsame Brücke `core/impala-ffi`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`

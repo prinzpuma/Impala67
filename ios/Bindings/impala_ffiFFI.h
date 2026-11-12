@@ -1432,6 +1432,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_links(void*_Nonnull ptr, 
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_props(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBJECT
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subject(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subtree(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -1555,6 +1560,11 @@ void uniffi_impala_ffi_fn_method_impalacore_set_page_db(void*_Nonnull ptr, RustB
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_PAGE_PROP
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_PAGE_PROP
 void uniffi_impala_ffi_fn_method_impalacore_set_page_prop(void*_Nonnull ptr, RustBuffer id, RustBuffer name, RustBuffer value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_PAGE_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_PAGE_SUBJECT
+void uniffi_impala_ffi_fn_method_impalacore_set_page_subject(void*_Nonnull ptr, RustBuffer id, RustBuffer subject, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SET_TREE_OPEN
@@ -1809,6 +1819,12 @@ RustBuffer uniffi_impala_ffi_fn_func_core_long_lock_holds(RustCallStatus *_Nonnu
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DEFAULT_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DEFAULT_SUBJECT
+RustBuffer uniffi_impala_ffi_fn_func_default_subject(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 void uniffi_impala_ffi_fn_func_download_local_embedding_model(RustBuffer model_dir, void*_Nonnull listener, RustCallStatus *_Nonnull out_status
@@ -1963,6 +1979,12 @@ RustBuffer uniffi_impala_ffi_fn_func_heft_shape_outline(RustBuffer shape, RustCa
 RustBuffer uniffi_impala_ffi_fn_func_heft_snapshot_first_page(RustBuffer snapshot, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_KNOWN_SUBJECTS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_KNOWN_SUBJECTS
+RustBuffer uniffi_impala_ffi_fn_func_known_subjects(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LOCAL_EMBEDDING_MODEL
 RustBuffer uniffi_impala_ffi_fn_func_local_embedding_model(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
@@ -1996,6 +2018,12 @@ RustBuffer uniffi_impala_ffi_fn_func_markdown_to_blocks(RustBuffer markdown, Rus
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MERGE_TEXTS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MERGE_TEXTS
 RustBuffer uniffi_impala_ffi_fn_func_merge_texts(RustBuffer base, RustBuffer mine, RustBuffer theirs, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_OVERVIEW_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_OVERVIEW_SUBJECT
+RustBuffer uniffi_impala_ffi_fn_func_overview_subject(RustCallStatus *_Nonnull out_status
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SCAN_DETECT
@@ -2334,6 +2362,12 @@ uint16_t uniffi_impala_ffi_checksum_func_core_long_lock_holds(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DEFAULT_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DEFAULT_SUBJECT
+uint16_t uniffi_impala_ffi_checksum_func_default_subject(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DOWNLOAD_LOCAL_EMBEDDING_MODEL
 uint16_t uniffi_impala_ffi_checksum_func_download_local_embedding_model(void
@@ -2514,6 +2548,12 @@ uint16_t uniffi_impala_ffi_checksum_func_heft_snapshot_first_page(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_KNOWN_SUBJECTS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_KNOWN_SUBJECTS
+uint16_t uniffi_impala_ffi_checksum_func_known_subjects(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LOCAL_EMBEDDING_MODEL
 uint16_t uniffi_impala_ffi_checksum_func_local_embedding_model(void
@@ -2553,6 +2593,12 @@ uint16_t uniffi_impala_ffi_checksum_func_markdown_to_blocks(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MERGE_TEXTS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MERGE_TEXTS
 uint16_t uniffi_impala_ffi_checksum_func_merge_texts(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_OVERVIEW_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_OVERVIEW_SUBJECT
+uint16_t uniffi_impala_ffi_checksum_func_overview_subject(void
     
 );
 #endif
@@ -3534,6 +3580,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_props(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBJECT
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subject(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subtree(void
@@ -3681,6 +3733,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_page_db(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_PAGE_PROP
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_PAGE_PROP
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_page_prop(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_PAGE_SUBJECT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SET_PAGE_SUBJECT
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_page_subject(void
     
 );
 #endif

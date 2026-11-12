@@ -31,6 +31,7 @@ mod scan;
 mod stats;
 mod storage_care;
 mod study_records;
+mod subjects;
 mod sync;
 mod ui;
 

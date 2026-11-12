@@ -24,6 +24,7 @@ base64 = "0.22"
 impala-ai = { path = "../impala-ai" }
 impala-crypto = { path = "../impala-crypto" }
 impala-drive = { path = "../impala-drive" }
+impala-fach = { path = "../impala-fach" }
 impala-heft = { path = "../impala-heft" }
 impala-markdown = { path = "../impala-markdown" }
 impala-model = { path = "../impala-model" }

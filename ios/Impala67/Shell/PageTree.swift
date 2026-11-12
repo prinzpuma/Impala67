@@ -9,6 +9,7 @@ struct PageTree: View {
     @State private var renaming: PageSummary?
     @State private var renameText = ""
     @State private var moving: PageSummary?
+    @State private var subjectPage: PageSummary?
     @State private var drops = 0
     @Namespace private var highlight
     /// Sichtbare Zeilen; im Hintergrund gelesen, denn `TreeRows.read` fragt den Kern je Zeile ab und
@@ -75,6 +76,7 @@ struct PageTree: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: drops)
         .sheet(item: $moving) { MovePageSheet(page: $0) }
+        .sheet(item: $subjectPage) { SubjectSheet(page: $0) }
         .alert("Umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Titel", text: $renameText)
             Button("Abbrechen", role: .cancel) {}
@@ -105,6 +107,7 @@ struct PageTree: View {
         MenuItem(page.favorite ? "Favorit entfernen" : "Zu Favoriten", icon: "star") {
             store.core.patchPage(page.id, ["favorite": !page.favorite])
         }
+        MenuItem("Fach…", icon: "graduation") { subjectPage = page }
         MenuItem("Verschieben nach…", icon: "folder-move") { moving = page }
         MenuItem("Archivieren", icon: "archive") {
             shell.close(page.id)

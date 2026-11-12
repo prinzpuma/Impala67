@@ -101,7 +101,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
 Größte Lücken neben der Leistung: Seiten-Icon/Cover,
-Fächer, Schulnoten, Lernanalyse, Daily-Notizen,
+Fächerliste in den Einstellungen, Schulnoten, Lernanalyse, Daily-Notizen,
 Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
 ---
@@ -142,7 +142,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | In neuem Tab öffnen | ✅ | `PageTree.swift:90` |
 | Duplizieren, Als Vorlage, Favorit | ✅ | `PageTree.swift:92-101` in PWA-Reihenfolge · am Gerät ungeprüft |
 | Vorlesungsübersicht | ✅ | `PageTree.swift` |
-| Fach… | ❌ | fehlt |
+| Fach… | ✅ | Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
 | Aus Archiv holen | 🟡 | Nur in der Bibliothek |
 | Archivieren / Löschen | ✅ | `PageTree.swift:103-110` · am Gerät ungeprüft |
@@ -198,7 +198,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | ⋯: Vorlage, Verschieben, Rückgängig/Wiederholen, Icon | ✅ | `Notes/NoteEditor.swift:551-645` im ⋯-Menü wie in PWA `moreMenuHtml` · am Gerät ungeprüft |
 | ⋯: Vorlesungsübersicht | ✅ | `NoteEditor.swift` |
 | ⋯: Verlauf | ✅ | `Notes/PageHistorySheet.swift` (Kern `pageHistory`), Wiederherstellen mit Rückgängig · am Gerät ungeprüft |
-| ⋯: Fach | ❌ | fehlt im Kern (bewusst nicht umgesetzt) |
+| ⋯: Fach | ✅ | Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Rückverweise und Brotkrumen | ✅ | `NoteEditor.swift:73, 366-374` |
 
 ### 1.11 KI-Panel
@@ -236,7 +236,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | Neu: Notiz, Heft, Vorlage | 🟡 | Menü statt Dialog |
 | Namenseingabe | 🟡 | Alert |
 | Verschieben nach… | ✅ | `PageTree.swift:102`, `Shell/TreeDrop.swift:147-185` · am Gerät ungeprüft |
-| Fach-Dialog | ❌ | fehlt |
+| Fach-Dialog | ✅ | zeigt zusätzlich, woher das Fach kommt; Kern `impala-fach` (Golden-Tests gegen `fach.js`), `Notes/SubjectSheet.swift` · am Gerät ungeprüft |
 | Verlauf-Dialog mit Wiederherstellen | ✅ | `Notes/PageHistorySheet.swift` · am Gerät ungeprüft |
 | Icon- und Cover-Wahl für Seiten | ❌ | Cover (Farbe oder eigenes Bild) nur für Hefte in der Bibliothek |
 

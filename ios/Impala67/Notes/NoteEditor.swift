@@ -477,6 +477,7 @@ private struct PageChrome: View {
     @State private var shareItem: ShareItem?
     @State private var movingPage: PageSummary?
     @State private var showHistory = false
+    @State private var subjectPage: PageSummary?
     @State private var summary: PageSummary?
     @State private var isArchived = false
     @State private var marks = 0
@@ -652,6 +653,10 @@ private struct PageChrome: View {
                         attempt("setPageDb", { try store.core.setPageDb(id: model.pageId, schema: isDb ? nil : lectureSchema) })
                     }
 
+                    MenuItem("Fach…", icon: "graduation") {
+                        if let summary { subjectPage = summary }
+                    }
+
                     MenuItem("Verschieben nach…", icon: "folder-move") {
                         if let summary { movingPage = summary }
                     }
@@ -683,6 +688,9 @@ private struct PageChrome: View {
         }
         .sheet(item: $movingPage) { p in
             MovePageSheet(page: p)
+        }
+        .sheet(item: $subjectPage) { p in
+            SubjectSheet(page: p)
         }
         .sheet(isPresented: $showHistory) {
             PageHistorySheet(model: model)
