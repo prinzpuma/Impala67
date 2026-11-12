@@ -93,7 +93,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 | Bereich | ✅ | 🟡 | ❌ | Anteil ✅ |
 |---|---|---|---|---|
 | 1. Shell & Navigation | 81 | 20 | 6 | 76 % |
-| 2. Seiten & Editor | 36 | 8 | 6 | 72 % |
+| 2. Seiten & Editor | 37 | 9 | 4 | 74 % |
 | 3. Heft | 25 | 7 | 3 | 71 % |
 | 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
 | 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
@@ -328,7 +328,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 |---|---|---|
 | „+“ fügt Absatz mit „/“ ein | ✅ | `NoteEditor.swift:191-207` |
 | Griff: Menü, Ziehen verschiebt | ✅ | `NoteEditor.swift:211-238` |
-| Mehrere Blöcke auswählen | ❌ | fehlt |
+| Mehrere Blöcke auswählen | ✅ | Blockmenü „Auswählen (mehrere)“, dann Antippen; Leiste mit Kopieren, Ausschneiden, Duplizieren, Löschen (`Notes/NoteCommands.swift` „Mehrere Blöcke“) · am Gerät ungeprüft |
 | Umwandeln (11 Typen), Duplizieren, Kopieren, Lernkarte | ✅ | `Notes/BlockViews.swift:127-144` |
 | Farbe (Text/Hintergrund) | 🟡 | Textfarbe ungeprüft |
 | Dateien per Ziehen/Einfügen | ✅ | `NoteEditor.swift:90-95` |
@@ -352,7 +352,7 @@ Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 | „---“, „```“, „$$“ live | ✅ | `Notes/NoteModel.swift` `edit` (wie `web/editor.js:1064-1085`) |
 | Enter, ⇧Enter, Tab/⇧Tab, Entf, ↑ ↓ | ✅ | `BlockTextView.swift:144-150` |
 | ⌘D, ⇧⌘↑/↓, Esc | ✅ | `BlockTextView.swift:160-162` |
-| ⌘A zweistufig, ⇧⌘0–8 | ❌ | fehlt |
+| ⌘A zweistufig, ⇧⌘0–8 | 🟡 | ⌘A zweistufig da (Text, dann alle Blöcke); ⇧⌘0–8 fehlt |
 | Tabellen-Tastatur | ✅ | `Notes/TableEditor.swift` |
 
 ### 2.6 Blocktypen

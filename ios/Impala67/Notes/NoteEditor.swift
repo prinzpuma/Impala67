@@ -132,7 +132,11 @@ private struct NoteBody: View {
         }
         .background(Impala.panel)
         .safeAreaInset(edge: .bottom) {
-            if editing {
+            if model.isPicking {
+                PickBar(model: model)
+                    .padding(.bottom, Space.s3)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if editing {
                 VStack(spacing: Space.s2) {
                     if model.menu != nil {
                         EditorMenuPanel(model: model)
@@ -162,6 +166,7 @@ private struct NoteBody: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2), value: editing)
+        .animation(reduceMotion ? nil : .snappy, value: model.picked)
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.menu?.kind)
         .animation(reduceMotion ? nil : .snappy, value: model.toast)
         .environment(\.openURL, OpenURLAction { url in open(url) })
@@ -216,6 +221,22 @@ private struct NoteBody: View {
                     .overlay(alignment: .topLeading) {
                         if dragId == b.id || (dragId == nil && (model.activeId == b.id || hovered == b.id)) {
                             blockGutter(b).offset(x: -48)
+                        }
+                    }
+                    .overlay {
+                        // Mehrfachauswahl: Antippen nimmt den Block dazu bzw. heraus.
+                        if model.isPicking {
+                            let on = model.picked.contains(b.id)
+                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                .fill(on ? Impala.accent.opacity(0.14) : Color.clear)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                        .strokeBorder(on ? Impala.accent.opacity(0.5) : .clear, lineWidth: 1)
+                                }
+                                .padding(-3)
+                                .contentShape(Rectangle())
+                                .onTapGesture { model.togglePick(b.id) }
+                                .accessibilityAddTraits(on ? .isSelected : [])
                         }
                     }
                     .onHover { inside in
@@ -394,6 +415,40 @@ private struct ArchivedBanner: View {
 }
 
 /// Emoji-Icon der Notiz über dem Titel wie in render.js:696-699 (`.page-icon`).
+/// Leiste der Mehrfachauswahl: Anzahl, Kopieren, Ausschneiden, Duplizieren, Löschen, Alle, Fertig.
+private struct PickBar: View {
+    let model: NoteModel
+
+    var body: some View {
+        let n = model.picked.count
+        HStack(spacing: Space.s4) {
+            Text(n == 1 ? "1 Block" : "\(n) Blöcke")
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .monospacedDigit()
+            Button { model.copyPicked() } label: { Icon("copy", size: 16) }
+                .accessibilityLabel("Kopieren")
+                .keyboardShortcut("c", modifiers: .command)
+            Button("Ausschneiden") { model.cutPicked() }
+                .keyboardShortcut("x", modifiers: .command)
+            Button { model.duplicatePicked() } label: { Icon("pages-stack", size: 16) }
+                .accessibilityLabel("Duplizieren")
+            Button(role: .destructive) { model.deletePicked() } label: { Icon("trash", size: 16) }
+                .accessibilityLabel("Löschen")
+                .keyboardShortcut(.delete, modifiers: [])
+            Button("Alle") { model.pickAll() }
+            Button("Fertig") { model.clearPicks() }
+                .fontWeight(.semibold)
+                .keyboardShortcut(.escape, modifiers: [])
+        }
+        .font(.system(size: TextSize.sm))
+        .foregroundStyle(Impala.text2)
+        .padding(.horizontal, Space.s4)
+        .frame(minHeight: 44)
+        .impalaGlass(interactive: true)
+    }
+}
+
 private struct NoteEmoji: View {
     @Environment(ImpalaStore.self) private var store
     let pageId: String

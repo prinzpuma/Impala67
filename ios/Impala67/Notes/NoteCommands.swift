@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // Befehle des Editors über `NoteModel` (wie EditorBlockCommands.kt, EditorKeys.kt, InlineFormat.kt).
 
@@ -205,6 +206,8 @@ enum TurnInto: CaseIterable {
 enum BlockKey {
     case tab, shiftTab, up, down, escape, softBreak, deleteForward
     case format(InlineFormat), link, undo, redo, duplicate, moveUp, moveDown
+    /// ⌘A, wenn der Text schon ganz markiert ist: alle Blöcke wählen.
+    case selectAll
 }
 
 private let slashTrigger = try! NSRegularExpression(pattern: #"(?:^|\s)/([a-zA-ZäöüÄÖÜß0-9]*)$"#)
@@ -412,6 +415,8 @@ extension NoteModel {
         case .deleteForward: return selection.length == 0 && at == ns.length && place(id).flatMap { $0.list[safe: $0.index + 1] }?.isText == true
         case .softBreak: return !b.keepsNewlines
         case .format, .link: return b.isText && !b.isCode
+        // Erstes ⌘A markiert den Text (System), das zweite wählt alle Blöcke.
+        case .selectAll: return selection.location == 0 && selection.length >= ns.length
         default: return true
         }
     }
@@ -436,6 +441,7 @@ extension NoteModel {
         case .duplicate: duplicate(id)
         case .moveUp: moveBlock(id, -1)
         case .moveDown: moveBlock(id, 1)
+        case .selectAll: pickAll()
         }
     }
 
@@ -619,4 +625,56 @@ extension Array where Element == MdBlock {
 
 extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
+}
+
+// MARK: Mehrere Blöcke
+
+/// Mehrfachauswahl wie `selectedBlocks` der PWA (editor.js): oberste Blöcke, gewählt über ⌘A (zweimal),
+/// „Auswählen“ im Blockmenü und danach Antippen weiterer Blöcke.
+extension NoteModel {
+    var isPicking: Bool { !picked.isEmpty }
+
+    /// Gewählte Blöcke in Seitenreihenfolge.
+    private var pickedBlocks: [MdBlock] { blocks.filter { picked.contains($0.id) } }
+
+    func togglePick(_ id: String) {
+        guard blocks.contains(where: { $0.id == id }) else { return }
+        endEditing()
+        if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+    }
+
+    /// Alle Blöcke wählen (zweites ⌘A, wenn der Text des Blocks schon ganz markiert ist).
+    func pickAll() {
+        endEditing()
+        picked = Set(blocks.map(\.id))
+    }
+
+    func clearPicks() { picked = [] }
+
+    func copyPicked() {
+        let md = blocksToMarkdown(blocks: pickedBlocks).trimmingCharacters(in: .newlines)
+        guard !md.isEmpty else { return }
+        UIPasteboard.general.string = md
+        showToast(picked.count == 1 ? "1 Block kopiert" : "\(picked.count) Blöcke kopiert")
+    }
+
+    func cutPicked() {
+        copyPicked()
+        deletePicked()
+    }
+
+    func deletePicked() {
+        let ids = picked
+        guard !ids.isEmpty else { return }
+        mutate(structural: true) { list in list.filter { !ids.contains($0.id) } }
+        picked = []
+    }
+
+    /// Kopie der gewählten Blöcke hinter dem letzten gewählten; danach ist die Kopie gewählt.
+    func duplicatePicked() {
+        guard let last = blocks.lastIndex(where: { picked.contains($0.id) }) else { return }
+        let copy = markdownToBlocks(markdown: blocksToMarkdown(blocks: pickedBlocks))
+        mutate(structural: true) { list in Array(list[...last]) + copy + Array(list[(last + 1)...]) }
+        picked = Set(copy.map(\.id))
+    }
 }

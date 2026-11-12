@@ -59,7 +59,7 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 - [x] **Neue Seite durch Weiterziehen** am Heft-Ende (gab es schon: `scrollViewDidEndDragging`, ab 70 pt).
 - [x] **Laserpointer** im Heft (`HeftLaserLayer`) – am Gerät prüfen.
 - [x] **Cover für Notizen** (9 Muster wie die PWA, eigenes Bild, Icon ragt ins Cover; `ios/Impala67/Notes/NoteCover.swift`) – am Gerät prüfen, ob es gut genug aussieht.
-- [ ] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig).
+- [x] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig, Blockmenü „Auswählen“, Leiste mit Kopieren/Ausschneiden/Duplizieren/Löschen) – am Gerät prüfen.
 - [x] **Aktivitäts-Heatmap** und **Kartenbrowser mit Sortierung** (Intervall, Fehler) auf dem iPad – am Gerät prüfen.
 - [x] **Lern-Extras standardmäßig aus** (Overlearning-Sperre, Pausen-Erinnerung) in PWA, iPad und Android; Karteikarten und Lernzeit-Messung bleiben an. Dabei behoben: PWA-Pausen-Erinnerung ließ sich nicht abschalten (`lernzeit.js` las „0“, gespeichert wird „off“).
 - Später: Lernanalyse (erst wenn das Design in der PWA passt), Heft-Vorschau in Notizen.

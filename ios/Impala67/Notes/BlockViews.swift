@@ -130,6 +130,7 @@ struct BlockMenuItems: View {
             Button("Farbe entfernen") { model.setColor(id, nil, background: false) }
         } label: { Label { Text("Farbe") } icon: { Icon("palette") } }
         Divider()
+        Button { model.togglePick(id) } label: { Label { Text("Auswählen (mehrere)") } icon: { Icon("check-square") } }
         Button { model.duplicate(id) } label: { Label { Text("Duplizieren") } icon: { Icon("copy") } }
         Button {
             UIPasteboard.general.string = model.rawOf(block).trimmingCharacters(in: .newlines)

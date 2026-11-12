@@ -24,6 +24,8 @@ final class NoteModel {
     }
     private var undoStack: [Step] = []
     private var redoStack: [Step] = []
+    /// Mehrfach ausgewählte (oberste) Blöcke (NoteCommands.swift „Mehrere Blöcke“).
+    var picked: Set<String> = []
 
     /// Auswahl im aktiven Feld (UTF-16), für Umwandeln ohne Sprung und Inline-Formate.
     @ObservationIgnored var selection = NSRange(location: 0, length: 0)
