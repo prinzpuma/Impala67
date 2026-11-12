@@ -73,7 +73,7 @@ Sortiert nach Nutzen.
 | O8 | **Graph im Worker** (`graph.js:193`, `graph-worker.js`) | Kraft-Layout O(n²) **alle 16 ms auf dem Hauptthread**, bis zu 5000 Seiten (`Graph/GraphModel.swift:113-130`) | Layout im Hintergrund rechnen | ✅ am Gerät bestätigt 07.11. (10 s Simulation ohne Stall; Gitter, Reichweite 200) |
 | O9 | **KI-Antwort gedrosselt**: Neuzeichnen höchstens alle 80 ms (`ai.js:378`) | Je Token: Seite zweimal laden, Bild-Anhänge (Base64) neu dekodieren, Anhang-JSON parsen (`Chat/ChatView.swift:128-133`, `Chat/ChatParts.swift:62-75`) | 80 ms drosseln, Anhänge einmal dekodieren | ✅ am Gerät bestätigt 07.11. (Streaming hängerfrei) |
 | O10 | „Weißt du's noch?“: einmal je Tag | Bei jeder Kartenänderung alle Stapel und alle Karten (jetzt im Hintergrund) | Einmal je Tag, neu nur, wenn sich die Karte ändert | ✅ am Gerät bestätigt 07.11. |
-| O11 | Einstellungen lesen nur bei Bedarf | KI-Bereich der Einstellungen scannt bei **jeder** Änderung alle Hefte (`Settings/SettingsAi.swift:305-310`); Übersicht zählt Konflikte bei jeder Änderung | An eigene Zähler hängen, im Hintergrund | 🟡 am Gerät 07.11.: 258 ms beim Öffnen/Wechsel zu „Darstellung“ |
+| O11 | Einstellungen lesen nur bei Bedarf | KI-Bereich der Einstellungen scannt bei **jeder** Änderung alle Hefte (`Settings/SettingsAi.swift:305-310`); Übersicht zählt Konflikte bei jeder Änderung | An eigene Zähler hängen, im Hintergrund | 🟡 am Gerät 07.11.: 258 ms beim Öffnen/Wechsel zu „Darstellung“ · ✅ Code (07.11., `bf594f7`): Darstellung liest im Hintergrund, nachmessen |
 | O12 | Bibliothek | `recentPages(alle)` plus Kern-Aufruf je Zeile/Heftkarte im `body` (`Library/LibraryScreen.swift:231-307, 445-514`) | Wie Seitenbaum im Hintergrund lesen | ✅ am Gerät bestätigt 07.11. (Tab-Wechsel ohne Hänger) |
 
 ### Startseite lässt sich nicht öffnen
@@ -100,7 +100,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
 
-Größte Lücken neben der Leistung: Seitenverlauf (Notiz und Heft), Seiten-Icon/Cover,
+Größte Lücken neben der Leistung: Seiten-Icon/Cover,
 Fächer, Schulnoten, Lernanalyse, Daily-Notizen,
 Mehrfachauswahl (Blöcke, Chats), Stapel/Tabs per Ziehen ordnen.
 
@@ -398,7 +398,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Seitenzähler ‹ n / m › | ✅ | `HeftScreen.swift:263-275` |
 | KI-Knopf im Heft | 🟡 | nur als Kontext |
 | „+“ Seite, Papier wählen/umstellen | ✅ | `HeftScreen.swift:189-199, 512-535` |
-| Position Davor/Danach/Am Ende | ❌ | nur am Ende |
+| Position Davor/Danach/Am Ende | ✅ | Plus-Menü (`Heft/HeftScreen.swift` `addPage(at:)`) |
 | Bild/PDF importieren, Scannen | ✅ | `HeftScreen.swift:537-540` |
 
 ### 3.3 Bilder, Text, Lasso
@@ -427,7 +427,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Pinch-Zoom | 🟡 | Grenzen 0,25–5 statt 0,4–6 |
 | Doppeltipp zoomt 2,2× | ✅ | `Heft/HeftCanvas.swift` `handleDoubleTap` (Finger; Faktoren relativ zur Passbreite wie `heft-viewport.js`) |
 | Trackpad-Scrollen blättert, ⌘+Scrollen zoomt | ❌ | fehlt |
-| Am Ende hochziehen = neue Seite | ❌ | fehlt |
+| Am Ende hochziehen = neue Seite | ✅ | `onPullAdd` (`Heft/HeftScreen.swift`) |
 
 ### 3.6 Darstellung und Aktionen
 | Punkt | Status | Fundstelle / Notiz |
