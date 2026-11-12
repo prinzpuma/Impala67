@@ -29,6 +29,8 @@ struct LearnStats {
     let forecast: [Forecast]
     let streakCurrent: Int
     let streakLongest: Int
+    /// Wiederholungen je Tag (Tagesbeginn) für die Aktivitäts-Heatmap.
+    let perDay: [Date: Int]
     let hard: [Card]
     let retention: [Bucket]
     /// Median der eigenen Denkzeit (letzte 300 Reviews, ab 12 Werten), sonst 0 (`TELE.thinkMedian`).
@@ -67,15 +69,24 @@ struct LearnStats {
         return f.date(from: s)
     }
 
-    init(json: String, now: Date = Date(), calendar cal: Calendar = .current) {
-        let o = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
-        let cards: [Card] = ((o["cards"] as? [[String: Any]]) ?? []).map {
+    /// Lernstand je Karte aus `learningStatsJson` (auch für die Sortierung im Kartenbrowser).
+    static func cards(_ o: [String: Any]) -> [Card] {
+        ((o["cards"] as? [[String: Any]]) ?? []).map {
             Card(id: $0["id"] as? String ?? "", front: $0["front"] as? String ?? "",
                  deck: ($0["deck"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? Deck.standard,
                  state: $0["state"] as? String ?? "new", stability: ($0["stability"] as? NSNumber)?.doubleValue ?? 0,
                  lapses: ($0["lapses"] as? NSNumber)?.intValue ?? 0, due: Self.date($0["due"]),
                  suspended: $0["suspended"] as? Bool ?? false)
         }
+    }
+
+    static func cards(json: String) -> [Card] {
+        cards((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:])
+    }
+
+    init(json: String, now: Date = Date(), calendar cal: Calendar = .current) {
+        let o = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
+        let cards = Self.cards(o)
         let reviews: [Review] = ((o["reviews"] as? [[String: Any]]) ?? []).compactMap { r in
             guard let t = Self.date(r["t"]) else { return nil }
             return Review(id: r["id"] as? String ?? "", cardId: r["cardId"] as? String ?? "",
@@ -185,6 +196,7 @@ struct LearnStats {
         self.reif = reif
         streakCurrent = current
         streakLongest = longest
+        self.perDay = perDay
         hard = Array(cards.filter { $0.lapses > 0 }.sorted { $0.lapses > $1.lapses }.prefix(5))
     }
 }
@@ -293,6 +305,12 @@ struct StatsScreen: View {
                         }
                     }
                 }
+                section("Aktivität · letzte 12 Monate") {
+                    ActivityHeatmap(perDay: d.perDay)
+                    Text("Serie: \(d.streakCurrent == 1 ? "1 Tag" : "\(d.streakCurrent) Tage") aktuell · längste \(d.streakLongest == 1 ? "1 Tag" : "\(d.streakLongest) Tage")")
+                        .font(.system(size: TextSize.sm))
+                        .foregroundStyle(Impala.text2)
+                }
                 if !d.decks.isEmpty {
                     section("Stapel") {
                         Grid(alignment: .leading, horizontalSpacing: Space.s4, verticalSpacing: Space.s2) {
@@ -342,6 +360,63 @@ struct StatsScreen: View {
         VStack(alignment: .leading, spacing: Space.s2) {
             Text(title).font(.system(size: TextSize.xs, weight: .semibold)).foregroundStyle(Impala.text2)
             content()
+        }
+    }
+}
+
+/// Aktivitäts-Heatmap wie `heatmapHtml` (anki-stats.js): 53 Wochen × 7 Tage ab Montag, Farbstufe nach
+/// Wiederholungen pro Tag (0, < 5, < 15, < 30, ab 30). Startet am rechten Ende (heute).
+struct ActivityHeatmap: View {
+    let perDay: [Date: Int]
+    private let cell: CGFloat = 12
+    private let gap: CGFloat = 3
+
+    var body: some View {
+        let weeks = Self.weeks(Date())
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: gap) {
+                ForEach(weeks.indices, id: \.self) { w in
+                    VStack(spacing: gap) {
+                        ForEach(weeks[w], id: \.self) { day in
+                            let n = perDay[day] ?? 0
+                            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                                .fill(Self.color(n))
+                                .frame(width: cell, height: cell)
+                                .help("\(day.formatted(.dateTime.day().month().year())): \(n) Wiederholungen")
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .defaultScrollAnchor(.trailing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Aktivität der letzten 12 Monate: an \(perDay.values.filter { $0 > 0 }.count) Tagen gelernt")
+    }
+
+    /// Spalten je Woche (Montag oben); die letzte Woche endet heute.
+    static func weeks(_ now: Date, calendar cal: Calendar = .current) -> [[Date]] {
+        let end = cal.startOfDay(for: now)
+        let weekday = (cal.component(.weekday, from: end) + 5) % 7 // Montag = 0
+        guard let start = cal.date(byAdding: .day, value: -364 - weekday, to: end) else { return [] }
+        var out: [[Date]] = []
+        var d = start
+        while d <= end {
+            if out.isEmpty || out[out.count - 1].count == 7 { out.append([]) }
+            out[out.count - 1].append(d)
+            guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
+            d = next
+        }
+        return out
+    }
+
+    static func color(_ n: Int) -> Color {
+        switch n {
+        case 0: Impala.edgeSoft
+        case ..<5: Impala.accent.opacity(0.3)
+        case ..<15: Impala.accent.opacity(0.55)
+        case ..<30: Impala.accent.opacity(0.8)
+        default: Impala.accent
         }
     }
 }

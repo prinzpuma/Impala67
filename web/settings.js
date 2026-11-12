@@ -114,9 +114,9 @@ export function applyTheme() { applyAppearance(); }
 export { BREAK_REMINDER_KEY };
 
 export function getBreakReminder() {
+	// Standardmäßig aus: nur ein ausdrückliches Einschalten zählt.
 	const val = localStorage.getItem(BREAK_REMINDER_KEY);
-	if (val === null || val === undefined || val === "") return true;
-	return val !== "off" && val !== "false" && val !== "0";
+	return val === "on" || val === "true" || val === "1";
 }
 
 export function setBreakReminder(enabled) {

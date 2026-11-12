@@ -95,7 +95,7 @@ Stand der Code-Prüfung je Bereich (Zählung der Zeilen unten, ⚪ nicht mitgez�
 | 1. Shell & Navigation | 80 | 21 | 6 | 75 % |
 | 2. Seiten & Editor | 35 | 8 | 7 | 70 % |
 | 3. Heft | 24 | 7 | 4 | 69 % |
-| 4. KI-Chat & Karten/Lernen | 24 | 10 | 10 | 55 % |
+| 4. KI-Chat & Karten/Lernen | 26 | 10 | 8 | 59 % |
 | 5. Einstellungen, Sync, Backup | 15 | 7 | 5 | 56 % |
 
 Manche Zeilen fassen mehrere Punkte zusammen; die Zahlen zeigen also die Richtung, kein exaktes Maß.
@@ -503,7 +503,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Suche, Bearbeiten, Aussetzen, Löschen | ✅ | `CardsScreen.swift:337-363` |
-| Sortierbare Spalten, Intervall/Fehler | ❌ | fehlt |
+| Sortierbare Spalten, Intervall/Fehler | ✅ | Sortiermenü (Fällig, Vorderseite, Intervall, Fehler, Status; gemerkt), Intervall/Fehler je Zeile (`Cards/CardsScreen.swift` `BrowserSort`) · am Gerät ungeprüft |
 | Zeilenaktion Archivieren | ✅ | `CardsScreen.swift:355` |
 | Export TXT/CSV | 🟡 | kein Anki-Paket |
 | Import mit Vorschau und Duplikaten | ✅ | `Cards/CardTransfer.swift:155-193` |
@@ -513,7 +513,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Punkt | Status | Fundstelle / Notiz |
 |---|---|---|
 | Kennzahlen, 30 Tage, Prognose, Behalten, schwierigste Karten | ✅ | `Cards/StatsScreen.swift:214-309` |
-| Aktivitäts-Heatmap | ❌ | fehlt |
+| Aktivitäts-Heatmap | ✅ | 53 Wochen × 7 Tage wie `heatmapHtml` (`Cards/StatsScreen.swift` `ActivityHeatmap`) · am Gerät ungeprüft |
 | Lern-Analyse im Statistik-Tab (Sitzungen, Tageszeit, Problemzonen, Experimente) | ❌ | fehlt |
 | Lernanalyse auf der Startseite | ❌ | fehlt |
 | Wochenziel-Prognose | 🟡 | Balken ohne Prognose |
@@ -523,7 +523,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 |---|---|---|
 | Wochenwidget, Ziele, Serie | ✅ | `Home/HomeWeek.swift`, `Home/LearningTime.swift` |
 | Erfassung, „Lernst du noch?“ | ✅ | `LearningTime.swift:131, 256-265` |
-| Pausen-Erinnerung nach 40 min | 🟡 | nur Schalter, keine Logik |
+| Pausen-Erinnerung nach 40 min | 🟡 | nur Schalter (standardmäßig aus wie überall), keine Logik |
 | Fächer (Liste, Zuordnung, Menüeintrag) | 🟡 | Zuordnung und Menüeintrag vorhanden: Fach-Dialog über „Fach…“ im Seitenbaum und im ⋯-Menü der Notiz (`Notes/SubjectSheet.swift`, Erkennung im Kern `impala-fach`); Fächerliste in den Einstellungen fehlt |
 | Schulnoten | ❌ | fehlt (Kern-API vorhanden) |
 

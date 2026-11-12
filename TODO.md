@@ -60,8 +60,8 @@ Stand: 7. November 2026 (letzter Release-Tag v2.2.123; Versionsnummern kommen au
 - [ ] **Laserpointer** im Heft.
 - [ ] **Cover für Notizen** (Farbe/Bild) – soll richtig gut aussehen.
 - [ ] **Mehrere Blöcke auswählen** im Editor (⌘A zweistufig).
-- [ ] **Aktivitäts-Heatmap** und **Kartenbrowser mit sortierbaren Spalten** (Intervall, Fehler).
-- [ ] **Alle Lernfunktionen standardmäßig aus** – überall in der App (PWA und iPad), einschaltbar in den Einstellungen.
+- [x] **Aktivitäts-Heatmap** und **Kartenbrowser mit Sortierung** (Intervall, Fehler) auf dem iPad – am Gerät prüfen.
+- [x] **Lern-Extras standardmäßig aus** (Overlearning-Sperre, Pausen-Erinnerung) in PWA, iPad und Android; Karteikarten und Lernzeit-Messung bleiben an. Dabei behoben: PWA-Pausen-Erinnerung ließ sich nicht abschalten (`lernzeit.js` las „0“, gespeichert wird „off“).
 - Später: Lernanalyse (erst wenn das Design in der PWA passt), Heft-Vorschau in Notizen.
 - Nicht geplant: Anki-.apkg (TXT/CSV reicht), eigener KI-Knopf im Heft (KI-Knopf oben rechts reicht), Daily-Notizen, Abschreiben, „x % analysiert“, Export „Alle Handschrift“, Schulnoten.
 

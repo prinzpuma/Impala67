@@ -296,7 +296,7 @@ function renderAi() {
 
 // ---------- Lernen ----------
 function renderLearning(vm) {
-	const overlearn = localStorage.getItem("impala67Overlearn") !== "off";
+	const overlearn = localStorage.getItem("impala67Overlearn") === "on";
 	const conf = localStorage.getItem("impala67Confidence");
 	const confidence = !!conf && conf !== "off";
 	const telemetry = localStorage.getItem("impala67Telemetry") !== "off";

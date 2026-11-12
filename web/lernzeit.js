@@ -31,9 +31,11 @@ export const LERNZEIT = (() => {
 
 	function isBreakReminderEnabled() {
 		try {
-			return localStorage.getItem("impala67BreakReminder") !== "0";
+			// Wie `getBreakReminder` in settings.js: standardmäßig aus, gespeichert als „on“/„off“.
+			const v = localStorage.getItem("impala67BreakReminder");
+			return v === "on" || v === "true" || v === "1";
 		} catch {
-			return true;
+			return false;
 		}
 	}
 
