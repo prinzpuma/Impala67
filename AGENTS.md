@@ -1,15 +1,31 @@
 # Impala67 – Arbeitsregeln
 
-## 1. Produkt und Plattformen
+## 1. Produkt: drei Versionen, ein Kern
 
-- **PWA auf allen Geräten**: Impala67 ist eine statische, installierbare Progressive Web App (Local-First) und nativer Android-App (Kotlin/Compose über dem Rust-Kern, `android/`) sowie nativer iPad-App (SwiftUI/PencilKit über dem Rust-Kern, `ios/`). Nutzung:
-  - **iPad / Tablet**: Handschriftliche Notizen und Zeichnungen mit dem Stift (Heft-Ansicht, PWA oder native iPad-App).
-  - **Laptop / PC (Linux, Windows, macOS)**: Strukturiertes Tippen (Markdown-Editor).
-  - **Smartphone / Android**: Schnelles Lesen und mobile Kurznotizen.
+Impala67 ist Local-First und wird in **drei Versionen** gepflegt, die sich einen Rust-Kern (`core/`) und dieselben Daten (Sync) teilen:
+
+| Version | Code | Technik | Hauptzweck | Eigene Regeln / Stand |
+|---|---|---|---|---|
+| **PWA** | `web/` | native ES-Module, Standard-CSS, kein Bundler; Kern als WASM (`web/core/` über `web/rust-core.js`) | Laptop/PC (Markdown-Editor), Fallback auf allen Geräten | dieses Dokument |
+| **Android-App** | `android/` | Kotlin/Compose, Material 3 Expressive; Kern über UniFFI (`core/impala-ffi`) | Smartphone: schnelles Lesen, Kurznotizen; Tablet | `android/PORTING.md`, `android/UI-INVENTAR.md` |
+| **iPad-App** | `ios/` | SwiftUI/PencilKit (iPadOS 27); Kern über UniFFI (`core/impala-ffi`) | Handschrift und Zeichnen mit dem Stift (Heft) | `ios/README.md`, `ios/PARITAET.md` |
+
+- **Die PWA ist die Vorlage**: Aussehen, Verhalten und Texte der nativen Apps richten sich nach der PWA (mit Plattform-Feinschliff). Die nativen Apps nutzen `web/` nicht und übernehmen nichts aus der alten Capacitor-App.
+- **Logik gehört in den Kern**: Was keine Oberfläche ist, steht in Rust (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`) und gilt damit automatisch für alle drei. Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall). Fehlt einer App eine Funktion, die FFI-Hülle erweitern – nicht in Kotlin/Swift nachbauen.
 - **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
-- **Ohne Bundler**: Der Web-Code (`web/`) nutzt native ES-Module und Standard-CSS, ohne Build-Schritt. Die nativen Apps (`android/`, `ios/`) nutzen `web/` nicht.
-- **Rust-Kern**: Die Logik ohne Oberfläche wird schrittweise nach Rust verlagert (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`). Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall); die PWA lädt den Kern als WASM aus `web/core/` (über `web/rust-core.js`). Nach Änderungen in `core/`: `npm run build:core` und `web/core/` + `core/wasm-build.json` mitcommitten.
-- **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren.
+- **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren (`node`-Skripte statt `.bat`/`.sh`).
+
+### Welche Version betrifft eine Änderung?
+
+Vor jeder Änderung klären, wo sie landen muss:
+
+- **Kern (`core/`)** → wirkt in allen drei. Danach bauen und mitcommitten:
+  - PWA: `npm run build:core`, `web/core/` + `core/wasm-build.json` committen (FFI-Änderungen ändern den WASM-Stempel nicht).
+  - Android: `npm run build:android-core` (bei Änderungen in `core/impala-ffi`).
+  - iPad: `npm run build:ios-core`, erzeugte Swift-Bindings (`ios/Impala67/Core/Generated/`, `ios/Bindings/`) committen.
+- **Nur Oberfläche einer Version** → nur dort ändern. Ist es ein Verhalten, das die PWA vorgibt, den Abgleich festhalten: iPad in `ios/PARITAET.md`, Android in `android/UI-INVENTAR.md`. Neue PWA-Funktionen dort als offene Lücke eintragen, statt sie ungefragt in allen Apps nachzubauen.
+- **Gespeicherte oder synchronisierte Formate** → müssen zwischen allen Versionen austauschbar bleiben (eine ältere App darf neuere Daten nicht zerstören).
+- **Icons** kommen für alle aus `web/icons.svg` (`npm run android:icons`, `npm run ios:icons`).
 
 ## 2. Daten und Synchronisation
 
@@ -39,7 +55,8 @@
 - **Dateigrößen**: Neue, in sich geschlossene Logik in kleine, testbare Module auslagern. Große Dateien, die nicht endlos wachsen sollen: `web/heft.js`, `web/editor.js`, `web/app.js`, `web/render.js`, `web/state.js`, `web/settings.js`, `web/ai.js`.
 - **Sicherheit & Geheimnisse**: Keine API-Schlüssel, Tokens oder `web/config.local.js` committen. KI-Schlüssel bleiben nur lokal im Browser.
 - **Rückwärtskompatibilität**: Lokale IndexedDB-Daten dürfen durch Updates nie verloren gehen oder ungefragt inkompatibel werden.
-- **Zustand nur über Events**: Gespeicherte Daten (`S.pages`, `S.cards`, … und Hefte) liegen im Rust-Kern und ändern sich nur über `STATE.dispatch`. Die Ansichten in `S` sind schreibgeschützt; Hefte nur über `STATE.heftDoc`/`heftPage` lesen, nie alle auf einmal.
+- **Native Apps**: Ein Paket/Ordner je Fachgebiet, Dateien möglichst < 300 Zeilen; Daten nur über `ImpalaStore` (Kotlin bzw. Swift) lesen und schreiben. Erzeugte Bindings nie von Hand ändern.
+- **Zustand nur über Events** (PWA): Gespeicherte Daten (`S.pages`, `S.cards`, … und Hefte) liegen im Rust-Kern und ändern sich nur über `STATE.dispatch`. Die Ansichten in `S` sind schreibgeschützt; Hefte nur über `STATE.heftDoc`/`heftPage` lesen, nie alle auf einmal.
 - **Offline-Cache**: Jeder Push auf `main` bekommt automatisch eine eigene Cache-Version (Zwischenstand `x.y.z-dev.N`, Release `x.y.z`, siehe `.github/workflows/deploy-pwa.yml`). Neue App-Dateien müssen nur in `APP_FILES` im Service Worker stehen.
 
 ## 5. Arbeitsweise
@@ -47,12 +64,18 @@
 - **Antwort = Abschluss-Box**: Am Ende einer Aufgabe nur die Zusammenfassungs-Box der App (Claude Code: `wrap_up`) als Antwort nutzen, kein zusätzlicher Fließtext. Gibt es keine Box, höchstens wenige Sätze. Ausführlich nur, wenn der Nutzer ausdrücklich eine Erklärung will.
 - **Kommunikation**: Kurz und verständlich antworten. Änderungen so beschreiben, wie sie sich für Bedienung, Verhalten oder Nutzen der App auswirken. Keine langen Code-Blöcke im Chat wiederholen.
 - **Kontext sparen**: Dateien über 300 Zeilen nicht komplett laden, sondern mit `grep` und Zeilenausschnitten arbeiten. Details zu Agenten-Delegation stehen in `CLAUDE.md`.
-- **Testen**: Vor einer Änderung die betroffenen Einzeltests ausführen. `npm run verify` nur bei Bedarf.
+- **Testen je Version**:
+  - **PWA**: betroffene Einzeltests (`node --test test/<name>.test.mjs`), Live-Prüfung über die MCP-Bridge; `npm run verify` nur bei Bedarf.
+  - **Kern**: `cd core && cargo test -p <crate>` und `cargo clippy -p <crate> --all-targets -- -D warnings`.
+  - **Android**: `cd android && ./gradlew assembleDebug` muss bauen (Emulator/Details: `android/PORTING.md` §6).
+  - **iPad**: baut nur auf macOS – unter Windows/Linux die Bindings erzeugen, die App baut `ios-build.yml`. Auf dem Gerät über die MCP-Bridge (WLAN) prüfen, Ablauf: `docs/IPAD-TESTAUFTRAG.md`.
 - **Keine ungefragten Tests**: Neue Testdateien (`test/*.test.mjs`) nur auf ausdrücklichen Wunsch anlegen. Sonst über bestehende Tests, gezielte Checks oder die MCP-Live-Bridge verifizieren.
 
 ## 6. Veröffentlichung
 
-- **Ein Push auf `main` geht sofort live**: Er veröffentlicht die PWA automatisch über GitHub Pages. Ein offizielles GitHub Release (mit Android Release APK) wird nur manuell über den Workflow ausgelöst; die iPad-App baut `ios-build.yml` als unsigniertes Artefakt. Vorher prüfen, ob die Änderung fertig ist.
+- **PWA**: Ein Push auf `main` geht sofort live (GitHub Pages über `deploy-pwa.yml`). Vorher prüfen, ob die Änderung fertig ist.
+- **Android**: `android-check.yml` baut auf Nebenzweigen bei Änderungen in `android/` oder `core/` eine Debug-APK; das offizielle Release mit signierter APK nur manuell über `release.yml`.
+- **iPad**: `ios-build.yml` baut bei Änderungen in `ios/` oder `core/impala-ffi/` eine unsignierte IPA (Artefakt `Impala67-ipa`), Installation per Sideloading.
 - **Versionen automatisch**: Quelle sind die Release-Tags (`version-from-tags.mjs`), gesetzt und geprüft über `.github/scripts/set-version.mjs`. `package.json` und `web/version.json` werden im Repo nicht von Hand hochgezählt.
 
 ## 7. KI- & Entwickler-Integration (MCP Live-Bridge)
