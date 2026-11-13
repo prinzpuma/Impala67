@@ -97,6 +97,10 @@ class DevicePrefs(private val context: Context) {
     val tabsInSidebar: Flow<Boolean> = boolFlow(TABS_IN_SIDEBAR, false)
     suspend fun setTabsInSidebar(on: Boolean) = put(TABS_IN_SIDEBAR, on)
 
+    /** Beim Start das GoodNotes-Regal öffnen (`impala67StartLibrary`), nur auf diesem Gerät. */
+    val startLibrary: Flow<Boolean> = boolFlow(START_LIBRARY, false)
+    suspend fun setStartLibrary(on: Boolean) = put(START_LIBRARY, on)
+
     /** Letztes lokales Backup in ms seit 1970 (`impala67LastBackup`); `null` = noch keines. */
     val lastBackup: Flow<Long?> = store.data.map { it[LAST_BACKUP] }
     suspend fun setLastBackup(ms: Long) = put(LAST_BACKUP, ms)
@@ -181,6 +185,7 @@ class DevicePrefs(private val context: Context) {
         val SIDEBAR_COLLAPSED = booleanPreferencesKey("sidebarCollapsed")
         val SIDEBAR_WIDTH = intPreferencesKey("sidebarWidth")
         val TABS_IN_SIDEBAR = booleanPreferencesKey("tabsInSidebar")
+        val START_LIBRARY = booleanPreferencesKey("start_library")
         val LAST_BACKUP = longPreferencesKey("lastBackup")
         val BACKUP_SNOOZE = longPreferencesKey("backupSnoozeUntil")
         val FAV_MODELS = stringSetPreferencesKey("favModels")

@@ -112,11 +112,18 @@ class ShellNav(
      * Gespeicherte Tabs übernehmen (`restoreSession` in tabs.js), solange noch keiner offen ist; beim
      * frischen Start (nur Start auf dem Stapel) öffnet der aktive Tab – sonst der letzte.
      */
-    fun restoreSession(saved: List<String>, active: String?) {
-        if (tabs.isNotEmpty() || saved.isEmpty()) return
+    fun restoreSession(saved: List<String>, active: String?, startLibrary: Boolean = false) {
+        if (tabs.isNotEmpty()) return
         tabs.addAll(saved.takeLast(MAX_TABS))
-        val show = active?.takeIf { it in tabs } ?: tabs.last()
-        if (backStack.size == 1 && backStack[0] == HomeRoute) backStack.add(tabRoute(show))
+        if (backStack.size == 1 && backStack[0] == HomeRoute) {
+            if (startLibrary) {
+                org.impala67.app.library.LibraryViewModel.initialMode = org.impala67.app.library.LibraryMode.HEFTE
+                backStack.add(LibraryRoute)
+            } else if (saved.isNotEmpty()) {
+                val show = active?.takeIf { it in tabs } ?: tabs.last()
+                backStack.add(tabRoute(show))
+            }
+        }
     }
 
     /** Aktive Seite (für Tab-Leiste und Seitenleiste). */

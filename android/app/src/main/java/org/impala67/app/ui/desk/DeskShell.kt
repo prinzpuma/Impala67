@@ -85,7 +85,9 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.impala67.app.settings.DevicePrefs
 import kotlin.math.roundToInt
 
 /**
@@ -121,7 +123,7 @@ fun DeskShell(
     // Chat aus der Seitenleiste oder ein neuer Chat klappt das KI-Panel auf.
     val openRequest by ai.openRequests.collectAsStateWithLifecycle()
     LaunchedEffect(openRequest) { if (openRequest > 0) nav.aiPanelOpen = true }
-    DeskSession(store, nav)
+    DeskSession(store, nav, prefs)
     val imeOpen = WindowInsets.isImeVisible
     Box(Modifier.fillMaxSize().onPreviewKeyEvent { deskShortcut(it, nav, current) }) {
         // Jede Spalte malt ihre Fläche bis an den Rand (auch unter Kamera-Loch/Notch im Querformat) und
@@ -261,15 +263,16 @@ private fun SidebarResizer(width: Dp, onDrag: (Dp) -> Unit, onDragEnd: () -> Uni
  */
 @OptIn(FlowPreview::class)
 @Composable
-private fun DeskSession(store: ImpalaStore, nav: ShellNav) {
-    LaunchedEffect(store, nav) {
+private fun DeskSession(store: ImpalaStore, nav: ShellNav, prefs: DevicePrefs) {
+    LaunchedEffect(store, nav, prefs) {
+        val startLib = prefs.startLibrary.first()
         val (saved, active) = store.write { core ->
             val ui = core.uiTabs()
             val pages = core.recentPages(UInt.MAX_VALUE).mapTo(HashSet()) { it.id }
             val chats = core.chats().mapTo(HashSet()) { it.id }
             ui.tabs.filter { t -> t == ANKI_TAB || (t.startsWith(CHAT_TAB) && t.removePrefix(CHAT_TAB) in chats) || t in pages } to ui.activeTabId
         }
-        nav.restoreSession(saved, active)
+        nav.restoreSession(saved, active, startLib)
         snapshotFlow { nav.tabs.toList() to nav.currentTab }
             .debounce(350)
             .distinctUntilChanged()

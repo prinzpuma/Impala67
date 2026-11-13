@@ -4,20 +4,24 @@ import UIKit
 /// Farben und Maße der Bibliothek wie `web/css/shelf.css`: warmes Papier-Panel, Holzbretter,
 /// Schulheft-Cover und Mappen. Die Werte sind die von der PWA gemischten Töne (`color-mix`).
 enum Shelf {
-    static let paper = dynamic(light: 0xF9F3EA, dark: 0x322D27)
-    static let sheet = dynamic(light: 0xFCFAF6, dark: 0x46423D)
-    static let woodTop = dynamic(light: 0xEAD9BD, dark: 0x7C6449)
-    static let wood = dynamic(light: 0xCFB38B, dark: 0x54402D)
-    static let ink = dynamic(light: 0x3C352B, dark: 0xE5DFD7)
+    static let paper = dynamic(light: 0xF9F3EA, dark: 0x1E1D1B)
+    static let sheet = dynamic(light: 0xFCFAF6, dark: 0x252422)
+    static let woodTop = dynamic(light: 0xEAD9BD, dark: 0x3D352E)
+    static let wood = dynamic(light: 0xCFB38B, dark: 0x2C2621)
+    static let ink = dynamic(light: 0x3C352B, dark: 0xF5F4F0)
     static let edge = Color(uiColor: UIColor { t in
-        t.userInterfaceStyle == .dark ? UIColor(hex: 0xC9A77C, alpha: 0.16) : UIColor(hex: 0x967046, alpha: 0.14)
+        t.userInterfaceStyle == .dark ? UIColor(hex: 0xFFFAF0, alpha: 0.08) : UIColor(hex: 0x967046, alpha: 0.14)
     })
-    static let button = Color(uiColor: UIColor(hex: 0xA8754C))
+    static let button = dynamic(light: 0xA8754C, dark: 0x8C6543)
     static let cream = Color(uiColor: UIColor(hex: 0xFBF7EE))
     static let labelInk = Color(uiColor: UIColor(hex: 0x2C2823))
     /// `--b-tint`, `--b-tint-2`: warme Tönung statt Akzentfarbe innerhalb des Panels.
-    static var tint: Color { wood.opacity(0.16) }
-    static var tint2: Color { wood.opacity(0.26) }
+    static let tint = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: 0xFFFAF0, alpha: 0.07) : UIColor(hex: 0xCFB38B, alpha: 0.16)
+    })
+    static let tint2 = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: 0xFFFAF0, alpha: 0.13) : UIColor(hex: 0xCFB38B, alpha: 0.26)
+    })
 
     static let ledge: CGFloat = 12
 

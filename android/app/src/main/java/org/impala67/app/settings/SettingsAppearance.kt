@@ -26,6 +26,7 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val haptics by prefs.nativeHaptics.collectAsStateWithLifecycle(true)
     val hideBars by prefs.hideSystemBars.collectAsStateWithLifecycle(true)
     val tabsInSidebar by prefs.tabsInSidebar.collectAsStateWithLifecycle(false)
+    val startLibrary by prefs.startLibrary.collectAsStateWithLifecycle(false)
     val s = values
 
     SettingsGroup("Design") {
@@ -73,6 +74,11 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             selected = tabsInSidebar,
             onSelect = { on -> vm.setPref { setTabsInSidebar(on) } },
         )
+        SettingsSwitchRow(
+            "In der Heft-Bibliothek starten",
+            "Öffnet beim Start das GoodNotes-Regal statt der zuletzt offenen Seite – nur auf diesem Gerät",
+            startLibrary,
+        ) { on -> vm.setPref { setStartLibrary(on) } }
         SettingsTextField(
             label = "Begrüßungsname",
             stored = s?.userName ?: "",

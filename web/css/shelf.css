@@ -4,14 +4,14 @@
    und brauchen kein eigenes Element. Farben werden aus den App-Tokens abgeleitet. */
 
 .lib-docs {
-	--gn-paper: color-mix(in srgb, var(--panel-solid) 86%, #c9a77c);
-	--gn-paper-edge: rgb(201 167 124 / .16);
-	--gn-wood-top: color-mix(in srgb, var(--panel-solid) 42%, #c49a6c);
-	--gn-wood: color-mix(in srgb, var(--panel-solid) 48%, #8a6440);
-	--gn-ink: color-mix(in srgb, var(--text) 82%, #c9a77c);
-	--gn-sheet: color-mix(in srgb, var(--gn-paper) 90%, #fff);
-	--gn-btn: #a8754c;
-	--gn-btn-hover: #b98459;
+	--gn-paper: #1e1d1b;
+	--gn-paper-edge: rgb(255 250 240 / .08);
+	--gn-wood-top: #3d352e;
+	--gn-wood: #2c2621;
+	--gn-ink: var(--text);
+	--gn-sheet: #252422;
+	--gn-btn: #8c6543;
+	--gn-btn-hover: #9d734e;
 	--gn-book-h: 196px;
 	--gn-folder-h: 118px;
 	--gn-ledge: 12px;
@@ -26,6 +26,8 @@ body.light .lib-docs {
 	--gn-wood: #cfb38b;
 	--gn-ink: color-mix(in srgb, var(--text) 80%, #8a6440);
 	--gn-sheet: color-mix(in srgb, var(--gn-paper) 45%, #fff);
+	--gn-btn: #a8754c;
+	--gn-btn-hover: #b98459;
 }
 @media (max-width: 600px) {
 	.lib-docs { --gn-book-h: 168px; --gn-folder-h: 100px; --gn-row-h: 236px; --gn-row-gap: 20px }

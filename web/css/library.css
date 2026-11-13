@@ -11,13 +11,19 @@
 /* ---------- Papier-Panel: oben die Leiste (Ansichten + Suche), darunter Filter/Pfad, dann der Inhalt.
    .lib-top und .lib-body bilden zusammen eine Fläche. Innerhalb gelten warme Töne statt der Akzent-Tönung. ---------- */
 .lib-docs :is(.lib-top, .lib-body) {
+	--b-tint: rgb(255 250 240 / .07);
+	--b-tint-2: rgb(255 250 240 / .13);
+	--b-tint-3: rgb(255 250 240 / .19);
+	--b-hover-bg: rgb(255 250 240 / .055);
+	--panel-solid: var(--gn-sheet);
+	background: var(--gn-paper);
+	border: 1px solid var(--gn-paper-edge);
+}
+body.light .lib-docs :is(.lib-top, .lib-body) {
 	--b-tint: color-mix(in srgb, var(--gn-wood) 16%, transparent);
 	--b-tint-2: color-mix(in srgb, var(--gn-wood) 26%, transparent);
 	--b-tint-3: color-mix(in srgb, var(--gn-wood) 38%, transparent);
 	--b-hover-bg: color-mix(in srgb, var(--gn-wood) 13%, transparent);
-	--panel-solid: var(--gn-sheet);
-	background: var(--gn-paper);
-	border: 1px solid var(--gn-paper-edge);
 }
 .lib-top { padding: 16px 26px 0; border-bottom: 0 !important; border-radius: 24px 24px 0 0 }
 .lib-docs .lib-body { min-height: 320px; margin: -1px 0 0; padding: 18px 26px 26px; border-top: 0; border-radius: 0 0 24px 24px }
@@ -117,7 +123,7 @@ body .lib-modes .lib-mode.active { color: var(--gn-ink); background: var(--b-tin
 /* In der Bibliothek: eine Karte mit Zeilen wie im Seitenbaum */
 .lib-nlm .nlm-lib-row { box-shadow: inset 0 0 0 1px var(--gn-paper-edge) }
 .lib-nlm .nlm-lib-row { min-height: 60px; margin: 0 0 8px; padding: 8px 10px; border: 0; border-radius: 14px; background: var(--gn-sheet); transition: background-color .12s ease }
-.lib-nlm .nlm-lib-row:hover { background: color-mix(in srgb, var(--gn-sheet) 86%, var(--gn-wood)) }
+.lib-nlm .nlm-lib-row:hover { background: color-mix(in srgb, var(--gn-sheet) 92%, var(--gn-ink)) }
 .lib-nlm .nlm-lib-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--b-tint); color: var(--accent); font-size: 18px }
 .lib-nlm .nlm-lib-inbox .nlm-lib-icon { background: var(--accent); color: var(--on-accent) }
 .lib-nlm .nlm-lib-btns button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 10px; background: transparent; color: var(--text2) }

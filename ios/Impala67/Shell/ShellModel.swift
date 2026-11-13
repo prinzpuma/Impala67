@@ -285,6 +285,10 @@ final class ShellModel {
         chat = ChatModel(core: store.core)
         chat.panelOpen = UserDefaults.standard.bool(forKey: "aiPanelOpen")
         reload()
+        if UserDefaults.standard.bool(forKey: "impala67StartLibrary") {
+            UserDefaults.standard.set(LibraryMode.hefte.rawValue, forKey: "impala67LibMode")
+            libraryOpen = true
+        }
         DevBridge.shared.shell = self
     }
 

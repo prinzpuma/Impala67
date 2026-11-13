@@ -63,7 +63,14 @@ private const val PRODUCT = "Gemini Notebook"
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NotebookScreen(store: ImpalaStore, currentPageId: String?, onOpenPage: (String) -> Unit, onToast: (String) -> Unit, modifier: Modifier = Modifier) {
+fun NotebookScreen(
+    store: ImpalaStore,
+    currentPageId: String?,
+    onOpenPage: (String) -> Unit,
+    onToast: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    background: androidx.compose.ui.graphics.Color = Impala.colors.panel,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val inbox = remember(context) { NotebookInbox(context.applicationContext) }
@@ -92,7 +99,7 @@ fun NotebookScreen(store: ImpalaStore, currentPageId: String?, onOpenPage: (Stri
     }
     val titleOf = { id: String -> pages.orEmpty().firstOrNull { it.id == id }?.title?.ifBlank { "Ohne Titel" } }
 
-    Box(modifier.fillMaxSize().background(c.panel), contentAlignment = Alignment.TopCenter) {
+    Box(modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 820.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Space.s5, vertical = 30.dp), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 Icon(painterResource(R.drawable.ic_i_book), null, tint = c.accent)

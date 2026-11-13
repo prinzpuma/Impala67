@@ -582,6 +582,7 @@ private struct AppearanceSettingsSections: View {
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppHaptics.key) private var haptics = true
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
+    @AppStorage("impala67StartLibrary") private var startLibrary = false
     @AppStorage(AppStatusBar.hiddenKey) private var statusBarHidden = false
 
     @State private var homeName = ""
@@ -654,6 +655,14 @@ private struct AppearanceSettingsSections: View {
                 SettingsRow(title: "Tab-Anordnung", description: tabsPosition == AppTabsPosition.sidebar.rawValue ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)") {
                     SettingsSegmented(options: AppTabsPosition.allCases.map { ($0.rawValue, $0.label) }, selection: $tabsPosition)
                 }
+
+                SettingsDivider()
+
+                SettingsSwitchRow(
+                    title: "In der Heft-Bibliothek starten",
+                    description: "Öffnet beim Start das GoodNotes-Regal statt der zuletzt offenen Seite – nur auf diesem Gerät",
+                    isOn: $startLibrary
+                )
 
                 SettingsDivider()
 
