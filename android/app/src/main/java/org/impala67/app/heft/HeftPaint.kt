@@ -60,15 +60,19 @@ fun DrawScope.drawPaper(paper: Paper, ink: Color, k: Float) {
     }
 }
 
-/** ink-Striche in Seitenkoordinaten auf die Zeichenfläche (mit [k] Pixel je Seiteneinheit). */
-fun DrawScope.drawInkStrokes(strokes: List<Stroke>, k: Float) {
+/**
+ * ink-Striche in Seitenkoordinaten auf die Zeichenfläche (mit [k] Pixel je Seiteneinheit). [lod]: Pixel je
+ * Seiteneinheit auf dem Bildschirm, falls die Fläche danach noch skaliert wird (Kamera-Zoom).
+ */
+fun DrawScope.drawInkStrokes(strokes: List<Stroke>, k: Float, lod: Float = k) {
     if (strokes.isEmpty()) return
-    val matrix = android.graphics.Matrix().apply { setScale(k, k) }
+    val canvasMatrix = android.graphics.Matrix().apply { setScale(k, k) }
+    val matrix = android.graphics.Matrix().apply { setScale(lod, lod) }
     drawIntoCanvas { canvas ->
         // Der Renderer nutzt die Matrix nur für die Detailstufe; zeichnen muss der Canvas selbst skaliert.
         val native = canvas.nativeCanvas
         val saved = native.save()
-        native.concat(matrix)
+        native.concat(canvasMatrix)
         for (stroke in strokes) HeftInk.renderer.draw(native, stroke, matrix)
         native.restoreToCount(saved)
     }

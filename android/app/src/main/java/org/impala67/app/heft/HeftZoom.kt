@@ -1,60 +1,29 @@
 package org.impala67.app.heft
 
-import androidx.compose.animation.core.AnimationState
-import androidx.compose.animation.core.DecayAnimationSpec
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateDecay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.runtime.Stable
+import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 
-/**
- * Zoom und waagerechtes Verschieben der Seitenspalte (heft-viewport.js). [zoom] ist die festgeschriebene
- * Stufe (Seitenbreite = Passbreite × zoom), [panX] der Versatz nach links in Pixeln. Während zweier
- * Finger skaliert nur [live] die Ebene (scharf wird sie erst beim Loslassen, wenn die Seiten neu
- * gelegt sind); [origin] ist der Fixpunkt in Pixeln der Ansicht.
- */
-@Stable
-class HeftZoom {
-    var zoom by mutableFloatStateOf(1f)
-    var panX by mutableFloatStateOf(0f)
-    var live by mutableFloatStateOf(1f)
-    var origin by mutableStateOf(Offset.Zero)
-    /** Verschiebung der Ebene während des Pinchs (die Finger ziehen die Seite mit). */
-    var shift by mutableStateOf(Offset.Zero)
-
-    companion object {
-        const val MIN = 0.4f
-        const val MAX = 6f
-    }
-}
-
 /** Rückmeldungen der Finger-Gesten an das Heft. */
 class HeftGestureCallbacks(
-    /** Pinch fertig: Faktor; die Stelle unter [from] landet unter [to] (Pixel der Ansicht). */
-    val pinchEnd: (scale: Float, from: Offset, to: Offset) -> Unit,
+    /** Pinch, live je Ereignis: Mittelpunkt (Pixel der Ansicht), Verschiebung und Zoomfaktor seit dem letzten Ereignis. */
+    val transform: (centroid: Offset, pan: Offset, zoom: Float) -> Unit,
+    /** Pinch fertig (die Zoomstufe steht, Auflösungen dürfen nachziehen). */
+    val transformEnd: () -> Unit,
     /** Doppeltipp mit einem Finger (heft-viewport.js: auf ca. 2,2× bzw. zurück auf Passbreite). */
     val doubleTap: (Offset) -> Unit,
     /** Zwei-Finger-Doppeltipp. */
@@ -66,13 +35,14 @@ class HeftGestureCallbacks(
 )
 
 /**
- * Finger-Gesten des Hefts (heft-viewport.js): Pinch mit zwei Fingern zoomt und verschiebt (Stift ignoriert); kurze
- * Tipps ohne Bewegung lösen aus: Doppeltipp zoomt, zwei Finger zweimal = Rückgängig, drei Finger =
- * Wiederholen. Läuft im Initial-Durchgang vor den Kindern; nur der Pinch verbraucht Berührungen,
- * damit die Liste dabei nicht scrollt. Kurz nach dem Stift zählen Finger nicht (Handballen).
- * [callbacks] wird bei jeder Geste frisch gelesen (die Rückmeldungen hängen von der Zoomstufe ab).
+ * Finger-Gesten des Hefts (heft-viewport.js): Pinch mit zwei Fingern zoomt und verschiebt live (Stift
+ * ignoriert); kurze Tipps ohne Bewegung lösen aus: Doppeltipp zoomt, zwei Finger zweimal = Rückgängig,
+ * drei Finger = Wiederholen. Läuft im Initial-Durchgang vor den Kindern; zwei Finger verbrauchen die
+ * Berührung, damit nichts zeichnet oder scrollt. Erst nach der Berührungsschwelle bewegt sich die Ansicht,
+ * damit ein Zwei-Finger-Tipp nichts verrückt. Kurz nach dem Stift zählen Finger nicht (Handballen).
+ * [callbacks] wird bei jedem Ereignis frisch gelesen.
  */
-fun Modifier.heftGestures(zoom: HeftZoom, callbacks: State<HeftGestureCallbacks>): Modifier = pointerInput(zoom) {
+fun Modifier.heftGestures(callbacks: State<HeftGestureCallbacks>): Modifier = pointerInput(Unit) {
     var lastTap = 0L
     var tapAt = Offset.Zero
     var lastTwoTap = 0L
@@ -83,8 +53,11 @@ fun Modifier.heftGestures(zoom: HeftZoom, callbacks: State<HeftGestureCallbacks>
         val startedAt = down.uptimeMillis
         var endedAt = startedAt
         var maxCount = 1
-        var pinching = false
         var travel = 0f
+        // Pinch: bis zur Schwelle gesammelt, danach live weitergereicht.
+        var moving = false
+        var zoomAcc = 1f
+        var panAcc = Offset.Zero
         do {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val touches = event.changes.filter { it.pressed && it.type == PointerType.Touch }
@@ -93,18 +66,27 @@ fun Modifier.heftGestures(zoom: HeftZoom, callbacks: State<HeftGestureCallbacks>
             travel += event.calculatePan().getDistance()
             event.changes.firstOrNull()?.let { endedAt = it.uptimeMillis }
             if (touches.size >= 2 && !penDown) {
-                if (!pinching) { zoom.origin = event.calculateCentroid(); zoom.shift = Offset.Zero }
-                else zoom.shift += event.calculatePan()
-                pinching = true
-                zoom.live = (zoom.live * event.calculateZoom()).coerceIn(HeftZoom.MIN / zoom.zoom, HeftZoom.MAX / zoom.zoom)
+                val zoom = event.calculateZoom()
+                val pan = event.calculatePan()
+                val centroid = event.calculateCentroid()
+                if (!moving) {
+                    zoomAcc *= zoom
+                    panAcc += pan
+                    val span = event.calculateCentroidSize()
+                    if (abs(1f - zoomAcc) * span > slop || panAcc.getDistance() > slop) {
+                        moving = true
+                        if (centroid.isSpecified) callbacks.value.transform(centroid - panAcc, panAcc, zoomAcc)
+                    }
+                } else if (centroid.isSpecified && (zoom != 1f || pan != Offset.Zero)) {
+                    // Mittelpunkt vor diesem Ereignis: dort hält die Ansicht fest, dann wandert sie um `pan`.
+                    callbacks.value.transform(centroid - pan, pan, zoom)
+                }
                 event.changes.forEach { it.consume() }
             }
         } while (event.changes.any { it.pressed })
         val on = callbacks.value
-        val quick = endedAt - startedAt < 300 && travel < slop && abs(zoom.live - 1f) < 0.04f
-        if (pinching) {
-            if (quick) { zoom.live = 1f; zoom.shift = Offset.Zero } else on.pinchEnd(zoom.live, zoom.origin, zoom.origin + zoom.shift)
-        }
+        if (moving) on.transformEnd()
+        val quick = !moving && endedAt - startedAt < 300 && travel < slop
         if (!touch || !quick || penRecently()) return@awaitEachGesture
         when {
             maxCount == 2 -> {
@@ -126,62 +108,18 @@ fun Modifier.heftGestures(zoom: HeftZoom, callbacks: State<HeftGestureCallbacks>
 }
 
 /**
- * Freies Verschieben mit einem Zeiger in alle Richtungen samt Schwung (heft-viewport.js `fling`), dazu
- * Mausrad/Touchpad. Läuft im Main-Durchgang nach den Seiten: Verbraucht eine Seite die Berührung
- * (Schreiben, Greifen) oder der Pinch (zwei Finger), verschiebt sich nichts. [pan] bekommt die
- * Fingerbewegung in Pixeln und gibt zurück, wie viel davon ging (am Rand weniger); es muss seine
- * Grenzen bei jedem Aufruf frisch lesen, weil der Modifier die erste Fassung behält.
+ * Mausrad und Touchpad verschieben das Heft (Berührungen verschiebt die Stift-Ebene, `PageInput`).
+ * [pan] bekommt die Bewegung in Bildschirmpixeln (wie ein Finger: positiv = Inhalt nach rechts/unten).
  */
-fun Modifier.heftPan(scope: CoroutineScope, decay: DecayAnimationSpec<Offset>, wheelStep: Float, pan: (Offset) -> Offset): Modifier =
-    pointerInput(Unit) {
-        val slop = viewConfiguration.touchSlop
-        var fling: Job? = null
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.type == PointerEventType.Scroll) {
-                    val d = event.changes.fold(Offset.Zero) { a, c -> a + c.scrollDelta }
-                    if (d != Offset.Zero && event.changes.none { it.isConsumed }) {
-                        fling?.cancel()
-                        pan(-d * wheelStep)
-                        event.changes.forEach { it.consume() }
-                    }
-                    continue
-                }
-                val down = event.changes.firstOrNull { it.changedToDownIgnoreConsumed() } ?: continue
-                fling?.cancel()
-                var free = !down.isConsumed
-                val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
-                var dragging = false
-                var travel = Offset.Zero
-                while (true) {
-                    val e = awaitPointerEvent()
-                    val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                    if (e.changes.count { it.pressed } > 1 || e.changes.any { it.isConsumed }) free = false
-                    if (!c.pressed) break
-                    if (!free) continue
-                    tracker.addPosition(c.uptimeMillis, c.position)
-                    val d = c.position - c.previousPosition
-                    if (!dragging) {
-                        travel += d
-                        val dist = travel.getDistance()
-                        if (dist <= slop) continue
-                        dragging = true
-                        pan(travel * ((dist - slop) / dist))
-                    } else pan(d)
-                    c.consume()
-                }
-                if (!free || !dragging) continue
-                val v = tracker.calculateVelocity()
-                fling = scope.launch {
-                    var last = Offset.Zero
-                    AnimationState(Offset.VectorConverter, Offset.Zero, Offset(v.x, v.y)).animateDecay(decay) {
-                        val d = value - last
-                        last = value
-                        // Beide Richtungen am Rand: Schwung endet.
-                        if (pan(d).getDistance() < 0.5f && d.getDistance() > 0.5f) cancelAnimation()
-                    }
-                }
-            }
+fun Modifier.heftWheel(wheelStep: Float, pan: (Offset) -> Unit): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type != PointerEventType.Scroll || event.changes.any { it.isConsumed }) continue
+            val d = event.changes.fold(Offset.Zero) { a, c -> a + c.scrollDelta }
+            if (d == Offset.Zero) continue
+            pan(-d * wheelStep)
+            event.changes.forEach { it.consume() }
         }
     }
+}

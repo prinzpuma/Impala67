@@ -29,7 +29,7 @@ import kotlin.math.roundToInt
  * Dekodierte Heft-Bilder (Scans, eingefügte Bilder, PDF-Seiten), für alle Hefte gemeinsam und nach
  * Speicher begrenzt. Schlüssel: Inhalts-Hash (bzw. Bild-ID bei Altbildern) und Zielgröße.
  */
-private object HeftImageCache : LruCache<String, ImageBitmap>(48 * 1024 * 1024) {
+private object HeftImageCache : LruCache<String, ImageBitmap>(96 * 1024 * 1024) {
     override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
 }
 
@@ -41,31 +41,39 @@ private object HeftImageCache : LruCache<String, ImageBitmap>(48 * 1024 * 1024) 
 fun rememberHeftImages(store: ImpalaStore, pageId: String, heftPageId: String?, images: List<HeftImage>, maxSide: Int): Map<String, ImageBitmap> {
     var loaded by remember(heftPageId) { mutableStateOf(emptyMap<String, ImageBitmap>()) }
     LaunchedEffect(heftPageId, images, maxSide) {
-        loaded = if (heftPageId == null) emptyMap() else loadHeftImages(store, pageId, heftPageId, images, maxSide)
+        loaded = if (heftPageId == null) emptyMap() else loadHeftImages(store, pageId, heftPageId, images, maxSide, hardware = true)
     }
     return loaded
 }
 
-/** Bilder einer Heftseite dekodieren (für Anzeige und Export); fehlende Daten bleiben weg. */
-suspend fun loadHeftImages(store: ImpalaStore, pageId: String, heftPageId: String, images: List<HeftImage>, maxSide: Int): Map<String, ImageBitmap> {
+/**
+ * Bilder einer Heftseite dekodieren (für Anzeige und Export); fehlende Daten bleiben weg. [hardware]:
+ * direkt in den Grafikspeicher (nur zum Anzeigen: kein Hochladen beim ersten Zeichnen, kein Java-Heap;
+ * ein Export, der in eine Software-Bitmap zeichnet, braucht normale Bitmaps).
+ */
+suspend fun loadHeftImages(store: ImpalaStore, pageId: String, heftPageId: String, images: List<HeftImage>, maxSide: Int, hardware: Boolean = false): Map<String, ImageBitmap> {
     val out = HashMap<String, ImageBitmap>()
     for (im in images) {
-        val key = (im.blobId ?: im.id) + "@" + maxSide
+        val key = (im.blobId ?: im.id) + "@" + maxSide + if (hardware) "h" else ""
         val bmp = HeftImageCache.get(key) ?: withContext(Dispatchers.IO) {
             val data = runCatching { store.write { it.heftImageData(pageId, heftPageId, im.id) } }.getOrNull()
-            data?.bytes?.let { decodeSampled(it, maxSide) }?.asImageBitmap()?.also { HeftImageCache.put(key, it) }
+            data?.bytes?.let { decodeSampled(it, maxSide, hardware) }?.asImageBitmap()?.also { HeftImageCache.put(key, it) }
         }
         if (bmp != null) out[im.id] = bmp
     }
     return out
 }
 
-private fun decodeSampled(bytes: ByteArray, maxSide: Int): Bitmap? {
+private fun decodeSampled(bytes: ByteArray, maxSide: Int, hardware: Boolean): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     var sample = 1
     while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    val opts = BitmapFactory.Options().apply {
+        inSampleSize = sample
+        if (hardware) inPreferredConfig = Bitmap.Config.HARDWARE
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
 }
 
 /** Bilder in Seitenkoordinaten (`renderPageTo`: unter den Strichen). */

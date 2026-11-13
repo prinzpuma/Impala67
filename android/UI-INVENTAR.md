@@ -901,7 +901,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 
 ### 6. Bilder-Popover („Bilder“)
 
-- [x] **Bilder & Texte direkt auswählen** – ohne eigenes Werkzeug: Fingertipp bei „Nur Stift“, sonst Halten (auch Maus); Verschieben, Skalieren, Löschen (web/heft-input.js `grabSelection`/`armPick`) — Kotlin: ✅ HeftInput.kt `holdPick`, HeftPageView.kt `fingerPicks`, HeftObjects.kt `ObjGesture`
+- [x] **Bilder & Texte direkt auswählen** – ohne eigenes Werkzeug: Fingertipp bei „Nur Stift“, sonst Halten (auch Maus); Verschieben, Skalieren, Löschen (web/heft-input.js `grabSelection`/`armPick`) — Kotlin: ✅ HeftInput.kt `holdPick`, HeftViewport.kt `heftFingerPicks`, HeftObjects.kt `ObjGesture`
 - [x] **Text schreiben** – Textfeld am Seitenende, ausgewähltes Feld antippen zum Bearbeiten (web/heft-toolbar-ui.js:215; web/heft.js:1461; web/heft.js:984-1052) — Kotlin: ✅ HeftViewModel.kt `startText`, HeftObjects.kt `HeftTextEditor`
 - [x] **Bild hinzufügen** – Galerie, Bild mit max. 70 % der Seite (web/heft-toolbar-ui.js:216; web/heft.js:1462; web/heft-import.js:101-135) — Kotlin: ✅ HeftImagePick.kt (Photo Picker, längste Kante 1400), HeftViewModel.kt `addImage`
 - [x] **Bild aufnehmen** – Kamera (web/heft-toolbar-ui.js:217; web/heft.js:1463) — Kotlin: ✅ HeftImagePick.kt (`TakePicture`, fragt Kamera-Berechtigung; im Emulator nicht geprüft)
@@ -962,7 +962,7 @@ Legende: ✅ vorhanden wie PWA · 🟡 teilweise oder abweichend · ⬜ fehlt. K
 ### 10. Gesten und Eingabe (Touch, Stift, Maus)
 
 - [x] **Finger zeichnen** – wenn „Finger dürfen zeichnen“ aktiv (web/heft-input.js:33-35, 67, 123) — Kotlin: ✅ HeftInput.kt:64-67
-- [x] **Finger scrollt und zoomt bei „Nur Stift“** – Blättern vertikal (web/heft-viewport.js:504-506, 535-574) — Kotlin: ✅ HeftScreen.kt:178-201 (LazyColumn), HeftInput.kt:64-67
+- [x] **Finger scrollt und zoomt bei „Nur Stift“** – Blättern vertikal (web/heft-viewport.js:504-506, 535-574) — Kotlin: ✅ HeftViewport.kt `HeftCamera` (frei in alle Richtungen, Pinch live), HeftInput.kt `startPan`/`panMove`
 - [x] **Zwei-Finger-Pinch zoomt und verschiebt in einem Schritt** (web/heft-viewport.js:539-564) — Kotlin: ✅ HeftZoom.kt `heftGestures` (0,4–6)
 - [x] **Zoom-Bereich 0,4–6** (web/heft-viewport.js:23) — Kotlin: ✅ HeftZoom.kt
 - [x] **Doppeltipp mit einem Finger zoomt auf ca. 2,2× bzw. zurück auf Fit** (web/heft-viewport.js:616-623; animateZoom 477-482) — Kotlin: ✅ HeftScreen.kt `zoomTo` (animiert; nur wenn der Finger nicht zeichnet)

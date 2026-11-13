@@ -5,6 +5,8 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
+import android.view.ViewConfiguration
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
@@ -35,6 +37,20 @@ interface PageInputSink {
     fun touchStart()
 }
 
+/** Seite unter einem Zeiger: Empfänger und Lage auf dem Bildschirm (links/oben in Pixeln, [k] Pixel je Seiteneinheit). */
+class PageHit(val sink: PageInputSink, val left: Float, val top: Float, val k: Float)
+
+/** Die Ansicht hinter der Stift-Ebene: Seite unter einem Punkt finden, verschieben und mit Schwung auslaufen lassen. */
+interface PageInputHost {
+    fun locate(x: Float, y: Float): PageHit?
+    /** Verschieben um Bildschirmpixel (Finger nach rechts/unten = Inhalt folgt). */
+    fun pan(dx: Float, dy: Float)
+    /** Loslassen mit Schwung (Pixel je Sekunde). */
+    fun fling(vx: Float, vy: Float)
+    /** Laufenden Schwung anhalten (neue Berührung). */
+    fun stopFling()
+}
+
 /** Handballen-Schutz (heft-input.js `PEN_GRACE_MS`): kurz nach dem Stift zählt ein Finger nicht. */
 private const val PEN_GRACE_MS = 400L
 private var lastPenUpAt = 0L
@@ -54,20 +70,24 @@ private const val LASER_SIZE = 7.0
 private const val LASER_FADE_MS = 900L
 
 /**
- * Stifteingabe einer Seite (in der PWA `heft-input.js`). Der Stift schreibt über `InProgressStrokesView`
- * (Frontbuffer, geringe Latenz), der Finger scrollt und zoomt, solange „nur Stift“ gilt. Die
- * Strichkoordinaten sind gleich Seitenkoordinaten: Eingaben liegen in View-Pixeln (Identität), die
- * Strich→Welt-Matrix skaliert mit [k] Pixel je Seiteneinheit.
+ * Stifteingabe des Hefts (in der PWA `heft-input.js`): eine `InProgressStrokesView` über der ganzen
+ * Ansicht (Frontbuffer, geringe Latenz, Größe = Bildschirm statt Seite). Beim Aufsetzen sucht [locate]
+ * die Seite unter dem Zeiger; deren Empfänger bekommt die ganze Geste in Seiteneinheiten. Die
+ * MotionEvent→Welt-Matrix rechnet Bildschirmpixel in Seiteneinheiten um, Strichkoordinaten sind gleich
+ * Seitenkoordinaten. Der Finger scrollt und zoomt, solange „nur Stift“ gilt.
  */
-class PageInput(private val view: InProgressStrokesView, private val sink: PageInputSink) {
-    /** Pixel je Seiteneinheit; wird mit jeder Zoomstufe nachgeführt. */
-    var k = 1f
+class PageInput(private val view: InProgressStrokesView, private val host: PageInputHost) {
+    /** Seite der laufenden Geste: Empfänger, Bildschirmlage und Pixel je Seiteneinheit (beim Aufsetzen festgelegt). */
+    private var sink: PageInputSink = NoSink
+    private var k = 1f
+    private var ox = 0f
+    private var oy = 0f
     var tools = HeftTools()
 
     /** Lesemodus: keine Eingabe auf der Seite, Finger und Stift scrollen die Liste. */
     var reading = false
 
-    private class Meta(val tool: String, val color: String, val size: Double, val laser: Boolean)
+    private class Meta(val tool: String, val color: String, val size: Double, val laser: Boolean, val sink: PageInputSink)
 
     private val running = HashMap<InProgressStrokeId, Meta>()
     private val identity = Matrix()
@@ -75,7 +95,15 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     private var pointerId = -1
     private var mode = Mode.INK
 
-    private enum class Mode { INK, ERASE, LASSO, OBJ }
+    private enum class Mode { INK, ERASE, LASSO, OBJ, PAN }
+
+    /** Verschieben (Finger bei „nur Stift“, alles im Lesemodus, alles neben den Seiten). */
+    private val velocity = VelocityTracker.obtain()
+    private val slop = ViewConfiguration.get(view.context).scaledTouchSlop.toFloat()
+    private var lastX = 0f
+    private var lastY = 0f
+    private var travel = 0f
+    private var dragging = false
 
     /** Finger (wenn er zeichnet) oder Maus liegt auf einem Bild/Textfeld: Halten greift es. */
     private var pickHit: ObjGesture.Hit? = null
@@ -102,13 +130,16 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                         continue
                     }
                     done += id
-                    if (info != null) sink.strokeFinished(info.tool, info.color, info.size, HeftInk.points(stroke))
+                    if (info != null) info.sink.strokeFinished(info.tool, info.color, info.size, HeftInk.points(stroke))
                 }
                 // Erst zwei Frames später entfernen: bis dahin zeichnet die Seite den Strich selbst.
                 if (done.isNotEmpty()) view.postOnAnimation { view.postOnAnimation { view.removeFinishedStrokes(done) } }
             }
         })
     }
+
+    private fun px(x: Float) = (x - ox) / k
+    private fun py(y: Float) = (y - oy) / k
 
     private fun accepts(type: Int) = when (type) {
         MotionEvent.TOOL_TYPE_STYLUS, MotionEvent.TOOL_TYPE_ERASER, MotionEvent.TOOL_TYPE_MOUSE -> true
@@ -118,15 +149,26 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
     fun onTouch(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                if (pointerId != -1) return true
-                if (reading) return false
                 val i = ev.actionIndex
+                if (pointerId != -1) {
+                    // Stift setzt auf, während die Hand verschiebt (Handballen): der Stift gewinnt.
+                    if (mode != Mode.PAN || reading || !isPen(ev.getToolType(i))) return true
+                    pointerId = -1
+                    mode = Mode.INK
+                }
+                host.stopFling()
+                if (reading) return startPan(ev, i)
+                val hit = host.locate(ev.getX(i), ev.getY(i)) ?: return startPan(ev, i)
+                sink = hit.sink
+                k = hit.k
+                ox = hit.left
+                oy = hit.top
                 val type = ev.getToolType(i)
                 val finger = type == MotionEvent.TOOL_TYPE_FINGER
                 val lasso = tools.tool == HeftTool.LASSO && type != MotionEvent.TOOL_TYPE_ERASER
                 val picks = tools.tool != HeftTool.LASSO && tools.tool != HeftTool.LASER && type != MotionEvent.TOOL_TYPE_ERASER
                 // Eine bestehende Auswahl greift jeder Zeiger (auch der Finger bei „Nur Stift“).
-                if (picks && !(finger && penRecently()) && sink.objects.grab(ev.getX(i) / k, ev.getY(i) / k, finger)) {
+                if (picks && !(finger && penRecently()) && sink.objects.grab(px(ev.getX(i)), py(ev.getY(i)), finger)) {
                     pointerId = ev.getPointerId(i)
                     view.parent?.requestDisallowInterceptTouchEvent(true)
                     mode = Mode.OBJ
@@ -134,14 +176,14 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 }
                 if (lasso) {
                     // Finger im Lasso-Modus (lassoTouchAction): auf der Auswahl greifen, daneben beenden.
-                    val x = ev.getX(i) / k
-                    val y = ev.getY(i) / k
+                    val x = px(ev.getX(i))
+                    val y = py(ev.getY(i))
                     when (heftLassoTouchAction(finger, true, sink.lasso.onSelection(x, y))) {
-                        HeftLassoTouch.DISMISS -> { if (!penRecently()) sink.lassoDismiss(); return false }
+                        HeftLassoTouch.DISMISS -> { if (!penRecently()) sink.lassoDismiss(); return startPan(ev, i) }
                         HeftLassoTouch.INTERACT, HeftLassoTouch.NONE -> Unit
                     }
                 } else if (!accepts(type)) {
-                    return false
+                    return startPan(ev, i)
                 }
                 pointerId = ev.getPointerId(i)
                 view.parent?.requestDisallowInterceptTouchEvent(true)
@@ -153,17 +195,17 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 }
                 when (mode) {
                     Mode.ERASE -> { sink.objects.clear(); sink.writing(true); erase(ev, i, history = false) }
-                    Mode.LASSO -> sink.lasso.down(ev.getX(i) / k, ev.getY(i) / k, finger)
+                    Mode.LASSO -> sink.lasso.down(px(ev.getX(i)), py(ev.getY(i)), finger)
                     Mode.INK -> {
                         sink.objects.clear()
                         begin(ev, i)
-                        val x = ev.getX(i) / k
-                        val y = ev.getY(i) / k
+                        val x = px(ev.getX(i))
+                        val y = py(ev.getY(i))
                         if (picks && type != MotionEvent.TOOL_TYPE_STYLUS && tools.tool.writes) {
                             pickHit = sink.objects.hit(x, y)?.also { view.postDelayed(pick, PICK_HOLD_MS) }
                         }
                     }
-                    Mode.OBJ -> Unit
+                    Mode.OBJ, Mode.PAN -> Unit
                 }
                 return true
             }
@@ -172,9 +214,10 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                 if (i < 0) return pointerId != -1
                 when (mode) {
                     Mode.ERASE -> erase(ev, i, history = true)
-                    Mode.LASSO -> sink.lasso.move(ev.getX(i) / k, ev.getY(i) / k)
-                    Mode.OBJ -> sink.objects.move(ev.getX(i) / k, ev.getY(i) / k)
+                    Mode.LASSO -> sink.lasso.move(px(ev.getX(i)), py(ev.getY(i)))
+                    Mode.OBJ -> sink.objects.move(px(ev.getX(i)), py(ev.getY(i)))
                     Mode.INK -> inkMove(ev, i)
+                    Mode.PAN -> panMove(ev, i)
                 }
                 return true
             }
@@ -185,6 +228,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                     Mode.LASSO -> sink.lasso.up()
                     Mode.OBJ -> sink.objects.up()
                     Mode.INK -> inkUp(ev)
+                    Mode.PAN -> panUp(ev)
                 }
                 if (ev.getToolType(ev.actionIndex) != MotionEvent.TOOL_TYPE_FINGER) lastPenUpAt = SystemClock.uptimeMillis()
                 reset()
@@ -200,6 +244,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
                         current?.let { running.remove(it); view.cancelStroke(it, ev) }
                         if (snapped != null) meta?.let { sink.shapePreview(null, it.color, it.size) }
                     }
+                    Mode.PAN -> Unit
                 }
                 reset()
                 return true
@@ -208,22 +253,65 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         return pointerId != -1
     }
 
+    private fun isPen(type: Int) = type == MotionEvent.TOOL_TYPE_STYLUS || type == MotionEvent.TOOL_TYPE_ERASER
+
+    /** Verschieben beginnen (erst nach der Berührungsschwelle bewegt sich die Ansicht). */
+    private fun startPan(ev: MotionEvent, i: Int): Boolean {
+        pointerId = ev.getPointerId(i)
+        mode = Mode.PAN
+        lastX = ev.getX(i)
+        lastY = ev.getY(i)
+        travel = 0f
+        dragging = false
+        velocity.clear()
+        velocity.addMovement(ev)
+        return true
+    }
+
+    private fun panMove(ev: MotionEvent, i: Int) {
+        velocity.addMovement(ev)
+        val x = ev.getX(i)
+        val y = ev.getY(i)
+        var dx = x - lastX
+        var dy = y - lastY
+        lastX = x
+        lastY = y
+        if (!dragging) {
+            travel += hypot(dx, dy)
+            if (travel <= slop) return
+            dragging = true
+            // Den Weg bis zur Schwelle schlucken, damit die Seite nicht ruckt.
+            val keep = (travel - slop) / travel
+            dx *= keep
+            dy *= keep
+        }
+        host.pan(dx, dy)
+    }
+
+    private fun panUp(ev: MotionEvent) {
+        velocity.addMovement(ev)
+        if (!dragging) return
+        velocity.computeCurrentVelocity(1000)
+        host.fling(velocity.getXVelocity(pointerId), velocity.getYVelocity(pointerId))
+    }
+
     private fun begin(ev: MotionEvent, i: Int) {
         val t = tools
         val laser = t.tool == HeftTool.LASER
         val name = if (t.tool == HeftTool.MARKER) "marker" else "pen"
-        val m = if (laser) Meta("pen", LASER_COLOR, LASER_SIZE, laser = true) else Meta(name, t.color, t.size, laser = false)
+        val m = if (laser) Meta("pen", LASER_COLOR, LASER_SIZE, laser = true, sink) else Meta(name, t.color, t.size, laser = false, sink)
         val brush = HeftInk.brush(m.tool, m.color, m.size)
-        val strokeToWorld = Matrix().apply { setScale(k, k) }
-        val id = view.startStroke(ev, pointerId, brush, identity, strokeToWorld)
+        // Welt = Seiteneinheiten: Bildschirmpixel minus Seitenecke, geteilt durch k; Strich = Welt.
+        val motionToWorld = Matrix().apply { setTranslate(-ox, -oy); postScale(1f / k, 1f / k) }
+        val id = view.startStroke(ev, pointerId, brush, motionToWorld, identity)
         running[id] = m
         current = id
         meta = m
         if (laser) return
         sink.writing(true)
         pts.clear()
-        addPoint(ev.getX(i) / k, ev.getY(i) / k, ev.getPressure(i))
-        armSnap(ev.getX(i) / k, ev.getY(i) / k)
+        addPoint(px(ev.getX(i)), py(ev.getY(i)), ev.getPressure(i))
+        armSnap(px(ev.getX(i)), py(ev.getY(i)))
     }
 
     private fun addPoint(x: Float, y: Float, p: Float) {
@@ -235,7 +323,7 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         if (shape != null) {
             // Eine erkannte Linie folgt dem Stift weiter (heft-input.js: x2/y2 nachführen).
             if (shape is HeftShape.Line) {
-                val next = shape.copy(x2 = (ev.getX(i) / k).toDouble(), y2 = (ev.getY(i) / k).toDouble())
+                val next = shape.copy(x2 = (px(ev.getX(i))).toDouble(), y2 = (py(ev.getY(i))).toDouble())
                 snapped = next
                 meta?.let { sink.shapePreview(next, it.color, it.size) }
             }
@@ -243,9 +331,9 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         }
         current?.let { view.addToStroke(ev, pointerId, it) }
         if (meta?.laser != false) return
-        for (h in 0 until ev.historySize) addPoint(ev.getHistoricalX(i, h) / k, ev.getHistoricalY(i, h) / k, ev.getHistoricalPressure(i, h))
-        val x = ev.getX(i) / k
-        val y = ev.getY(i) / k
+        for (h in 0 until ev.historySize) addPoint(px(ev.getHistoricalX(i, h)), py(ev.getHistoricalY(i, h)), ev.getHistoricalPressure(i, h))
+        val x = px(ev.getX(i))
+        val y = py(ev.getY(i))
         addPoint(x, y, ev.getPressure(i))
         if (pickHit != null && pts.size >= 3 && hypot(x - pts[0], y - pts[1]) > SNAP_SLOP) cancelPick()
         if (hypot(x - anchorX, y - anchorY) > SNAP_SLOP) armSnap(x, y)
@@ -308,8 +396,8 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
 
     /** Radierer: alle Zwischenpunkte der Bewegung, damit schnelle Züge keinen Strich überspringen. */
     private fun erase(ev: MotionEvent, i: Int, history: Boolean) {
-        if (history) for (h in 0 until ev.historySize) sink.eraseMove(ev.getHistoricalX(i, h) / k, ev.getHistoricalY(i, h) / k)
-        sink.eraseMove(ev.getX(i) / k, ev.getY(i) / k)
+        if (history) for (h in 0 until ev.historySize) sink.eraseMove(px(ev.getHistoricalX(i, h)), py(ev.getHistoricalY(i, h)))
+        sink.eraseMove(px(ev.getX(i)), py(ev.getY(i)))
     }
 
     private fun reset() {
@@ -323,4 +411,18 @@ class PageInput(private val view: InProgressStrokesView, private val sink: PageI
         pointerId = -1
         mode = Mode.INK
     }
+}
+
+/** Empfänger ohne Seite (vor der ersten Geste). */
+private object NoSink : PageInputSink {
+    override fun strokeFinished(tool: String, color: String, size: Double, points: List<Float>) = Unit
+    override fun shapePreview(shape: HeftShape?, color: String, size: Double) = Unit
+    override fun shapeFinished(shape: HeftShape, color: String, size: Double) = Unit
+    override fun writing(on: Boolean) = Unit
+    override fun eraseMove(x: Float, y: Float) = Unit
+    override fun eraseEnd() = Unit
+    override val lasso: LassoGesture get() = error("keine Seite")
+    override fun lassoDismiss() = Unit
+    override val objects: ObjGesture get() = error("keine Seite")
+    override fun touchStart() = Unit
 }
