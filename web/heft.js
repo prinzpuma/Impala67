@@ -51,6 +51,8 @@ import { canGoBack, canGoForward } from "./nav-history.js";
 import { lead } from "./icons.js";
 import { BUS } from "./event-bus.js";
 import { createHeftViewport } from "./heft-viewport.js";
+import { drawStroke } from "./heft-stroke-draw.js";
+import { createInkRenderer } from "./heft-ink-render.js";
 import { createHeftInput } from "./heft-input.js";
 import { toggleSidebar } from "./sidebar-toggle.js";
 
@@ -482,43 +484,6 @@ export const HEFT = (() => {
 		}
 		x.restore();
 	}
-	const segW = (b, p) => Math.max(0.5, b * (0.4 + (p == null ? 0.5 : p) * 1.2));
-	function drawStroke(x, s) {
-		const pts = s.pts;
-		if (!pts || !pts.length) return;
-		x.save();
-		x.lineCap = "round"; x.lineJoin = "round"; x.strokeStyle = s.color;
-		if (s.tool === "shape" && s.shape) {
-			x.lineWidth = s.size || 3;
-			const a = s.shape;
-			if (a.type === "line") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.stroke(); }
-			else if (a.type === "ellipse") { x.beginPath(); x.ellipse(a.cx, a.cy, Math.abs(a.rx), Math.abs(a.ry), 0, 0, Math.PI * 2); x.stroke(); }
-			else if (a.type === "triangle") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.lineTo(a.x3, a.y3); x.lineTo(a.x1, a.y1); x.stroke(); }
-			else if (a.type === "arrow") { x.beginPath(); x.moveTo(a.x1, a.y1); x.lineTo(a.x2, a.y2); x.lineTo(a.h1x, a.h1y); x.moveTo(a.x2, a.y2); x.lineTo(a.h2x, a.h2y); x.stroke(); }
-			else if (a.type === "rect") { x.strokeRect(Math.min(a.x1, a.x2), Math.min(a.y1, a.y2), Math.abs(a.x2 - a.x1), Math.abs(a.y2 - a.y1)); }
-		} else if (s.tool === "marker") {
-			x.globalAlpha = 0.32; x.lineWidth = s.size * 3;
-			x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
-			for (let i = 1; i < pts.length; i++) x.lineTo(pts[i][0], pts[i][1]);
-			x.stroke();
-		} else if (pts.length === 1) {
-			x.beginPath(); x.fillStyle = s.color;
-			x.arc(pts[0][0], pts[0][1], segW(s.size, pts[0][2]) / 2, 0, Math.PI * 2); x.fill();
-		} else {
-			let from = pts[0];
-			for (let i = 1; i < pts.length; i++) {
-				const cur = pts[i];
-				const to = i < pts.length - 1 ? [(cur[0] + pts[i + 1][0]) / 2, (cur[1] + pts[i + 1][1]) / 2] : cur;
-				x.beginPath(); x.lineWidth = segW(s.size, ((pts[i - 1][2] || 0.5) + (cur[2] || 0.5)) / 2);
-				x.moveTo(from[0], from[1]);
-				x.quadraticCurveTo(cur[0], cur[1], to[0], to[1]);
-				x.stroke();
-				from = to;
-			}
-		}
-		x.restore();
-	}
-
 	const textsOf = (pg) => (pg.texts || (pg.texts = []));
 	const TEXT_LH = 1.4, TEXT_PAD = 10;
 	function wrapTextLines(x, t) {
@@ -593,21 +558,16 @@ export const HEFT = (() => {
 		x.stroke();
 		x.restore();
 	}
-	function renderPageTo(x, pg, pi, tileRect = null, imgOf = imgEl) {
+	// Eine Seite in drei Lagen: Papier + Bilder, Striche, darüber Text und Auswahl. Die
+	// Striche einer dichten Basis-Seite rastert redrawBasePageAsync im Worker.
+	function renderPageUnder(x, pg, imgOf = imgEl) {
 		paintPaper(x, PAGE_W, PAGE_H, pg.paper);
 		(pg.images || []).forEach((im) => {
 			const el = imgOf(im);
 			if (el instanceof ImageBitmap ? el.width : el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
-		(pg.strokes || []).forEach((s) => {
-			if (tileRect) {
-				const b = s.bbox || strokeBounds(s);
-				if (b && (b.maxX < tileRect.x || b.minX > tileRect.x + tileRect.w || b.maxY < tileRect.y || b.minY > tileRect.y + tileRect.h)) {
-					return;
-				}
-			}
-			drawStroke(x, s);
-		});
+	}
+	function renderPageOver(x, pg, pi) {
 		(pg.texts || []).forEach((t) => { if (t.id !== editingTxtId) drawTextBox(x, t); });
 		if (lassoSel && lassoSel.pageIdx === pi) drawLassoSelection(x, lassoSel.strokes, lassoSel.bounds);
 		if (sel && doc && sel.pageIdx === pi && doc.pages[pi] === pg) {
@@ -616,6 +576,15 @@ export const HEFT = (() => {
 			const tx = sel.txtId ? textsOf(pg).find((t2) => t2.id === sel.txtId) : null;
 			if (tx) drawSelection(x, tx);
 		}
+	}
+	const outside = (b, r) => b && (b.maxX < r.x || b.minX > r.x + r.w || b.maxY < r.y || b.minY > r.y + r.h);
+	function renderPageTo(x, pg, pi, tileRect = null, imgOf = imgEl) {
+		renderPageUnder(x, pg, imgOf);
+		(pg.strokes || []).forEach((s) => {
+			if (tileRect && outside(s.bbox || strokeBounds(s), tileRect)) return;
+			drawStroke(x, s);
+		});
+		renderPageOver(x, pg, pi);
 	}
 
 	// pageIndex: welche Seite gezeigt wird (Default 0). Rückgabe null bei Fehler,
@@ -652,10 +621,13 @@ export const HEFT = (() => {
 		redrawBasePage(i);
 		renderDetailTile(i);
 	}
+	// Jede Zeichnung der Basis-Seite zählt __heftJob hoch: ein Worker-Bild, das danach
+	// ankommt, ist veraltet und wird verworfen (Radieren, Auswahl, Neuaufbau zeichnen synchron).
 	function redrawBasePage(i) {
 		if (!doc || !doc.pages[i]) return;
 		const cv = canvases[i];
 		if (cv && cv.width >= 2 && cv.height >= 2) {
+			cv.__heftJob = (cv.__heftJob || 0) + 1;
 			const x = cv.getContext('2d');
 			x.setTransform(1, 0, 0, 1, 0, 0);
 			x.clearRect(0, 0, cv.width, cv.height);
@@ -663,6 +635,58 @@ export const HEFT = (() => {
 			renderPageTo(x, doc.pages[i], i);
 		}
 	}
+	// PERF: Eine Seite oder Detail-Kachel, die beim Scrollen, Öffnen oder nach dem Zoomen neu
+	// gefüllt wird, bekommt sofort Papier und Bilder; die Striche einer dichten Seite rastert
+	// der Worker (heft-ink-render.js), sie erscheinen einen Augenblick später, ohne dass
+	// Scrollen oder Stift hängen. Striche, die in der Zwischenzeit dazukommen
+	// (commitStrokeRender), liegen schon auf der Fläche und bleiben unter dem durchsichtigen
+	// Worker-Bild sichtbar. m: Transform der Fläche (wie setTransform), cull: Seitenausschnitt.
+	// Eine Detail-Kachel (cull gesetzt) bleibt bis dahin durchsichtig: sie liegt über der
+	// Basis-Seite, die ihre Striche schon zeigt – nur Papier darüber liesse sie kurz verschwinden.
+	// Rückgabe false = zu wenig Striche oder kein Worker; der Aufrufer zeichnet selbst.
+	function paintLayerAsync(cv, pg, i, m, cull, stillCurrent, retry) {
+		const strokes = cull ? (pg.strokes || []).filter((s) => !outside(s.bbox || strokeBounds(s), cull)) : pg.strokes;
+		const w = cv.width, h = cv.height;
+		const job = ink.render(strokes, w, h, m);
+		if (!job) return false;
+		const token = cv.__heftJob = (cv.__heftJob || 0) + 1, sent = pg.strokes, n0 = sent ? sent.length : 0;
+		const x = cv.getContext('2d');
+		const setM = () => x.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
+		x.setTransform(1, 0, 0, 1, 0, 0);
+		x.clearRect(0, 0, w, h);
+		if (!cull) { setM(); renderPageUnder(x, pg); }
+		job.then((bitmap) => {
+			if (cv.__heftJob !== token || cv.width !== w || cv.height !== h || !stillCurrent()) { bitmap?.close(); return; }
+			// Dokument inzwischen neu geladen (gleiche Fläche, neue Seitenobjekte): neu anstoßen,
+			// sonst bliebe die Fläche bis zur nächsten Größenänderung ohne Striche.
+			if (!doc || doc.pages[i] !== pg) { bitmap?.close(); if (doc && doc.pages[i]) retry(); return; }
+			if (!bitmap) {
+				cv.__heftJob++;
+				x.setTransform(1, 0, 0, 1, 0, 0);
+				x.clearRect(0, 0, w, h);
+				setM();
+				renderPageTo(x, pg, i, cull);
+				return;
+			}
+			if (cull) { setM(); renderPageUnder(x, pg); }
+			x.setTransform(1, 0, 0, 1, 0, 0);
+			x.drawImage(bitmap, 0, 0);
+			bitmap.close();
+			setM();
+			// Die Kachel wurde eben mit Papier übermalt: inzwischen fertige Striche nachziehen.
+			if (cull && pg.strokes === sent) for (let k = n0; k < sent.length; k++) if (!outside(strokeBounds(sent[k]), cull)) drawStroke(x, sent[k]);
+			renderPageOver(x, pg, i);
+		});
+		return true;
+	}
+	function redrawBasePageAsync(i) {
+		const pg = doc && doc.pages[i], cv = canvases[i];
+		if (!pg || !cv || cv.width < 2 || cv.height < 2) return;
+		const f = (cv.__heftDpr || 1) * (cv.__heftScale || vp.scale());
+		if (!paintLayerAsync(cv, pg, i, [f, 0, 0, f, 0, 0], null, () => canvases[i] === cv, () => redrawBasePageAsync(i))) redrawBasePage(i);
+	}
+
+	const ink = createInkRenderer();
 
 	// Ansicht (Zoom, Verschieben, Kacheln, Finger-Gesten): heft-viewport.js.
 	// Getter statt Werte, weil bindCanvas()/unmount() die Zeichenflächen neu zuweisen;
@@ -671,7 +695,7 @@ export const HEFT = (() => {
 		host: () => host, doc: () => doc, drawing: () => drawing,
 		canvases: () => canvases, detailCanvases: () => detailCanvases, wetCanvases: () => wetCanvases, pageSlots: () => pageSlots,
 		penRecently: () => input.penRecently(), touchNavigates: () => input.touchNavigates(),
-		drawStroke, renderPageTo, applyTransform, redrawBasePage, viewChanged,
+		drawStroke, renderPageTo, applyTransform, redrawBasePage, redrawBasePageAsync, paintLayerAsync, viewChanged,
 		// Zwei-/Drei-Finger-Tipp: im Lesemodus nichts zurücknehmen.
 		undo: () => { if (!isViewOnly()) undo(); }, redo: () => { if (!isViewOnly()) redo(); },
 	});

@@ -159,7 +159,7 @@ export function createHeftViewport(ctx) {
 			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
-			if (needsRender) ctx.redrawBasePage(i);
+			if (needsRender) ctx.redrawBasePageAsync(i);
 		}
 	}
 	function scheduleGesturePrefetch() {
@@ -299,7 +299,9 @@ export function createHeftViewport(ctx) {
 		if (cv.width || cv.height) { cv.width = 0; cv.height = 0; }
 	}
 
-	function renderDetailTile(i) {
+	// background: nach Scrollen/Zoomen (renderDetailTiles) darf der Worker rastern; Änderungen
+	// am Inhalt (Radieren, Auswahl, Lasso: redrawPage) zeichnen sofort, sonst flackerte die Kachel.
+	function renderDetailTile(i, background = false) {
 		const tile = ctx.detailCanvases()[i], wet = ctx.wetCanvases()[i], pg = ctx.doc()?.pages[i];
 		if (!tile || !pg) return;
 
@@ -310,11 +312,15 @@ export function createHeftViewport(ctx) {
 		const dpr = tileDpr(r);
 		placeLayer(tile, i, r, dpr);
 		const x = tile.getContext("2d");
-		x.setTransform(1, 0, 0, 1, 0, 0);
-		x.clearRect(0, 0, tile.width, tile.height);
 		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
-		tileTransform(x, tile.__heftTile);
-		ctx.renderPageTo(x, pg, i, pageRectForTile(r));
+		const t = tile.__heftTile, f = t.dpr * t.k, s = t.dpr * t.scale, cull = pageRectForTile(r);
+		if (!background || !ctx.paintLayerAsync(tile, pg, i, [s, 0, 0, s, -t.x * f, -t.y * f], cull, () => tile.__heftTile === t, () => renderDetailTile(i, true))) {
+			tile.__heftJob = (tile.__heftJob || 0) + 1;
+			x.setTransform(1, 0, 0, 1, 0, 0);
+			x.clearRect(0, 0, tile.width, tile.height);
+			tileTransform(x, t);
+			ctx.renderPageTo(x, pg, i, cull);
+		}
 		if (wet) {
 			placeLayer(wet, i, r, dpr);
 			const wx = wet.getContext("2d");
@@ -348,7 +354,7 @@ export function createHeftViewport(ctx) {
 		for (const i of next) {
 			if (!layerRectFor(i)) { hideLayer(ctx.detailCanvases()[i]); hideLayer(ctx.wetCanvases()[i]); continue; }
 			if (!force && tileCovers(i)) continue;
-			renderDetailTile(i);
+			renderDetailTile(i, true);
 		}
 		detailVisible = next;
 		finish();
@@ -429,7 +435,7 @@ export function createHeftViewport(ctx) {
 			const needsRender = cv.width !== w || cv.height !== h;
 			if (cv.width !== w) cv.width = w;
 			if (cv.height !== h) cv.height = h;
-			if (needsRender) ctx.redrawBasePage(i);
+			if (needsRender) ctx.redrawBasePageAsync(i);
 		});
 
 		if (!skipTiles) renderDetailTiles(forceTiles);
