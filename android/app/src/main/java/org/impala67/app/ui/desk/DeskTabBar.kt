@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,7 +78,8 @@ internal fun rememberTabInfo(store: ImpalaStore): (String) -> TabInfo {
  * Tab-Leiste über dem Inhalt (`#tabbar`, `renderTabs` in render.js): ☰ (Seitenleiste ein-/ausklappen), Zurück, Vor,
  * offene Tabs als Chips (Seiten, Chats, Karteikarten; 170 dp, aktiv getönt, × zum Schließen, halten und ziehen
  * ordnet um), „+“ mit „Neuen Chat starten“ / „Neue Seite“ / „In neuem Tab öffnen…“. Mit „Tabs in Seitenleiste“
- * ([tabsInSidebar]) stehen die Chips links in der Seitenleiste; hier bleiben ☰, Zurück und Vor.
+ * ([tabsInSidebar]) stehen die Chips links in der Seitenleiste; hier bleiben ☰, Zurück und Vor (in Notiz und
+ * Heft fällt die Leiste dann ganz weg, siehe [LocalDeskNav]).
  * Teilen/Stern/⋯ sitzen wie in der PWA in der Seitenzeile über dem Editor ([PageActions]).
  */
 @Composable
@@ -98,9 +100,7 @@ fun DeskTabBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            SidebarToggle(onToggleSidebar)
-            SmallButton(R.drawable.ic_i_chevron_left, "Zurück", enabled = canGoBack, onClick = nav::back)
-            SmallButton(R.drawable.ic_i_chevron_right, "Vor", enabled = nav.canGoForward, onClick = nav::forward)
+            DeskNavButtons(nav, canGoBack, onToggleSidebar)
             if (tabsInSidebar) return@Row
             Row(
                 Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -119,6 +119,20 @@ fun DeskTabBar(
 }
 
 private val TabGap = 2.dp
+
+/** ☰ (Seitenleiste ein-/ausklappen), Zurück und Vor – in der Tab-Leiste oder, ohne sie, im Kopf von Editor/Heft. */
+@Composable
+fun DeskNavButtons(nav: ShellNav, canGoBack: Boolean, onToggleSidebar: () -> Unit) {
+    SidebarToggle(onToggleSidebar)
+    SmallButton(R.drawable.ic_i_chevron_left, "Zurück", enabled = canGoBack, onClick = nav::back)
+    SmallButton(R.drawable.ic_i_chevron_right, "Vor", enabled = nav.canGoForward, onClick = nav::forward)
+}
+
+/**
+ * Bei „Tabs in Seitenleiste“ fällt die Tab-Leiste in Notiz und Heft weg (PWA: `body.tabs-in-sidebar.page-open
+ * #tabbar { display: none }`); ☰ ‹ › kommen dann über diesen Wert in die Kopfzeile von Editor bzw. Heft.
+ */
+val LocalDeskNav = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
 
 /** „+“ wie `#btnTabNew`: Menü wie `newTabActions` in search.js plus Seitensuche für einen neuen Tab. */
 @Composable

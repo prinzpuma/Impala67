@@ -51,6 +51,8 @@ fun EditorScreen(
     onOpenPage: (String) -> Unit,
     modifier: Modifier = Modifier,
     chromeActions: (@Composable () -> Unit)? = null,
+    /** ☰ ‹ › links in der Seitenzeile, wenn die Tab-Leiste darüber fehlt (Tabs in der Seitenleiste). */
+    navButtons: (@Composable () -> Unit)? = null,
     onToast: (String) -> Unit = {},
 ) {
     val vm: EditorViewModel = viewModel(key = "editor:$pageId") { EditorViewModel(store, pageId) }
@@ -87,6 +89,7 @@ fun EditorScreen(
                 // Tablet: Seitenzeile wie `.page-chrome` der PWA – Pfad links, Seiten-Aktionen rechts.
                 if (chromeActions != null) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 38.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        navButtons?.invoke()
                         Breadcrumbs(head, vm.title, onOpenPage, Modifier.weight(1f))
                         chromeActions()
                     }

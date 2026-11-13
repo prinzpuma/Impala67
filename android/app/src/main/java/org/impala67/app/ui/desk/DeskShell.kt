@@ -1,6 +1,8 @@
 package org.impala67.app.ui.desk
 
 import androidx.compose.animation.AnimatedVisibility
+import org.impala67.app.ui.shell.PageRoute
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Arrangement
@@ -166,8 +168,12 @@ fun DeskShell(
             if (!sidebarOpen) sides += WindowInsetsSides.Start
             if (!nav.aiPanelOpen) sides += WindowInsetsSides.End
             Column(Modifier.weight(1f).fillMaxHeight().column(c.panel, sides)) {
-                DeskTabBar(store, nav, canGoBack, tabsInSidebar, onToggleSidebar = { scope.launch { prefs.setSidebarCollapsed(sidebarOpen) } })
-                content(Modifier.weight(1f))
+                val toggleSidebar = { scope.launch { prefs.setSidebarCollapsed(sidebarOpen) }; Unit }
+                // Tabs in der Seitenleiste: in Notiz und Heft keine eigene Leiste, ☰ ‹ › sitzen im Kopf der Seite.
+                val pageOnly = tabsInSidebar && current is PageRoute
+                if (!pageOnly) DeskTabBar(store, nav, canGoBack, tabsInSidebar, onToggleSidebar = toggleSidebar)
+                val navButtons: (@Composable () -> Unit)? = if (pageOnly) ({ DeskNavButtons(nav, canGoBack, toggleSidebar) }) else null
+                CompositionLocalProvider(LocalDeskNav provides navButtons) { content(Modifier.weight(1f)) }
             }
             AnimatedVisibility(nav.aiPanelOpen, enter = enter, exit = exit) {
                 Row(Modifier.fillMaxHeight().column(c.panel, WindowInsetsSides.End + WindowInsetsSides.Vertical)) {

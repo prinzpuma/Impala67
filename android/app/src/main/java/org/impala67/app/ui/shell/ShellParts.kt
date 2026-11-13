@@ -16,6 +16,7 @@ import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.impala67.app.editor.EditorScreen
 import org.impala67.app.heft.HeftScreen
+import org.impala67.app.ui.desk.LocalDeskNav
 import org.impala67.app.ui.desk.PageActions
 import uniffi.impala_ffi.PageKind
 
@@ -28,18 +29,20 @@ fun NewButton(onClick: () -> Unit) {
 /** Seite öffnen: Notizen im Editor, Hefte im Heft. Die Art liest der Kern im Hintergrund. */
 @Composable
 fun PageEntry(store: ImpalaStore, id: String, nav: ShellNav) {
+    val navButtons = LocalDeskNav.current
     val kind by produceState<PageKind?>(null, id) { value = withContext(Dispatchers.IO) { store.core.page(id)?.summary?.kind } }
     when (kind) {
         null -> {}
         PageKind.HEFT -> {
             DisposableEffect(id) { nav.immersive = true; onDispose { nav.immersive = false } }
             HeftScreen(
-                store, id, onBack = nav::back, desk = nav.desk,
+                store, id, onBack = nav::back, desk = nav.desk, navButtons = navButtons,
                 onAi = if (nav.desk) ({ nav.aiPanelOpen = true }) else ({ nav.open(AiRoute) }),
             )
         }
         PageKind.NOTE -> EditorScreen(
             store, id, onOpenPage = { nav.open(PageRoute(it)) },
+            navButtons = navButtons,
             chromeActions = if (nav.desk) ({
                 val favorite by remember(store, id) { store.query(Touches.pagesMeta) { it.page(id)?.summary?.favorite == true } }.collectAsStateWithLifecycle()
                 PageActions(store, nav, id, favorite = favorite == true)

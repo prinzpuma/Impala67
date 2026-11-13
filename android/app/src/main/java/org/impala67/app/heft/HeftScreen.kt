@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -95,6 +96,8 @@ fun HeftScreen(
     modifier: Modifier = Modifier,
     desk: Boolean = false,
     onAi: (() -> Unit)? = null,
+    /** ☰ ‹ › links oben, wenn die Tab-Leiste darüber fehlt (Tabs in der Seitenleiste). */
+    navButtons: (@Composable () -> Unit)? = null,
 ) {
     val app = LocalContext.current.applicationContext as ImpalaApp
     val vm = viewModel(key = "heft:$pageId") { HeftViewModel(store, pageId, app.prefs, File(app.filesDir, "heftver")) }
@@ -245,7 +248,17 @@ fun HeftScreen(
                 ) { HeftLassoBar(vm) }
 
                 if (desk) {
-                    HeftCornerPages({ showPages = true }, Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 14.dp))
+                    Row(
+                        Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (navButtons != null) Row(
+                            Modifier.heftFloat(RoundedCornerShape(19.dp), border = false).padding(horizontal = 3.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { navButtons() }
+                        HeftCornerPages({ showPages = true })
+                    }
                     HeftCornerActions(pageActions, onAi ?: {}, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 14.dp))
                 } else {
                     PagesPill(
