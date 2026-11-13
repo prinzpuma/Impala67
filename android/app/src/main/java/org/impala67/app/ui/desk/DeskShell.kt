@@ -1,16 +1,11 @@
 package org.impala67.app.ui.desk
 
-import androidx.compose.animation.AnimatedVisibility
 import org.impala67.app.ui.shell.PageRoute
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import org.impala67.app.ui.theme.Radius
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -136,9 +131,9 @@ fun DeskShell(
         // Komfortabel: dunkler App-Hintergrund, Spalten als abgerundete Karten mit gleichem Rand und Abstand
         // (`--app-gap` in layout.css); der Rand wächst nur, wo Systemleisten oder Kamera-Loch mehr verlangen.
         val compact = Impala.appearance.compact
-        val motion = !Impala.appearance.reduceMotion
-        val enter = if (motion) expandHorizontally() else EnterTransition.None
-        val exit = if (motion) shrinkHorizontally() else ExitTransition.None
+        val gap = if (compact) 0.dp else AppGap
+        val sidebarSlide = rememberDeskSlide(sidebarOpen, gap)
+        val aiSlide = rememberDeskSlide(nav.aiPanelOpen, gap)
         val card = RoundedCornerShape(Radius.lg)
         fun Modifier.column(color: Color, sides: WindowInsetsSides) =
             if (compact) background(color).windowInsetsPadding(safe.only(sides))
@@ -149,8 +144,8 @@ fun DeskShell(
         Row(outer, horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else AppGap)) {
             val standard = if (compact) SidebarWidth else SidebarWidthComfortable
             val width = dragWidth ?: savedWidth.takeIf { it > 0 }?.dp ?: standard
-            AnimatedVisibility(sidebarOpen, enter = enter, exit = exit) {
-                Row(Modifier.fillMaxHeight()) {
+            if (sidebarSlide.shown) with(sidebarSlide) {
+                Row(Modifier.fillMaxHeight().slidePanel(fromStart = true)) {
                     DeskSidebar(
                         store, nav, current, ai, tabsInSidebar,
                         Modifier.column(c.sidebar, WindowInsetsSides.Start + WindowInsetsSides.Vertical).width(width),
@@ -167,7 +162,7 @@ fun DeskShell(
             var sides = WindowInsetsSides.Vertical
             if (!sidebarOpen) sides += WindowInsetsSides.Start
             if (!nav.aiPanelOpen) sides += WindowInsetsSides.End
-            Column(Modifier.weight(1f).fillMaxHeight().column(c.panel, sides)) {
+            Column(Modifier.weight(1f).fillMaxHeight().column(c.panel, sides).slideContent(sidebarSlide, aiSlide)) {
                 val toggleSidebar = { scope.launch { prefs.setSidebarCollapsed(sidebarOpen) }; Unit }
                 // Tabs in der Seitenleiste: in Notiz und Heft keine eigene Leiste, ☰ ‹ › sitzen im Kopf der Seite.
                 val pageOnly = tabsInSidebar && current is PageRoute
@@ -175,8 +170,8 @@ fun DeskShell(
                 val navButtons: (@Composable () -> Unit)? = if (pageOnly) ({ DeskNavButtons(nav, canGoBack, toggleSidebar) }) else null
                 CompositionLocalProvider(LocalDeskNav provides navButtons) { content(Modifier.weight(1f)) }
             }
-            AnimatedVisibility(nav.aiPanelOpen, enter = enter, exit = exit) {
-                Row(Modifier.fillMaxHeight().column(c.panel, WindowInsetsSides.End + WindowInsetsSides.Vertical)) {
+            if (aiSlide.shown) with(aiSlide) {
+                Row(Modifier.fillMaxHeight().slidePanel(fromStart = false).column(c.panel, WindowInsetsSides.End + WindowInsetsSides.Vertical)) {
                     if (compact) VerticalDivider(color = c.edgeSoft)
                     DeskAiPanel(
                         ai = ai,
