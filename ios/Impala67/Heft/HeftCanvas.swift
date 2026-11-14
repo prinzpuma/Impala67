@@ -50,6 +50,17 @@ struct HeftCanvas: UIViewRepresentable {
         doubleTap.numberOfTapsRequired = 2
         doubleTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         canvas.addGestureRecognizer(doubleTap)
+        // Wie `heft-viewport.js`: Doppel-Tipp mit zwei Fingern nimmt zurück (ein einzelner kam beim Umgreifen
+        // zu oft versehentlich), Tipp mit drei Fingern wiederholt. Nur Finger, nie der Stift.
+        let undoTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleUndoTap(_:)))
+        undoTap.numberOfTouchesRequired = 2
+        undoTap.numberOfTapsRequired = 2
+        undoTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        canvas.addGestureRecognizer(undoTap)
+        let redoTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleRedoTap(_:)))
+        redoTap.numberOfTouchesRequired = 3
+        redoTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        canvas.addGestureRecognizer(redoTap)
         // Doppeltippen/Drücken am Apple Pencil (sonst übernimmt das Apples Werkzeugleiste).
         canvas.addInteraction(UIPencilInteraction(delegate: context.coordinator))
         context.coordinator.attach(canvas)
@@ -164,6 +175,12 @@ struct HeftCanvas: UIViewRepresentable {
             var drawn: CGAffineTransform
         }
         private var known: [UInt32: Known] = [:]
+        /// Striche entladener Seiten (nicht mehr in der Zeichnung, `evictFarPages`). Holt Rückgängig oder
+        /// Wiederholen einen davon zurück, gilt er wieder als bekannt – sonst landete er doppelt im Kern.
+        private var parked: [UInt32: Known] = [:]
+        private var evictTask: Task<Void, Never>?
+        /// Seiten vor und hinter dem sichtbaren Bereich, deren Striche in der Zeichnung bleiben.
+        private static let keepPages = 4
         /// Gelöschte Striche, damit „Rückgängig“ nach dem Radieren die Originaldaten wiederherstellt.
         private var removed: [UInt32: (page: String, data: HeftStroke)] = [:]
         /// Neue Stiftstriche, die erst nach dem Loslassen geschrieben werden (Formerkennung braucht das Halten).
@@ -234,6 +251,16 @@ struct HeftCanvas: UIViewRepresentable {
         func redo() {
             canvas?.undoManager?.redo()
             refreshUndo()
+        }
+
+        @objc func handleUndoTap(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended else { return }
+            undo()
+        }
+
+        @objc func handleRedoTap(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended else { return }
+            redo()
         }
 
         /// Knöpfe der Leiste nachführen; nach dem Lauf, weil PencilKit den Schritt erst danach abschließt.
@@ -350,6 +377,8 @@ struct HeftCanvas: UIViewRepresentable {
             loaded.removeAll()
             loading.removeAll()
             known.removeAll()
+            parked.removeAll()
+            evictTask?.cancel()
             removed.removeAll()
             pending.removeAll()
             objectPages = []
@@ -455,6 +484,8 @@ struct HeftCanvas: UIViewRepresentable {
             guard !fresh.isEmpty else { return }
             let pages = Set(fresh.map(\.id))
             for d in fresh { loaded[d.id] = d }
+            // Die Seite kommt frisch aus dem Kern; gemerkte Stände ihrer Striche gelten nicht mehr.
+            parked = parked.filter { !pages.contains($0.value.page) }
             let current = canvas.drawing.strokes
             let old = known
             var out: [PKStroke] = []
@@ -538,6 +569,42 @@ struct HeftCanvas: UIViewRepresentable {
             refreshObjects(force: false)
             viewportChanged()
             reportCurrent()
+            scheduleEvict()
+        }
+
+        /// Entladen erst, wenn Scrollen und Zoomen kurz ruhen (das Ersetzen der Zeichnung kostet Zeit).
+        private func scheduleEvict() {
+            evictTask?.cancel()
+            evictTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                self?.evictFarPages()
+            }
+        }
+
+        /// Wie Android (nur Seiten in der Nähe): Striche weit entfernter Seiten aus der PencilKit-Zeichnung
+        /// nehmen. Sonst wächst sie mit jeder besuchten Seite, und jeder neue Strich vergleicht alle (`sync`).
+        /// Der Kern behält alles; beim Hinscrollen liest `load` die Seite neu (hinter offenen Schreibvorgängen).
+        private func evictFarPages() {
+            guard let canvas, let r = visibleRange(), !applying else { return }
+            // Nicht mitten in einem Strich oder vor dem Schreiben wartender Stiftstriche.
+            let drawing = canvas.drawingGestureRecognizer.state
+            if !pending.isEmpty || drawing == .began || drawing == .changed {
+                scheduleEvict()
+                return
+            }
+            let keep = Set(clamped(r.lowerBound - Self.keepPages, r.upperBound + Self.keepPages))
+            for id in loaded.keys where !keep.contains(id) { loaded[id] = nil }
+            let far = Set(known.filter { !keep.contains($0.value.page) }.keys)
+            guard !far.isEmpty else { return }
+            let done = Profiler.shared.begin("heft.evict")
+            defer { done() }
+            for seed in far { parked[seed] = known.removeValue(forKey: seed) }
+            if !lassoSeeds.isDisjoint(with: far) { clearLasso() }
+            let strokes = canvas.drawing.strokes.filter { !far.contains($0.randomSeed) }
+            applying = true
+            canvas.drawing = PKDrawing(strokes: strokes)
+            applying = false
         }
 
         /// Sichtbare Striche: Ebene anlegen für sichtbar ± 1 (geladene Seiten), entfernen erst außerhalb ± 2.
@@ -782,6 +849,9 @@ struct HeftCanvas: UIViewRepresentable {
             for stroke in strokes {
                 let seed = stroke.randomSeed
                 seen.insert(seed)
+                // Rückgängig/Wiederholen holt einen Strich einer entladenen Seite zurück: wieder bekannt; eine
+                // Lageänderung (z. B. Lasso-Verschieben zurückgenommen) erkennt der Vergleich darunter.
+                if known[seed] == nil, let k = parked.removeValue(forKey: seed) { known[seed] = k }
                 if var k = known[seed] {
                     // Unverändert, verschoben (Lasso) oder anders geändert → neu schreiben. Ohne Maske
                     // (Pixel-Radierer) und mit gleicher Lage ist der Strich unverändert – `renderBounds` für

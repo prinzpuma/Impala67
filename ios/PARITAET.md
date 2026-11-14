@@ -46,7 +46,7 @@ Die PWA hat diese Hänger nicht. Ursachen laut Code (noch nicht mit Instruments 
 | P6 | Fremde Heftänderungen starten jedes Mal den Handschrift-Hintergrundscan. | `Core/ImpalaStore.swift:54` | ✅ Code 14.11.: läuft schon nur einmal gleichzeitig; startet jetzt nicht mehr bei einem Sync im Hintergrund (`backgroundRefresh`) |
 | P7 | Heft öffnen: PencilKit-Striche aus den geladenen Seiten auf dem Hauptthread gebaut (~200 ms bei vollen Seiten). | `Heft/HeftCanvas.swift` `load` | ✅ Code 14.11.: werden in der Lade-Warteschlange gebaut · nachmessen |
 | P8 | Notiz: Speichern beim Tippen wartete auf dem Hauptthread an der Kern-Sperre. | `Notes/NoteModel.swift` `flush` | ✅ Code 14.11.: entprelltes Speichern in eigener Warteschlange; Verlassen/Hintergrund wartet weiter auf alles Geschriebene |
-| P9 | Heft: Die PencilKit-Zeichnung behält die Striche aller je besuchten Seiten (kein Entladen); jeder neue Strich vergleicht alle (`sync`). Bei langen Heften wachsen Speicher und Zeit je Strich. | `Heft/HeftCanvas.swift` `apply`, `sync` | ❌ offen (Android: nur sichtbare Seiten) |
+| P9 | Heft: Die PencilKit-Zeichnung behält die Striche aller je besuchten Seiten (kein Entladen); jeder neue Strich vergleicht alle (`sync`). Bei langen Heften wachsen Speicher und Zeit je Strich. | `Heft/HeftCanvas.swift` `apply`, `sync` | ✅ Code 14.11.: Striche außerhalb sichtbar ± 4 Seiten verlassen die Zeichnung 0,8 s nach dem Scrollen (`evictFarPages`); Rückgängig holt sie ohne Doppel zurück (`parked`) · am Gerät prüfen (Profiler `heft.evict`) |
 
 Vorschlag für die Reihenfolge:
 
@@ -429,6 +429,7 @@ Eigene Werkzeug-Pille wie `heft-pill` der PWA (Liquid Glass), keine Apple-Werkze
 | Finger scrollt, Stift zeichnet | ✅ | `HeftCanvas.swift:29` |
 | Pinch-Zoom | ✅ | 0,4–6 × Passbreite wie PWA (`Heft/HeftCanvas.swift:583-587`) |
 | Doppeltipp zoomt 2,2× | ✅ | `Heft/HeftCanvas.swift` `handleDoubleTap` (Finger; Faktoren relativ zur Passbreite wie `heft-viewport.js`) |
+| Zwei Finger doppelt tippen = Rückgängig, drei Finger tippen = Wiederholen | ✅ | wie `heft-viewport.js` (`handleUndoTap`/`handleRedoTap` in `Heft/HeftCanvas.swift`), nur Finger · am Gerät ungeprüft |
 | Trackpad-Scrollen blättert, ⌘+Scrollen zoomt | ❌ | fehlt |
 | Am Ende hochziehen = neue Seite | ✅ | `onPullAdd` (`Heft/HeftScreen.swift`) |
 
