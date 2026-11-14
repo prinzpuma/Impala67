@@ -856,7 +856,7 @@ fn mask_quads(ctx: &Context) -> Vec<Quad> {
             let bh = (max_y - min_y).max(1) as f64;
             let fill = ((area as f64) / (bw * bh)).min(1.0);
             let aspect = bw / bh;
-            if aspect < 0.24 || aspect > 4.2 {
+            if !(0.24..=4.2).contains(&aspect) {
                 continue;
             }
 

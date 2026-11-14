@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use impala_srs::Timestamp;
 use impala_storage::{BlobKeep, Compacted, StorageExt};
 
-use crate::{CoreError, ImpalaCore, Inner, Shared};
+use crate::{CoreError, ImpalaCore, Inner};
 
 /// Schonfrist: neuere Bilder und Heft-Events zählen immer (Rückgängig, Heft-Versionen, Geräte,
 /// deren Änderungen noch nicht angekommen sind).
@@ -42,8 +42,8 @@ impl Inner {
     /// Kompaktiert den Log (`force`: sofort, sonst nur wenn fällig). Weggefallene Bilder vergisst
     /// der Zustand; danach gleich ein neuer Checkpoint, sonst spielt der nächste Start alles neu ab.
     pub(crate) fn compact_local(&mut self, force: bool) -> Result<usize, CoreError> {
-        // Läuft nach jedem Sync unter der Kern-Sperre: Nicht fällig → sofort zurück, ohne den
-        // Heft-Zustand nach Bildern abzusuchen und ohne WAL-Checkpoint.
+        // Läuft bei jedem Checkpoint: Nicht fällig → sofort zurück, ohne den Heft-Zustand nach
+        // Bildern abzusuchen und ohne WAL-Checkpoint.
         if !force && !self.storage.compact_due()? {
             return Ok(0);
         }
@@ -65,12 +65,6 @@ impl Inner {
         }
         Ok(dropped)
     }
-}
-
-/// Nach einem Sync-Durchgang (Cloudflare, Drive): kompaktieren, wenn fällig. Fehler sind harmlos
-/// (Kompaktierung ist optional) und werden nur übersprungen.
-pub(crate) fn compact_if_due(shared: &Shared) {
-    let _ = crate::lock(shared).compact_local(false);
 }
 
 #[uniffi::export]

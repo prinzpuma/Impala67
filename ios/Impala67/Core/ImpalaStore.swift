@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// Dünne Schicht über dem Rust-Kern (wie `ImpalaStore.kt` in der Android-App und `STATE` in der PWA):
 /// Lesen direkt über [core], Schreiben nur über Kern-Funktionen. Der Kern meldet jede Änderung – eigene
@@ -59,7 +60,11 @@ final class ImpalaStore {
         if c.remote || c.everything {
             lastRemote = c
             remoteRevision += 1
-            if c.everything || !c.hefte.isEmpty { HeftOcr.startBackgroundScan(core: core) }
+            // Nur bei offener App: Ein Sync im Hintergrund (`backgroundRefresh`) startet sonst die
+            // Erkennung, die `onBackground` gerade angehalten hat.
+            if c.everything || !c.hefte.isEmpty, UIApplication.shared.applicationState == .active {
+                HeftOcr.startBackgroundScan(core: core)
+            }
         }
     }
 

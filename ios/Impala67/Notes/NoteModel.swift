@@ -63,6 +63,11 @@ final class NoteModel {
     @ObservationIgnored private var dirtyContent = false
     @ObservationIgnored private var lastEdit = Date.distantPast
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    /// Entprellte Speichervorgänge, die noch in `writer` laufen (fremde Stände solange nicht übernehmen).
+    @ObservationIgnored private var pendingWrites = 0
+    /// Schreibt der Reihe nach, damit ein Speichern beim Tippen den Hauptthread nicht an der Kern-Sperre
+    /// warten lässt (Sync); ein sofortiges Speichern (`flush()`) wartet auf alles davor.
+    private static let writer = DispatchQueue(label: "impala.note.write", qos: .userInitiated)
     /// Nur Anzeige (Lernkarten): Änderungen bleiben im Speicher, nichts geht in den Kern.
     @ObservationIgnored private var readOnly = false
 
@@ -94,7 +99,7 @@ final class NoteModel {
 
     /// Fremde Änderung (Sync): nur übernehmen, wenn hier nichts ungespeichert ist und gerade niemand tippt.
     func applyRemote() {
-        guard !dirtyTitle, !dirtyContent, Date().timeIntervalSince(lastEdit) > 1.5,
+        guard !dirtyTitle, !dirtyContent, pendingWrites == 0, Date().timeIntervalSince(lastEdit) > 1.5,
               let page = core.page(id: pageId) else { return }
         if page.summary.title != savedTitle {
             title = page.summary.title
@@ -127,15 +132,19 @@ final class NoteModel {
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
-            self?.flush()
+            self?.flush(wait: false)
         }
     }
 
-    /// Sofort speichern (Seite verlassen, App im Hintergrund).
-    func flush() {
+    /// Speichern; ohne `wait` im Hintergrund (Pause beim Tippen). Mit `wait` (Seite verlassen, App im
+    /// Hintergrund, vor dem Lesen aus dem Kern) steht danach alles im Kern.
+    func flush(wait: Bool = true) {
         saveTask?.cancel()
         saveTask = nil
-        guard dirtyTitle || dirtyContent else { return }
+        guard dirtyTitle || dirtyContent else {
+            if wait { Self.writer.sync {} }
+            return
+        }
         let newTitle = dirtyTitle && title != savedTitle ? title : nil
         var md: String?
         if dirtyContent {
@@ -146,8 +155,21 @@ final class NoteModel {
         dirtyContent = false
         if let newTitle { savedTitle = newTitle }
         if let md { savedMarkdown = md }
-        guard newTitle != nil || md != nil else { return }
-        attempt("updatePage", { try core.updatePage(id: pageId, title: newTitle, content: md) })
+        guard newTitle != nil || md != nil else {
+            if wait { Self.writer.sync {} }
+            return
+        }
+        let (core, pageId) = (core, pageId)
+        let save = { _ = attempt("updatePage", { try core.updatePage(id: pageId, title: newTitle, content: md) }) }
+        if wait {
+            Self.writer.sync(execute: save)
+            return
+        }
+        pendingWrites += 1
+        Self.writer.async {
+            save()
+            DispatchQueue.main.async { [weak self] in self?.pendingWrites -= 1 }
+        }
     }
 
     // MARK: Verlauf

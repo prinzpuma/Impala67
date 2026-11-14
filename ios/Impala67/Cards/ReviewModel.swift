@@ -147,30 +147,59 @@ final class ReviewModel {
         }
     }
 
-    /// Bewertung 1 = Nochmal … 4 = Einfach.
+    /// Bewertung 1 = Nochmal … 4 = Einfach. Speichert im Hintergrund: Der Kern hat eine Sperre, an der
+    /// der Hauptthread sonst während eines Syncs wartet. Bis die nächste Karte da ist, sperrt `loading`.
     func grade(_ grade: Int) {
         guard let card, showBack, !busy, !loading else { return }
-        busy = true
-        defer { busy = false }
         let now = Date().timeIntervalSince1970
         let revealed = revealedAt > 0 ? revealedAt : now
         let think = max(0, min(300_000, Int64(((revealed - shownAt) * 1000).rounded())))
         let gradeTime = max(0, min(300_000, Int64(((now - revealed) * 1000).rounded())))
         self.thinkMs = think
         self.gradeMs = gradeTime
-        do {
-            try core.reviewCard(cardId: card.id, grade: UInt8(grade))
-            logReview(card: card, grade: grade, thinkMs: think, gradeMs: gradeTime)
-            lastGrade = grade
-            graded += 1
-            refresh(unpin: true)
-        } catch {
-            self.error = CardsModel.reason(error)
+        let tele = reviewTelemetry(card: card, grade: grade, thinkMs: think, gradeMs: gradeTime)
+        let id = card.id
+        perform {
+            try $0.reviewCard(cardId: id, grade: UInt8(grade))
+            if let tele { _ = try? $0.dispatch(kind: "teleEvent", payloadJson: tele) }
+            return nil
+        } done: { [weak self] _ in
+            self?.lastGrade = grade
+            self?.graded += 1
         }
     }
 
-    /// Telemetrie für Lernstatistiken erfassen wie `TELE` in der PWA und `ReviewViewModel.kt` auf Android.
-    private func logReview(card: CardInfo, grade: Int, thinkMs: Int64, gradeMs: Int64) {
+    /// Kern-Aufruf im Hintergrund, danach neu lesen. `work` liefert optional die Karte, die danach
+    /// liegen soll (Rückgängig); sonst kommt mit `unpin` die nächste fällige, ohne bleibt die angezeigte.
+    private func perform(unpin: Bool = true, _ work: @escaping @Sendable (ImpalaCore) throws -> String?,
+                         done: @escaping (String?) -> Void = { _ in }) {
+        guard !busy else { return }
+        busy = true
+        loading = true
+        let core = self.core
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { Result { try work(core) } }.value
+            busy = false
+            switch result {
+            case .success(let pin):
+                done(pin)
+                if let pin {
+                    // Alte Karte bleibt bis zum Ergebnis stehen; `shownCardId = nil` setzt die Seite beim Anwenden zurück.
+                    pinned = pin
+                    shownCardId = nil
+                }
+                // `loading` bleibt bis zum Ergebnis gesetzt.
+                refresh(unpin: unpin && pin == nil)
+            case .failure(let e):
+                loading = false
+                self.error = CardsModel.reason(e)
+            }
+        }
+    }
+
+    /// Telemetrie für Lernstatistiken wie `TELE` in der PWA und `ReviewViewModel.kt` auf Android (JSON
+    /// für `teleEvent`); auf dem Hauptthread gebaut, weil sie den Zustand der Sitzung liest.
+    private func reviewTelemetry(card: CardInfo, grade: Int, thinkMs: Int64, gradeMs: Int64) -> String? {
         let cal = Calendar.current
         let now = Date()
         let hour = cal.component(.hour, from: now)
@@ -201,10 +230,8 @@ final class ReviewModel {
             "kind": "review",
             "data": data,
         ]
-        if let json = try? JSONSerialization.data(withJSONObject: payload),
-           let jsonStr = String(data: json, encoding: .utf8) {
-            _ = try? core.dispatch(kind: "teleEvent", payloadJson: jsonStr)
-        }
+        guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return String(data: json, encoding: .utf8)
     }
 
     /// Erklärung von der KI prüfen lassen, danach aufdecken (die Note wählt weiter der Lernende).
@@ -230,28 +257,15 @@ final class ReviewModel {
     }
 
     func suspend() {
-        guard let card else { return }
-        do {
-            try core.setCardSuspended(id: card.id, suspended: true)
-            refresh(unpin: true)
-        } catch {
-            self.error = CardsModel.reason(error)
-        }
+        guard let card, !loading else { return }
+        let id = card.id
+        perform { try $0.setCardSuspended(id: id, suspended: true); return nil }
     }
 
     /// Letzte Bewertung zurücknehmen; die Karte kommt verdeckt wieder.
     func undo() {
         guard !loading else { return }
-        do {
-            if let id = try core.undoReview() {
-                // Alte Karte bleibt bis zum Ergebnis stehen; `shownCardId = nil` setzt die Seite beim Anwenden zurück.
-                pinned = id
-                shownCardId = nil
-                loading = true
-            }
-            refresh()
-        } catch {
-            self.error = CardsModel.reason(error)
-        }
+        // Nichts zurückzunehmen (`nil`): nur neu lesen, die angezeigte Karte bleibt.
+        perform(unpin: false) { try $0.undoReview() }
     }
 }

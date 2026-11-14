@@ -557,9 +557,13 @@ impl ImpalaCore {
     }
 
     /// Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
+    /// Verdichtet vorher den Log, wenn fällig (wie `compactLocalIfDue` der PWA nach dem Sync): Das
+    /// liest den ganzen Log und hält die Kern-Sperre, gehört also nicht in einen Sync-Durchgang,
+    /// während die Oberfläche bedient wird. Fehler beim Verdichten sind harmlos und werden übersprungen.
     pub fn save_checkpoint(&self) -> Result<CheckpointResult, CoreError> {
         let mut guard = self.lock();
         let inner = &mut *guard;
+        let _ = inner.compact_local(false);
         Ok(match inner.model.save_checkpoint(&mut inner.storage)? {
             CheckpointSave::Written => CheckpointResult::Written,
             CheckpointSave::Unchanged => CheckpointResult::Unchanged,

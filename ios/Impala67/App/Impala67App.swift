@@ -1,5 +1,6 @@
 import BackgroundTasks
 import SwiftUI
+import UIKit
 
 /// Einstieg: öffnet den Rust-Kern im Hintergrund (Checkpoint + Log abspielen) und zeigt bis dahin
 /// einen leeren Bildschirm, bei einem Fehler die Meldung.
@@ -138,9 +139,15 @@ final class AppModel {
         return out
     }
 
+    /// Verdichtet bei Bedarf auch den Log (`saveCheckpoint` im Kern). Das kann einige Hundert ms
+    /// dauern; iOS gibt der App dafür über `beginBackgroundTask` Zeit, statt sie mitten darin anzuhalten.
     private func saveCheckpoint() {
         guard let core = store?.core else { return }
-        Task.detached(priority: .utility) { _ = attempt("saveCheckpoint", { try core.saveCheckpoint() }) }
+        let task = BackgroundTime.begin("checkpoint")
+        Task.detached(priority: .utility) {
+            _ = attempt("saveCheckpoint", { try core.saveCheckpoint() })
+            await task.end()
+        }
     }
 
     /// Frühestens in einer Stunde; iOS entscheidet je nach Nutzung, wann wirklich.
@@ -155,5 +162,23 @@ final class AppModel {
     nonisolated private static func databaseURL() throws -> URL {
         let dir = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         return dir.appendingPathComponent("impala67.db")
+    }
+}
+
+/// Zusätzliche Laufzeit nach dem Wechsel in den Hintergrund; endet genau einmal (fertig oder abgelaufen).
+@MainActor
+final class BackgroundTime {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    static func begin(_ name: String) -> BackgroundTime {
+        let time = BackgroundTime()
+        time.id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak time] in time?.end() }
+        return time
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }

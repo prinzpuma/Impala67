@@ -415,21 +415,41 @@ struct HeftCanvas: UIViewRepresentable {
             flush()
             loading.formUnion(need)
             let (core, pageId) = (core, pageId)
+            let origins = Dictionary(uniqueKeysWithValues: need.map { ($0, origin(of: $0)) })
             let done = Profiler.shared.begin("heft.load")
             writer.async {
                 let datas = need.compactMap { hid in attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: hid) }) }
+                // PencilKit-Striche gleich hier bauen: Bei vollen Seiten kostete das auf dem Hauptthread
+                // beim Öffnen rund 200 ms. Gilt nur, solange die Seite noch an derselben Stelle liegt.
+                let built = datas.map { d in Built(origin: origins[d.id] ?? .zero, strokes: Self.build(d, at: origins[d.id] ?? .zero)) }
                 DispatchQueue.main.async { [weak self] in
                     done()
                     guard let self else { return }
                     self.loading.subtract(need)
-                    self.apply(datas)
+                    self.apply(datas, built: Dictionary(uniqueKeysWithValues: zip(datas.map(\.id), built)))
                 }
             }
         }
 
+        /// Im Hintergrund vorbereitete (durchsichtige) PencilKit-Striche einer Seite, nach Seed.
+        private struct Built {
+            let origin: CGPoint
+            let strokes: [UInt32: PKStroke]
+        }
+
+        nonisolated private static func build(_ d: HeftPageData, at o: CGPoint) -> [UInt32: PKStroke] {
+            var out: [UInt32: PKStroke] = [:]
+            out.reserveCapacity(d.strokes.count)
+            for s in d.strokes {
+                let seed = HeftInk.seed(s.id)
+                if let pk = HeftInk.pkStroke(s, seed: seed, hidden: true, offset: o) { out[seed] = pk }
+            }
+            return out
+        }
+
         /// Gelesene Seiten anzeigen: ihre Striche in der Zeichnung ersetzen (Unverändertes bleibt, damit
         /// PencilKit nicht alles neu zeichnet), Papier, Bilder, Textfelder und sichtbare Striche nachziehen.
-        private func apply(_ datas: [HeftPageData]) {
+        private func apply(_ datas: [HeftPageData], built: [String: Built] = [:]) {
             guard let canvas else { return }
             let fresh = datas.filter { slot[$0.id] != nil }
             guard !fresh.isEmpty else { return }
@@ -455,6 +475,7 @@ struct HeftCanvas: UIViewRepresentable {
             }
             for d in fresh {
                 let o = origin(of: d.id)
+                let ready = built[d.id].flatMap { $0.origin == o ? $0.strokes : nil } ?? [:]
                 var ids = Set<String>()
                 for s in d.strokes {
                     ids.insert(s.id)
@@ -464,7 +485,7 @@ struct HeftCanvas: UIViewRepresentable {
                         known[seed] = k
                         continue
                     }
-                    guard let pk = HeftInk.pkStroke(s, seed: seed, hidden: true, offset: o) else { continue }
+                    guard let pk = ready[seed] ?? HeftInk.pkStroke(s, seed: seed, hidden: true, offset: o) else { continue }
                     out.append(pk)
                     known[seed] = Known(id: s.id, page: d.id, data: s, transform: .identity, bounds: pk.renderBounds, drawn: .identity)
                 }

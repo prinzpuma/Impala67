@@ -418,9 +418,10 @@ fn run<H: HttpClient>(
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.sync(force_all));
                 if r.is_ok() {
-                    // Erst nach dem Upload verdichten (wie die PWA): überholte Stände sind dann entbehrlich.
+                    // Verdichtet wird nicht hier, sondern mit dem Checkpoint beim Wechsel in den
+                    // Hintergrund ([`ImpalaCore::save_checkpoint`]): Unter der Kern-Sperre hielt das
+                    // die Oberfläche bis 0,8 s an.
                     settle_remote(&client.store_mut().core);
-                    crate::storage_care::compact_if_due(&client.store_mut().core);
                 }
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
