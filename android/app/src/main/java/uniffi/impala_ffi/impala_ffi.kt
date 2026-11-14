@@ -3591,7 +3591,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_save_chat() != 5723.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_save_checkpoint() != 16752.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_save_checkpoint() != 40891.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_save_home_article() != 64360.toShort()) {
@@ -8546,6 +8546,9 @@ public interface ImpalaCoreInterface {
     
     /**
      * Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
+     * Verdichtet vorher den Log, wenn fällig (wie `compactLocalIfDue` der PWA nach dem Sync): Das
+     * liest den ganzen Log und hält die Kern-Sperre, gehört also nicht in einen Sync-Durchgang,
+     * während die Oberfläche bedient wird. Fehler beim Verdichten sind harmlos und werden übersprungen.
      */
     fun `saveCheckpoint`(): CheckpointResult
     
@@ -10842,6 +10845,9 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     
     /**
      * Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
+     * Verdichtet vorher den Log, wenn fällig (wie `compactLocalIfDue` der PWA nach dem Sync): Das
+     * liest den ganzen Log und hält die Kern-Sperre, gehört also nicht in einen Sync-Durchgang,
+     * während die Oberfläche bedient wird. Fehler beim Verdichten sind harmlos und werden übersprungen.
      */
     @Throws(CoreException::class)override fun `saveCheckpoint`(): CheckpointResult {
             return FfiConverterTypeCheckpointResult.lift(

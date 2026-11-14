@@ -3792,6 +3792,9 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     
     /**
      * Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
+     * Verdichtet vorher den Log, wenn fällig (wie `compactLocalIfDue` der PWA nach dem Sync): Das
+     * liest den ganzen Log und hält die Kern-Sperre, gehört also nicht in einen Sync-Durchgang,
+     * während die Oberfläche bedient wird. Fehler beim Verdichten sind harmlos und werden übersprungen.
      */
     func saveCheckpoint() throws  -> CheckpointResult
     
@@ -5572,6 +5575,9 @@ open func saveChat(chat: ChatData)throws  -> String  {
     
     /**
      * Start-Schnappschuss schreiben (beim Wechsel in den Hintergrund oder nach vielen Ã„nderungen).
+     * Verdichtet vorher den Log, wenn fällig (wie `compactLocalIfDue` der PWA nach dem Sync): Das
+     * liest den ganzen Log und hält die Kern-Sperre, gehört also nicht in einen Sync-Durchgang,
+     * während die Oberfläche bedient wird. Fehler beim Verdichten sind harmlos und werden übersprungen.
      */
 open func saveCheckpoint()throws  -> CheckpointResult  {
     return try  FfiConverterTypeCheckpointResult_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
@@ -21233,7 +21239,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_save_chat() != 5723) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_impalacore_save_checkpoint() != 16752) {
+    if (uniffi_impala_ffi_checksum_method_impalacore_save_checkpoint() != 40891) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_save_home_article() != 64360) {
