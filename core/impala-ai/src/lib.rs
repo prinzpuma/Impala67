@@ -7,6 +7,7 @@
 //! kommen als Parameter und werden nie geloggt.
 
 mod js;
+mod pattern;
 
 pub mod agent;
 pub mod api;

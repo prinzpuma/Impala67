@@ -1,12 +1,9 @@
 //! KI-Quellen (Einstellungen → KI): Voreinstellungen, Erkennung der Anbieter-Familie,
 //! aufgelöste Chat-Konfiguration und dokumentierte Thinking-Stufen je Modell.
 
-use std::sync::LazyLock;
-
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::js;
+use crate::{js, pattern};
 
 /// Standard-Worker für Sync und „Impala AI“.
 pub const DEFAULT_WORKER_URL: &str = "https://impala67-sync.joshuagayer1.workers.dev";
@@ -79,27 +76,40 @@ pub enum Family {
     Other,
 }
 
-static CF_TAG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?-u:\b)(cloudflare|workers\.dev|impala{}*ai)(?-u:\b)", js::WS_CLASS))
-        .expect("gültiges Muster")
-});
-static CF_BASE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"workers\.dev|/api/ai(?-u:\b)").expect("gültiges Muster"));
-static LOCAL_BASE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|/|$)").expect("gültiges Muster")
-});
-static LOCAL_TAG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?-u:\b)(local|lm(?:-|{})?studio|ollama|llama\.cpp|jan)(?-u:\b)", js::WS_CLASS))
-        .expect("gültiges Muster")
-});
-static GOOGLE_TAG: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?-u:\b)(google|gemini|gemma)(?-u:\b)").expect("gültiges Muster"));
-static WORD: LazyLock<[Regex; 2]> = LazyLock::new(|| {
-    [
-        Regex::new(r"(?-u:\b)deepseek(?-u:\b)").expect("gültiges Muster"),
-        Regex::new(r"(?-u:\b)openai(?-u:\b)").expect("gültiges Muster"),
-    ]
-});
+// Muster der JS-Fassung (Eingaben sind schon kleingeschrieben):
+
+/// `/\b(cloudflare|workers\.dev|impala\s*ai)\b/`
+fn cf_tag(tag: &str) -> bool {
+    pattern::word_match(tag, |r, ends| {
+        ["cloudflare", "workers.dev"].iter().any(|w| r.starts_with(w) && ends(w.len()))
+            || r.strip_prefix("impala").is_some_and(|x| {
+                let y = pattern::skip_ws(x);
+                y.starts_with("ai") && ends(r.len() - y.len() + 2)
+            })
+    })
+}
+
+/// `/workers\.dev|\/api\/ai\b/`
+fn cf_base(base: &str) -> bool {
+    base.contains("workers.dev") || pattern::has_followed(base, "/api/ai", pattern::at_word_end)
+}
+
+/// `/localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\.local(?::|\/|$)/`
+fn local_base(base: &str) -> bool {
+    ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"].iter().any(|l| base.contains(l))
+        || pattern::has_followed(base, ".local", |r| r.is_empty() || r.starts_with([':', '/']))
+}
+
+/// `/\b(local|lm(?:-|\s)?studio|ollama|llama\.cpp|jan)\b/`
+fn local_tag(tag: &str) -> bool {
+    pattern::word_match(tag, |r, ends| {
+        ["local", "ollama", "llama.cpp", "jan"].iter().any(|w| r.starts_with(w) && ends(w.len()))
+            || r.strip_prefix("lm").is_some_and(|x| {
+                let y = x.strip_prefix('-').or_else(|| x.strip_prefix(js::is_ws)).unwrap_or(x);
+                y.starts_with("studio") && ends(r.len() - y.len() + "studio".len())
+            })
+    })
+}
 
 /// Familie aus ID, Name und Basis-URL.
 pub fn family(provider: &Provider) -> Family {
@@ -110,19 +120,19 @@ pub fn family(provider: &Provider) -> Family {
         .join(" ")
         .to_lowercase();
     let base = provider.base.to_lowercase();
-    if provider.id == "cloudflare" || CF_TAG.is_match(&tag) || CF_BASE.is_match(&base) {
+    if provider.id == "cloudflare" || cf_tag(&tag) || cf_base(&base) {
         Family::Cloudflare
-    } else if LOCAL_BASE.is_match(&base) || LOCAL_TAG.is_match(&tag) {
+    } else if local_base(&base) || local_tag(&tag) {
         Family::Local
     } else if base.contains("generativelanguage")
         || base.contains("googleapis")
         || base.contains("google")
-        || GOOGLE_TAG.is_match(&tag)
+        || pattern::has_word(&tag, &["google", "gemini", "gemma"])
     {
         Family::Google
-    } else if WORD[0].is_match(&tag) || base.contains("deepseek") {
+    } else if pattern::has_word(&tag, &["deepseek"]) || base.contains("deepseek") {
         Family::Deepseek
-    } else if base.contains("api.openai.com") || WORD[1].is_match(&tag) {
+    } else if base.contains("api.openai.com") || pattern::has_word(&tag, &["openai"]) {
         Family::Openai
     } else {
         Family::Other
@@ -220,7 +230,7 @@ pub fn is_cloudflare_base(base: &str, sync_url: &str, providers: &[Provider]) ->
     if clean.is_empty() {
         return false;
     }
-    if CF_BASE.is_match(&clean) {
+    if cf_base(&clean) {
         return true;
     }
     let sync = clean_base(sync_url).to_lowercase();

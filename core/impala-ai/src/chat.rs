@@ -4,11 +4,9 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use impala_net::{HttpClient, NetError, Response};
-use regex::Regex;
 
 use crate::error::{AiError, retry_after_header};
 use crate::message::{AssistantMessage, Message, Role, ToolDef};
@@ -68,26 +66,37 @@ const MAX_RETRY_WAIT_MS: u64 = 35_000;
 const WAITS: [u64; 4] = [0, 750, 1800, 3500];
 const REQUEST_MS: u64 = 60_000;
 
-static COMPAT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"reasoning_content|thinking|reasoning|thought|extra_body|unknown.*(field|parameter)|unsupported.*(field|parameter)")
-        .expect("gültiges Muster")
-});
-static SCHEMA_A: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"tool|function|schema").expect("gültiges Muster"));
-static SCHEMA_B: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"unsupported|not support|invalid|unknown|reject|schema").expect("gültiges Muster"));
+fn contains_any(text: &str, words: &[&str]) -> bool {
+    words.iter().any(|w| text.contains(w))
+}
+
+/// `/reasoning_content|thinking|reasoning|thought|extra_body|unknown.*(field|parameter)|unsupported.*(field|parameter)/`
+/// (`reasoning` deckt `reasoning_content` ab; `.` reicht nicht über einen Zeilenumbruch).
+fn is_compat_text(t: &str) -> bool {
+    contains_any(t, &["thinking", "reasoning", "thought", "extra_body"])
+        || t.split('\n').any(|line| {
+            ["unknown", "unsupported"]
+                .iter()
+                .any(|w| line.find(w).is_some_and(|i| contains_any(&line[i + w.len()..], &["field", "parameter"])))
+        })
+}
+
+/// `/tool|function|schema/` und `/unsupported|not support|invalid|unknown|reject|schema/`
+fn is_schema_text(t: &str) -> bool {
+    contains_any(t, &["tool", "function", "schema"])
+        && contains_any(t, &["unsupported", "not support", "invalid", "unknown", "reject", "schema"])
+}
 
 fn is_bad_request(e: &AiError) -> Option<String> {
     matches!(e.status(), Some(400 | 422)).then(|| e.to_string().to_lowercase())
 }
 
 fn is_tool_schema_error(e: &AiError, tools: &[ToolDef], tool_history: bool) -> bool {
-    !tools.is_empty()
-        && !tool_history
-        && is_bad_request(e).is_some_and(|t| SCHEMA_A.is_match(&t) && SCHEMA_B.is_match(&t))
+    !tools.is_empty() && !tool_history && is_bad_request(e).is_some_and(|t| is_schema_text(&t))
 }
 
 fn is_compatibility_error(e: &AiError, tools: &[ToolDef], tool_history: bool) -> bool {
-    is_bad_request(e).is_some_and(|t| COMPAT.is_match(&t)) || is_tool_schema_error(e, tools, tool_history)
+    is_bad_request(e).is_some_and(|t| is_compat_text(&t)) || is_tool_schema_error(e, tools, tool_history)
 }
 
 fn net_error(e: NetError) -> AiError {

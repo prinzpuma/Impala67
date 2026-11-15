@@ -47,10 +47,6 @@ pub fn is_ws(c: char) -> bool {
     )
 }
 
-/// Zeichenklasse für Regex-Muster, die JS-`\s` entspricht.
-pub const WS_CLASS: &str =
-    r"[\t\n\x0B\x0C\r \u{A0}\u{1680}\u{2000}-\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}]";
-
 pub fn trim(s: &str) -> &str {
     s.trim_matches(is_ws)
 }

@@ -2,11 +2,7 @@
 //! `<think>`-artige Blöcke heraustrennen, ohne Tags eine Heuristik für
 //! „Selbstgespräch am Anfang“ (Vorbild: `web/think-heuristik.js`).
 
-use std::sync::LazyLock;
-
-use regex::Regex;
-
-use crate::js;
+use crate::{js, pattern};
 
 /// Tags, deren Inhalt nur in die Denk-Box gehört. Gemma nutzt `<thought>`.
 pub const THINK_TAGS: [&str; 4] = ["think", "thinking", "thought", "reasoning"];
@@ -18,40 +14,107 @@ pub struct Split {
 }
 
 /// Selbstgespräch redet über den Nutzer oder das eigene Vorgehen – alles andere ist Antwort.
-/// `\b` wie in JS nur ASCII-Wortgrenzen.
-static META: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)(?-u:\b)(the user|they (want|have|are|might|asked)|der nutzer|die nutzerin|i (should|need|must|will|have to|can|could|think|wonder)(?-u:\b)|i'?(ll|m going)(?-u:\b)|let me|let's|ich (sollte|muss|werde|denke|prüfe|schaue|könnte)|lass mich|wait(?-u:\b)|hmm(?-u:\b)|actually(?-u:\b)|perhaps(?-u:\b)|maybe(?-u:\b)|instead(?-u:\b)|my instructions|laut (meiner|den) anweisungen)(?-u:\b)",
-    )
-    .expect("gültiges Muster")
-});
-/// Füllwörter am Satzanfang sagen nichts über Denken vs. Antwort.
-static NOISE: LazyLock<[Regex; 3]> = LazyLock::new(|| {
-    let ws = js::WS_CLASS;
-    [
-        Regex::new(&format!(r"^[0-9]+[.)]{ws}*")).expect("gültiges Muster"),
-        Regex::new(&format!(r"^[-*•]{ws}*")).expect("gültiges Muster"),
-        Regex::new(&format!(r"(?i)^(okay|ok|gut|also|alright|so|nun|sure|well)(?:[,!.]|{ws})+"))
-            .expect("gültiges Muster"),
-    ]
-});
+/// JS: `/\b(the user|they (want|…)|…|laut (meiner|den) anweisungen)\b/i` – als Wortliste
+/// (kleingeschrieben verglichen; `\b` wie in JS nur ASCII-Wortgrenzen).
+const META: [&str; 40] = [
+    "the user",
+    "they want",
+    "they have",
+    "they are",
+    "they might",
+    "they asked",
+    "der nutzer",
+    "die nutzerin",
+    "i should",
+    "i need",
+    "i must",
+    "i will",
+    "i have to",
+    "i can",
+    "i could",
+    "i think",
+    "i wonder",
+    "i'll",
+    "ill",
+    "i'm going",
+    "im going",
+    "let me",
+    "let's",
+    "ich sollte",
+    "ich muss",
+    "ich werde",
+    "ich denke",
+    "ich prüfe",
+    "ich schaue",
+    "ich könnte",
+    "lass mich",
+    "wait",
+    "hmm",
+    "actually",
+    "perhaps",
+    "maybe",
+    "instead",
+    "my instructions",
+    "laut meiner anweisungen",
+    "laut den anweisungen",
+];
 
-fn strip_noise(s: &str) -> String {
-    let mut t = js::trim(s).to_owned();
-    for re in NOISE.iter() {
-        t = re.replace(&t, "").into_owned();
+/// Füllwörter am Satzanfang sagen nichts über Denken vs. Antwort (`/^(okay|…)(?:[,!.]|\s)+/i`,
+/// Reihenfolge wie im JS-Muster).
+const FILLERS: [&str; 9] = ["okay", "ok", "gut", "also", "alright", "so", "nun", "sure", "well"];
+
+fn is_meta_text(t: &str) -> bool {
+    pattern::has_word(&t.to_lowercase(), &META)
+}
+
+/// Aufzählungszeichen und Füllwörter vorn abschneiden (JS: drei `replace` mit `^`-Mustern).
+fn strip_noise(s: &str) -> &str {
+    let mut t = js::trim(s);
+    // ^[0-9]+[.)]\s*
+    let digits = t.len() - t.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    if digits > 0
+        && let Some(rest) = t[digits..].strip_prefix(['.', ')'])
+    {
+        t = pattern::skip_ws(rest);
+    }
+    // ^[-*•]\s*
+    if let Some(rest) = t.strip_prefix(['-', '*', '•']) {
+        t = pattern::skip_ws(rest);
+    }
+    // ^(okay|…)(?:[,!.]|\s)+ – das erste Wort, nach dem mindestens ein Trenner folgt
+    for w in FILLERS {
+        if let Some(rest) = pattern::strip_prefix_ci(t, w) {
+            let after = rest.trim_start_matches(|c: char| matches!(c, ',' | '!' | '.') || js::is_ws(c));
+            if after.len() < rest.len() {
+                t = after;
+                break;
+            }
+        }
     }
     t
 }
 
+/// `/<br\s*\/?>/gi` → "\n", danach `/&nbsp;/gi` → " ".
+fn plain_breaks(text: &str) -> String {
+    let br = |r: &str| {
+        let after = pattern::skip_ws(pattern::strip_prefix_ci(r, "<br")?);
+        let after = after.strip_prefix('/').unwrap_or(after);
+        after.starts_with('>').then(|| r.len() - after.len() + 1)
+    };
+    let nbsp = |r: &str| pattern::strip_prefix_ci(r, "&nbsp;").map(|_| "&nbsp;".len());
+    let lines = pattern::replace_all(text, '<', br, "\n");
+    let lines = lines.as_deref().unwrap_or(text);
+    pattern::replace_all(lines, '&', nbsp, " ").unwrap_or_else(|| lines.to_owned())
+}
+
 fn is_meta(s: &str) -> bool {
     let t = strip_noise(s);
-    t.is_empty() || META.is_match(&t)
+    t.is_empty() || is_meta_text(t)
 }
 
 fn is_answer(s: &str) -> bool {
     let t = strip_noise(s);
-    js::len16(&t) >= 3 && !META.is_match(&t)
+    js::len16(t) >= 3 && !is_meta_text(t)
 }
 
 /// Satzteile wie `split(/(?<=[.!?])\s+|\n+|(?<=[.!?])(?=[A-ZÄÖÜ])/)` samt `filter(Boolean)`.
@@ -98,14 +161,7 @@ pub fn strip_leaked_reasoning(text: &str) -> Split {
         return Split::default();
     }
     // Manche Backends liefern Umbrüche als `<br>`; nur dann für die Erkennung normalisieren.
-    static BR: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(&format!(r"(?i)<br{}*/?>", js::WS_CLASS)).expect("gültiges Muster"));
-    static NBSP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)&nbsp;").expect("gültiges Muster"));
-    let analysis = if BR.is_match(text) || NBSP.is_match(text) {
-        NBSP.replace_all(&BR.replace_all(text, "\n"), " ").into_owned()
-    } else {
-        text.to_owned()
-    };
+    let analysis = plain_breaks(text);
     let parts = sentences(&analysis);
     if parts.is_empty() || !is_meta(parts[0]) {
         return Split { content: text.to_owned(), reasoning: String::new() };
