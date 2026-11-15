@@ -162,7 +162,6 @@ export async function initApp() {
 	// erscheint. Ohne gültigen gespeicherten Tab bleibt die Startseite sichtbar.
 	await TABS.restoreSession();
 	APP.wireEvents();
-	APP.checkIncomingShare?.();
 	// FIX (Start-Performance): Hook erst nach Abschluss aller Start-Migrationen
 	// aktivieren, damit Dispatches beim Boot keine verfrühten Renders hinter dem Splash auslösen.
 	STATE.onChange = (type, ev) => RENDER.onStateChange(type, ev);
@@ -173,7 +172,6 @@ export async function initApp() {
 	// bevor schwere Nacharbeiten (Mobile-Init, Heft-Bilder) den Kreis einfrieren.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
-	window.Capacitor?.Plugins?.SplashScreen?.hide?.();
 	// Heft-Bilder lädt HEFT.mount (heft.js load) selbst — nur die des geöffneten Hefts.
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
 	MOBILE.init();

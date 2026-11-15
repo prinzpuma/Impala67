@@ -2,7 +2,6 @@
 import { S } from "./state.js";
 import { U } from "./util.js";
 import { icon } from "./icons.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 
 // voice.js — Web Speech API für Eingabe/Ausgabe. WICHTIG (27. Juli): früher griff
 // diese Datei auf window.S / window.U / window.CHAT_FULLSCREEN zu — die gibt es in
@@ -60,40 +59,6 @@ function start(type) {
 		form.requestSubmit();
 	};
 
-	if (PLATFORM_NATIVE.speech.isAvailable) {
-		listening = true;
-		updateButton();
-		const full = (type || "side") === "full";
-		const input = document.getElementById(full ? "mainChatInput" : "chatInput");
-		const baseValue = input ? input.value : "";
-		let lastPartial = "";
-		PLATFORM_NATIVE.speech.startListening({
-			lang: "de-DE",
-			onPartial: (partialText) => {
-				if (partialText) lastPartial = partialText;
-				if (input && partialText) {
-					input.value = baseValue ? `${baseValue.trim()} ${partialText}` : partialText;
-					input.dispatchEvent(new Event("input", { bubbles: true }));
-				}
-			},
-			onResult: (finalText) => {
-				clearRecognition();
-				const spoken = (finalText && finalText.trim()) || lastPartial.trim();
-				// Die Teilergebnisse stehen schon im Feld — zurück auf den Ausgangstext,
-				// sonst hängt handleResult das Gesprochene ein zweites Mal an.
-				if (input) input.value = baseValue;
-				if (spoken) handleResult(spoken);
-			},
-			onError: (err) => {
-				clearRecognition();
-				toast("Spracheingabe: " + err, "error");
-			},
-		}).then((ok) => {
-			if (!ok) clearRecognition();
-		});
-		return true;
-	}
-
 	const Recognition = speechRecognitionCtor();
 	if (!Recognition) {
 		toast("Spracheingabe wird von diesem Browser nicht unterstützt.", "error");
@@ -132,9 +97,6 @@ function start(type) {
 }
 
 function stopListening() {
-	if (PLATFORM_NATIVE.speech.isAvailable) {
-		PLATFORM_NATIVE.speech.stopListening();
-	}
 	if (recognition) {
 		try { recognition.stop(); } catch { /* bereits beendet */ }
 	}

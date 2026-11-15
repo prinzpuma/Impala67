@@ -11,7 +11,6 @@ import { DRIVE_SYNC_INTERVAL_OPTIONS, driveSyncAfterChange, normalizeDriveSyncMi
 import { SETTINGS_SECTIONS, searchSettings } from "./settings-schema.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { isLocalDev, mcpBridgeEnabled } from "./mcp-bridge-flag.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { backupActionState, cloudflareActionState, driveActionState, updateActionState } from "./settings-action-state.js";
@@ -109,8 +108,7 @@ function renderAppearance(vm) {
 	const readable = UI.row({ id: "font-size", title: "Schriftgröße", description: "Gilt appweit", trailing: UI.segmented("fontSegments", [
 		{ value: "s", label: "Klein", id: "btnFontS" }, { value: "m", label: "Normal", id: "btnFontM" }, { value: "l", label: "Groß", id: "btnFontL" },
 	], vm.fontSize, "Schriftgröße") }) +
-		UI.row({ id: "motion", title: "Performance-Modus", description: "Für ältere Geräte: ohne Animationen, Milchglas-Effekte und Handschrift-Erkennung", trailing: switchControl("inpReduceMotion", "Performance-Modus", vm.motion === "reduced") }) +
-		(vm.isNative ? UI.row({ id: "native-haptics", title: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", trailing: switchControl("inpNativeHaptics", "Haptisches Feedback", vm.nativeHapticsEnabled) }) : "");
+		UI.row({ id: "motion", title: "Performance-Modus", description: "Für ältere Geräte: ohne Animationen, Milchglas-Effekte und Handschrift-Erkennung", trailing: switchControl("inpReduceMotion", "Performance-Modus", vm.motion === "reduced") });
 	const surface = UI.row({ id: "tabs-position", title: "Tab-Anordnung", description: vm.tabsPosition === "sidebar" ? "Vertikale Tabs in der linken Seitenleiste" : "Horizontale Leiste oben (Standard)", trailing: UI.segmented("tabsSegments", [
 		{ value: "top", label: "Oben", id: "btnTabsTop" }, { value: "sidebar", label: "Seitenleiste", id: "btnTabsSidebar" },
 	], vm.tabsPosition || "top", "Tab-Anordnung") }) +
@@ -423,14 +421,6 @@ function renderApp(vm) {
 	const storage = storageRow + storageDetails;
 	const updateValues = '<span class="settings-version-values"><span>Installiert <b id="updateLocalVer">v' + e(plainVersion(vm.version)) + '</b></span><span>Verfügbar <b id="updateRemoteVer">—</b></span></span>';
 	const update = UI.row({ title: "App-Version", description: "Updates werden nur auf Wunsch geprüft", descriptionId: "updateStatus", descriptionLive: true, trailing: updateValues + updateButton(), className: "settings-update-row" });
-	const scanner = vm.nativeScannerAvailable ? UI.group("Gerät", UI.row({
-		id: "native-scanner",
-		title: "Dokumenten-Scanner",
-		description: "Google-Scanner (schnell, von Google Play) oder Impala-Scanner (eigene Kamera-Ansicht mit Filtern, auch ohne Google-Dienste)",
-		trailing: '<select id="inpNativeScanner" aria-label="Dokumenten-Scanner">' +
-			'<option value="google"' + (vm.nativeScannerEnabled ? " selected" : "") + '>Google-Scanner</option>' +
-			'<option value="impala"' + (vm.nativeScannerEnabled ? "" : " selected") + '>Impala-Scanner</option></select>',
-	})) : "";
 	const experiments = UI.row({ id: "beta-ui", title: "Beta-Design", description: "Platz zum Testen neuer Design-Ideen – aktuell ohne Wirkung", trailing: switchControl("inpBetaUi", "Beta-Design", !!vm.betaUi) });
 	const chats = CHATS.load();
 	const cardCount = Object.keys(S.cards || {}).length;
@@ -449,14 +439,13 @@ function renderApp(vm) {
 	const perfDescription = countPrefix + "Erfasst lokal Hänger in Eingabe, Rendern und Sync sowie App- und KI-Fehler – nie Inhalte oder Zugangsdaten";
 	const developer = '<div id="performance-profiler" data-settings-anchor>' + UI.row({ title: "Performance-Profiler", description: perfDescription, trailing: switchControl("inpPerformanceProfiler", "Performance-Profiler aktivieren", perf.enabled) }) +
 		(perf.records ? UI.actions([{ label: "Diagnose kopieren", id: "btnPerfCopy" }, { label: "JSON exportieren", id: "btnPerfExport", className: "secondary" }, { label: "Protokoll löschen", id: "btnPerfClear", className: "secondary" }]) : "") + "</div>" +
-		(PLATFORM_NATIVE.isNative ? "" : UI.row({ id: "mcp-bridge", title: "MCP-Live-Bridge", description: isLocalDev() ? "Auf dem lokalen Dev-Server immer aktiv" : "Verbindet die App mit einem KI-Assistenten auf diesem Rechner (ws://127.0.0.1:8765). Chrome fragt einmal nach Zugriff aufs lokale Netzwerk.", trailing: switchControl("inpMcpBridge", "MCP-Live-Bridge aktivieren", mcpBridgeEnabled()) }));
+		UI.row({ id: "mcp-bridge", title: "MCP-Live-Bridge", description: isLocalDev() ? "Auf dem lokalen Dev-Server immer aktiv" : "Verbindet die App mit einem KI-Assistenten auf diesem Rechner (ws://127.0.0.1:8765). Chrome fragt einmal nach Zugriff aufs lokale Netzwerk.", trailing: switchControl("inpMcpBridge", "MCP-Live-Bridge aktivieren", mcpBridgeEnabled()) });
 	return UI.page("App & Speicher", "Speicher im Blick behalten, die App aktuell halten und Neues ausprobieren.",
 		UI.group("Lokaler Speicher", storage, { id: "storage" }) +
 		UI.group("App-Updates", update, { id: "updates" }) +
-		scanner +
 		UI.group("Experimente", experiments, { footnote: "Experimente können sich noch ändern und gelten nur auf diesem Gerät." }) +
 		UI.group("Gefahrenzone", danger, { id: "danger-zone", danger: true }) +
-		UI.disclosure("Für Entwickler", PLATFORM_NATIVE.isNative ? "Performance-Profiler" : "Performance-Profiler und MCP-Live-Bridge", developer));
+		UI.disclosure("Für Entwickler", "Performance-Profiler und MCP-Live-Bridge", developer));
 }
 
 const PAGES = { appearance: renderAppearance, ai: renderAi, learning: renderLearning, sync: renderSync, app: renderApp };
@@ -492,7 +481,7 @@ export function renderSettingsShell(section, body, query = "") {
 }
 
 export function renderSearchResults(query) {
-	const results = searchSettings(query, 8, { native: PLATFORM_NATIVE.isNative, web: !PLATFORM_NATIVE.isNative });
+	const results = searchSettings(query, 8);
 	if (!query.trim()) return "";
 	if (!results.length) return '<div class="settings-search-empty">Keine Einstellung gefunden</div>';
 	return results.map((item) => '<button type="button" data-settings-go="' + e(item.section) + '" data-settings-anchor-target="' + e(item.id) + '"><span><b>' + e(item.label) + "</b><small>" + e(item.sectionLabel) + " · " + e(item.description) + "</small></span>" + UI.icon("chevron") + "</button>").join("");

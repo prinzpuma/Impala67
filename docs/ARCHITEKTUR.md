@@ -145,7 +145,7 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `settings-schema.js`, `settings-renderer.js`, `settings-ui.js`, `settings-action-state.js` | Abschnitte, HTML, Bausteine, Button-Zustände |
 
 ### Plattform & Infrastruktur
-`util.js` (Helfer `U`, inkl. `U.morph`, `U.closeOverlay` als einziger Schließweg für `#overlay`), `html-escape.js` (einziges HTML-Escape), `event-bus.js` (Entkopplung statt Import-Zyklen), `cooperative.js`, `platform-native.js` (Rest der alten Capacitor-Brücke, ohne Wirkung), `platform.js`, `performance-profiler*.js`, `optional-modules.js` (CDN-Nachladen), `mcp-bridge.js` (Live-Bridge), `service-worker.js`, `updater.js`, `types.js` (nur JSDoc-Typen).
+`util.js` (Helfer `U`, inkl. `U.morph`, `U.closeOverlay` als einziger Schließweg für `#overlay`), `html-escape.js` (einziges HTML-Escape), `event-bus.js` (Entkopplung statt Import-Zyklen), `cooperative.js`, `platform.js`, `performance-profiler*.js`, `optional-modules.js` (CDN-Nachladen), `mcp-bridge.js` (Live-Bridge), `service-worker.js`, `updater.js`, `types.js` (nur JSDoc-Typen).
 
 ---
 

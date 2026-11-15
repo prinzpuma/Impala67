@@ -1,11 +1,9 @@
 "use strict";
 // Scanner-Oberfläche des Hefts: Kamera mit Live-Prüfung und Auto-Scan, Aufnahmeleiste mit
 // Hintergrund-Warteschlange, Nachbearbeitung (Ecken, Filter, Drehen) und Abschluss als PDF oder Heftseiten.
-// Bildverarbeitung: heft-scan.js (SCANCORE, läuft im Web-Worker). Auf Android zuerst der Google-Scanner.
+// Bildverarbeitung: heft-scan.js (SCANCORE, läuft im Web-Worker).
 import { U } from "./util.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { SCANCORE } from "./heft-scan.js";
-import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
 import { buildPdf } from "./heft-export.js";
 import { lead } from "./icons.js";
 
@@ -50,33 +48,6 @@ export function createScanner(host) {
 
 	async function openScanner() {
 		if (scanUI) return;
-
-		if (PLATFORM_NATIVE.scanner.isEnabled()) {
-			try {
-				const res = await PLATFORM_NATIVE.scanner.scan({ pageLimit: 25 });
-				if (res?.images?.length) {
-					// Als Bilddaten übernehmen: die Cache-Datei des Scanners ist vergänglich und nicht synchronisierbar.
-					const images = [];
-					for (const uri of res.images) {
-						const src = window.Capacitor?.convertFileSrc ? window.Capacitor.convertFileSrc(uri) : uri;
-						const im = await host.fileToImageData(await (await fetch(src)).blob(), SCAN_OUT_MAX_EDGE, "image/jpeg", SCAN_JPEG_QUALITY);
-						images.push({ ...im, scan: true });
-					}
-					host.insertPages(images);
-					return;
-				}
-				if (res?.canceled) {
-					return;
-				}
-				if (res?.error) {
-					U.toast?.("Google-Scanner nicht verfügbar – nutze internen Scanner.", "info");
-				}
-			} catch (err) {
-				console.warn("[heft] Native scanner error, falling back to internal scanner:", err);
-				U.toast?.("Google-Scanner fehlgeschlagen – nutze internen Scanner.", "info");
-			}
-			// Fallback: Bei Fehlern oder fehlendem ML Kit startet automatisch der interne Kamera-Scanner.
-		}
 
 		const filters = SCAN_MODES.map((m) =>
 			'<button type="button" data-hescanfilter="' + m[0] + '" aria-pressed="' + (m[0] === "color" ? "true" : "false") + '"' + (m[0] === "color" ? ' class="active"' : "") + ">" + m[1] + "</button>").join("");

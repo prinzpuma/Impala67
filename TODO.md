@@ -27,8 +27,6 @@ Stand: 15.11.2026.
   Remote-Queue in `web/ai.js` (`embedProvider`, `remoteEmbed*`).
 - **iPad-Semantik**: Suche nach Bedeutung, RAG-Quellen im Chat, Fach-Einordnung per Embedding; SwiftUI-Menüs barrierefrei.
 - **Android-Semantik**: „Verwandt“-Leiste und RAG-Quellen (semantischer Index auf Android).
-- **Capacitor-Reste entfernen**: `web/platform-native.js` (greift auf `window.Capacitor` zu, das es nicht mehr gibt) und
-  seine 10 Aufrufer; vorher prüfen, welche Zweige dadurch tot sind.
 
 ## 3. Kern und Leistung
 

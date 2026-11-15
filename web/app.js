@@ -21,7 +21,6 @@ import { VOICE } from "./voice.js";
 import { POPOVERS } from "./popovers.js";
 import { AI } from "./ai.js";
 import { PDFS } from "./pdfs.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { icon } from "./icons.js";
 import { wireSidebarEvents } from "./app-sidebar-events.js";
 import { closestOf, blurActive, closeTopMenu } from "./app-ui.js";
@@ -74,143 +73,6 @@ const $ = (id) => U.el(id);
 
 
 
-async function checkIncomingShare() {
-	if (!PLATFORM_NATIVE.sendIntent.isAvailable) return;
-	if (typeof DB === "undefined" || !DB.isOpen?.()) return;
-	try {
-		const shared = await PLATFORM_NATIVE.sendIntent.checkIncoming();
-		if (!shared) return;
-
-		const type = String(shared.type || "").toLowerCase();
-		const items = [shared.url, ...(shared.additionalItems || [])].filter(Boolean);
-
-		// 1. PDF-Dateien geteilt
-		const isPdf = type.includes("pdf") || items.some((uri) => String(uri).toLowerCase().endsWith(".pdf"));
-		if (isPdf && items.length > 0 && typeof PDFS !== "undefined" && typeof PDFS.ingest === "function") {
-			try {
-				const uri = items[0];
-				const fileSrc = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
-					? window.Capacitor.convertFileSrc(uri)
-					: uri;
-				const resp = await fetch(fileSrc);
-				const blob = await resp.blob();
-				const file = new File([blob], shared.title || "Geteiltes Dokument.pdf", { type: "application/pdf" });
-				await PDFS.ingest(file, (msg) => U.toast(msg, "info"));
-				U.toast("PDF erfolgreich geteilt & importiert!", "success");
-				return;
-			} catch (pdfErr) {
-				console.warn("[app] Geteiltes PDF konnte nicht importiert werden:", pdfErr);
-			}
-		}
-
-		// 2. Bilder geteilt
-		const isImage = type.includes("image") || items.some((uri) => /\.(png|jpe?g|webp|gif)$/i.test(String(uri)));
-		if (isImage && items.length > 0) {
-			try {
-				const id = U.uid();
-				const title = shared.title || "Geteiltes Bild";
-				const alt = title.replace(/[[\]]/g, "");
-				let mdContent = "";
-				for (const uri of items) {
-					const fileSrc = (window.Capacitor && typeof window.Capacitor.convertFileSrc === "function")
-						? window.Capacitor.convertFileSrc(uri)
-						: uri;
-					const resp = await fetch(fileSrc);
-					const blob = await resp.blob();
-					// Gleiches Format wie Bildblöcke im Editor (img:<id>): nur das löst editor.js
-					// hydrate() aus IndexedDB auf. „blob:<id>“ landete ungeprüft als <img src>.
-					const blobId = "img:" + U.uid();
-					await DB.putBlob(blobId, await U.readAsBuffer(blob), { name: "image.png", size: blob.size, type: blob.type || "image/png" });
-					mdContent += `![${alt}](${blobId})\n\n`;
-				}
-				if (shared.text && shared.text !== title) {
-					mdContent += shared.text + "\n\n";
-				}
-				await STATE.dispatch("pageCreate", { id, title, content: mdContent, parentId: null });
-				openPage(id);
-				U.toast("Bild(er) mit Impala67 geteilt", "success");
-				return;
-			} catch (imgErr) {
-				console.warn("[app] Geteilte Bilder konnten nicht importiert werden:", imgErr);
-			}
-		}
-
-		// 3. Text oder Link geteilt
-		let text = shared.text || "";
-		const url = shared.url || "";
-		if (url && !text.includes(url)) {
-			text = text ? `${text}\n\n${url}` : url;
-		}
-		if (text || shared.title) {
-			let title = shared.title;
-			if (!title && url) {
-				try { title = new URL(url).hostname; } catch { title = "Geteilter Link"; }
-			}
-			title = title || "Geteilte Notiz";
-			const id = U.uid();
-			await STATE.dispatch("pageCreate", { id, title, content: text, parentId: null });
-			openPage(id);
-			U.toast("Geteilt mit Impala67: " + title, "success");
-		}
-	} catch (err) {
-		console.warn("[app] Geteilte Daten konnten nicht verarbeitet werden:", err);
-	}
-}
-
-let lifecycleInited = false;
-function initPlatformLifecycle() {
-	if (lifecycleInited) return;
-	lifecycleInited = true;
-
-	PLATFORM_NATIVE.notifications.onActionPerformed?.(() => {
-		try {
-			if (typeof openAnki === "function") openAnki();
-		} catch (err) {
-			console.warn("[app] Fehler beim Öffnen des Lernmodus aus Benachrichtigung:", err);
-		}
-	});
-
-	PLATFORM_NATIVE.lifecycle.init({
-		onStateChange: (isActive) => {
-			if (isActive) {
-				checkIncomingShare();
-			} else {
-				document.activeElement?.blur?.();
-				try {
-					const snap = STATE.studySnapshot?.(null);
-					const due = (snap?.counts?.neu || 0) + (snap?.counts?.learn || 0) + (snap?.counts?.review || 0);
-					if (due > 0) PLATFORM_NATIVE.notifications.scheduleSRSReview(due);
-				} catch (e) { PERF_PROFILER.error("srs-reminder-error", e); }
-			}
-		},
-		onBackButton: () => {
-			const scanClose = document.querySelector(".heft-scan [data-hescanclose]");
-			if (scanClose) {
-				scanClose.click();
-				return;
-			}
-			const overlay = document.getElementById("overlay");
-			if (overlay && !overlay.hidden) {
-				closeOverlay();
-				return;
-			}
-			const palette = document.getElementById("palette");
-			if (palette && !palette.hidden) {
-				palette.hidden = true;
-				return;
-			}
-			if (document.body.classList.contains("mnav-open") || document.body.classList.contains("mmore-open")) {
-				document.body.classList.remove("mnav-open", "mmore-open");
-				return;
-			}
-			if (TABS.canGoBack()) {
-				TABS.navBack();
-				return;
-			}
-			try { window.Capacitor?.Plugins?.App?.minimizeApp?.(); } catch { /* ignore */ }
-		},
-	});
-}
 
 
 
@@ -225,7 +87,6 @@ const APPEARANCE_BTN = {
 };
 
 function wireEvents() {
-	initPlatformLifecycle();
 	// dispatch() rendert bereits rAF-gebündelt → nach dispatch kein extra render();
 	// reine UI-Navigation ohne dispatch rendert sofort.
 	// „＋ Neue Zeile“ in der Datenbank-Ansicht: neue Unterseite mit leeren Eigenschaften
@@ -648,15 +509,6 @@ function wireEvents() {
 			SETTINGS.handleAppearanceSelect("motion", e.target.checked ? "reduced" : "full");
 			return;
 		}
-		if (e.target.id === "inpNativeHaptics") {
-			localStorage.setItem("impala67NativeHaptics", e.target.checked ? "1" : "0");
-			if (e.target.checked) PLATFORM_NATIVE.haptics.light();
-			return;
-		}
-		if (e.target.id === "inpNativeScanner") {
-			localStorage.setItem("impala67NativeScanner", e.target.value === "impala" ? "0" : "1");
-			return;
-		}
 		if (e.target.id === "inpOverlearn") {
 			SETTINGS.handleAppearanceSelect("overlearn", e.target.checked ? "on" : "off");
 			return;
@@ -817,5 +669,4 @@ export const APP = {
 	showStudyAnswer,
 	gradeStudyCard,
 	studySpaceOrEnter,
-	checkIncomingShare,
 };

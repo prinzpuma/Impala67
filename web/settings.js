@@ -15,7 +15,6 @@ import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, v
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi, renderSettingsModelList, localEmbeddingStatusView } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import * as UI from "./settings-ui.js";
 import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
@@ -185,10 +184,6 @@ function settingsViewModel() {
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
 		betaUi: localStorage.getItem("impala67BetaUi") !== "0",
-		isNative: PLATFORM_NATIVE.isNative,
-		nativeHapticsEnabled: localStorage.getItem("impala67NativeHaptics") !== "0",
-		nativeScannerAvailable: PLATFORM_NATIVE.scanner.isAvailable,
-		nativeScannerEnabled: PLATFORM_NATIVE.scanner.isEnabled(),
 		breakReminder: getBreakReminder(),
 	};
 }

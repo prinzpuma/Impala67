@@ -7,8 +7,6 @@
 // jetzt diese zwei Abfragen; das CSS liest das Ergebnis als body.is-touch / body.is-phone.
 // Eigenes Modul, damit alle Stellen es direkt importieren statt über window.PLATFORM zu gehen.
 
-import { PLATFORM_NATIVE } from "./platform-native.js";
-
 // Ohne Browser (Node-Tests) gibt es kein matchMedia/document: dann gilt „kein Touch, kein Handy“.
 const query = (q) => (typeof matchMedia === "function" ? matchMedia(q) : { matches: false, addEventListener() {} });
 const MQ_PHONE = query("(max-width: 700px), (pointer: coarse) and (max-height: 500px)");
@@ -26,9 +24,7 @@ export const PLATFORM = {
 		document.body.classList.toggle("is-phone", PLATFORM.isPhone());
 		document.body.classList.toggle("is-ios", PLATFORM.isIOS());
 		document.body.classList.toggle("is-standalone", PLATFORM.isStandalone());
-		document.body.classList.toggle("is-native", PLATFORM_NATIVE.isNative);
 	},
-	native: PLATFORM_NATIVE,
 };
 for (const q of [MQ_PHONE, MQ_TOUCH]) q.addEventListener("change", PLATFORM.sync);
 PLATFORM.sync();

@@ -56,7 +56,6 @@ const APP_FILES = [
 	"./design.css",
 	"./beta-ui.css",
 	"./motion.js",
-	"./platform-native.js",
 	"./platform.js",
 	"./collapse.js",
 	"./chats.js",

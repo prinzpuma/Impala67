@@ -3,7 +3,6 @@ import { icon } from "./icons.js";
 import { escapeHtml } from "./html-escape.js";
 import { OPTIONAL_MODULE_URLS, OPTIONAL_MODULE_INTEGRITY, MERMAID_VERSION } from "./optional-modules.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 // util.js — kleine Helfer
 const OPTIONAL_LOAD_TIMEOUT_MS = 15000;
 function withLoadTimeout(task, label) {
@@ -834,14 +833,8 @@ export const U = {
 	},
 
 	// Gemeinsamer Download-Helfer (dedupliziert download/downloadText/downloadBlob).
-	// In der Android-App gibt es keinen Download-Ordner-Dialog: dort öffnet sich das Teilen-Menü.
-	// Ergebnis { success, aborted? } – aborted = Teilen-Menü ohne Auswahl geschlossen.
+	// Ergebnis { success }.
 	async _dl(name, blob) {
-		if (PLATFORM_NATIVE.isNative) {
-			const res = await PLATFORM_NATIVE.filesystem.exportFile(name, blob);
-			if (res.error) U.toast("Datei konnte nicht geteilt werden: " + res.error, "error");
-			return res;
-		}
 		const a = document.createElement("a");
 		a.href = URL.createObjectURL(blob);
 		a.download = name;

@@ -1,4 +1,3 @@
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { lead } from "./icons.js";
 
 /**
@@ -152,9 +151,6 @@ export async function openQrScanner(onResult, onError) {
 	async function processDetectedString(rawText) {
 		const parsed = parseCfPairingData(rawText);
 		if (parsed) {
-			if (PLATFORM_NATIVE?.haptics?.impact) {
-				PLATFORM_NATIVE.haptics.impact("medium").catch(() => {});
-			}
 			cleanup();
 			onResult(parsed);
 			return true;

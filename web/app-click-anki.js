@@ -8,7 +8,6 @@ import { RENDER_ANKI } from "./render-anki.js";
 import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { TABS } from "./tabs.js";
-import { PLATFORM_NATIVE } from "./platform-native.js";
 import { focusRenameInput } from "./app-sidebar-events.js";
 import { PLATFORM } from "./platform.js";
 import { closestOf, blurActive } from "./app-ui.js";
@@ -164,7 +163,7 @@ export async function handleAnkiClick(t, e) {
 	if (t.dataset.ankishowback) { showStudyAnswer(t.dataset.card); return true; }
 	if (t.dataset.ankiwaitrefresh) { resetStudyCard(); renderMain(); return true; }
 	if (t.dataset.ankigrade) {
-		PLATFORM_NATIVE.haptics.light();
+		try { navigator.vibrate?.(15); } catch { /* ohne Vibration */ }
 		await rateAndReviewCard(t.dataset.card, Number(t.dataset.ankigrade), t.dataset.reviewId);
 		resetStudyCard();
 		return true;

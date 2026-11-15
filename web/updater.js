@@ -195,20 +195,6 @@ async function fetchWorkerVersion() {
 }
 
 async function fetchDeployedVersion() {
-	if (window.Capacitor?.isNativePlatform?.()) {
-		try {
-			const res = await fetch("https://api.github.com/repos/prinzpuma/Impala67/releases/latest", {
-				headers: { Accept: "application/vnd.github.v3+json" }
-			});
-			if (res.ok) {
-				const data = await res.json();
-				const latest = normVer(data?.tag_name || data?.name);
-				if (latest) return { latest, source: "GitHub Release" };
-			}
-		} catch {
-			/* Fallback zur ausgelieferten Datei */
-		}
-	}
 	try {
 		const data = await fetchJson("./version.json");
 		const latest = normVer(data.version);
@@ -233,7 +219,7 @@ window.checkAppUpdate = async function checkAppUpdate() {
 	pendingUpdate = hasUpdate ? { version: latest } : null;
 	// Das neue Bundle bereits im Hintergrund laden, aber NICHT aktivieren. Erst der
 	// bewusste Klick sendet SKIP_WAITING; so erhält keine alte UI neue Lazy-Module.
-	if (hasUpdate && !window.Capacitor?.isNativePlatform?.()) prepareUpdate(latest);
+	if (hasUpdate) prepareUpdate(latest);
 	return {
 		ok: true,
 		latest,
@@ -246,14 +232,6 @@ window.checkAppUpdate = async function checkAppUpdate() {
 
 window.installAppUpdate = async function installAppUpdate(onStatus) {
 	const say = (text) => { try { if (typeof onStatus === "function") onStatus(text); } catch { /* UI geschlossen */ } };
-
-	if (window.Capacitor?.isNativePlatform?.()) {
-		say("APK-Download wird im Browser geöffnet…");
-		const apkUrl = "https://github.com/prinzpuma/Impala67/releases/latest/download/Impala67.apk";
-		window.open(apkUrl, "_system");
-		pendingUpdate = null;
-		return { reloaded: false, nativeDownload: true };
-	}
 
 	// Ohne bekannte Zielversion (Aufruf vor der ersten Hintergrundprüfung) erst
 	// version.json fragen. Früher lief der Update-Pfad dann ohne Ziel: irgendein

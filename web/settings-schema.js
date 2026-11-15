@@ -23,7 +23,6 @@ export const BREAK_REMINDER_KEY = "impala67BreakReminder";
 
 // Das Schema ist zugleich Informationsarchitektur und Suchindex. Renderer lesen
 // dieselben IDs, Titel und Beschreibungen; dadurch driften Navigation und Inhalt nicht auseinander.
-// platform: "native" = nur in der Android-App, "web" = nur im Browser.
 export const SETTINGS_ITEMS = [
 	{ id: "overview-status", section: "overview", group: "Status", label: "App-Status", description: "KI, Sync, Backup, Speicher und Version auf einen Blick", keywords: "zustand start dashboard diagnose" },
 	{ id: "theme", section: "appearance", group: "Design", label: "Erscheinungsbild", description: "System, Hell oder Dunkel", keywords: "theme modus mode dark light gerätemodus" },
@@ -31,7 +30,6 @@ export const SETTINGS_ITEMS = [
 	{ id: "density", section: "appearance", group: "Design", label: "Darstellungsdichte", description: "Kompakt oder komfortabel", keywords: "abstand platz layout" },
 	{ id: "font-size", section: "appearance", group: "Lesbarkeit", label: "Schriftgröße", description: "Klein, normal oder groß", keywords: "text schrift lesbar zoom" },
 	{ id: "motion", section: "appearance", group: "Lesbarkeit", label: "Bewegung reduzieren", description: "Weniger Übergänge und Animationen, keine Handschrift-Erkennung", keywords: "animation motion barrierefreiheit performance handschrift erkennung speicher" },
-	{ id: "native-haptics", section: "appearance", group: "Lesbarkeit", label: "Haptisches Feedback", description: "Taktile Vibrationen bei Aktionen, Werkzeugwechsel und Bewertungen", keywords: "vibration haptik feedback touch motor", platform: "native" },
 	{ id: "tabs-position", section: "appearance", group: "Oberfläche", label: "Tab-Anordnung", description: "Horizontale Leiste oben oder vertikale Tabs in der Seitenleiste", keywords: "tabs leiste vertikal horizontal seitenleiste navigation anordnung" },
 	{ id: "home-name", section: "appearance", group: "Oberfläche", label: "Begrüßungsname", description: "Name in der Begrüßung auf der Startseite", keywords: "anzeigename profil startseite home" },
 	{ id: "home-article", section: "appearance", group: "Oberfläche", label: "Tagesartikel", description: "KI-Zusammenfassung deiner Notizen auf der Startseite", keywords: "artikel zusammenfassung ki startseite home täglich" },
@@ -58,13 +56,12 @@ export const SETTINGS_ITEMS = [
 	{ id: "data-export", section: "sync", group: "Backup", label: "Weitere Exporte", description: "Lerndaten und Markdown-Workspace exportieren", keywords: "telemetrie zip markdown rohdatei" },
 	{ id: "storage", section: "app", group: "Speicher", label: "Lokaler Speicher", description: "Verwendeten Gerätespeicher anzeigen", keywords: "indexeddb quota größe" },
 	{ id: "updates", section: "app", group: "App", label: "App-Updates", description: "Version prüfen und Update installieren", keywords: "pwa version neu laden cache" },
-	{ id: "native-scanner", section: "app", group: "Gerät", label: "Dokumenten-Scanner", description: "Google-Scanner oder Impala-Scanner verwenden", keywords: "scanner scannen kamera dokument google ml kit impala foto", platform: "native" },
 	{ id: "beta-ui", section: "app", group: "Experimente", label: "Beta-Design", description: "Platz zum Testen neuer Design-Ideen – aktuell ohne Wirkung", keywords: "beta ui design modern experimentell oberfläche layout heft stift werkzeugleiste" },
 	{ id: "danger-zone", section: "app", group: "Gefahrenzone", label: "Lokale Seiten löschen", description: "Alle lokalen Seiten unwiderruflich entfernen", keywords: "reset löschen zurücksetzen" },
 	{ id: "danger-chats", section: "app", group: "Gefahrenzone", label: "Alle Chats löschen", description: "Gespeicherte Chats auf diesem und synchronisierten Geräten entfernen", keywords: "chat verlauf unterhaltung löschen zurücksetzen" },
 	{ id: "danger-cards", section: "app", group: "Gefahrenzone", label: "Alle Karteikarten löschen", description: "Alle Karteikarten, Stapel und Lernfortschritte entfernen", keywords: "karteikarten anki karten stapel deck löschen zurücksetzen" },
 	{ id: "performance-profiler", section: "app", group: "Für Entwickler", label: "Performance-Profiler", description: "Hänger, App- und KI-Fehler lokal protokollieren", keywords: "langsam hänger profiler long task diagnose ruckeln fehler ki debug protokoll entwickler" },
-	{ id: "mcp-bridge", section: "app", group: "Für Entwickler", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live", platform: "web" },
+	{ id: "mcp-bridge", section: "app", group: "Für Entwickler", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live" },
 ];
 
 const normalize = (value) => String(value || "").toLocaleLowerCase("de-DE")
@@ -76,10 +73,10 @@ export function resolveSettingsSection(section) {
 	return SETTINGS_SECTIONS.some((entry) => entry.id === resolved) ? resolved : "overview";
 }
 
-export function searchSettings(query, limit = 8, context = {}) {
+export function searchSettings(query, limit = 8) {
 	const terms = normalize(query).split(" ").filter(Boolean);
 	if (!terms.length) return [];
-	return SETTINGS_ITEMS.filter((item) => !item.platform || context[item.platform]).map((item) => {
+	return SETTINGS_ITEMS.map((item) => {
 		const section = SETTINGS_SECTIONS.find((entry) => entry.id === item.section);
 		const title = normalize(item.label);
 		const haystack = normalize([item.label, item.description, item.group, item.keywords, section?.label].join(" "));
