@@ -310,34 +310,24 @@ struct TreeRows: RandomAccessCollection {
         key.hasPrefix("ws:") ? open[key] == false : open[key] != true
     }
 
-    /// Tiefe wie in der PWA (`depth > 8` wird nicht mehr gezeichnet).
-    private static let maxDepth = 8
-
     static func read(_ core: ImpalaCore) -> TreeRows {
         var t = TreeRows()
         t.open = core.treeOpen()
-        let all = core.recentPages(limit: UInt32.max)
-        let favorites = all.filter(\.favorite)
-        let children = PageChildren(core)
-        t.dbPages = Set(all.filter { $0.kind != .heft && core.pageDb(id: $0.id) != nil }.map(\.id))
-        if !favorites.isEmpty {
-            t.rows.append(Row(id: "head:fav", kind: .head(title: "★ Favoriten", collapseKey: nil, workspaceId: nil)))
-            for p in favorites { t.rows.append(Row(id: "fav:\(p.id)", kind: .page(p, depth: 0, hasKids: false))) }
-        }
-        func branch(_ list: [PageSummary], _ depth: Int) {
-            for p in list {
-                let sub = depth < maxDepth ? children.of(p) : []
-                t.rows.append(Row(id: "tree:\(p.id)", kind: .page(p, depth: depth, hasKids: !sub.isEmpty)))
-                if !sub.isEmpty && !t.isCollapsed(p.id) { branch(sub, depth + 1) }
+        for r in core.sidebarTreeRows() {
+            switch r.kind {
+            case "head":
+                t.rows.append(Row(id: r.rowId, kind: .head(title: r.title, collapseKey: r.collapseKey, workspaceId: r.workspaceId)))
+            case "page":
+                if let p = r.page {
+                    t.rows.append(Row(id: r.rowId, kind: .page(p, depth: Int(r.depth), hasKids: r.hasKids)))
+                    if p.kind != .heft, core.pageDb(id: p.id) != nil { t.dbPages.insert(p.id) }
+                }
+            case "empty":
+                if let ws = r.workspaceId {
+                    t.rows.append(Row(id: r.rowId, kind: .empty(workspaceId: ws)))
+                }
+            default: break
             }
-        }
-        for ws in core.workspaces() {
-            let key = "ws:\(ws.id)"
-            t.rows.append(Row(id: "head:\(key)", kind: .head(title: ws.name, collapseKey: key, workspaceId: ws.id)))
-            guard !t.isCollapsed(key) else { continue }
-            let before = t.rows.count
-            branch(children.roots(ws.id), 0)
-            if t.rows.count == before { t.rows.append(Row(id: "empty:\(ws.id)", kind: .empty(workspaceId: ws.id))) }
         }
         return t
     }

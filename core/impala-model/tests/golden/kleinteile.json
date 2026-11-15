@@ -1,0 +1,422 @@
+{
+  "grades": [
+    {
+      "today": "07.11.2026",
+      "grades": {
+        "g1": {
+          "id": "g1",
+          "subject": "Mathematik",
+          "grade": 1.3,
+          "weight": 2,
+          "date": "2026-10-15",
+          "comment": "Klausur 1 | Analysis",
+          "created": "2026-10-15T10:00:00.000Z"
+        },
+        "g2": {
+          "id": "g2",
+          "subject": "Mathematik",
+          "grade": 2,
+          "weight": 1,
+          "date": "2026-09-20",
+          "comment": "Test",
+          "created": "2026-09-20T09:00:00.000Z"
+        },
+        "g3": {
+          "id": "g3",
+          "subject": "Informatik",
+          "grade": 1,
+          "weight": 1.5,
+          "date": "",
+          "comment": "",
+          "created": "2026-11-01T12:00:00.000Z"
+        },
+        "g4": {
+          "id": "g4",
+          "subject": "Informatik",
+          "grade": 3.7,
+          "weight": 1,
+          "date": "2026-10-01",
+          "comment": "Projekt",
+          "created": "2026-10-01T08:00:00.000Z",
+          "deleted": true
+        },
+        "g5": {
+          "id": "g5",
+          "subject": "  ",
+          "grade": 2.7,
+          "weight": 0,
+          "date": "2026-10-10",
+          "comment": "Mündlich",
+          "created": "2026-10-10T08:00:00.000Z"
+        }
+      },
+      "all": [
+        {
+          "id": "g3",
+          "subject": "Informatik",
+          "grade": 1,
+          "weight": 1.5,
+          "date": "2026-11-01",
+          "comment": "",
+          "created": "2026-11-01T12:00:00.000Z"
+        },
+        {
+          "id": "g1",
+          "subject": "Mathematik",
+          "grade": 1.3,
+          "weight": 2,
+          "date": "2026-10-15",
+          "comment": "Klausur 1 | Analysis",
+          "created": "2026-10-15T10:00:00.000Z"
+        },
+        {
+          "id": "g5",
+          "subject": "Allgemein",
+          "grade": 2.7,
+          "weight": 1,
+          "date": "2026-10-10",
+          "comment": "Mündlich",
+          "created": "2026-10-10T08:00:00.000Z"
+        },
+        {
+          "id": "g2",
+          "subject": "Mathematik",
+          "grade": 2,
+          "weight": 1,
+          "date": "2026-09-20",
+          "comment": "Test",
+          "created": "2026-09-20T09:00:00.000Z"
+        }
+      ],
+      "average": 1.6,
+      "subjects": [
+        {
+          "subject": "Allgemein",
+          "grades": [
+            {
+              "id": "g5",
+              "subject": "Allgemein",
+              "grade": 2.7,
+              "weight": 1,
+              "date": "2026-10-10",
+              "comment": "Mündlich",
+              "created": "2026-10-10T08:00:00.000Z"
+            }
+          ],
+          "average": 2.7
+        },
+        {
+          "subject": "Informatik",
+          "grades": [
+            {
+              "id": "g3",
+              "subject": "Informatik",
+              "grade": 1,
+              "weight": 1.5,
+              "date": "2026-11-01",
+              "comment": "",
+              "created": "2026-11-01T12:00:00.000Z"
+            }
+          ],
+          "average": 1
+        },
+        {
+          "subject": "Mathematik",
+          "grades": [
+            {
+              "id": "g1",
+              "subject": "Mathematik",
+              "grade": 1.3,
+              "weight": 2,
+              "date": "2026-10-15",
+              "comment": "Klausur 1 | Analysis",
+              "created": "2026-10-15T10:00:00.000Z"
+            },
+            {
+              "id": "g2",
+              "subject": "Mathematik",
+              "grade": 2,
+              "weight": 1,
+              "date": "2026-09-20",
+              "comment": "Test",
+              "created": "2026-09-20T09:00:00.000Z"
+            }
+          ],
+          "average": 1.5333333333333332
+        }
+      ],
+      "markdown": "# Schulnoten-Übersicht\n\n**Gesamtschnitt:** 1,60 (4 Noten) · Stand: 07.11.2026\n\n## Allgemein (Ø 2,70)\n\n| Datum | Note | Gewichtung | Kommentar |\n| --- | --- | --- | --- |\n| 2026-10-10 | 2,7 | 1× | Mündlich |\n\n## Informatik (Ø 1,00)\n\n| Datum | Note | Gewichtung | Kommentar |\n| --- | --- | --- | --- |\n| 2026-11-01 | 1,0 | 1,5× |  |\n\n## Mathematik (Ø 1,53)\n\n| Datum | Note | Gewichtung | Kommentar |\n| --- | --- | --- | --- |\n| 2026-10-15 | 1,3 | 2× | Klausur 1 \\| Analysis |\n| 2026-09-20 | 2,0 | 1× | Test |\n"
+    },
+    {
+      "today": "01.01.2026",
+      "grades": {},
+      "all": [],
+      "average": null,
+      "subjects": [],
+      "markdown": "# Schulnoten-Übersicht\n\n**Gesamtschnitt:** – (0 Noten) · Stand: 01.01.2026\n"
+    }
+  ],
+  "tiers": [
+    {
+      "grade": 1,
+      "tier": 1
+    },
+    {
+      "grade": 1.5,
+      "tier": 1
+    },
+    {
+      "grade": 1.6,
+      "tier": 2
+    },
+    {
+      "grade": 2.5,
+      "tier": 2
+    },
+    {
+      "grade": 2.6,
+      "tier": 3
+    },
+    {
+      "grade": 3.5,
+      "tier": 3
+    },
+    {
+      "grade": 3.6,
+      "tier": 4
+    },
+    {
+      "grade": 4.5,
+      "tier": 4
+    },
+    {
+      "grade": 4.6,
+      "tier": 5
+    },
+    {
+      "grade": 5,
+      "tier": 5
+    }
+  ],
+  "topics": [
+    {
+      "topicsRaw": "Mathematik, Physik; Informatik\nChemie",
+      "history": [
+        "Physik",
+        "Mathematik"
+      ],
+      "picked": "Informatik"
+    },
+    {
+      "topicsRaw": "Analysis, Lineare Algebra",
+      "history": [
+        "Lineare Algebra",
+        "Analysis"
+      ],
+      "picked": "Analysis"
+    },
+    {
+      "topicsRaw": "   , ; ",
+      "history": [
+        "Mathematik"
+      ],
+      "picked": null
+    }
+  ],
+  "choose": [
+    {
+      "pool": [
+        {
+          "id": "p1",
+          "contentLen": 120,
+          "updated": "2026-11-05T10:00:00Z",
+          "archived": false,
+          "subject": "Mathematik"
+        },
+        {
+          "id": "p2",
+          "contentLen": 200,
+          "updated": "2026-11-06T10:00:00Z",
+          "archived": false,
+          "subject": "Mathematik"
+        },
+        {
+          "id": "p3",
+          "contentLen": 80,
+          "updated": "2026-11-04T10:00:00Z",
+          "archived": true,
+          "subject": "Mathematik"
+        },
+        {
+          "id": "p4",
+          "contentLen": 150,
+          "updated": "2026-11-07T10:00:00Z",
+          "archived": false,
+          "subject": "Informatik"
+        },
+        {
+          "id": "p5",
+          "contentLen": 20,
+          "updated": "2026-11-07T12:00:00Z",
+          "archived": false,
+          "subject": "Physik"
+        },
+        {
+          "id": "p6",
+          "contentLen": 300,
+          "updated": "2026-11-07T15:00:00Z",
+          "archived": false,
+          "subject": "Übersicht & Organisation"
+        }
+      ],
+      "recentUsedIds": [
+        "p4"
+      ],
+      "recentFocuses": [
+        "Informatik"
+      ],
+      "knownSubjects": [
+        "Mathematik",
+        "Informatik",
+        "Physik",
+        "Chemie"
+      ],
+      "result": {
+        "focus": "Mathematik",
+        "noteIds": [
+          "p2",
+          "p1",
+          "p3"
+        ]
+      }
+    },
+    {
+      "pool": [
+        {
+          "id": "a1",
+          "contentLen": 90,
+          "updated": "2026-10-01T10:00:00Z",
+          "archived": true,
+          "subject": "Physik"
+        },
+        {
+          "id": "a2",
+          "contentLen": 110,
+          "updated": "2026-10-02T10:00:00Z",
+          "archived": true,
+          "subject": "Physik"
+        }
+      ],
+      "recentUsedIds": [],
+      "recentFocuses": [],
+      "knownSubjects": [
+        "Mathematik",
+        "Informatik",
+        "Physik",
+        "Chemie"
+      ],
+      "result": {
+        "focus": "Physik",
+        "noteIds": [
+          "a2",
+          "a1"
+        ]
+      }
+    }
+  ],
+  "chats": [
+    {
+      "now": "2026-11-07T12:00:00.000Z",
+      "stateChats": {
+        "c1": {
+          "id": "c1",
+          "title": "Sync Chat 1",
+          "created": "2026-11-01T10:00:00Z",
+          "updated": "2026-11-05T10:00:00Z",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hallo",
+              "mid": "m1"
+            }
+          ]
+        },
+        "c2": {
+          "id": "c2",
+          "title": "Gelöscht",
+          "created": "2026-11-01T10:00:00Z",
+          "updated": "2026-11-06T10:00:00Z",
+          "deleted": true,
+          "deletedAt": "2026-11-08T10:00:00Z"
+        }
+      },
+      "localRaw": [
+        {
+          "id": "c1",
+          "title": "Alt Lokal",
+          "created": "2026-11-01T10:00:00Z",
+          "updated": "2026-11-02T10:00:00Z",
+          "messages": []
+        },
+        {
+          "id": "c2",
+          "title": "Sollte weg sein",
+          "created": "2026-11-01T10:00:00Z",
+          "updated": "2026-11-07T10:00:00Z",
+          "messages": []
+        },
+        {
+          "id": "c3",
+          "title": "",
+          "created": "",
+          "updated": "",
+          "messages": [
+            {
+              "role": "assistant",
+              "content": "Antwort",
+              "thinking": "Denke...",
+              "extra": 123
+            },
+            {
+              "role": "",
+              "content": "ungültig"
+            }
+          ]
+        }
+      ],
+      "merged": [
+        {
+          "id": "c3",
+          "title": "",
+          "created": "2026-11-07T12:00:00.000Z",
+          "updated": "2026-11-07T12:00:00.000Z",
+          "messages": [
+            {
+              "role": "assistant",
+              "content": "Antwort",
+              "thinking": "Denke...",
+              "extra": 123
+            },
+            {
+              "role": "",
+              "content": "ungültig"
+            }
+          ]
+        },
+        {
+          "id": "c1",
+          "title": "Sync Chat 1",
+          "created": "2026-11-01T10:00:00Z",
+          "updated": "2026-11-05T10:00:00Z",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hallo",
+              "mid": "m1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

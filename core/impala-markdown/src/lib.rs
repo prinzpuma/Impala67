@@ -7,12 +7,14 @@
 mod block;
 mod js;
 mod mime;
+mod ops;
 mod parse;
 mod serialize;
 mod text;
 
 pub use block::{Block, BlockKind, HeadingLevel, ListStyle};
 pub use mime::mime_from_name;
+pub use ops::*;
 pub use parse::parse;
 pub use serialize::{serialize, serialize_block};
 pub use text::{card_text, excerpt, first_line, links_to, page_link, plain_text, teaser, wiki_links};

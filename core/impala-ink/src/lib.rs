@@ -6,6 +6,8 @@
 //! ONNX Runtime Web ausführen und nur die Dekodierung ([`decode_line`]) aufrufen – ein Aufruf je Zeile mit der
 //! ganzen Logit-Matrix.
 
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 pub mod ctc;
 pub mod lexicon;
 #[cfg(feature = "onnx")]

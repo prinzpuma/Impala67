@@ -39,6 +39,7 @@ import org.impala67.app.ui.components.TintLabel
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
+import uniffi.impala_ffi.DeckEntry
 
 /** Was das ⋯-Menü eines Stapels auslösen kann (`deckMenuHtml` in render-anki.js). */
 data class DeckMenuActions(
@@ -57,7 +58,6 @@ data class DeckMenuActions(
 @Composable
 fun DeckRow(e: DeckEntry, compact: Boolean, onStudy: () -> Unit, onToggle: () -> Unit, menu: DeckMenuActions) {
     val c = Impala.colors
-    val d = e.deck
     Row(
         Modifier.fillMaxWidth().padding(start = (e.depth * 22).dp).clip(MaterialTheme.shapes.medium)
             .clickable(enabled = e.open, onClick = onStudy).defaultMinSize(minHeight = 60.dp).padding(vertical = Space.s1),
@@ -67,7 +67,7 @@ fun DeckRow(e: DeckEntry, compact: Boolean, onStudy: () -> Unit, onToggle: () ->
         Column(Modifier.weight(1f).padding(end = Space.s2)) {
             Text(e.label, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                cardsText(d.total.toInt()) + if (d.suspended > 0uL) " · ${d.suspended} ausgesetzt" else "",
+                cardsText(e.total.toInt()) + if (e.suspended > 0uL) " · ${e.suspended} ausgesetzt" else "",
                 fontSize = TextSize.xs, color = c.text2, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -99,12 +99,11 @@ private fun Chevron(e: DeckEntry, onToggle: () -> Unit) {
 @Composable
 private fun Counts(e: DeckEntry) {
     val c = Impala.colors
-    val d = e.deck
     Column(horizontalAlignment = Alignment.End) {
         if (e.open) {
-            if (d.review > 0uL) Text("${d.review} fällig", fontSize = TextSize.base, fontWeight = FontWeight.Bold, color = c.accent)
-            else Text("${d.learn + d.new} offen", fontSize = TextSize.base, fontWeight = FontWeight.SemiBold)
-            Text("${d.learn} lernen · ${d.new} neu", fontSize = TextSize.xs2, color = c.text2)
+            if (e.review > 0uL) Text("${e.review} fällig", fontSize = TextSize.base, fontWeight = FontWeight.Bold, color = c.accent)
+            else Text("${e.learn + e.new} offen", fontSize = TextSize.base, fontWeight = FontWeight.SemiBold)
+            Text("${e.learn} lernen · ${e.new} neu", fontSize = TextSize.xs2, color = c.text2)
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
                 Icon(painterResource(R.drawable.ic_i_check), null, Modifier.size(12.dp), tint = c.success)

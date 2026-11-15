@@ -1,6 +1,7 @@
 import Foundation
 
 /// Suchindex für die Einstellungen nach Vorbild von `settings-schema.js` (`SETTINGS_ITEMS`, `searchSettings`).
+/// Die Suchlogik (Normalisierung, Worttreffer und Bewertung) läuft im Rust-Kern (`searchSettingsItems`).
 struct SettingsSearchItem: Identifiable, Hashable {
     let id: String
     let section: SettingsSection
@@ -8,10 +9,6 @@ struct SettingsSearchItem: Identifiable, Hashable {
     let label: String
     let description: String
     let keywords: String
-
-    var haystack: String {
-        "\(label) \(description) \(group) \(keywords) \(section.label)".lowercased()
-    }
 }
 
 enum SettingsSearchIndex {
@@ -314,49 +311,23 @@ enum SettingsSearchIndex {
         )
     ]
 
-    /// Durchsucht die Einstellungen wie `searchSettings` der PWA.
+    private static let byId: [String: SettingsSearchItem] = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+
+    private static let ffiEntries: [SettingsSearchEntry] = items.map {
+        SettingsSearchEntry(
+            id: $0.id,
+            section: $0.section.rawValue,
+            sectionLabel: $0.section.label,
+            group: $0.group,
+            label: $0.label,
+            description: $0.description,
+            keywords: $0.keywords
+        )
+    }
+
+    /// Durchsucht die Einstellungen über den Rust-Kern (`searchSettingsItems`).
     static func search(_ query: String, limit: Int = 8) -> [SettingsSearchItem] {
-        let terms = query.lowercased()
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .split(separator: " ")
-            .map { String($0) }
-            .filter { !$0.isEmpty }
-
-        guard !terms.isEmpty else { return [] }
-
-        struct Hit {
-            let item: SettingsSearchItem
-            let score: Int
-        }
-
-        var hits: [Hit] = []
-
-        for item in items {
-            let haystack = item.haystack.folding(options: .diacriticInsensitive, locale: .current)
-            let title = item.label.lowercased().folding(options: .diacriticInsensitive, locale: .current)
-
-            // Alle Suchbegriffe müssen vorkommen
-            guard terms.allSatisfy({ haystack.contains($0) }) else { continue }
-
-            var score = 0
-            for term in terms {
-                if title.hasPrefix(term) {
-                    score += 4
-                } else if title.contains(term) {
-                    score += 2
-                } else {
-                    score += 1
-                }
-            }
-            hits.append(Hit(item: item, score: score))
-        }
-
-        return hits
-            .sorted { a, b in
-                if a.score != b.score { return a.score > b.score }
-                return a.item.label.localizedCompare(b.item.label) == .orderedAscending
-            }
-            .prefix(limit)
-            .map(\.item)
+        searchSettingsItems(entries: ffiEntries, query: query, limit: UInt32(max(0, limit)))
+            .compactMap { byId[$0.id] }
     }
 }

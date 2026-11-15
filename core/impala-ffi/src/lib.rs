@@ -5,8 +5,10 @@
 
 mod ai;
 mod ai_tools;
+mod analysis;
 mod busy;
 mod card_ops;
+mod card_transfer;
 mod cards;
 mod changes;
 mod chats;
@@ -26,6 +28,7 @@ mod heft_library;
 mod heft_undo;
 mod markdown;
 mod pages;
+mod palette;
 mod rag;
 mod scan;
 mod stats;

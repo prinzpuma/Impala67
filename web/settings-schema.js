@@ -1,5 +1,7 @@
 "use strict";
 
+import { CORE } from "./rust-core.js";
+
 export const SETTINGS_LAST_SECTION_KEY = "impala67SettingsLastSection";
 
 export const SETTINGS_SECTIONS = [
@@ -64,26 +66,25 @@ export const SETTINGS_ITEMS = [
 	{ id: "mcp-bridge", section: "app", group: "Für Entwickler", label: "MCP-Live-Bridge", description: "App mit einem KI-Assistenten auf diesem Rechner verbinden", keywords: "mcp claude agent bridge websocket entwickler live" },
 ];
 
-const normalize = (value) => String(value || "").toLocaleLowerCase("de-DE")
-	.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+const ITEMS_BY_ID = new Map(SETTINGS_ITEMS.map((item) => [item.id, item]));
+const SECTIONS_BY_ID = new Map(SETTINGS_SECTIONS.map((s) => [s.id, s]));
 
 export function resolveSettingsSection(section) {
-	const id = normalize(section).replace(/ /g, "");
+	const id = CORE.normalizeSettingsText(String(section || "")).replace(/ /g, "");
 	const resolved = SETTINGS_ALIASES[id] || id;
-	return SETTINGS_SECTIONS.some((entry) => entry.id === resolved) ? resolved : "overview";
+	return SECTIONS_BY_ID.has(resolved) ? resolved : "overview";
 }
 
 export function searchSettings(query, limit = 8) {
-	const terms = normalize(query).split(" ").filter(Boolean);
-	if (!terms.length) return [];
-	return SETTINGS_ITEMS.map((item) => {
-		const section = SETTINGS_SECTIONS.find((entry) => entry.id === item.section);
-		const title = normalize(item.label);
-		const haystack = normalize([item.label, item.description, item.group, item.keywords, section?.label].join(" "));
-		if (!terms.every((term) => haystack.includes(term))) return null;
-		const score = terms.reduce((sum, term) => sum + (title.startsWith(term) ? 4 : title.includes(term) ? 2 : 1), 0);
-		return { ...item, sectionLabel: section?.label || item.section, score };
-	}).filter(Boolean).sort((a, b) => b.score - a.score || a.label.localeCompare(b.label, "de")).slice(0, limit);
+	const hits = JSON.parse(CORE.searchSettingsCatalog(String(query || ""), limit, undefined));
+	return hits
+		.map((hit) => {
+			const item = ITEMS_BY_ID.get(hit.id);
+			if (!item) return null;
+			const section = SECTIONS_BY_ID.get(item.section);
+			return { ...item, sectionLabel: section?.label || item.section, score: hit.score };
+		})
+		.filter(Boolean);
 }
 
 export function valuesSnapshot(entries) {

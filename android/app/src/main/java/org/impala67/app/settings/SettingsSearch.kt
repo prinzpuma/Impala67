@@ -27,8 +27,8 @@ import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Radius
 import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
-import java.text.Normalizer
-import java.util.Locale
+import uniffi.impala_ffi.SettingsSearchEntry
+import uniffi.impala_ffi.searchSettingsItems
 
 /** Ein Eintrag des Suchindex (settings-schema.js `SETTINGS_ITEMS`). */
 data class SettingsItem(val section: String, val group: String, val label: String, val description: String, val keywords: String)
@@ -67,24 +67,24 @@ val SETTINGS_ITEMS = listOf(
     SettingsItem("app", "Für Entwickler", "Performance-Profiler", "Hänger, App- und KI-Fehler lokal protokollieren", "langsam hänger profiler long task diagnose ruckeln fehler ki debug protokoll entwickler"),
 )
 
-private val MARKS = Regex("\\p{M}+")
-private val NON_WORD = Regex("[^a-z0-9]+")
-
-/** Wie `normalize` in settings-schema.js: klein, ohne Akzente, nur Buchstaben und Ziffern. */
-private fun normalize(v: String) = NON_WORD.replace(MARKS.replace(Normalizer.normalize(v.lowercase(Locale.GERMAN), Normalizer.Form.NFD), ""), " ").trim()
-
-/** `searchSettings`: alle Wörter müssen vorkommen; Titelanfang zählt am meisten. */
-fun searchSettings(query: String, limit: Int = 8): List<SettingsItem> {
-    val terms = normalize(query).split(' ').filter { it.isNotEmpty() }
-    if (terms.isEmpty()) return emptyList()
-    return SETTINGS_ITEMS.mapNotNull { item ->
-        val title = normalize(item.label)
-        val section = SettingsSectionInfo.resolve(item.section).label
-        val hay = normalize(listOf(item.label, item.description, item.group, item.keywords, section).joinToString(" "))
-        if (!terms.all { hay.contains(it) }) return@mapNotNull null
-        item to terms.sumOf { t -> if (title.startsWith(t)) 4 else if (title.contains(t)) 2 else 1 }
-    }.sortedWith(compareByDescending<Pair<SettingsItem, Int>> { it.second }.thenBy { it.first.label }).take(limit).map { it.first }
+private val INDEX_ENTRIES: List<SettingsSearchEntry> by lazy {
+    SETTINGS_ITEMS.mapIndexed { idx, item ->
+        SettingsSearchEntry(
+            id = idx.toString(),
+            section = item.section,
+            sectionLabel = SettingsSectionInfo.resolve(item.section).label,
+            group = item.group,
+            label = item.label,
+            description = item.description,
+            keywords = item.keywords,
+        )
+    }
 }
+
+/** Durchsucht die Einstellungen über den Rust-Kern (`searchSettingsItems`). */
+fun searchSettings(query: String, limit: Int = 8): List<SettingsItem> =
+    searchSettingsItems(INDEX_ENTRIES, query, limit.coerceAtLeast(0).toUInt())
+        .mapNotNull { hit -> hit.id.toIntOrNull()?.let { SETTINGS_ITEMS.getOrNull(it) } }
 
 /** Suchfeld der Übersicht mit höchstens acht Treffern; ein Treffer öffnet seinen Bereich. */
 @Composable

@@ -40,8 +40,8 @@ import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.CardInfo
 import uniffi.impala_ffi.CoreException
+import uniffi.impala_ffi.wrapCloze
 
-private val CLOZE_NUMBER = Regex("""\{\{c(\d+)::""")
 private const val NEW_DECK = "\u0000new"
 
 /**
@@ -144,11 +144,6 @@ private fun EditorBody(store: ImpalaStore, card: CardInfo?, decks: List<String>,
 
 /** Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine leere Lücke. */
 private fun wrapCloze(v: TextFieldValue): TextFieldValue {
-    val next = (CLOZE_NUMBER.findAll(v.text).maxOfOrNull { it.groupValues[1].toInt() } ?: 0) + 1
-    val sel = v.selection
-    val picked = v.text.substring(sel.min, sel.max)
-    val open = "{{c$next::"
-    val text = v.text.substring(0, sel.min) + open + picked + "}}" + v.text.substring(sel.max)
-    val caret = if (picked.isEmpty()) sel.min + open.length else sel.min + open.length + picked.length + 2
-    return TextFieldValue(text, TextRange(caret))
+    val res = wrapCloze(v.text, v.selection.min.toUInt(), v.selection.max.toUInt())
+    return TextFieldValue(res.text, TextRange(res.cursor.toInt()))
 }

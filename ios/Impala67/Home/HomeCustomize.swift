@@ -165,15 +165,15 @@ enum HomeFormat {
 
     /// Ein Satz, was heute zählt: Streak in Gefahr > Ziel in Reichweite > Ziel geschafft > heutige Zeit.
     static func nudge(streak: Int, todaySeconds: Int, weekMin: Double, goalMin: Int, now: Date = .now) -> String {
-        let todayMin = Int((Double(todaySeconds) / 60).rounded())
-        let left = Double(goalMin) - weekMin
-        if streak > 0 && todayMin == 0 && Calendar.current.component(.hour, from: now) >= 14 {
-            return " Dein Streak von \(days(streak)) wartet noch auf heute."
-        }
-        if left > 0 && left <= 60 { return " Nur noch \(dur(left)) bis zum Wochenziel." }
-        if left <= 0 && weekMin > 0 { return " Das Wochenziel hast du schon geschafft." }
-        if todayMin > 0 { return " Heute schon \(dur(Double(todayMin))) gelernt." }
-        return ""
+        let hour = Calendar.current.component(.hour, from: now)
+        let weekSec = UInt64(max(0, weekMin * 60.0).rounded())
+        return learningTimeHomeNudgeText(
+            streak: UInt32(max(0, streak)),
+            todaySeconds: UInt64(max(0, todaySeconds)),
+            weekSeconds: weekSec,
+            goalMin: UInt32(max(0, goalMin)),
+            currentHour: UInt32(max(0, hour))
+        )
     }
 
     private static func parseIsoDate(_ iso: String) -> Date? {

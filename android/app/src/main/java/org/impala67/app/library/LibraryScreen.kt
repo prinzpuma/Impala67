@@ -256,13 +256,14 @@ private fun LibGlyph(store: ImpalaStore, p: PageSummary) {
 
 @Composable
 private fun ArchiveListContent(vm: LibraryViewModel, query: String, onOpen: (PageSummary) -> Unit) {
-    val all by vm.archived.collectAsStateWithLifecycle()
-    val list = all.orEmpty()
-    val shown = list.filter { p -> (vm.archiveFilter == "all" || (vm.archiveFilter == "heft") == (p.kind == PageKind.HEFT)) && libMatches(p, query) }
+    val data by vm.archived.collectAsStateWithLifecycle()
+    val filter by vm.archiveFilter.collectAsStateWithLifecycle()
+    val v = data
+    val shown = v?.shown.orEmpty()
     Column(Modifier.fillMaxSize()) {
         LibToolbar(vm.mode, { vm.mode = it; vm.setQuery("") }, query, vm::setQuery, "Archiv durchsuchen…",
-            left = { LibFilterChips(listOf(Triple("all", "Alle", list.size), Triple("page", "Seiten", list.count { it.kind != PageKind.HEFT }), Triple("heft", "Hefte", list.count { it.kind == PageKind.HEFT })), vm.archiveFilter) { vm.archiveFilter = it } })
-        if (all != null && shown.isEmpty()) EmptyState(if (list.isEmpty()) "Archiv ist leer" else "Nichts gefunden")
+            left = { LibFilterChips(listOf(Triple("all", "Alle", v?.all ?: 0), Triple("page", "Seiten", v?.page ?: 0), Triple("heft", "Hefte", v?.heft ?: 0)), filter) { vm.setArchiveFilter(it) } })
+        if (v != null && shown.isEmpty()) EmptyState(if (v.all == 0) "Archiv ist leer" else "Nichts gefunden")
         else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp)) {
             item { Spacer(Modifier.height(14.dp)) }
             item {

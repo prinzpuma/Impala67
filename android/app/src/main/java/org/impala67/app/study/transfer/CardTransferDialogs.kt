@@ -113,8 +113,7 @@ fun CardImportDialog(store: ImpalaStore, defaultDeck: String?, onToast: (String)
                         ?: error("Keine collection.anki2 im Archiv — das neue .apkg-Format (anki21b, zstd-komprimiert) wird nicht unterstützt. In Anki beim Export „Support older Anki versions“ anhaken.")
                     ParsedCards(cards, emptyList(), "Anki-Paket")
                 } else CardText.parse(bytes.decodeToString(), defaultDeck ?: "Standard")
-                val known = existingKeys(store)
-                duplicates = result.cards.count { !known.add(CardText.key(it)) }
+                duplicates = store.write { core -> core.duplicateCount(result.cards).toInt() }
                 parsed = name to result
             }.onFailure { onToast("Import fehlgeschlagen: ${it.message}") }
         }
@@ -165,7 +164,7 @@ fun CardImportDialog(store: ImpalaStore, defaultDeck: String?, onToast: (String)
 }
 
 private suspend fun existingKeys(store: ImpalaStore): MutableSet<String> = store.write { core ->
-    core.decks().flatMap { core.cardsInDeck(it.name) }.filter { !it.trashed }.map { CardText.key(PlainCard(it.front, it.back, it.deck)) }.toHashSet()
+    core.existingCardKeys().toHashSet()
 }
 
 private suspend fun importCards(store: ImpalaStore, cards: List<PlainCard>, withDuplicates: Boolean): Int {

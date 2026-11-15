@@ -1,8 +1,8 @@
 use flate2::read::GzDecoder;
 use impala_scan::{
-    apply_scan_mode_pixels, detect_quad_pixels, detect_sizes, dist2d, downscale_pixels, is_convex,
-    lum_stats_pixels, quad_area, rotate_pixels, scan_quality_pixels, to_gray, warp_pixels,
-    LumStats, Point, Quad, RgbaImage, Rotation, ScanMode, ScanQuality,
+    LumStats, Point, Quad, RgbaImage, Rotation, ScanMode, ScanQuality, apply_scan_mode_pixels, detect_quad_pixels,
+    detect_sizes, dist2d, downscale_pixels, is_convex, lum_stats_pixels, quad_area, rotate_pixels, scan_quality_pixels,
+    to_gray, warp_pixels,
 };
 use serde::Deserialize;
 use std::io::Read;
@@ -10,14 +10,8 @@ use std::io::Read;
 fn load_gz_image(bytes: &[u8], width: u32, height: u32) -> RgbaImage {
     let mut decoder = GzDecoder::new(bytes);
     let mut data = Vec::with_capacity((width * height * 4) as usize);
-    decoder
-        .read_to_end(&mut data)
-        .expect("Fehler beim Dekomprimieren des Testbilds");
-    RgbaImage {
-        width,
-        height,
-        data,
-    }
+    decoder.read_to_end(&mut data).expect("Fehler beim Dekomprimieren des Testbilds");
+    RgbaImage { width, height, data }
 }
 
 #[derive(Deserialize)]
@@ -72,24 +66,14 @@ struct GoldenCases {
 }
 
 fn assert_stats_approx(actual: &LumStats, expected: &LumStats, eps: f64) {
-    assert!(
-        (actual.mean - expected.mean).abs() < eps,
-        "mean mismatch: {} vs {}",
-        actual.mean,
-        expected.mean
-    );
+    assert!((actual.mean - expected.mean).abs() < eps, "mean mismatch: {} vs {}", actual.mean, expected.mean);
     assert!(
         (actual.contrast - expected.contrast).abs() < eps,
         "contrast mismatch: {} vs {}",
         actual.contrast,
         expected.contrast
     );
-    assert!(
-        (actual.sharp - expected.sharp).abs() < eps,
-        "sharp mismatch: {} vs {}",
-        actual.sharp,
-        expected.sharp
-    );
+    assert!((actual.sharp - expected.sharp).abs() < eps, "sharp mismatch: {} vs {}", actual.sharp, expected.sharp);
     assert!(
         (actual.dark_ratio - expected.dark_ratio).abs() < eps,
         "dark_ratio mismatch: {} vs {}",
@@ -121,12 +105,7 @@ fn test_golden_cases() {
             Point(case.quad[3][0], case.quad[3][1]),
         ]);
         let area = quad_area(&q);
-        assert!(
-            (area - case.area).abs() < 1e-4,
-            "quadArea mismatch: {} vs {}",
-            area,
-            case.area
-        );
+        assert!((area - case.area).abs() < 1e-4, "quadArea mismatch: {} vs {}", area, case.area);
         assert_eq!(is_convex(&q), case.convex, "isConvex mismatch");
     }
 
@@ -168,12 +147,9 @@ fn test_golden_cases() {
     assert_stats_approx(&warp_stats, &golden.doc_medium.warp_result.lum_stats, 0.25);
 
     // Enhance (color, bw, gray, photo)
-    for (mode_str, mode) in [
-        ("color", ScanMode::Color),
-        ("bw", ScanMode::Bw),
-        ("gray", ScanMode::Gray),
-        ("photo", ScanMode::Photo),
-    ] {
+    for (mode_str, mode) in
+        [("color", ScanMode::Color), ("bw", ScanMode::Bw), ("gray", ScanMode::Gray), ("photo", ScanMode::Photo)]
+    {
         let expected = &golden.doc_medium.enhance_results[mode_str];
         let mut test_img = warped.clone();
         apply_scan_mode_pixels(&mut test_img, mode);
@@ -182,26 +158,10 @@ fn test_golden_cases() {
         assert_stats_approx(&stats, &expected.lum_stats, 0.5);
 
         let qual = scan_quality_pixels(&test_img);
-        assert_eq!(
-            qual.soft, expected.quality.soft,
-            "mode {} quality.soft mismatch",
-            mode_str
-        );
-        assert_eq!(
-            qual.flat, expected.quality.flat,
-            "mode {} quality.flat mismatch",
-            mode_str
-        );
-        assert_eq!(
-            qual.too_dark, expected.quality.too_dark,
-            "mode {} quality.tooDark mismatch",
-            mode_str
-        );
-        assert_eq!(
-            qual.glare, expected.quality.glare,
-            "mode {} quality.glare mismatch",
-            mode_str
-        );
+        assert_eq!(qual.soft, expected.quality.soft, "mode {} quality.soft mismatch", mode_str);
+        assert_eq!(qual.flat, expected.quality.flat, "mode {} quality.flat mismatch", mode_str);
+        assert_eq!(qual.too_dark, expected.quality.too_dark, "mode {} quality.tooDark mismatch", mode_str);
+        assert_eq!(qual.glare, expected.quality.glare, "mode {} quality.glare mismatch", mode_str);
     }
 
     // Dokumenterkennung (Detect)
@@ -210,29 +170,12 @@ fn test_golden_cases() {
     let refine_img = downscale_pixels(&med_img, sizes.gw, sizes.gh);
     let gray_refine = to_gray(&refine_img);
 
-    let detected = detect_quad_pixels(
-        &analysis_img,
-        med_img.width,
-        med_img.height,
-        Some(&gray_refine),
-    );
+    let detected = detect_quad_pixels(&analysis_img, med_img.width, med_img.height, Some(&gray_refine));
     let expected_det = Quad([
-        Point(
-            golden.doc_medium.detected_quad[0][0],
-            golden.doc_medium.detected_quad[0][1],
-        ),
-        Point(
-            golden.doc_medium.detected_quad[1][0],
-            golden.doc_medium.detected_quad[1][1],
-        ),
-        Point(
-            golden.doc_medium.detected_quad[2][0],
-            golden.doc_medium.detected_quad[2][1],
-        ),
-        Point(
-            golden.doc_medium.detected_quad[3][0],
-            golden.doc_medium.detected_quad[3][1],
-        ),
+        Point(golden.doc_medium.detected_quad[0][0], golden.doc_medium.detected_quad[0][1]),
+        Point(golden.doc_medium.detected_quad[1][0], golden.doc_medium.detected_quad[1][1]),
+        Point(golden.doc_medium.detected_quad[2][0], golden.doc_medium.detected_quad[2][1]),
+        Point(golden.doc_medium.detected_quad[3][0], golden.doc_medium.detected_quad[3][1]),
     ]);
 
     for i in 0..4 {

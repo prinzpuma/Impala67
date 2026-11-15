@@ -1,5 +1,6 @@
-//! Nicht-DOM-Teile des Befehls-Menüs (Strg+K, `web/search.js`): Vorschau-Ausschnitt und
-//! Markierungs-Bereiche. Das HTML (Escapen, `<mark>`) bleibt in der Oberfläche.
+//! Nicht-DOM-Teile des Befehls-Menüs (Strg+K, `web/search.js`): Vorschau-Ausschnitt,
+//! Markierungs-Bereiche, Seitenpfad, Aktionsfilter und Chat-Suche.
+//! Das HTML (Escapen, `<mark>`) sowie lokalisierte Anzeigetexte bleiben in der Oberfläche.
 
 use crate::text::{is_js_space, js_trim, slice_utf16};
 
@@ -64,6 +65,109 @@ pub fn highlight_ranges(text: &str, query: &str, terms: &[String]) -> Vec<(usize
     out
 }
 
+/// Zu markierende UTF-16-Code-Unit-Bereiche in `text` (für JS `String.prototype.slice`, Kotlin `substring` und Swift `NSRange`).
+pub fn highlight_ranges_utf16(text: &str, query: &str, terms: &[String]) -> Vec<(u32, u32)> {
+    let byte_ranges = highlight_ranges(text, query, terms);
+    if byte_ranges.is_empty() {
+        return Vec::new();
+    }
+    let mut byte_to_u16 = vec![0u32; text.len() + 1];
+    let mut u16_pos = 0u32;
+    for (i, c) in text.char_indices() {
+        byte_to_u16[i] = u16_pos;
+        u16_pos += c.len_utf16() as u32;
+    }
+    byte_to_u16[text.len()] = u16_pos;
+    byte_ranges.into_iter().map(|(s, e)| (byte_to_u16[s], byte_to_u16[e])).collect()
+}
+
+/// Formatiert den Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …` wie `pagePathLabel` in `web/search.js`).
+pub fn format_page_path(workspace_name: Option<&str>, ancestor_titles: &[String]) -> String {
+    let mut parts: Vec<&str> = Vec::with_capacity(ancestor_titles.len() + 1);
+    if let Some(ws) = workspace_name.filter(|s| !s.is_empty()) {
+        parts.push(ws);
+    }
+    for t in ancestor_titles {
+        if !t.is_empty() {
+            parts.push(t.as_str());
+        }
+    }
+    parts.join(" › ")
+}
+
+/// Kennung einer Schnell-Aktion im Befehls-Menü.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PaletteActionId {
+    NewPage,
+    NewChat,
+    ReviewCards,
+    ManageCards,
+    DailyNote,
+    DailyCalendar,
+    Notebook,
+    ToggleTheme,
+    OpenArchive,
+    OpenTrash,
+    OpenSyncSettings,
+    OpenSettings,
+}
+
+impl PaletteActionId {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NewPage => "new-page",
+            Self::NewChat => "new-chat",
+            Self::ReviewCards => "review-cards",
+            Self::ManageCards => "manage-cards",
+            Self::DailyNote => "daily-note",
+            Self::DailyCalendar => "daily-calendar",
+            Self::Notebook => "notebook",
+            Self::ToggleTheme => "toggle-theme",
+            Self::OpenArchive => "open-archive",
+            Self::OpenTrash => "open-trash",
+            Self::OpenSyncSettings => "open-sync-settings",
+            Self::OpenSettings => "open-settings",
+        }
+    }
+}
+
+/// Filtert Schnell-Aktionen `(id, label)` nach Suchanfrage `query` (ohne Groß-/Kleinschreibung).
+pub fn filter_actions<T: Clone>(actions: &[(T, String)], query: &str) -> Vec<T> {
+    let ql = js_trim(query).to_lowercase();
+    if ql.is_empty() {
+        return actions.iter().map(|(id, _)| id.clone()).collect();
+    }
+    actions.iter().filter(|(_, label)| label.to_lowercase().contains(&ql)).map(|(id, _)| id.clone()).collect()
+}
+
+/// Ein Chat-Eintrag für die Suche im Befehls-Menü.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ChatSearchDoc {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub messages: Vec<String>,
+}
+
+/// Filtert und begrenzt Chats für das Befehls-Menü (`web/search.js: gather`).
+/// `include_messages`: in `"command"`-Modus `true` (Limit 5 mit Query, 3 ohne), in `"newTab"`-Modus `false` (Limit 8 mit Query, 4 ohne).
+pub fn search_chats(chats: &[ChatSearchDoc], query: &str, include_messages: bool, limit: usize) -> Vec<String> {
+    let ql = js_trim(query).to_lowercase();
+    if ql.is_empty() {
+        return chats.iter().take(limit).map(|c| c.id.clone()).collect();
+    }
+    chats
+        .iter()
+        .filter(|c| {
+            c.title.to_lowercase().contains(&ql)
+                || (include_messages && c.messages.iter().any(|m| m.to_lowercase().contains(&ql)))
+        })
+        .take(limit)
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,5 +185,20 @@ mod tests {
         let r = highlight_ranges("Größe", "grö", &[]);
         assert_eq!(&"Größe"[r[0].0..r[0].1], "Grö");
         assert!(highlight_ranges("abc", "", &[]).is_empty());
+    }
+
+    #[test]
+    fn ranges_utf16_handles_umlauts() {
+        let r = highlight_ranges_utf16("Größe und größer", "größ", &[]);
+        assert_eq!(r, vec![(0, 4), (10, 14)]);
+    }
+
+    #[test]
+    fn page_path_formatting() {
+        assert_eq!(
+            format_page_path(Some("Uni"), &["Mathe".into(), "".into(), "Analysis".into()]),
+            "Uni › Mathe › Analysis"
+        );
+        assert_eq!(format_page_path(None, &[]), "");
     }
 }

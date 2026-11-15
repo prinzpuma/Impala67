@@ -1,0 +1,277 @@
+{
+	"sentences": [
+		{
+			"text": "",
+			"indexes": [],
+			"front": {
+				"99": ""
+			},
+			"back": {},
+			"recall": null
+		},
+		{
+			"text": "Ein ganz normaler Satz ohne jede Lücke.",
+			"indexes": [],
+			"front": {
+				"99": "Ein ganz normaler Satz ohne jede Lücke."
+			},
+			"back": {},
+			"recall": null
+		},
+		{
+			"text": "Die Hauptstadt von Frankreich ist {{c1::Paris}}.",
+			"indexes": [
+				1
+			],
+			"front": {
+				"1": "Die Hauptstadt von Frankreich ist **[…]**.",
+				"99": "Die Hauptstadt von Frankreich ist Paris."
+			},
+			"back": {
+				"1": "Die Hauptstadt von Frankreich ist **==Paris==**."
+			},
+			"recall": {
+				"question": "Die Hauptstadt von Frankreich ist ＿＿＿.",
+				"answers": [
+					"Paris"
+				]
+			}
+		},
+		{
+			"text": "Die Hauptstadt von Frankreich ist {{c1::Paris::Stadt}}.",
+			"indexes": [
+				1
+			],
+			"front": {
+				"1": "Die Hauptstadt von Frankreich ist **[…Stadt…]**.",
+				"99": "Die Hauptstadt von Frankreich ist Paris."
+			},
+			"back": {
+				"1": "Die Hauptstadt von Frankreich ist **==Paris==**."
+			},
+			"recall": {
+				"question": "Die Hauptstadt von Frankreich ist ＿＿＿.",
+				"answers": [
+					"Paris"
+				]
+			}
+		},
+		{
+			"text": "{{c1::Paris}} ist die Hauptstadt von {{c2::Frankreich::Land}} in {{c3::Europa}}.",
+			"indexes": [
+				1,
+				2,
+				3
+			],
+			"front": {
+				"1": "**[…]** ist die Hauptstadt von Frankreich in Europa.",
+				"2": "Paris ist die Hauptstadt von **[…Land…]** in Europa.",
+				"3": "Paris ist die Hauptstadt von Frankreich in **[…]**.",
+				"99": "Paris ist die Hauptstadt von Frankreich in Europa."
+			},
+			"back": {
+				"1": "**==Paris==** ist die Hauptstadt von Frankreich in Europa.",
+				"2": "Paris ist die Hauptstadt von **==Frankreich==** in Europa.",
+				"3": "Paris ist die Hauptstadt von Frankreich in **==Europa==**."
+			},
+			"recall": {
+				"question": "＿＿＿ ist die Hauptstadt von ＿＿＿ in ＿＿＿.",
+				"answers": [
+					"Paris",
+					"Frankreich",
+					"Europa"
+				]
+			}
+		},
+		{
+			"text": "In Deutschland sind {{c1::Berlin}} und {{c1::Hamburg}} Millionenstädte.",
+			"indexes": [
+				1
+			],
+			"front": {
+				"1": "In Deutschland sind **[…]** und **[…]** Millionenstädte.",
+				"99": "In Deutschland sind Berlin und Hamburg Millionenstädte."
+			},
+			"back": {
+				"1": "In Deutschland sind **==Berlin==** und **==Hamburg==** Millionenstädte."
+			},
+			"recall": {
+				"question": "In Deutschland sind ＿＿＿ und ＿＿＿ Millionenstädte.",
+				"answers": [
+					"Berlin",
+					"Hamburg"
+				]
+			}
+		},
+		{
+			"text": "Reihenfolge: {{c2::Zweiter Schritt}}, danach {{c1::Erster Schritt}} und wieder {{c2::Zweiter Schritt}}.",
+			"indexes": [
+				1,
+				2
+			],
+			"front": {
+				"1": "Reihenfolge: Zweiter Schritt, danach **[…]** und wieder Zweiter Schritt.",
+				"2": "Reihenfolge: **[…]**, danach Erster Schritt und wieder **[…]**.",
+				"99": "Reihenfolge: Zweiter Schritt, danach Erster Schritt und wieder Zweiter Schritt."
+			},
+			"back": {
+				"1": "Reihenfolge: Zweiter Schritt, danach **==Erster Schritt==** und wieder Zweiter Schritt.",
+				"2": "Reihenfolge: **==Zweiter Schritt==**, danach Erster Schritt und wieder **==Zweiter Schritt==**."
+			},
+			"recall": {
+				"question": "Reihenfolge: ＿＿＿, danach ＿＿＿ und wieder ＿＿＿.",
+				"answers": [
+					"Zweiter Schritt",
+					"Erster Schritt",
+					"Zweiter Schritt"
+				]
+			}
+		},
+		{
+			"text": "Sonderzeichen: {{c1::München & Köln::Städte}} haben über 1.000.000 Einwohner (ca. 100%).",
+			"indexes": [
+				1
+			],
+			"front": {
+				"1": "Sonderzeichen: **[…Städte…]** haben über 1.000.000 Einwohner (ca. 100%).",
+				"99": "Sonderzeichen: München & Köln haben über 1.000.000 Einwohner (ca. 100%)."
+			},
+			"back": {
+				"1": "Sonderzeichen: **==München & Köln==** haben über 1.000.000 Einwohner (ca. 100%)."
+			},
+			"recall": {
+				"question": "Sonderzeichen: ＿＿＿ haben über 1.000.000 Einwohner (ca. 100%).",
+				"answers": [
+					"München & Köln"
+				]
+			}
+		},
+		{
+			"text": "Mehrzeilig: {{c1::Erste Zeile\nZweite Zeile::Zwei Zeilen}} Ende.",
+			"indexes": [
+				1
+			],
+			"front": {
+				"1": "Mehrzeilig: **[…Zwei Zeilen…]** Ende.",
+				"99": "Mehrzeilig: Erste Zeile\nZweite Zeile Ende."
+			},
+			"back": {
+				"1": "Mehrzeilig: **==Erste Zeile\nZweite Zeile==** Ende."
+			},
+			"recall": {
+				"question": "Mehrzeilig: ＿＿＿ Ende.",
+				"answers": [
+					"Erste Zeile\nZweite Zeile"
+				]
+			}
+		}
+	],
+	"wraps": [
+		{
+			"text": "Paris ist die Hauptstadt",
+			"a": 0,
+			"b": 5,
+			"expected": {
+				"text": "{{c1::Paris}} ist die Hauptstadt",
+				"cursor": 13
+			}
+		},
+		{
+			"text": "Paris ist die Hauptstadt",
+			"a": 0,
+			"b": 0,
+			"expected": {
+				"text": "{{c1::}}Paris ist die Hauptstadt",
+				"cursor": 6
+			}
+		},
+		{
+			"text": "Paris ist die Hauptstadt",
+			"a": 24,
+			"b": 24,
+			"expected": {
+				"text": "Paris ist die Hauptstadt{{c1::}}",
+				"cursor": 30
+			}
+		},
+		{
+			"text": "Paris ist die Hauptstadt",
+			"a": 14,
+			"b": 24,
+			"expected": {
+				"text": "Paris ist die {{c1::Hauptstadt}}",
+				"cursor": 32
+			}
+		},
+		{
+			"text": "{{c1::Paris}} ist die Hauptstadt von Frankreich",
+			"a": 38,
+			"b": 48,
+			"expected": {
+				"text": "{{c1::Paris}} ist die Hauptstadt von F{{c2::rankreich}}",
+				"cursor": 55
+			}
+		},
+		{
+			"text": "Schöne Grüße aus München",
+			"a": 18,
+			"b": 25,
+			"expected": {
+				"text": "Schöne Grüße aus M{{c1::ünchen}}",
+				"cursor": 32
+			}
+		}
+	],
+	"highlights": [
+		{
+			"input": "Eine Notiz mit ==wichtigem== Begriff.",
+			"output": "Eine Notiz mit {{c1::wichtigem}} Begriff."
+		},
+		{
+			"input": "Keine Markierung hier.",
+			"output": null
+		},
+		{
+			"input": "Mehrere ==erste== und ==zweite== Markierungen.",
+			"output": "Mehrere {{c1::erste}} und {{c2::zweite}} Markierungen."
+		},
+		{
+			"input": "==Alles markiert==",
+			"output": "{{c1::Alles markiert}}"
+		},
+		{
+			"input": "Kaputtes == ohne Ende",
+			"output": null
+		},
+		{
+			"input": "== == leerer Inhalt",
+			"output": "{{c1:: }} leerer Inhalt"
+		}
+	],
+	"strips": [
+		{
+			"input": "- [ ] Todo offen",
+			"output": "Todo offen"
+		},
+		{
+			"input": "  - [x] Erledigt",
+			"output": "Erledigt"
+		},
+		{
+			"input": "> [ ] Zitat mit Checkbox",
+			"output": "Zitat mit Checkbox"
+		},
+		{
+			"input": "### Überschrift 3",
+			"output": "Überschrift 3"
+		},
+		{
+			"input": "  * Aufzählung",
+			"output": "Aufzählung"
+		},
+		{
+			"input": "Normaler Text",
+			"output": "Normaler Text"
+		}
+	]
+}

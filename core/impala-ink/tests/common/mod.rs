@@ -1,6 +1,6 @@
 //! Gemeinsames für die Golden-Tests und die Messung: Golden-Files lesen (erzeugt von
 //! core/tools/gen-golden-ink.mjs), Binärdaten entpacken, aufgezeichnete Modellausgaben abspielen.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::chunks_exact_to_as_chunks)]
 
 use std::cell::RefCell;
 use std::collections::VecDeque;

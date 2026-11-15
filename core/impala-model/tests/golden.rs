@@ -443,3 +443,266 @@ fn konflikt_dialog_wie_js() {
         assert_same(&json!(rows), &d["rows"], "alignDiffRows");
     }
 }
+
+#[test]
+fn lernzeit_wie_js() {
+    let g = golden("lernzeit.json");
+    for case in g["merged"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let sessions: Vec<impala_model::learning_time::LearningSessionData> =
+            serde_json::from_value(case["sessions"].clone()).unwrap();
+        let got = impala_model::learning_time::merged_seconds(&sessions);
+        assert_eq!(got, case["expectedSeconds"].as_u64().unwrap(), "merged case {name}");
+    }
+    for case in g["streaks"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let totals: HashMap<String, u64> = serde_json::from_value(case["totals"].clone()).unwrap();
+        let ref_date = case["referenceDate"].as_str().unwrap();
+        let now_ms = impala_model::learning_time::parse_ms(&format!("{ref_date}T12:00:00.000Z")).unwrap();
+        let got = impala_model::learning_time::streak_days(&totals, now_ms, 0);
+        assert_eq!(got, case["expectedStreak"].as_u64().unwrap() as u32, "streak case {name}");
+    }
+
+    let sample_totals: HashMap<String, u64> = [
+        ("2026-11-02".to_string(), 1200),
+        ("2026-11-03".to_string(), 1800),
+        ("2026-11-04".to_string(), 600),
+        ("2026-11-05".to_string(), 0),
+        ("2026-11-06".to_string(), 2400),
+        ("2026-11-07".to_string(), 900),
+        ("2026-11-08".to_string(), 300),
+        ("2026-10-30".to_string(), 500),
+    ]
+    .into_iter()
+    .collect();
+
+    for case in g["weeks"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let ref_date = case["refDate"].as_str().unwrap();
+        let now_ms = impala_model::learning_time::parse_ms(&format!("{ref_date}T12:00:00.000Z")).unwrap();
+        let offset = case["offset"].as_i64().unwrap() as i32;
+        let expected_days: Vec<u64> =
+            case["days"].as_array().unwrap().iter().map(|d| d["seconds"].as_u64().unwrap()).collect();
+        let got = impala_model::learning_time::week_data(&sample_totals, now_ms, offset, 0);
+        assert_eq!(got.to_vec(), expected_days, "week case {name}");
+    }
+    for case in g["cycle"].as_array().unwrap() {
+        let input = case["input"].as_u64().unwrap() as u32;
+        let expected = case["next"].as_u64().unwrap() as u32;
+        let got = impala_model::learning_time::cycle_week_goal(input);
+        assert_eq!(got, expected, "cycle case {input}");
+    }
+    for case in g["nudges"].as_array().unwrap() {
+        let streak = case["streak"].as_u64().unwrap() as u32;
+        let today_sec = case["todaySeconds"].as_u64().unwrap();
+        let week_sec = (case["weekMin"].as_f64().unwrap() * 60.0).round() as u64;
+        let goal_min = case["goalMin"].as_u64().unwrap() as u32;
+        let hour = case["hour"].as_u64().unwrap() as u32;
+        let got = impala_model::learning_time::home_nudge(streak, today_sec, week_sec, goal_min, hour);
+        let expected: impala_model::learning_time::HomeNudge =
+            serde_json::from_value(case["expected"].clone()).unwrap();
+        assert_eq!(got, expected, "nudge case {:?}", case);
+    }
+}
+
+#[test]
+fn statistik_wie_js() {
+    let cases = golden("stats.json");
+    for case in cases.as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let now = Timestamp::parse_iso(case["now"].as_str().unwrap()).unwrap();
+        let deck = case["deck"].as_str();
+        let tz_offset_minutes = case["tzOffsetMinutes"].as_i64().unwrap();
+        let cards: Vec<impala_model::Card> =
+            objects(&case["cards"]).into_iter().map(impala_model::Card::from_object).collect();
+        let reviews: Vec<impala_model::Review> =
+            objects(&case["reviews"]).into_iter().map(impala_model::Review::from_object).collect();
+        let telemetry: Vec<impala_model::Telemetry> =
+            objects(&case["telemetry"]).into_iter().map(impala_model::Telemetry::from_object).collect();
+        let think_ms = case["expected"]["thinkMs"].as_i64();
+        let options = impala_model::stats::StatsOptions { deck, now, tz_offset_minutes, think_ms };
+        let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
+        let actual = serde_json::to_value(&stats).unwrap();
+        assert_same(&actual, &case["expected"], &format!("statistik {name}"));
+    }
+}
+
+#[test]
+fn karten_import_export_wie_js() {
+    let g = golden("card-transfer.json");
+
+    for c in g["exportTxt"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"].clone()).unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::export_txt(&cards);
+        assert_eq!(got, expected, "exportTxt mismatch");
+    }
+
+    for c in g["exportCsv"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"].clone()).unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::export_csv(&cards);
+        assert_eq!(got, expected, "exportCsv mismatch");
+    }
+
+    for c in g["parseCsv"].as_array().unwrap() {
+        let text = c["input"].as_str().unwrap();
+        let expected: Vec<Vec<String>> = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_csv(text);
+        assert_eq!(got, expected, "parseCsv mismatch for input: {text:?}");
+    }
+
+    for c in g["parseTableCards"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_table_cards(text, default_deck);
+        assert_eq!(got, expected, "parseTableCards mismatch");
+    }
+
+    for c in g["parseImpalaTxt"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_impala_txt(text, default_deck);
+        assert_eq!(got, expected, "parseImpalaTxt mismatch");
+    }
+
+    for c in g["parseCardText"].as_array().unwrap() {
+        let text = c["input"]["text"].as_str().unwrap();
+        let default_deck = c["input"]["defaultDeck"].as_str().unwrap();
+        let expected: impala_model::ParsedCards = serde_json::from_value(c["output"].clone()).unwrap();
+        let got = impala_model::parse_card_text(text, default_deck);
+        assert_eq!(got, expected, "parseCardText mismatch");
+    }
+
+    for c in g["cardKey"].as_array().unwrap() {
+        let front = c["input"]["front"].as_str().unwrap();
+        let back = c["input"]["back"].as_str().unwrap();
+        let deck = c["input"]["deck"].as_str().unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::card_key(front, back, deck);
+        assert_eq!(got, expected, "cardKey mismatch");
+    }
+
+    for c in g["duplicateCount"].as_array().unwrap() {
+        let cards: Vec<impala_model::PlainCard> = serde_json::from_value(c["input"]["cards"].clone()).unwrap();
+        let existing_obj = c["input"]["existing"].as_object().unwrap();
+        let seen: HashSet<String> = existing_obj
+            .values()
+            .filter(|v| !v["trashed"].as_bool().unwrap_or(false))
+            .map(|v| {
+                impala_model::card_key(
+                    v["front"].as_str().unwrap_or(""),
+                    v["back"].as_str().unwrap_or(""),
+                    v["deck"].as_str().unwrap_or("Standard"),
+                )
+            })
+            .collect();
+        let expected = c["output"].as_u64().unwrap() as usize;
+        let got = impala_model::duplicate_count(&cards, seen);
+        assert_eq!(got, expected, "duplicateCount mismatch");
+    }
+
+    for c in g["stripHtml"].as_array().unwrap() {
+        let html = c["input"].as_str().unwrap();
+        let expected = c["output"].as_str().unwrap();
+        let got = impala_model::strip_html(html);
+        assert_eq!(got, expected, "stripHtml mismatch for input: {html:?}");
+    }
+}
+
+#[test]
+fn bibliothek_wie_js() {
+    use impala_model::library::{
+        archive_tree, default_cover, folder_tone, gn_order_of_page, gn_shelf, notion_tree, sidebar_tree_rows,
+    };
+    let g = golden("library.json");
+    for c in g["covers"].as_array().unwrap() {
+        assert_eq!(
+            default_cover(c["title"].as_str().unwrap(), c["id"].as_str().unwrap()),
+            c["cover"].as_str().unwrap()
+        );
+    }
+    for t in g["tones"].as_array().unwrap() {
+        assert_eq!(folder_tone(t["key"].as_str().unwrap()), t["tone"].as_str().unwrap());
+    }
+    for o in g["gnOrders"].as_array().unwrap() {
+        let p = Page::from_object(o["item"].as_object().unwrap().clone());
+        assert_eq!(gn_order_of_page(&p), o["expected"].as_f64().unwrap());
+    }
+    let st = State::from_object(g["state"].as_object().unwrap().clone());
+    assert_same(
+        &serde_json::to_value(notion_tree(&st, None, None, "")).unwrap(),
+        &g["expectedNotionAll"],
+        "notion_tree all",
+    );
+    assert_same(
+        &serde_json::to_value(notion_tree(&st, None, None, "script")).unwrap(),
+        &g["expectedNotionSearchScript"],
+        "notion_tree search script",
+    );
+    assert_same(
+        &serde_json::to_value(archive_tree(&st, "all", "")).unwrap(),
+        &g["expectedArchiveAll"],
+        "archive_tree all",
+    );
+    assert_same(
+        &serde_json::to_value(gn_shelf(&st, None, "all", "")).unwrap(),
+        &g["expectedShelfRoot"],
+        "gn_shelf root",
+    );
+    assert_same(
+        &serde_json::to_value(gn_shelf(&st, Some("f1"), "all", "")).unwrap(),
+        &g["expectedShelfF1"],
+        "gn_shelf f1",
+    );
+    let sb = sidebar_tree_rows(&st);
+    assert!(sb.iter().any(|r| r.row_id == "head:fav"));
+    assert!(sb.iter().any(|r| r.row_id == "tree:p2" && r.depth == 1));
+}
+
+#[test]
+fn kleinteile_wie_js() {
+    use impala_model::kleinteile::{
+        ArticlePoolItem, all_grades, choose_article_notes, export_grades_markdown, grade_tier, grades_by_subject,
+        merged_chat_sessions, pick_article_topic, weighted_average,
+    };
+    let g = golden("kleinteile.json");
+    for case in g["grades"].as_array().unwrap() {
+        let mut obj = Object::new();
+        obj.insert("grades".into(), case["grades"].clone());
+        let st = State::from_object(obj);
+        let list = all_grades(&st);
+        assert_same(&serde_json::to_value(&list).unwrap(), &case["all"], "all_grades");
+        assert_same(&json!(weighted_average(&list)), &case["average"], "weighted_average");
+        assert_same(&serde_json::to_value(grades_by_subject(&st)).unwrap(), &case["subjects"], "grades_by_subject");
+        let md = export_grades_markdown(&st, case["today"].as_str().unwrap());
+        assert_eq!(md, case["markdown"].as_str().unwrap(), "export_grades_markdown");
+    }
+    for t in g["tiers"].as_array().unwrap() {
+        assert_eq!(grade_tier(t["grade"].as_f64().unwrap()) as u64, t["tier"].as_u64().unwrap());
+    }
+    for tc in g["topics"].as_array().unwrap() {
+        let hist: Vec<String> =
+            tc["history"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect();
+        let got = pick_article_topic(tc["topicsRaw"].as_str().unwrap(), &hist);
+        assert_eq!(json!(got), tc["picked"]);
+    }
+    for cc in g["choose"].as_array().unwrap() {
+        let pool: Vec<ArticlePoolItem> = serde_json::from_value(cc["pool"].clone()).unwrap();
+        let used: Vec<String> = serde_json::from_value(cc["recentUsedIds"].clone()).unwrap();
+        let focuses: Vec<String> = serde_json::from_value(cc["recentFocuses"].clone()).unwrap();
+        let known: Vec<String> = serde_json::from_value(cc["knownSubjects"].clone()).unwrap();
+        let got = choose_article_notes(&pool, &used, &focuses, &known);
+        assert_same(&serde_json::to_value(&got).unwrap(), &cc["result"], "choose_article_notes");
+    }
+    for ch in g["chats"].as_array().unwrap() {
+        let mut obj = Object::new();
+        obj.insert("chatSessions".into(), ch["stateChats"].clone());
+        let st = State::from_object(obj);
+        let local: Vec<Value> = ch["localRaw"].as_array().unwrap().clone();
+        let got = merged_chat_sessions(&st, &local, ch["now"].as_str().unwrap());
+        assert_same(&Value::Array(got), &ch["merged"], "merged_chat_sessions");
+    }
+}

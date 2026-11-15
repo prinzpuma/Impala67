@@ -1,10 +1,15 @@
 //! WASM-Hülle des Kerns für die PWA. Gebaut mit `npm run build:core` nach `core/target/wasm/` nach `web/core/`.
 
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 mod ai;
+mod analysis;
+mod card_transfer;
 mod drive;
 mod heft;
 mod ink;
 mod js;
+mod learning_time;
 mod markdown;
 mod model;
 mod search;

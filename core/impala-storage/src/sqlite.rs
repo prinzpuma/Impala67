@@ -106,8 +106,10 @@ impl SqliteStorage {
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(())).map_err(db)?;
         // journal_size_limit: Nach jedem WAL-Checkpoint schrumpft das Schreib-Log wieder auf
         // höchstens 4 MB, statt so groß zu bleiben wie die größte Schreibspitze.
-        conn.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA journal_size_limit = 4194304;")
-            .map_err(db)?;
+        conn.execute_batch(
+            "PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA journal_size_limit = 4194304;",
+        )
+        .map_err(db)?;
         migrate(&mut conn)?;
         Ok(Self { conn })
     }
@@ -116,7 +118,8 @@ impl SqliteStorage {
     /// die Datei schrumpft nie von selbst. `VACUUM` baut sie neu – nur, wenn mindestens ein Viertel
     /// (und ≥ 1 MB) leer steht, denn es schreibt die ganze Datei. Liefert, ob neu gebaut wurde.
     pub fn reclaim(&self) -> Result<bool, Error> {
-        let pragma = |name: &str| self.conn.query_row(&format!("PRAGMA {name}"), [], |r| r.get::<_, i64>(0)).map_err(db);
+        let pragma =
+            |name: &str| self.conn.query_row(&format!("PRAGMA {name}"), [], |r| r.get::<_, i64>(0)).map_err(db);
         let (pages, free, page_size) = (pragma("page_count")?, pragma("freelist_count")?, pragma("page_size")?);
         let vacuum = free * page_size >= 1 << 20 && free * 4 >= pages;
         if vacuum {
@@ -309,9 +312,11 @@ fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Err
                 PartKind::HeftDoc => None,
             };
             let data = if seq.is_some() { String::new() } else { data };
-            tx.prepare_cached("INSERT OR REPLACE INTO checkpoint_parts (kind, hash, data, seq) VALUES (?1, ?2, ?3, ?4)")
-                .and_then(|mut s| s.execute(params![kind_id(kind), hash, data, seq]))
-                .map_err(db)?;
+            tx.prepare_cached(
+                "INSERT OR REPLACE INTO checkpoint_parts (kind, hash, data, seq) VALUES (?1, ?2, ?3, ?4)",
+            )
+            .and_then(|mut s| s.execute(params![kind_id(kind), hash, data, seq]))
+            .map_err(db)?;
         }
         Write::DeletePart(kind, hash) => {
             tx.prepare_cached("DELETE FROM checkpoint_parts WHERE kind = ?1 AND hash = ?2")

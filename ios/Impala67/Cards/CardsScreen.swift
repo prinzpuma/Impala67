@@ -201,7 +201,6 @@ private struct DeckRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        let d = entry.deck
         HStack(spacing: Space.s2) {
             Group {
                 if entry.hasKids { Chevron(open: !entry.collapsed, action: onToggle) } else { Color.clear }
@@ -209,7 +208,7 @@ private struct DeckRow: View {
             .frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.label).font(.system(size: TextSize.md, weight: .semibold)).foregroundStyle(Impala.text).lineLimit(1)
-                Text(Deck.cardsText(Int(d.total)) + (d.suspended > 0 ? " · \(d.suspended) ausgesetzt" : ""))
+                Text(Deck.cardsText(Int(entry.total)) + (entry.suspended > 0 ? " · \(entry.suspended) ausgesetzt" : ""))
                     .font(.system(size: TextSize.xs))
                     .foregroundStyle(Impala.text2)
                     .lineLimit(1)
@@ -217,12 +216,12 @@ private struct DeckRow: View {
             Spacer(minLength: Space.s2)
             VStack(alignment: .trailing, spacing: 1) {
                 if entry.open {
-                    if d.review > 0 {
-                        Text("\(d.review) fällig").font(.system(size: TextSize.base, weight: .bold)).foregroundStyle(Impala.accent)
+                    if entry.review > 0 {
+                        Text("\(entry.review) fällig").font(.system(size: TextSize.base, weight: .bold)).foregroundStyle(Impala.accent)
                     } else {
-                        Text("\(d.learn + d.new) offen").font(.system(size: TextSize.base, weight: .semibold)).foregroundStyle(Impala.text)
+                        Text("\(entry.learn + entry.new) offen").font(.system(size: TextSize.base, weight: .semibold)).foregroundStyle(Impala.text)
                     }
-                    Text("\(d.learn) lernen · \(d.new) neu").font(.system(size: 11)).foregroundStyle(Impala.text2)
+                    Text("\(entry.learn) lernen · \(entry.new) neu").font(.system(size: 11)).foregroundStyle(Impala.text2)
                 } else {
                     HStack(spacing: Space.s1) {
                         Icon("check", size: 12)

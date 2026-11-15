@@ -76,3 +76,59 @@ fn hilfsfunktionen_wie_js() {
         assert_eq!(format_interval(i[0].as_f64().unwrap()), i[1].as_str().unwrap(), "{i}");
     }
 }
+
+#[test]
+fn cloze_wie_js() {
+    let g = load("cloze.json");
+    for s in g["sentences"].as_array().unwrap() {
+        let text = s["text"].as_str().unwrap();
+        let want_indexes: Vec<u32> =
+            s["indexes"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as u32).collect();
+        assert_eq!(cloze::indexes(text), want_indexes, "indexes für {text:?}");
+
+        for (idx_str, want_front) in s["front"].as_object().unwrap() {
+            let idx: u32 = idx_str.parse().unwrap();
+            assert_eq!(cloze::front(text, idx), want_front.as_str().unwrap(), "front({idx}) für {text:?}");
+        }
+
+        for (idx_str, want_back) in s["back"].as_object().unwrap() {
+            let idx: u32 = idx_str.parse().unwrap();
+            assert_eq!(cloze::back(text, idx), want_back.as_str().unwrap(), "back({idx}) für {text:?}");
+        }
+
+        let want_recall = s["recall"].as_object();
+        let actual_recall = cloze::cloze_recall(text);
+        match (want_recall, actual_recall) {
+            (None, None) => {}
+            (Some(w), Some(a)) => {
+                assert_eq!(a.question, w["question"].as_str().unwrap());
+                let want_ans: Vec<&str> =
+                    w["answers"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+                assert_eq!(a.answers, want_ans);
+            }
+            _ => panic!("recall mismatch für {text:?}"),
+        }
+    }
+
+    for w in g["wraps"].as_array().unwrap() {
+        let text = w["text"].as_str().unwrap();
+        let a = w["a"].as_u64().unwrap() as u32;
+        let b = w["b"].as_u64().unwrap() as u32;
+        let exp = &w["expected"];
+        let res = cloze::wrap_cloze(text, a, b);
+        assert_eq!(res.text, exp["text"].as_str().unwrap());
+        assert_eq!(res.cursor, exp["cursor"].as_u64().unwrap() as u32);
+    }
+
+    for h in g["highlights"].as_array().unwrap() {
+        let input = h["input"].as_str().unwrap();
+        let want = h["output"].as_str();
+        assert_eq!(cloze::highlights_to_cloze(input).as_deref(), want);
+    }
+
+    for st in g["strips"].as_array().unwrap() {
+        let input = st["input"].as_str().unwrap();
+        let want = st["output"].as_str().unwrap();
+        assert_eq!(cloze::strip_line_prefix(input), want);
+    }
+}

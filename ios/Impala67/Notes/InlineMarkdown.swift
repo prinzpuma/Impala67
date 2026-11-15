@@ -262,21 +262,6 @@ enum InlineFormat: CaseIterable {
 /// die Marker entfernen. Ohne Auswahl entsteht ein leeres Markerpaar mit dem Caret dazwischen.
 /// Positionen in UTF-16; liefert neuen Text und Caret.
 func wrapMarkers(_ text: String, _ start: Int, _ end: Int, _ before: String, _ after: String) -> (String, Int) {
-    let ns = text as NSString
-    let s = min(max(start, 0), ns.length)
-    let e = min(max(end, s), ns.length)
-    let pre = ns.substring(to: s), mid = ns.substring(with: NSRange(location: s, length: e - s)), post = ns.substring(from: e)
-    let b = (before as NSString).length, a = (after as NSString).length, m = (mid as NSString).length
-    let midIsWrapped = mid.hasPrefix(before) && mid.hasSuffix(after) && m >= b + a &&
-        (before != "*" || (mid.hasPrefix("***") && mid.hasSuffix("***")) || (!mid.hasPrefix("**") && !mid.hasSuffix("**")))
-    if mid.isEmpty { return (pre + before + after + post, s + b) }
-    if midIsWrapped {
-        let inner = (mid as NSString).substring(with: NSRange(location: b, length: m - b - a))
-        return (pre + inner + post, s + (inner as NSString).length)
-    }
-    if pre.hasSuffix(before), post.hasPrefix(after) {
-        let p = (pre as NSString).substring(to: (pre as NSString).length - b)
-        return (p + mid + (post as NSString).substring(from: a), s - b + m)
-    }
-    return (pre + before + mid + after + post, s + b + m + a)
+    let res = mdWrapMarkers(text: text, startUtf16: UInt32(max(start, 0)), endUtf16: UInt32(max(end, 0)), before: before, after: after)
+    return (res.text, Int(res.caret))
 }

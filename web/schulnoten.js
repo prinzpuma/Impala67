@@ -4,6 +4,7 @@ import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { icon, lead } from "./icons.js";
 import { BUS } from "./event-bus.js";
+import { CORE } from "./rust-core.js";
 
 // Schulnoten: persistiert jede Änderung im Event-Log (gradeAdd/gradeDelete),
 // damit sie mit dem bestehenden Drive-Sync zwischen Geräten repliziert wird.
@@ -14,25 +15,18 @@ export const SCHULNOTEN = (() => {
 	}
 
 	function allGrades() {
-		return Object.values(S.grades || {}).filter((entry) => !entry.deleted);
+		return STATE.allGrades();
 	}
 
 	function average(entries) {
-		if (!entries.length) return null;
-		let weightedSum = 0;
-		let totalWeight = 0;
-		for (const entry of entries) {
-			const weight = Number(entry.weight) || 1;
-			weightedSum += Number(entry.grade) * weight;
-			totalWeight += weight;
-		}
-		return totalWeight ? (weightedSum / totalWeight).toFixed(2) : null;
+		const avg = CORE.gradesWeightedAverage(JSON.stringify(entries || []));
+		return avg != null ? Number(avg).toFixed(2) : null;
 	}
 
 	function subjects() {
 		const result = {};
-		for (const entry of allGrades()) {
-			(result[entry.subject] ||= []).push(entry);
+		for (const group of STATE.gradesBySubject()) {
+			result[group.subject] = group.grades;
 		}
 		return result;
 	}
@@ -57,22 +51,15 @@ export const SCHULNOTEN = (() => {
 	}
 
 	function exportMarkdown() {
-		const lines = ["# Schulnoten", ""];
-		for (const [subject, entries] of Object.entries(subjects()).sort(([a], [b]) => U.cmpDe(a, b))) {
-			lines.push("## " + subject + " — Ø " + average(entries));
-			for (const entry of entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
-				lines.push("- **" + entry.grade + "** · Gewichtung " + entry.weight + " · " + entry.date + (entry.comment ? " · " + entry.comment : ""));
-			}
-			lines.push("");
-		}
-		return lines.join("\n");
+		return STATE.exportGradesMarkdown(localDate());
 	}
 
 	function gradeColor(value) {
-		if (value <= 1.5) return "var(--success)";
-		if (value <= 2.5) return "color-mix(in srgb, var(--success) 70%, var(--accent))";
-		if (value <= 3.5) return "var(--warn, #eac26b)";
-		if (value <= 4.5) return "color-mix(in srgb, var(--danger) 60%, var(--warn, #eac26b))";
+		const tier = CORE.gradeTier(Number(value));
+		if (tier === 1) return "var(--success)";
+		if (tier === 2) return "color-mix(in srgb, var(--success) 70%, var(--accent))";
+		if (tier === 3) return "var(--warn, #eac26b)";
+		if (tier === 4) return "color-mix(in srgb, var(--danger) 60%, var(--warn, #eac26b))";
 		return "var(--danger)";
 	}
 
@@ -99,7 +86,7 @@ export const SCHULNOTEN = (() => {
 				const avg = average(entries);
 				html += '<article class="noten-subject"><header><b>' + U.esc(subject) + '</b><span style="color:' + gradeColor(Number(avg)) + '">Ø ' + avg + '</span></header>' +
 					'<table class="noten-table"><thead><tr><th>Note</th><th>Gew.</th><th>Datum</th><th>Kommentar</th><th></th></tr></thead><tbody>';
-				for (const entry of entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
+				for (const entry of entries) {
 					html += '<tr><td style="color:' + gradeColor(entry.grade) + '"><b>' + entry.grade + '</b></td><td>' + entry.weight + '</td><td>' + U.esc(entry.date) + '</td><td>' + U.esc(entry.comment || '') + '</td>' +
 						'<td><button type="button" class="mini danger" data-noten-delete="' + entry.id + '" title="Note löschen">' + icon("trash") + '</button></td></tr>';
 				}

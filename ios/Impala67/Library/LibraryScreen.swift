@@ -299,12 +299,6 @@ private struct LibAction: View {
     }
 }
 
-/// Suche wie `renderNotionTree`: Titel oder Schlagwort enthält die Suche.
-func libMatches(_ p: PageSummary, _ query: String) -> Bool {
-    let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-    return q.isEmpty || p.title.lowercased().contains(q) || p.tags.contains { $0.lowercased().contains(q) }
-}
-
 // MARK: Notion
 
 /// Kompakter Seitenbaum je Arbeitsbereich mit Filtern Alle · Favoriten · PDFs · Vorlagen
@@ -391,52 +385,17 @@ private struct NotionTree: View {
         }
     }
 
-    private nonisolated static func ownMatch(_ p: PageSummary, smart: String, query: String) -> Bool {
-        let filter = switch smart {
-        case "fav": p.favorite
-        case "pdf": p.pdfId != nil
-        case "tpl": p.isTemplate
-        default: true
-        }
-        return filter && libMatches(p, query)
-    }
-
     private nonisolated static func load(core: ImpalaCore, smart: String, query: String) -> Loaded {
-        let all = core.recentPages(limit: UInt32.max)
+        let v = core.libraryNotionView(smart: smart, query: query)
         return Loaded(
-            all: all.count,
-            fav: all.filter(\.favorite).count,
-            pdf: all.filter { $0.pdfId != nil }.count,
-            tpl: all.filter(\.isTemplate).count,
-            sections: build(core: core, smart: smart, query: query)
-        )
-    }
-
-    /// Sichtbar = passt selbst oder hat eine passende Unterseite (je Durchlauf gemerkt).
-    private nonisolated static func build(core: ImpalaCore, smart: String, query: String) -> [(ws: WorkspaceInfo, rows: [Row])] {
-        let open = core.treeOpen()
-        let children = PageChildren(core)
-        var visibleMemo: [String: Bool] = [:]
-        func kids(_ p: PageSummary) -> [PageSummary] { children.of(p) }
-        func visible(_ p: PageSummary) -> Bool {
-            if let v = visibleMemo[p.id] { return v }
-            let v = ownMatch(p, smart: smart, query: query) || kids(p).contains(where: visible)
-            visibleMemo[p.id] = v
-            return v
-        }
-        func branch(_ list: [PageSummary], _ depth: Int, _ rows: inout [Row]) {
-            for p in list where visible(p) {
-                let k = depth < 8 ? kids(p).filter(visible) : []
-                let collapsed = !k.isEmpty && open[p.id] != true
-                rows.append(Row(page: p, depth: depth, hasKids: !k.isEmpty, collapsed: collapsed))
-                if !collapsed { branch(k, depth + 1, &rows) }
+            all: Int(v.allCount),
+            fav: Int(v.favCount),
+            pdf: Int(v.pdfCount),
+            tpl: Int(v.tplCount),
+            sections: v.sections.map { sec in
+                (ws: sec.workspace, rows: sec.rows.map { Row(page: $0.page, depth: Int($0.depth), hasKids: $0.hasKids, collapsed: $0.collapsed) })
             }
-        }
-        return core.workspaces().compactMap { ws -> (ws: WorkspaceInfo, rows: [Row])? in
-            var rows: [Row] = []
-            branch(children.roots(ws.id), 0, &rows)
-            return rows.isEmpty ? nil : (ws: ws, rows: rows)
-        }
+        )
     }
 
     private func toggle(_ row: Row) {
@@ -610,20 +569,23 @@ private struct ArchiveList: View {
     @Binding var query: String
     let onOpen: (PageSummary) -> Void
     @State private var filter = "all"
-    /// Archivierte Seiten; im Hintergrund gelesen (`.task` unten), der Body filtert nur noch lokal.
-    @State private var loaded: [PageSummary]?
+    /// Archivierte Seiten aus dem Rust-Kern; im Hintergrund gelesen (`.task` unten).
+    @State private var loaded: ArchiveLibraryView?
+
+    private struct LoadKey: Hashable {
+        let meta: Int, filter: String, query: String
+    }
 
     var body: some View {
-        let all = loaded ?? []
-        let shown = all.filter { p in
-            (filter == "all" || (filter == "heft") == (p.kind == .heft)) && libMatches(p, query)
-        }
+        let v = loaded
+        let shown = v?.shown ?? []
+        let allEmpty = (v?.allCount ?? 0) == 0
         VStack(spacing: 0) {
             LibToolbar(query: $query, prompt: "Archiv durchsuchen…") {
                 LibFilterChips(filters: [
-                    LibFilter(id: "all", label: "Alle", count: all.count),
-                    LibFilter(id: "page", label: "Seiten", count: all.filter { $0.kind != .heft }.count),
-                    LibFilter(id: "heft", label: "Hefte", count: all.filter { $0.kind == .heft }.count),
+                    LibFilter(id: "all", label: "Alle", count: Int(v?.allCount ?? 0)),
+                    LibFilter(id: "page", label: "Seiten", count: Int(v?.pageCount ?? 0)),
+                    LibFilter(id: "heft", label: "Hefte", count: Int(v?.heftCount ?? 0)),
                 ], selection: $filter)
             } trailing: { EmptyView() }
             ScrollView {
@@ -670,16 +632,21 @@ private struct ArchiveList: View {
             .overlay {
                 if loaded != nil, shown.isEmpty {
                     ContentUnavailableView {
-                        Label { Text(all.isEmpty ? "Archiv ist leer" : "Nichts gefunden") } icon: { Icon("archive", size: 40).foregroundStyle(Impala.text2) }
+                        Label { Text(allEmpty ? "Archiv ist leer" : "Nichts gefunden") } icon: { Icon("archive", size: 40).foregroundStyle(Impala.text2) }
                     } description: {
-                        if all.isEmpty { Text("Archivierte Seiten und Hefte erscheinen hier.") }
+                        if allEmpty { Text("Archivierte Seiten und Hefte erscheinen hier.") }
                     }
                 }
             }
         }
-        .task(id: store.pageMetaRevision) {
+        .task(id: LoadKey(meta: store.pageMetaRevision, filter: filter, query: query)) {
             let core = store.core
-            let next = await Task.detached(priority: .userInitiated) { core.archivedPages() }.value
+            let filter = filter, query = query
+            if !query.isEmpty {
+                try? await Task.sleep(for: .milliseconds(150))
+                if Task.isCancelled { return }
+            }
+            let next = await Task.detached(priority: .userInitiated) { core.libraryArchiveView(filter: filter, query: query) }.value
             if !Task.isCancelled { loaded = next }
         }
     }

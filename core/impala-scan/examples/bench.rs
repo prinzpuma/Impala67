@@ -1,7 +1,7 @@
 use flate2::read::GzDecoder;
 use impala_scan::{
-    apply_scan_mode_pixels, detect_quad_pixels, detect_sizes, downscale_pixels, to_gray,
-    warp_pixels, Quad, RgbaImage, ScanMode,
+    Quad, RgbaImage, ScanMode, apply_scan_mode_pixels, detect_quad_pixels, detect_sizes, downscale_pixels, to_gray,
+    warp_pixels,
 };
 use std::io::Read;
 use std::time::Instant;
@@ -9,14 +9,8 @@ use std::time::Instant;
 fn load_gz_image(bytes: &[u8], width: u32, height: u32) -> RgbaImage {
     let mut decoder = GzDecoder::new(bytes);
     let mut data = Vec::with_capacity((width * height * 4) as usize);
-    decoder
-        .read_to_end(&mut data)
-        .expect("Fehler beim Dekomprimieren");
-    RgbaImage {
-        width,
-        height,
-        data,
-    }
+    decoder.read_to_end(&mut data).expect("Fehler beim Dekomprimieren");
+    RgbaImage { width, height, data }
 }
 
 fn median(mut times: Vec<f64>) -> f64 {
@@ -47,12 +41,7 @@ fn main() {
         let analysis = downscale_pixels(&med_img, sizes.dw, sizes.dh);
         let refine_src = downscale_pixels(&med_img, sizes.gw, sizes.gh);
         let gray_refine = to_gray(&refine_src);
-        let _ = detect_quad_pixels(
-            &analysis,
-            med_img.width,
-            med_img.height,
-            Some(&gray_refine),
-        );
+        let _ = detect_quad_pixels(&analysis, med_img.width, med_img.height, Some(&gray_refine));
         detect_times.push(t0.elapsed().as_secs_f64() * 1000.0);
     }
 

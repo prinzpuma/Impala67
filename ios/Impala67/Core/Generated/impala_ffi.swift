@@ -3117,6 +3117,11 @@ public func FfiConverterTypeDriveTokens_lower(_ value: DriveTokens) -> UnsafeMut
 public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     
     /**
+     * Aktive Karten für den Export (ohne Papierkorb und Archiv).
+     */
+    func activePlainCards()  -> [PlainCard]
+    
+    /**
      * Bild oder Datei speichern; liefert die ID fÃ¼r den Seiteninhalt (`img:â€¦` fÃ¼r Bilder, sonst
      * `file:â€¦`, wie im Editor der PWA). Der Sync Ã¼bertrÃ¤gt sie mit der nÃ¤chsten SeitenÃ¤nderung.
      */
@@ -3182,6 +3187,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func archivedPages()  -> [PageSummary]
     
     /**
+     * Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+     */
+    func articlePoolIds(topic: String?)  -> [String]
+    
+    /**
      * Seiten, die per `[[Titel]]` auf diese verweisen.
      */
     func backlinks(id: String)  -> [PageSummary]
@@ -3229,6 +3239,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Sichtbare Unterseiten in Seitenleisten-Reihenfolge; ohne `parent_id` die Wurzeln von `workspace_id`.
      */
     func childrenOf(parentId: String?, workspaceId: String?)  -> [PageSummary]
+    
+    /**
+     * Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+     */
+    func chooseArticleNotes(candidateIds: [String])  -> [ArticleNoteItem]
     
     /**
      * Seiten-Reset (`DB.clearPages`): Seiten- und Heft-Events, Vektoren und Dateien entfernen;
@@ -3300,6 +3315,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func deckOverview(utcOffsetMinutes: Int32, mix: Bool)  -> [DeckOverview]
     
     /**
+     * Fertiger Stapelbaum: Hierarchie aus "A::B"-Namen, Tiefe, Elternteil, Kurzname,
+     * aktive Stapel, eingeklappt-Zustand als Eingabe, Zähler je Knoten summiert.
+     */
+    func deckTree(collapsed: [String], utcOffsetMinutes: Int32, mix: Bool)  -> [DeckEntry]
+    
+    /**
      * Stapel außerhalb von Papierkorb und Archiv, mit Kartenzahl.
      */
     func decks()  -> [DeckInfo]
@@ -3348,6 +3369,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func dispatch(kind: String, payloadJson: String) throws  -> String
     
     /**
+     * Duplikate in den übergebenen Karten gegenüber der Datenbank zählen.
+     */
+    func duplicateCount(cards: [PlainCard])  -> UInt64
+    
+    /**
      * Stapel samt Unterstapeln und aktiven Karten kopieren (Lernstand der Kopie neu); liefert den
      * Namen der Kopie (`"Name (Kopie)"`).
      */
@@ -3364,6 +3390,16 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Papierkorb leeren.
      */
     func emptyPageTrash() throws  -> UInt32
+    
+    /**
+     * Bestehende Kartenschlüssel für Duplikaterkennung.
+     */
+    func existingCardKeys()  -> [String]
+    
+    /**
+     * Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+     */
+    func exportGradesMarkdown(todayLabel: String)  -> String
     
     /**
      * Export im Format der PWA (`exportAll`), Geheimnisse entfernt.
@@ -3606,6 +3642,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      */
     func heftStyleStrokes(pageId: String, heftPageId: String, ids: [String], color: String?, size: Double?) throws  -> HeftEdit
     
+    /**
+     * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
+     */
+    func homeAnalysis(nowMs: Int64, tzOffsetMinutes: Int32, goalMin: Int32, days: [Double], pace: Double)  -> HomeAnalysis?
+    
     func homeArticle(id: String)  -> HomeArticleInfo?
     
     /**
@@ -3631,10 +3672,45 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func learningSessions()  -> [LearningSessionInfo]
     
     /**
+     * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
+     */
+    func learningStats(deck: String?, nowMs: Int64?, utcOffsetMinutes: Int32?)  -> LearningStats
+    
+    /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */
     func learningStatsJson()  -> String
+    
+    /**
+     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+     */
+    func learningStreakDays(nowMs: Int64, offsetMinutes: Int32)  -> UInt32
+    
+    /**
+     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
+     */
+    func learningTotalsByDay(offsetMinutes: Int32)  -> [String: UInt64]
+    
+    /**
+     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+     */
+    func learningWeekData(nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32)  -> [UInt64]
+    
+    /**
+     * Archiv-Liste für die Bibliothek samt Filter-Zählern.
+     */
+    func libraryArchiveView(filter: String, query: String)  -> ArchiveLibraryView
+    
+    /**
+     * GoodNotes-Regal für die Bibliothek (Ordner, Hefte mit Seitenzahl, Zähler, Brotkrumen).
+     */
+    func libraryHeftShelf(folderId: String?, filter: String, query: String)  -> HeftShelfData
+    
+    /**
+     * Notion-Seitenbaum für die Bibliothek samt Filter-Zählern.
+     */
+    func libraryNotionView(smart: String, query: String)  -> NotionLibraryView
     
     func loadInfo()  -> LoadInfo
     
@@ -3705,6 +3781,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func pageLinks()  -> [PageLink]
     
     /**
+     * Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+     */
+    func pagePathLabel(pageId: String)  -> String
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */
     func pageProps(id: String)  -> [String: String]
@@ -3718,6 +3799,23 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
     func pageSubtree(id: String)  -> [String]
+    
+    /**
+     * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
+     * ohne `query` die ersten `limit` Chats, mit `query` Treffer in Titel oder Nachrichteninhalt.
+     */
+    func paletteChats(query: String, includeMessages: Bool, limit: UInt32)  -> [ChatInfo]
+    
+    /**
+     * Seitentreffer für die Befehlspalette: ohne `query` die `recent_limit` zuletzt bearbeiteten Seiten,
+     * mit `query` die Volltext-Treffer (inkl. Archiv) samt gekürztem Vorschau-Ausschnitt und Brotkrumen-Pfad.
+     */
+    func palettePages(query: String, recentLimit: UInt32)  -> [PalettePageHit]
+    
+    /**
+     * Lernmuster des Statistik-Tabs (Position, Timer, Tageszeit, Experimente, Problemzonen).
+     */
+    func patternData(livePages: [String]?)  -> PatternData
     
     /**
      * Alle Seiten auÃŸerhalb von Papierkorb und Archiv, zuletzt geÃ¤nderte zuerst.
@@ -3873,6 +3971,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * `deckConf`, `driveAutoSyncMinutes`). Geheimnisse (`cfSyncKey`, KI-Schlüssel) sind enthalten.
      */
     func settingsJson()  -> String
+    
+    /**
+     * Sichtbare Zeilen der Seitenleiste (Favoriten + Arbeitsbereiche + ausgeklappte Seiten).
+     */
+    func sidebarTreeRows()  -> [SidebarRowInfo]
     
     /**
      * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
@@ -4047,6 +4150,16 @@ public static func openInMemory()throws  -> ImpalaCore  {
 
     
     /**
+     * Aktive Karten für den Export (ohne Papierkorb und Archiv).
+     */
+open func activePlainCards() -> [PlainCard]  {
+    return try!  FfiConverterSequenceTypePlainCard.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_active_plain_cards(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
      * Bild oder Datei speichern; liefert die ID fÃ¼r den Seiteninhalt (`img:â€¦` fÃ¼r Bilder, sonst
      * `file:â€¦`, wie im Editor der PWA). Der Sync Ã¼bertrÃ¤gt sie mit der nÃ¤chsten SeitenÃ¤nderung.
      */
@@ -4184,6 +4297,17 @@ open func archivedPages() -> [PageSummary]  {
 }
     
     /**
+     * Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+     */
+open func articlePoolIds(topic: String?) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_article_pool_ids(self.uniffiClonePointer(),
+        FfiConverterOptionString.lower(topic),$0
+    )
+})
+}
+    
+    /**
      * Seiten, die per `[[Titel]]` auf diese verweisen.
      */
 open func backlinks(id: String) -> [PageSummary]  {
@@ -4288,6 +4412,17 @@ open func childrenOf(parentId: String?, workspaceId: String?) -> [PageSummary]  
     uniffi_impala_ffi_fn_method_impalacore_children_of(self.uniffiClonePointer(),
         FfiConverterOptionString.lower(parentId),
         FfiConverterOptionString.lower(workspaceId),$0
+    )
+})
+}
+    
+    /**
+     * Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+     */
+open func chooseArticleNotes(candidateIds: [String]) -> [ArticleNoteItem]  {
+    return try!  FfiConverterSequenceTypeArticleNoteItem.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_choose_article_notes(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(candidateIds),$0
     )
 })
 }
@@ -4446,6 +4581,20 @@ open func deckOverview(utcOffsetMinutes: Int32, mix: Bool) -> [DeckOverview]  {
 }
     
     /**
+     * Fertiger Stapelbaum: Hierarchie aus "A::B"-Namen, Tiefe, Elternteil, Kurzname,
+     * aktive Stapel, eingeklappt-Zustand als Eingabe, Zähler je Knoten summiert.
+     */
+open func deckTree(collapsed: [String], utcOffsetMinutes: Int32, mix: Bool) -> [DeckEntry]  {
+    return try!  FfiConverterSequenceTypeDeckEntry.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_deck_tree(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(collapsed),
+        FfiConverterInt32.lower(utcOffsetMinutes),
+        FfiConverterBool.lower(mix),$0
+    )
+})
+}
+    
+    /**
      * Stapel außerhalb von Papierkorb und Archiv, mit Kartenzahl.
      */
 open func decks() -> [DeckInfo]  {
@@ -4541,6 +4690,17 @@ open func dispatch(kind: String, payloadJson: String)throws  -> String  {
 }
     
     /**
+     * Duplikate in den übergebenen Karten gegenüber der Datenbank zählen.
+     */
+open func duplicateCount(cards: [PlainCard]) -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_duplicate_count(self.uniffiClonePointer(),
+        FfiConverterSequenceTypePlainCard.lower(cards),$0
+    )
+})
+}
+    
+    /**
      * Stapel samt Unterstapeln und aktiven Karten kopieren (Lernstand der Kopie neu); liefert den
      * Namen der Kopie (`"Name (Kopie)"`).
      */
@@ -4570,6 +4730,27 @@ open func emptyCardTrash()throws  -> UInt64  {
 open func emptyPageTrash()throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_impala_ffi_fn_method_impalacore_empty_page_trash(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Bestehende Kartenschlüssel für Duplikaterkennung.
+     */
+open func existingCardKeys() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_existing_card_keys(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+     */
+open func exportGradesMarkdown(todayLabel: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_export_grades_markdown(self.uniffiClonePointer(),
+        FfiConverterString.lower(todayLabel),$0
     )
 })
 }
@@ -5185,6 +5366,21 @@ open func heftStyleStrokes(pageId: String, heftPageId: String, ids: [String], co
 })
 }
     
+    /**
+     * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
+     */
+open func homeAnalysis(nowMs: Int64, tzOffsetMinutes: Int32, goalMin: Int32, days: [Double], pace: Double) -> HomeAnalysis?  {
+    return try!  FfiConverterOptionTypeHomeAnalysis.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_home_analysis(self.uniffiClonePointer(),
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(tzOffsetMinutes),
+        FfiConverterInt32.lower(goalMin),
+        FfiConverterSequenceDouble.lower(days),
+        FfiConverterDouble.lower(pace),$0
+    )
+})
+}
+    
 open func homeArticle(id: String) -> HomeArticleInfo?  {
     return try!  FfiConverterOptionTypeHomeArticleInfo.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_home_article(self.uniffiClonePointer(),
@@ -5244,12 +5440,98 @@ open func learningSessions() -> [LearningSessionInfo]  {
 }
     
     /**
+     * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
+     */
+open func learningStats(deck: String?, nowMs: Int64?, utcOffsetMinutes: Int32?) -> LearningStats  {
+    return try!  FfiConverterTypeLearningStats_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_learning_stats(self.uniffiClonePointer(),
+        FfiConverterOptionString.lower(deck),
+        FfiConverterOptionInt64.lower(nowMs),
+        FfiConverterOptionInt32.lower(utcOffsetMinutes),$0
+    )
+})
+}
+    
+    /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */
 open func learningStatsJson() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+     */
+open func learningStreakDays(nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(self.uniffiClonePointer(),
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+    
+    /**
+     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
+     */
+open func learningTotalsByDay(offsetMinutes: Int32) -> [String: UInt64]  {
+    return try!  FfiConverterDictionaryStringUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(self.uniffiClonePointer(),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+    
+    /**
+     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+     */
+open func learningWeekData(nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32) -> [UInt64]  {
+    return try!  FfiConverterSequenceUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_learning_week_data(self.uniffiClonePointer(),
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(weekOffset),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+    
+    /**
+     * Archiv-Liste für die Bibliothek samt Filter-Zählern.
+     */
+open func libraryArchiveView(filter: String, query: String) -> ArchiveLibraryView  {
+    return try!  FfiConverterTypeArchiveLibraryView_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_library_archive_view(self.uniffiClonePointer(),
+        FfiConverterString.lower(filter),
+        FfiConverterString.lower(query),$0
+    )
+})
+}
+    
+    /**
+     * GoodNotes-Regal für die Bibliothek (Ordner, Hefte mit Seitenzahl, Zähler, Brotkrumen).
+     */
+open func libraryHeftShelf(folderId: String?, filter: String, query: String) -> HeftShelfData  {
+    return try!  FfiConverterTypeHeftShelfData_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(self.uniffiClonePointer(),
+        FfiConverterOptionString.lower(folderId),
+        FfiConverterString.lower(filter),
+        FfiConverterString.lower(query),$0
+    )
+})
+}
+    
+    /**
+     * Notion-Seitenbaum für die Bibliothek samt Filter-Zählern.
+     */
+open func libraryNotionView(smart: String, query: String) -> NotionLibraryView  {
+    return try!  FfiConverterTypeNotionLibraryView_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_library_notion_view(self.uniffiClonePointer(),
+        FfiConverterString.lower(smart),
+        FfiConverterString.lower(query),$0
     )
 })
 }
@@ -5398,6 +5680,17 @@ open func pageLinks() -> [PageLink]  {
 }
     
     /**
+     * Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+     */
+open func pagePathLabel(pageId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_page_path_label(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),$0
+    )
+})
+}
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */
 open func pageProps(id: String) -> [String: String]  {
@@ -5426,6 +5719,44 @@ open func pageSubtree(id: String) -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_page_subtree(self.uniffiClonePointer(),
         FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
+     * ohne `query` die ersten `limit` Chats, mit `query` Treffer in Titel oder Nachrichteninhalt.
+     */
+open func paletteChats(query: String, includeMessages: Bool, limit: UInt32) -> [ChatInfo]  {
+    return try!  FfiConverterSequenceTypeChatInfo.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_palette_chats(self.uniffiClonePointer(),
+        FfiConverterString.lower(query),
+        FfiConverterBool.lower(includeMessages),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Seitentreffer für die Befehlspalette: ohne `query` die `recent_limit` zuletzt bearbeiteten Seiten,
+     * mit `query` die Volltext-Treffer (inkl. Archiv) samt gekürztem Vorschau-Ausschnitt und Brotkrumen-Pfad.
+     */
+open func palettePages(query: String, recentLimit: UInt32) -> [PalettePageHit]  {
+    return try!  FfiConverterSequenceTypePalettePageHit.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_palette_pages(self.uniffiClonePointer(),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(recentLimit),$0
+    )
+})
+}
+    
+    /**
+     * Lernmuster des Statistik-Tabs (Position, Timer, Tageszeit, Experimente, Problemzonen).
+     */
+open func patternData(livePages: [String]?) -> PatternData  {
+    return try!  FfiConverterTypePatternData_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_pattern_data(self.uniffiClonePointer(),
+        FfiConverterOptionSequenceString.lower(livePages),$0
     )
 })
 }
@@ -5744,6 +6075,16 @@ open func setUiTabs(tabs: [String], activeTabId: String?)throws   {try rustCallW
 open func settingsJson() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_settings_json(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Sichtbare Zeilen der Seitenleiste (Favoriten + Arbeitsbereiche + ausgeklappte Seiten).
+     */
+open func sidebarTreeRows() -> [SidebarRowInfo]  {
+    return try!  FfiConverterSequenceTypeSidebarRowInfo.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_sidebar_tree_rows(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -7566,6 +7907,178 @@ public func FfiConverterTypeAiRunRequest_lower(_ value: AiRunRequest) -> RustBuf
 }
 
 
+public struct ArchiveLibraryView {
+    public var allCount: UInt32
+    public var pageCount: UInt32
+    public var heftCount: UInt32
+    public var shown: [PageSummary]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(allCount: UInt32, pageCount: UInt32, heftCount: UInt32, shown: [PageSummary]) {
+        self.allCount = allCount
+        self.pageCount = pageCount
+        self.heftCount = heftCount
+        self.shown = shown
+    }
+}
+
+#if compiler(>=6)
+extension ArchiveLibraryView: Sendable {}
+#endif
+
+
+extension ArchiveLibraryView: Equatable, Hashable {
+    public static func ==(lhs: ArchiveLibraryView, rhs: ArchiveLibraryView) -> Bool {
+        if lhs.allCount != rhs.allCount {
+            return false
+        }
+        if lhs.pageCount != rhs.pageCount {
+            return false
+        }
+        if lhs.heftCount != rhs.heftCount {
+            return false
+        }
+        if lhs.shown != rhs.shown {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(allCount)
+        hasher.combine(pageCount)
+        hasher.combine(heftCount)
+        hasher.combine(shown)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeArchiveLibraryView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ArchiveLibraryView {
+        return
+            try ArchiveLibraryView(
+                allCount: FfiConverterUInt32.read(from: &buf), 
+                pageCount: FfiConverterUInt32.read(from: &buf), 
+                heftCount: FfiConverterUInt32.read(from: &buf), 
+                shown: FfiConverterSequenceTypePageSummary.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ArchiveLibraryView, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.allCount, into: &buf)
+        FfiConverterUInt32.write(value.pageCount, into: &buf)
+        FfiConverterUInt32.write(value.heftCount, into: &buf)
+        FfiConverterSequenceTypePageSummary.write(value.shown, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeArchiveLibraryView_lift(_ buf: RustBuffer) throws -> ArchiveLibraryView {
+    return try FfiConverterTypeArchiveLibraryView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeArchiveLibraryView_lower(_ value: ArchiveLibraryView) -> RustBuffer {
+    return FfiConverterTypeArchiveLibraryView.lower(value)
+}
+
+
+public struct ArticleNoteItem {
+    public var id: String
+    public var title: String
+    public var text: String
+    public var archived: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, title: String, text: String, archived: Bool) {
+        self.id = id
+        self.title = title
+        self.text = text
+        self.archived = archived
+    }
+}
+
+#if compiler(>=6)
+extension ArticleNoteItem: Sendable {}
+#endif
+
+
+extension ArticleNoteItem: Equatable, Hashable {
+    public static func ==(lhs: ArticleNoteItem, rhs: ArticleNoteItem) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.archived != rhs.archived {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(title)
+        hasher.combine(text)
+        hasher.combine(archived)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeArticleNoteItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ArticleNoteItem {
+        return
+            try ArticleNoteItem(
+                id: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                archived: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ArticleNoteItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterBool.write(value.archived, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeArticleNoteItem_lift(_ buf: RustBuffer) throws -> ArticleNoteItem {
+    return try FfiConverterTypeArticleNoteItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeArticleNoteItem_lower(_ value: ArticleNoteItem) -> RustBuffer {
+    return FfiConverterTypeArticleNoteItem.lower(value)
+}
+
+
 /**
  * Notiz, aus der ein Tagesartikel entstand.
  */
@@ -7644,6 +8157,170 @@ public func FfiConverterTypeArticleSource_lift(_ buf: RustBuffer) throws -> Arti
 #endif
 public func FfiConverterTypeArticleSource_lower(_ value: ArticleSource) -> RustBuffer {
     return FfiConverterTypeArticleSource.lower(value)
+}
+
+
+public struct BestTime {
+    public var slots: [Slot]
+    public var best: Slot?
+    public var text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(slots: [Slot], best: Slot?, text: String) {
+        self.slots = slots
+        self.best = best
+        self.text = text
+    }
+}
+
+#if compiler(>=6)
+extension BestTime: Sendable {}
+#endif
+
+
+extension BestTime: Equatable, Hashable {
+    public static func ==(lhs: BestTime, rhs: BestTime) -> Bool {
+        if lhs.slots != rhs.slots {
+            return false
+        }
+        if lhs.best != rhs.best {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slots)
+        hasher.combine(best)
+        hasher.combine(text)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBestTime: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BestTime {
+        return
+            try BestTime(
+                slots: FfiConverterSequenceTypeSlot.read(from: &buf), 
+                best: FfiConverterOptionTypeSlot.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BestTime, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeSlot.write(value.slots, into: &buf)
+        FfiConverterOptionTypeSlot.write(value.best, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBestTime_lift(_ buf: RustBuffer) throws -> BestTime {
+    return try FfiConverterTypeBestTime.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBestTime_lower(_ value: BestTime) -> RustBuffer {
+    return FfiConverterTypeBestTime.lower(value)
+}
+
+
+public struct BestandRecord {
+    public var neu: UInt32
+    public var lernen: UInt32
+    public var wiederholen: UInt32
+    public var ausgesetzt: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(neu: UInt32, lernen: UInt32, wiederholen: UInt32, ausgesetzt: UInt32) {
+        self.neu = neu
+        self.lernen = lernen
+        self.wiederholen = wiederholen
+        self.ausgesetzt = ausgesetzt
+    }
+}
+
+#if compiler(>=6)
+extension BestandRecord: Sendable {}
+#endif
+
+
+extension BestandRecord: Equatable, Hashable {
+    public static func ==(lhs: BestandRecord, rhs: BestandRecord) -> Bool {
+        if lhs.neu != rhs.neu {
+            return false
+        }
+        if lhs.lernen != rhs.lernen {
+            return false
+        }
+        if lhs.wiederholen != rhs.wiederholen {
+            return false
+        }
+        if lhs.ausgesetzt != rhs.ausgesetzt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(neu)
+        hasher.combine(lernen)
+        hasher.combine(wiederholen)
+        hasher.combine(ausgesetzt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBestandRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BestandRecord {
+        return
+            try BestandRecord(
+                neu: FfiConverterUInt32.read(from: &buf), 
+                lernen: FfiConverterUInt32.read(from: &buf), 
+                wiederholen: FfiConverterUInt32.read(from: &buf), 
+                ausgesetzt: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BestandRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.neu, into: &buf)
+        FfiConverterUInt32.write(value.lernen, into: &buf)
+        FfiConverterUInt32.write(value.wiederholen, into: &buf)
+        FfiConverterUInt32.write(value.ausgesetzt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBestandRecord_lift(_ buf: RustBuffer) throws -> BestandRecord {
+    return try FfiConverterTypeBestandRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBestandRecord_lower(_ value: BestandRecord) -> RustBuffer {
+    return FfiConverterTypeBestandRecord.lower(value)
 }
 
 
@@ -8737,6 +9414,152 @@ public func FfiConverterTypeChildList_lower(_ value: ChildList) -> RustBuffer {
 
 
 /**
+ * Frage (mit „＿＿＿“ maskiert) und Roh-Antworten für die Tageskarten-Vorschau (Recall).
+ */
+public struct ClozeRecall {
+    public var question: String
+    public var answers: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(question: String, answers: [String]) {
+        self.question = question
+        self.answers = answers
+    }
+}
+
+#if compiler(>=6)
+extension ClozeRecall: Sendable {}
+#endif
+
+
+extension ClozeRecall: Equatable, Hashable {
+    public static func ==(lhs: ClozeRecall, rhs: ClozeRecall) -> Bool {
+        if lhs.question != rhs.question {
+            return false
+        }
+        if lhs.answers != rhs.answers {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(question)
+        hasher.combine(answers)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeClozeRecall: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClozeRecall {
+        return
+            try ClozeRecall(
+                question: FfiConverterString.read(from: &buf), 
+                answers: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ClozeRecall, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.question, into: &buf)
+        FfiConverterSequenceString.write(value.answers, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClozeRecall_lift(_ buf: RustBuffer) throws -> ClozeRecall {
+    return try FfiConverterTypeClozeRecall.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClozeRecall_lower(_ value: ClozeRecall) -> RustBuffer {
+    return FfiConverterTypeClozeRecall.lower(value)
+}
+
+
+/**
+ * Ergebnis von [`wrap_cloze`]: geänderter Text und Schreibmarkenposition (UTF-16-Offset).
+ */
+public struct ClozeWrap {
+    public var text: String
+    public var cursor: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(text: String, cursor: UInt32) {
+        self.text = text
+        self.cursor = cursor
+    }
+}
+
+#if compiler(>=6)
+extension ClozeWrap: Sendable {}
+#endif
+
+
+extension ClozeWrap: Equatable, Hashable {
+    public static func ==(lhs: ClozeWrap, rhs: ClozeWrap) -> Bool {
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.cursor != rhs.cursor {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        hasher.combine(cursor)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeClozeWrap: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClozeWrap {
+        return
+            try ClozeWrap(
+                text: FfiConverterString.read(from: &buf), 
+                cursor: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ClozeWrap, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterUInt32.write(value.cursor, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClozeWrap_lift(_ buf: RustBuffer) throws -> ClozeWrap {
+    return try FfiConverterTypeClozeWrap.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClozeWrap_lower(_ value: ClozeWrap) -> RustBuffer {
+    return FfiConverterTypeClozeWrap.lower(value)
+}
+
+
+/**
  * Eine angebotene Entscheidung.
  */
 public struct ConflictChoice {
@@ -9431,6 +10254,301 @@ public func FfiConverterTypeDeckConfig_lower(_ value: DeckConfig) -> RustBuffer 
 }
 
 
+/**
+ * Eine Zeile im Stapelbaum mit Kennzahlen.
+ */
+public struct DeckEntry {
+    /**
+     * Voller Name; Unterstapel als `"Eltern::Kind"`.
+     */
+    public var name: String
+    /**
+     * Kurzname / letzter Abschnitt („Analysis“ bei „Mathe::Analysis“).
+     */
+    public var label: String
+    /**
+     * Elternstapel (`None` bei oberster Ebene).
+     */
+    public var parent: String?
+    /**
+     * Ebene im Baum (0 = oberste Ebene).
+     */
+    public var depth: Int32
+    /**
+     * Hat dieser Stapel sichtbare Unterstapel?
+     */
+    public var hasKids: Bool
+    /**
+     * Ist dieser Stapel eingeklappt?
+     */
+    public var collapsed: Bool
+    /**
+     * Aktive Karten im Stapel samt Unterstapeln.
+     */
+    public var total: UInt64
+    /**
+     * Davon ausgesetzt.
+     */
+    public var suspended: UInt64
+    /**
+     * Neue Karten heute (mit Tageslimit).
+     */
+    public var new: UInt64
+    /**
+     * Offene Lernschritte heute.
+     */
+    public var learn: UInt64
+    /**
+     * Jetzt fällige Lernschritte.
+     */
+    public var learnNow: UInt64
+    /**
+     * Fällige Wiederholungen (mit Tageslimit).
+     */
+    public var review: UInt64
+    /**
+     * Fällige Karten (`review + learn`).
+     */
+    public var due: UInt64
+    /**
+     * Jetzt fällige Karten (`review + learn_now`).
+     */
+    public var dueNow: UInt64
+    /**
+     * Karten heute offen (`!done`).
+     */
+    public var `open`: Bool
+    /**
+     * Manuelle Reihenfolge (`reorder_decks`), `None` = alphabetisch.
+     */
+    public var order: Double?
+    /**
+     * Eingebettete Übersicht für direkte Kompatibilität (`entry.deck.xxx`).
+     */
+    public var deck: DeckOverview
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Voller Name; Unterstapel als `"Eltern::Kind"`.
+         */name: String, 
+        /**
+         * Kurzname / letzter Abschnitt („Analysis“ bei „Mathe::Analysis“).
+         */label: String, 
+        /**
+         * Elternstapel (`None` bei oberster Ebene).
+         */parent: String?, 
+        /**
+         * Ebene im Baum (0 = oberste Ebene).
+         */depth: Int32, 
+        /**
+         * Hat dieser Stapel sichtbare Unterstapel?
+         */hasKids: Bool, 
+        /**
+         * Ist dieser Stapel eingeklappt?
+         */collapsed: Bool, 
+        /**
+         * Aktive Karten im Stapel samt Unterstapeln.
+         */total: UInt64, 
+        /**
+         * Davon ausgesetzt.
+         */suspended: UInt64, 
+        /**
+         * Neue Karten heute (mit Tageslimit).
+         */new: UInt64, 
+        /**
+         * Offene Lernschritte heute.
+         */learn: UInt64, 
+        /**
+         * Jetzt fällige Lernschritte.
+         */learnNow: UInt64, 
+        /**
+         * Fällige Wiederholungen (mit Tageslimit).
+         */review: UInt64, 
+        /**
+         * Fällige Karten (`review + learn`).
+         */due: UInt64, 
+        /**
+         * Jetzt fällige Karten (`review + learn_now`).
+         */dueNow: UInt64, 
+        /**
+         * Karten heute offen (`!done`).
+         */`open`: Bool, 
+        /**
+         * Manuelle Reihenfolge (`reorder_decks`), `None` = alphabetisch.
+         */order: Double?, 
+        /**
+         * Eingebettete Übersicht für direkte Kompatibilität (`entry.deck.xxx`).
+         */deck: DeckOverview) {
+        self.name = name
+        self.label = label
+        self.parent = parent
+        self.depth = depth
+        self.hasKids = hasKids
+        self.collapsed = collapsed
+        self.total = total
+        self.suspended = suspended
+        self.new = new
+        self.learn = learn
+        self.learnNow = learnNow
+        self.review = review
+        self.due = due
+        self.dueNow = dueNow
+        self.`open` = `open`
+        self.order = order
+        self.deck = deck
+    }
+}
+
+#if compiler(>=6)
+extension DeckEntry: Sendable {}
+#endif
+
+
+extension DeckEntry: Equatable, Hashable {
+    public static func ==(lhs: DeckEntry, rhs: DeckEntry) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.parent != rhs.parent {
+            return false
+        }
+        if lhs.depth != rhs.depth {
+            return false
+        }
+        if lhs.hasKids != rhs.hasKids {
+            return false
+        }
+        if lhs.collapsed != rhs.collapsed {
+            return false
+        }
+        if lhs.total != rhs.total {
+            return false
+        }
+        if lhs.suspended != rhs.suspended {
+            return false
+        }
+        if lhs.new != rhs.new {
+            return false
+        }
+        if lhs.learn != rhs.learn {
+            return false
+        }
+        if lhs.learnNow != rhs.learnNow {
+            return false
+        }
+        if lhs.review != rhs.review {
+            return false
+        }
+        if lhs.due != rhs.due {
+            return false
+        }
+        if lhs.dueNow != rhs.dueNow {
+            return false
+        }
+        if lhs.`open` != rhs.`open` {
+            return false
+        }
+        if lhs.order != rhs.order {
+            return false
+        }
+        if lhs.deck != rhs.deck {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(label)
+        hasher.combine(parent)
+        hasher.combine(depth)
+        hasher.combine(hasKids)
+        hasher.combine(collapsed)
+        hasher.combine(total)
+        hasher.combine(suspended)
+        hasher.combine(new)
+        hasher.combine(learn)
+        hasher.combine(learnNow)
+        hasher.combine(review)
+        hasher.combine(due)
+        hasher.combine(dueNow)
+        hasher.combine(`open`)
+        hasher.combine(order)
+        hasher.combine(deck)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeckEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeckEntry {
+        return
+            try DeckEntry(
+                name: FfiConverterString.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf), 
+                parent: FfiConverterOptionString.read(from: &buf), 
+                depth: FfiConverterInt32.read(from: &buf), 
+                hasKids: FfiConverterBool.read(from: &buf), 
+                collapsed: FfiConverterBool.read(from: &buf), 
+                total: FfiConverterUInt64.read(from: &buf), 
+                suspended: FfiConverterUInt64.read(from: &buf), 
+                new: FfiConverterUInt64.read(from: &buf), 
+                learn: FfiConverterUInt64.read(from: &buf), 
+                learnNow: FfiConverterUInt64.read(from: &buf), 
+                review: FfiConverterUInt64.read(from: &buf), 
+                due: FfiConverterUInt64.read(from: &buf), 
+                dueNow: FfiConverterUInt64.read(from: &buf), 
+                open: FfiConverterBool.read(from: &buf), 
+                order: FfiConverterOptionDouble.read(from: &buf), 
+                deck: FfiConverterTypeDeckOverview.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeckEntry, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterOptionString.write(value.parent, into: &buf)
+        FfiConverterInt32.write(value.depth, into: &buf)
+        FfiConverterBool.write(value.hasKids, into: &buf)
+        FfiConverterBool.write(value.collapsed, into: &buf)
+        FfiConverterUInt64.write(value.total, into: &buf)
+        FfiConverterUInt64.write(value.suspended, into: &buf)
+        FfiConverterUInt64.write(value.new, into: &buf)
+        FfiConverterUInt64.write(value.learn, into: &buf)
+        FfiConverterUInt64.write(value.learnNow, into: &buf)
+        FfiConverterUInt64.write(value.review, into: &buf)
+        FfiConverterUInt64.write(value.due, into: &buf)
+        FfiConverterUInt64.write(value.dueNow, into: &buf)
+        FfiConverterBool.write(value.`open`, into: &buf)
+        FfiConverterOptionDouble.write(value.order, into: &buf)
+        FfiConverterTypeDeckOverview.write(value.deck, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeckEntry_lift(_ buf: RustBuffer) throws -> DeckEntry {
+    return try FfiConverterTypeDeckEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeckEntry_lower(_ value: DeckEntry) -> RustBuffer {
+    return FfiConverterTypeDeckEntry.lower(value)
+}
+
+
 public struct DeckInfo {
     /**
      * Voller Name; Unterstapel als `"Eltern::Kind"`.
@@ -9647,6 +10765,100 @@ public func FfiConverterTypeDeckOverview_lift(_ buf: RustBuffer) throws -> DeckO
 #endif
 public func FfiConverterTypeDeckOverview_lower(_ value: DeckOverview) -> RustBuffer {
     return FfiConverterTypeDeckOverview.lower(value)
+}
+
+
+public struct DeckRowRecord {
+    public var name: String
+    public var n: UInt32
+    public var due: UInt32
+    public var reif: UInt32
+    public var rate: Double?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, n: UInt32, due: UInt32, reif: UInt32, rate: Double?) {
+        self.name = name
+        self.n = n
+        self.due = due
+        self.reif = reif
+        self.rate = rate
+    }
+}
+
+#if compiler(>=6)
+extension DeckRowRecord: Sendable {}
+#endif
+
+
+extension DeckRowRecord: Equatable, Hashable {
+    public static func ==(lhs: DeckRowRecord, rhs: DeckRowRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.due != rhs.due {
+            return false
+        }
+        if lhs.reif != rhs.reif {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(n)
+        hasher.combine(due)
+        hasher.combine(reif)
+        hasher.combine(rate)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeckRowRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeckRowRecord {
+        return
+            try DeckRowRecord(
+                name: FfiConverterString.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf), 
+                due: FfiConverterUInt32.read(from: &buf), 
+                reif: FfiConverterUInt32.read(from: &buf), 
+                rate: FfiConverterOptionDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeckRowRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+        FfiConverterUInt32.write(value.due, into: &buf)
+        FfiConverterUInt32.write(value.reif, into: &buf)
+        FfiConverterOptionDouble.write(value.rate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeckRowRecord_lift(_ buf: RustBuffer) throws -> DeckRowRecord {
+    return try FfiConverterTypeDeckRowRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeckRowRecord_lower(_ value: DeckRowRecord) -> RustBuffer {
+    return FfiConverterTypeDeckRowRecord.lower(value)
 }
 
 
@@ -10455,6 +11667,170 @@ public func FfiConverterTypeDriveStorage_lower(_ value: DriveStorage) -> RustBuf
 }
 
 
+public struct DueWeek {
+    public var counts: [Int32]
+    public var labels: [String]
+    public var peak: Int32
+    public var text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(counts: [Int32], labels: [String], peak: Int32, text: String) {
+        self.counts = counts
+        self.labels = labels
+        self.peak = peak
+        self.text = text
+    }
+}
+
+#if compiler(>=6)
+extension DueWeek: Sendable {}
+#endif
+
+
+extension DueWeek: Equatable, Hashable {
+    public static func ==(lhs: DueWeek, rhs: DueWeek) -> Bool {
+        if lhs.counts != rhs.counts {
+            return false
+        }
+        if lhs.labels != rhs.labels {
+            return false
+        }
+        if lhs.peak != rhs.peak {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(counts)
+        hasher.combine(labels)
+        hasher.combine(peak)
+        hasher.combine(text)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDueWeek: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DueWeek {
+        return
+            try DueWeek(
+                counts: FfiConverterSequenceInt32.read(from: &buf), 
+                labels: FfiConverterSequenceString.read(from: &buf), 
+                peak: FfiConverterInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DueWeek, into buf: inout [UInt8]) {
+        FfiConverterSequenceInt32.write(value.counts, into: &buf)
+        FfiConverterSequenceString.write(value.labels, into: &buf)
+        FfiConverterInt32.write(value.peak, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDueWeek_lift(_ buf: RustBuffer) throws -> DueWeek {
+    return try FfiConverterTypeDueWeek.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDueWeek_lower(_ value: DueWeek) -> RustBuffer {
+    return FfiConverterTypeDueWeek.lower(value)
+}
+
+
+public struct ExpRow {
+    public var label: String
+    public var n: Int32
+    public var average: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, n: Int32, average: Double) {
+        self.label = label
+        self.n = n
+        self.average = average
+    }
+}
+
+#if compiler(>=6)
+extension ExpRow: Sendable {}
+#endif
+
+
+extension ExpRow: Equatable, Hashable {
+    public static func ==(lhs: ExpRow, rhs: ExpRow) -> Bool {
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.average != rhs.average {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(label)
+        hasher.combine(n)
+        hasher.combine(average)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExpRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExpRow {
+        return
+            try ExpRow(
+                label: FfiConverterString.read(from: &buf), 
+                n: FfiConverterInt32.read(from: &buf), 
+                average: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExpRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterInt32.write(value.n, into: &buf)
+        FfiConverterDouble.write(value.average, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExpRow_lift(_ buf: RustBuffer) throws -> ExpRow {
+    return try FfiConverterTypeExpRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExpRow_lower(_ value: ExpRow) -> RustBuffer {
+    return FfiConverterTypeExpRow.lower(value)
+}
+
+
 public struct FileData {
     public var bytes: Data
     /**
@@ -10536,6 +11912,210 @@ public func FfiConverterTypeFileData_lift(_ buf: RustBuffer) throws -> FileData 
 #endif
 public func FfiConverterTypeFileData_lower(_ value: FileData) -> RustBuffer {
     return FfiConverterTypeFileData.lower(value)
+}
+
+
+public struct ForecastDayRecord {
+    public var dayOffset: UInt32
+    public var n: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(dayOffset: UInt32, n: UInt32) {
+        self.dayOffset = dayOffset
+        self.n = n
+    }
+}
+
+#if compiler(>=6)
+extension ForecastDayRecord: Sendable {}
+#endif
+
+
+extension ForecastDayRecord: Equatable, Hashable {
+    public static func ==(lhs: ForecastDayRecord, rhs: ForecastDayRecord) -> Bool {
+        if lhs.dayOffset != rhs.dayOffset {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(dayOffset)
+        hasher.combine(n)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeForecastDayRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForecastDayRecord {
+        return
+            try ForecastDayRecord(
+                dayOffset: FfiConverterUInt32.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ForecastDayRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.dayOffset, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForecastDayRecord_lift(_ buf: RustBuffer) throws -> ForecastDayRecord {
+    return try FfiConverterTypeForecastDayRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForecastDayRecord_lower(_ value: ForecastDayRecord) -> RustBuffer {
+    return FfiConverterTypeForecastDayRecord.lower(value)
+}
+
+
+public struct Goal {
+    public var goalMin: Int32
+    public var days: [Double]
+    public var done: Double
+    public var today: Int32
+    public var pace: Double
+    public var need: Double
+    public var left: Int32
+    public var text: String
+    public var warn: Bool
+    public var reachDay: Int32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(goalMin: Int32, days: [Double], done: Double, today: Int32, pace: Double, need: Double, left: Int32, text: String, warn: Bool, reachDay: Int32?) {
+        self.goalMin = goalMin
+        self.days = days
+        self.done = done
+        self.today = today
+        self.pace = pace
+        self.need = need
+        self.left = left
+        self.text = text
+        self.warn = warn
+        self.reachDay = reachDay
+    }
+}
+
+#if compiler(>=6)
+extension Goal: Sendable {}
+#endif
+
+
+extension Goal: Equatable, Hashable {
+    public static func ==(lhs: Goal, rhs: Goal) -> Bool {
+        if lhs.goalMin != rhs.goalMin {
+            return false
+        }
+        if lhs.days != rhs.days {
+            return false
+        }
+        if lhs.done != rhs.done {
+            return false
+        }
+        if lhs.today != rhs.today {
+            return false
+        }
+        if lhs.pace != rhs.pace {
+            return false
+        }
+        if lhs.need != rhs.need {
+            return false
+        }
+        if lhs.left != rhs.left {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.warn != rhs.warn {
+            return false
+        }
+        if lhs.reachDay != rhs.reachDay {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(goalMin)
+        hasher.combine(days)
+        hasher.combine(done)
+        hasher.combine(today)
+        hasher.combine(pace)
+        hasher.combine(need)
+        hasher.combine(left)
+        hasher.combine(text)
+        hasher.combine(warn)
+        hasher.combine(reachDay)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGoal: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Goal {
+        return
+            try Goal(
+                goalMin: FfiConverterInt32.read(from: &buf), 
+                days: FfiConverterSequenceDouble.read(from: &buf), 
+                done: FfiConverterDouble.read(from: &buf), 
+                today: FfiConverterInt32.read(from: &buf), 
+                pace: FfiConverterDouble.read(from: &buf), 
+                need: FfiConverterDouble.read(from: &buf), 
+                left: FfiConverterInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                warn: FfiConverterBool.read(from: &buf), 
+                reachDay: FfiConverterOptionInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Goal, into buf: inout [UInt8]) {
+        FfiConverterInt32.write(value.goalMin, into: &buf)
+        FfiConverterSequenceDouble.write(value.days, into: &buf)
+        FfiConverterDouble.write(value.done, into: &buf)
+        FfiConverterInt32.write(value.today, into: &buf)
+        FfiConverterDouble.write(value.pace, into: &buf)
+        FfiConverterDouble.write(value.need, into: &buf)
+        FfiConverterInt32.write(value.left, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterBool.write(value.warn, into: &buf)
+        FfiConverterOptionInt32.write(value.reachDay, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGoal_lift(_ buf: RustBuffer) throws -> Goal {
+    return try FfiConverterTypeGoal.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGoal_lower(_ value: Goal) -> RustBuffer {
+    return FfiConverterTypeGoal.lower(value)
 }
 
 
@@ -10664,6 +12244,178 @@ public func FfiConverterTypeGradeInfo_lift(_ buf: RustBuffer) throws -> GradeInf
 #endif
 public func FfiConverterTypeGradeInfo_lower(_ value: GradeInfo) -> RustBuffer {
     return FfiConverterTypeGradeInfo.lower(value)
+}
+
+
+public struct HardCardRecord {
+    public var id: String
+    public var front: String
+    public var deck: String
+    public var lapses: Int64
+    public var stability: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, front: String, deck: String, lapses: Int64, stability: Double) {
+        self.id = id
+        self.front = front
+        self.deck = deck
+        self.lapses = lapses
+        self.stability = stability
+    }
+}
+
+#if compiler(>=6)
+extension HardCardRecord: Sendable {}
+#endif
+
+
+extension HardCardRecord: Equatable, Hashable {
+    public static func ==(lhs: HardCardRecord, rhs: HardCardRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.front != rhs.front {
+            return false
+        }
+        if lhs.deck != rhs.deck {
+            return false
+        }
+        if lhs.lapses != rhs.lapses {
+            return false
+        }
+        if lhs.stability != rhs.stability {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(front)
+        hasher.combine(deck)
+        hasher.combine(lapses)
+        hasher.combine(stability)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHardCardRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HardCardRecord {
+        return
+            try HardCardRecord(
+                id: FfiConverterString.read(from: &buf), 
+                front: FfiConverterString.read(from: &buf), 
+                deck: FfiConverterString.read(from: &buf), 
+                lapses: FfiConverterInt64.read(from: &buf), 
+                stability: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HardCardRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.front, into: &buf)
+        FfiConverterString.write(value.deck, into: &buf)
+        FfiConverterInt64.write(value.lapses, into: &buf)
+        FfiConverterDouble.write(value.stability, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHardCardRecord_lift(_ buf: RustBuffer) throws -> HardCardRecord {
+    return try FfiConverterTypeHardCardRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHardCardRecord_lower(_ value: HardCardRecord) -> RustBuffer {
+    return FfiConverterTypeHardCardRecord.lower(value)
+}
+
+
+public struct HeatmapCellRecord {
+    public var date: String
+    public var n: UInt32
+    public var level: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(date: String, n: UInt32, level: UInt32) {
+        self.date = date
+        self.n = n
+        self.level = level
+    }
+}
+
+#if compiler(>=6)
+extension HeatmapCellRecord: Sendable {}
+#endif
+
+
+extension HeatmapCellRecord: Equatable, Hashable {
+    public static func ==(lhs: HeatmapCellRecord, rhs: HeatmapCellRecord) -> Bool {
+        if lhs.date != rhs.date {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.level != rhs.level {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(date)
+        hasher.combine(n)
+        hasher.combine(level)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeatmapCellRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeatmapCellRecord {
+        return
+            try HeatmapCellRecord(
+                date: FfiConverterString.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf), 
+                level: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeatmapCellRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.date, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+        FfiConverterUInt32.write(value.level, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeatmapCellRecord_lift(_ buf: RustBuffer) throws -> HeatmapCellRecord {
+    return try FfiConverterTypeHeatmapCellRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeatmapCellRecord_lower(_ value: HeatmapCellRecord) -> RustBuffer {
+    return FfiConverterTypeHeatmapCellRecord.lower(value)
 }
 
 
@@ -10860,6 +12612,76 @@ public func FfiConverterTypeHeftFolder_lift(_ buf: RustBuffer) throws -> HeftFol
 #endif
 public func FfiConverterTypeHeftFolder_lower(_ value: HeftFolder) -> RustBuffer {
     return FfiConverterTypeHeftFolder.lower(value)
+}
+
+
+public struct HeftFolderCount {
+    public var folder: HeftFolder
+    public var count: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(folder: HeftFolder, count: UInt32) {
+        self.folder = folder
+        self.count = count
+    }
+}
+
+#if compiler(>=6)
+extension HeftFolderCount: Sendable {}
+#endif
+
+
+extension HeftFolderCount: Equatable, Hashable {
+    public static func ==(lhs: HeftFolderCount, rhs: HeftFolderCount) -> Bool {
+        if lhs.folder != rhs.folder {
+            return false
+        }
+        if lhs.count != rhs.count {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(folder)
+        hasher.combine(count)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftFolderCount: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftFolderCount {
+        return
+            try HeftFolderCount(
+                folder: FfiConverterTypeHeftFolder.read(from: &buf), 
+                count: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftFolderCount, into buf: inout [UInt8]) {
+        FfiConverterTypeHeftFolder.write(value.folder, into: &buf)
+        FfiConverterUInt32.write(value.count, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftFolderCount_lift(_ buf: RustBuffer) throws -> HeftFolderCount {
+    return try FfiConverterTypeHeftFolderCount.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftFolderCount_lower(_ value: HeftFolderCount) -> RustBuffer {
+    return FfiConverterTypeHeftFolderCount.lower(value)
 }
 
 
@@ -11679,6 +13501,170 @@ public func FfiConverterTypeHeftRect_lower(_ value: HeftRect) -> RustBuffer {
 }
 
 
+public struct HeftShelfCard {
+    public var page: PageSummary
+    public var pagesCount: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(page: PageSummary, pagesCount: UInt32) {
+        self.page = page
+        self.pagesCount = pagesCount
+    }
+}
+
+#if compiler(>=6)
+extension HeftShelfCard: Sendable {}
+#endif
+
+
+extension HeftShelfCard: Equatable, Hashable {
+    public static func ==(lhs: HeftShelfCard, rhs: HeftShelfCard) -> Bool {
+        if lhs.page != rhs.page {
+            return false
+        }
+        if lhs.pagesCount != rhs.pagesCount {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(page)
+        hasher.combine(pagesCount)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftShelfCard: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftShelfCard {
+        return
+            try HeftShelfCard(
+                page: FfiConverterTypePageSummary.read(from: &buf), 
+                pagesCount: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftShelfCard, into buf: inout [UInt8]) {
+        FfiConverterTypePageSummary.write(value.page, into: &buf)
+        FfiConverterUInt32.write(value.pagesCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftShelfCard_lift(_ buf: RustBuffer) throws -> HeftShelfCard {
+    return try FfiConverterTypeHeftShelfCard.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftShelfCard_lower(_ value: HeftShelfCard) -> RustBuffer {
+    return FfiConverterTypeHeftShelfCard.lower(value)
+}
+
+
+public struct HeftShelfData {
+    public var folders: [HeftFolderCount]
+    public var shown: [HeftShelfCard]
+    public var allCount: UInt32
+    public var favCount: UInt32
+    public var crumbs: [HeftFolder]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(folders: [HeftFolderCount], shown: [HeftShelfCard], allCount: UInt32, favCount: UInt32, crumbs: [HeftFolder]) {
+        self.folders = folders
+        self.shown = shown
+        self.allCount = allCount
+        self.favCount = favCount
+        self.crumbs = crumbs
+    }
+}
+
+#if compiler(>=6)
+extension HeftShelfData: Sendable {}
+#endif
+
+
+extension HeftShelfData: Equatable, Hashable {
+    public static func ==(lhs: HeftShelfData, rhs: HeftShelfData) -> Bool {
+        if lhs.folders != rhs.folders {
+            return false
+        }
+        if lhs.shown != rhs.shown {
+            return false
+        }
+        if lhs.allCount != rhs.allCount {
+            return false
+        }
+        if lhs.favCount != rhs.favCount {
+            return false
+        }
+        if lhs.crumbs != rhs.crumbs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(folders)
+        hasher.combine(shown)
+        hasher.combine(allCount)
+        hasher.combine(favCount)
+        hasher.combine(crumbs)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftShelfData: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftShelfData {
+        return
+            try HeftShelfData(
+                folders: FfiConverterSequenceTypeHeftFolderCount.read(from: &buf), 
+                shown: FfiConverterSequenceTypeHeftShelfCard.read(from: &buf), 
+                allCount: FfiConverterUInt32.read(from: &buf), 
+                favCount: FfiConverterUInt32.read(from: &buf), 
+                crumbs: FfiConverterSequenceTypeHeftFolder.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftShelfData, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeHeftFolderCount.write(value.folders, into: &buf)
+        FfiConverterSequenceTypeHeftShelfCard.write(value.shown, into: &buf)
+        FfiConverterUInt32.write(value.allCount, into: &buf)
+        FfiConverterUInt32.write(value.favCount, into: &buf)
+        FfiConverterSequenceTypeHeftFolder.write(value.crumbs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftShelfData_lift(_ buf: RustBuffer) throws -> HeftShelfData {
+    return try FfiConverterTypeHeftShelfData.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftShelfData_lower(_ value: HeftShelfData) -> RustBuffer {
+    return FfiConverterTypeHeftShelfData.lower(value)
+}
+
+
 public struct HeftStroke {
     public var id: String
     /**
@@ -11922,6 +13908,189 @@ public func FfiConverterTypeHeftText_lift(_ buf: RustBuffer) throws -> HeftText 
 #endif
 public func FfiConverterTypeHeftText_lower(_ value: HeftText) -> RustBuffer {
     return FfiConverterTypeHeftText.lower(value)
+}
+
+
+/**
+ * Ein UTF-16-Markierungsbereich (`start..end`) im Text.
+ */
+public struct HighlightSpan {
+    public var start: UInt32
+    public var end: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(start: UInt32, end: UInt32) {
+        self.start = start
+        self.end = end
+    }
+}
+
+#if compiler(>=6)
+extension HighlightSpan: Sendable {}
+#endif
+
+
+extension HighlightSpan: Equatable, Hashable {
+    public static func ==(lhs: HighlightSpan, rhs: HighlightSpan) -> Bool {
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.end != rhs.end {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(start)
+        hasher.combine(end)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHighlightSpan: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HighlightSpan {
+        return
+            try HighlightSpan(
+                start: FfiConverterUInt32.read(from: &buf), 
+                end: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HighlightSpan, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.start, into: &buf)
+        FfiConverterUInt32.write(value.end, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHighlightSpan_lift(_ buf: RustBuffer) throws -> HighlightSpan {
+    return try FfiConverterTypeHighlightSpan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHighlightSpan_lower(_ value: HighlightSpan) -> RustBuffer {
+    return FfiConverterTypeHighlightSpan.lower(value)
+}
+
+
+public struct HomeAnalysis {
+    public var goal: Goal
+    public var subjects: Subjects
+    public var time: BestTime
+    public var forecast: DueWeek
+    public var headline: String
+    public var action: String?
+    public var actionDeck: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(goal: Goal, subjects: Subjects, time: BestTime, forecast: DueWeek, headline: String, action: String?, actionDeck: String?) {
+        self.goal = goal
+        self.subjects = subjects
+        self.time = time
+        self.forecast = forecast
+        self.headline = headline
+        self.action = action
+        self.actionDeck = actionDeck
+    }
+}
+
+#if compiler(>=6)
+extension HomeAnalysis: Sendable {}
+#endif
+
+
+extension HomeAnalysis: Equatable, Hashable {
+    public static func ==(lhs: HomeAnalysis, rhs: HomeAnalysis) -> Bool {
+        if lhs.goal != rhs.goal {
+            return false
+        }
+        if lhs.subjects != rhs.subjects {
+            return false
+        }
+        if lhs.time != rhs.time {
+            return false
+        }
+        if lhs.forecast != rhs.forecast {
+            return false
+        }
+        if lhs.headline != rhs.headline {
+            return false
+        }
+        if lhs.action != rhs.action {
+            return false
+        }
+        if lhs.actionDeck != rhs.actionDeck {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(goal)
+        hasher.combine(subjects)
+        hasher.combine(time)
+        hasher.combine(forecast)
+        hasher.combine(headline)
+        hasher.combine(action)
+        hasher.combine(actionDeck)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHomeAnalysis: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HomeAnalysis {
+        return
+            try HomeAnalysis(
+                goal: FfiConverterTypeGoal.read(from: &buf), 
+                subjects: FfiConverterTypeSubjects.read(from: &buf), 
+                time: FfiConverterTypeBestTime.read(from: &buf), 
+                forecast: FfiConverterTypeDueWeek.read(from: &buf), 
+                headline: FfiConverterString.read(from: &buf), 
+                action: FfiConverterOptionString.read(from: &buf), 
+                actionDeck: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HomeAnalysis, into buf: inout [UInt8]) {
+        FfiConverterTypeGoal.write(value.goal, into: &buf)
+        FfiConverterTypeSubjects.write(value.subjects, into: &buf)
+        FfiConverterTypeBestTime.write(value.time, into: &buf)
+        FfiConverterTypeDueWeek.write(value.forecast, into: &buf)
+        FfiConverterString.write(value.headline, into: &buf)
+        FfiConverterOptionString.write(value.action, into: &buf)
+        FfiConverterOptionString.write(value.actionDeck, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeAnalysis_lift(_ buf: RustBuffer) throws -> HomeAnalysis {
+    return try FfiConverterTypeHomeAnalysis.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeAnalysis_lower(_ value: HomeAnalysis) -> RustBuffer {
+    return FfiConverterTypeHomeAnalysis.lower(value)
 }
 
 
@@ -12187,6 +14356,84 @@ public func FfiConverterTypeHomeArticleInput_lift(_ buf: RustBuffer) throws -> H
 #endif
 public func FfiConverterTypeHomeArticleInput_lower(_ value: HomeArticleInput) -> RustBuffer {
     return FfiConverterTypeHomeArticleInput.lower(value)
+}
+
+
+public struct HourRate {
+    public var hour: Int32
+    public var n: Int32
+    public var rate: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(hour: Int32, n: Int32, rate: Double) {
+        self.hour = hour
+        self.n = n
+        self.rate = rate
+    }
+}
+
+#if compiler(>=6)
+extension HourRate: Sendable {}
+#endif
+
+
+extension HourRate: Equatable, Hashable {
+    public static func ==(lhs: HourRate, rhs: HourRate) -> Bool {
+        if lhs.hour != rhs.hour {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(hour)
+        hasher.combine(n)
+        hasher.combine(rate)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHourRate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HourRate {
+        return
+            try HourRate(
+                hour: FfiConverterInt32.read(from: &buf), 
+                n: FfiConverterInt32.read(from: &buf), 
+                rate: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HourRate, into buf: inout [UInt8]) {
+        FfiConverterInt32.write(value.hour, into: &buf)
+        FfiConverterInt32.write(value.n, into: &buf)
+        FfiConverterDouble.write(value.rate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHourRate_lift(_ buf: RustBuffer) throws -> HourRate {
+    return try FfiConverterTypeHourRate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHourRate_lower(_ value: HourRate) -> RustBuffer {
+    return FfiConverterTypeHourRate.lower(value)
 }
 
 
@@ -12662,6 +14909,376 @@ public func FfiConverterTypeLearningSessionInput_lower(_ value: LearningSessionI
 }
 
 
+public struct LearningStats {
+    public var reviewsAll: UInt32
+    public var last: UInt32
+    public var rate: Double?
+    public var trend: Int32?
+    public var avg: Double
+    public var bestand: BestandRecord
+    public var n: UInt32
+    public var faellig: UInt32
+    public var reif: UInt32
+    public var gelernt: UInt32
+    public var decks: [DeckRowRecord]
+    public var series: [SeriesDayRecord]
+    public var peak: PeakDayRecord
+    public var forecast: [ForecastDayRecord]
+    public var streakCurrent: UInt32
+    public var streakLongest: UInt32
+    public var hard: [HardCardRecord]
+    public var thinkMs: Int64
+    public var retention: RetentionRecord
+    public var heatmap: [HeatmapCellRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(reviewsAll: UInt32, last: UInt32, rate: Double?, trend: Int32?, avg: Double, bestand: BestandRecord, n: UInt32, faellig: UInt32, reif: UInt32, gelernt: UInt32, decks: [DeckRowRecord], series: [SeriesDayRecord], peak: PeakDayRecord, forecast: [ForecastDayRecord], streakCurrent: UInt32, streakLongest: UInt32, hard: [HardCardRecord], thinkMs: Int64, retention: RetentionRecord, heatmap: [HeatmapCellRecord]) {
+        self.reviewsAll = reviewsAll
+        self.last = last
+        self.rate = rate
+        self.trend = trend
+        self.avg = avg
+        self.bestand = bestand
+        self.n = n
+        self.faellig = faellig
+        self.reif = reif
+        self.gelernt = gelernt
+        self.decks = decks
+        self.series = series
+        self.peak = peak
+        self.forecast = forecast
+        self.streakCurrent = streakCurrent
+        self.streakLongest = streakLongest
+        self.hard = hard
+        self.thinkMs = thinkMs
+        self.retention = retention
+        self.heatmap = heatmap
+    }
+}
+
+#if compiler(>=6)
+extension LearningStats: Sendable {}
+#endif
+
+
+extension LearningStats: Equatable, Hashable {
+    public static func ==(lhs: LearningStats, rhs: LearningStats) -> Bool {
+        if lhs.reviewsAll != rhs.reviewsAll {
+            return false
+        }
+        if lhs.last != rhs.last {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        if lhs.trend != rhs.trend {
+            return false
+        }
+        if lhs.avg != rhs.avg {
+            return false
+        }
+        if lhs.bestand != rhs.bestand {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.faellig != rhs.faellig {
+            return false
+        }
+        if lhs.reif != rhs.reif {
+            return false
+        }
+        if lhs.gelernt != rhs.gelernt {
+            return false
+        }
+        if lhs.decks != rhs.decks {
+            return false
+        }
+        if lhs.series != rhs.series {
+            return false
+        }
+        if lhs.peak != rhs.peak {
+            return false
+        }
+        if lhs.forecast != rhs.forecast {
+            return false
+        }
+        if lhs.streakCurrent != rhs.streakCurrent {
+            return false
+        }
+        if lhs.streakLongest != rhs.streakLongest {
+            return false
+        }
+        if lhs.hard != rhs.hard {
+            return false
+        }
+        if lhs.thinkMs != rhs.thinkMs {
+            return false
+        }
+        if lhs.retention != rhs.retention {
+            return false
+        }
+        if lhs.heatmap != rhs.heatmap {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(reviewsAll)
+        hasher.combine(last)
+        hasher.combine(rate)
+        hasher.combine(trend)
+        hasher.combine(avg)
+        hasher.combine(bestand)
+        hasher.combine(n)
+        hasher.combine(faellig)
+        hasher.combine(reif)
+        hasher.combine(gelernt)
+        hasher.combine(decks)
+        hasher.combine(series)
+        hasher.combine(peak)
+        hasher.combine(forecast)
+        hasher.combine(streakCurrent)
+        hasher.combine(streakLongest)
+        hasher.combine(hard)
+        hasher.combine(thinkMs)
+        hasher.combine(retention)
+        hasher.combine(heatmap)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLearningStats: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LearningStats {
+        return
+            try LearningStats(
+                reviewsAll: FfiConverterUInt32.read(from: &buf), 
+                last: FfiConverterUInt32.read(from: &buf), 
+                rate: FfiConverterOptionDouble.read(from: &buf), 
+                trend: FfiConverterOptionInt32.read(from: &buf), 
+                avg: FfiConverterDouble.read(from: &buf), 
+                bestand: FfiConverterTypeBestandRecord.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf), 
+                faellig: FfiConverterUInt32.read(from: &buf), 
+                reif: FfiConverterUInt32.read(from: &buf), 
+                gelernt: FfiConverterUInt32.read(from: &buf), 
+                decks: FfiConverterSequenceTypeDeckRowRecord.read(from: &buf), 
+                series: FfiConverterSequenceTypeSeriesDayRecord.read(from: &buf), 
+                peak: FfiConverterTypePeakDayRecord.read(from: &buf), 
+                forecast: FfiConverterSequenceTypeForecastDayRecord.read(from: &buf), 
+                streakCurrent: FfiConverterUInt32.read(from: &buf), 
+                streakLongest: FfiConverterUInt32.read(from: &buf), 
+                hard: FfiConverterSequenceTypeHardCardRecord.read(from: &buf), 
+                thinkMs: FfiConverterInt64.read(from: &buf), 
+                retention: FfiConverterTypeRetentionRecord.read(from: &buf), 
+                heatmap: FfiConverterSequenceTypeHeatmapCellRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LearningStats, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.reviewsAll, into: &buf)
+        FfiConverterUInt32.write(value.last, into: &buf)
+        FfiConverterOptionDouble.write(value.rate, into: &buf)
+        FfiConverterOptionInt32.write(value.trend, into: &buf)
+        FfiConverterDouble.write(value.avg, into: &buf)
+        FfiConverterTypeBestandRecord.write(value.bestand, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+        FfiConverterUInt32.write(value.faellig, into: &buf)
+        FfiConverterUInt32.write(value.reif, into: &buf)
+        FfiConverterUInt32.write(value.gelernt, into: &buf)
+        FfiConverterSequenceTypeDeckRowRecord.write(value.decks, into: &buf)
+        FfiConverterSequenceTypeSeriesDayRecord.write(value.series, into: &buf)
+        FfiConverterTypePeakDayRecord.write(value.peak, into: &buf)
+        FfiConverterSequenceTypeForecastDayRecord.write(value.forecast, into: &buf)
+        FfiConverterUInt32.write(value.streakCurrent, into: &buf)
+        FfiConverterUInt32.write(value.streakLongest, into: &buf)
+        FfiConverterSequenceTypeHardCardRecord.write(value.hard, into: &buf)
+        FfiConverterInt64.write(value.thinkMs, into: &buf)
+        FfiConverterTypeRetentionRecord.write(value.retention, into: &buf)
+        FfiConverterSequenceTypeHeatmapCellRecord.write(value.heatmap, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLearningStats_lift(_ buf: RustBuffer) throws -> LearningStats {
+    return try FfiConverterTypeLearningStats.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLearningStats_lower(_ value: LearningStats) -> RustBuffer {
+    return FfiConverterTypeLearningStats.lower(value)
+}
+
+
+public struct LibrarySectionInfo {
+    public var workspace: WorkspaceInfo
+    public var rows: [LibraryTreeRowInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(workspace: WorkspaceInfo, rows: [LibraryTreeRowInfo]) {
+        self.workspace = workspace
+        self.rows = rows
+    }
+}
+
+#if compiler(>=6)
+extension LibrarySectionInfo: Sendable {}
+#endif
+
+
+extension LibrarySectionInfo: Equatable, Hashable {
+    public static func ==(lhs: LibrarySectionInfo, rhs: LibrarySectionInfo) -> Bool {
+        if lhs.workspace != rhs.workspace {
+            return false
+        }
+        if lhs.rows != rhs.rows {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(workspace)
+        hasher.combine(rows)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLibrarySectionInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LibrarySectionInfo {
+        return
+            try LibrarySectionInfo(
+                workspace: FfiConverterTypeWorkspaceInfo.read(from: &buf), 
+                rows: FfiConverterSequenceTypeLibraryTreeRowInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LibrarySectionInfo, into buf: inout [UInt8]) {
+        FfiConverterTypeWorkspaceInfo.write(value.workspace, into: &buf)
+        FfiConverterSequenceTypeLibraryTreeRowInfo.write(value.rows, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibrarySectionInfo_lift(_ buf: RustBuffer) throws -> LibrarySectionInfo {
+    return try FfiConverterTypeLibrarySectionInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibrarySectionInfo_lower(_ value: LibrarySectionInfo) -> RustBuffer {
+    return FfiConverterTypeLibrarySectionInfo.lower(value)
+}
+
+
+public struct LibraryTreeRowInfo {
+    public var page: PageSummary
+    public var depth: UInt32
+    public var hasKids: Bool
+    public var collapsed: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(page: PageSummary, depth: UInt32, hasKids: Bool, collapsed: Bool) {
+        self.page = page
+        self.depth = depth
+        self.hasKids = hasKids
+        self.collapsed = collapsed
+    }
+}
+
+#if compiler(>=6)
+extension LibraryTreeRowInfo: Sendable {}
+#endif
+
+
+extension LibraryTreeRowInfo: Equatable, Hashable {
+    public static func ==(lhs: LibraryTreeRowInfo, rhs: LibraryTreeRowInfo) -> Bool {
+        if lhs.page != rhs.page {
+            return false
+        }
+        if lhs.depth != rhs.depth {
+            return false
+        }
+        if lhs.hasKids != rhs.hasKids {
+            return false
+        }
+        if lhs.collapsed != rhs.collapsed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(page)
+        hasher.combine(depth)
+        hasher.combine(hasKids)
+        hasher.combine(collapsed)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLibraryTreeRowInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LibraryTreeRowInfo {
+        return
+            try LibraryTreeRowInfo(
+                page: FfiConverterTypePageSummary.read(from: &buf), 
+                depth: FfiConverterUInt32.read(from: &buf), 
+                hasKids: FfiConverterBool.read(from: &buf), 
+                collapsed: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LibraryTreeRowInfo, into buf: inout [UInt8]) {
+        FfiConverterTypePageSummary.write(value.page, into: &buf)
+        FfiConverterUInt32.write(value.depth, into: &buf)
+        FfiConverterBool.write(value.hasKids, into: &buf)
+        FfiConverterBool.write(value.collapsed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibraryTreeRowInfo_lift(_ buf: RustBuffer) throws -> LibraryTreeRowInfo {
+    return try FfiConverterTypeLibraryTreeRowInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibraryTreeRowInfo_lower(_ value: LibraryTreeRowInfo) -> RustBuffer {
+    return FfiConverterTypeLibraryTreeRowInfo.lower(value)
+}
+
+
 /**
  * Wie der Start verlief (Diagnose).
  */
@@ -12956,6 +15573,240 @@ public func FfiConverterTypeMdBlock_lift(_ buf: RustBuffer) throws -> MdBlock {
 #endif
 public func FfiConverterTypeMdBlock_lower(_ value: MdBlock) -> RustBuffer {
     return FfiConverterTypeMdBlock.lower(value)
+}
+
+
+public struct MdShortcutResult {
+    public var shortcutType: MdShortcutType
+    public var rest: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(shortcutType: MdShortcutType, rest: String) {
+        self.shortcutType = shortcutType
+        self.rest = rest
+    }
+}
+
+#if compiler(>=6)
+extension MdShortcutResult: Sendable {}
+#endif
+
+
+extension MdShortcutResult: Equatable, Hashable {
+    public static func ==(lhs: MdShortcutResult, rhs: MdShortcutResult) -> Bool {
+        if lhs.shortcutType != rhs.shortcutType {
+            return false
+        }
+        if lhs.rest != rhs.rest {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(shortcutType)
+        hasher.combine(rest)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMdShortcutResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MdShortcutResult {
+        return
+            try MdShortcutResult(
+                shortcutType: FfiConverterTypeMdShortcutType.read(from: &buf), 
+                rest: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MdShortcutResult, into buf: inout [UInt8]) {
+        FfiConverterTypeMdShortcutType.write(value.shortcutType, into: &buf)
+        FfiConverterString.write(value.rest, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdShortcutResult_lift(_ buf: RustBuffer) throws -> MdShortcutResult {
+    return try FfiConverterTypeMdShortcutResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdShortcutResult_lower(_ value: MdShortcutResult) -> RustBuffer {
+    return FfiConverterTypeMdShortcutResult.lower(value)
+}
+
+
+public struct MdWrapResult {
+    public var text: String
+    public var caret: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(text: String, caret: UInt32) {
+        self.text = text
+        self.caret = caret
+    }
+}
+
+#if compiler(>=6)
+extension MdWrapResult: Sendable {}
+#endif
+
+
+extension MdWrapResult: Equatable, Hashable {
+    public static func ==(lhs: MdWrapResult, rhs: MdWrapResult) -> Bool {
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.caret != rhs.caret {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        hasher.combine(caret)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMdWrapResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MdWrapResult {
+        return
+            try MdWrapResult(
+                text: FfiConverterString.read(from: &buf), 
+                caret: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MdWrapResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterUInt32.write(value.caret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdWrapResult_lift(_ buf: RustBuffer) throws -> MdWrapResult {
+    return try FfiConverterTypeMdWrapResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdWrapResult_lower(_ value: MdWrapResult) -> RustBuffer {
+    return FfiConverterTypeMdWrapResult.lower(value)
+}
+
+
+public struct NotionLibraryView {
+    public var allCount: UInt32
+    public var favCount: UInt32
+    public var pdfCount: UInt32
+    public var tplCount: UInt32
+    public var sections: [LibrarySectionInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(allCount: UInt32, favCount: UInt32, pdfCount: UInt32, tplCount: UInt32, sections: [LibrarySectionInfo]) {
+        self.allCount = allCount
+        self.favCount = favCount
+        self.pdfCount = pdfCount
+        self.tplCount = tplCount
+        self.sections = sections
+    }
+}
+
+#if compiler(>=6)
+extension NotionLibraryView: Sendable {}
+#endif
+
+
+extension NotionLibraryView: Equatable, Hashable {
+    public static func ==(lhs: NotionLibraryView, rhs: NotionLibraryView) -> Bool {
+        if lhs.allCount != rhs.allCount {
+            return false
+        }
+        if lhs.favCount != rhs.favCount {
+            return false
+        }
+        if lhs.pdfCount != rhs.pdfCount {
+            return false
+        }
+        if lhs.tplCount != rhs.tplCount {
+            return false
+        }
+        if lhs.sections != rhs.sections {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(allCount)
+        hasher.combine(favCount)
+        hasher.combine(pdfCount)
+        hasher.combine(tplCount)
+        hasher.combine(sections)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotionLibraryView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotionLibraryView {
+        return
+            try NotionLibraryView(
+                allCount: FfiConverterUInt32.read(from: &buf), 
+                favCount: FfiConverterUInt32.read(from: &buf), 
+                pdfCount: FfiConverterUInt32.read(from: &buf), 
+                tplCount: FfiConverterUInt32.read(from: &buf), 
+                sections: FfiConverterSequenceTypeLibrarySectionInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NotionLibraryView, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.allCount, into: &buf)
+        FfiConverterUInt32.write(value.favCount, into: &buf)
+        FfiConverterUInt32.write(value.pdfCount, into: &buf)
+        FfiConverterUInt32.write(value.tplCount, into: &buf)
+        FfiConverterSequenceTypeLibrarySectionInfo.write(value.sections, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotionLibraryView_lift(_ buf: RustBuffer) throws -> NotionLibraryView {
+    return try FfiConverterTypeNotionLibraryView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotionLibraryView_lower(_ value: NotionLibraryView) -> RustBuffer {
+    return FfiConverterTypeNotionLibraryView.lower(value)
 }
 
 
@@ -13539,6 +16390,660 @@ public func FfiConverterTypePageVersion_lower(_ value: PageVersion) -> RustBuffe
 
 
 /**
+ * Eine Schnell-Aktion (Kennung + lokalisierter Anzeigetext der App) für den Filter.
+ */
+public struct PaletteActionDef {
+    public var id: String
+    public var label: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+#if compiler(>=6)
+extension PaletteActionDef: Sendable {}
+#endif
+
+
+extension PaletteActionDef: Equatable, Hashable {
+    public static func ==(lhs: PaletteActionDef, rhs: PaletteActionDef) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(label)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePaletteActionDef: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PaletteActionDef {
+        return
+            try PaletteActionDef(
+                id: FfiConverterString.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PaletteActionDef, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePaletteActionDef_lift(_ buf: RustBuffer) throws -> PaletteActionDef {
+    return try FfiConverterTypePaletteActionDef.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePaletteActionDef_lower(_ value: PaletteActionDef) -> RustBuffer {
+    return FfiConverterTypePaletteActionDef.lower(value)
+}
+
+
+/**
+ * Ein Seitentreffer der Befehlspalette samt gekürztem Vorschau-Ausschnitt, Brotkrumen-Pfad und Archiv-Flag.
+ */
+public struct PalettePageHit {
+    public var summary: PageSummary
+    public var archived: Bool
+    public var snippet: String
+    public var path: String
+    public var terms: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(summary: PageSummary, archived: Bool, snippet: String, path: String, terms: [String]) {
+        self.summary = summary
+        self.archived = archived
+        self.snippet = snippet
+        self.path = path
+        self.terms = terms
+    }
+}
+
+#if compiler(>=6)
+extension PalettePageHit: Sendable {}
+#endif
+
+
+extension PalettePageHit: Equatable, Hashable {
+    public static func ==(lhs: PalettePageHit, rhs: PalettePageHit) -> Bool {
+        if lhs.summary != rhs.summary {
+            return false
+        }
+        if lhs.archived != rhs.archived {
+            return false
+        }
+        if lhs.snippet != rhs.snippet {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.terms != rhs.terms {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(summary)
+        hasher.combine(archived)
+        hasher.combine(snippet)
+        hasher.combine(path)
+        hasher.combine(terms)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePalettePageHit: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PalettePageHit {
+        return
+            try PalettePageHit(
+                summary: FfiConverterTypePageSummary.read(from: &buf), 
+                archived: FfiConverterBool.read(from: &buf), 
+                snippet: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                terms: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PalettePageHit, into buf: inout [UInt8]) {
+        FfiConverterTypePageSummary.write(value.summary, into: &buf)
+        FfiConverterBool.write(value.archived, into: &buf)
+        FfiConverterString.write(value.snippet, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterSequenceString.write(value.terms, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePalettePageHit_lift(_ buf: RustBuffer) throws -> PalettePageHit {
+    return try FfiConverterTypePalettePageHit.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePalettePageHit_lower(_ value: PalettePageHit) -> RustBuffer {
+    return FfiConverterTypePalettePageHit.lower(value)
+}
+
+
+public struct ParsedCards {
+    public var cards: [PlainCard]
+    public var errors: [String]
+    public var format: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(cards: [PlainCard], errors: [String], format: String) {
+        self.cards = cards
+        self.errors = errors
+        self.format = format
+    }
+}
+
+#if compiler(>=6)
+extension ParsedCards: Sendable {}
+#endif
+
+
+extension ParsedCards: Equatable, Hashable {
+    public static func ==(lhs: ParsedCards, rhs: ParsedCards) -> Bool {
+        if lhs.cards != rhs.cards {
+            return false
+        }
+        if lhs.errors != rhs.errors {
+            return false
+        }
+        if lhs.format != rhs.format {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(cards)
+        hasher.combine(errors)
+        hasher.combine(format)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParsedCards: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParsedCards {
+        return
+            try ParsedCards(
+                cards: FfiConverterSequenceTypePlainCard.read(from: &buf), 
+                errors: FfiConverterSequenceString.read(from: &buf), 
+                format: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParsedCards, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypePlainCard.write(value.cards, into: &buf)
+        FfiConverterSequenceString.write(value.errors, into: &buf)
+        FfiConverterString.write(value.format, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParsedCards_lift(_ buf: RustBuffer) throws -> ParsedCards {
+    return try FfiConverterTypeParsedCards.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParsedCards_lower(_ value: ParsedCards) -> RustBuffer {
+    return FfiConverterTypeParsedCards.lower(value)
+}
+
+
+public struct PatternData {
+    public var position: [RateRow]
+    public var timer: [RateRow]
+    public var hours: [HourRate]?
+    public var experiments: [ExpRow]
+    public var problems: [ProblemPage]
+    public var empty: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(position: [RateRow], timer: [RateRow], hours: [HourRate]?, experiments: [ExpRow], problems: [ProblemPage], empty: Bool) {
+        self.position = position
+        self.timer = timer
+        self.hours = hours
+        self.experiments = experiments
+        self.problems = problems
+        self.empty = empty
+    }
+}
+
+#if compiler(>=6)
+extension PatternData: Sendable {}
+#endif
+
+
+extension PatternData: Equatable, Hashable {
+    public static func ==(lhs: PatternData, rhs: PatternData) -> Bool {
+        if lhs.position != rhs.position {
+            return false
+        }
+        if lhs.timer != rhs.timer {
+            return false
+        }
+        if lhs.hours != rhs.hours {
+            return false
+        }
+        if lhs.experiments != rhs.experiments {
+            return false
+        }
+        if lhs.problems != rhs.problems {
+            return false
+        }
+        if lhs.empty != rhs.empty {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(position)
+        hasher.combine(timer)
+        hasher.combine(hours)
+        hasher.combine(experiments)
+        hasher.combine(problems)
+        hasher.combine(empty)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePatternData: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PatternData {
+        return
+            try PatternData(
+                position: FfiConverterSequenceTypeRateRow.read(from: &buf), 
+                timer: FfiConverterSequenceTypeRateRow.read(from: &buf), 
+                hours: FfiConverterOptionSequenceTypeHourRate.read(from: &buf), 
+                experiments: FfiConverterSequenceTypeExpRow.read(from: &buf), 
+                problems: FfiConverterSequenceTypeProblemPage.read(from: &buf), 
+                empty: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PatternData, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeRateRow.write(value.position, into: &buf)
+        FfiConverterSequenceTypeRateRow.write(value.timer, into: &buf)
+        FfiConverterOptionSequenceTypeHourRate.write(value.hours, into: &buf)
+        FfiConverterSequenceTypeExpRow.write(value.experiments, into: &buf)
+        FfiConverterSequenceTypeProblemPage.write(value.problems, into: &buf)
+        FfiConverterBool.write(value.empty, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePatternData_lift(_ buf: RustBuffer) throws -> PatternData {
+    return try FfiConverterTypePatternData.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePatternData_lower(_ value: PatternData) -> RustBuffer {
+    return FfiConverterTypePatternData.lower(value)
+}
+
+
+public struct PeakDayRecord {
+    public var date: String
+    public var n: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(date: String, n: UInt32) {
+        self.date = date
+        self.n = n
+    }
+}
+
+#if compiler(>=6)
+extension PeakDayRecord: Sendable {}
+#endif
+
+
+extension PeakDayRecord: Equatable, Hashable {
+    public static func ==(lhs: PeakDayRecord, rhs: PeakDayRecord) -> Bool {
+        if lhs.date != rhs.date {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(date)
+        hasher.combine(n)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePeakDayRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PeakDayRecord {
+        return
+            try PeakDayRecord(
+                date: FfiConverterString.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PeakDayRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.date, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeakDayRecord_lift(_ buf: RustBuffer) throws -> PeakDayRecord {
+    return try FfiConverterTypePeakDayRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeakDayRecord_lower(_ value: PeakDayRecord) -> RustBuffer {
+    return FfiConverterTypePeakDayRecord.lower(value)
+}
+
+
+public struct PlainCard {
+    public var front: String
+    public var back: String
+    public var deck: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(front: String, back: String, deck: String) {
+        self.front = front
+        self.back = back
+        self.deck = deck
+    }
+}
+
+#if compiler(>=6)
+extension PlainCard: Sendable {}
+#endif
+
+
+extension PlainCard: Equatable, Hashable {
+    public static func ==(lhs: PlainCard, rhs: PlainCard) -> Bool {
+        if lhs.front != rhs.front {
+            return false
+        }
+        if lhs.back != rhs.back {
+            return false
+        }
+        if lhs.deck != rhs.deck {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(front)
+        hasher.combine(back)
+        hasher.combine(deck)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePlainCard: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PlainCard {
+        return
+            try PlainCard(
+                front: FfiConverterString.read(from: &buf), 
+                back: FfiConverterString.read(from: &buf), 
+                deck: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PlainCard, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.front, into: &buf)
+        FfiConverterString.write(value.back, into: &buf)
+        FfiConverterString.write(value.deck, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePlainCard_lift(_ buf: RustBuffer) throws -> PlainCard {
+    return try FfiConverterTypePlainCard.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePlainCard_lower(_ value: PlainCard) -> RustBuffer {
+    return FfiConverterTypePlainCard.lower(value)
+}
+
+
+public struct ProblemPage {
+    public var pageId: String
+    public var minutes: Int32
+    public var lost: Int32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pageId: String, minutes: Int32, lost: Int32) {
+        self.pageId = pageId
+        self.minutes = minutes
+        self.lost = lost
+    }
+}
+
+#if compiler(>=6)
+extension ProblemPage: Sendable {}
+#endif
+
+
+extension ProblemPage: Equatable, Hashable {
+    public static func ==(lhs: ProblemPage, rhs: ProblemPage) -> Bool {
+        if lhs.pageId != rhs.pageId {
+            return false
+        }
+        if lhs.minutes != rhs.minutes {
+            return false
+        }
+        if lhs.lost != rhs.lost {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pageId)
+        hasher.combine(minutes)
+        hasher.combine(lost)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProblemPage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProblemPage {
+        return
+            try ProblemPage(
+                pageId: FfiConverterString.read(from: &buf), 
+                minutes: FfiConverterInt32.read(from: &buf), 
+                lost: FfiConverterInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProblemPage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.pageId, into: &buf)
+        FfiConverterInt32.write(value.minutes, into: &buf)
+        FfiConverterInt32.write(value.lost, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProblemPage_lift(_ buf: RustBuffer) throws -> ProblemPage {
+    return try FfiConverterTypeProblemPage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProblemPage_lower(_ value: ProblemPage) -> RustBuffer {
+    return FfiConverterTypeProblemPage.lower(value)
+}
+
+
+public struct RateRow {
+    public var label: String
+    public var n: Int32
+    public var rate: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, n: Int32, rate: Double) {
+        self.label = label
+        self.n = n
+        self.rate = rate
+    }
+}
+
+#if compiler(>=6)
+extension RateRow: Sendable {}
+#endif
+
+
+extension RateRow: Equatable, Hashable {
+    public static func ==(lhs: RateRow, rhs: RateRow) -> Bool {
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(label)
+        hasher.combine(n)
+        hasher.combine(rate)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRateRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RateRow {
+        return
+            try RateRow(
+                label: FfiConverterString.read(from: &buf), 
+                n: FfiConverterInt32.read(from: &buf), 
+                rate: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RateRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterInt32.write(value.n, into: &buf)
+        FfiConverterDouble.write(value.rate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRateRow_lift(_ buf: RustBuffer) throws -> RateRow {
+    return try FfiConverterTypeRateRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRateRow_lower(_ value: RateRow) -> RustBuffer {
+    return FfiConverterTypeRateRow.lower(value)
+}
+
+
+/**
  * Ergebnis von [`CloudSync::refetch_all`].
  */
 public struct RefetchReport {
@@ -13712,6 +17217,162 @@ public func FfiConverterTypeRelatedPage_lift(_ buf: RustBuffer) throws -> Relate
 #endif
 public func FfiConverterTypeRelatedPage_lower(_ value: RelatedPage) -> RustBuffer {
     return FfiConverterTypeRelatedPage.lower(value)
+}
+
+
+public struct RetentionBucketRecord {
+    public var n: UInt32
+    public var rate: Double?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(n: UInt32, rate: Double?) {
+        self.n = n
+        self.rate = rate
+    }
+}
+
+#if compiler(>=6)
+extension RetentionBucketRecord: Sendable {}
+#endif
+
+
+extension RetentionBucketRecord: Equatable, Hashable {
+    public static func ==(lhs: RetentionBucketRecord, rhs: RetentionBucketRecord) -> Bool {
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(n)
+        hasher.combine(rate)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRetentionBucketRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RetentionBucketRecord {
+        return
+            try RetentionBucketRecord(
+                n: FfiConverterUInt32.read(from: &buf), 
+                rate: FfiConverterOptionDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RetentionBucketRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.n, into: &buf)
+        FfiConverterOptionDouble.write(value.rate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionBucketRecord_lift(_ buf: RustBuffer) throws -> RetentionBucketRecord {
+    return try FfiConverterTypeRetentionBucketRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionBucketRecord_lower(_ value: RetentionBucketRecord) -> RustBuffer {
+    return FfiConverterTypeRetentionBucketRecord.lower(value)
+}
+
+
+public struct RetentionRecord {
+    public var day1: RetentionBucketRecord
+    public var day3: RetentionBucketRecord
+    public var day7: RetentionBucketRecord
+    public var day14: RetentionBucketRecord
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(day1: RetentionBucketRecord, day3: RetentionBucketRecord, day7: RetentionBucketRecord, day14: RetentionBucketRecord) {
+        self.day1 = day1
+        self.day3 = day3
+        self.day7 = day7
+        self.day14 = day14
+    }
+}
+
+#if compiler(>=6)
+extension RetentionRecord: Sendable {}
+#endif
+
+
+extension RetentionRecord: Equatable, Hashable {
+    public static func ==(lhs: RetentionRecord, rhs: RetentionRecord) -> Bool {
+        if lhs.day1 != rhs.day1 {
+            return false
+        }
+        if lhs.day3 != rhs.day3 {
+            return false
+        }
+        if lhs.day7 != rhs.day7 {
+            return false
+        }
+        if lhs.day14 != rhs.day14 {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(day1)
+        hasher.combine(day3)
+        hasher.combine(day7)
+        hasher.combine(day14)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRetentionRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RetentionRecord {
+        return
+            try RetentionRecord(
+                day1: FfiConverterTypeRetentionBucketRecord.read(from: &buf), 
+                day3: FfiConverterTypeRetentionBucketRecord.read(from: &buf), 
+                day7: FfiConverterTypeRetentionBucketRecord.read(from: &buf), 
+                day14: FfiConverterTypeRetentionBucketRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RetentionRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeRetentionBucketRecord.write(value.day1, into: &buf)
+        FfiConverterTypeRetentionBucketRecord.write(value.day3, into: &buf)
+        FfiConverterTypeRetentionBucketRecord.write(value.day7, into: &buf)
+        FfiConverterTypeRetentionBucketRecord.write(value.day14, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionRecord_lift(_ buf: RustBuffer) throws -> RetentionRecord {
+    return try FfiConverterTypeRetentionRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRetentionRecord_lower(_ value: RetentionRecord) -> RustBuffer {
+    return FfiConverterTypeRetentionRecord.lower(value)
 }
 
 
@@ -14188,6 +17849,490 @@ public func FfiConverterTypeSemanticHit_lower(_ value: SemanticHit) -> RustBuffe
 }
 
 
+public struct SeriesDayRecord {
+    public var date: String
+    public var n: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(date: String, n: UInt32) {
+        self.date = date
+        self.n = n
+    }
+}
+
+#if compiler(>=6)
+extension SeriesDayRecord: Sendable {}
+#endif
+
+
+extension SeriesDayRecord: Equatable, Hashable {
+    public static func ==(lhs: SeriesDayRecord, rhs: SeriesDayRecord) -> Bool {
+        if lhs.date != rhs.date {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(date)
+        hasher.combine(n)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSeriesDayRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SeriesDayRecord {
+        return
+            try SeriesDayRecord(
+                date: FfiConverterString.read(from: &buf), 
+                n: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SeriesDayRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.date, into: &buf)
+        FfiConverterUInt32.write(value.n, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSeriesDayRecord_lift(_ buf: RustBuffer) throws -> SeriesDayRecord {
+    return try FfiConverterTypeSeriesDayRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSeriesDayRecord_lower(_ value: SeriesDayRecord) -> RustBuffer {
+    return FfiConverterTypeSeriesDayRecord.lower(value)
+}
+
+
+/**
+ * Ein Eintrag des Einstellungs-Suchindex (von der App übergeben oder aus dem Standard-Katalog).
+ */
+public struct SettingsSearchEntry {
+    public var id: String
+    public var section: String
+    public var sectionLabel: String
+    public var group: String
+    public var label: String
+    public var description: String
+    public var keywords: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, section: String, sectionLabel: String, group: String, label: String, description: String, keywords: String) {
+        self.id = id
+        self.section = section
+        self.sectionLabel = sectionLabel
+        self.group = group
+        self.label = label
+        self.description = description
+        self.keywords = keywords
+    }
+}
+
+#if compiler(>=6)
+extension SettingsSearchEntry: Sendable {}
+#endif
+
+
+extension SettingsSearchEntry: Equatable, Hashable {
+    public static func ==(lhs: SettingsSearchEntry, rhs: SettingsSearchEntry) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.section != rhs.section {
+            return false
+        }
+        if lhs.sectionLabel != rhs.sectionLabel {
+            return false
+        }
+        if lhs.group != rhs.group {
+            return false
+        }
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.keywords != rhs.keywords {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(section)
+        hasher.combine(sectionLabel)
+        hasher.combine(group)
+        hasher.combine(label)
+        hasher.combine(description)
+        hasher.combine(keywords)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSettingsSearchEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SettingsSearchEntry {
+        return
+            try SettingsSearchEntry(
+                id: FfiConverterString.read(from: &buf), 
+                section: FfiConverterString.read(from: &buf), 
+                sectionLabel: FfiConverterString.read(from: &buf), 
+                group: FfiConverterString.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                keywords: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SettingsSearchEntry, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.section, into: &buf)
+        FfiConverterString.write(value.sectionLabel, into: &buf)
+        FfiConverterString.write(value.group, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.keywords, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSettingsSearchEntry_lift(_ buf: RustBuffer) throws -> SettingsSearchEntry {
+    return try FfiConverterTypeSettingsSearchEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSettingsSearchEntry_lower(_ value: SettingsSearchEntry) -> RustBuffer {
+    return FfiConverterTypeSettingsSearchEntry.lower(value)
+}
+
+
+/**
+ * Treffer der Einstellungssuche.
+ */
+public struct SettingsSearchHit {
+    public var id: String
+    public var section: String
+    public var score: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, section: String, score: UInt32) {
+        self.id = id
+        self.section = section
+        self.score = score
+    }
+}
+
+#if compiler(>=6)
+extension SettingsSearchHit: Sendable {}
+#endif
+
+
+extension SettingsSearchHit: Equatable, Hashable {
+    public static func ==(lhs: SettingsSearchHit, rhs: SettingsSearchHit) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.section != rhs.section {
+            return false
+        }
+        if lhs.score != rhs.score {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(section)
+        hasher.combine(score)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSettingsSearchHit: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SettingsSearchHit {
+        return
+            try SettingsSearchHit(
+                id: FfiConverterString.read(from: &buf), 
+                section: FfiConverterString.read(from: &buf), 
+                score: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SettingsSearchHit, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.section, into: &buf)
+        FfiConverterUInt32.write(value.score, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSettingsSearchHit_lift(_ buf: RustBuffer) throws -> SettingsSearchHit {
+    return try FfiConverterTypeSettingsSearchHit.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSettingsSearchHit_lower(_ value: SettingsSearchHit) -> RustBuffer {
+    return FfiConverterTypeSettingsSearchHit.lower(value)
+}
+
+
+public struct SidebarRowInfo {
+    public var rowId: String
+    public var kind: String
+    public var title: String
+    public var collapseKey: String?
+    public var workspaceId: String?
+    public var page: PageSummary?
+    public var depth: UInt32
+    public var hasKids: Bool
+    public var collapsed: Bool
+    public var section: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(rowId: String, kind: String, title: String, collapseKey: String?, workspaceId: String?, page: PageSummary?, depth: UInt32, hasKids: Bool, collapsed: Bool, section: String) {
+        self.rowId = rowId
+        self.kind = kind
+        self.title = title
+        self.collapseKey = collapseKey
+        self.workspaceId = workspaceId
+        self.page = page
+        self.depth = depth
+        self.hasKids = hasKids
+        self.collapsed = collapsed
+        self.section = section
+    }
+}
+
+#if compiler(>=6)
+extension SidebarRowInfo: Sendable {}
+#endif
+
+
+extension SidebarRowInfo: Equatable, Hashable {
+    public static func ==(lhs: SidebarRowInfo, rhs: SidebarRowInfo) -> Bool {
+        if lhs.rowId != rhs.rowId {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.collapseKey != rhs.collapseKey {
+            return false
+        }
+        if lhs.workspaceId != rhs.workspaceId {
+            return false
+        }
+        if lhs.page != rhs.page {
+            return false
+        }
+        if lhs.depth != rhs.depth {
+            return false
+        }
+        if lhs.hasKids != rhs.hasKids {
+            return false
+        }
+        if lhs.collapsed != rhs.collapsed {
+            return false
+        }
+        if lhs.section != rhs.section {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rowId)
+        hasher.combine(kind)
+        hasher.combine(title)
+        hasher.combine(collapseKey)
+        hasher.combine(workspaceId)
+        hasher.combine(page)
+        hasher.combine(depth)
+        hasher.combine(hasKids)
+        hasher.combine(collapsed)
+        hasher.combine(section)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSidebarRowInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SidebarRowInfo {
+        return
+            try SidebarRowInfo(
+                rowId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                collapseKey: FfiConverterOptionString.read(from: &buf), 
+                workspaceId: FfiConverterOptionString.read(from: &buf), 
+                page: FfiConverterOptionTypePageSummary.read(from: &buf), 
+                depth: FfiConverterUInt32.read(from: &buf), 
+                hasKids: FfiConverterBool.read(from: &buf), 
+                collapsed: FfiConverterBool.read(from: &buf), 
+                section: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SidebarRowInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.rowId, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.collapseKey, into: &buf)
+        FfiConverterOptionString.write(value.workspaceId, into: &buf)
+        FfiConverterOptionTypePageSummary.write(value.page, into: &buf)
+        FfiConverterUInt32.write(value.depth, into: &buf)
+        FfiConverterBool.write(value.hasKids, into: &buf)
+        FfiConverterBool.write(value.collapsed, into: &buf)
+        FfiConverterString.write(value.section, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSidebarRowInfo_lift(_ buf: RustBuffer) throws -> SidebarRowInfo {
+    return try FfiConverterTypeSidebarRowInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSidebarRowInfo_lower(_ value: SidebarRowInfo) -> RustBuffer {
+    return FfiConverterTypeSidebarRowInfo.lower(value)
+}
+
+
+public struct Slot {
+    public var label: String
+    public var hint: String
+    public var n: Int32
+    public var rate: Double?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, hint: String, n: Int32, rate: Double?) {
+        self.label = label
+        self.hint = hint
+        self.n = n
+        self.rate = rate
+    }
+}
+
+#if compiler(>=6)
+extension Slot: Sendable {}
+#endif
+
+
+extension Slot: Equatable, Hashable {
+    public static func ==(lhs: Slot, rhs: Slot) -> Bool {
+        if lhs.label != rhs.label {
+            return false
+        }
+        if lhs.hint != rhs.hint {
+            return false
+        }
+        if lhs.n != rhs.n {
+            return false
+        }
+        if lhs.rate != rhs.rate {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(label)
+        hasher.combine(hint)
+        hasher.combine(n)
+        hasher.combine(rate)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSlot: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Slot {
+        return
+            try Slot(
+                label: FfiConverterString.read(from: &buf), 
+                hint: FfiConverterString.read(from: &buf), 
+                n: FfiConverterInt32.read(from: &buf), 
+                rate: FfiConverterOptionDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Slot, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.hint, into: &buf)
+        FfiConverterInt32.write(value.n, into: &buf)
+        FfiConverterOptionDouble.write(value.rate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSlot_lift(_ buf: RustBuffer) throws -> Slot {
+    return try FfiConverterTypeSlot.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSlot_lower(_ value: Slot) -> RustBuffer {
+    return FfiConverterTypeSlot.lower(value)
+}
+
+
 /**
  * Ergebnis von [`ImpalaCore::storage_check`]; im Normalfall alles 0.
  */
@@ -14535,6 +18680,178 @@ public func FfiConverterTypeSubjectGrades_lift(_ buf: RustBuffer) throws -> Subj
 #endif
 public func FfiConverterTypeSubjectGrades_lower(_ value: SubjectGrades) -> RustBuffer {
     return FfiConverterTypeSubjectGrades.lower(value)
+}
+
+
+public struct SubjectRow {
+    public var subject: String
+    public var now: Double
+    public var before: Double
+    public var delta: Int32
+    public var deck: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(subject: String, now: Double, before: Double, delta: Int32, deck: String) {
+        self.subject = subject
+        self.now = now
+        self.before = before
+        self.delta = delta
+        self.deck = deck
+    }
+}
+
+#if compiler(>=6)
+extension SubjectRow: Sendable {}
+#endif
+
+
+extension SubjectRow: Equatable, Hashable {
+    public static func ==(lhs: SubjectRow, rhs: SubjectRow) -> Bool {
+        if lhs.subject != rhs.subject {
+            return false
+        }
+        if lhs.now != rhs.now {
+            return false
+        }
+        if lhs.before != rhs.before {
+            return false
+        }
+        if lhs.delta != rhs.delta {
+            return false
+        }
+        if lhs.deck != rhs.deck {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(subject)
+        hasher.combine(now)
+        hasher.combine(before)
+        hasher.combine(delta)
+        hasher.combine(deck)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSubjectRow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SubjectRow {
+        return
+            try SubjectRow(
+                subject: FfiConverterString.read(from: &buf), 
+                now: FfiConverterDouble.read(from: &buf), 
+                before: FfiConverterDouble.read(from: &buf), 
+                delta: FfiConverterInt32.read(from: &buf), 
+                deck: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SubjectRow, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.subject, into: &buf)
+        FfiConverterDouble.write(value.now, into: &buf)
+        FfiConverterDouble.write(value.before, into: &buf)
+        FfiConverterInt32.write(value.delta, into: &buf)
+        FfiConverterString.write(value.deck, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubjectRow_lift(_ buf: RustBuffer) throws -> SubjectRow {
+    return try FfiConverterTypeSubjectRow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubjectRow_lower(_ value: SubjectRow) -> RustBuffer {
+    return FfiConverterTypeSubjectRow.lower(value)
+}
+
+
+public struct Subjects {
+    public var rows: [SubjectRow]
+    public var worst: SubjectRow?
+    public var text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(rows: [SubjectRow], worst: SubjectRow?, text: String) {
+        self.rows = rows
+        self.worst = worst
+        self.text = text
+    }
+}
+
+#if compiler(>=6)
+extension Subjects: Sendable {}
+#endif
+
+
+extension Subjects: Equatable, Hashable {
+    public static func ==(lhs: Subjects, rhs: Subjects) -> Bool {
+        if lhs.rows != rhs.rows {
+            return false
+        }
+        if lhs.worst != rhs.worst {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rows)
+        hasher.combine(worst)
+        hasher.combine(text)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSubjects: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Subjects {
+        return
+            try Subjects(
+                rows: FfiConverterSequenceTypeSubjectRow.read(from: &buf), 
+                worst: FfiConverterOptionTypeSubjectRow.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Subjects, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeSubjectRow.write(value.rows, into: &buf)
+        FfiConverterOptionTypeSubjectRow.write(value.worst, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubjects_lift(_ buf: RustBuffer) throws -> Subjects {
+    return try FfiConverterTypeSubjects.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSubjects_lower(_ value: Subjects) -> RustBuffer {
+    return FfiConverterTypeSubjects.lower(value)
 }
 
 
@@ -17178,6 +21495,106 @@ extension HeftShape: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum HomeNudgeInfo {
+    
+    case none
+    case streakAtRisk(streakDays: UInt32
+    )
+    case goalInReach(minutesLeft: Double
+    )
+    case goalReached
+    case todayProgress(minutes: UInt32
+    )
+}
+
+
+#if compiler(>=6)
+extension HomeNudgeInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHomeNudgeInfo: FfiConverterRustBuffer {
+    typealias SwiftType = HomeNudgeInfo
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HomeNudgeInfo {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .streakAtRisk(streakDays: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        case 3: return .goalInReach(minutesLeft: try FfiConverterDouble.read(from: &buf)
+        )
+        
+        case 4: return .goalReached
+        
+        case 5: return .todayProgress(minutes: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HomeNudgeInfo, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .streakAtRisk(streakDays):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt32.write(streakDays, into: &buf)
+            
+        
+        case let .goalInReach(minutesLeft):
+            writeInt(&buf, Int32(3))
+            FfiConverterDouble.write(minutesLeft, into: &buf)
+            
+        
+        case .goalReached:
+            writeInt(&buf, Int32(4))
+        
+        
+        case let .todayProgress(minutes):
+            writeInt(&buf, Int32(5))
+            FfiConverterUInt32.write(minutes, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeNudgeInfo_lift(_ buf: RustBuffer) throws -> HomeNudgeInfo {
+    return try FfiConverterTypeHomeNudgeInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHomeNudgeInfo_lower(_ value: HomeNudgeInfo) -> RustBuffer {
+    return FfiConverterTypeHomeNudgeInfo.lower(value)
+}
+
+
+extension HomeNudgeInfo: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum LeechAction {
     
     /**
@@ -17627,6 +22044,121 @@ public func FfiConverterTypeMdListStyle_lower(_ value: MdListStyle) -> RustBuffe
 
 
 extension MdListStyle: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum MdShortcutType {
+    
+    case h1
+    case h2
+    case h3
+    case bullet
+    case number
+    case todo(checked: Bool
+    )
+    case quote
+    case code
+}
+
+
+#if compiler(>=6)
+extension MdShortcutType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMdShortcutType: FfiConverterRustBuffer {
+    typealias SwiftType = MdShortcutType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MdShortcutType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .h1
+        
+        case 2: return .h2
+        
+        case 3: return .h3
+        
+        case 4: return .bullet
+        
+        case 5: return .number
+        
+        case 6: return .todo(checked: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 7: return .quote
+        
+        case 8: return .code
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MdShortcutType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .h1:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .h2:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .h3:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .bullet:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .number:
+            writeInt(&buf, Int32(5))
+        
+        
+        case let .todo(checked):
+            writeInt(&buf, Int32(6))
+            FfiConverterBool.write(checked, into: &buf)
+            
+        
+        case .quote:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .code:
+            writeInt(&buf, Int32(8))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdShortcutType_lift(_ buf: RustBuffer) throws -> MdShortcutType {
+    return try FfiConverterTypeMdShortcutType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMdShortcutType_lower(_ value: MdShortcutType) -> RustBuffer {
+    return FfiConverterTypeMdShortcutType.lower(value)
+}
+
+
+extension MdShortcutType: Equatable, Hashable {}
 
 
 
@@ -18124,6 +22656,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt32: FfiConverterRustBuffer {
+    typealias SwiftType = Int32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
     typealias SwiftType = UInt64?
 
@@ -18140,6 +22696,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -18460,6 +23040,30 @@ fileprivate struct FfiConverterOptionTypeChatData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeClozeRecall: FfiConverterRustBuffer {
+    typealias SwiftType = ClozeRecall?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeClozeRecall.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeClozeRecall.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeCoreLockHold: FfiConverterRustBuffer {
     typealias SwiftType = CoreLockHold?
 
@@ -18652,6 +23256,30 @@ fileprivate struct FfiConverterOptionTypeHeftRect: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeHomeAnalysis: FfiConverterRustBuffer {
+    typealias SwiftType = HomeAnalysis?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeHomeAnalysis.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeHomeAnalysis.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeHomeArticleInfo: FfiConverterRustBuffer {
     typealias SwiftType = HomeArticleInfo?
 
@@ -18692,6 +23320,30 @@ fileprivate struct FfiConverterOptionTypeLearningSessionInfo: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeLearningSessionInfo.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMdShortcutResult: FfiConverterRustBuffer {
+    typealias SwiftType = MdShortcutResult?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMdShortcutResult.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMdShortcutResult.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -18764,6 +23416,54 @@ fileprivate struct FfiConverterOptionTypePageSummary: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypePageSummary.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeSlot: FfiConverterRustBuffer {
+    typealias SwiftType = Slot?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSlot.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSlot.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeSubjectRow: FfiConverterRustBuffer {
+    typealias SwiftType = SubjectRow?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSubjectRow.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSubjectRow.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -18892,6 +23592,54 @@ fileprivate struct FfiConverterOptionSequenceTypeDbColumn: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionSequenceTypeHourRate: FfiConverterRustBuffer {
+    typealias SwiftType = [HourRate]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceTypeHourRate.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceTypeHourRate.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceTypeMdBlock: FfiConverterRustBuffer {
+    typealias SwiftType = [MdBlock]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceTypeMdBlock.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceTypeMdBlock.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionSequenceTypeDiffRow: FfiConverterRustBuffer {
     typealias SwiftType = [DiffRow]?
 
@@ -18910,6 +23658,56 @@ fileprivate struct FfiConverterOptionSequenceTypeDiffRow: FfiConverterRustBuffer
         case 1: return try FfiConverterSequenceTypeDiffRow.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceInt32: FfiConverterRustBuffer {
+    typealias SwiftType = [Int32]
+
+    public static func write(_ value: [Int32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterInt32.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Int32] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Int32]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterInt32.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt64]
+
+    public static func write(_ value: [UInt64], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt64.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt64] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt64]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt64.read(from: &buf))
+        }
+        return seq
     }
 }
 
@@ -19008,6 +23806,31 @@ fileprivate struct FfiConverterSequenceTypeAiModel: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeAiModel.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeArticleNoteItem: FfiConverterRustBuffer {
+    typealias SwiftType = [ArticleNoteItem]
+
+    public static func write(_ value: [ArticleNoteItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeArticleNoteItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ArticleNoteItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ArticleNoteItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeArticleNoteItem.read(from: &buf))
         }
         return seq
     }
@@ -19266,6 +24089,31 @@ fileprivate struct FfiConverterSequenceTypeDbColumn: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDeckEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [DeckEntry]
+
+    public static func write(_ value: [DeckEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeckEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeckEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeckEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeckEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDeckInfo: FfiConverterRustBuffer {
     typealias SwiftType = [DeckInfo]
 
@@ -19316,6 +24164,31 @@ fileprivate struct FfiConverterSequenceTypeDeckOverview: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDeckRowRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DeckRowRecord]
+
+    public static func write(_ value: [DeckRowRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeckRowRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeckRowRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeckRowRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeckRowRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDriveIntervalOption: FfiConverterRustBuffer {
     typealias SwiftType = [DriveIntervalOption]
 
@@ -19333,6 +24206,56 @@ fileprivate struct FfiConverterSequenceTypeDriveIntervalOption: FfiConverterRust
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDriveIntervalOption.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeExpRow: FfiConverterRustBuffer {
+    typealias SwiftType = [ExpRow]
+
+    public static func write(_ value: [ExpRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExpRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExpRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExpRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExpRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeForecastDayRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [ForecastDayRecord]
+
+    public static func write(_ value: [ForecastDayRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeForecastDayRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ForecastDayRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ForecastDayRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeForecastDayRecord.read(from: &buf))
         }
         return seq
     }
@@ -19366,6 +24289,56 @@ fileprivate struct FfiConverterSequenceTypeGradeInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHardCardRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [HardCardRecord]
+
+    public static func write(_ value: [HardCardRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHardCardRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HardCardRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HardCardRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHardCardRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeHeatmapCellRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [HeatmapCellRecord]
+
+    public static func write(_ value: [HeatmapCellRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHeatmapCellRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HeatmapCellRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HeatmapCellRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHeatmapCellRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHeftFolder: FfiConverterRustBuffer {
     typealias SwiftType = [HeftFolder]
 
@@ -19383,6 +24356,31 @@ fileprivate struct FfiConverterSequenceTypeHeftFolder: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeHeftFolder.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeHeftFolderCount: FfiConverterRustBuffer {
+    typealias SwiftType = [HeftFolderCount]
+
+    public static func write(_ value: [HeftFolderCount], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHeftFolderCount.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HeftFolderCount] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HeftFolderCount]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHeftFolderCount.read(from: &buf))
         }
         return seq
     }
@@ -19491,6 +24489,31 @@ fileprivate struct FfiConverterSequenceTypeHeftPdfPage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHeftShelfCard: FfiConverterRustBuffer {
+    typealias SwiftType = [HeftShelfCard]
+
+    public static func write(_ value: [HeftShelfCard], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHeftShelfCard.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HeftShelfCard] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HeftShelfCard]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHeftShelfCard.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHeftStroke: FfiConverterRustBuffer {
     typealias SwiftType = [HeftStroke]
 
@@ -19541,6 +24564,31 @@ fileprivate struct FfiConverterSequenceTypeHeftText: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHighlightSpan: FfiConverterRustBuffer {
+    typealias SwiftType = [HighlightSpan]
+
+    public static func write(_ value: [HighlightSpan], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHighlightSpan.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HighlightSpan] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HighlightSpan]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHighlightSpan.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHomeArticleInfo: FfiConverterRustBuffer {
     typealias SwiftType = [HomeArticleInfo]
 
@@ -19566,6 +24614,31 @@ fileprivate struct FfiConverterSequenceTypeHomeArticleInfo: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHourRate: FfiConverterRustBuffer {
+    typealias SwiftType = [HourRate]
+
+    public static func write(_ value: [HourRate], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHourRate.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HourRate] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HourRate]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHourRate.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeLearningSessionInfo: FfiConverterRustBuffer {
     typealias SwiftType = [LearningSessionInfo]
 
@@ -19583,6 +24656,56 @@ fileprivate struct FfiConverterSequenceTypeLearningSessionInfo: FfiConverterRust
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLearningSessionInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLibrarySectionInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [LibrarySectionInfo]
+
+    public static func write(_ value: [LibrarySectionInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLibrarySectionInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LibrarySectionInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LibrarySectionInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLibrarySectionInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLibraryTreeRowInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [LibraryTreeRowInfo]
+
+    public static func write(_ value: [LibraryTreeRowInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLibraryTreeRowInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LibraryTreeRowInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LibraryTreeRowInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLibraryTreeRowInfo.read(from: &buf))
         }
         return seq
     }
@@ -19691,6 +24814,131 @@ fileprivate struct FfiConverterSequenceTypePageVersion: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePaletteActionDef: FfiConverterRustBuffer {
+    typealias SwiftType = [PaletteActionDef]
+
+    public static func write(_ value: [PaletteActionDef], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePaletteActionDef.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PaletteActionDef] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PaletteActionDef]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePaletteActionDef.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePalettePageHit: FfiConverterRustBuffer {
+    typealias SwiftType = [PalettePageHit]
+
+    public static func write(_ value: [PalettePageHit], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePalettePageHit.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PalettePageHit] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PalettePageHit]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePalettePageHit.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePlainCard: FfiConverterRustBuffer {
+    typealias SwiftType = [PlainCard]
+
+    public static func write(_ value: [PlainCard], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePlainCard.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PlainCard] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PlainCard]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePlainCard.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeProblemPage: FfiConverterRustBuffer {
+    typealias SwiftType = [ProblemPage]
+
+    public static func write(_ value: [ProblemPage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProblemPage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ProblemPage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ProblemPage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProblemPage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRateRow: FfiConverterRustBuffer {
+    typealias SwiftType = [RateRow]
+
+    public static func write(_ value: [RateRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRateRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RateRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RateRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRateRow.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeRelatedPage: FfiConverterRustBuffer {
     typealias SwiftType = [RelatedPage]
 
@@ -19766,6 +25014,131 @@ fileprivate struct FfiConverterSequenceTypeSemanticHit: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeSeriesDayRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [SeriesDayRecord]
+
+    public static func write(_ value: [SeriesDayRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSeriesDayRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SeriesDayRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SeriesDayRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSeriesDayRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSettingsSearchEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [SettingsSearchEntry]
+
+    public static func write(_ value: [SettingsSearchEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSettingsSearchEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SettingsSearchEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SettingsSearchEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSettingsSearchEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSettingsSearchHit: FfiConverterRustBuffer {
+    typealias SwiftType = [SettingsSearchHit]
+
+    public static func write(_ value: [SettingsSearchHit], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSettingsSearchHit.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SettingsSearchHit] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SettingsSearchHit]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSettingsSearchHit.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSidebarRowInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [SidebarRowInfo]
+
+    public static func write(_ value: [SidebarRowInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSidebarRowInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SidebarRowInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SidebarRowInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSidebarRowInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSlot: FfiConverterRustBuffer {
+    typealias SwiftType = [Slot]
+
+    public static func write(_ value: [Slot], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSlot.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Slot] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Slot]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSlot.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSubjectGrades: FfiConverterRustBuffer {
     typealias SwiftType = [SubjectGrades]
 
@@ -19783,6 +25156,31 @@ fileprivate struct FfiConverterSequenceTypeSubjectGrades: FfiConverterRustBuffer
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeSubjectGrades.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSubjectRow: FfiConverterRustBuffer {
+    typealias SwiftType = [SubjectRow]
+
+    public static func write(_ value: [SubjectRow], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSubjectRow.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SubjectRow] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SubjectRow]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSubjectRow.read(from: &buf))
         }
         return seq
     }
@@ -19966,6 +25364,58 @@ fileprivate struct FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterDictionaryStringUInt32: FfiConverterRustBuffer {
+    public static func write(_ value: [String: UInt32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for (key, value) in value {
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterUInt32.write(value, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String: UInt32] {
+        let len: Int32 = try readInt(&buf)
+        var dict = [String: UInt32]()
+        dict.reserveCapacity(Int(len))
+        for _ in 0..<len {
+            let key = try FfiConverterString.read(from: &buf)
+            let value = try FfiConverterUInt32.read(from: &buf)
+            dict[key] = value
+        }
+        return dict
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterDictionaryStringUInt64: FfiConverterRustBuffer {
+    public static func write(_ value: [String: UInt64], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for (key, value) in value {
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterUInt64.write(value, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String: UInt64] {
+        let len: Int32 = try readInt(&buf)
+        var dict = [String: UInt64]()
+        dict.reserveCapacity(Int(len))
+        for _ in 0..<len {
+            let key = try FfiConverterString.read(from: &buf)
+            let value = try FfiConverterUInt64.read(from: &buf)
+            dict[key] = value
+        }
+        return dict
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterDictionaryStringBool: FfiConverterRustBuffer {
     public static func write(_ value: [String: Bool], into buf: inout [UInt8]) {
         let len = Int32(value.count)
@@ -20025,6 +25475,113 @@ public func blocksToMarkdown(blocks: [MdBlock]) -> String  {
 })
 }
 /**
+ * Zählt Duplikate innerhalb der Karten und gegenüber bestehenden Schlüsseln.
+ */
+public func cardDuplicateCount(cards: [PlainCard], seenKeys: [String]) -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_duplicate_count(
+        FfiConverterSequenceTypePlainCard.lower(cards),
+        FfiConverterSequenceString.lower(seenKeys),$0
+    )
+})
+}
+/**
+ * CSV-Format schreiben (`impala67-karten.csv`).
+ */
+public func cardExportCsv(cards: [PlainCard]) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_export_csv(
+        FfiConverterSequenceTypePlainCard.lower(cards),$0
+    )
+})
+}
+/**
+ * Impala-TXT-Format schreiben (`impala67-karten.txt`).
+ */
+public func cardExportTxt(cards: [PlainCard]) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_export_txt(
+        FfiConverterSequenceTypePlainCard.lower(cards),$0
+    )
+})
+}
+/**
+ * Eindeutiger Kartenschlüssel für Duplikate.
+ */
+public func cardKey(front: String, back: String, deck: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_key(
+        FfiConverterString.lower(front),
+        FfiConverterString.lower(back),
+        FfiConverterString.lower(deck),$0
+    )
+})
+}
+/**
+ * Erkennt das Format automatisch (Impala-TXT vs. Tabelle/Anki) und parst Karten.
+ */
+public func cardParseCardText(text: String, defaultDeck: String) -> ParsedCards  {
+    return try!  FfiConverterTypeParsedCards_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_parse_card_text(
+        FfiConverterString.lower(text),
+        FfiConverterString.lower(defaultDeck),$0
+    )
+})
+}
+/**
+ * Impala-TXT-Dateien einlesen.
+ */
+public func cardParseImpalaTxt(text: String, defaultDeck: String) -> ParsedCards  {
+    return try!  FfiConverterTypeParsedCards_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_parse_impala_txt(
+        FfiConverterString.lower(text),
+        FfiConverterString.lower(defaultDeck),$0
+    )
+})
+}
+/**
+ * Tabellarische Karten (CSV/TSV oder Anki-Text) einlesen.
+ */
+public func cardParseTableCards(text: String, defaultDeck: String) -> ParsedCards  {
+    return try!  FfiConverterTypeParsedCards_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_parse_table_cards(
+        FfiConverterString.lower(text),
+        FfiConverterString.lower(defaultDeck),$0
+    )
+})
+}
+/**
+ * HTML aus Anki-Feldern in Klartext umwandeln.
+ */
+public func cardStripHtml(html: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_card_strip_html(
+        FfiConverterString.lower(html),$0
+    )
+})
+}
+/**
+ * Maskiert alle Lücken mit `＿＿＿` und liefert die Antworten der Reihe nach.
+ * Liefert `None`, wenn der Text keine Cloze-Lücke enthält.
+ */
+public func clozeRecall(front: String) -> ClozeRecall?  {
+    return try!  FfiConverterOptionTypeClozeRecall.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_cloze_recall(
+        FfiConverterString.lower(front),$0
+    )
+})
+}
+public func computeGoal(goalMin: Int32, days: [Double], today: Int32, pace: Double) -> Goal  {
+    return try!  FfiConverterTypeGoal_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_compute_goal(
+        FfiConverterInt32.lower(goalMin),
+        FfiConverterSequenceDouble.lower(days),
+        FfiConverterInt32.lower(today),
+        FfiConverterDouble.lower(pace),$0
+    )
+})
+}
+/**
  * Zweispaltiger Vergleich zweier Fassungen für den Konflikt-Dialog. `None`, wenn der abweichende
  * Mittelteil zu groß ist (dann beide Volltexte nebeneinander zeigen).
  */
@@ -20051,6 +25608,26 @@ public func coreLockHolder() -> CoreLockHold?  {
 public func coreLongLockHolds() -> [CoreLockHold]  {
     return try!  FfiConverterSequenceTypeCoreLockHold.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_core_long_lock_holds($0
+    )
+})
+}
+/**
+ * Kurzname eines Stapels („Mathe::Analysis“ → „Analysis“).
+ */
+public func deckLabel(name: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_deck_label(
+        FfiConverterString.lower(name),$0
+    )
+})
+}
+/**
+ * Elternteil eines Stapels („Mathe::Analysis“ → Some("Mathe"), „Mathe“ → None).
+ */
+public func deckParent(name: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_deck_parent(
+        FfiConverterString.lower(name),$0
     )
 })
 }
@@ -20239,6 +25816,17 @@ public func embeddingSetup(core: ImpalaCore, modelDir: String) -> EmbeddingSetup
 })
 }
 /**
+ * Stapel-Übersicht in hierarchische Tiefenreihenfolge bringen; eingeklappte Äste entfallen.
+ */
+public func flattenDecks(overview: [DeckOverview], collapsed: [String]) -> [DeckEntry]  {
+    return try!  FfiConverterSequenceTypeDeckEntry.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_flatten_decks(
+        FfiConverterSequenceTypeDeckOverview.lower(overview),
+        FfiConverterSequenceString.lower(collapsed),$0
+    )
+})
+}
+/**
  * Speicheranzeige vor dem ersten Abruf.
  */
 public func formatSyncUsage(bytes: Double) -> String  {
@@ -20254,6 +25842,16 @@ public func formatSyncUsage(bytes: Double) -> String  {
 public func generateSyncKey()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeSyncFailure_lift) {
     uniffi_impala_ffi_fn_func_generate_sync_key($0
+    )
+})
+}
+/**
+ * Farb-Stufe einer Note (1..=5).
+ */
+public func gradeTier(grade: Double) -> UInt8  {
+    return try!  FfiConverterUInt8.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_grade_tier(
+        FfiConverterDouble.lower(grade),$0
     )
 })
 }
@@ -20415,6 +26013,84 @@ public func knownSubjects() -> [String]  {
     )
 })
 }
+public func learningTimeCycleGoal(current: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_cycle_goal(
+        FfiConverterUInt32.lower(current),$0
+    )
+})
+}
+public func learningTimeHomeNudge(streak: UInt32, todaySeconds: UInt64, weekSeconds: UInt64, goalMin: UInt32, currentHour: UInt32) -> HomeNudgeInfo  {
+    return try!  FfiConverterTypeHomeNudgeInfo_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_home_nudge(
+        FfiConverterUInt32.lower(streak),
+        FfiConverterUInt64.lower(todaySeconds),
+        FfiConverterUInt64.lower(weekSeconds),
+        FfiConverterUInt32.lower(goalMin),
+        FfiConverterUInt32.lower(currentHour),$0
+    )
+})
+}
+public func learningTimeHomeNudgeText(streak: UInt32, todaySeconds: UInt64, weekSeconds: UInt64, goalMin: UInt32, currentHour: UInt32) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_home_nudge_text(
+        FfiConverterUInt32.lower(streak),
+        FfiConverterUInt64.lower(todaySeconds),
+        FfiConverterUInt64.lower(weekSeconds),
+        FfiConverterUInt32.lower(goalMin),
+        FfiConverterUInt32.lower(currentHour),$0
+    )
+})
+}
+public func learningTimeMergedSeconds(sessions: [LearningSessionInfo]) -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_merged_seconds(
+        FfiConverterSequenceTypeLearningSessionInfo.lower(sessions),$0
+    )
+})
+}
+public func learningTimeNormalizeGoal(stored: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_normalize_goal(
+        FfiConverterUInt32.lower(stored),$0
+    )
+})
+}
+public func learningTimeStreakDays(totals: [String: UInt64], nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_streak_days(
+        FfiConverterDictionaryStringUInt64.lower(totals),
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+public func learningTimeTotalsByDay(sessions: [LearningSessionInfo], offsetMinutes: Int32) -> [String: UInt64]  {
+    return try!  FfiConverterDictionaryStringUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_totals_by_day(
+        FfiConverterSequenceTypeLearningSessionInfo.lower(sessions),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+public func learningTimeWeekData(totals: [String: UInt64], nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32) -> [UInt64]  {
+    return try!  FfiConverterSequenceUInt64.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_week_data(
+        FfiConverterDictionaryStringUInt64.lower(totals),
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(weekOffset),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
+public func learningTimeWeekdayIndex(nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_learning_time_weekday_index(
+        FfiConverterInt64.lower(nowMs),
+        FfiConverterInt32.lower(offsetMinutes),$0
+    )
+})
+}
 /**
  * Stand des lokalen Modells im Verzeichnis `model_dir`.
  */
@@ -20476,6 +26152,55 @@ public func markdownToBlocks(markdown: String) -> [MdBlock]  {
     )
 })
 }
+public func mdContinuationBlock(block: MdBlock, newId: String) -> [MdBlock]?  {
+    return try!  FfiConverterOptionSequenceTypeMdBlock.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_continuation_block(
+        FfiConverterTypeMdBlock_lower(block),
+        FfiConverterString.lower(newId),$0
+    )
+})
+}
+public func mdConvertBlock(block: MdBlock, targetType: String) -> MdBlock  {
+    return try!  FfiConverterTypeMdBlock_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_convert_block(
+        FfiConverterTypeMdBlock_lower(block),
+        FfiConverterString.lower(targetType),$0
+    )
+})
+}
+public func mdIndentBlock(block: MdBlock, delta: Int32) -> MdBlock  {
+    return try!  FfiConverterTypeMdBlock_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_indent_block(
+        FfiConverterTypeMdBlock_lower(block),
+        FfiConverterInt32.lower(delta),$0
+    )
+})
+}
+public func mdListNumbers(blocks: [MdBlock]) -> [String: UInt32]  {
+    return try!  FfiConverterDictionaryStringUInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_list_numbers(
+        FfiConverterSequenceTypeMdBlock.lower(blocks),$0
+    )
+})
+}
+public func mdShortcutType(line: String) -> MdShortcutResult?  {
+    return try!  FfiConverterOptionTypeMdShortcutResult.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_shortcut_type(
+        FfiConverterString.lower(line),$0
+    )
+})
+}
+public func mdWrapMarkers(text: String, startUtf16: UInt32, endUtf16: UInt32, before: String, after: String) -> MdWrapResult  {
+    return try!  FfiConverterTypeMdWrapResult_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_md_wrap_markers(
+        FfiConverterString.lower(text),
+        FfiConverterUInt32.lower(startUtf16),
+        FfiConverterUInt32.lower(endUtf16),
+        FfiConverterString.lower(before),
+        FfiConverterString.lower(after),$0
+    )
+})
+}
 /**
  * Drei-Wege-Abgleich eines Textes (`base` = gemeinsamer Stand): der zusammengeführte Text, oder
  * `None` bei Überlappung.
@@ -20495,6 +26220,26 @@ public func mergeTexts(base: String, mine: String, theirs: String) -> String?  {
 public func overviewSubject() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_overview_subject($0
+    )
+})
+}
+/**
+ * Eigenes Thema für den Tagesartikel wählen.
+ */
+public func pickArticleTopic(topicsRaw: String, historyFirstTopics: [String]) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_pick_article_topic(
+        FfiConverterString.lower(topicsRaw),
+        FfiConverterSequenceString.lower(historyFirstTopics),$0
+    )
+})
+}
+public func resolvedHeftCover(cover: String, title: String, id: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_resolved_heft_cover(
+        FfiConverterString.lower(cover),
+        FfiConverterString.lower(title),
+        FfiConverterString.lower(id),$0
     )
 })
 }
@@ -20523,6 +26268,63 @@ public func scanProcess(img: ScanImage, corners: [Double], mode: String, rotatio
 })
 }
 /**
+ * Filtert Schnell-Aktionen nach `query` (ohne Groß-/Kleinschreibung); liefert die passenden IDs in Eingabereihenfolge.
+ */
+public func searchFilterActions(actions: [PaletteActionDef], query: String) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_search_filter_actions(
+        FfiConverterSequenceTypePaletteActionDef.lower(actions),
+        FfiConverterString.lower(query),$0
+    )
+})
+}
+/**
+ * Zu markierende UTF-16-Bereiche in `text` für `query` und optionale Wortformen `terms`.
+ */
+public func searchHighlightRanges(text: String, query: String, terms: [String]) -> [HighlightSpan]  {
+    return try!  FfiConverterSequenceTypeHighlightSpan.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_search_highlight_ranges(
+        FfiConverterString.lower(text),
+        FfiConverterString.lower(query),
+        FfiConverterSequenceString.lower(terms),$0
+    )
+})
+}
+/**
+ * Kürzt einen Ausschnitt auf 110 Zeichen (`snippet.replace(/\s+/g, " ").trim().slice(0, 110)`).
+ */
+public func searchPreview(snippet: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_search_preview(
+        FfiConverterString.lower(snippet),$0
+    )
+})
+}
+/**
+ * Durchsucht den Standard-Einstellungskatalog (`platform`: `"web"`, `"native"`, oder `None` für alle).
+ */
+public func searchSettingsCatalog(query: String, limit: UInt32, platform: String?) -> [SettingsSearchHit]  {
+    return try!  FfiConverterSequenceTypeSettingsSearchHit.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_search_settings_catalog(
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),
+        FfiConverterOptionString.lower(platform),$0
+    )
+})
+}
+/**
+ * Durchsucht übergebene Einstellungs-Einträge nach `query` wie `searchSettings` der PWA.
+ */
+public func searchSettingsItems(entries: [SettingsSearchEntry], query: String, limit: UInt32) -> [SettingsSearchHit]  {
+    return try!  FfiConverterSequenceTypeSettingsSearchHit.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_search_settings_items(
+        FfiConverterSequenceTypeSettingsSearchEntry.lower(entries),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+/**
  * Wartezeit vor dem n-ten WebSocket-Neuaufbau (ab 1, mit Streuung).
  */
 public func syncReconnectDelayMs(attempt: UInt32) -> UInt64  {
@@ -20539,6 +26341,19 @@ public func syncRetryDelayMs(attempt: UInt32) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_sync_retry_delay_ms(
         FfiConverterUInt32.lower(attempt),$0
+    )
+})
+}
+/**
+ * Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine
+ * leere Lücke an der Schreibmarke. Positionen als UTF-16-Code-Units (Swift / Kotlin).
+ */
+public func wrapCloze(text: String, selectionStart: UInt32, selectionEnd: UInt32) -> ClozeWrap  {
+    return try!  FfiConverterTypeClozeWrap_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_wrap_cloze(
+        FfiConverterString.lower(text),
+        FfiConverterUInt32.lower(selectionStart),
+        FfiConverterUInt32.lower(selectionEnd),$0
     )
 })
 }
@@ -20573,6 +26388,36 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_blocks_to_markdown() != 45823) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_card_duplicate_count() != 52385) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_export_csv() != 51755) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_export_txt() != 20181) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_key() != 32824) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_parse_card_text() != 21086) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_parse_impala_txt() != 12892) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_parse_table_cards() != 51929) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_card_strip_html() != 53707) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_cloze_recall() != 52584) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_compute_goal() != 45819) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_conflict_diff_rows() != 3952) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20580,6 +26425,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_deck_label() != 20186) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_deck_parent() != 44475) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_default_subject() != 39744) {
@@ -20630,10 +26481,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_embedding_setup() != 16401) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_flatten_decks() != 50954) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_format_sync_usage() != 35532) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_generate_sync_key() != 42273) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_grade_tier() != 15175) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_heft_build_pdf() != 18652) {
@@ -20678,6 +26535,33 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_known_subjects() != 19235) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_learning_time_cycle_goal() != 14173) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_home_nudge() != 17005) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_home_nudge_text() != 50608) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_merged_seconds() != 13183) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_normalize_goal() != 18288) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 45686) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 4986) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_week_data() != 27895) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 40126) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20696,10 +26580,34 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_markdown_to_blocks() != 43341) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_md_continuation_block() != 19286) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_md_convert_block() != 26821) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_md_indent_block() != 65217) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_md_list_numbers() != 12994) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_md_shortcut_type() != 19708) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_md_wrap_markers() != 12569) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_merge_texts() != 21845) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_overview_subject() != 28504) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_pick_article_topic() != 28913) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_resolved_heft_cover() != 12440) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_scan_detect() != 8517) {
@@ -20708,10 +26616,28 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_scan_process() != 37929) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_search_filter_actions() != 38398) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_search_highlight_ranges() != 53195) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_search_preview() != 5993) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_search_settings_catalog() != 27008) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_search_settings_items() != 40169) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms() != 27487) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_sync_retry_delay_ms() != 52390) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_wrap_cloze() != 62727) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_ws_ping_interval_ms() != 26635) {
@@ -20849,6 +26775,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_drivetokens_token_expired() != 14649) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards() != 4946) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_add_file() != 41519) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20885,6 +26814,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_archived_pages() != 19295) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_article_pool_ids() != 45343) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_backlinks() != 31340) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20913,6 +26845,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_children_of() != 44896) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_choose_article_notes() != 59499) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_clear_pages() != 2531) {
@@ -20954,6 +26889,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_deck_overview() != 63645) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_deck_tree() != 62951) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_decks() != 11748) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20981,6 +26919,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_dispatch() != 2010) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_duplicate_count() != 9008) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_duplicate_deck() != 23948) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20988,6 +26929,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_empty_page_trash() != 61975) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_existing_card_keys() != 4883) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_export_grades_markdown() != 18059) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_export_json() != 54264) {
@@ -21131,6 +27078,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes() != 61548) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 52076) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_home_article() != 46611) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21149,7 +27099,28 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_learning_sessions() != 60078) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 13464) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json() != 14105) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days() != 23959) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day() != 2938) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_learning_week_data() != 18399) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_library_archive_view() != 22816) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf() != 30483) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_library_notion_view() != 53167) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_load_info() != 7430) {
@@ -21191,6 +27162,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_page_links() != 31208) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_page_path_label() != 56669) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21198,6 +27172,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_palette_chats() != 55124) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_palette_pages() != 50741) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_pattern_data() != 63352) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_recent_pages() != 24241) {
@@ -21282,6 +27265,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_sidebar_tree_rows() != 51321) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_storage_check() != 52100) {

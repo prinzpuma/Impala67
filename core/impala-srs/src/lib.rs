@@ -4,6 +4,7 @@
 //! Der Kartenzustand [`Srs`] hat dieselbe JSON-Form wie `card.srs` im JS (Events `cardReview`,
 //! IndexedDB); unbekannte Zusatzfelder alter Karten bleiben erhalten.
 
+pub mod cloze;
 mod fsrs;
 mod time;
 
@@ -14,7 +15,7 @@ use fsrs::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-pub use time::{MS_PER_DAY, MS_PER_MINUTE, Timestamp};
+pub use time::{MS_PER_DAY, MS_PER_MINUTE, Timestamp, civil_from_days, days_from_civil};
 
 /// Bewertung einer Wiederholung (JS `grade` 1…4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

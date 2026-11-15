@@ -2,8 +2,8 @@
 //! perspektivisch entzerren, Filter, Drehen) – dieselbe Logik wie der Scanner der PWA.
 
 use impala_scan::{
-    GrayImage, Point, Quad, RgbaImage, Rotation, ScanMode, apply_scan_mode_pixels, detect_quad_pixels, detect_sizes, downscale_pixels,
-    full_quad_pixels, rotate_pixels, scan_quality_pixels, to_gray, warp_pixels,
+    GrayImage, Point, Quad, RgbaImage, Rotation, ScanMode, apply_scan_mode_pixels, detect_quad_pixels, detect_sizes,
+    downscale_pixels, full_quad_pixels, rotate_pixels, scan_quality_pixels, to_gray, warp_pixels,
 };
 
 /// Bild (RGBA, 4 Bytes je Pixel) an der Grenze.
@@ -76,7 +76,14 @@ pub fn scan_detect(img: ScanImage) -> Result<ScanDetection, ScanFailure> {
     Ok(ScanDetection {
         corners: corners(&quad),
         full: quad == full_quad_pixels(pix.width, pix.height),
-        check: ScanCheck { soft: q.soft, flat: q.flat, too_dark: q.too_dark, glare: q.glare, sharp: q.sharp, contrast: q.contrast },
+        check: ScanCheck {
+            soft: q.soft,
+            flat: q.flat,
+            too_dark: q.too_dark,
+            glare: q.glare,
+            sharp: q.sharp,
+            contrast: q.contrast,
+        },
     })
 }
 

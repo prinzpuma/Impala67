@@ -488,6 +488,157 @@ export class InkEngine {
 if (Symbol.dispose) InkEngine.prototype[Symbol.dispose] = InkEngine.prototype.free;
 
 /**
+ * Erfassungs-Zustandsmaschine (Tracker) für die PWA.
+ */
+export class LzSessionTracker {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        LzSessionTrackerFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_lzsessiontracker_free(ptr, 0);
+    }
+    /**
+     * @param {string} now_iso
+     * @returns {any}
+     */
+    currentAsSession(now_iso) {
+        const ptr0 = passStringToWasm0(now_iso, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.lzsessiontracker_currentAsSession(this.__wbg_ptr, ptr0, len0);
+        return takeObject(ret);
+    }
+    /**
+     * @returns {string | undefined}
+     */
+    get currentId() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.lzsessiontracker_currentId(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            let v1;
+            if (r0 !== 0) {
+                v1 = getStringFromWasm0(r0, r1);
+                wasm.__wbindgen_export5(r0, r1 * 1, 1);
+            }
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {number} now_ms
+     * @param {string} now_iso
+     * @returns {any}
+     */
+    finishSession(now_ms, now_iso) {
+        const ptr0 = passStringToWasm0(now_iso, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.lzsessiontracker_finishSession(this.__wbg_ptr, now_ms, ptr0, len0);
+        return takeObject(ret);
+    }
+    /**
+     * @returns {boolean}
+     */
+    get hasCurrent() {
+        const ret = wasm.lzsessiontracker_hasCurrent(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @returns {boolean}
+     */
+    get isActive() {
+        const ret = wasm.lzsessiontracker_isActive(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} now_ms
+     * @param {string} now_iso
+     * @param {string} category
+     * @param {string | null | undefined} source_id
+     * @param {string | null | undefined} subject
+     * @param {string | null | undefined} subject_source
+     * @param {Function} uid_fn
+     * @returns {any}
+     */
+    maybeSplitSegment(now_ms, now_iso, category, source_id, subject, subject_source, uid_fn) {
+        try {
+            const ptr0 = passStringToWasm0(now_iso, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(category, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            var ptr2 = isLikeNone(source_id) ? 0 : passStringToWasm0(source_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len2 = WASM_VECTOR_LEN;
+            var ptr3 = isLikeNone(subject) ? 0 : passStringToWasm0(subject, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len3 = WASM_VECTOR_LEN;
+            var ptr4 = isLikeNone(subject_source) ? 0 : passStringToWasm0(subject_source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len4 = WASM_VECTOR_LEN;
+            const ret = wasm.lzsessiontracker_maybeSplitSegment(this.__wbg_ptr, now_ms, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, addBorrowedObject(uid_fn));
+            return takeObject(ret);
+        } finally {
+            heap[stack_pointer++] = undefined;
+        }
+    }
+    constructor() {
+        const ret = wasm.lzsessiontracker_new();
+        this.__wbg_ptr = ret;
+        LzSessionTrackerFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {number} now_ms
+     * @param {string} now_iso
+     * @param {string} category
+     * @param {string | null | undefined} source_id
+     * @param {string | null | undefined} subject
+     * @param {string | null | undefined} subject_source
+     * @param {Function} uid_fn
+     * @returns {any}
+     */
+    openSegment(now_ms, now_iso, category, source_id, subject, subject_source, uid_fn) {
+        try {
+            const ptr0 = passStringToWasm0(now_iso, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(category, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            var ptr2 = isLikeNone(source_id) ? 0 : passStringToWasm0(source_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len2 = WASM_VECTOR_LEN;
+            var ptr3 = isLikeNone(subject) ? 0 : passStringToWasm0(subject, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len3 = WASM_VECTOR_LEN;
+            var ptr4 = isLikeNone(subject_source) ? 0 : passStringToWasm0(subject_source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len4 = WASM_VECTOR_LEN;
+            const ret = wasm.lzsessiontracker_openSegment(this.__wbg_ptr, now_ms, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, addBorrowedObject(uid_fn));
+            return takeObject(ret);
+        } finally {
+            heap[stack_pointer++] = undefined;
+        }
+    }
+    /**
+     * @param {number} now_ms
+     * @param {string} now_iso
+     * @returns {any}
+     */
+    pauseSegment(now_ms, now_iso) {
+        const ptr0 = passStringToWasm0(now_iso, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.lzsessiontracker_pauseSegment(this.__wbg_ptr, now_ms, ptr0, len0);
+        return takeObject(ret);
+    }
+    /**
+     * @returns {number}
+     */
+    get pausedAtMs() {
+        const ret = wasm.lzsessiontracker_pausedAtMs(this.__wbg_ptr);
+        return ret;
+    }
+}
+if (Symbol.dispose) LzSessionTracker.prototype[Symbol.dispose] = LzSessionTracker.prototype.free;
+
+/**
  * Der Zustand der App samt Log-Anbindung (eine Instanz je Tab).
  */
 export class ModelCore {
@@ -521,6 +672,28 @@ export class ModelCore {
         }
     }
     /**
+     * @param {string | null} [extra_name]
+     * @returns {string}
+     */
+    activeDeckNames(extra_name) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(extra_name) ? 0 : passStringToWasm0(extra_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_activeDeckNames(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * @returns {string}
      */
     activePages() {
@@ -529,6 +702,25 @@ export class ModelCore {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             wasm.modelcore_activePages(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    allGrades() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.modelcore_allGrades(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred1_0 = r0;
@@ -934,6 +1126,31 @@ export class ModelCore {
         }
     }
     /**
+     * Berechnet die Wochenziel-Prognose für gegebene Tage und Tempo.
+     * @param {number} goal_min
+     * @param {string} days_json
+     * @param {number} today
+     * @param {number} pace
+     * @returns {any}
+     */
+    computeGoal(goal_min, days_json, today, pace) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(days_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_computeGoal(retptr, this.__wbg_ptr, goal_min, ptr0, len0, today, pace);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Gerettete Alt-Kopien früherer Konflikte (`resolved`: schon quittierte Kopien, JSON-Liste).
      * @param {string} resolved
      * @returns {string}
@@ -1053,6 +1270,63 @@ export class ModelCore {
         }
     }
     /**
+     * @param {string} collapsed_json
+     * @param {number} now
+     * @param {number} day_start
+     * @param {number} day_end
+     * @param {boolean} mix
+     * @param {boolean} overlearn_lock
+     * @returns {string}
+     */
+    deckTree(collapsed_json, now, day_start, day_end, mix, overlearn_lock) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(collapsed_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_deckTree(retptr, this.__wbg_ptr, ptr0, len0, now, day_start, day_end, mix, overlearn_lock);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr2 = r0;
+            var len2 = r1;
+            if (r3) {
+                ptr2 = 0; len2 = 0;
+                throw takeObject(r2);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {string} today_label
+     * @returns {string}
+     */
+    exportGradesMarkdown(today_label) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(today_label, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_exportGradesMarkdown(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * @returns {string}
      */
     favoritePages() {
@@ -1114,6 +1388,35 @@ export class ModelCore {
             return r0 >>> 0;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} folder_id
+     * @returns {number}
+     */
+    gnFolderDirectCount(folder_id) {
+        const ptr0 = passStringToWasm0(folder_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.modelcore_gnFolderDirectCount(this.__wbg_ptr, ptr0, len0);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {string}
+     */
+    gradesBySubject() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.modelcore_gradesBySubject(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
         }
     }
     /**
@@ -1396,6 +1699,34 @@ export class ModelCore {
         return ret === 0 ? undefined : HeftShadow.__wrap(ret);
     }
     /**
+     * Berechnet die Lernanalyse der Startseite:
+     * Liefert `{ goal, subjects, time, forecast, headline, action, actionDeck }`
+     * oder `null`, falls es noch gar keine Lerndaten gibt.
+     * @param {number} now_ms
+     * @param {number} tz_offset_minutes
+     * @param {number} goal_min
+     * @param {string} days_json
+     * @param {number} pace
+     * @returns {any}
+     */
+    homeAnalysis(now_ms, tz_offset_minutes, goal_min, days_json, pace) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(days_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_homeAnalysis(retptr, this.__wbg_ptr, now_ms, tz_offset_minutes, goal_min, ptr0, len0, pace);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Gelesene Bilder übernehmen: `found` aus dem Checkpoint, `recovered` aus dem Log (beide `{ hash: data }`).
      * @param {string} targets
      * @param {string} found
@@ -1506,6 +1837,32 @@ export class ModelCore {
         return ret !== 0;
     }
     /**
+     * Statistik-Kennzahlen (`anki-stats.js` `statsData`).
+     * @param {string | null | undefined} deck
+     * @param {number} now
+     * @param {number} tz_offset_minutes
+     * @param {number | null} [think_ms]
+     * @returns {string}
+     */
+    learningStats(deck, now, tz_offset_minutes, think_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(deck) ? 0 : passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_learningStats(retptr, this.__wbg_ptr, ptr0, len0, now, tz_offset_minutes, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Patch für alte, lokal gespeicherte Zugangsdaten (`impala67.secrets`/`notion.secrets`), sonst `undefined`.
      * @param {string | null} [current]
      * @param {string | null} [older]
@@ -1529,6 +1886,87 @@ export class ModelCore {
             return v3;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} type_filter
+     * @param {string} query
+     * @returns {string}
+     */
+    libraryArchiveTree(type_filter, query) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(type_filter, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            wasm.modelcore_libraryArchiveTree(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred3_0 = r0;
+            deferred3_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {string | null | undefined} folder_id
+     * @param {string} filter
+     * @param {string} query
+     * @returns {string}
+     */
+    libraryGnShelf(folder_id, filter, query) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(folder_id) ? 0 : passStringToWasm0(folder_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(filter, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.modelcore_libraryGnShelf(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred4_0 = r0;
+            deferred4_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
+     * @param {string | null | undefined} smart
+     * @param {string | null | undefined} tag
+     * @param {string} query
+     * @returns {string}
+     */
+    libraryNotionTree(smart, tag, query) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(smart) ? 0 : passStringToWasm0(smart, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(tag) ? 0 : passStringToWasm0(tag, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.modelcore_libraryNotionTree(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred4_0 = r0;
+            deferred4_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
         }
     }
     /**
@@ -1695,6 +2133,39 @@ export class ModelCore {
             wasm.__wbindgen_export5(deferred6_0, deferred6_1, 1);
         }
     }
+    /**
+     * @param {string} local_json
+     * @param {string} now
+     * @returns {string}
+     */
+    mergedChatSessions(local_json, now) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(local_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            wasm.modelcore_mergedChatSessions(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr3 = r0;
+            var len3 = r1;
+            if (r3) {
+                ptr3 = 0; len3 = 0;
+                throw takeObject(r2);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+        }
+    }
     constructor() {
         const ret = wasm.modelcore_new();
         this.__wbg_ptr = ret;
@@ -1795,6 +2266,26 @@ export class ModelCore {
         }
     }
     /**
+     * Berechnet die Lernmuster für den Statistik-Tab:
+     * `{ position, timer, hours, experiments, problems, empty }`.
+     * @returns {any}
+     */
+    patternData() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.modelcore_patternData(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Ein Feld eines Eintrags, das [`ModelCore::records`] auslässt (`content`).
      * @param {string} kind
      * @param {string} id
@@ -1875,6 +2366,37 @@ export class ModelCore {
     replayOrdered() {
         const ret = wasm.modelcore_replayOrdered(this.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * Retention-Kennzahlen nach Wiederholungsabstand (`telemetrie.js` `retentionStatsForReviews`).
+     * @param {string | null} [review_ids_json]
+     * @returns {string}
+     */
+    retentionStats(review_ids_json) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(review_ids_json) ? 0 : passStringToWasm0(review_ids_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_retentionStats(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr2 = r0;
+            var len2 = r1;
+            if (r3) {
+                ptr2 = 0; len2 = 0;
+                throw takeObject(r2);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+        }
     }
     /**
      * @returns {string}
@@ -2023,6 +2545,14 @@ export class ModelCore {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
         }
+    }
+    /**
+     * Denkzeit-Median aus der Telemetrie (`telemetrie.js` `thinkMedian`).
+     * @returns {number}
+     */
+    thinkMedian() {
+        const ret = wasm.modelcore_thinkMedian(this.__wbg_ptr);
+        return ret;
     }
     /**
      * @returns {string}
@@ -2598,6 +3128,409 @@ export function aiToolDefs() {
 }
 
 /**
+ * Zählt Duplikate innerhalb der Karten und gegenüber bestehenden Schlüsseln/Karten.
+ * @param {any} cards
+ * @param {any} existing
+ * @returns {number}
+ */
+export function cardDuplicateCount(cards, existing) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.cardDuplicateCount(retptr, addBorrowedObject(cards), addBorrowedObject(existing));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return r0 >>> 0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * CSV-Format schreiben (`impala67-karten.csv`).
+ * @param {any} cards
+ * @returns {string}
+ */
+export function cardExportCsv(cards) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.cardExportCsv(retptr, addBorrowedObject(cards));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr1 = r0;
+        var len1 = r1;
+        if (r3) {
+            ptr1 = 0; len1 = 0;
+            throw takeObject(r2);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Impala-TXT-Format schreiben (`impala67-karten.txt`).
+ * @param {any} cards
+ * @returns {string}
+ */
+export function cardExportTxt(cards) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.cardExportTxt(retptr, addBorrowedObject(cards));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr1 = r0;
+        var len1 = r1;
+        if (r3) {
+            ptr1 = 0; len1 = 0;
+            throw takeObject(r2);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Eindeutiger Kartenschlüssel für Duplikate.
+ * @param {string} front
+ * @param {string} back
+ * @param {string} deck
+ * @returns {string}
+ */
+export function cardKey(front, back, deck) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(front, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(back, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len2 = WASM_VECTOR_LEN;
+        wasm.cardKey(retptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred4_0 = r0;
+        deferred4_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * Erkennt das Format automatisch (Impala-TXT vs. Tabelle/Anki) und parst Karten.
+ * @param {string} text
+ * @param {string} default_deck
+ * @returns {any}
+ */
+export function cardParseCardText(text, default_deck) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(default_deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.cardParseCardText(ptr0, len0, ptr1, len1);
+    return takeObject(ret);
+}
+
+/**
+ * CSV/TSV-Datei mit Trennzeichen-Erkennung in Zeilen zerlegen.
+ * @param {string} text
+ * @returns {any}
+ */
+export function cardParseCsv(text) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.cardParseCsv(ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Impala-TXT-Dateien einlesen.
+ * @param {string} text
+ * @param {string} default_deck
+ * @returns {any}
+ */
+export function cardParseImpalaTxt(text, default_deck) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(default_deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.cardParseImpalaTxt(ptr0, len0, ptr1, len1);
+    return takeObject(ret);
+}
+
+/**
+ * Tabellarische Karten (CSV/TSV oder Anki-Text) einlesen.
+ * @param {string} text
+ * @param {string} default_deck
+ * @returns {any}
+ */
+export function cardParseTableCards(text, default_deck) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(default_deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.cardParseTableCards(ptr0, len0, ptr1, len1);
+    return takeObject(ret);
+}
+
+/**
+ * HTML aus Anki-Feldern in Klartext/Markdown umwandeln.
+ * @param {string} html
+ * @returns {string}
+ */
+export function cardStripHtml(html) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(html, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.cardStripHtml(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {string} pool_json
+ * @param {string} recent_used_ids_json
+ * @param {string} recent_focuses_json
+ * @param {string} known_subjects_json
+ * @returns {string}
+ */
+export function chooseArticleNotes(pool_json, recent_used_ids_json, recent_focuses_json, known_subjects_json) {
+    let deferred6_0;
+    let deferred6_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(pool_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(recent_used_ids_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(recent_focuses_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(known_subjects_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len3 = WASM_VECTOR_LEN;
+        wasm.chooseArticleNotes(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr5 = r0;
+        var len5 = r1;
+        if (r3) {
+            ptr5 = 0; len5 = 0;
+            throw takeObject(r2);
+        }
+        deferred6_0 = ptr5;
+        deferred6_1 = len5;
+        return getStringFromWasm0(ptr5, len5);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred6_0, deferred6_1, 1);
+    }
+}
+
+/**
+ * Rückseite einer Karte: Lücke `idx` wird markiert, andere bleiben unmaskiert.
+ * @param {string} text
+ * @param {number} idx
+ * @returns {string}
+ */
+export function clozeBack(text, idx) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeBack(retptr, ptr0, len0, idx);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Vorderseite einer Karte: Lücke `idx` wird verdeckt, andere bleiben unmaskiert.
+ * @param {string} text
+ * @param {number} idx
+ * @returns {string}
+ */
+export function clozeFront(text, idx) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeFront(retptr, ptr0, len0, idx);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Wandelt `==Markierung==` in `{{cN::Markierung}}` um; `null`, wenn keine Markierung da ist.
+ * @param {string} line
+ * @returns {string | undefined}
+ */
+export function clozeHighlightsToCloze(line) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(line, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeHighlightsToCloze(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v2;
+        if (r0 !== 0) {
+            v2 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Gefundene Lücken-Nummern aufsteigend ohne Doppelte.
+ * @param {string} text
+ * @returns {Uint32Array}
+ */
+export function clozeIndexes(text) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeIndexes(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v2 = getArrayU32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Maskiert alle Lücken mit `＿＿＿` und liefert `{ question, answers }` oder `null`.
+ * @param {string} front
+ * @returns {any}
+ */
+export function clozeRecall(front) {
+    const ptr0 = passStringToWasm0(front, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.clozeRecall(ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Findet alle Zeilen eines Seiteninhalts, die als Lückentext taugen.
+ * @param {string} content
+ * @returns {string[]}
+ */
+export function clozeSourcesFromContent(content) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeSourcesFromContent(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v2 = getArrayJsValueFromWasm0(r0, r1);
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Entfernt Zeilenpräfixe (`-`, `*`, `#`, `> `, Checkboxen).
+ * @param {string} line
+ * @returns {string}
+ */
+export function clozeStripLinePrefix(line) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(line, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clozeStripLinePrefix(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Markierten Text in `{{cN::…}}` setzen; liefert `{ text, cursor }`.
+ * @param {string} text
+ * @param {number} u16_start
+ * @param {number} u16_end
+ * @returns {any}
+ */
+export function clozeWrap(text, u16_start, u16_end) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.clozeWrap(ptr0, len0, u16_start, u16_end);
+    return takeObject(ret);
+}
+
+/**
  * Kompaktiert das Event-Log und liefert die Indizes der behaltenen Events in Log-Reihenfolge.
  * Die Events bleiben in JS; der Kern fragt nur die Felder ab, die die Regeln lesen.
  * Wirft, wenn ein Event eine Form hat, die nur die JS-Implementierung abdeckt.
@@ -2626,6 +3559,76 @@ export function compactOrder(events, live, since) {
         var v3 = getArrayU32FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export5(r0, r1 * 4, 4);
         return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Berechnet Statistik-Kennzahlen aus übergebenen Karten, Reviews und Telemetrie (`statsData`).
+ * @param {string} cards_json
+ * @param {string} reviews_json
+ * @param {string} telemetry_json
+ * @param {string | null | undefined} deck
+ * @param {number} now_ms
+ * @param {number} tz_offset_minutes
+ * @param {number | null} [think_ms]
+ * @returns {string}
+ */
+export function computeCardStats(cards_json, reviews_json, telemetry_json, deck, now_ms, tz_offset_minutes, think_ms) {
+    let deferred6_0;
+    let deferred6_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(cards_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(reviews_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(telemetry_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len2 = WASM_VECTOR_LEN;
+        var ptr3 = isLikeNone(deck) ? 0 : passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len3 = WASM_VECTOR_LEN;
+        wasm.computeCardStats(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, now_ms, tz_offset_minutes, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr5 = r0;
+        var len5 = r1;
+        if (r3) {
+            ptr5 = 0; len5 = 0;
+            throw takeObject(r2);
+        }
+        deferred6_0 = ptr5;
+        deferred6_1 = len5;
+        return getStringFromWasm0(ptr5, len5);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred6_0, deferred6_1, 1);
+    }
+}
+
+/**
+ * Freie Funktion zur Wochenziel-Berechnung ohne Modellinstanz.
+ * @param {number} goal_min
+ * @param {string} days_json
+ * @param {number} today
+ * @param {number} pace
+ * @returns {any}
+ */
+export function computeGoalStandalone(goal_min, days_json, today, pace) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(days_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.computeGoalStandalone(retptr, goal_min, ptr0, len0, today, pace);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -2731,6 +3734,80 @@ export function deckInTree(deck, root) {
 }
 
 /**
+ * Letzter Namensteil eines Stapels („Mathe::Analysis“ → „Analysis“).
+ * @param {string} name
+ * @returns {string}
+ */
+export function deckLabel(name) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.deckLabel(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Elternteil eines Stapels („Mathe::Analysis“ → "Mathe", "Mathe" → undefined/null).
+ * @param {string} name
+ * @returns {string | undefined}
+ */
+export function deckParent(name) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.deckParent(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v2;
+        if (r0 !== 0) {
+            v2 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * @param {string} title
+ * @param {string} id
+ * @returns {string}
+ */
+export function defaultCover(title, id) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.defaultCover(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Geltender Drive-Modus (`backup` | `sync`) aus `cfSyncKey` und `driveMode` der Einstellungen.
  * @param {string} cf_sync_key
  * @param {string} setting
@@ -2770,6 +3847,29 @@ export function driveModeSelectable(cf_sync_key) {
 }
 
 /**
+ * @param {string} key
+ * @returns {string}
+ */
+export function folderTone(key) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.folderTone(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Speicheranzeige wie der Client sie meldet (für den Zustand vor dem ersten Abruf).
  * @param {number} bytes
  * @param {number | null} [limit]
@@ -2806,6 +3906,38 @@ export function generateSyncKey() {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {number} grade
+ * @returns {number}
+ */
+export function gradeTier(grade) {
+    const ret = wasm.gradeTier(grade);
+    return ret;
+}
+
+/**
+ * @param {string} list_json
+ * @returns {number | undefined}
+ */
+export function gradesWeightedAverage(list_json) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-32);
+        const ptr0 = passStringToWasm0(list_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.gradesWeightedAverage(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r2 = getDataViewMemory0().getFloat64(retptr + 8 * 1, true);
+        var r4 = getDataViewMemory0().getInt32(retptr + 4 * 4, true);
+        var r5 = getDataViewMemory0().getInt32(retptr + 4 * 5, true);
+        if (r5) {
+            throw takeObject(r4);
+        }
+        return r0 === 0 ? undefined : r2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(32);
     }
 }
 
@@ -3513,6 +4645,162 @@ export function inkSegmentLines(strokes) {
 }
 
 /**
+ * Schaltet durch die Vorgaben 120, 300, 480, 720 min.
+ * @param {number} current
+ * @returns {number}
+ */
+export function lzCycleWeekGoal(current) {
+    const ret = wasm.lzCycleWeekGoal(current);
+    return ret >>> 0;
+}
+
+/**
+ * Home-Hinweis als Enum-Objekt `{ kind: "...", ... }`.
+ * @param {number} streak
+ * @param {number} today_seconds
+ * @param {number} week_seconds
+ * @param {number} goal_min
+ * @param {number} current_hour
+ * @returns {any}
+ */
+export function lzHomeNudge(streak, today_seconds, week_seconds, goal_min, current_hour) {
+    const ret = wasm.lzHomeNudge(streak, today_seconds, week_seconds, goal_min, current_hour);
+    return takeObject(ret);
+}
+
+/**
+ * Fertig formulierter deutscher Satz für die Begrüßung auf der Startseite.
+ * @param {number} streak
+ * @param {number} today_seconds
+ * @param {number} week_seconds
+ * @param {number} goal_min
+ * @param {number} current_hour
+ * @returns {string}
+ */
+export function lzHomeNudgeText(streak, today_seconds, week_seconds, goal_min, current_hour) {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.lzHomeNudgeText(retptr, streak, today_seconds, week_seconds, goal_min, current_hour);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * Intervall-Vereinigung: Vereinigt überlappende Zeitabschnitte (Wanduhrzeit).
+ * @param {any} sessions
+ * @returns {number}
+ */
+export function lzMergedSeconds(sessions) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.lzMergedSeconds(retptr, addBorrowedObject(sessions));
+        var r0 = getDataViewMemory0().getFloat64(retptr + 8 * 0, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        return r0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Wochenziel normalisieren (mindestens 30 min, Standard 300).
+ * @param {number} stored
+ * @returns {number}
+ */
+export function lzNormalizeWeekGoal(stored) {
+    const ret = wasm.lzNormalizeWeekGoal(stored);
+    return ret >>> 0;
+}
+
+/**
+ * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+ * @param {any} totals
+ * @param {number} now_ms
+ * @param {number} offset_minutes
+ * @returns {number}
+ */
+export function lzStreakDays(totals, now_ms, offset_minutes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.lzStreakDays(retptr, addBorrowedObject(totals), now_ms, offset_minutes);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return r0 >>> 0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Gruppiert Sitzungen nach Kalendertag (lokal nach Beginn der Sitzung).
+ * @param {any} sessions
+ * @param {any} live
+ * @param {number} offset_minutes
+ * @returns {any}
+ */
+export function lzTotalsByDay(sessions, live, offset_minutes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.lzTotalsByDay(retptr, addBorrowedObject(sessions), addBorrowedObject(live), offset_minutes);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+ * @param {any} totals
+ * @param {number} now_ms
+ * @param {number} week_offset
+ * @param {number} offset_minutes
+ * @returns {any}
+ */
+export function lzWeekData(totals, now_ms, week_offset, offset_minutes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.lzWeekData(retptr, addBorrowedObject(totals), now_ms, week_offset, offset_minutes);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Klartext einer Karte (Bilder/HTML raus, Formeln als „…“).
  * @param {string} md
  * @returns {string}
@@ -3533,6 +4821,54 @@ export function mdCardText(md) {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {any} block
+ * @param {string} new_id
+ * @returns {any}
+ */
+export function mdContinuationBlock(block, new_id) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(new_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.mdContinuationBlock(retptr, addBorrowedObject(block), ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * @param {any} block
+ * @param {string} target_type
+ * @returns {any}
+ */
+export function mdConvertBlock(block, target_type) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(target_type, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.mdConvertBlock(retptr, addBorrowedObject(block), ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
     }
 }
 
@@ -3581,6 +4917,49 @@ export function mdFirstLine(content) {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {any} block
+ * @param {number} delta
+ * @returns {any}
+ */
+export function mdIndentBlock(block, delta) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.mdIndentBlock(retptr, addBorrowedObject(block), delta);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * @param {any} blocks
+ * @returns {any}
+ */
+export function mdListNumbers(blocks) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.mdListNumbers(retptr, addBorrowedObject(blocks));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
     }
 }
 
@@ -3719,6 +5098,17 @@ export function mdSerializeBlock(block) {
 }
 
 /**
+ * @param {string} line
+ * @returns {any}
+ */
+export function mdShortcutType(line) {
+    const ptr0 = passStringToWasm0(line, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.mdShortcutType(ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
  * Erster Fließtext-Absatz, höchstens 180 Zeichen.
  * @param {string} body
  * @returns {string}
@@ -3740,6 +5130,25 @@ export function mdTeaser(body) {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
     }
+}
+
+/**
+ * @param {string} text
+ * @param {number} start_utf16
+ * @param {number} end_utf16
+ * @param {string} before
+ * @param {string} after
+ * @returns {any}
+ */
+export function mdWrapMarkers(text, start_utf16, end_utf16, before, after) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(before, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(after, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.mdWrapMarkers(ptr0, len0, start_utf16, end_utf16, ptr1, len1, ptr2, len2);
+    return takeObject(ret);
 }
 
 /**
@@ -3769,6 +5178,61 @@ export function merge3(base, mine, theirs) {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * @param {string} raw_json
+ * @param {string} now
+ * @returns {string | undefined}
+ */
+export function normalizeChatSession(raw_json, now) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(raw_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.normalizeChatSession(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        let v3;
+        if (r0 !== 0) {
+            v3 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Normalisiert Einstellungstext wie `normalize` in `settings-schema.js`.
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeSettingsText(text) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.normalizeSettingsText(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
     }
 }
 
@@ -3804,6 +5268,37 @@ export function pageHistory(events, id) {
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * @param {string} topics_raw
+ * @param {string} history_first_topics_json
+ * @returns {string | undefined}
+ */
+export function pickArticleTopic(topics_raw, history_first_topics_json) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(topics_raw, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(history_first_topics_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.pickArticleTopic(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        let v3;
+        if (r0 !== 0) {
+            v3 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
     }
 }
 
@@ -3918,6 +5413,169 @@ export function reconnectDelayMs(attempt) {
 }
 
 /**
+ * Filtert und begrenzt Chats (`[{ id, title, messages: [..] }]` als JSON) für das Befehls-Menü; liefert passende Chat-IDs als JSON-Array.
+ * @param {string} chats_json
+ * @param {string} query
+ * @param {boolean} include_messages
+ * @param {number} limit
+ * @returns {string}
+ */
+export function searchChats(chats_json, query, include_messages, limit) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(chats_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.searchChats(retptr, ptr0, len0, ptr1, len1, include_messages, limit);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Filtert Schnell-Aktionen (`[[id, label], …]` als JSON) nach `query`; liefert passende IDs als JSON-Array.
+ * @param {string} actions_json
+ * @param {string} query
+ * @returns {string}
+ */
+export function searchFilterActions(actions_json, query) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(actions_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.searchFilterActions(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Formatiert den Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+ * @param {string | null | undefined} workspace_name
+ * @param {string[]} ancestor_titles
+ * @returns {string}
+ */
+export function searchFormatPagePath(workspace_name, ancestor_titles) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        var ptr0 = isLikeNone(workspace_name) ? 0 : passStringToWasm0(workspace_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArrayJsValueToWasm0(ancestor_titles, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.searchFormatPagePath(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Markierungsbereiche in UTF-16-Code-Units als flache Liste `[start0, end0, start1, end1, …]`.
+ * @param {string} text
+ * @param {string} query
+ * @param {string[]} terms
+ * @returns {Uint32Array}
+ */
+export function searchHighlightRanges(text, query, terms) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArrayJsValueToWasm0(terms, wasm.__wbindgen_export);
+        const len2 = WASM_VECTOR_LEN;
+        wasm.searchHighlightRanges(retptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v4 = getArrayU32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v4;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Vorschau-Ausschnitt (`snippet.replace(/\s+/g, " ").trim().slice(0, 110)`).
+ * @param {string} snippet
+ * @returns {string}
+ */
+export function searchPreview(snippet) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(snippet, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.searchPreview(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Durchsucht den Standard-Einstellungskatalog (`platform`: `"web"`, `"native"`, oder leer für alle).
+ * Liefert `[{ id, section, score }]` als JSON.
+ * @param {string} query
+ * @param {number} limit
+ * @param {string | null} [platform]
+ * @returns {string}
+ */
+export function searchSettingsCatalog(query, limit, platform) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(query, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(platform) ? 0 : passStringToWasm0(platform, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len1 = WASM_VECTOR_LEN;
+        wasm.searchSettingsCatalog(retptr, ptr0, len0, limit, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Ist es Zeit für eine Cloud-Kompaktierung?
  * @param {boolean} connected
  * @param {number | null | undefined} usage_percent
@@ -3929,6 +5587,37 @@ export function reconnectDelayMs(attempt) {
 export function shouldCompactCloud(connected, usage_percent, last_compacted_at_ms, now_ms, bypass_cooldown) {
     const ret = wasm.shouldCompactCloud(connected, !isLikeNone(usage_percent), isLikeNone(usage_percent) ? 0 : usage_percent, last_compacted_at_ms, now_ms, bypass_cooldown);
     return ret !== 0;
+}
+
+/**
+ * @param {string} list_json
+ * @returns {string}
+ */
+export function sortChatSessions(list_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(list_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.sortChatSessions(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr2 = r0;
+        var len2 = r1;
+        if (r3) {
+            ptr2 = 0; len2 = 0;
+            throw takeObject(r2);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
 }
 
 /**
@@ -4247,7 +5936,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4756(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5441(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4293,7 +5982,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4756(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5441(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4385,8 +6074,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 190, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4700);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 197, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5385);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -4413,14 +6102,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4756(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4756(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5441(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5441(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4700(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5385(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4700(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5385(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4452,6 +6141,9 @@ const HeftTransformFinalization = (typeof FinalizationRegistry === 'undefined')
 const InkEngineFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_inkengine_free(ptr, 1));
+const LzSessionTrackerFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_lzsessiontracker_free(ptr, 1));
 const ModelCoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_modelcore_free(ptr, 1));

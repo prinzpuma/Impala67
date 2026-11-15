@@ -377,7 +377,11 @@ fn run<H: HttpClient>(
                         l.on_progress(label, p.fraction());
                     }
                 };
-                let r = if restore { block_on(backup.restore(&mut on_phase)) } else { block_on(backup.sync(&mut on_phase)) };
+                let r = if restore {
+                    block_on(backup.restore(&mut on_phase))
+                } else {
+                    block_on(backup.sync(&mut on_phase))
+                };
                 // Verdichten erst mit dem Checkpoint im Hintergrund (siehe `sync.rs`).
                 settle_remote(&shared);
                 set_progress("");

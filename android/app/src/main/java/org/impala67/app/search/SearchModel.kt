@@ -9,6 +9,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import org.impala67.app.R
 import uniffi.impala_ffi.PageSummary
+import uniffi.impala_ffi.PaletteActionDef
+import uniffi.impala_ffi.searchFilterActions
+import uniffi.impala_ffi.searchHighlightRanges
+import uniffi.impala_ffi.searchPreview
 
 /** Ein Eintrag der Suche: Seite mit Ausschnitt oder Schnell-Aktion (Ids wie in web/search.js). */
 sealed interface SearchRow {
@@ -18,7 +22,7 @@ sealed interface SearchRow {
 
 data class SearchSection(val title: String, val rows: List<SearchRow>)
 
-/** Texte und Aktionen der Suche (wörtlich aus search.js). */
+/** Texte und Aktionen der Suche (wörtlich aus search.js; Filter/Ausschnitt/Hervorhebung im Rust-Kern). */
 object SearchText {
     const val PLACEHOLDER = "Suchen oder Befehl eingeben…"
     const val NOTHING = "Nichts gefunden"
@@ -27,8 +31,8 @@ object SearchText {
     const val ACTIONS = "Aktionen"
     const val ACTION_KIND = "Aktion"
 
-    /** Ausschnitt wie in search.js: Leerraum zusammengezogen, höchstens 110 Zeichen. */
-    fun snippet(raw: String): String = raw.replace(Regex("\\s+"), " ").trim().take(110)
+    /** Ausschnitt wie in search.js über den Rust-Kern (`searchPreview`). */
+    fun snippet(raw: String): String = searchPreview(raw)
 
     /**
      * Schnell-Aktionen. Die Ids löst die Shell aus; „Helles/Dunkles Design“ entfällt, weil die App dem
@@ -45,20 +49,33 @@ object SearchText {
         SearchRow.Action("sync", "Drive-Sync in Einstellungen öffnen", R.drawable.ic_i_cloud),
         SearchRow.Action("settings", "Einstellungen öffnen", R.drawable.ic_i_sliders),
     )
+
+    /** Filtert Schnell-Aktionen über den Rust-Kern (`searchFilterActions`). */
+    fun filteredActions(dueCards: Int, query: String): List<SearchRow.Action> {
+        val all = actions(dueCards)
+        val matchedIds = searchFilterActions(
+            all.map { PaletteActionDef(id = it.id, label = it.label) },
+            query,
+        ).toSet()
+        return all.filter { it.id in matchedIds }
+    }
 }
 
-/** Trefferwörter fett und getönt hervorheben (Groß-/Kleinschreibung egal, wie `mark()` in search.js). */
+/** Trefferwörter fett und getönt hervorheben über die UTF-16-Bereiche des Rust-Kerns (`searchHighlightRanges`). */
 fun highlight(text: String, query: String, color: Color): AnnotatedString {
     val q = query.trim()
     if (q.isEmpty() || text.isEmpty()) return AnnotatedString(text)
+    val spans = searchHighlightRanges(text, q, emptyList())
+    if (spans.isEmpty()) return AnnotatedString(text)
     val style = SpanStyle(fontWeight = FontWeight.SemiBold, background = color)
-    val re = Regex(Regex.escape(q), RegexOption.IGNORE_CASE)
     return buildAnnotatedString {
         var last = 0
-        for (m in re.findAll(text)) {
-            append(text.substring(last, m.range.first))
-            withStyle(style) { append(m.value) }
-            last = m.range.last + 1
+        for (span in spans) {
+            val start = span.start.toInt().coerceIn(last, text.length)
+            val end = span.end.toInt().coerceIn(start, text.length)
+            append(text.substring(last, start))
+            withStyle(style) { append(text.substring(start, end)) }
+            last = end
         }
         append(text.substring(last))
     }

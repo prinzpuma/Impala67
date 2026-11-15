@@ -166,7 +166,7 @@ struct HeftMetaJs {
 /// Der Zustand der App samt Log-Anbindung (eine Instanz je Tab).
 #[wasm_bindgen]
 pub struct ModelCore {
-    m: Model,
+    pub(crate) m: Model,
     search: NoteSearch,
     load: Option<Prefetched>,
 }
@@ -770,6 +770,37 @@ impl ModelCore {
         self.m.state().is_deck_archived(name)
     }
 
+    #[wasm_bindgen(js_name = activeDeckNames)]
+    pub fn active_deck_names(&self, extra_name: Option<String>) -> String {
+        text(&self.m.state().active_deck_names(extra_name.as_deref().filter(|s| !s.is_empty())))
+    }
+
+    #[wasm_bindgen(js_name = deckTree)]
+    pub fn deck_tree(
+        &self,
+        collapsed_json: &str,
+        now: f64,
+        day_start: f64,
+        day_end: f64,
+        mix: bool,
+        overlearn_lock: bool,
+    ) -> Result<String, JsError> {
+        let collapsed_vec: Vec<String> = parse(collapsed_json).unwrap_or_default();
+        let collapsed_set: std::collections::HashSet<String> = collapsed_vec.into_iter().collect();
+        let now_ts = Timestamp(now as i64);
+        let day_start_ts = Timestamp(day_start as i64);
+        let day_end_ts = Timestamp(day_end as i64);
+        let entries = self.m.state().deck_tree(&collapsed_set, |deck| StudyOptions {
+            deck: Some(deck),
+            now: now_ts,
+            day_start: day_start_ts,
+            day_end: day_end_ts,
+            mix,
+            overlearn_lock,
+        });
+        Ok(text(&entries))
+    }
+
     #[wasm_bindgen(js_name = isCardArchived)]
     pub fn is_card_archived(&self, id: &str) -> bool {
         let s = self.m.state();
@@ -828,6 +859,44 @@ impl ModelCore {
             "available": s.available,
         })
         .to_string()
+    }
+
+    /// Statistik-Kennzahlen (`anki-stats.js` `statsData`).
+    #[wasm_bindgen(js_name = learningStats)]
+    pub fn learning_stats(
+        &self,
+        deck: Option<String>,
+        now: f64,
+        tz_offset_minutes: i32,
+        think_ms: Option<f64>,
+    ) -> String {
+        let now_ts = Timestamp::from_millis(now as i64);
+        let options = impala_model::stats::StatsOptions {
+            deck: deck.as_deref().filter(|d| !d.is_empty()),
+            now: now_ts,
+            tz_offset_minutes: tz_offset_minutes as i64,
+            think_ms: think_ms.map(|ms| ms as i64),
+        };
+        let stats = self.m.state().learning_stats(&options);
+        text(&stats)
+    }
+
+    /// Denkzeit-Median aus der Telemetrie (`telemetrie.js` `thinkMedian`).
+    #[wasm_bindgen(js_name = thinkMedian)]
+    pub fn think_median(&self) -> f64 {
+        self.m.state().think_median() as f64
+    }
+
+    /// Retention-Kennzahlen nach Wiederholungsabstand (`telemetrie.js` `retentionStatsForReviews`).
+    #[wasm_bindgen(js_name = retentionStats)]
+    pub fn retention_stats(&self, review_ids_json: Option<String>) -> Result<String, JsError> {
+        let ids: Option<Vec<String>> = match review_ids_json {
+            Some(s) if !s.is_empty() => Some(strings(parse(&s)?)),
+            _ => None,
+        };
+        let ids_ref: Option<Vec<&str>> = ids.as_ref().map(|v| v.iter().map(String::as_str).collect());
+        let stats = self.m.state().retention_stats(ids_ref.as_deref());
+        Ok(text(&stats))
     }
 
     /// Seitensuche: `[{ id, score, terms, snippet }]`.
@@ -950,6 +1019,18 @@ pub fn deck_in_tree_js(deck: &str, root: &str) -> bool {
     deck_in_tree(deck, root)
 }
 
+/// Letzter Namensteil eines Stapels („Mathe::Analysis“ → „Analysis“).
+#[wasm_bindgen(js_name = deckLabel)]
+pub fn deck_label_js(name: &str) -> String {
+    impala_model::tree::deck_label(name).to_owned()
+}
+
+/// Elternteil eines Stapels („Mathe::Analysis“ → "Mathe", "Mathe" → undefined/null).
+#[wasm_bindgen(js_name = deckParent)]
+pub fn deck_parent_js(name: &str) -> Option<String> {
+    impala_model::tree::deck_parent(name).map(str::to_owned)
+}
+
 /// Seitenverlauf aus dem Log (`[{ t, title, content }]`).
 #[wasm_bindgen(js_name = pageHistory)]
 pub fn page_history_js(events: &str, id: &str) -> Result<String, JsError> {
@@ -1016,4 +1097,132 @@ pub fn conflict_diff_rows(left: &str, right: &str) -> String {
         })
         .collect();
     Value::Array(rows).to_string()
+}
+
+/// Berechnet Statistik-Kennzahlen aus übergebenen Karten, Reviews und Telemetrie (`statsData`).
+#[wasm_bindgen(js_name = computeCardStats)]
+pub fn compute_card_stats_js(
+    cards_json: &str,
+    reviews_json: &str,
+    telemetry_json: &str,
+    deck: Option<String>,
+    now_ms: f64,
+    tz_offset_minutes: i32,
+    think_ms: Option<f64>,
+) -> Result<String, JsError> {
+    let cards: Vec<impala_model::Card> =
+        objects(parse(cards_json)?).into_iter().map(impala_model::Card::from_object).collect();
+    let reviews: Vec<impala_model::Review> =
+        objects(parse(reviews_json)?).into_iter().map(impala_model::Review::from_object).collect();
+    let telemetry: Vec<impala_model::Telemetry> =
+        objects(parse(telemetry_json)?).into_iter().map(impala_model::Telemetry::from_object).collect();
+    let now = Timestamp::from_millis(now_ms as i64);
+    let options = impala_model::stats::StatsOptions {
+        deck: deck.as_deref().filter(|d| !d.is_empty()),
+        now,
+        tz_offset_minutes: tz_offset_minutes as i64,
+        think_ms: think_ms.map(|ms| ms as i64),
+    };
+    let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
+    Ok(text(&stats))
+}
+
+#[wasm_bindgen]
+impl ModelCore {
+    #[wasm_bindgen(js_name = libraryNotionTree)]
+    pub fn library_notion_tree(&self, smart: Option<String>, tag: Option<String>, query: &str) -> String {
+        text(&impala_model::library::notion_tree(self.m.state(), smart.as_deref(), tag.as_deref(), query))
+    }
+
+    #[wasm_bindgen(js_name = libraryArchiveTree)]
+    pub fn library_archive_tree(&self, type_filter: &str, query: &str) -> String {
+        text(&impala_model::library::archive_tree(self.m.state(), type_filter, query))
+    }
+
+    #[wasm_bindgen(js_name = libraryGnShelf)]
+    pub fn library_gn_shelf(&self, folder_id: Option<String>, filter: &str, query: &str) -> String {
+        text(&impala_model::library::gn_shelf(self.m.state(), folder_id.as_deref(), filter, query))
+    }
+
+    #[wasm_bindgen(js_name = gnFolderDirectCount)]
+    pub fn gn_folder_direct_count_js(&self, folder_id: &str) -> u32 {
+        impala_model::library::gn_folder_direct_count(self.m.state(), folder_id) as u32
+    }
+}
+
+#[wasm_bindgen(js_name = defaultCover)]
+pub fn default_cover_js(title: &str, id: &str) -> String {
+    impala_model::library::default_cover(title, id).to_owned()
+}
+
+#[wasm_bindgen(js_name = folderTone)]
+pub fn folder_tone_js(key: &str) -> String {
+    impala_model::library::folder_tone(key).to_owned()
+}
+
+#[wasm_bindgen]
+impl ModelCore {
+    #[wasm_bindgen(js_name = allGrades)]
+    pub fn all_grades_js(&self) -> String {
+        text(&impala_model::kleinteile::all_grades(self.m.state()))
+    }
+
+    #[wasm_bindgen(js_name = gradesBySubject)]
+    pub fn grades_by_subject_js(&self) -> String {
+        text(&impala_model::kleinteile::grades_by_subject(self.m.state()))
+    }
+
+    #[wasm_bindgen(js_name = exportGradesMarkdown)]
+    pub fn export_grades_markdown_js(&self, today_label: &str) -> String {
+        impala_model::kleinteile::export_grades_markdown(self.m.state(), today_label)
+    }
+
+    #[wasm_bindgen(js_name = mergedChatSessions)]
+    pub fn merged_chat_sessions_js(&self, local_json: &str, now: &str) -> Result<String, JsError> {
+        let local: Vec<Value> = parse(local_json)?;
+        Ok(text(&impala_model::kleinteile::merged_chat_sessions(self.m.state(), &local, now)))
+    }
+}
+
+#[wasm_bindgen(js_name = gradeTier)]
+pub fn grade_tier_js(grade: f64) -> u8 {
+    impala_model::kleinteile::grade_tier(grade)
+}
+
+#[wasm_bindgen(js_name = gradesWeightedAverage)]
+pub fn grades_weighted_average_js(list_json: &str) -> Result<Option<f64>, JsError> {
+    let list: Vec<impala_model::kleinteile::GradeInfo> = parse(list_json)?;
+    Ok(impala_model::kleinteile::weighted_average(&list))
+}
+
+#[wasm_bindgen(js_name = pickArticleTopic)]
+pub fn pick_article_topic_js(topics_raw: &str, history_first_topics_json: &str) -> Result<Option<String>, JsError> {
+    let hist: Vec<String> = parse(history_first_topics_json)?;
+    Ok(impala_model::kleinteile::pick_article_topic(topics_raw, &hist))
+}
+
+#[wasm_bindgen(js_name = chooseArticleNotes)]
+pub fn choose_article_notes_js(
+    pool_json: &str,
+    recent_used_ids_json: &str,
+    recent_focuses_json: &str,
+    known_subjects_json: &str,
+) -> Result<String, JsError> {
+    let pool: Vec<impala_model::kleinteile::ArticlePoolItem> = parse(pool_json)?;
+    let used: Vec<String> = parse(recent_used_ids_json)?;
+    let focuses: Vec<String> = parse(recent_focuses_json)?;
+    let known: Vec<String> = parse(known_subjects_json)?;
+    Ok(text(&impala_model::kleinteile::choose_article_notes(&pool, &used, &focuses, &known)))
+}
+
+#[wasm_bindgen(js_name = normalizeChatSession)]
+pub fn normalize_chat_session_js(raw_json: &str, now: &str) -> Result<Option<String>, JsError> {
+    let raw: Value = parse(raw_json)?;
+    Ok(impala_model::kleinteile::normalize_chat_value(&raw, now).map(|v| text(&v)))
+}
+
+#[wasm_bindgen(js_name = sortChatSessions)]
+pub fn sort_chat_sessions_js(list_json: &str) -> Result<String, JsError> {
+    let list: Vec<Value> = parse(list_json)?;
+    Ok(text(&impala_model::kleinteile::sort_chat_values(list)))
 }

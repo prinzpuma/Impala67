@@ -1,7 +1,6 @@
 package org.impala67.app.study.transfer
 
 import android.database.sqlite.SQLiteDatabase
-import androidx.core.text.HtmlCompat
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -146,8 +145,5 @@ object Apkg {
     }
 
     /** HTML der Anki-Felder als Klartext (Zeilenumbrüche bleiben); Bilder laden dabei nicht. */
-    private fun stripHtml(s: String): String {
-        val html = s.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n").replace(Regex("</div>\\s*<div>", RegexOption.IGNORE_CASE), "\n")
-        return HtmlCompat.fromHtml(html.replace("\n", "<br>"), HtmlCompat.FROM_HTML_MODE_LEGACY).toString().replace(Regex("[￼]"), "").trim()
-    }
+    private fun stripHtml(s: String): String = uniffi.impala_ffi.cardStripHtml(s)
 }

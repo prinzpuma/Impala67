@@ -253,7 +253,11 @@ impl DriveStore for MockStore {
         Ok(out)
     }
     async fn known_ids(&self, ids: &[String]) -> Result<Vec<String>, StoreError> {
-        Ok(ids.iter().filter(|id| self.events.iter().any(|e| e.get("id").and_then(Value::as_str) == Some(id.as_str()))).cloned().collect())
+        Ok(ids
+            .iter()
+            .filter(|id| self.events.iter().any(|e| e.get("id").and_then(Value::as_str) == Some(id.as_str())))
+            .cloned()
+            .collect())
     }
     async fn export_snapshot(&self, redact: bool, _at: &str) -> Result<String, StoreError> {
         let events: Vec<Value> = self
@@ -382,7 +386,11 @@ fn flows_match_js() {
         let (result, error): (Value, Option<String>) = match s(&case["op"]) {
             "sync" => {
                 let mut statuses = Vec::new();
-                match block_on(backup.sync(&mut |p| if !p.is_tick() { statuses.push(p.label()) })) {
+                match block_on(backup.sync(&mut |p| {
+                    if !p.is_tick() {
+                        statuses.push(p.label())
+                    }
+                })) {
                     Ok(r) => {
                         statuses.push(r.label().to_owned());
                         let v = json!({"imported": r.imported, "uploaded": r.uploaded, "conflicts": r.conflicts.len(),

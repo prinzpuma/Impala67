@@ -60,7 +60,9 @@ class DevicePrefs(private val context: Context) {
     val breakReminder: Flow<Boolean> = boolFlow(BREAK_REMINDER, false)
 
     /** Wochenziel in Minuten (lernzeit.js `weekGoalMinutes`), mindestens 30, sonst 300. */
-    val weekGoalMinutes: Flow<Int> = store.data.map { (it[WEEK_GOAL] ?: 300).coerceAtLeast(30) }
+    val weekGoalMinutes: Flow<Int> = store.data.map {
+        uniffi.impala_ffi.learningTimeNormalizeGoal((it[WEEK_GOAL] ?: 300).coerceAtLeast(0).toUInt()).toInt()
+    }
 
     /**
      * Schlüssel des aktiven Cloudflare-Syncs (PWA: `LS_KEY` in sync-cloudflare.js). Leer = getrennt;
@@ -144,8 +146,8 @@ class DevicePrefs(private val context: Context) {
     suspend fun cycleWeekGoal(): Int {
         var next = 0
         store.edit {
-            val now = (it[WEEK_GOAL] ?: 300).coerceAtLeast(30)
-            next = GOAL_PRESETS[(GOAL_PRESETS.indexOf(now) + 1) % GOAL_PRESETS.size]
+            val now = (it[WEEK_GOAL] ?: 300).coerceAtLeast(0).toUInt()
+            next = uniffi.impala_ffi.learningTimeCycleGoal(now).toInt()
             it[WEEK_GOAL] = next
         }
         return next

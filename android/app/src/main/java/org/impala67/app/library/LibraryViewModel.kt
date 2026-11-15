@@ -21,7 +21,6 @@ import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
 import org.json.JSONObject
 import uniffi.impala_ffi.HeftFolder
-import uniffi.impala_ffi.ImpalaCore
 import uniffi.impala_ffi.PageKind
 import uniffi.impala_ffi.PageSummary
 import uniffi.impala_ffi.WorkspaceInfo
@@ -35,6 +34,7 @@ enum class LibraryMode(val label: String, @DrawableRes val icon: Int) {
 data class TreeRow(val page: PageSummary, val depth: Int, val hasKids: Boolean, val collapsed: Boolean)
 data class TreeSectionData(val workspace: WorkspaceInfo, val rows: List<TreeRow>)
 data class NotionLoaded(val all: Int, val fav: Int, val pdf: Int, val tpl: Int, val sections: List<TreeSectionData>)
+data class ArchiveLoaded(val all: Int, val page: Int, val heft: Int, val shown: List<PageSummary>)
 
 sealed interface ShelfEntry {
     val key: String
@@ -52,7 +52,8 @@ class LibraryViewModel(val store: ImpalaStore) : ViewModel() {
     val query: StateFlow<String> = _query
     private val _smartFilter = MutableStateFlow("all")
     val smartFilter: StateFlow<String> = _smartFilter
-    var archiveFilter by mutableStateOf("all")
+    private val _archiveFilter = MutableStateFlow("all")
+    val archiveFilter: StateFlow<String> = _archiveFilter
     private val _folder = MutableStateFlow<String?>(null)
     val folder: StateFlow<String?> = _folder
 
@@ -63,17 +64,34 @@ class LibraryViewModel(val store: ImpalaStore) : ViewModel() {
     }
 
     val notionData: StateFlow<NotionLoaded?> = combine(_smartFilter, _query) { f, q -> f to q }.flatMapLatest { (smart, q) ->
-        store.query(Touches.any(Touches.pagesMeta, Touches.ui)) { core -> buildNotion(core, smart, q) }
+        store.query(Touches.any(Touches.pagesMeta, Touches.ui)) { core ->
+            val v = core.libraryNotionView(smart, q)
+            val sections = v.sections.map { sec ->
+                TreeSectionData(sec.workspace, sec.rows.map { r -> TreeRow(r.page, r.depth.toInt(), r.hasKids, r.collapsed) })
+            }
+            NotionLoaded(v.allCount.toInt(), v.favCount.toInt(), v.pdfCount.toInt(), v.tplCount.toInt(), sections)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val shelf: StateFlow<ShelfLoaded?> = combine(_folder, _query) { id, q -> id to q }.flatMapLatest { (id, q) ->
-        store.query({ c -> Touches.pagesMeta(c) || c.heftFolders }) { core -> buildShelf(core, id, q) }
+        store.query({ c -> Touches.pagesMeta(c) || c.heftFolders }) { core ->
+            val s = core.libraryHeftShelf(id, "all", q)
+            val entries = s.folders.map { ShelfEntry.Folder(it.folder, it.count.toInt()) } +
+                s.shown.map { ShelfEntry.Heft(it.page, it.pagesCount.toInt()) }
+            ShelfLoaded(s.crumbs, entries, entries.size, core.heftFolders(null))
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val archived: StateFlow<List<PageSummary>?> = store.query(Touches.pagesMeta) { it.archivedPages() }
+    val archived: StateFlow<ArchiveLoaded?> = combine(_archiveFilter, _query) { f, q -> f to q }.flatMapLatest { (f, q) ->
+        store.query(Touches.pagesMeta) { core ->
+            val v = core.libraryArchiveView(f, q)
+            ArchiveLoaded(v.allCount.toInt(), v.pageCount.toInt(), v.heftCount.toInt(), v.shown)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun setQuery(q: String) { _query.value = q }
     fun setSmartFilter(f: String) { _smartFilter.value = f }
+    fun setArchiveFilter(f: String) { _archiveFilter.value = f }
     fun openFolder(id: String?) { _folder.value = id }
     fun toggleTreeOpen(row: TreeRow) = launch { store.write { it.setTreeOpen(row.page.id, row.collapsed) } }
 
@@ -115,48 +133,4 @@ class LibraryViewModel(val store: ImpalaStore) : ViewModel() {
         var initialMode = LibraryMode.NOTION
         val COVER_PRESETS = listOf("sunset" to (0xFFFF9A4D to 0xFFFF5F6D), "ocean" to (0xFF2B5876 to 0xFF4E4376), "forest" to (0xFF134E5E to 0xFF71B280), "grape" to (0xFF6A11CB to 0xFF2575FC), "mono" to (0xFF3A3A3A to 0xFF101010))
     }
-}
-
-fun libMatches(p: PageSummary, query: String): Boolean {
-    val q = query.trim().lowercase()
-    return q.isEmpty() || p.title.lowercase().contains(q) || p.tags.any { it.lowercase().contains(q) }
-}
-
-private fun buildNotion(core: ImpalaCore, smart: String, query: String): NotionLoaded {
-    val all = core.recentPages(UInt.MAX_VALUE)
-    val open = core.treeOpen()
-    val byParent = HashMap<String?, MutableList<PageSummary>>()
-    for (entry in core.pageChildrenIndex()) {
-        val key = entry.parentId ?: "ws:${entry.workspaceId}"
-        byParent.getOrPut(key) { mutableListOf() }.addAll(entry.pages)
-    }
-    val memo = HashMap<String, Boolean>()
-    fun ownMatch(p: PageSummary) = when (smart) {
-        "fav" -> p.favorite; "pdf" -> p.pdfId != null; "tpl" -> p.isTemplate; else -> true
-    } && libMatches(p, query)
-    fun visible(p: PageSummary): Boolean = memo.getOrPut(p.id) { ownMatch(p) || byParent[p.id].orEmpty().any(::visible) }
-    fun branch(list: List<PageSummary>, depth: Int, rows: MutableList<TreeRow>) {
-        for (p in list) if (visible(p)) {
-            val kids = if (depth < 8) byParent[p.id].orEmpty().filter(::visible) else emptyList()
-            val collapsed = kids.isNotEmpty() && open[p.id] != true
-            rows += TreeRow(p, depth, kids.isNotEmpty(), collapsed)
-            if (!collapsed) branch(kids, depth + 1, rows)
-        }
-    }
-    val sections = core.workspaces().mapNotNull { ws ->
-        val rows = mutableListOf<TreeRow>()
-        branch(byParent["ws:${ws.id}"].orEmpty(), 0, rows)
-        if (rows.isEmpty()) null else TreeSectionData(ws, rows)
-    }
-    return NotionLoaded(all.size, all.count { it.favorite }, all.count { it.pdfId != null }, all.count { it.isTemplate }, sections)
-}
-
-private fun buildShelf(core: ImpalaCore, folderId: String?, query: String): ShelfLoaded {
-    val searching = query.trim().isNotEmpty()
-    val folders = if (searching) emptyList() else core.heftFolders(folderId)
-    val raw = if (searching) core.recentPages(UInt.MAX_VALUE).filter { it.kind == PageKind.HEFT } else core.heftInFolder(folderId)
-    val hefte = raw.filter { libMatches(it, query) }
-    val entries = folders.map { ShelfEntry.Folder(it, core.heftFolders(it.id).size + core.heftInFolder(it.id).size) } +
-        hefte.map { ShelfEntry.Heft(it, core.heftPageIds(it.id).size) }
-    return ShelfLoaded(folderId?.let { core.heftFolderPath(it) }.orEmpty(), entries, raw.size + folders.size, core.heftFolders(null))
 }

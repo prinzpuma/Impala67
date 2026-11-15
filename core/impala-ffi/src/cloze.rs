@@ -1,130 +1,43 @@
 //! Lückentext-Karten (Cloze) wie in der PWA (`web/extras.js`): `{{c1::Antwort::Hinweis}}`; je
 //! Lücken-Nummer eine eigene Karte. Aus `==Markierungen==` einer Seite werden Lücken.
 
+use impala_srs::cloze;
 use serde_json::json;
 
 use crate::{CoreError, ImpalaCore, Inner};
 
-/// Eine Lücke `{{cN::Antwort(::Hinweis)?}}` mit Byte-Bereich im Text.
-struct Gap<'a> {
-    start: usize,
-    end: usize,
-    n: u32,
-    answer: &'a str,
-    hint: Option<&'a str>,
+/// Ergebnis von [`wrap_cloze`]: geänderter Text und Schreibmarkenposition (UTF-16-Offset).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ClozeWrap {
+    pub text: String,
+    pub cursor: u32,
 }
 
-/// Wie `/\{\{c(\d+)::([\s\S]*?)(?:::([^{}]*?))?\}\}/g`.
-fn gaps(text: &str) -> Vec<Gap<'_>> {
-    let mut out = Vec::new();
-    let mut from = 0;
-    while let Some(rel) = text[from..].find("{{c") {
-        let start = from + rel;
-        if let Some(gap) = gap_at(text, start) {
-            from = gap.end;
-            out.push(gap);
-        } else {
-            from = start + 1;
-        }
-    }
-    out
+/// Frage (mit „＿＿＿“ maskiert) und Roh-Antworten für die Tageskarten-Vorschau (Recall).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ClozeRecall {
+    pub question: String,
+    pub answers: Vec<String>,
 }
 
-fn gap_at(text: &str, start: usize) -> Option<Gap<'_>> {
-    let rest = &text[start + 3..];
-    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
-    let n: u32 = rest[..digits].parse().ok()?;
-    let body_start = start + 3 + digits;
-    if !text[body_start..].starts_with("::") {
-        return None;
-    }
-    let body_start = body_start + 2;
-    // Kürzeste Antwort, nach der `::Hinweis}}` oder `}}` folgt.
-    for (k, _) in text[body_start..].char_indices() {
-        let at = body_start + k;
-        let tail = &text[at..];
-        if let Some(h) = tail.strip_prefix("::") {
-            let len = h.find(['{', '}']).unwrap_or(h.len());
-            if h[len..].starts_with("}}") {
-                let hint = &h[..len];
-                return Some(Gap { start, end: at + 2 + len + 2, n, answer: &text[body_start..at], hint: Some(hint) });
-            }
-        }
-        if tail.starts_with("}}") {
-            return Some(Gap { start, end: at + 2, n, answer: &text[body_start..at], hint: None });
-        }
-    }
-    None
+/// Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine
+/// leere Lücke an der Schreibmarke. Positionen als UTF-16-Code-Units (Swift / Kotlin).
+#[uniffi::export]
+pub fn wrap_cloze(text: String, selection_start: u32, selection_end: u32) -> ClozeWrap {
+    let res = cloze::wrap_cloze(&text, selection_start, selection_end);
+    ClozeWrap { text: res.text, cursor: res.cursor }
 }
 
-fn replace_gaps(text: &str, f: impl Fn(&Gap) -> String) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut last = 0;
-    for g in gaps(text) {
-        out.push_str(&text[last..g.start]);
-        out.push_str(&f(&g));
-        last = g.end;
-    }
-    out.push_str(&text[last..]);
-    out
-}
-
-/// Lücken-Nummern, aufsteigend und ohne Doppelte.
-fn indexes(text: &str) -> Vec<u32> {
-    let mut v: Vec<u32> = gaps(text).iter().map(|g| g.n).collect();
-    v.sort_unstable();
-    v.dedup();
-    v
-}
-
-fn front(text: &str, idx: u32) -> String {
-    replace_gaps(text, |g| {
-        if g.n != idx {
-            return g.answer.to_owned();
-        }
-        match g.hint.filter(|h| !h.is_empty()) {
-            Some(h) => format!("**[…{h}…]**"),
-            None => "**[…]**".to_owned(),
-        }
-    })
-}
-
-fn back(text: &str, idx: u32) -> String {
-    replace_gaps(text, |g| if g.n == idx { format!("**=={}==**", g.answer) } else { g.answer.to_owned() })
-}
-
-/// `==Markierung==` → `{{cN::Markierung}}`; `None`, wenn die Zeile keine hat.
-fn highlights_to_cloze(line: &str) -> Option<String> {
-    let mut out = String::new();
-    let mut rest = line;
-    let mut i = 0;
-    while let Some(a) = rest.find("==") {
-        let after = &rest[a + 2..];
-        let len = after.find(['=', '\n']).unwrap_or(after.len());
-        if len > 0 && after[len..].starts_with("==") {
-            i += 1;
-            out.push_str(&rest[..a]);
-            out.push_str(&format!("{{{{c{i}::{}}}}}", &after[..len]));
-            rest = &after[len + 2..];
-        } else {
-            out.push_str(&rest[..a + 1]);
-            rest = &rest[a + 1..];
-        }
-    }
-    out.push_str(rest);
-    (i > 0).then_some(out)
-}
-
-/// Zeilenanfang ohne Listen-/Zitat-/Überschriftzeichen und Checkbox (`^[\s>#*-]*(\[[ x]\]\s*)?`).
-fn strip_line_prefix(line: &str) -> &str {
-    let s = line.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '>' | '#' | '*' | '-'));
-    let s = s.strip_prefix("[ ]").or_else(|| s.strip_prefix("[x]")).map_or(s, str::trim_start);
-    s.trim()
+/// Maskiert alle Lücken mit `＿＿＿` und liefert die Antworten der Reihe nach.
+/// Liefert `None`, wenn der Text keine Cloze-Lücke enthält.
+#[uniffi::export]
+pub fn cloze_recall(front: String) -> Option<ClozeRecall> {
+    cloze::cloze_recall(&front).map(|r| ClozeRecall { question: r.question, answers: r.answers })
 }
 
 impl Inner {
     fn create_cloze(&mut self, text: &str, deck: Option<&str>, page_id: Option<&str>) -> Result<u32, CoreError> {
-        let idxs = indexes(text);
+        let idxs = cloze::indexes(text);
         if let Some(d) = deck {
             self.ensure_deck(d)?;
         }
@@ -133,8 +46,13 @@ impl Inner {
             self.dispatch(
                 "cardCreate",
                 json!({
-                    "id": id, "front": front(text, i), "back": back(text, i), "pageId": page_id, "deck": deck,
-                    "type": "cloze", "cloze": { "src": text, "index": i },
+                    "id": id,
+                    "front": cloze::front(text, i),
+                    "back": cloze::back(text, i),
+                    "pageId": page_id,
+                    "deck": deck,
+                    "type": "cloze",
+                    "cloze": { "src": text, "index": i },
                 }),
             )?;
         }
@@ -167,20 +85,9 @@ impl ImpalaCore {
         let deck = deck.filter(|d| !d.trim().is_empty());
         let mut inner = self.lock();
         let content = inner.model.state().pages.get(&page_id).map(|p| p.content().to_owned()).unwrap_or_default();
+        let sources = cloze::cloze_sources_from_content(&content);
         let mut n = 0;
-        for line in content.split('\n') {
-            let plain = strip_line_prefix(line);
-            if plain.is_empty() {
-                continue;
-            }
-            let src = if gaps(plain).is_empty() {
-                match highlights_to_cloze(plain) {
-                    Some(src) => src,
-                    None => continue,
-                }
-            } else {
-                plain.to_owned()
-            };
+        for src in sources {
             if !inner.has_cloze_card(&src) {
                 n += inner.create_cloze(&src, deck.as_deref(), Some(&page_id))?;
             }
@@ -194,17 +101,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn luecken_wie_die_pwa() {
-        let t = "{{c1::Paris::Stadt}} ist die Hauptstadt von {{c2::Frankreich}}.";
-        assert_eq!(indexes(t), [1, 2]);
-        assert_eq!(front(t, 1), "**[…Stadt…]** ist die Hauptstadt von Frankreich.");
-        assert_eq!(back(t, 2), "Paris ist die Hauptstadt von **==Frankreich==**.");
-        assert_eq!(highlights_to_cloze("a ==b== c ==d=="), Some("a {{c1::b}} c {{c2::d}}".into()));
-        assert_eq!(highlights_to_cloze("a == b"), None);
-        assert_eq!(strip_line_prefix("  - [x] Text "), "Text");
-    }
-
-    #[test]
     fn karten_aus_markierungen() {
         let core = ImpalaCore::open_in_memory().unwrap();
         let p = core.create_page("Geo".into(), "- ==Paris== ist schön\nnichts\n".into(), None, None).unwrap();
@@ -213,5 +109,17 @@ mod tests {
         let cards = core.cards_in_deck("Erdkunde".into());
         assert_eq!(cards[0].front, "**[…]** ist schön");
         assert_eq!(core.create_cloze_cards("{{c1::a}} {{c2::b}}".into(), None, None).unwrap(), 2);
+    }
+
+    #[test]
+    fn ffi_wrap_und_recall() {
+        let w = wrap_cloze("Paris ist die Hauptstadt".into(), 0, 5);
+        assert_eq!(w.text, "{{c1::Paris}} ist die Hauptstadt");
+        assert_eq!(w.cursor, 13);
+
+        let r = cloze_recall("{{c1::Paris}} ist die Hauptstadt von {{c2::Frankreich}}.".into()).unwrap();
+        assert_eq!(r.question, "＿＿＿ ist die Hauptstadt von ＿＿＿.");
+        assert_eq!(r.answers, ["Paris", "Frankreich"]);
+        assert!(cloze_recall("Keine Lücke".into()).is_none());
     }
 }

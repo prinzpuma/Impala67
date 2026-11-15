@@ -14,3 +14,10 @@ export const serializeBlock = (b) => CORE.mdSerializeBlock(b);
 export const mimeFromName = (name) => CORE.mdMimeFromName(String(name || ""));
 // Klartext eines Blocks (z. B. Vorderseite einer Karte aus einem Block).
 export const plainTextOf = (b) => CORE.mdPlainText(b);
+
+export const shortcutType = (line) => CORE.mdShortcutType(String(line || ""));
+export const convertBlock = (block, targetType) => CORE.mdConvertBlock(block, targetType);
+export const continuationBlock = (block, newId) => CORE.mdContinuationBlock(block, newId);
+export const indentBlock = (block, delta) => CORE.mdIndentBlock(block, delta);
+export const listNumbers = (blocks) => CORE.mdListNumbers(blocks);
+export const wrapMarkers = (text, start, end, before, after) => CORE.mdWrapMarkers(String(text || ""), start, end, before, after);

@@ -202,6 +202,20 @@ impl State {
         self.cards.values().filter(|c| !c.is_trashed() && !self.is_card_archived(c)).collect()
     }
 
+    /// Aktive Karten als PlainCard für Export oder Übertrag.
+    pub fn active_plain_cards(&self) -> Vec<crate::card_transfer::PlainCard> {
+        self.active_cards().into_iter().map(Card::to_plain).collect()
+    }
+
+    /// Bestehende Kartenschlüssel für Duplikaterkennung (ohne Papierkorb).
+    pub fn existing_card_keys(&self) -> HashSet<String> {
+        self.cards
+            .values()
+            .filter(|c| !c.is_trashed())
+            .map(|c| crate::card_transfer::card_key(c.front(), c.back(), c.deck_name()))
+            .collect()
+    }
+
     pub fn archived_cards(&self) -> Vec<&Card> {
         newest_first(self.cards.values().filter(|c| !c.is_trashed() && c.is_archived()).collect(), |c| {
             str_field(c, "archivedAt")

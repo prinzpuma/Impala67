@@ -115,40 +115,28 @@ extension MdBlock {
 
     /// In einen anderen Textblock umwandeln; Text, Einzug und Farben bleiben.
     func converted(to type: BlockType) -> MdBlock {
-        let t = text
-        var language = ""
-        if case .code(let l, _) = kind { language = l }
-        var b = self
-        b.kind = switch type {
-        case .text: .paragraph(text: t)
-        case .h1: .heading(level: .h1, text: t)
-        case .h2: .heading(level: .h2, text: t)
-        case .h3: .heading(level: .h3, text: t)
-        case .bullet: .listItem(style: .bullet, indent: indent, text: t)
-        case .number: .listItem(style: .number, indent: indent, text: t)
-        case .todo: .listItem(style: .todo(checked: false), indent: indent, text: t)
-        case .quote: .quote(text: t)
-        case .code: .code(language: language, text: t)
+        let target = switch type {
+        case .text: "text"
+        case .h1: "h1"
+        case .h2: "h2"
+        case .h3: "h3"
+        case .bullet: "bullet"
+        case .number: "number"
+        case .todo: "todo"
+        case .quote: "quote"
+        case .code: "code"
         }
-        return b
+        return mdConvertBlock(block: self, targetType: target)
     }
 
     /// Der Block, der beim Enter hinter diesem entsteht: Listen und Zitate setzen sich fort, sonst Absatz.
     func continuation() -> MdBlock {
-        switch kind {
-        case .listItem(let style, let indent, _):
-            if case .todo = style { return .make(.listItem(style: .todo(checked: false), indent: indent, text: "")) }
-            return .make(.listItem(style: style, indent: indent, text: ""))
-        case .quote: return .make(.quote(text: ""))
-        default: return .paragraph()
-        }
+        let newId = String(UUID().uuidString.lowercased().prefix(8))
+        return mdContinuationBlock(block: self, newId: newId)?.last ?? .paragraph()
     }
 
     func indented(_ delta: Int) -> MdBlock {
-        guard case .listItem(let style, let indent, let t) = kind else { return self }
-        var b = self
-        b.kind = .listItem(style: style, indent: UInt32(min(max(Int(indent) + delta, 0), 6)), text: t)
-        return b
+        mdIndentBlock(block: self, delta: Int32(delta))
     }
 
     func toggledTodo() -> MdBlock {
@@ -252,37 +240,22 @@ extension Array where Element == MdBlock {
 }
 
 func listNumbers(_ blocks: [MdBlock]) -> [String: Int] {
-    var out: [String: Int] = [:]
-    var counters = Array(repeating: 0, count: 8)
-    for b in blocks {
-        guard case .listItem(let style, let indent, _) = b.kind else {
-            counters = Array(repeating: 0, count: 8)
-            continue
-        }
-        let i = min(Int(indent), 7)
-        for d in (i + 1)..<8 { counters[d] = 0 }
-        if case .number = style {
-            counters[i] += 1
-            out[b.id] = counters[i]
-        } else {
-            counters[i] = 0
-        }
-    }
-    return out
+    mdListNumbers(blocks: blocks).mapValues { Int($0) }
 }
 
 /// Blocktyp für ein Markdown-Kürzel am Blockanfang (TRANSFORMS in web/editor.js); `prefix` ist der Text
 /// bis zum Caret, nur das volle Kürzel zählt.
 func shortcutType(_ prefix: String) -> BlockType? {
-    switch prefix {
-    case "# ": .h1
-    case "## ": .h2
-    case "### ": .h3
-    case "- ", "* ", "+ ": .bullet
-    case "1. ", "1) ": .number
-    case "[] ", "[ ] ": .todo
-    case "> ": .quote
-    default: nil
+    guard let res = mdShortcutType(line: prefix), res.rest.isEmpty else { return nil }
+    return switch res.shortcutType {
+    case .h1: .h1
+    case .h2: .h2
+    case .h3: .h3
+    case .bullet: .bullet
+    case .number: .number
+    case .todo: .todo
+    case .quote: .quote
+    case .code: nil
     }
 }
 

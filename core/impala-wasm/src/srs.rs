@@ -53,3 +53,55 @@ pub fn retrievability(card: &JsValue, now_ms: f64) -> Option<f64> {
     let now = now_or(now_ms);
     read(card, now).ok()?.retrievability_at(now)
 }
+
+/// Gefundene Lücken-Nummern aufsteigend ohne Doppelte.
+#[wasm_bindgen(js_name = clozeIndexes)]
+pub fn cloze_indexes(text: &str) -> Vec<u32> {
+    impala_srs::cloze::indexes(text)
+}
+
+/// Vorderseite einer Karte: Lücke `idx` wird verdeckt, andere bleiben unmaskiert.
+#[wasm_bindgen(js_name = clozeFront)]
+pub fn cloze_front(text: &str, idx: u32) -> String {
+    impala_srs::cloze::front(text, idx)
+}
+
+/// Rückseite einer Karte: Lücke `idx` wird markiert, andere bleiben unmaskiert.
+#[wasm_bindgen(js_name = clozeBack)]
+pub fn cloze_back(text: &str, idx: u32) -> String {
+    impala_srs::cloze::back(text, idx)
+}
+
+/// Markierten Text in `{{cN::…}}` setzen; liefert `{ text, cursor }`.
+#[wasm_bindgen(js_name = clozeWrap)]
+pub fn cloze_wrap(text: &str, u16_start: u32, u16_end: u32) -> JsValue {
+    let wrap = impala_srs::cloze::wrap_cloze(text, u16_start, u16_end);
+    to_js(&serde_json::to_value(&wrap).unwrap_or(Value::Null))
+}
+
+/// Maskiert alle Lücken mit `＿＿＿` und liefert `{ question, answers }` oder `null`.
+#[wasm_bindgen(js_name = clozeRecall)]
+pub fn cloze_recall(front: &str) -> JsValue {
+    match impala_srs::cloze::cloze_recall(front) {
+        Some(recall) => to_js(&serde_json::to_value(&recall).unwrap_or(Value::Null)),
+        None => JsValue::NULL,
+    }
+}
+
+/// Wandelt `==Markierung==` in `{{cN::Markierung}}` um; `null`, wenn keine Markierung da ist.
+#[wasm_bindgen(js_name = clozeHighlightsToCloze)]
+pub fn highlights_to_cloze(line: &str) -> Option<String> {
+    impala_srs::cloze::highlights_to_cloze(line)
+}
+
+/// Entfernt Zeilenpräfixe (`-`, `*`, `#`, `> `, Checkboxen).
+#[wasm_bindgen(js_name = clozeStripLinePrefix)]
+pub fn strip_line_prefix(line: &str) -> String {
+    impala_srs::cloze::strip_line_prefix(line).to_string()
+}
+
+/// Findet alle Zeilen eines Seiteninhalts, die als Lückentext taugen.
+#[wasm_bindgen(js_name = clozeSourcesFromContent)]
+pub fn cloze_sources_from_content(content: &str) -> Vec<String> {
+    impala_srs::cloze::cloze_sources_from_content(content)
+}

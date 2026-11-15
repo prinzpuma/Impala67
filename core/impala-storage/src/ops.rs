@@ -107,7 +107,12 @@ pub trait StorageExt: Storage {
     /// entscheidet `impala_sync::compact_with`; mit `blobs` (aktueller Heft-Zustand bekannt) fallen
     /// auch Bilder weg, die kein Heft mehr zeigt. Das Event mit der höchsten `seq` bleibt immer
     /// (Wasserstand für Upload-Cursor und Checkpoint). Setzt die Kompaktierungs-Untergrenze.
-    fn compact(&mut self, min_drop: usize, now: &str, blobs: Option<&impala_sync::BlobKeep>) -> Result<Compacted, Error> {
+    fn compact(
+        &mut self,
+        min_drop: usize,
+        now: &str,
+        blobs: Option<&impala_sync::BlobKeep>,
+    ) -> Result<Compacted, Error> {
         let events = self.all_events()?;
         let Some(keep) = compaction::keep_indices(&events, blobs) else { return Ok(Compacted::default()) };
         if events.len() - keep.len() < min_drop {

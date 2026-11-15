@@ -1205,7 +1205,10 @@ fn validate_op(op: &Value) -> Option<&'static str> {
             }
         }
         "page.patch" => {
-            if has_text(op, &["title"]) && has_text(op, &["search"]) && (has_field(op, "replace") || has_field(op, "content")) {
+            if has_text(op, &["title"])
+                && has_text(op, &["search"])
+                && (has_field(op, "replace") || has_field(op, "content"))
+            {
                 return None;
             }
             "braucht title, search (exakter Text, der schon in der Seite steht) und replace (neuer Text)"
@@ -1233,7 +1236,9 @@ fn validate_op(op: &Value) -> Option<&'static str> {
                     r#"cards fehlt – die Karten selbst gehören in den Aufruf: "cards": [{"front": "Frage", "back": "Antwort"}, …] (limit gibt es bei card.create nicht)"#,
                 ),
                 None if !has_field(op, "back") => Some("back fehlt"),
-                Some(cards) if cards.is_empty() => Some(r#"cards ist leer – mindestens eine Karte {"front": …, "back": …} angeben"#),
+                Some(cards) if cards.is_empty() => {
+                    Some(r#"cards ist leer – mindestens eine Karte {"front": …, "back": …} angeben"#)
+                }
                 Some(cards) if !cards.iter().all(|c| has_text(c, &["front"]) && has_field(c, "back")) => {
                     Some("jede Karte in cards braucht front und back")
                 }

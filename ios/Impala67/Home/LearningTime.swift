@@ -1,76 +1,45 @@
 import SwiftUI
 
 /// Auswertung der Lernzeit wie web/lernzeit.js (`mergedSeconds`, `totalsByDay`, `weekData`, `streakDays`)
-/// und `LearningTime.kt`: Überlappende Abschnitte zweier Geräte zählen nur einmal (Wanduhr-Zeit).
-/// Kandidat für den Rust-Kern, sobald die PWA die Auswertung ebenfalls dorthin verlagert.
+/// über den Rust-Kern (`study_records.rs`, `learning_time.rs`).
 struct LearningTime {
     /// Sekunden je Kalendertag (lokal, Schlüssel `JJJJ-MM-TT`), nach Beginn der Sitzung.
     private let totals: [String: Int]
     private let calendar: Calendar
+    private let offsetMinutes: Int32
 
     init(_ sessions: [LearningSessionInfo], calendar: Calendar = .monday) {
         self.calendar = calendar
-        var groups: [String: [LearningSessionInfo]] = [:]
-        for s in sessions where s.durationSeconds > 0 {
-            guard let start = ISODate.parse(s.startedAt) else { continue }
-            groups[Self.key(start, calendar), default: []].append(s)
-        }
-        totals = groups.mapValues(Self.mergedSeconds)
+        self.offsetMinutes = Int32(TimeZone.current.secondsFromGMT() / 60)
+        let rawTotals = learningTimeTotalsByDay(sessions: sessions, offsetMinutes: offsetMinutes)
+        self.totals = rawTotals.mapValues { Int($0) }
     }
 
     func seconds(_ day: Date) -> Int { totals[Self.key(day, calendar)] ?? 0 }
 
     /// Die 7 Tage der laufenden Woche (Mo–So).
     func week(_ today: Date = .now) -> [Int] {
-        guard let monday = calendar.dateInterval(of: .weekOfYear, for: today)?.start else { return Array(repeating: 0, count: 7) }
-        return (0..<7).map { seconds(calendar.date(byAdding: .day, value: $0, to: monday) ?? monday) }
+        let ms = Int64(today.timeIntervalSince1970 * 1000)
+        let raw = learningTimeWeekData(totals: totals.mapValues { UInt64($0) }, nowMs: ms, weekOffset: 0, offsetMinutes: offsetMinutes)
+        return raw.map { Int($0) }
     }
 
     /// Aufeinanderfolgende Tage mit ≥ 5 Minuten; ein noch leerer heutiger Tag bricht die Serie nicht.
     func streakDays(_ today: Date = .now) -> Int {
-        var streak = 0
-        for i in 0..<365 {
-            let day = calendar.date(byAdding: .day, value: -i, to: today) ?? today
-            if seconds(day) >= 5 * 60 { streak += 1 } else if i == 0 { continue } else { break }
-        }
-        return streak
+        let ms = Int64(today.timeIntervalSince1970 * 1000)
+        return Int(learningTimeStreakDays(totals: totals.mapValues { UInt64($0) }, nowMs: ms, offsetMinutes: offsetMinutes))
     }
 
     /// Montag als 0, Sonntag als 6.
     static func weekdayIndex(_ date: Date = .now) -> Int {
-        (Calendar.current.component(.weekday, from: date) + 5) % 7
+        let ms = Int64(date.timeIntervalSince1970 * 1000)
+        let offset = Int32(TimeZone.current.secondsFromGMT() / 60)
+        return Int(learningTimeWeekdayIndex(nowMs: ms, offsetMinutes: offset))
     }
 
     private static func key(_ date: Date, _ calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
-    }
-
-    private static func mergedSeconds(_ sessions: [LearningSessionInfo]) -> Int {
-        var intervals: [(Date, Date)] = []
-        for s in sessions {
-            if !s.segments.isEmpty {
-                for seg in s.segments {
-                    if let a = ISODate.parse(seg.startedAt), let b = ISODate.parse(seg.endedAt), b >= a { intervals.append((a, b)) }
-                }
-            } else if let a = ISODate.parse(s.startedAt) {
-                let b = ISODate.parse(s.endedAt) ?? a.addingTimeInterval(Double(s.durationSeconds))
-                intervals.append((a, max(a, b)))
-            }
-        }
-        intervals.sort { $0.0 < $1.0 }
-        var total: TimeInterval = 0
-        var cur: (Date, Date)?
-        for (a, b) in intervals {
-            if let c = cur, a <= c.1 {
-                cur = (c.0, max(c.1, b))
-            } else {
-                if let c = cur { total += c.1.timeIntervalSince(c.0) }
-                cur = (a, b)
-            }
-        }
-        if let c = cur { total += c.1.timeIntervalSince(c.0) }
-        return Int(total.rounded())
     }
 }
 
@@ -111,11 +80,12 @@ enum WeekGoal {
     static let key = "weekGoalMinutes"
     static let presets = [120, 300, 480, 720]
 
-    static func normalized(_ stored: Int) -> Int { stored >= 30 ? stored : 300 }
+    static func normalized(_ stored: Int) -> Int {
+        Int(learningTimeNormalizeGoal(stored: UInt32(max(0, stored))))
+    }
 
     static func next(after current: Int) -> Int {
-        let i = presets.firstIndex(of: current) ?? -1
-        return presets[(i + 1) % presets.count]
+        Int(learningTimeCycleGoal(current: UInt32(max(0, current))))
     }
 }
 

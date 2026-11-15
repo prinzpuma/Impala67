@@ -5,7 +5,6 @@ import { U } from "./util.js";
 import { DB } from "./db.js";
 import { BUS } from "./event-bus.js";
 import { TABS } from "./tabs.js";
-import { COLLAPSE } from "./collapse.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { icon, lead, pageIcon } from "./icons.js";
@@ -18,20 +17,13 @@ const hydrateCovers = (root) => BUS.emit("ui:hydrate-covers", root);
 
 // ---------- GoodNotes Documents: Cover-Presets + Notebook-Regal ----------
 export const COVER_PRESETS = ["sunset", "ocean", "forest", "grape", "mono"];
-const FOLDER_TONES = ["sky", "mint", "lilac", "sand", "rose", "slate"];
 
 export function defaultCover(pg) {
-	const s = (pg.title || "") + (pg.id || "");
-	let h = 0;
-	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-	return COVER_PRESETS[h % COVER_PRESETS.length];
+	return CORE.defaultCover(String(pg?.title || ""), String(pg?.id || ""));
 }
 
 export function folderTone(key) {
-	const s = String(key || "");
-	let h = 0;
-	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-	return FOLDER_TONES[h % FOLDER_TONES.length];
+	return CORE.folderTone(String(key || ""));
 }
 
 // Jedes Heft bekommt ein eigenes Cover: die gewählte Farbe gibt die Farbfamilie vor, die Heft-ID
@@ -94,20 +86,16 @@ export function libCardHtml(pg) {
 }
 
 // Eigenständiger GoodNotes-Ordner: kein Workspace, keine Notion-Seite.
-function gnOrder(item) {
-	return typeof item.gnOrder === "number" ? item.gnOrder
-		: (typeof item.order === "number" ? item.order : Date.parse(item.created || "") || 0);
-}
-function gnFolderHtml(folder) {
-	const direct = Object.values(S.gnFolders || {}).filter((f) => f.parentId === folder.id).length +
-		STATE.activePages().filter((p) => p.kind === "heft" && p.gnFolderId === folder.id).length;
+function gnFolderHtml(folder, directCount, orderVal) {
+	const direct = typeof directCount === "number" ? directCount : STATE.gnFolderDirectCount(folder.id);
+	const ord = typeof orderVal === "number" ? orderVal : Number(folder.order || 0);
 	const tone = folderTone(folder.id || folder.title);
 	return '<div class="lib-folder gn-folder tone-' + tone + '" draggable="true" data-gnfolder="' + U.esc(folder.id) +
-		'" data-gnitem="f:' + U.esc(folder.id) + '" data-gnorder="' + gnOrder(folder) + '">' +
+		'" data-gnitem="f:' + U.esc(folder.id) + '" data-gnorder="' + ord + '">' +
 		'<span class="lib-folder-visual" aria-hidden="true"><span class="lib-folder-tab"></span><span class="lib-folder-body"></span></span>' +
 		'<span class="lib-folder-name">' + U.esc(folder.title) + "</span>" +
 		'<span class="lib-folder-count">' + direct + (direct === 1 ? " Objekt" : " Objekte") + "</span>" +
-		'<button class="gn-folder-more" data-gnfoldermenu="' + U.esc(folder.id) + '" title="Ordneroptionen" aria-label="Ordneroptionen">•••</button></div>'; 
+		'<button class="gn-folder-more" data-gnfoldermenu="' + U.esc(folder.id) + '" title="Ordneroptionen" aria-label="Ordneroptionen">•••</button></div>';
 }
 
 // GoodNotes-artiger Neu-Dialog: eine Aktion, danach klarer Typ statt permanenter
@@ -254,69 +242,41 @@ export function renderLibrary(main) {
 	renderNotionTree(main);
 }
 
-// Gemeinsamer Seitenbaum für Bibliothek (Notion) und Archiv: pages sind die Geschwister einer Ebene,
-// kidsOf liefert die Unterseiten, visible entscheidet über Filter/Suche, rowMeta/rowActions liefern
-// Text und Buttons der Zeile.
-function treeRowsHtml(pages, depth, kidsOf, visible, rowMeta, rowActions) {
-	return pages.filter(visible).map((pg) => {
-		const kids = kidsOf(pg).filter(visible);
-		// Ein-/Ausklappen teilt sich denselben Zustand wie die Sidebar (S.treeOpen) —
-		// dieselbe Seite, dieselbe Klapp-Info, nur eine andere Ansicht.
-		const collapsed = kids.length > 0 && COLLAPSE.isCollapsed(pg.id);
-		const caret = kids.length
-			? '<button class="notion-tree-caret' + (collapsed ? "" : " open") + '" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">' + icon("chevron-right") + "</button>"
+function renderTreeRowsFromCore(rows, rowMeta, rowActions) {
+	return rows.map((r) => {
+		const pg = S.pages[r.id];
+		if (!pg) return "";
+		const caret = r.hasKids
+			? '<button class="notion-tree-caret' + (r.collapsed ? "" : " open") + '" data-collapse="' + pg.id + '" title="Ein-/Ausklappen">' + icon("chevron-right") + "</button>"
 			: '<span class="notion-tree-caret spacer"></span>';
-		const row = '<div class="notion-tree-row' + (pg.kind === "heft" ? " is-heft" : "") + '" data-page="' + pg.id + '" style="--tree-depth:' + depth + '">' +
+		return '<div class="notion-tree-row' + (pg.kind === "heft" ? " is-heft" : "") + '" data-page="' + pg.id + '" style="--tree-depth:' + r.depth + '">' +
 			caret +
 			(pg.coverImg
 				? '<span class="notion-tree-icon has-img" data-coverimg="' + U.esc(pg.coverImg) + '"></span>'
 				: '<span class="notion-tree-icon">' + pageIcon(pg) + "</span>") +
 			'<span class="notion-tree-title">' + U.esc(pg.title || "Ohne Titel") + "</span>" +
 			'<span class="notion-tree-meta">' + rowMeta(pg) + "</span>" + (rowActions ? rowActions(pg) : "") + "</div>";
-		return row + (collapsed ? "" : treeRowsHtml(kids, depth + 1, kidsOf, visible, rowMeta, rowActions));
 	}).join("");
 }
 
-// Sichtbar = passt selbst oder hat eine passende Unterseite. Je Render gemerkt: jede Baumebene
-// fragt erneut nach — ungemerkt lief eine Suche je Vorfahre noch einmal durch jeden Teilbaum.
-function visibleWithKids(ownMatch, kidsOf) {
-	const seen = new Map();
-	const visible = (pg) => {
-		let hit = seen.get(pg.id);
-		if (hit === undefined) seen.set(pg.id, hit = ownMatch(pg) || kidsOf(pg).some(visible));
-		return hit;
-	};
-	return visible;
-}
-
-// ---------- Notion-Ansicht: kompakter Seitenbaum, kein Kartenraster ----------
+// ---------- Notion-Ansicht: kompakter Seitenbaum aus dem Rust-Kern ----------
 function renderNotionTree(main) {
-	const q = (S.libFilter || "").trim().toLowerCase();
+	const q = (S.libFilter || "").trim();
 	const smart = S.libSmart || null;
-	const allPages = STATE.activePages();
-	const ownMatch = (pg) => (!smart
-		|| (smart === "fav" && pg.favorite)
-		|| (smart === "pdf" && pg.pdfId)
-		|| (smart === "tpl" && pg.isTemplate)
-		|| (smart === "untagged" && !(pg.tags || []).length))
-		&& (!S.libTag || (pg.tags || []).includes(S.libTag))
-		&& (!q || (pg.title || "").toLowerCase().includes(q)
-			|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
-	// Bei einer Suche bleiben passende Unterseiten samt ihren Eltern sichtbar.
-	const visible = visibleWithKids(ownMatch, (pg) => STATE.childrenOf(pg.id, pg.workspaceId));
+	const res = STATE.libraryNotionTree(smart, S.libTag || null, q);
 	const notionMeta = (pg) => treeMetaHtml(pg, U.fmtDate(pg.updated));
-	const wsIds = [...new Set(allPages.map((pg) => pg.workspaceId || "default"))];
-	const smartDefs = [["all", "Alle", allPages.length], ["fav", "Favoriten", allPages.filter((p) => p.favorite).length], ["pdf", "PDFs", allPages.filter((p) => p.pdfId).length], ["tpl", "Vorlagen", allPages.filter((p) => p.isTemplate).length]];
+	const smartDefs = [["all", "Alle", res.all], ["fav", "Favoriten", res.fav], ["pdf", "PDFs", res.pdf], ["tpl", "Vorlagen", res.tpl]];
 	const tabs = '<div class="lib-tabs">' + smartDefs.map(([id, label, n]) =>
 		'<button class="lib-tab' + ((smart === id || (!smart && id === "all")) ? " active" : "") + '" data-libsmart="' + id + '">' + U.esc(label) + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
-	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';	wsIds.forEach((wsId) => {
-		const rows = treeRowsHtml(STATE.childrenOf(null, wsId), 0, (pg) => STATE.childrenOf(pg.id, wsId), visible, notionMeta);
-		if (!rows) return;
-		const ws = S.workspaces[wsId] || { name: "Privat" };
-		html += treeSectionHtml(ws.name, rows);
-	});
-	if (!html.includes('notion-tree-row')) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
-	U.morph(main, html + "</div></div>");	hydrateCovers(main);
+	let html = '<div class="library lib-docs lib-notion-tree" data-key="lib:notion">' + libToolbarHtml(tabs, libSearchHtml("Seiten suchen…")) + '<div class="lib-body">';
+	for (const sec of res.sections) {
+		const rows = renderTreeRowsFromCore(sec.rows, notionMeta);
+		if (!rows) continue;
+		html += treeSectionHtml(sec.workspaceName, rows);
+	}
+	if (!html.includes("notion-tree-row")) html += '<div class="empty small">Keine Seiten für diesen Filter</div>';
+	U.morph(main, html + "</div></div>");
+	hydrateCovers(main);
 }
 
 export async function exportWorkspaceZip(wsId) {
@@ -397,99 +357,65 @@ export async function handleCreateWorkspace() {
 	}
 }
 
-// ---------- GoodNotes-Dokumente: eigener Dateibaum, getrennt von Notion ----------
-// Hefte behalten ihre Notion-Seite, bekommen hier aber eine unabhängige Ablage.
-// Ordner existieren ausschließlich in S.gnFolders und erscheinen nie in Notion.
-function gnAncestors(folderId) {
-	const out = [];
-	let cur = S.gnFolders[folderId];
-	const seen = new Set();
-	while (cur && !seen.has(cur.id)) { seen.add(cur.id); out.unshift(cur); cur = S.gnFolders[cur.parentId]; }
-	return out;
-}
-function gnContent(folderId, query) {
-	const folders = Object.values(S.gnFolders || {}).filter((f) => f.parentId === folderId && (!query || f.title.toLowerCase().includes(query)));
-	const hefte = STATE.activePages().filter((p) => p.kind === "heft" && (p.gnFolderId || null) === folderId &&
-		(!query || (p.title || "").toLowerCase().includes(query)));
-	return folders.map((f) => ({ type: "folder", value: f, order: gnOrder(f) }))
-		.concat(hefte.map((p) => ({ type: "heft", value: p, order: gnOrder(p) })))
-		.sort((a, b) => a.order - b.order || (a.value.created || "").localeCompare(b.value.created || ""));
-}
+// ---------- GoodNotes-Dokumente: eigener Dateibaum aus dem Rust-Kern ----------
 export function renderHefteShelf(main) {
-	const q = (S.libFilter || "").trim().toLowerCase();
-	// Alte Workspace-Navigation niemals in den neuen GN-Baum übernehmen.
-	const folderId = typeof S.libFolder === "string" && S.gnFolders[S.libFolder] ? S.libFolder : null;
-	if (S.libFolder && !folderId) S.libFolder = null;
-	const current = folderId ? S.gnFolders[folderId] : null;
-	const items = q
-		? Object.values(S.gnFolders || {}).filter((f) => f.title.toLowerCase().includes(q)).map((f) => ({ type: "folder", value: f, order: gnOrder(f) }))
-			.concat(STATE.activePages().filter((p) => p.kind === "heft" && (p.title || "").toLowerCase().includes(q)).map((p) => ({ type: "heft", value: p, order: gnOrder(p) }))).sort((a, b) => a.order - b.order)
-		: gnContent(folderId, "");
+	const q = (S.libFilter || "").trim();
+	const view = STATE.libraryGnShelf(typeof S.libFolder === "string" ? S.libFolder : null, "all", q);
+	S.libFolder = view.folderId || null;
+	const current = view.folderId ? S.gnFolders[view.folderId] : null;
 	const crumbs = q ? '<span class="lib-crumb current">Suche</span>'
-		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + gnAncestors(folderId).map((f) =>
-			'<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>").join("");
+		: '<button class="gn-crumb-root" data-gnroot="1">Dokumente</button>' + view.ancestors.map((fid) => {
+			const f = S.gnFolders[fid];
+			return f ? '<span class="lib-crumb-sep">/</span><button class="gn-crumb" data-gnfolder="' + f.id + '">' + U.esc(f.title) + "</button>" : "";
+		}).join("");
+	const cards = view.items.map((item) => {
+		if (item.kind === "folder") {
+			const f = S.gnFolders[item.id];
+			return f ? gnFolderHtml(f, item.directCount, item.order) : "";
+		}
+		const pg = S.pages[item.id];
+		return pg ? libCardHtml(pg).replace('class="lib-card"', 'class="lib-card gn-card" draggable="true" data-gnitem="p:' + pg.id + '" data-gnorder="' + item.order + '"') : "";
+	}).join("");
 	let html = '<div class="library lib-docs lib-shelf gn-shelf" data-key="lib:shelf">' + libToolbarHtml('<div class="lib-crumbs gn-crumbs">' + crumbs + "</div>",
 			libSearchHtml("Hefte suchen") +
 			'<button class="gn-new" data-libshelfnew="1">' + icon("plus") + "<span>Neu</span></button>") +
-		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + items.map((item) => item.type === "folder"
-			? gnFolderHtml(item.value)
-			: libCardHtml(item.value).replace('class="lib-card"', 'class="lib-card gn-card" draggable="true" data-gnitem="p:' + item.value.id + '" data-gnorder="' + item.order + '"'))
-			.join("") + "</div>" +
-		(items.length ? "" : '<div class="empty small">' + (q ? "Keine Treffer" : (current ? "Dieser Ordner ist leer." : "Noch keine Hefte oder Ordner.")) + "</div>") +
+		'<div class="lib-body"><div class="lib-grid gn-grid" data-gndrop-root="1">' + cards + "</div>" +
+		(view.items.length ? "" : '<div class="empty small">' + (q ? "Keine Treffer" : (current ? "Dieser Ordner ist leer." : "Noch keine Hefte oder Ordner.")) + "</div>") +
 		'<p class="hint lib-shelf-hint">Ziehe Hefte auf Ordner zum Einsortieren. Ziehe Ordner auf Ordner, um Unterordner anzulegen. Die Reihenfolge hier ist unabhängig von Notion.</p></div></div>';
 	U.morph(main, html);
 	hydrateCovers(main);
 }
 
-// ---------- Archiv-Ansicht: dieselbe Baum-Struktur wie die Bibliothek (Notion) ----------
-// STATE.childrenOf überspringt archivierte Seiten. Unterseiten archivierter Seiten sind aber
-// ebenfalls archiviert — deshalb eigene Suche, sonst wären sie im Archiv nicht zu öffnen.
-function archivedChildrenOf(pg) {
-	return STATE.childPagesOf(pg.id)
-		.filter((c) => c && c.archived && !c.trashed)
-		.sort((a, b) => STATE.sortKeyOf(a) - STATE.sortKeyOf(b));
-}
-
+// ---------- Archiv-Ansicht: dieselbe Baum-Struktur aus dem Rust-Kern ----------
 export function renderArchiveLibrary(main) {
-	const q = (S.libFilter || "").trim().toLowerCase();
+	const q = (S.libFilter || "").trim();
 	const typeFilter = S.libArchiveType || "all";
-	const roots = (STATE.archivedPageRoots && STATE.archivedPageRoots()) || [];
-	const isHeft = (pg) => pg.kind === "heft";
-	const kindOk = (pg) => typeFilter === "all" || (typeFilter === "hefte" ? isHeft(pg) : !isHeft(pg));
-	const ownMatch = (pg) => kindOk(pg) && (!q || (pg.title || "").toLowerCase().includes(q)
-		|| (pg.tags || []).some((tag) => String(tag).toLowerCase().includes(q)));
-	// Wie in der Bibliothek: passende Unterseiten bleiben samt ihren Eltern sichtbar.
-	const visible = visibleWithKids(ownMatch, archivedChildrenOf);
+	const res = STATE.libraryArchiveTree(typeFilter, q);
 	const archiveMeta = (pg) => treeMetaHtml(pg, "archiviert " + U.fmtDate(pg.archivedAt || pg.updated));
 	const archiveActions = (pg) => '<span class="archive-row-actions">' +
 		'<button type="button" class="mini" data-pageunarchive="' + pg.id + '" title="Aus Archiv wiederherstellen">' + lead("undo") + 'Wiederherstellen</button>' +
 		'<button type="button" class="mini danger" data-pagetrash="' + pg.id + '" title="In Papierkorb">' + icon("trash") + '</button></span>';
-	const wsIds = [...new Set(roots.map((pg) => pg.workspaceId || "default"))];
-
 	const filterTabs = [
-		["all", "Alle", roots.length],
-		["hefte", lead("notebook") + "Hefte", roots.filter(isHeft).length],
-		["pages", lead("note") + "Seiten", roots.filter((pg) => !isHeft(pg)).length],
+		["all", "Alle", res.all],
+		["hefte", lead("notebook") + "Hefte", res.hefte],
+		["pages", lead("note") + "Seiten", res.pages],
 	];
-
 	const tabs = '<div class="lib-tabs">' + filterTabs.map(([id, label, n]) =>
 		'<button class="lib-tab' + (typeFilter === id ? " active" : "") + '" data-libarchivefilter="' + id + '">' + label + '<span class="lib-tab-n">' + n + "</span></button>").join("") + "</div>";
 	let html = '<div class="library lib-docs lib-notion-tree lib-archive" data-key="lib:archive">' + libToolbarHtml(tabs, libSearchHtml("Archiv durchsuchen…")) + '<div class="lib-body">';
-
-	if (!roots.length) {
+	if (!res.all) {
 		html += '<div class="empty small">Das Archiv ist leer. Archivierte Hefte und Seiten erscheinen hier und können jederzeit wiederhergestellt werden.</div>';
 		U.morph(main, html + "</div></div>");
 		return;
 	}
-
-	wsIds.forEach((wsId) => {
-		const rows = treeRowsHtml(roots.filter((pg) => (pg.workspaceId || "default") === wsId), 0, archivedChildrenOf, visible, archiveMeta, archiveActions);
-		if (!rows) return;
-		const ws = S.workspaces[wsId] || { name: "Privat" };
-		html += treeSectionHtml(ws.name, rows);
-	});
+	for (const sec of res.sections) {
+		const rows = renderTreeRowsFromCore(sec.rows, archiveMeta, archiveActions);
+		if (!rows) continue;
+		html += treeSectionHtml(sec.workspaceName, rows);
+	}
 	if (!html.includes("notion-tree-row")) html += '<div class="empty small">Keine Treffer für diese Suche im Archiv.</div>';
-	U.morph(main, html + "</div></div>");	hydrateCovers(main);
+	U.morph(main, html + "</div></div>");
+	hydrateCovers(main);
 }
 
 // Ansichts-Umschalter: eigene Delegation (Styles: css/library.css).

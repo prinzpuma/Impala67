@@ -135,6 +135,121 @@ fn session_info(s: &LearningSession) -> LearningSessionInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum HomeNudgeInfo {
+    None,
+    StreakAtRisk { streak_days: u32 },
+    GoalInReach { minutes_left: f64 },
+    GoalReached,
+    TodayProgress { minutes: u32 },
+}
+
+impl From<impala_model::learning_time::HomeNudge> for HomeNudgeInfo {
+    fn from(n: impala_model::learning_time::HomeNudge) -> Self {
+        match n {
+            impala_model::learning_time::HomeNudge::None => Self::None,
+            impala_model::learning_time::HomeNudge::StreakAtRisk { streak_days } => Self::StreakAtRisk { streak_days },
+            impala_model::learning_time::HomeNudge::GoalInReach { minutes_left } => Self::GoalInReach { minutes_left },
+            impala_model::learning_time::HomeNudge::GoalReached => Self::GoalReached,
+            impala_model::learning_time::HomeNudge::TodayProgress { minutes } => Self::TodayProgress { minutes },
+        }
+    }
+}
+
+fn session_info_to_data(s: &LearningSessionInfo) -> impala_model::learning_time::LearningSessionData {
+    impala_model::learning_time::LearningSessionData {
+        id: s.id.clone(),
+        started_at: s.started_at.clone(),
+        ended_at: if s.ended_at.is_empty() { None } else { Some(s.ended_at.clone()) },
+        duration_seconds: s.duration_seconds,
+        segments: s
+            .segments
+            .iter()
+            .map(|seg| impala_model::learning_time::TimeSegment {
+                started_at: seg.started_at.clone(),
+                ended_at: seg.ended_at.clone(),
+            })
+            .collect(),
+        category: s.category.clone(),
+        subject: s.subject.clone(),
+        subject_source: s.subject_source.clone(),
+        source_id: s.source_id.clone(),
+    }
+}
+
+#[uniffi::export]
+pub fn learning_time_merged_seconds(sessions: Vec<LearningSessionInfo>) -> u64 {
+    let data: Vec<impala_model::learning_time::LearningSessionData> =
+        sessions.iter().map(session_info_to_data).collect();
+    impala_model::learning_time::merged_seconds(&data)
+}
+
+#[uniffi::export]
+pub fn learning_time_totals_by_day(
+    sessions: Vec<LearningSessionInfo>,
+    offset_minutes: i32,
+) -> std::collections::HashMap<String, u64> {
+    let data: Vec<impala_model::learning_time::LearningSessionData> =
+        sessions.iter().map(session_info_to_data).collect();
+    impala_model::learning_time::totals_by_day(&data, None, offset_minutes)
+}
+
+#[uniffi::export]
+pub fn learning_time_week_data(
+    totals: std::collections::HashMap<String, u64>,
+    now_ms: i64,
+    week_offset: i32,
+    offset_minutes: i32,
+) -> Vec<u64> {
+    impala_model::learning_time::week_data(&totals, now_ms, week_offset, offset_minutes).to_vec()
+}
+
+#[uniffi::export]
+pub fn learning_time_streak_days(
+    totals: std::collections::HashMap<String, u64>,
+    now_ms: i64,
+    offset_minutes: i32,
+) -> u32 {
+    impala_model::learning_time::streak_days(&totals, now_ms, offset_minutes)
+}
+
+#[uniffi::export]
+pub fn learning_time_weekday_index(now_ms: i64, offset_minutes: i32) -> u32 {
+    impala_model::learning_time::weekday_index(now_ms, offset_minutes)
+}
+
+#[uniffi::export]
+pub fn learning_time_normalize_goal(stored: u32) -> u32 {
+    impala_model::learning_time::normalize_week_goal(stored)
+}
+
+#[uniffi::export]
+pub fn learning_time_cycle_goal(current: u32) -> u32 {
+    impala_model::learning_time::cycle_week_goal(current)
+}
+
+#[uniffi::export]
+pub fn learning_time_home_nudge(
+    streak: u32,
+    today_seconds: u64,
+    week_seconds: u64,
+    goal_min: u32,
+    current_hour: u32,
+) -> HomeNudgeInfo {
+    impala_model::learning_time::home_nudge(streak, today_seconds, week_seconds, goal_min, current_hour).into()
+}
+
+#[uniffi::export]
+pub fn learning_time_home_nudge_text(
+    streak: u32,
+    today_seconds: u64,
+    week_seconds: u64,
+    goal_min: u32,
+    current_hour: u32,
+) -> String {
+    impala_model::learning_time::home_nudge(streak, today_seconds, week_seconds, goal_min, current_hour).message()
+}
+
 // ---------------------------------------------------------------------------
 // Tagesartikel
 
@@ -346,6 +461,32 @@ impl ImpalaCore {
         self.learning_sessions().iter().map(|s| s.duration_seconds).sum()
     }
 
+    /// Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
+    pub fn learning_totals_by_day(&self, offset_minutes: i32) -> std::collections::HashMap<String, u64> {
+        let inner = self.lock();
+        let sessions: Vec<impala_model::learning_time::LearningSessionData> = inner
+            .model
+            .state()
+            .learning_sessions
+            .values()
+            .filter(|s| !s.truthy("deleted") && s.duration_seconds.unwrap_or(0.0) > 0.0)
+            .map(impala_model::learning_time::LearningSessionData::from)
+            .collect();
+        impala_model::learning_time::totals_by_day(&sessions, None, offset_minutes)
+    }
+
+    /// Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+    pub fn learning_week_data(&self, now_ms: i64, week_offset: i32, offset_minutes: i32) -> Vec<u64> {
+        let totals = self.learning_totals_by_day(offset_minutes);
+        impala_model::learning_time::week_data(&totals, now_ms, week_offset, offset_minutes).to_vec()
+    }
+
+    /// Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+    pub fn learning_streak_days(&self, now_ms: i64, offset_minutes: i32) -> u32 {
+        let totals = self.learning_totals_by_day(offset_minutes);
+        impala_model::learning_time::streak_days(&totals, now_ms, offset_minutes)
+    }
+
     /// Tagesartikel der Startseite, neueste zuerst (`limit` 0 = alle; die PWA zeigt 30).
     pub fn home_articles(&self, limit: u32) -> Vec<HomeArticleInfo> {
         let inner = self.lock();
@@ -528,5 +669,160 @@ mod tests {
         let mut empty = mk("2026-05-03");
         empty.body = "  ".into();
         assert!(core.save_home_article(empty).is_err());
+    }
+
+    #[test]
+    fn lernzeit_auswertung() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+
+        let sid = core
+            .save_learning_session(LearningSessionInput {
+                id: None,
+                started_at: "2026-11-04T10:00:00.000Z".into(),
+                ended_at: "2026-11-04T10:30:00.000Z".into(),
+                duration_seconds: 1800,
+                segments: vec![TimeSegment {
+                    started_at: "2026-11-04T10:00:00.000Z".into(),
+                    ended_at: "2026-11-04T10:30:00.000Z".into(),
+                }],
+                category: "cards".into(),
+                subject: Some("Mathe".into()),
+                subject_source: None,
+                source_id: None,
+            })
+            .unwrap();
+
+        assert_eq!(core.learning_seconds_total(), 1800);
+        let sessions = core.learning_sessions();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].id, sid);
+
+        let merged = learning_time_merged_seconds(sessions.clone());
+        assert_eq!(merged, 1800);
+
+        let totals = learning_time_totals_by_day(sessions, 0);
+        assert_eq!(totals.get("2026-11-04").copied(), Some(1800));
+
+        let ref_ms = impala_srs::Timestamp::parse_iso("2026-11-04T12:00:00.000Z").unwrap().millis();
+        let week = learning_time_week_data(totals.clone(), ref_ms, 0, 0);
+        assert_eq!(week.len(), 7);
+        // Mittwoch ist Index 2 (Mo=0, Di=1, Mi=2)
+        assert_eq!(week[2], 1800);
+
+        let streak = learning_time_streak_days(totals, ref_ms, 0);
+        assert_eq!(streak, 1);
+
+        assert_eq!(learning_time_normalize_goal(20), 300);
+        assert_eq!(learning_time_normalize_goal(120), 120);
+        assert_eq!(learning_time_cycle_goal(120), 300);
+
+        let nudge = learning_time_home_nudge(1, 1800, 1800, 300, 15);
+        assert_eq!(nudge, HomeNudgeInfo::TodayProgress { minutes: 30 });
+        let text = learning_time_home_nudge_text(1, 1800, 1800, 300, 15);
+        assert_eq!(text, " Heute schon 30 Min gelernt.");
+
+        let core_totals = core.learning_totals_by_day(0);
+        assert_eq!(core_totals.get("2026-11-04").copied(), Some(1800));
+        let core_week = core.learning_week_data(ref_ms, 0, 0);
+        assert_eq!(core_week[2], 1800);
+        let core_streak = core.learning_streak_days(ref_ms, 0);
+        assert_eq!(core_streak, 1);
+    }
+}
+
+/// Farb-Stufe einer Note (1..=5).
+#[uniffi::export]
+pub fn grade_tier(grade: f64) -> u8 {
+    impala_model::kleinteile::grade_tier(grade)
+}
+
+/// Eigenes Thema für den Tagesartikel wählen.
+#[uniffi::export]
+pub fn pick_article_topic(topics_raw: String, history_first_topics: Vec<String>) -> Option<String> {
+    impala_model::kleinteile::pick_article_topic(&topics_raw, &history_first_topics)
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ArticleNoteItem {
+    pub id: String,
+    pub title: String,
+    pub text: String,
+    pub archived: bool,
+}
+
+#[uniffi::export]
+impl ImpalaCore {
+    /// Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+    pub fn export_grades_markdown(&self, today_label: String) -> String {
+        let inner = self.lock();
+        impala_model::kleinteile::export_grades_markdown(inner.model.state(), &today_label)
+    }
+
+    /// Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+    pub fn article_pool_ids(&self, topic: Option<String>) -> Vec<String> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let state = inner.model.state();
+        let Some(topic) = topic.filter(|t| !t.trim().is_empty()) else {
+            let mut active = state.active_pages();
+            active.sort_by(|a, b| b.updated().cmp(a.updated()));
+            active.truncate(200);
+            let mut ids: Vec<String> = active.into_iter().map(|p| p.id().to_owned()).collect();
+            ids.extend(state.archived_pages().into_iter().map(|p| p.id().to_owned()));
+            return ids;
+        };
+        if let Some(root) = state.find_page(&topic, true)
+            && root.title().to_lowercase() == topic.to_lowercase()
+        {
+            return state.page_subtree(root.id());
+        }
+        inner.search.search(&inner.model, &topic, true).into_iter().take(8).map(|h| h.id).collect()
+    }
+
+    /// Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+    pub fn choose_article_notes(&self, candidate_ids: Vec<String>) -> Vec<ArticleNoteItem> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let (_, used_ids, recent_focuses) = impala_model::kleinteile::article_history_meta(state);
+        let mut seen = std::collections::HashSet::new();
+        let mut pool = Vec::new();
+        for id in &candidate_ids {
+            if !seen.insert(id.clone()) {
+                continue;
+            }
+            let Some(pg) = state.pages.get(id) else { continue };
+            if pg.is_trashed() || pg.is_heft() {
+                continue;
+            }
+            pool.push(impala_model::kleinteile::ArticlePoolItem {
+                id: pg.id().to_owned(),
+                content_len: pg.content().trim().chars().count(),
+                updated: pg.updated().to_owned(),
+                archived: state.is_page_archived(pg.id()),
+                subject: "Allgemein".into(),
+            });
+        }
+        let choice = impala_model::kleinteile::choose_article_notes(&pool, &used_ids, &recent_focuses, &[]);
+        let mut budget = 9000usize;
+        let mut out = Vec::new();
+        for id in choice.note_ids {
+            let Some(pg) = state.pages.get(&id) else { continue };
+            let archived = state.is_page_archived(&id);
+            let limit = (if archived { 500 } else { 1800 }).min(budget);
+            let text: String = pg.content().trim().chars().take(limit).collect();
+            let count = text.chars().count();
+            budget = budget.saturating_sub(count);
+            if text.is_empty() {
+                continue;
+            }
+            let title = pg.title();
+            out.push(ArticleNoteItem {
+                id,
+                title: if title.is_empty() { "Ohne Titel".into() } else { title.to_owned() },
+                text,
+                archived,
+            });
+        }
+        out
     }
 }

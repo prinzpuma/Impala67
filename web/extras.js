@@ -7,6 +7,7 @@ import { BUS } from "./event-bus.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
+import { CORE } from "./rust-core.js";
 // extras.js — Ausbau-Modul, läuft bewusst NACH app.js:
 // • Cloze-Karten (Lückentexte) + Karten aus ==Markierungen==
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
@@ -21,7 +22,6 @@ export const EXTRAS = (() => {
 	// Klammern nirgends mit Template-/Platzhalter-Systemen kollidieren.
 	const CO = "{" + "{";
 	const CC = "}" + "}";
-	const clozeRe = () => /\{\{c(\d+)::([\s\S]*?)(?:::([^{}]*?))?\}\}/g;
 
 	// ---- Zusätzliche Styles (Heatmap, Leech, Fußbereich, Mobile-Panel, Multi-Tab) ----
 	const style = document.createElement("style");
@@ -105,17 +105,9 @@ export const EXTRAS = (() => {
 	}
 
 	// ---- Cloze: pro Lücken-Nummer eine eigene Karte (wie Anki-Geschwisterkarten) ----
-	function clozeIndexes(text) {
-		const set = new Set();
-		const re = clozeRe();
-		let m;
-		while ((m = re.exec(text))) set.add(Number(m[1]));
-		return [...set].sort((a, b) => a - b);
-	}
-	const clozeFront = (text, idx) => text.replace(clozeRe(), (all, n, ans, hint) =>
-		Number(n) === idx ? "**[" + (hint ? "…" + hint + "…" : "…") + "]**" : ans);
-	const clozeBack = (text, idx) => text.replace(clozeRe(), (all, n, ans) =>
-		Number(n) === idx ? "**==" + ans + "==**" : ans);
+	const clozeIndexes = (text) => CORE.clozeIndexes(String(text || ""));
+	const clozeFront = (text, idx) => CORE.clozeFront(String(text || ""), idx);
+	const clozeBack = (text, idx) => CORE.clozeBack(String(text || ""), idx);
 	async function createClozeCards(text, deck, pageId) {
 		const idxs = clozeIndexes(text);
 		for (const i of idxs) {
@@ -129,23 +121,13 @@ export const EXTRAS = (() => {
 	}
 
 	// ---- Karten aus ==Markierungen== und Cloze-Lücken einer Seite ----
-	const hasClozeCard = (src) => Object.values(S.cards).some((c) => c.cloze && c.cloze.src === src);
+	const hasClozeCard = (src) => Object.values(S.cards).some((c) => c && c.cloze && c.cloze.src === src);
 	async function cardsFromHighlights(pageId) {
 		const pg = S.pages[pageId];
 		if (!pg) return 0;
 		let n = 0;
-		for (const line of (pg.content || "").split(/\n+/)) {
-			const plain = line.replace(/^[\s>#*-]*(\[[ x]\]\s*)?/, "").trim();
-			if (!plain) continue;
-			if (clozeRe().test(plain)) {
-				// Zeile enthält bereits explizite Cloze-Lücken
-				if (!hasClozeCard(plain)) n += await createClozeCards(plain, S.ankiDeck || undefined, pageId);
-				continue;
-			}
-			if (!/==[^=\n]+==/.test(plain)) continue;
-			// ==Markierung== → Cloze-Lücke, der restliche Satz bleibt als Kontext stehen
-			let i = 0;
-			const src = plain.replace(/==([^=\n]+)==/g, (a, t) => CO + "c" + (++i) + "::" + t + CC);
+		const sources = CORE.clozeSourcesFromContent(pg.content || "");
+		for (const src of sources) {
 			if (!hasClozeCard(src)) n += await createClozeCards(src, S.ankiDeck || undefined, pageId);
 		}
 		U.toast(n ? n + " Karteikarte(n) erstellt." : "Keine neuen Markierungen — für alle gibt es schon Karten.", n ? "success" : "info");
@@ -170,128 +152,24 @@ Welche Aufgabe haben Mitochondrien?
 @antwort
 Sie erzeugen den Großteil des ATP durch Zellatmung.
 ---`;
-	// Eine zusätzliche führende \ schützt Formatmarker; auch vorhandene \ werden
-	// verdoppelt, damit Export → Import den ursprünglichen Text exakt erhält.
-	const textEscape = (s) => String(s ?? "").replace(/^(?=\\|@(?:stapel|frage|antwort)\b|---\s*$)/gim, "\\");
 	function exportTxt() {
-		const byDeck = new Map();
-		for (const c of STATE.activeCards()) {
-			const deck = c.deck || "Standard";
-			if (!byDeck.has(deck)) byDeck.set(deck, []);
-			byDeck.get(deck).push(c);
-		}
-		const parts = [TXT_HEADER];
-		for (const [deck, cards] of byDeck) {
-			parts.push("", "@stapel " + deck);
-			for (const c of cards) parts.push("@frage", textEscape(c.front), "@antwort", textEscape(c.back), "---");
-		}
-		U.downloadText("impala67-karten.txt", parts.join("\n"));
+		U.downloadText("impala67-karten.txt", CORE.cardExportTxt(STATE.activeCards()));
 	}
-	const csvEscape = (s) => {
-		s = String(s ?? "");
-		return /[";\n\t]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-	};
 	function exportCsv() {
 		// FIX: Papierkorb-Karten (Soft-Delete, 11. Juli) wanderten mit in den Export.
-		const cards = STATE.activeCards();
-		const csv = "front;back;deck\n" + cards.map((c) => [c.front, c.back, c.deck || "Standard"].map(csvEscape).join(";")).join("\n");
-		U.downloadText("impala67-karten.csv", csv);
+		U.downloadText("impala67-karten.csv", CORE.cardExportCsv(STATE.activeCards()));
 	}
 	function parseCsv(text) {
-		const separatorName = (text.match(/^#separator:(.+)$/mi) || [])[1]?.trim().toLowerCase();
-		const separators = { tab: "\t", comma: ",", semicolon: ";", colon: ":", pipe: "|", space: " " };
-		const contentLine = text.split(/\r?\n/).find((line) => line && !line.startsWith("#")) || "";
-		const sep = separators[separatorName] || (separatorName?.length === 1 ? separatorName : contentLine.includes("\t") ? "\t" : contentLine.includes(";") ? ";" : ",");
-		const rows = [];
-		let row = [], cur = "", inQ = false;
-		for (let i = 0; i < text.length; i++) {
-			const ch = text[i];
-			if (inQ) {
-				if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
-				else cur += ch;
-			} else if (ch === '"') inQ = true;
-			else if (ch === sep) { row.push(cur); cur = ""; }
-			else if (ch === "\n" || ch === "\r") {
-				if (ch === "\r" && text[i + 1] === "\n") i++;
-				row.push(cur); cur = "";
-				if (row.some((x) => x !== "")) rows.push(row);
-				row = [];
-			} else cur += ch;
-		}
-		row.push(cur);
-		if (row.some((x) => x !== "")) rows.push(row);
-		return rows;
+		return CORE.cardParseCsv(String(text ?? ""));
 	}
 	function parseTableCards(text) {
-		const rows = parseCsv(text);
-		const directives = text.split(/\r?\n/).filter((line) => line.startsWith("#"));
-		const deckDirective = directives.map((line) => line.match(/^#deck:(.+)$/i)).find(Boolean);
-		const defaultDeck = (deckDirective?.[1] || S.ankiDeck || "Standard").trim();
-		const columnOf = (name) => {
-			const hit = directives.map((line) => line.match(new RegExp("^#" + name + " column:(\\d+)$", "i"))).find(Boolean);
-			return hit ? Number(hit[1]) - 1 : -1;
-		};
-		const special = ["guid", "notetype", "deck", "tags"].map(columnOf).filter((i) => i >= 0);
-		const deckColumn = columnOf("deck");
-		const cards = [], errors = [];
-		for (const row of rows) {
-			if (!row.length || String(row[0]).startsWith("#")) continue;
-			const header = row.map((x) => String(x).trim().toLowerCase());
-			if (header[0] === "front" && header[1] === "back") continue;
-			const content = row.map((_, i) => i).filter((i) => !special.includes(i));
-			const front = String(row[content[0]] || "").trim();
-			const back = String(row[content[1]] || "").trim();
-			const deck = String(deckColumn >= 0 ? row[deckColumn] : (deckDirective ? defaultDeck : row[2]) || defaultDeck).trim() || "Standard";
-			if (front && back) cards.push({ front, back, deck });
-			else if (front) errors.push("Eine Karte hat keine Antwort: " + front.slice(0, 60));
-		}
-		return { cards, errors, format: directives.length ? "Anki-Text" : "CSV/TSV" };
+		return CORE.cardParseTableCards(String(text ?? ""), (S.ankiDeck || "Standard").trim());
 	}
 	function parseImpalaTxt(text) {
-		const cards = [], errors = [];
-		let deck = S.ankiDeck || "Standard", mode = "", value = [], draft = null, lineNo = 0;
-		const saveValue = () => {
-			if (!draft || !mode) return;
-			draft[mode] = value.join("\n").trim();
-			value = [];
-		};
-		const saveCard = () => {
-			saveValue();
-			if (!draft) return;
-			if (!draft.front || !draft.back || !draft.deck) errors.push("Zeile " + draft.line + ": Frage, Antwort oder gültiger Stapel fehlt.");
-			else cards.push({ front: draft.front, back: draft.back, deck: draft.deck });
-			draft = null; mode = ""; value = [];
-		};
-		for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
-			lineNo++;
-			const line = raw.trim();
-			const deckMatch = line.match(/^@stapel\s+(.+)$/i);
-			if (deckMatch) {
-				saveCard();
-				const parts = deckMatch[1].split("::").map((part) => part.trim());
-				deck = parts.some((part) => !part) ? "" : parts.join("::");
-				if (!deck) errors.push("Zeile " + lineNo + ": Ungültiger Stapelpfad.");
-				continue;
-			}
-			if (/^@frage\s*$/i.test(line)) {
-				saveCard();
-				draft = { front: "", back: "", deck, line: lineNo }; mode = "front"; continue;
-			}
-			if (/^@antwort\s*$/i.test(line)) {
-				saveValue();
-				if (!draft) errors.push("Zeile " + lineNo + ": Antwort ohne Frage.");
-				else mode = "back";
-				continue;
-			}
-			if (/^---\s*$/.test(line)) { saveCard(); continue; }
-			if (draft && mode) value.push(raw.replace(/^\\(?=\\|@(?:stapel|frage|antwort)\b|---\s*$)/i, ""));
-		}
-		saveCard();
-		return { cards, errors, format: "Impala-TXT" };
+		return CORE.cardParseImpalaTxt(String(text ?? ""), (S.ankiDeck || "Standard").trim());
 	}
 	function parseCardText(text) {
-		text = text.replace(/^\uFEFF/, "");
-		return /(^|\n)@(?:stapel|frage|antwort)\b/i.test(text) ? parseImpalaTxt(text) : parseTableCards(text);
+		return CORE.cardParseCardText(String(text ?? ""), (S.ankiDeck || "Standard").trim());
 	}
 	async function importCards(cards, includeDuplicates) {
 		const existing = new Set(Object.values(S.cards).filter((c) => !c.trashed).map(cardKey));
@@ -304,16 +182,14 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		}
 		return n;
 	}
-	const cardKey = (c) => [c.deck || "Standard", c.front, c.back].map((x) => String(x || "").trim()).join("\u001f");
-	function duplicateCount(cards) {
-		const seen = new Set(Object.values(S.cards).filter((c) => !c.trashed).map(cardKey));
-		let count = 0;
-		for (const card of cards) {
-			const key = cardKey(card);
-			if (seen.has(key)) count++;
-			seen.add(key);
+	const cardKey = (c, back, deck) => {
+		if (typeof c === "object" && c !== null) {
+			return CORE.cardKey(String(c.front ?? ""), String(c.back ?? ""), String(c.deck ?? "Standard"));
 		}
-		return count;
+		return CORE.cardKey(String(c ?? ""), String(back ?? ""), String(deck ?? "Standard"));
+	};
+	function duplicateCount(cards) {
+		return CORE.cardDuplicateCount(cards || [], S.cards || {});
 	}
 
 	// ---- sql.js bei Bedarf nachladen (nur für .apkg nötig, ~1 MB WASM) ----
@@ -417,10 +293,7 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	// HTML aus Anki-Feldern in Klartext/Markdown-tauglichen Text umwandeln
 	// SECURITY: DOMParser statt innerHTML an einem eigenen <div> — dort laden Bilder auch
 	// ohne Einhängen, ein <img onerror=…> aus einer fremden .apkg-Datei liefe als Code.
-	const stripHtml = (s) => {
-		const html = String(s || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/div>\s*<div>/gi, "\n");
-		return (new DOMParser().parseFromString(html, "text/html").body.textContent || "").trim();
-	};
+	const stripHtml = (s) => CORE.cardStripHtml(String(s ?? ""));
 
 	// ---- .apkg-Import: collection.anki2/anki21 lesen, Notizen → cardCreate-Events ----
 	async function importApkgFile(file) {
@@ -601,11 +474,10 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 	function clozeWrapSelection() {
 		const ta = U.el("cardFront");
 		if (!ta) return;
-		const a = ta.selectionStart, b = ta.selectionEnd;
-		const sel = ta.value.slice(a, b) || "Antwort";
-		const next = (ta.value.match(/\{\{c(\d+)::/g) || []).length + 1;
-		ta.value = ta.value.slice(0, a) + CO + "c" + next + "::" + sel + CC + ta.value.slice(b);
+		const res = CORE.clozeWrap(ta.value || "", ta.selectionStart || 0, ta.selectionEnd || 0);
+		ta.value = res.text;
 		ta.focus();
+		ta.setSelectionRange(res.cursor, res.cursor);
 	}
 	async function clozeSaveFromEditor() {
 		const front = U.el("cardFront") ? U.el("cardFront").value : "";

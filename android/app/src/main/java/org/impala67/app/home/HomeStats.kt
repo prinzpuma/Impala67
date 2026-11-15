@@ -38,6 +38,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.impala67.app.R
+import org.impala67.app.study.LearningTime
 import org.impala67.app.ui.components.PanelCard
 import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.Space
@@ -122,7 +123,7 @@ fun WeekStat(s: HomeState, modifier: Modifier, onCycleGoal: () -> Unit) {
 @Composable
 private fun DayBars(s: HomeState) {
     val c = Impala.colors
-    val todayIdx = LocalDate.now().dayOfWeek.value - 1
+    val todayIdx = LearningTime.weekdayIndex()
     val scale = maxOf(s.goalMin / 7.0, s.week.maxOf { it / 60.0 }, 1.0)
     Row(Modifier.fillMaxWidth().height(48.dp).padding(top = Space.s2), horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
         s.week.forEachIndexed { i, sec ->

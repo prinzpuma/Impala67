@@ -217,3 +217,179 @@ mod tests {
         assert!(core.heft_folder_delete(mathe).is_err());
     }
 }
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LibraryTreeRowInfo {
+    pub page: PageSummary,
+    pub depth: u32,
+    pub has_kids: bool,
+    pub collapsed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LibrarySectionInfo {
+    pub workspace: crate::WorkspaceInfo,
+    pub rows: Vec<LibraryTreeRowInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct NotionLibraryView {
+    pub all_count: u32,
+    pub fav_count: u32,
+    pub pdf_count: u32,
+    pub tpl_count: u32,
+    pub sections: Vec<LibrarySectionInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftFolderCount {
+    pub folder: HeftFolder,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftShelfCard {
+    pub page: PageSummary,
+    pub pages_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftShelfData {
+    pub folders: Vec<HeftFolderCount>,
+    pub shown: Vec<HeftShelfCard>,
+    pub all_count: u32,
+    pub fav_count: u32,
+    pub crumbs: Vec<HeftFolder>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ArchiveLibraryView {
+    pub all_count: u32,
+    pub page_count: u32,
+    pub heft_count: u32,
+    pub shown: Vec<PageSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct SidebarRowInfo {
+    pub row_id: String,
+    pub kind: String,
+    pub title: String,
+    pub collapse_key: Option<String>,
+    pub workspace_id: Option<String>,
+    pub page: Option<PageSummary>,
+    pub depth: u32,
+    pub has_kids: bool,
+    pub collapsed: bool,
+    pub section: String,
+}
+
+#[uniffi::export]
+pub fn resolved_heft_cover(cover: String, title: String, id: String) -> String {
+    impala_model::library::resolved_cover(&cover, &title, &id)
+}
+
+#[uniffi::export]
+impl ImpalaCore {
+    /// Notion-Seitenbaum für die Bibliothek samt Filter-Zählern.
+    pub fn library_notion_view(&self, smart: String, query: String) -> NotionLibraryView {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let res = impala_model::library::notion_tree(state, Some(&smart), None, &query);
+        let sections = res
+            .sections
+            .into_iter()
+            .map(|sec| {
+                let rows = sec
+                    .rows
+                    .into_iter()
+                    .filter_map(|r| {
+                        let pg = state.pages.get(&r.id)?;
+                        Some(LibraryTreeRowInfo {
+                            page: summary(pg),
+                            depth: r.depth as u32,
+                            has_kids: r.has_kids,
+                            collapsed: r.collapsed,
+                        })
+                    })
+                    .collect();
+                LibrarySectionInfo {
+                    workspace: crate::WorkspaceInfo { id: sec.workspace_id, name: sec.workspace_name },
+                    rows,
+                }
+            })
+            .collect();
+        NotionLibraryView {
+            all_count: res.all as u32,
+            fav_count: res.fav as u32,
+            pdf_count: res.pdf as u32,
+            tpl_count: res.tpl as u32,
+            sections,
+        }
+    }
+
+    /// GoodNotes-Regal für die Bibliothek (Ordner, Hefte mit Seitenzahl, Zähler, Brotkrumen).
+    pub fn library_heft_shelf(&self, folder_id: Option<String>, filter: String, query: String) -> HeftShelfData {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let view = impala_model::library::gn_shelf(state, folder_id.as_deref(), &filter, &query);
+        let mut folders = Vec::new();
+        let mut shown = Vec::new();
+        for item in view.items {
+            if item.kind == "folder" {
+                if let Some(f) = state.gn_folders.get(&item.id) {
+                    folders.push(HeftFolderCount { folder: folder_record(f), count: item.direct_count as u32 });
+                }
+            } else if let Some(pg) = state.pages.get(&item.id) {
+                let pages_count = state.hefte.get(&item.id).map_or(1, |d| d.pages.len().max(1)) as u32;
+                shown.push(HeftShelfCard { page: summary(pg), pages_count });
+            }
+        }
+        let crumbs = view.ancestors.into_iter().filter_map(|id| state.gn_folders.get(&id).map(folder_record)).collect();
+        HeftShelfData { folders, shown, all_count: view.all_count as u32, fav_count: view.fav_count as u32, crumbs }
+    }
+
+    /// Archiv-Liste für die Bibliothek samt Filter-Zählern.
+    pub fn library_archive_view(&self, filter: String, query: String) -> ArchiveLibraryView {
+        let inner = self.lock();
+        let state = inner.model.state();
+        let all = state.archived_pages();
+        let all_count = all.len() as u32;
+        let heft_count = all.iter().filter(|p| p.is_heft()).count() as u32;
+        let page_count = all_count - heft_count;
+        let shown = all
+            .into_iter()
+            .filter(|p| {
+                let kind_ok = match filter.as_str() {
+                    "heft" | "hefte" => p.is_heft(),
+                    "page" | "pages" => !p.is_heft(),
+                    _ => true,
+                };
+                kind_ok && impala_model::library::page_matches_query(p, &query)
+            })
+            .map(summary)
+            .collect();
+        ArchiveLibraryView { all_count, page_count, heft_count, shown }
+    }
+
+    /// Sichtbare Zeilen der Seitenleiste (Favoriten + Arbeitsbereiche + ausgeklappte Seiten).
+    pub fn sidebar_tree_rows(&self) -> Vec<SidebarRowInfo> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        impala_model::library::sidebar_tree_rows(state)
+            .into_iter()
+            .map(|r| SidebarRowInfo {
+                row_id: r.row_id,
+                kind: r.kind,
+                title: r.title,
+                collapse_key: r.collapse_key,
+                workspace_id: r.workspace_id,
+                page: r.page_id.as_deref().and_then(|id| state.pages.get(id)).map(summary),
+                depth: r.depth as u32,
+                has_kids: r.has_kids,
+                collapsed: r.collapsed,
+                section: r.section,
+            })
+            .collect()
+    }
+}

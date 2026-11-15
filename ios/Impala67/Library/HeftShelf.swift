@@ -252,17 +252,14 @@ struct HeftShelf: View {
     }
 
     private nonisolated static func load(core: ImpalaCore, folderId: String?, query: String) -> Loaded {
-        let searching = !query.trimmingCharacters(in: .whitespaces).isEmpty
-        let folders = searching ? [] : core.heftFolders(parentId: folderId)
-        let raw = searching ? core.recentPages(limit: UInt32.max).filter { $0.kind == .heft } : core.heftInFolder(folderId: folderId)
-        let hefte = raw.filter { libMatches($0, query) }
+        let s = core.libraryHeftShelf(folderId: folderId, filter: "all", query: query)
         let entries: [ShelfEntry] =
-            folders.map { .folder($0, core.heftFolders(parentId: $0.id).count + core.heftInFolder(folderId: $0.id).count) } +
-            hefte.map { .heft($0, core.heftPageIds(pageId: $0.id).count) }
+            s.folders.map { .folder($0.folder, Int($0.count)) } +
+            s.shown.map { .heft($0.page, Int($0.pagesCount)) }
         return Loaded(
             entries: entries,
-            total: raw.count + folders.count,
-            crumbs: folderId.map { core.heftFolderPath(folderId: $0) } ?? []
+            total: entries.count,
+            crumbs: s.crumbs
         )
     }
 }

@@ -46,13 +46,12 @@ enum Deck {
 
     /// Letzter Namensteil: „Mathe::Analysis“ → „Analysis“.
     static func label(_ name: String) -> String {
-        name.components(separatedBy: sep).last ?? name
+        deckLabel(name: name)
     }
 
     /// Eltern-Name („“ für oberste Ebene).
     static func parent(_ name: String) -> String {
-        guard let r = name.range(of: sep, options: .backwards) else { return "" }
-        return String(name[..<r.lowerBound])
+        deckParent(name: name) ?? ""
     }
 
     /// Versatz der Ortszeit zu UTC für die Tagesgrenze des Kerns (MEZ +60, MESZ +120).
@@ -61,41 +60,12 @@ enum Deck {
     static func cardsText(_ n: Int) -> String { n == 1 ? "1 Karte" : "\(n) Karten" }
 }
 
-/// Eine sichtbare Zeile des Stapelbaums.
-struct DeckEntry: Identifiable {
-    let deck: DeckOverview
-    let depth: Int
-    let hasKids: Bool
-    let collapsed: Bool
+extension DeckEntry: Identifiable {
+    public var id: String { name }
 
-    var id: String { deck.name }
-    var name: String { deck.name }
-    var label: String { Deck.label(deck.name) }
-    var due: UInt64 { deck.review + deck.learn }
-    /// Etwas zu lernen (neu, lernen oder fällig).
-    var open: Bool { deck.new + deck.learn + deck.review > 0 }
-
-    /// Unterstapel direkt unter ihrem Eltern-Stapel (wie `flattenDecks` der Android-App); die
-    /// Reihenfolge innerhalb einer Ebene liefert der Kern. Eingeklappte Äste entfallen.
+    /// Unterstapel direkt unter ihrem Eltern-Stapel; die Reihenfolge bestimmt der Kern.
     static func flatten(_ overview: [DeckOverview], collapsed: Set<String>) -> [DeckEntry] {
-        func kids(_ parent: String?) -> [DeckOverview] {
-            overview.filter { d in
-                guard let parent else { return !d.name.contains(Deck.sep) }
-                let prefix = parent + Deck.sep
-                return d.name.hasPrefix(prefix) && !d.name.dropFirst(prefix.count).contains(Deck.sep)
-            }
-        }
-        var out: [DeckEntry] = []
-        func walk(_ parent: String?, _ depth: Int) {
-            for d in kids(parent) {
-                let hasKids = !kids(d.name).isEmpty
-                let isCollapsed = hasKids && collapsed.contains(d.name)
-                out.append(DeckEntry(deck: d, depth: depth, hasKids: hasKids, collapsed: isCollapsed))
-                if !isCollapsed { walk(d.name, depth + 1) }
-            }
-        }
-        walk(nil, 0)
-        return out
+        flattenDecks(overview: overview, collapsed: Array(collapsed))
     }
 }
 

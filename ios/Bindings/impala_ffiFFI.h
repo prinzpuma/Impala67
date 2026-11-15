@@ -862,6 +862,11 @@ void*_Nonnull uniffi_impala_ffi_fn_constructor_impalacore_open_in_memory(RustCal
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_active_plain_cards(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ADD_FILE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ADD_FILE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_add_file(void*_Nonnull ptr, RustBuffer bytes, RustBuffer mime, RustBuffer name, RustCallStatus *_Nonnull out_status
@@ -922,6 +927,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_archived_decks(void*_Nonnull p
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_archived_pages(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ARTICLE_POOL_IDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_ARTICLE_POOL_IDS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_article_pool_ids(void*_Nonnull ptr, RustBuffer topic, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_BACKLINKS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_BACKLINKS
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_backlinks(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -970,6 +980,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_chats(void*_Nonnull ptr, RustC
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CHILDREN_OF
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CHILDREN_OF
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_children_of(void*_Nonnull ptr, RustBuffer parent_id, RustBuffer workspace_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CHOOSE_ARTICLE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CHOOSE_ARTICLE_NOTES
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_choose_article_notes(void*_Nonnull ptr, RustBuffer candidate_ids, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_CLEAR_PAGES
@@ -1037,6 +1052,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_deck_config(void*_Nonnull ptr,
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_deck_overview(void*_Nonnull ptr, int32_t utc_offset_minutes, int8_t mix, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DECK_TREE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DECK_TREE
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_deck_tree(void*_Nonnull ptr, RustBuffer collapsed, int32_t utc_offset_minutes, int8_t mix, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DECKS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DECKS
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_decks(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -1082,6 +1102,11 @@ void uniffi_impala_ffi_fn_method_impalacore_delete_page_forever(void*_Nonnull pt
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_dispatch(void*_Nonnull ptr, RustBuffer kind, RustBuffer payload_json, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DUPLICATE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DUPLICATE_COUNT
+uint64_t uniffi_impala_ffi_fn_method_impalacore_duplicate_count(void*_Nonnull ptr, RustBuffer cards, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DUPLICATE_DECK
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_DUPLICATE_DECK
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_duplicate_deck(void*_Nonnull ptr, RustBuffer name, RustCallStatus *_Nonnull out_status
@@ -1095,6 +1120,16 @@ uint64_t uniffi_impala_ffi_fn_method_impalacore_empty_card_trash(void*_Nonnull p
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EMPTY_PAGE_TRASH
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EMPTY_PAGE_TRASH
 uint32_t uniffi_impala_ffi_fn_method_impalacore_empty_page_trash(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EXISTING_CARD_KEYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EXISTING_CARD_KEYS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_existing_card_keys(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EXPORT_GRADES_MARKDOWN
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EXPORT_GRADES_MARKDOWN
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_export_grades_markdown(void*_Nonnull ptr, RustBuffer today_label, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_EXPORT_JSON
@@ -1332,6 +1367,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_strokes_bounds(void*_Nonn
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_style_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer ids, RustBuffer color, RustBuffer size, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ANALYSIS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ANALYSIS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_home_analysis(void*_Nonnull ptr, int64_t now_ms, int32_t tz_offset_minutes, int32_t goal_min, RustBuffer days, double pace, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ARTICLE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ARTICLE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_home_article(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -1362,9 +1402,44 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_session(void*_Nonnull
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_sessions(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_stats(void*_Nonnull ptr, RustBuffer deck, RustBuffer now_ms, RustBuffer utc_offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS_JSON
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
+uint32_t uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(void*_Nonnull ptr, int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(void*_Nonnull ptr, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_WEEK_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_WEEK_DATA
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_week_data(void*_Nonnull ptr, int64_t now_ms, int32_t week_offset, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_ARCHIVE_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_ARCHIVE_VIEW
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_library_archive_view(void*_Nonnull ptr, RustBuffer filter, RustBuffer query, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_HEFT_SHELF
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_HEFT_SHELF
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(void*_Nonnull ptr, RustBuffer folder_id, RustBuffer filter, RustBuffer query, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_NOTION_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_NOTION_VIEW
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_library_notion_view(void*_Nonnull ptr, RustBuffer smart, RustBuffer query, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LOAD_INFO
@@ -1432,6 +1507,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_history(void*_Nonnull ptr
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_links(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PATH_LABEL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PATH_LABEL
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_path_label(void*_Nonnull ptr, RustBuffer page_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PROPS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_PROPS
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_props(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
@@ -1445,6 +1525,21 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subject(void*_Nonnull ptr
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subtree(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PALETTE_CHATS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PALETTE_CHATS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_palette_chats(void*_Nonnull ptr, RustBuffer query, int8_t include_messages, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PALETTE_PAGES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PALETTE_PAGES
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_palette_pages(void*_Nonnull ptr, RustBuffer query, uint32_t recent_limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PATTERN_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PATTERN_DATA
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_pattern_data(void*_Nonnull ptr, RustBuffer live_pages, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_RECENT_PAGES
@@ -1585,6 +1680,11 @@ void uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(void*_Nonnull ptr, RustB
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SETTINGS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SETTINGS_JSON
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_settings_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SIDEBAR_TREE_ROWS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SIDEBAR_TREE_ROWS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_sidebar_tree_rows(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_STORAGE_CHECK
@@ -1807,6 +1907,56 @@ RustBuffer uniffi_impala_ffi_fn_method_textembedder_embed(void*_Nonnull ptr, Rus
 RustBuffer uniffi_impala_ffi_fn_func_blocks_to_markdown(RustBuffer blocks, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_DUPLICATE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_DUPLICATE_COUNT
+uint64_t uniffi_impala_ffi_fn_func_card_duplicate_count(RustBuffer cards, RustBuffer seen_keys, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_EXPORT_CSV
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_EXPORT_CSV
+RustBuffer uniffi_impala_ffi_fn_func_card_export_csv(RustBuffer cards, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_EXPORT_TXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_EXPORT_TXT
+RustBuffer uniffi_impala_ffi_fn_func_card_export_txt(RustBuffer cards, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_KEY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_KEY
+RustBuffer uniffi_impala_ffi_fn_func_card_key(RustBuffer front, RustBuffer back, RustBuffer deck, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_CARD_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_CARD_TEXT
+RustBuffer uniffi_impala_ffi_fn_func_card_parse_card_text(RustBuffer text, RustBuffer default_deck, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_IMPALA_TXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_IMPALA_TXT
+RustBuffer uniffi_impala_ffi_fn_func_card_parse_impala_txt(RustBuffer text, RustBuffer default_deck, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_TABLE_CARDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_PARSE_TABLE_CARDS
+RustBuffer uniffi_impala_ffi_fn_func_card_parse_table_cards(RustBuffer text, RustBuffer default_deck, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_STRIP_HTML
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CARD_STRIP_HTML
+RustBuffer uniffi_impala_ffi_fn_func_card_strip_html(RustBuffer html, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CLOZE_RECALL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CLOZE_RECALL
+RustBuffer uniffi_impala_ffi_fn_func_cloze_recall(RustBuffer front, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_COMPUTE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_COMPUTE_GOAL
+RustBuffer uniffi_impala_ffi_fn_func_compute_goal(int32_t goal_min, RustBuffer days, int32_t today, double pace, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CONFLICT_DIFF_ROWS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CONFLICT_DIFF_ROWS
 RustBuffer uniffi_impala_ffi_fn_func_conflict_diff_rows(RustBuffer left, RustBuffer right, RustCallStatus *_Nonnull out_status
@@ -1822,6 +1972,16 @@ RustBuffer uniffi_impala_ffi_fn_func_core_lock_holder(RustCallStatus *_Nonnull o
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_CORE_LONG_LOCK_HOLDS
 RustBuffer uniffi_impala_ffi_fn_func_core_long_lock_holds(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DECK_LABEL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DECK_LABEL
+RustBuffer uniffi_impala_ffi_fn_func_deck_label(RustBuffer name, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DECK_PARENT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DECK_PARENT
+RustBuffer uniffi_impala_ffi_fn_func_deck_parent(RustBuffer name, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_DEFAULT_SUBJECT
@@ -1907,6 +2067,11 @@ RustBuffer uniffi_impala_ffi_fn_func_embedding_model_key(RustBuffer model, RustC
 RustBuffer uniffi_impala_ffi_fn_func_embedding_setup(void*_Nonnull core, RustBuffer model_dir, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_FLATTEN_DECKS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_FLATTEN_DECKS
+RustBuffer uniffi_impala_ffi_fn_func_flatten_decks(RustBuffer overview, RustBuffer collapsed, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_FORMAT_SYNC_USAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_FORMAT_SYNC_USAGE
 RustBuffer uniffi_impala_ffi_fn_func_format_sync_usage(double bytes, RustCallStatus *_Nonnull out_status
@@ -1916,6 +2081,11 @@ RustBuffer uniffi_impala_ffi_fn_func_format_sync_usage(double bytes, RustCallSta
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_GENERATE_SYNC_KEY
 RustBuffer uniffi_impala_ffi_fn_func_generate_sync_key(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_GRADE_TIER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_GRADE_TIER
+uint8_t uniffi_impala_ffi_fn_func_grade_tier(double grade, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_BUILD_PDF
@@ -1990,6 +2160,51 @@ RustBuffer uniffi_impala_ffi_fn_func_known_subjects(RustCallStatus *_Nonnull out
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_CYCLE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_CYCLE_GOAL
+uint32_t uniffi_impala_ffi_fn_func_learning_time_cycle_goal(uint32_t current, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_HOME_NUDGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_HOME_NUDGE
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_home_nudge(uint32_t streak, uint64_t today_seconds, uint64_t week_seconds, uint32_t goal_min, uint32_t current_hour, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_HOME_NUDGE_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_HOME_NUDGE_TEXT
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_home_nudge_text(uint32_t streak, uint64_t today_seconds, uint64_t week_seconds, uint32_t goal_min, uint32_t current_hour, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_MERGED_SECONDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_MERGED_SECONDS
+uint64_t uniffi_impala_ffi_fn_func_learning_time_merged_seconds(RustBuffer sessions, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_NORMALIZE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_NORMALIZE_GOAL
+uint32_t uniffi_impala_ffi_fn_func_learning_time_normalize_goal(uint32_t stored, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_STREAK_DAYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_STREAK_DAYS
+uint32_t uniffi_impala_ffi_fn_func_learning_time_streak_days(RustBuffer totals, int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_TOTALS_BY_DAY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_TOTALS_BY_DAY
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_totals_by_day(RustBuffer sessions, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEK_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEK_DATA
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_week_data(RustBuffer totals, int64_t now_ms, int32_t week_offset, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEKDAY_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEKDAY_INDEX
+uint32_t uniffi_impala_ffi_fn_func_learning_time_weekday_index(int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LOCAL_EMBEDDING_MODEL
 RustBuffer uniffi_impala_ffi_fn_func_local_embedding_model(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
@@ -2020,6 +2235,36 @@ RustBuffer uniffi_impala_ffi_fn_func_markdown_teaser(RustBuffer body, RustCallSt
 RustBuffer uniffi_impala_ffi_fn_func_markdown_to_blocks(RustBuffer markdown, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_CONTINUATION_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_CONTINUATION_BLOCK
+RustBuffer uniffi_impala_ffi_fn_func_md_continuation_block(RustBuffer block, RustBuffer new_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_CONVERT_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_CONVERT_BLOCK
+RustBuffer uniffi_impala_ffi_fn_func_md_convert_block(RustBuffer block, RustBuffer target_type, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_INDENT_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_INDENT_BLOCK
+RustBuffer uniffi_impala_ffi_fn_func_md_indent_block(RustBuffer block, int32_t delta, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_LIST_NUMBERS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_LIST_NUMBERS
+RustBuffer uniffi_impala_ffi_fn_func_md_list_numbers(RustBuffer blocks, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_SHORTCUT_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_SHORTCUT_TYPE
+RustBuffer uniffi_impala_ffi_fn_func_md_shortcut_type(RustBuffer line, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_WRAP_MARKERS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MD_WRAP_MARKERS
+RustBuffer uniffi_impala_ffi_fn_func_md_wrap_markers(RustBuffer text, uint32_t start_utf16, uint32_t end_utf16, RustBuffer before, RustBuffer after, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MERGE_TEXTS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_MERGE_TEXTS
 RustBuffer uniffi_impala_ffi_fn_func_merge_texts(RustBuffer base, RustBuffer mine, RustBuffer theirs, RustCallStatus *_Nonnull out_status
@@ -2029,6 +2274,16 @@ RustBuffer uniffi_impala_ffi_fn_func_merge_texts(RustBuffer base, RustBuffer min
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_OVERVIEW_SUBJECT
 RustBuffer uniffi_impala_ffi_fn_func_overview_subject(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_PICK_ARTICLE_TOPIC
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_PICK_ARTICLE_TOPIC
+RustBuffer uniffi_impala_ffi_fn_func_pick_article_topic(RustBuffer topics_raw, RustBuffer history_first_topics, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_RESOLVED_HEFT_COVER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_RESOLVED_HEFT_COVER
+RustBuffer uniffi_impala_ffi_fn_func_resolved_heft_cover(RustBuffer cover, RustBuffer title, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SCAN_DETECT
@@ -2041,6 +2296,31 @@ RustBuffer uniffi_impala_ffi_fn_func_scan_detect(RustBuffer img, RustCallStatus 
 RustBuffer uniffi_impala_ffi_fn_func_scan_process(RustBuffer img, RustBuffer corners, RustBuffer mode, int32_t rotation, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_FILTER_ACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_FILTER_ACTIONS
+RustBuffer uniffi_impala_ffi_fn_func_search_filter_actions(RustBuffer actions, RustBuffer query, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_HIGHLIGHT_RANGES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_HIGHLIGHT_RANGES
+RustBuffer uniffi_impala_ffi_fn_func_search_highlight_ranges(RustBuffer text, RustBuffer query, RustBuffer terms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_PREVIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_PREVIEW
+RustBuffer uniffi_impala_ffi_fn_func_search_preview(RustBuffer snippet, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_SETTINGS_CATALOG
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_SETTINGS_CATALOG
+RustBuffer uniffi_impala_ffi_fn_func_search_settings_catalog(RustBuffer query, uint32_t limit, RustBuffer platform, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_SETTINGS_ITEMS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SEARCH_SETTINGS_ITEMS
+RustBuffer uniffi_impala_ffi_fn_func_search_settings_items(RustBuffer entries, RustBuffer query, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SYNC_RECONNECT_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SYNC_RECONNECT_DELAY_MS
 uint64_t uniffi_impala_ffi_fn_func_sync_reconnect_delay_ms(uint32_t attempt, RustCallStatus *_Nonnull out_status
@@ -2049,6 +2329,11 @@ uint64_t uniffi_impala_ffi_fn_func_sync_reconnect_delay_ms(uint32_t attempt, Rus
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SYNC_RETRY_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_SYNC_RETRY_DELAY_MS
 uint64_t uniffi_impala_ffi_fn_func_sync_retry_delay_ms(uint32_t attempt, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_WRAP_CLOZE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_WRAP_CLOZE
+RustBuffer uniffi_impala_ffi_fn_func_wrap_cloze(RustBuffer text, uint32_t selection_start, uint32_t selection_end, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_WS_PING_INTERVAL_MS
@@ -2349,6 +2634,66 @@ uint16_t uniffi_impala_ffi_checksum_func_blocks_to_markdown(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_DUPLICATE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_DUPLICATE_COUNT
+uint16_t uniffi_impala_ffi_checksum_func_card_duplicate_count(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_EXPORT_CSV
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_EXPORT_CSV
+uint16_t uniffi_impala_ffi_checksum_func_card_export_csv(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_EXPORT_TXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_EXPORT_TXT
+uint16_t uniffi_impala_ffi_checksum_func_card_export_txt(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_KEY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_KEY
+uint16_t uniffi_impala_ffi_checksum_func_card_key(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_CARD_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_CARD_TEXT
+uint16_t uniffi_impala_ffi_checksum_func_card_parse_card_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_IMPALA_TXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_IMPALA_TXT
+uint16_t uniffi_impala_ffi_checksum_func_card_parse_impala_txt(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_TABLE_CARDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_PARSE_TABLE_CARDS
+uint16_t uniffi_impala_ffi_checksum_func_card_parse_table_cards(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_STRIP_HTML
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CARD_STRIP_HTML
+uint16_t uniffi_impala_ffi_checksum_func_card_strip_html(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CLOZE_RECALL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CLOZE_RECALL
+uint16_t uniffi_impala_ffi_checksum_func_cloze_recall(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_COMPUTE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_COMPUTE_GOAL
+uint16_t uniffi_impala_ffi_checksum_func_compute_goal(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CONFLICT_DIFF_ROWS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CONFLICT_DIFF_ROWS
 uint16_t uniffi_impala_ffi_checksum_func_conflict_diff_rows(void
@@ -2364,6 +2709,18 @@ uint16_t uniffi_impala_ffi_checksum_func_core_lock_holder(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LONG_LOCK_HOLDS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_CORE_LONG_LOCK_HOLDS
 uint16_t uniffi_impala_ffi_checksum_func_core_long_lock_holds(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DECK_LABEL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DECK_LABEL
+uint16_t uniffi_impala_ffi_checksum_func_deck_label(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DECK_PARENT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_DECK_PARENT
+uint16_t uniffi_impala_ffi_checksum_func_deck_parent(void
     
 );
 #endif
@@ -2463,6 +2820,12 @@ uint16_t uniffi_impala_ffi_checksum_func_embedding_setup(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_FLATTEN_DECKS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_FLATTEN_DECKS
+uint16_t uniffi_impala_ffi_checksum_func_flatten_decks(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_FORMAT_SYNC_USAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_FORMAT_SYNC_USAGE
 uint16_t uniffi_impala_ffi_checksum_func_format_sync_usage(void
@@ -2472,6 +2835,12 @@ uint16_t uniffi_impala_ffi_checksum_func_format_sync_usage(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_GENERATE_SYNC_KEY
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_GENERATE_SYNC_KEY
 uint16_t uniffi_impala_ffi_checksum_func_generate_sync_key(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_GRADE_TIER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_GRADE_TIER
+uint16_t uniffi_impala_ffi_checksum_func_grade_tier(void
     
 );
 #endif
@@ -2559,6 +2928,60 @@ uint16_t uniffi_impala_ffi_checksum_func_known_subjects(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_CYCLE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_CYCLE_GOAL
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_cycle_goal(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_HOME_NUDGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_HOME_NUDGE
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_home_nudge(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_HOME_NUDGE_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_HOME_NUDGE_TEXT
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_home_nudge_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_MERGED_SECONDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_MERGED_SECONDS
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_merged_seconds(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_NORMALIZE_GOAL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_NORMALIZE_GOAL
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_normalize_goal(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_STREAK_DAYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_STREAK_DAYS
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_streak_days(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_TOTALS_BY_DAY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_TOTALS_BY_DAY
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_totals_by_day(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_WEEK_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_WEEK_DATA
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_week_data(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_WEEKDAY_INDEX
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LEARNING_TIME_WEEKDAY_INDEX
+uint16_t uniffi_impala_ffi_checksum_func_learning_time_weekday_index(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LOCAL_EMBEDDING_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_LOCAL_EMBEDDING_MODEL
 uint16_t uniffi_impala_ffi_checksum_func_local_embedding_model(void
@@ -2595,6 +3018,42 @@ uint16_t uniffi_impala_ffi_checksum_func_markdown_to_blocks(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_CONTINUATION_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_CONTINUATION_BLOCK
+uint16_t uniffi_impala_ffi_checksum_func_md_continuation_block(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_CONVERT_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_CONVERT_BLOCK
+uint16_t uniffi_impala_ffi_checksum_func_md_convert_block(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_INDENT_BLOCK
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_INDENT_BLOCK
+uint16_t uniffi_impala_ffi_checksum_func_md_indent_block(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_LIST_NUMBERS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_LIST_NUMBERS
+uint16_t uniffi_impala_ffi_checksum_func_md_list_numbers(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_SHORTCUT_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_SHORTCUT_TYPE
+uint16_t uniffi_impala_ffi_checksum_func_md_shortcut_type(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_WRAP_MARKERS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MD_WRAP_MARKERS
+uint16_t uniffi_impala_ffi_checksum_func_md_wrap_markers(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MERGE_TEXTS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_MERGE_TEXTS
 uint16_t uniffi_impala_ffi_checksum_func_merge_texts(void
@@ -2604,6 +3063,18 @@ uint16_t uniffi_impala_ffi_checksum_func_merge_texts(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_OVERVIEW_SUBJECT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_OVERVIEW_SUBJECT
 uint16_t uniffi_impala_ffi_checksum_func_overview_subject(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_PICK_ARTICLE_TOPIC
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_PICK_ARTICLE_TOPIC
+uint16_t uniffi_impala_ffi_checksum_func_pick_article_topic(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_RESOLVED_HEFT_COVER
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_RESOLVED_HEFT_COVER
+uint16_t uniffi_impala_ffi_checksum_func_resolved_heft_cover(void
     
 );
 #endif
@@ -2619,6 +3090,36 @@ uint16_t uniffi_impala_ffi_checksum_func_scan_process(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_FILTER_ACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_FILTER_ACTIONS
+uint16_t uniffi_impala_ffi_checksum_func_search_filter_actions(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_HIGHLIGHT_RANGES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_HIGHLIGHT_RANGES
+uint16_t uniffi_impala_ffi_checksum_func_search_highlight_ranges(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_PREVIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_PREVIEW
+uint16_t uniffi_impala_ffi_checksum_func_search_preview(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_SETTINGS_CATALOG
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_SETTINGS_CATALOG
+uint16_t uniffi_impala_ffi_checksum_func_search_settings_catalog(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_SETTINGS_ITEMS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SEARCH_SETTINGS_ITEMS
+uint16_t uniffi_impala_ffi_checksum_func_search_settings_items(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SYNC_RECONNECT_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SYNC_RECONNECT_DELAY_MS
 uint16_t uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms(void
@@ -2628,6 +3129,12 @@ uint16_t uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SYNC_RETRY_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_SYNC_RETRY_DELAY_MS
 uint16_t uniffi_impala_ffi_checksum_func_sync_retry_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_WRAP_CLOZE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_WRAP_CLOZE
+uint16_t uniffi_impala_ffi_checksum_func_wrap_cloze(void
     
 );
 #endif
@@ -2901,6 +3408,12 @@ uint16_t uniffi_impala_ffi_checksum_method_drivetokens_token_expired(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ADD_FILE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ADD_FILE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_add_file(void
@@ -2973,6 +3486,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_archived_pages(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ARTICLE_POOL_IDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ARTICLE_POOL_IDS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_article_pool_ids(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_BACKLINKS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_BACKLINKS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_backlinks(void
@@ -3030,6 +3549,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_chats(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CHILDREN_OF
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CHILDREN_OF
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_children_of(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CHOOSE_ARTICLE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_CHOOSE_ARTICLE_NOTES
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_choose_article_notes(void
     
 );
 #endif
@@ -3111,6 +3636,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_deck_overview(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DECK_TREE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DECK_TREE
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_deck_tree(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DECKS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DECKS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_decks(void
@@ -3165,6 +3696,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_dispatch(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DUPLICATE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DUPLICATE_COUNT
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_duplicate_count(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DUPLICATE_DECK
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_DUPLICATE_DECK
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_duplicate_deck(void
@@ -3180,6 +3717,18 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_empty_card_trash(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EMPTY_PAGE_TRASH
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EMPTY_PAGE_TRASH
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_empty_page_trash(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EXISTING_CARD_KEYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EXISTING_CARD_KEYS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_existing_card_keys(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EXPORT_GRADES_MARKDOWN
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_EXPORT_GRADES_MARKDOWN
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_export_grades_markdown(void
     
 );
 #endif
@@ -3465,6 +4014,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HOME_ANALYSIS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HOME_ANALYSIS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_home_analysis(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HOME_ARTICLE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HOME_ARTICLE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_home_article(void
@@ -3501,9 +4056,51 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_sessions(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_stats(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS_JSON
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_WEEK_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_WEEK_DATA
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_week_data(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_ARCHIVE_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_ARCHIVE_VIEW
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_library_archive_view(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_HEFT_SHELF
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_HEFT_SHELF
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_NOTION_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LIBRARY_NOTION_VIEW
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_library_notion_view(void
     
 );
 #endif
@@ -3585,6 +4182,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_links(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_PATH_LABEL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_PATH_LABEL
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_path_label(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_PROPS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_PROPS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_props(void
@@ -3600,6 +4203,24 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subject(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subtree(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PALETTE_CHATS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PALETTE_CHATS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_palette_chats(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PALETTE_PAGES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PALETTE_PAGES
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_palette_pages(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PATTERN_DATA
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PATTERN_DATA
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_pattern_data(void
     
 );
 #endif
@@ -3768,6 +4389,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SETTINGS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SETTINGS_JSON
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_settings_json(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SIDEBAR_TREE_ROWS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_SIDEBAR_TREE_ROWS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_sidebar_tree_rows(void
     
 );
 #endif

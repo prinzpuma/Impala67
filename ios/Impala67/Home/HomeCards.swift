@@ -11,8 +11,6 @@ struct Recall: Sendable, Equatable {
 /// Wählt täglich eine gelernte Karte für „Weißt du's noch?“ (wie home-view.js / HomeViewModel.kt).
 /// Geht alle Karten durch: nur im Hintergrund aufrufen.
 enum HomeRecall {
-    private static let clozeRegex = try? NSRegularExpression(pattern: #"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}"#)
-
     /// Gemerktes Tagesergebnis: Tag, Karte und deren Vorderseite (zum Erkennen von Änderungen).
     private static let lock = NSLock()
     private static var cached: (day: Int64, recall: Recall, front: String)?
@@ -47,26 +45,13 @@ enum HomeRecall {
         let index = Int(hash % UInt32(pool.count))
         let card = pool[index]
 
-        let front = card.front
-        var question: String
-        var answer: String
-
-        let nsFront = front as NSString
-        let fullRange = NSRange(location: 0, length: nsFront.length)
-        if let regex = clozeRegex, regex.firstMatch(in: front, range: fullRange) != nil {
-            let matches = regex.matches(in: front, range: fullRange)
-            let clozeReplaced = regex.stringByReplacingMatches(in: front, range: fullRange, withTemplate: "＿＿＿")
-            question = markdownCardText(markdown: clozeReplaced)
-            let answers = matches.compactMap { match -> String? in
-                guard match.numberOfRanges > 1 else { return nil }
-                let r = match.range(at: 1)
-                guard r.location != NSNotFound else { return nil }
-                let text = nsFront.substring(with: r)
-                return markdownCardText(markdown: text)
-            }
-            answer = answers.joined(separator: " · ")
+        let question: String
+        let answer: String
+        if let cloze = clozeRecall(front: card.front) {
+            question = markdownCardText(markdown: cloze.question)
+            answer = cloze.answers.map { markdownCardText(markdown: $0) }.joined(separator: " · ")
         } else {
-            question = markdownCardText(markdown: front)
+            question = markdownCardText(markdown: card.front)
             answer = markdownCardText(markdown: card.back)
         }
 

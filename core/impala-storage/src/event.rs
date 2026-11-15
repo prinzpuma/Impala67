@@ -160,7 +160,8 @@ mod tests {
     fn model_choice_is_dropped() {
         let ev = obj(json!({"type": "settingsSet", "payload": {"aiModel": "m", "aiProviderId": "p"}}));
         assert_eq!(drop_model_choice(ev), None);
-        let ev = obj(json!({"type": "settingsSet", "payload": {"embedModel": "e", "aiProviders": [{"id": 1, "key": "k"}]}}));
+        let ev =
+            obj(json!({"type": "settingsSet", "payload": {"embedModel": "e", "aiProviders": [{"id": 1, "key": "k"}]}}));
         assert_eq!(drop_model_choice(ev).unwrap()["payload"], json!({"aiProviders": [{"id": 1, "key": "k"}]}));
     }
 

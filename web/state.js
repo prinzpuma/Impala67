@@ -564,6 +564,19 @@ export const STATE = (() => {
 	const trashedDeckRoots = () => cardMemo("trashedDeckRoots", () => ids(M.trashedDeckRoots())).slice();
 	const orphanArchivedCards = () => cardsOf(cardMemo("orphanArchived", () => ids(M.orphanArchivedCards())));
 	const orphanTrashedCards = () => cardsOf(cardMemo("orphanTrashed", () => ids(M.orphanTrashedCards())));
+	const activeDeckNames = (extraName = null) => cardMemo("activeDeckNames|" + (extraName || ""), () => Object.freeze(JSON.parse(M.activeDeckNames(extraName ? String(extraName) : null))));
+	const deckLabel = (name) => CORE.deckLabel(String(name || ""));
+	const deckParent = (name) => CORE.deckParent(String(name || ""));
+	// Overlearning-Sperre ist standardmäßig aus (nur „on“ schaltet sie ein).
+	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") === "on"; } catch { return false; } };
+	function deckTree(collapsed = [], now = new Date()) {
+		const t = now instanceof Date ? now : new Date(now);
+		const back = t.getHours() < 4 ? 1 : 0;
+		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4);
+		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 1, 4);
+		const collapsedList = Array.isArray(collapsed) ? collapsed : Array.from(collapsed);
+		return JSON.parse(M.deckTree(JSON.stringify(collapsedList), t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock()));
+	}
 	const deckConfOf = (deck) => cardMemo("deckConf|" + (deck || ""), () => Object.freeze(JSON.parse(M.deckConf(String(deck || "")))));
 	const pageTitles = () => activePages().map((pg) => pg.title);
 	// Titel → erste nicht gelöschte Seite (Archiv inklusive): [[Wiki-Links]] im Editor.
@@ -591,8 +604,6 @@ export const STATE = (() => {
 	// zeitabhängig); ein ausdrückliches `now` umgeht den Zwischenspeicher.
 	const LEARN_AHEAD_MS = 20 * 60e3;
 	const _snapCache = { rev: -1, t: 0, map: new Map() };
-	// Overlearning-Sperre ist standardmäßig aus (nur „on“ schaltet sie ein).
-	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") === "on"; } catch { return false; } };
 	function computeStudySnapshot(deck, now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
 		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).
@@ -637,6 +648,20 @@ export const STATE = (() => {
 	// .slice(): Aufrufer dürfen das Ergebnis verändern, ohne den Zwischenspeicher zu beschädigen.
 	const dueCards = () => studySnapshot(null).dueNow.slice();
 
+	function learningStats(deck, now = new Date(), thinkMs = null) {
+		const t = now instanceof Date ? now : new Date(now);
+		const deckArg = deck ? String(deck) : undefined;
+		const thinkArg = thinkMs != null ? Number(thinkMs) : undefined;
+		return JSON.parse(M.learningStats(deckArg, t.getTime(), -t.getTimezoneOffset(), thinkArg));
+	}
+
+	const thinkMedian = () => (M && typeof M.thinkMedian === "function") ? M.thinkMedian() : 0;
+
+	function retentionStats(reviewIds = null) {
+		const arg = Array.isArray(reviewIds) ? JSON.stringify(reviewIds) : null;
+		return (M && typeof M.retentionStats === "function") ? JSON.parse(M.retentionStats(arg)) : null;
+	}
+
 	// Seitenverlauf aus dem Log (append-only, also vollständig). Nur Events dieser Seite gehen in den Kern.
 	async function pageHistory(pageId) {
 		const events = (await DB.allEvents()).filter((ev) => ev?.payload?.id === pageId);
@@ -650,6 +675,23 @@ export const STATE = (() => {
 	const conflictWithTexts = (c) => JSON.parse(M.conflictWithTexts(JSON.stringify(c)));
 	const conflictResolve = (c, action) => JSON.parse(M.conflictResolve(JSON.stringify(c), String(action)));
 
+	// Lernanalyse (Wochenziel, Fächer, Tageszeit, Prognose) und Lernmuster aus dem Kern
+	function homeAnalysis(goalMin, days, pace, now = Date.now(), tzOffset = -(new Date().getTimezoneOffset())) {
+		return M.homeAnalysis(
+			typeof now === "number" ? now : new Date(now).getTime(),
+			tzOffset,
+			goalMin,
+			JSON.stringify(days || []),
+			pace,
+		);
+	}
+	function computeGoal(goalMin, days, today, pace) {
+		return M.computeGoal(goalMin, JSON.stringify(days || []), today, pace);
+	}
+	function patternData() {
+		return M.patternData();
+	}
+
 	return {
 		onChange: null, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
 		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftMeta, heftPreview,
@@ -657,7 +699,16 @@ export const STATE = (() => {
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, favoritePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
-		dueCards, studySnapshot, deckConfOf, backlinksOf, pageHistory,
+		dueCards, studySnapshot, learningStats, thinkMedian, retentionStats, deckConfOf, backlinksOf, pageHistory,
+		homeAnalysis, computeGoal, patternData, activeDeckNames, deckTree, deckLabel, deckParent,
+		libraryNotionTree: (smart = null, tag = null, query = "") => JSON.parse(M.libraryNotionTree(smart || undefined, tag || undefined, String(query || ""))),
+		libraryArchiveTree: (typeFilter = "all", query = "") => JSON.parse(M.libraryArchiveTree(String(typeFilter || "all"), String(query || ""))),
+		libraryGnShelf: (folderId = null, filter = "all", query = "") => JSON.parse(M.libraryGnShelf(folderId || undefined, String(filter || "all"), String(query || ""))),
+		gnFolderDirectCount: (folderId) => M.gnFolderDirectCount(String(folderId || "")),
+		allGrades: () => JSON.parse(M.allGrades()),
+		gradesBySubject: () => JSON.parse(M.gradesBySubject()),
+		exportGradesMarkdown: (todayLabel = "") => M.exportGradesMarkdown(String(todayLabel)),
+		mergedChatSessions: (localRaw = [], now = "") => JSON.parse(M.mergedChatSessions(JSON.stringify(localRaw), String(now))),
 	};
 })();
 

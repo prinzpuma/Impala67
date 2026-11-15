@@ -4,6 +4,10 @@ import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
 import uniffi.impala_ffi.MdHeadingLevel
 import uniffi.impala_ffi.MdListStyle
+import uniffi.impala_ffi.mdContinuationBlock
+import uniffi.impala_ffi.mdConvertBlock
+import uniffi.impala_ffi.mdIndentBlock
+import uniffi.impala_ffi.mdListNumbers
 import java.util.UUID
 
 /** Blocktypen der Werkzeugleiste (SLASH-Liste in web/editor-menus.js, soweit tippbar). */
@@ -53,34 +57,28 @@ internal fun paragraph(text: String = "") = newBlock(MdBlockKind.Paragraph(text)
 
 /** Block in einen anderen Textblock umwandeln; Text, Einzug und Farben bleiben. */
 internal fun MdBlock.convertTo(type: BlockType): MdBlock {
-    val t = text()
-    val indent = (kind as? MdBlockKind.ListItem)?.indent ?: 0u
-    val language = (kind as? MdBlockKind.Code)?.language.orEmpty()
-    val k: MdBlockKind = when (type) {
-        BlockType.Text -> MdBlockKind.Paragraph(t)
-        BlockType.H1 -> MdBlockKind.Heading(MdHeadingLevel.H1, t)
-        BlockType.H2 -> MdBlockKind.Heading(MdHeadingLevel.H2, t)
-        BlockType.H3 -> MdBlockKind.Heading(MdHeadingLevel.H3, t)
-        BlockType.Bullet -> MdBlockKind.ListItem(MdListStyle.Bullet, indent, t)
-        BlockType.Number -> MdBlockKind.ListItem(MdListStyle.Number, indent, t)
-        BlockType.Todo -> MdBlockKind.ListItem(MdListStyle.Todo(false), indent, t)
-        BlockType.Quote -> MdBlockKind.Quote(t)
-        BlockType.Code -> MdBlockKind.Code(language, t)
+    val target = when (type) {
+        BlockType.Text -> "text"
+        BlockType.H1 -> "h1"
+        BlockType.H2 -> "h2"
+        BlockType.H3 -> "h3"
+        BlockType.Bullet -> "bullet"
+        BlockType.Number -> "number"
+        BlockType.Todo -> "todo"
+        BlockType.Quote -> "quote"
+        BlockType.Code -> "code"
     }
-    return copy(kind = k)
+    return mdConvertBlock(this, target)
 }
 
 /** Der Block, der beim Enter hinter diesem entsteht: Listen und Zitate setzen sich fort, sonst Absatz. */
-internal fun MdBlock.continuation(): MdBlock = when (val k = kind) {
-    is MdBlockKind.ListItem -> newBlock(MdBlockKind.ListItem(if (k.style is MdListStyle.Todo) MdListStyle.Todo(false) else k.style, k.indent, ""))
-    is MdBlockKind.Quote -> newBlock(MdBlockKind.Quote(""))
-    else -> paragraph()
+internal fun MdBlock.continuation(): MdBlock {
+    val newId = UUID.randomUUID().toString().take(8)
+    return mdContinuationBlock(this, newId)?.lastOrNull() ?: paragraph()
 }
 
-internal fun MdBlock.withIndent(delta: Int): MdBlock {
-    val k = kind as? MdBlockKind.ListItem ?: return this
-    return copy(kind = k.copy(indent = (k.indent.toInt() + delta).coerceIn(0, 6).toUInt()))
-}
+internal fun MdBlock.withIndent(delta: Int): MdBlock =
+    mdIndentBlock(this, delta)
 
 internal fun MdBlock.withChecked(checked: Boolean): MdBlock {
     val k = kind as? MdBlockKind.ListItem ?: return this
@@ -99,23 +97,5 @@ internal fun List<MdBlock>.mapDeep(id: String, f: (MdBlock) -> MdBlock): List<Md
 }
 
 /** Laufende Nummern nummerierter Listen je Ebene (wie `listNums` in editor.js). */
-internal fun listNumbers(blocks: List<MdBlock>): Map<String, Int> {
-    val out = HashMap<String, Int>()
-    val counters = IntArray(8)
-    for (b in blocks) {
-        val k = b.kind
-        if (k is MdBlockKind.ListItem) {
-            val i = k.indent.toInt().coerceIn(0, 7)
-            for (d in i + 1..7) counters[d] = 0
-            if (k.style is MdListStyle.Number) {
-                counters[i]++
-                out[b.id] = counters[i]
-            } else {
-                counters[i] = 0
-            }
-        } else {
-            counters.fill(0)
-        }
-    }
-    return out
-}
+internal fun listNumbers(blocks: List<MdBlock>): Map<String, Int> =
+    mdListNumbers(blocks).mapValues { it.value.toInt() }

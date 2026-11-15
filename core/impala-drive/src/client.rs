@@ -21,12 +21,12 @@ use serde_json::{Map, Value};
 
 use crate::DriveError;
 use crate::api::{self, Change, Outcome, Upload};
-use crate::policy::DriveMode;
 use crate::clock::{Clock, ClockSkew, retry_delay_ms};
 use crate::format::{
     BLOB_PREFIX, DriveFile, Encoding, FileKind, SNAPSHOT_NAME, SNAPSHOT_NAMES, blob_hash, blob_name, blob_payload,
     delta_name, delta_payload, delta_properties, import_payload, parse_blob_payload,
 };
+use crate::policy::DriveMode;
 use crate::state::{DriveState, FileIndex, UploadHash};
 use crate::store::DriveStore;
 use crate::stream::{BATCH_BYTES, EventReader};

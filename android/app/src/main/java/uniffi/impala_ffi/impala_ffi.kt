@@ -1536,6 +1536,120 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1553,11 +1667,35 @@ internal interface IntegrityCheckingUniffiLib : Library {
     // Integrity check functions only
     fun uniffi_impala_ffi_checksum_func_blocks_to_markdown(
 ): Short
+fun uniffi_impala_ffi_checksum_func_card_duplicate_count(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_export_csv(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_export_txt(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_key(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_parse_card_text(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_parse_impala_txt(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_parse_table_cards(
+): Short
+fun uniffi_impala_ffi_checksum_func_card_strip_html(
+): Short
+fun uniffi_impala_ffi_checksum_func_cloze_recall(
+): Short
+fun uniffi_impala_ffi_checksum_func_compute_goal(
+): Short
 fun uniffi_impala_ffi_checksum_func_conflict_diff_rows(
 ): Short
 fun uniffi_impala_ffi_checksum_func_core_lock_holder(
 ): Short
 fun uniffi_impala_ffi_checksum_func_core_long_lock_holds(
+): Short
+fun uniffi_impala_ffi_checksum_func_deck_label(
+): Short
+fun uniffi_impala_ffi_checksum_func_deck_parent(
 ): Short
 fun uniffi_impala_ffi_checksum_func_default_subject(
 ): Short
@@ -1591,9 +1729,13 @@ fun uniffi_impala_ffi_checksum_func_embedding_model_key(
 ): Short
 fun uniffi_impala_ffi_checksum_func_embedding_setup(
 ): Short
+fun uniffi_impala_ffi_checksum_func_flatten_decks(
+): Short
 fun uniffi_impala_ffi_checksum_func_format_sync_usage(
 ): Short
 fun uniffi_impala_ffi_checksum_func_generate_sync_key(
+): Short
+fun uniffi_impala_ffi_checksum_func_grade_tier(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_build_pdf(
 ): Short
@@ -1623,6 +1765,24 @@ fun uniffi_impala_ffi_checksum_func_heft_snapshot_first_page(
 ): Short
 fun uniffi_impala_ffi_checksum_func_known_subjects(
 ): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_cycle_goal(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_home_nudge(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_home_nudge_text(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_merged_seconds(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_normalize_goal(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_streak_days(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_totals_by_day(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_week_data(
+): Short
+fun uniffi_impala_ffi_checksum_func_learning_time_weekday_index(
+): Short
 fun uniffi_impala_ffi_checksum_func_local_embedding_model(
 ): Short
 fun uniffi_impala_ffi_checksum_func_markdown_card_text(
@@ -1635,17 +1795,45 @@ fun uniffi_impala_ffi_checksum_func_markdown_teaser(
 ): Short
 fun uniffi_impala_ffi_checksum_func_markdown_to_blocks(
 ): Short
+fun uniffi_impala_ffi_checksum_func_md_continuation_block(
+): Short
+fun uniffi_impala_ffi_checksum_func_md_convert_block(
+): Short
+fun uniffi_impala_ffi_checksum_func_md_indent_block(
+): Short
+fun uniffi_impala_ffi_checksum_func_md_list_numbers(
+): Short
+fun uniffi_impala_ffi_checksum_func_md_shortcut_type(
+): Short
+fun uniffi_impala_ffi_checksum_func_md_wrap_markers(
+): Short
 fun uniffi_impala_ffi_checksum_func_merge_texts(
 ): Short
 fun uniffi_impala_ffi_checksum_func_overview_subject(
+): Short
+fun uniffi_impala_ffi_checksum_func_pick_article_topic(
+): Short
+fun uniffi_impala_ffi_checksum_func_resolved_heft_cover(
 ): Short
 fun uniffi_impala_ffi_checksum_func_scan_detect(
 ): Short
 fun uniffi_impala_ffi_checksum_func_scan_process(
 ): Short
+fun uniffi_impala_ffi_checksum_func_search_filter_actions(
+): Short
+fun uniffi_impala_ffi_checksum_func_search_highlight_ranges(
+): Short
+fun uniffi_impala_ffi_checksum_func_search_preview(
+): Short
+fun uniffi_impala_ffi_checksum_func_search_settings_catalog(
+): Short
+fun uniffi_impala_ffi_checksum_func_search_settings_items(
+): Short
 fun uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms(
 ): Short
 fun uniffi_impala_ffi_checksum_func_sync_retry_delay_ms(
+): Short
+fun uniffi_impala_ffi_checksum_func_wrap_cloze(
 ): Short
 fun uniffi_impala_ffi_checksum_func_ws_ping_interval_ms(
 ): Short
@@ -1737,6 +1925,8 @@ fun uniffi_impala_ffi_checksum_method_drivetokens_renew_token(
 ): Short
 fun uniffi_impala_ffi_checksum_method_drivetokens_token_expired(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_add_file(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_add_grade(
@@ -1761,6 +1951,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_archived_decks(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_archived_pages(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_article_pool_ids(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_backlinks(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_can_undo_review(
@@ -1780,6 +1972,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_chat(
 fun uniffi_impala_ffi_checksum_method_impalacore_chats(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_children_of(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_choose_article_notes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_clear_pages(
 ): Short
@@ -1807,6 +2001,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_deck_config(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_deck_overview(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_deck_tree(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_decks(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_delete_all_cards(
@@ -1825,11 +2021,17 @@ fun uniffi_impala_ffi_checksum_method_impalacore_delete_page_forever(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_dispatch(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_duplicate_count(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_duplicate_deck(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_empty_card_trash(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_empty_page_trash(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_existing_card_keys(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_export_grades_markdown(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_export_json(
 ): Short
@@ -1925,6 +2127,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_strokes_bounds(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_home_analysis(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_home_article(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_home_articles(
@@ -1937,7 +2141,21 @@ fun uniffi_impala_ffi_checksum_method_impalacore_learning_session(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_learning_sessions(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_learning_stats(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_learning_week_data(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_library_archive_view(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_library_notion_view(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_load_info(
 ): Short
@@ -1965,11 +2183,19 @@ fun uniffi_impala_ffi_checksum_method_impalacore_page_history(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_links(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_path_label(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_props(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subtree(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_palette_chats(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_palette_pages(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_pattern_data(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_recent_pages(
 ): Short
@@ -2026,6 +2252,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_set_tree_open(
 fun uniffi_impala_ffi_checksum_method_impalacore_set_ui_tabs(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_settings_json(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_sidebar_tree_rows(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_storage_check(
 ): Short
@@ -2320,6 +2548,8 @@ fun uniffi_impala_ffi_fn_constructor_impalacore_open(`dbPath`: RustBuffer.ByValu
 ): Pointer
 fun uniffi_impala_ffi_fn_constructor_impalacore_open_in_memory(uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
+fun uniffi_impala_ffi_fn_method_impalacore_active_plain_cards(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_add_file(`ptr`: Pointer,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_add_grade(`ptr`: Pointer,`subject`: RustBuffer.ByValue,`grade`: Double,`weight`: RustBuffer.ByValue,`date`: RustBuffer.ByValue,`comment`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2344,6 +2574,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_archived_decks(`ptr`: Pointer,uniffi_
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_archived_pages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_article_pool_ids(`ptr`: Pointer,`topic`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_backlinks(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_can_undo_review(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2363,6 +2595,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_chat(`ptr`: Pointer,`id`: RustBuffer.
 fun uniffi_impala_ffi_fn_method_impalacore_chats(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_children_of(`ptr`: Pointer,`parentId`: RustBuffer.ByValue,`workspaceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_choose_article_notes(`ptr`: Pointer,`candidateIds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_clear_pages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -2390,6 +2624,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_deck_config(`ptr`: Pointer,`deck`: Ru
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_deck_overview(`ptr`: Pointer,`utcOffsetMinutes`: Int,`mix`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_deck_tree(`ptr`: Pointer,`collapsed`: RustBuffer.ByValue,`utcOffsetMinutes`: Int,`mix`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_decks(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_delete_all_cards(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2408,12 +2644,18 @@ fun uniffi_impala_ffi_fn_method_impalacore_delete_page_forever(`ptr`: Pointer,`i
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_dispatch(`ptr`: Pointer,`kind`: RustBuffer.ByValue,`payloadJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_duplicate_count(`ptr`: Pointer,`cards`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Long
 fun uniffi_impala_ffi_fn_method_impalacore_duplicate_deck(`ptr`: Pointer,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_empty_card_trash(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
 fun uniffi_impala_ffi_fn_method_impalacore_empty_page_trash(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
+fun uniffi_impala_ffi_fn_method_impalacore_existing_card_keys(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_export_grades_markdown(`ptr`: Pointer,`todayLabel`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_export_json(`ptr`: Pointer,`includeBlobs`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_file(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2508,6 +2750,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_strokes_bounds(`ptr`: Pointer,`p
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_style_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`color`: RustBuffer.ByValue,`size`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_home_analysis(`ptr`: Pointer,`nowMs`: Long,`tzOffsetMinutes`: Int,`goalMin`: Int,`days`: RustBuffer.ByValue,`pace`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_home_article(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_home_articles(`ptr`: Pointer,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
@@ -2520,7 +2764,21 @@ fun uniffi_impala_ffi_fn_method_impalacore_learning_session(`ptr`: Pointer,`id`:
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_learning_sessions(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_learning_stats(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`nowMs`: RustBuffer.ByValue,`utcOffsetMinutes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(`ptr`: Pointer,`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(`ptr`: Pointer,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_learning_week_data(`ptr`: Pointer,`nowMs`: Long,`weekOffset`: Int,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_library_archive_view(`ptr`: Pointer,`filter`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(`ptr`: Pointer,`folderId`: RustBuffer.ByValue,`filter`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_library_notion_view(`ptr`: Pointer,`smart`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_load_info(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2548,11 +2806,19 @@ fun uniffi_impala_ffi_fn_method_impalacore_page_history(`ptr`: Pointer,`id`: Rus
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_links(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_path_label(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_props(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_subject(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_subtree(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_palette_chats(`ptr`: Pointer,`query`: RustBuffer.ByValue,`includeMessages`: Byte,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_palette_pages(`ptr`: Pointer,`query`: RustBuffer.ByValue,`recentLimit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_pattern_data(`ptr`: Pointer,`livePages`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_recent_pages(`ptr`: Pointer,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2609,6 +2875,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_set_tree_open(`ptr`: Pointer,`key`: R
 fun uniffi_impala_ffi_fn_method_impalacore_set_ui_tabs(`ptr`: Pointer,`tabs`: RustBuffer.ByValue,`activeTabId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_settings_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_sidebar_tree_rows(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_storage_check(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2698,11 +2966,35 @@ fun uniffi_impala_ffi_fn_method_textembedder_embed(`ptr`: Pointer,`texts`: RustB
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_blocks_to_markdown(`blocks`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_duplicate_count(`cards`: RustBuffer.ByValue,`seenKeys`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+fun uniffi_impala_ffi_fn_func_card_export_csv(`cards`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_export_txt(`cards`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_key(`front`: RustBuffer.ByValue,`back`: RustBuffer.ByValue,`deck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_parse_card_text(`text`: RustBuffer.ByValue,`defaultDeck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_parse_impala_txt(`text`: RustBuffer.ByValue,`defaultDeck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_parse_table_cards(`text`: RustBuffer.ByValue,`defaultDeck`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_card_strip_html(`html`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_cloze_recall(`front`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_compute_goal(`goalMin`: Int,`days`: RustBuffer.ByValue,`today`: Int,`pace`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_conflict_diff_rows(`left`: RustBuffer.ByValue,`right`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_core_lock_holder(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_core_long_lock_holds(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_deck_label(`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_deck_parent(`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_default_subject(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2736,10 +3028,14 @@ fun uniffi_impala_ffi_fn_func_embedding_model_key(`model`: RustBuffer.ByValue,un
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_embedding_setup(`core`: Pointer,`modelDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_flatten_decks(`overview`: RustBuffer.ByValue,`collapsed`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_format_sync_usage(`bytes`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_generate_sync_key(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_grade_tier(`grade`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_impala_ffi_fn_func_heft_build_pdf(`pages`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_export_file_name(`title`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2768,6 +3064,24 @@ fun uniffi_impala_ffi_fn_func_heft_snapshot_first_page(`snapshot`: RustBuffer.By
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_known_subjects(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_learning_time_cycle_goal(`current`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun uniffi_impala_ffi_fn_func_learning_time_home_nudge(`streak`: Int,`todaySeconds`: Long,`weekSeconds`: Long,`goalMin`: Int,`currentHour`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_learning_time_home_nudge_text(`streak`: Int,`todaySeconds`: Long,`weekSeconds`: Long,`goalMin`: Int,`currentHour`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_learning_time_merged_seconds(`sessions`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+fun uniffi_impala_ffi_fn_func_learning_time_normalize_goal(`stored`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun uniffi_impala_ffi_fn_func_learning_time_streak_days(`totals`: RustBuffer.ByValue,`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun uniffi_impala_ffi_fn_func_learning_time_totals_by_day(`sessions`: RustBuffer.ByValue,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_learning_time_week_data(`totals`: RustBuffer.ByValue,`nowMs`: Long,`weekOffset`: Int,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_learning_time_weekday_index(`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Int
 fun uniffi_impala_ffi_fn_func_local_embedding_model(`modelDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_card_text(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2780,18 +3094,46 @@ fun uniffi_impala_ffi_fn_func_markdown_teaser(`body`: RustBuffer.ByValue,uniffi_
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_markdown_to_blocks(`markdown`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_continuation_block(`block`: RustBuffer.ByValue,`newId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_convert_block(`block`: RustBuffer.ByValue,`targetType`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_indent_block(`block`: RustBuffer.ByValue,`delta`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_list_numbers(`blocks`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_shortcut_type(`line`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_md_wrap_markers(`text`: RustBuffer.ByValue,`startUtf16`: Int,`endUtf16`: Int,`before`: RustBuffer.ByValue,`after`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_merge_texts(`base`: RustBuffer.ByValue,`mine`: RustBuffer.ByValue,`theirs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_overview_subject(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_pick_article_topic(`topicsRaw`: RustBuffer.ByValue,`historyFirstTopics`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_resolved_heft_cover(`cover`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_scan_detect(`img`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_scan_process(`img`: RustBuffer.ByValue,`corners`: RustBuffer.ByValue,`mode`: RustBuffer.ByValue,`rotation`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_search_filter_actions(`actions`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_search_highlight_ranges(`text`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,`terms`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_search_preview(`snippet`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_search_settings_catalog(`query`: RustBuffer.ByValue,`limit`: Int,`platform`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_search_settings_items(`entries`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_sync_reconnect_delay_ms(`attempt`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
 fun uniffi_impala_ffi_fn_func_sync_retry_delay_ms(`attempt`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
+fun uniffi_impala_ffi_fn_func_wrap_cloze(`text`: RustBuffer.ByValue,`selectionStart`: Int,`selectionEnd`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_ws_ping_interval_ms(uniffi_out_err: UniffiRustCallStatus, 
 ): Long
 fun uniffi_impala_ffi_fn_func_ws_ping_message(uniffi_out_err: UniffiRustCallStatus, 
@@ -2925,6 +3267,36 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_blocks_to_markdown() != 45823.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_card_duplicate_count() != 52385.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_export_csv() != 51755.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_export_txt() != 20181.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_key() != 32824.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_parse_card_text() != 21086.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_parse_impala_txt() != 12892.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_parse_table_cards() != 51929.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_card_strip_html() != 53707.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_cloze_recall() != 52584.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_compute_goal() != 45819.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_conflict_diff_rows() != 3952.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2932,6 +3304,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_core_long_lock_holds() != 58262.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_deck_label() != 20186.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_deck_parent() != 44475.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_default_subject() != 39744.toShort()) {
@@ -2982,10 +3360,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_embedding_setup() != 16401.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_flatten_decks() != 50954.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_format_sync_usage() != 35532.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_generate_sync_key() != 42273.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_grade_tier() != 15175.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_build_pdf() != 18652.toShort()) {
@@ -3030,6 +3414,33 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_known_subjects() != 19235.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_cycle_goal() != 14173.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_home_nudge() != 17005.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_home_nudge_text() != 50608.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_merged_seconds() != 13183.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_normalize_goal() != 18288.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 45686.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 4986.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_week_data() != 27895.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 40126.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3048,10 +3459,34 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_markdown_to_blocks() != 43341.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_md_continuation_block() != 19286.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_md_convert_block() != 26821.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_md_indent_block() != 65217.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_md_list_numbers() != 12994.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_md_shortcut_type() != 19708.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_md_wrap_markers() != 12569.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_merge_texts() != 21845.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_overview_subject() != 28504.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_pick_article_topic() != 28913.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_resolved_heft_cover() != 12440.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_scan_detect() != 8517.toShort()) {
@@ -3060,10 +3495,28 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_scan_process() != 37929.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_search_filter_actions() != 38398.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_search_highlight_ranges() != 53195.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_search_preview() != 5993.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_search_settings_catalog() != 27008.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_search_settings_items() != 40169.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_sync_reconnect_delay_ms() != 27487.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_sync_retry_delay_ms() != 52390.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_wrap_cloze() != 62727.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_ws_ping_interval_ms() != 26635.toShort()) {
@@ -3201,6 +3654,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_drivetokens_token_expired() != 14649.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards() != 4946.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_add_file() != 41519.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3237,6 +3693,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_archived_pages() != 19295.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_article_pool_ids() != 45343.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_backlinks() != 31340.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3265,6 +3724,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_children_of() != 44896.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_choose_article_notes() != 59499.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_clear_pages() != 2531.toShort()) {
@@ -3306,6 +3768,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_deck_overview() != 63645.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_deck_tree() != 62951.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_decks() != 11748.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3333,6 +3798,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_dispatch() != 2010.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_duplicate_count() != 9008.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_duplicate_deck() != 23948.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3340,6 +3808,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_empty_page_trash() != 61975.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_existing_card_keys() != 4883.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_export_grades_markdown() != 18059.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_export_json() != 54264.toShort()) {
@@ -3483,6 +3957,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes() != 61548.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 52076.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_home_article() != 46611.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3501,7 +3978,28 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_sessions() != 60078.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 13464.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json() != 14105.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days() != 23959.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day() != 2938.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_week_data() != 18399.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_library_archive_view() != 22816.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf() != 30483.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_library_notion_view() != 53167.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_load_info() != 7430.toShort()) {
@@ -3543,6 +4041,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_links() != 31208.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_path_label() != 56669.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_props() != 52506.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3550,6 +4051,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_palette_chats() != 55124.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_palette_pages() != 50741.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_pattern_data() != 63352.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_recent_pages() != 24241.toShort()) {
@@ -3634,6 +4144,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_settings_json() != 60537.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_sidebar_tree_rows() != 51321.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_storage_check() != 52100.toShort()) {
@@ -7871,6 +8384,11 @@ public object FfiConverterTypeDriveTokens: FfiConverter<DriveTokens, Pointer> {
 public interface ImpalaCoreInterface {
     
     /**
+     * Aktive Karten für den Export (ohne Papierkorb und Archiv).
+     */
+    fun `activePlainCards`(): List<PlainCard>
+    
+    /**
      * Bild oder Datei speichern; liefert die ID fÃ¼r den Seiteninhalt (`img:â€¦` fÃ¼r Bilder, sonst
      * `file:â€¦`, wie im Editor der PWA). Der Sync Ã¼bertrÃ¤gt sie mit der nÃ¤chsten SeitenÃ¤nderung.
      */
@@ -7936,6 +8454,11 @@ public interface ImpalaCoreInterface {
     fun `archivedPages`(): List<PageSummary>
     
     /**
+     * Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+     */
+    fun `articlePoolIds`(`topic`: kotlin.String?): List<kotlin.String>
+    
+    /**
      * Seiten, die per `[[Titel]]` auf diese verweisen.
      */
     fun `backlinks`(`id`: kotlin.String): List<PageSummary>
@@ -7983,6 +8506,11 @@ public interface ImpalaCoreInterface {
      * Sichtbare Unterseiten in Seitenleisten-Reihenfolge; ohne `parent_id` die Wurzeln von `workspace_id`.
      */
     fun `childrenOf`(`parentId`: kotlin.String?, `workspaceId`: kotlin.String?): List<PageSummary>
+    
+    /**
+     * Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+     */
+    fun `chooseArticleNotes`(`candidateIds`: List<kotlin.String>): List<ArticleNoteItem>
     
     /**
      * Seiten-Reset (`DB.clearPages`): Seiten- und Heft-Events, Vektoren und Dateien entfernen;
@@ -8054,6 +8582,12 @@ public interface ImpalaCoreInterface {
     fun `deckOverview`(`utcOffsetMinutes`: kotlin.Int, `mix`: kotlin.Boolean): List<DeckOverview>
     
     /**
+     * Fertiger Stapelbaum: Hierarchie aus "A::B"-Namen, Tiefe, Elternteil, Kurzname,
+     * aktive Stapel, eingeklappt-Zustand als Eingabe, Zähler je Knoten summiert.
+     */
+    fun `deckTree`(`collapsed`: List<kotlin.String>, `utcOffsetMinutes`: kotlin.Int, `mix`: kotlin.Boolean): List<DeckEntry>
+    
+    /**
      * Stapel außerhalb von Papierkorb und Archiv, mit Kartenzahl.
      */
     fun `decks`(): List<DeckInfo>
@@ -8102,6 +8636,11 @@ public interface ImpalaCoreInterface {
     fun `dispatch`(`kind`: kotlin.String, `payloadJson`: kotlin.String): kotlin.String
     
     /**
+     * Duplikate in den übergebenen Karten gegenüber der Datenbank zählen.
+     */
+    fun `duplicateCount`(`cards`: List<PlainCard>): kotlin.ULong
+    
+    /**
      * Stapel samt Unterstapeln und aktiven Karten kopieren (Lernstand der Kopie neu); liefert den
      * Namen der Kopie (`"Name (Kopie)"`).
      */
@@ -8118,6 +8657,16 @@ public interface ImpalaCoreInterface {
      * Papierkorb leeren.
      */
     fun `emptyPageTrash`(): kotlin.UInt
+    
+    /**
+     * Bestehende Kartenschlüssel für Duplikaterkennung.
+     */
+    fun `existingCardKeys`(): List<kotlin.String>
+    
+    /**
+     * Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+     */
+    fun `exportGradesMarkdown`(`todayLabel`: kotlin.String): kotlin.String
     
     /**
      * Export im Format der PWA (`exportAll`), Geheimnisse entfernt.
@@ -8360,6 +8909,11 @@ public interface ImpalaCoreInterface {
      */
     fun `heftStyleStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>, `color`: kotlin.String?, `size`: kotlin.Double?): HeftEdit
     
+    /**
+     * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
+     */
+    fun `homeAnalysis`(`nowMs`: kotlin.Long, `tzOffsetMinutes`: kotlin.Int, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis?
+    
     fun `homeArticle`(`id`: kotlin.String): HomeArticleInfo?
     
     /**
@@ -8385,10 +8939,45 @@ public interface ImpalaCoreInterface {
     fun `learningSessions`(): List<LearningSessionInfo>
     
     /**
+     * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
+     */
+    fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `utcOffsetMinutes`: kotlin.Int?): LearningStats
+    
+    /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */
     fun `learningStatsJson`(): kotlin.String
+    
+    /**
+     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+     */
+    fun `learningStreakDays`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt
+    
+    /**
+     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
+     */
+    fun `learningTotalsByDay`(`offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong>
+    
+    /**
+     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+     */
+    fun `learningWeekData`(`nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong>
+    
+    /**
+     * Archiv-Liste für die Bibliothek samt Filter-Zählern.
+     */
+    fun `libraryArchiveView`(`filter`: kotlin.String, `query`: kotlin.String): ArchiveLibraryView
+    
+    /**
+     * GoodNotes-Regal für die Bibliothek (Ordner, Hefte mit Seitenzahl, Zähler, Brotkrumen).
+     */
+    fun `libraryHeftShelf`(`folderId`: kotlin.String?, `filter`: kotlin.String, `query`: kotlin.String): HeftShelfData
+    
+    /**
+     * Notion-Seitenbaum für die Bibliothek samt Filter-Zählern.
+     */
+    fun `libraryNotionView`(`smart`: kotlin.String, `query`: kotlin.String): NotionLibraryView
     
     fun `loadInfo`(): LoadInfo
     
@@ -8459,6 +9048,11 @@ public interface ImpalaCoreInterface {
     fun `pageLinks`(): List<PageLink>
     
     /**
+     * Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+     */
+    fun `pagePathLabel`(`pageId`: kotlin.String): kotlin.String
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */
     fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String>
@@ -8472,6 +9066,23 @@ public interface ImpalaCoreInterface {
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
     fun `pageSubtree`(`id`: kotlin.String): List<kotlin.String>
+    
+    /**
+     * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
+     * ohne `query` die ersten `limit` Chats, mit `query` Treffer in Titel oder Nachrichteninhalt.
+     */
+    fun `paletteChats`(`query`: kotlin.String, `includeMessages`: kotlin.Boolean, `limit`: kotlin.UInt): List<ChatInfo>
+    
+    /**
+     * Seitentreffer für die Befehlspalette: ohne `query` die `recent_limit` zuletzt bearbeiteten Seiten,
+     * mit `query` die Volltext-Treffer (inkl. Archiv) samt gekürztem Vorschau-Ausschnitt und Brotkrumen-Pfad.
+     */
+    fun `palettePages`(`query`: kotlin.String, `recentLimit`: kotlin.UInt): List<PalettePageHit>
+    
+    /**
+     * Lernmuster des Statistik-Tabs (Position, Timer, Tageszeit, Experimente, Problemzonen).
+     */
+    fun `patternData`(`livePages`: List<kotlin.String>?): PatternData
     
     /**
      * Alle Seiten auÃŸerhalb von Papierkorb und Archiv, zuletzt geÃ¤nderte zuerst.
@@ -8627,6 +9238,11 @@ public interface ImpalaCoreInterface {
      * `deckConf`, `driveAutoSyncMinutes`). Geheimnisse (`cfSyncKey`, KI-Schlüssel) sind enthalten.
      */
     fun `settingsJson`(): kotlin.String
+    
+    /**
+     * Sichtbare Zeilen der Seitenleiste (Favoriten + Arbeitsbereiche + ausgeklappte Seiten).
+     */
+    fun `sidebarTreeRows`(): List<SidebarRowInfo>
     
     /**
      * Kontrolle gegen doppelten oder verwaisten Speicher (Speicheranzeige). Liest alle Bild-Events
@@ -8810,6 +9426,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
             UniffiLib.INSTANCE.uniffi_impala_ffi_fn_clone_impalacore(pointer!!, status)
         }
     }
+
+    
+    /**
+     * Aktive Karten für den Export (ohne Papierkorb und Archiv).
+     */override fun `activePlainCards`(): List<PlainCard> {
+            return FfiConverterSequenceTypePlainCard.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_active_plain_cards(
+        it, _status)
+}
+    }
+    )
+    }
+    
 
     
     /**
@@ -9002,6 +9633,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Notizen-Pool für ein Tagesartikel-Thema (`None` = alle Seiten).
+     */override fun `articlePoolIds`(`topic`: kotlin.String?): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_article_pool_ids(
+        it, FfiConverterOptionalString.lower(`topic`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Seiten, die per `[[Titel]]` auf diese verweisen.
      */override fun `backlinks`(`id`: kotlin.String): List<PageSummary> {
             return FfiConverterSequenceTypePageSummary.lift(
@@ -9144,6 +9790,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_children_of(
         it, FfiConverterOptionalString.lower(`parentId`),FfiConverterOptionalString.lower(`workspaceId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Notizen für den Tagesartikel auswählen und auf das Zeichen-Budget kürzen.
+     */override fun `chooseArticleNotes`(`candidateIds`: List<kotlin.String>): List<ArticleNoteItem> {
+            return FfiConverterSequenceTypeArticleNoteItem.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_choose_article_notes(
+        it, FfiConverterSequenceString.lower(`candidateIds`),_status)
 }
     }
     )
@@ -9358,6 +10019,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Fertiger Stapelbaum: Hierarchie aus "A::B"-Namen, Tiefe, Elternteil, Kurzname,
+     * aktive Stapel, eingeklappt-Zustand als Eingabe, Zähler je Knoten summiert.
+     */override fun `deckTree`(`collapsed`: List<kotlin.String>, `utcOffsetMinutes`: kotlin.Int, `mix`: kotlin.Boolean): List<DeckEntry> {
+            return FfiConverterSequenceTypeDeckEntry.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_deck_tree(
+        it, FfiConverterSequenceString.lower(`collapsed`),FfiConverterInt.lower(`utcOffsetMinutes`),FfiConverterBoolean.lower(`mix`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Stapel außerhalb von Papierkorb und Archiv, mit Kartenzahl.
      */override fun `decks`(): List<DeckInfo> {
             return FfiConverterSequenceTypeDeckInfo.lift(
@@ -9498,6 +10175,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Duplikate in den übergebenen Karten gegenüber der Datenbank zählen.
+     */override fun `duplicateCount`(`cards`: List<PlainCard>): kotlin.ULong {
+            return FfiConverterULong.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_duplicate_count(
+        it, FfiConverterSequenceTypePlainCard.lower(`cards`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Stapel samt Unterstapeln und aktiven Karten kopieren (Lernstand der Kopie neu); liefert den
      * Namen der Kopie (`"Name (Kopie)"`).
      */
@@ -9541,6 +10233,36 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_empty_page_trash(
         it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Bestehende Kartenschlüssel für Duplikaterkennung.
+     */override fun `existingCardKeys`(): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_existing_card_keys(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Markdown-Export aller Schulnoten (`today_label` z. B. `"07.11.2026"`).
+     */override fun `exportGradesMarkdown`(`todayLabel`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_export_grades_markdown(
+        it, FfiConverterString.lower(`todayLabel`),_status)
 }
     }
     )
@@ -10291,6 +11013,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     }
     
 
+    
+    /**
+     * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
+     */override fun `homeAnalysis`(`nowMs`: kotlin.Long, `tzOffsetMinutes`: kotlin.Int, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis? {
+            return FfiConverterOptionalTypeHomeAnalysis.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_home_analysis(
+        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`tzOffsetMinutes`),FfiConverterInt.lower(`goalMin`),FfiConverterSequenceDouble.lower(`days`),FfiConverterDouble.lower(`pace`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `homeArticle`(`id`: kotlin.String): HomeArticleInfo? {
             return FfiConverterOptionalTypeHomeArticleInfo.lift(
     callWithPointer {
@@ -10378,6 +11115,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
+     */override fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `utcOffsetMinutes`: kotlin.Int?): LearningStats {
+            return FfiConverterTypeLearningStats.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_stats(
+        it, FfiConverterOptionalString.lower(`deck`),FfiConverterOptionalLong.lower(`nowMs`),FfiConverterOptionalInt.lower(`utcOffsetMinutes`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */override fun `learningStatsJson`(): kotlin.String {
@@ -10386,6 +11138,96 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(
         it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
+     */override fun `learningStreakDays`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(
+        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
+     */override fun `learningTotalsByDay`(`offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong> {
+            return FfiConverterMapStringULong.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(
+        it, FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
+     */override fun `learningWeekData`(`nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong> {
+            return FfiConverterSequenceULong.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_week_data(
+        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`weekOffset`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Archiv-Liste für die Bibliothek samt Filter-Zählern.
+     */override fun `libraryArchiveView`(`filter`: kotlin.String, `query`: kotlin.String): ArchiveLibraryView {
+            return FfiConverterTypeArchiveLibraryView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_library_archive_view(
+        it, FfiConverterString.lower(`filter`),FfiConverterString.lower(`query`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * GoodNotes-Regal für die Bibliothek (Ordner, Hefte mit Seitenzahl, Zähler, Brotkrumen).
+     */override fun `libraryHeftShelf`(`folderId`: kotlin.String?, `filter`: kotlin.String, `query`: kotlin.String): HeftShelfData {
+            return FfiConverterTypeHeftShelfData.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(
+        it, FfiConverterOptionalString.lower(`folderId`),FfiConverterString.lower(`filter`),FfiConverterString.lower(`query`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Notion-Seitenbaum für die Bibliothek samt Filter-Zählern.
+     */override fun `libraryNotionView`(`smart`: kotlin.String, `query`: kotlin.String): NotionLibraryView {
+            return FfiConverterTypeNotionLibraryView.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_library_notion_view(
+        it, FfiConverterString.lower(`smart`),FfiConverterString.lower(`query`),_status)
 }
     }
     )
@@ -10595,6 +11437,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Brotkrumen-Pfad einer Seite (`Workspace › Eltern › …`).
+     */override fun `pagePathLabel`(`pageId`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_path_label(
+        it, FfiConverterString.lower(`pageId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Eigenschaften (`props`) einer Seite als Text.
      */override fun `pageProps`(`id`: kotlin.String): Map<kotlin.String, kotlin.String> {
             return FfiConverterMapStringString.lift(
@@ -10632,6 +11489,53 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_subtree(
         it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
+     * ohne `query` die ersten `limit` Chats, mit `query` Treffer in Titel oder Nachrichteninhalt.
+     */override fun `paletteChats`(`query`: kotlin.String, `includeMessages`: kotlin.Boolean, `limit`: kotlin.UInt): List<ChatInfo> {
+            return FfiConverterSequenceTypeChatInfo.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_palette_chats(
+        it, FfiConverterString.lower(`query`),FfiConverterBoolean.lower(`includeMessages`),FfiConverterUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Seitentreffer für die Befehlspalette: ohne `query` die `recent_limit` zuletzt bearbeiteten Seiten,
+     * mit `query` die Volltext-Treffer (inkl. Archiv) samt gekürztem Vorschau-Ausschnitt und Brotkrumen-Pfad.
+     */override fun `palettePages`(`query`: kotlin.String, `recentLimit`: kotlin.UInt): List<PalettePageHit> {
+            return FfiConverterSequenceTypePalettePageHit.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_palette_pages(
+        it, FfiConverterString.lower(`query`),FfiConverterUInt.lower(`recentLimit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Lernmuster des Statistik-Tabs (Position, Timer, Tageszeit, Experimente, Problemzonen).
+     */override fun `patternData`(`livePages`: List<kotlin.String>?): PatternData {
+            return FfiConverterTypePatternData.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_pattern_data(
+        it, FfiConverterOptionalSequenceString.lower(`livePages`),_status)
 }
     }
     )
@@ -11071,6 +11975,21 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_settings_json(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sichtbare Zeilen der Seitenleiste (Favoriten + Arbeitsbereiche + ausgeklappte Seiten).
+     */override fun `sidebarTreeRows`(): List<SidebarRowInfo> {
+            return FfiConverterSequenceTypeSidebarRowInfo.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_sidebar_tree_rows(
         it, _status)
 }
     }
@@ -12917,6 +13836,86 @@ public object FfiConverterTypeAiRunRequest: FfiConverterRustBuffer<AiRunRequest>
 
 
 
+data class ArchiveLibraryView (
+    var `allCount`: kotlin.UInt, 
+    var `pageCount`: kotlin.UInt, 
+    var `heftCount`: kotlin.UInt, 
+    var `shown`: List<PageSummary>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeArchiveLibraryView: FfiConverterRustBuffer<ArchiveLibraryView> {
+    override fun read(buf: ByteBuffer): ArchiveLibraryView {
+        return ArchiveLibraryView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypePageSummary.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ArchiveLibraryView) = (
+            FfiConverterUInt.allocationSize(value.`allCount`) +
+            FfiConverterUInt.allocationSize(value.`pageCount`) +
+            FfiConverterUInt.allocationSize(value.`heftCount`) +
+            FfiConverterSequenceTypePageSummary.allocationSize(value.`shown`)
+    )
+
+    override fun write(value: ArchiveLibraryView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`allCount`, buf)
+            FfiConverterUInt.write(value.`pageCount`, buf)
+            FfiConverterUInt.write(value.`heftCount`, buf)
+            FfiConverterSequenceTypePageSummary.write(value.`shown`, buf)
+    }
+}
+
+
+
+data class ArticleNoteItem (
+    var `id`: kotlin.String, 
+    var `title`: kotlin.String, 
+    var `text`: kotlin.String, 
+    var `archived`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeArticleNoteItem: FfiConverterRustBuffer<ArticleNoteItem> {
+    override fun read(buf: ByteBuffer): ArticleNoteItem {
+        return ArticleNoteItem(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ArticleNoteItem) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`title`) +
+            FfiConverterString.allocationSize(value.`text`) +
+            FfiConverterBoolean.allocationSize(value.`archived`)
+    )
+
+    override fun write(value: ArticleNoteItem, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`title`, buf)
+            FfiConverterString.write(value.`text`, buf)
+            FfiConverterBoolean.write(value.`archived`, buf)
+    }
+}
+
+
+
 /**
  * Notiz, aus der ein Tagesartikel entstand.
  */
@@ -12951,6 +13950,82 @@ public object FfiConverterTypeArticleSource: FfiConverterRustBuffer<ArticleSourc
             FfiConverterString.write(value.`id`, buf)
             FfiConverterString.write(value.`title`, buf)
             FfiConverterBoolean.write(value.`archived`, buf)
+    }
+}
+
+
+
+data class BestTime (
+    var `slots`: List<Slot>, 
+    var `best`: Slot?, 
+    var `text`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBestTime: FfiConverterRustBuffer<BestTime> {
+    override fun read(buf: ByteBuffer): BestTime {
+        return BestTime(
+            FfiConverterSequenceTypeSlot.read(buf),
+            FfiConverterOptionalTypeSlot.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: BestTime) = (
+            FfiConverterSequenceTypeSlot.allocationSize(value.`slots`) +
+            FfiConverterOptionalTypeSlot.allocationSize(value.`best`) +
+            FfiConverterString.allocationSize(value.`text`)
+    )
+
+    override fun write(value: BestTime, buf: ByteBuffer) {
+            FfiConverterSequenceTypeSlot.write(value.`slots`, buf)
+            FfiConverterOptionalTypeSlot.write(value.`best`, buf)
+            FfiConverterString.write(value.`text`, buf)
+    }
+}
+
+
+
+data class BestandRecord (
+    var `neu`: kotlin.UInt, 
+    var `lernen`: kotlin.UInt, 
+    var `wiederholen`: kotlin.UInt, 
+    var `ausgesetzt`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBestandRecord: FfiConverterRustBuffer<BestandRecord> {
+    override fun read(buf: ByteBuffer): BestandRecord {
+        return BestandRecord(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: BestandRecord) = (
+            FfiConverterUInt.allocationSize(value.`neu`) +
+            FfiConverterUInt.allocationSize(value.`lernen`) +
+            FfiConverterUInt.allocationSize(value.`wiederholen`) +
+            FfiConverterUInt.allocationSize(value.`ausgesetzt`)
+    )
+
+    override fun write(value: BestandRecord, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`neu`, buf)
+            FfiConverterUInt.write(value.`lernen`, buf)
+            FfiConverterUInt.write(value.`wiederholen`, buf)
+            FfiConverterUInt.write(value.`ausgesetzt`, buf)
     }
 }
 
@@ -13487,6 +14562,76 @@ public object FfiConverterTypeChildList: FfiConverterRustBuffer<ChildList> {
 
 
 /**
+ * Frage (mit „＿＿＿“ maskiert) und Roh-Antworten für die Tageskarten-Vorschau (Recall).
+ */
+data class ClozeRecall (
+    var `question`: kotlin.String, 
+    var `answers`: List<kotlin.String>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeClozeRecall: FfiConverterRustBuffer<ClozeRecall> {
+    override fun read(buf: ByteBuffer): ClozeRecall {
+        return ClozeRecall(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ClozeRecall) = (
+            FfiConverterString.allocationSize(value.`question`) +
+            FfiConverterSequenceString.allocationSize(value.`answers`)
+    )
+
+    override fun write(value: ClozeRecall, buf: ByteBuffer) {
+            FfiConverterString.write(value.`question`, buf)
+            FfiConverterSequenceString.write(value.`answers`, buf)
+    }
+}
+
+
+
+/**
+ * Ergebnis von [`wrap_cloze`]: geänderter Text und Schreibmarkenposition (UTF-16-Offset).
+ */
+data class ClozeWrap (
+    var `text`: kotlin.String, 
+    var `cursor`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeClozeWrap: FfiConverterRustBuffer<ClozeWrap> {
+    override fun read(buf: ByteBuffer): ClozeWrap {
+        return ClozeWrap(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ClozeWrap) = (
+            FfiConverterString.allocationSize(value.`text`) +
+            FfiConverterUInt.allocationSize(value.`cursor`)
+    )
+
+    override fun write(value: ClozeWrap, buf: ByteBuffer) {
+            FfiConverterString.write(value.`text`, buf)
+            FfiConverterUInt.write(value.`cursor`, buf)
+    }
+}
+
+
+
+/**
  * Eine angebotene Entscheidung.
  */
 data class ConflictChoice (
@@ -13822,6 +14967,152 @@ public object FfiConverterTypeDeckConfig: FfiConverterRustBuffer<DeckConfig> {
 
 
 
+/**
+ * Eine Zeile im Stapelbaum mit Kennzahlen.
+ */
+data class DeckEntry (
+    /**
+     * Voller Name; Unterstapel als `"Eltern::Kind"`.
+     */
+    var `name`: kotlin.String, 
+    /**
+     * Kurzname / letzter Abschnitt („Analysis“ bei „Mathe::Analysis“).
+     */
+    var `label`: kotlin.String, 
+    /**
+     * Elternstapel (`None` bei oberster Ebene).
+     */
+    var `parent`: kotlin.String?, 
+    /**
+     * Ebene im Baum (0 = oberste Ebene).
+     */
+    var `depth`: kotlin.Int, 
+    /**
+     * Hat dieser Stapel sichtbare Unterstapel?
+     */
+    var `hasKids`: kotlin.Boolean, 
+    /**
+     * Ist dieser Stapel eingeklappt?
+     */
+    var `collapsed`: kotlin.Boolean, 
+    /**
+     * Aktive Karten im Stapel samt Unterstapeln.
+     */
+    var `total`: kotlin.ULong, 
+    /**
+     * Davon ausgesetzt.
+     */
+    var `suspended`: kotlin.ULong, 
+    /**
+     * Neue Karten heute (mit Tageslimit).
+     */
+    var `new`: kotlin.ULong, 
+    /**
+     * Offene Lernschritte heute.
+     */
+    var `learn`: kotlin.ULong, 
+    /**
+     * Jetzt fällige Lernschritte.
+     */
+    var `learnNow`: kotlin.ULong, 
+    /**
+     * Fällige Wiederholungen (mit Tageslimit).
+     */
+    var `review`: kotlin.ULong, 
+    /**
+     * Fällige Karten (`review + learn`).
+     */
+    var `due`: kotlin.ULong, 
+    /**
+     * Jetzt fällige Karten (`review + learn_now`).
+     */
+    var `dueNow`: kotlin.ULong, 
+    /**
+     * Karten heute offen (`!done`).
+     */
+    var `open`: kotlin.Boolean, 
+    /**
+     * Manuelle Reihenfolge (`reorder_decks`), `None` = alphabetisch.
+     */
+    var `order`: kotlin.Double?, 
+    /**
+     * Eingebettete Übersicht für direkte Kompatibilität (`entry.deck.xxx`).
+     */
+    var `deck`: DeckOverview
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDeckEntry: FfiConverterRustBuffer<DeckEntry> {
+    override fun read(buf: ByteBuffer): DeckEntry {
+        return DeckEntry(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterTypeDeckOverview.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DeckEntry) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterOptionalString.allocationSize(value.`parent`) +
+            FfiConverterInt.allocationSize(value.`depth`) +
+            FfiConverterBoolean.allocationSize(value.`hasKids`) +
+            FfiConverterBoolean.allocationSize(value.`collapsed`) +
+            FfiConverterULong.allocationSize(value.`total`) +
+            FfiConverterULong.allocationSize(value.`suspended`) +
+            FfiConverterULong.allocationSize(value.`new`) +
+            FfiConverterULong.allocationSize(value.`learn`) +
+            FfiConverterULong.allocationSize(value.`learnNow`) +
+            FfiConverterULong.allocationSize(value.`review`) +
+            FfiConverterULong.allocationSize(value.`due`) +
+            FfiConverterULong.allocationSize(value.`dueNow`) +
+            FfiConverterBoolean.allocationSize(value.`open`) +
+            FfiConverterOptionalDouble.allocationSize(value.`order`) +
+            FfiConverterTypeDeckOverview.allocationSize(value.`deck`)
+    )
+
+    override fun write(value: DeckEntry, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterOptionalString.write(value.`parent`, buf)
+            FfiConverterInt.write(value.`depth`, buf)
+            FfiConverterBoolean.write(value.`hasKids`, buf)
+            FfiConverterBoolean.write(value.`collapsed`, buf)
+            FfiConverterULong.write(value.`total`, buf)
+            FfiConverterULong.write(value.`suspended`, buf)
+            FfiConverterULong.write(value.`new`, buf)
+            FfiConverterULong.write(value.`learn`, buf)
+            FfiConverterULong.write(value.`learnNow`, buf)
+            FfiConverterULong.write(value.`review`, buf)
+            FfiConverterULong.write(value.`due`, buf)
+            FfiConverterULong.write(value.`dueNow`, buf)
+            FfiConverterBoolean.write(value.`open`, buf)
+            FfiConverterOptionalDouble.write(value.`order`, buf)
+            FfiConverterTypeDeckOverview.write(value.`deck`, buf)
+    }
+}
+
+
+
 data class DeckInfo (
     /**
      * Voller Name; Unterstapel als `"Eltern::Kind"`.
@@ -13922,6 +15213,50 @@ public object FfiConverterTypeDeckOverview: FfiConverterRustBuffer<DeckOverview>
             FfiConverterULong.write(value.`new`, buf)
             FfiConverterULong.write(value.`learn`, buf)
             FfiConverterULong.write(value.`review`, buf)
+    }
+}
+
+
+
+data class DeckRowRecord (
+    var `name`: kotlin.String, 
+    var `n`: kotlin.UInt, 
+    var `due`: kotlin.UInt, 
+    var `reif`: kotlin.UInt, 
+    var `rate`: kotlin.Double?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDeckRowRecord: FfiConverterRustBuffer<DeckRowRecord> {
+    override fun read(buf: ByteBuffer): DeckRowRecord {
+        return DeckRowRecord(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DeckRowRecord) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterUInt.allocationSize(value.`n`) +
+            FfiConverterUInt.allocationSize(value.`due`) +
+            FfiConverterUInt.allocationSize(value.`reif`) +
+            FfiConverterOptionalDouble.allocationSize(value.`rate`)
+    )
+
+    override fun write(value: DeckRowRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+            FfiConverterUInt.write(value.`due`, buf)
+            FfiConverterUInt.write(value.`reif`, buf)
+            FfiConverterOptionalDouble.write(value.`rate`, buf)
     }
 }
 
@@ -14310,6 +15645,82 @@ public object FfiConverterTypeDriveStorage: FfiConverterRustBuffer<DriveStorage>
 
 
 
+data class DueWeek (
+    var `counts`: List<kotlin.Int>, 
+    var `labels`: List<kotlin.String>, 
+    var `peak`: kotlin.Int, 
+    var `text`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDueWeek: FfiConverterRustBuffer<DueWeek> {
+    override fun read(buf: ByteBuffer): DueWeek {
+        return DueWeek(
+            FfiConverterSequenceInt.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DueWeek) = (
+            FfiConverterSequenceInt.allocationSize(value.`counts`) +
+            FfiConverterSequenceString.allocationSize(value.`labels`) +
+            FfiConverterInt.allocationSize(value.`peak`) +
+            FfiConverterString.allocationSize(value.`text`)
+    )
+
+    override fun write(value: DueWeek, buf: ByteBuffer) {
+            FfiConverterSequenceInt.write(value.`counts`, buf)
+            FfiConverterSequenceString.write(value.`labels`, buf)
+            FfiConverterInt.write(value.`peak`, buf)
+            FfiConverterString.write(value.`text`, buf)
+    }
+}
+
+
+
+data class ExpRow (
+    var `label`: kotlin.String, 
+    var `n`: kotlin.Int, 
+    var `average`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExpRow: FfiConverterRustBuffer<ExpRow> {
+    override fun read(buf: ByteBuffer): ExpRow {
+        return ExpRow(
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ExpRow) = (
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterInt.allocationSize(value.`n`) +
+            FfiConverterDouble.allocationSize(value.`average`)
+    )
+
+    override fun write(value: ExpRow, buf: ByteBuffer) {
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterInt.write(value.`n`, buf)
+            FfiConverterDouble.write(value.`average`, buf)
+    }
+}
+
+
+
 data class FileData (
     var `bytes`: kotlin.ByteArray, 
     /**
@@ -14344,6 +15755,102 @@ public object FfiConverterTypeFileData: FfiConverterRustBuffer<FileData> {
             FfiConverterByteArray.write(value.`bytes`, buf)
             FfiConverterString.write(value.`mime`, buf)
             FfiConverterString.write(value.`name`, buf)
+    }
+}
+
+
+
+data class ForecastDayRecord (
+    var `dayOffset`: kotlin.UInt, 
+    var `n`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeForecastDayRecord: FfiConverterRustBuffer<ForecastDayRecord> {
+    override fun read(buf: ByteBuffer): ForecastDayRecord {
+        return ForecastDayRecord(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ForecastDayRecord) = (
+            FfiConverterUInt.allocationSize(value.`dayOffset`) +
+            FfiConverterUInt.allocationSize(value.`n`)
+    )
+
+    override fun write(value: ForecastDayRecord, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`dayOffset`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+    }
+}
+
+
+
+data class Goal (
+    var `goalMin`: kotlin.Int, 
+    var `days`: List<kotlin.Double>, 
+    var `done`: kotlin.Double, 
+    var `today`: kotlin.Int, 
+    var `pace`: kotlin.Double, 
+    var `need`: kotlin.Double, 
+    var `left`: kotlin.Int, 
+    var `text`: kotlin.String, 
+    var `warn`: kotlin.Boolean, 
+    var `reachDay`: kotlin.Int?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGoal: FfiConverterRustBuffer<Goal> {
+    override fun read(buf: ByteBuffer): Goal {
+        return Goal(
+            FfiConverterInt.read(buf),
+            FfiConverterSequenceDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Goal) = (
+            FfiConverterInt.allocationSize(value.`goalMin`) +
+            FfiConverterSequenceDouble.allocationSize(value.`days`) +
+            FfiConverterDouble.allocationSize(value.`done`) +
+            FfiConverterInt.allocationSize(value.`today`) +
+            FfiConverterDouble.allocationSize(value.`pace`) +
+            FfiConverterDouble.allocationSize(value.`need`) +
+            FfiConverterInt.allocationSize(value.`left`) +
+            FfiConverterString.allocationSize(value.`text`) +
+            FfiConverterBoolean.allocationSize(value.`warn`) +
+            FfiConverterOptionalInt.allocationSize(value.`reachDay`)
+    )
+
+    override fun write(value: Goal, buf: ByteBuffer) {
+            FfiConverterInt.write(value.`goalMin`, buf)
+            FfiConverterSequenceDouble.write(value.`days`, buf)
+            FfiConverterDouble.write(value.`done`, buf)
+            FfiConverterInt.write(value.`today`, buf)
+            FfiConverterDouble.write(value.`pace`, buf)
+            FfiConverterDouble.write(value.`need`, buf)
+            FfiConverterInt.write(value.`left`, buf)
+            FfiConverterString.write(value.`text`, buf)
+            FfiConverterBoolean.write(value.`warn`, buf)
+            FfiConverterOptionalInt.write(value.`reachDay`, buf)
     }
 }
 
@@ -14405,6 +15912,86 @@ public object FfiConverterTypeGradeInfo: FfiConverterRustBuffer<GradeInfo> {
             FfiConverterString.write(value.`date`, buf)
             FfiConverterString.write(value.`comment`, buf)
             FfiConverterString.write(value.`created`, buf)
+    }
+}
+
+
+
+data class HardCardRecord (
+    var `id`: kotlin.String, 
+    var `front`: kotlin.String, 
+    var `deck`: kotlin.String, 
+    var `lapses`: kotlin.Long, 
+    var `stability`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHardCardRecord: FfiConverterRustBuffer<HardCardRecord> {
+    override fun read(buf: ByteBuffer): HardCardRecord {
+        return HardCardRecord(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HardCardRecord) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`front`) +
+            FfiConverterString.allocationSize(value.`deck`) +
+            FfiConverterLong.allocationSize(value.`lapses`) +
+            FfiConverterDouble.allocationSize(value.`stability`)
+    )
+
+    override fun write(value: HardCardRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`front`, buf)
+            FfiConverterString.write(value.`deck`, buf)
+            FfiConverterLong.write(value.`lapses`, buf)
+            FfiConverterDouble.write(value.`stability`, buf)
+    }
+}
+
+
+
+data class HeatmapCellRecord (
+    var `date`: kotlin.String, 
+    var `n`: kotlin.UInt, 
+    var `level`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeatmapCellRecord: FfiConverterRustBuffer<HeatmapCellRecord> {
+    override fun read(buf: ByteBuffer): HeatmapCellRecord {
+        return HeatmapCellRecord(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeatmapCellRecord) = (
+            FfiConverterString.allocationSize(value.`date`) +
+            FfiConverterUInt.allocationSize(value.`n`) +
+            FfiConverterUInt.allocationSize(value.`level`)
+    )
+
+    override fun write(value: HeatmapCellRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`date`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+            FfiConverterUInt.write(value.`level`, buf)
     }
 }
 
@@ -14500,6 +16087,38 @@ public object FfiConverterTypeHeftFolder: FfiConverterRustBuffer<HeftFolder> {
             FfiConverterOptionalString.write(value.`parentId`, buf)
             FfiConverterDouble.write(value.`order`, buf)
             FfiConverterString.write(value.`created`, buf)
+    }
+}
+
+
+
+data class HeftFolderCount (
+    var `folder`: HeftFolder, 
+    var `count`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftFolderCount: FfiConverterRustBuffer<HeftFolderCount> {
+    override fun read(buf: ByteBuffer): HeftFolderCount {
+        return HeftFolderCount(
+            FfiConverterTypeHeftFolder.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftFolderCount) = (
+            FfiConverterTypeHeftFolder.allocationSize(value.`folder`) +
+            FfiConverterUInt.allocationSize(value.`count`)
+    )
+
+    override fun write(value: HeftFolderCount, buf: ByteBuffer) {
+            FfiConverterTypeHeftFolder.write(value.`folder`, buf)
+            FfiConverterUInt.write(value.`count`, buf)
     }
 }
 
@@ -14898,6 +16517,82 @@ public object FfiConverterTypeHeftRect: FfiConverterRustBuffer<HeftRect> {
 
 
 
+data class HeftShelfCard (
+    var `page`: PageSummary, 
+    var `pagesCount`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftShelfCard: FfiConverterRustBuffer<HeftShelfCard> {
+    override fun read(buf: ByteBuffer): HeftShelfCard {
+        return HeftShelfCard(
+            FfiConverterTypePageSummary.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftShelfCard) = (
+            FfiConverterTypePageSummary.allocationSize(value.`page`) +
+            FfiConverterUInt.allocationSize(value.`pagesCount`)
+    )
+
+    override fun write(value: HeftShelfCard, buf: ByteBuffer) {
+            FfiConverterTypePageSummary.write(value.`page`, buf)
+            FfiConverterUInt.write(value.`pagesCount`, buf)
+    }
+}
+
+
+
+data class HeftShelfData (
+    var `folders`: List<HeftFolderCount>, 
+    var `shown`: List<HeftShelfCard>, 
+    var `allCount`: kotlin.UInt, 
+    var `favCount`: kotlin.UInt, 
+    var `crumbs`: List<HeftFolder>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftShelfData: FfiConverterRustBuffer<HeftShelfData> {
+    override fun read(buf: ByteBuffer): HeftShelfData {
+        return HeftShelfData(
+            FfiConverterSequenceTypeHeftFolderCount.read(buf),
+            FfiConverterSequenceTypeHeftShelfCard.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypeHeftFolder.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftShelfData) = (
+            FfiConverterSequenceTypeHeftFolderCount.allocationSize(value.`folders`) +
+            FfiConverterSequenceTypeHeftShelfCard.allocationSize(value.`shown`) +
+            FfiConverterUInt.allocationSize(value.`allCount`) +
+            FfiConverterUInt.allocationSize(value.`favCount`) +
+            FfiConverterSequenceTypeHeftFolder.allocationSize(value.`crumbs`)
+    )
+
+    override fun write(value: HeftShelfData, buf: ByteBuffer) {
+            FfiConverterSequenceTypeHeftFolderCount.write(value.`folders`, buf)
+            FfiConverterSequenceTypeHeftShelfCard.write(value.`shown`, buf)
+            FfiConverterUInt.write(value.`allCount`, buf)
+            FfiConverterUInt.write(value.`favCount`, buf)
+            FfiConverterSequenceTypeHeftFolder.write(value.`crumbs`, buf)
+    }
+}
+
+
+
 data class HeftStroke (
     var `id`: kotlin.String, 
     /**
@@ -15010,6 +16705,93 @@ public object FfiConverterTypeHeftText: FfiConverterRustBuffer<HeftText> {
             FfiConverterOptionalDouble.write(value.`h`, buf)
             FfiConverterOptionalString.write(value.`color`, buf)
             FfiConverterOptionalDouble.write(value.`size`, buf)
+    }
+}
+
+
+
+/**
+ * Ein UTF-16-Markierungsbereich (`start..end`) im Text.
+ */
+data class HighlightSpan (
+    var `start`: kotlin.UInt, 
+    var `end`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHighlightSpan: FfiConverterRustBuffer<HighlightSpan> {
+    override fun read(buf: ByteBuffer): HighlightSpan {
+        return HighlightSpan(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HighlightSpan) = (
+            FfiConverterUInt.allocationSize(value.`start`) +
+            FfiConverterUInt.allocationSize(value.`end`)
+    )
+
+    override fun write(value: HighlightSpan, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`start`, buf)
+            FfiConverterUInt.write(value.`end`, buf)
+    }
+}
+
+
+
+data class HomeAnalysis (
+    var `goal`: Goal, 
+    var `subjects`: Subjects, 
+    var `time`: BestTime, 
+    var `forecast`: DueWeek, 
+    var `headline`: kotlin.String, 
+    var `action`: kotlin.String?, 
+    var `actionDeck`: kotlin.String?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHomeAnalysis: FfiConverterRustBuffer<HomeAnalysis> {
+    override fun read(buf: ByteBuffer): HomeAnalysis {
+        return HomeAnalysis(
+            FfiConverterTypeGoal.read(buf),
+            FfiConverterTypeSubjects.read(buf),
+            FfiConverterTypeBestTime.read(buf),
+            FfiConverterTypeDueWeek.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HomeAnalysis) = (
+            FfiConverterTypeGoal.allocationSize(value.`goal`) +
+            FfiConverterTypeSubjects.allocationSize(value.`subjects`) +
+            FfiConverterTypeBestTime.allocationSize(value.`time`) +
+            FfiConverterTypeDueWeek.allocationSize(value.`forecast`) +
+            FfiConverterString.allocationSize(value.`headline`) +
+            FfiConverterOptionalString.allocationSize(value.`action`) +
+            FfiConverterOptionalString.allocationSize(value.`actionDeck`)
+    )
+
+    override fun write(value: HomeAnalysis, buf: ByteBuffer) {
+            FfiConverterTypeGoal.write(value.`goal`, buf)
+            FfiConverterTypeSubjects.write(value.`subjects`, buf)
+            FfiConverterTypeBestTime.write(value.`time`, buf)
+            FfiConverterTypeDueWeek.write(value.`forecast`, buf)
+            FfiConverterString.write(value.`headline`, buf)
+            FfiConverterOptionalString.write(value.`action`, buf)
+            FfiConverterOptionalString.write(value.`actionDeck`, buf)
     }
 }
 
@@ -15138,6 +16920,42 @@ public object FfiConverterTypeHomeArticleInput: FfiConverterRustBuffer<HomeArtic
             FfiConverterSequenceString.write(value.`topics`, buf)
             FfiConverterOptionalString.write(value.`focus`, buf)
             FfiConverterSequenceTypeArticleSource.write(value.`sources`, buf)
+    }
+}
+
+
+
+data class HourRate (
+    var `hour`: kotlin.Int, 
+    var `n`: kotlin.Int, 
+    var `rate`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHourRate: FfiConverterRustBuffer<HourRate> {
+    override fun read(buf: ByteBuffer): HourRate {
+        return HourRate(
+            FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HourRate) = (
+            FfiConverterInt.allocationSize(value.`hour`) +
+            FfiConverterInt.allocationSize(value.`n`) +
+            FfiConverterDouble.allocationSize(value.`rate`)
+    )
+
+    override fun write(value: HourRate, buf: ByteBuffer) {
+            FfiConverterInt.write(value.`hour`, buf)
+            FfiConverterInt.write(value.`n`, buf)
+            FfiConverterDouble.write(value.`rate`, buf)
     }
 }
 
@@ -15370,6 +17188,182 @@ public object FfiConverterTypeLearningSessionInput: FfiConverterRustBuffer<Learn
 
 
 
+data class LearningStats (
+    var `reviewsAll`: kotlin.UInt, 
+    var `last`: kotlin.UInt, 
+    var `rate`: kotlin.Double?, 
+    var `trend`: kotlin.Int?, 
+    var `avg`: kotlin.Double, 
+    var `bestand`: BestandRecord, 
+    var `n`: kotlin.UInt, 
+    var `faellig`: kotlin.UInt, 
+    var `reif`: kotlin.UInt, 
+    var `gelernt`: kotlin.UInt, 
+    var `decks`: List<DeckRowRecord>, 
+    var `series`: List<SeriesDayRecord>, 
+    var `peak`: PeakDayRecord, 
+    var `forecast`: List<ForecastDayRecord>, 
+    var `streakCurrent`: kotlin.UInt, 
+    var `streakLongest`: kotlin.UInt, 
+    var `hard`: List<HardCardRecord>, 
+    var `thinkMs`: kotlin.Long, 
+    var `retention`: RetentionRecord, 
+    var `heatmap`: List<HeatmapCellRecord>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLearningStats: FfiConverterRustBuffer<LearningStats> {
+    override fun read(buf: ByteBuffer): LearningStats {
+        return LearningStats(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalInt.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterTypeBestandRecord.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypeDeckRowRecord.read(buf),
+            FfiConverterSequenceTypeSeriesDayRecord.read(buf),
+            FfiConverterTypePeakDayRecord.read(buf),
+            FfiConverterSequenceTypeForecastDayRecord.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypeHardCardRecord.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterTypeRetentionRecord.read(buf),
+            FfiConverterSequenceTypeHeatmapCellRecord.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LearningStats) = (
+            FfiConverterUInt.allocationSize(value.`reviewsAll`) +
+            FfiConverterUInt.allocationSize(value.`last`) +
+            FfiConverterOptionalDouble.allocationSize(value.`rate`) +
+            FfiConverterOptionalInt.allocationSize(value.`trend`) +
+            FfiConverterDouble.allocationSize(value.`avg`) +
+            FfiConverterTypeBestandRecord.allocationSize(value.`bestand`) +
+            FfiConverterUInt.allocationSize(value.`n`) +
+            FfiConverterUInt.allocationSize(value.`faellig`) +
+            FfiConverterUInt.allocationSize(value.`reif`) +
+            FfiConverterUInt.allocationSize(value.`gelernt`) +
+            FfiConverterSequenceTypeDeckRowRecord.allocationSize(value.`decks`) +
+            FfiConverterSequenceTypeSeriesDayRecord.allocationSize(value.`series`) +
+            FfiConverterTypePeakDayRecord.allocationSize(value.`peak`) +
+            FfiConverterSequenceTypeForecastDayRecord.allocationSize(value.`forecast`) +
+            FfiConverterUInt.allocationSize(value.`streakCurrent`) +
+            FfiConverterUInt.allocationSize(value.`streakLongest`) +
+            FfiConverterSequenceTypeHardCardRecord.allocationSize(value.`hard`) +
+            FfiConverterLong.allocationSize(value.`thinkMs`) +
+            FfiConverterTypeRetentionRecord.allocationSize(value.`retention`) +
+            FfiConverterSequenceTypeHeatmapCellRecord.allocationSize(value.`heatmap`)
+    )
+
+    override fun write(value: LearningStats, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`reviewsAll`, buf)
+            FfiConverterUInt.write(value.`last`, buf)
+            FfiConverterOptionalDouble.write(value.`rate`, buf)
+            FfiConverterOptionalInt.write(value.`trend`, buf)
+            FfiConverterDouble.write(value.`avg`, buf)
+            FfiConverterTypeBestandRecord.write(value.`bestand`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+            FfiConverterUInt.write(value.`faellig`, buf)
+            FfiConverterUInt.write(value.`reif`, buf)
+            FfiConverterUInt.write(value.`gelernt`, buf)
+            FfiConverterSequenceTypeDeckRowRecord.write(value.`decks`, buf)
+            FfiConverterSequenceTypeSeriesDayRecord.write(value.`series`, buf)
+            FfiConverterTypePeakDayRecord.write(value.`peak`, buf)
+            FfiConverterSequenceTypeForecastDayRecord.write(value.`forecast`, buf)
+            FfiConverterUInt.write(value.`streakCurrent`, buf)
+            FfiConverterUInt.write(value.`streakLongest`, buf)
+            FfiConverterSequenceTypeHardCardRecord.write(value.`hard`, buf)
+            FfiConverterLong.write(value.`thinkMs`, buf)
+            FfiConverterTypeRetentionRecord.write(value.`retention`, buf)
+            FfiConverterSequenceTypeHeatmapCellRecord.write(value.`heatmap`, buf)
+    }
+}
+
+
+
+data class LibrarySectionInfo (
+    var `workspace`: WorkspaceInfo, 
+    var `rows`: List<LibraryTreeRowInfo>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLibrarySectionInfo: FfiConverterRustBuffer<LibrarySectionInfo> {
+    override fun read(buf: ByteBuffer): LibrarySectionInfo {
+        return LibrarySectionInfo(
+            FfiConverterTypeWorkspaceInfo.read(buf),
+            FfiConverterSequenceTypeLibraryTreeRowInfo.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LibrarySectionInfo) = (
+            FfiConverterTypeWorkspaceInfo.allocationSize(value.`workspace`) +
+            FfiConverterSequenceTypeLibraryTreeRowInfo.allocationSize(value.`rows`)
+    )
+
+    override fun write(value: LibrarySectionInfo, buf: ByteBuffer) {
+            FfiConverterTypeWorkspaceInfo.write(value.`workspace`, buf)
+            FfiConverterSequenceTypeLibraryTreeRowInfo.write(value.`rows`, buf)
+    }
+}
+
+
+
+data class LibraryTreeRowInfo (
+    var `page`: PageSummary, 
+    var `depth`: kotlin.UInt, 
+    var `hasKids`: kotlin.Boolean, 
+    var `collapsed`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLibraryTreeRowInfo: FfiConverterRustBuffer<LibraryTreeRowInfo> {
+    override fun read(buf: ByteBuffer): LibraryTreeRowInfo {
+        return LibraryTreeRowInfo(
+            FfiConverterTypePageSummary.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LibraryTreeRowInfo) = (
+            FfiConverterTypePageSummary.allocationSize(value.`page`) +
+            FfiConverterUInt.allocationSize(value.`depth`) +
+            FfiConverterBoolean.allocationSize(value.`hasKids`) +
+            FfiConverterBoolean.allocationSize(value.`collapsed`)
+    )
+
+    override fun write(value: LibraryTreeRowInfo, buf: ByteBuffer) {
+            FfiConverterTypePageSummary.write(value.`page`, buf)
+            FfiConverterUInt.write(value.`depth`, buf)
+            FfiConverterBoolean.write(value.`hasKids`, buf)
+            FfiConverterBoolean.write(value.`collapsed`, buf)
+    }
+}
+
+
+
 /**
  * Wie der Start verlief (Diagnose).
  */
@@ -15509,6 +17503,114 @@ public object FfiConverterTypeMdBlock: FfiConverterRustBuffer<MdBlock> {
             FfiConverterTypeMdBlockKind.write(value.`kind`, buf)
             FfiConverterOptionalString.write(value.`textColor`, buf)
             FfiConverterOptionalString.write(value.`bgColor`, buf)
+    }
+}
+
+
+
+data class MdShortcutResult (
+    var `shortcutType`: MdShortcutType, 
+    var `rest`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMdShortcutResult: FfiConverterRustBuffer<MdShortcutResult> {
+    override fun read(buf: ByteBuffer): MdShortcutResult {
+        return MdShortcutResult(
+            FfiConverterTypeMdShortcutType.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: MdShortcutResult) = (
+            FfiConverterTypeMdShortcutType.allocationSize(value.`shortcutType`) +
+            FfiConverterString.allocationSize(value.`rest`)
+    )
+
+    override fun write(value: MdShortcutResult, buf: ByteBuffer) {
+            FfiConverterTypeMdShortcutType.write(value.`shortcutType`, buf)
+            FfiConverterString.write(value.`rest`, buf)
+    }
+}
+
+
+
+data class MdWrapResult (
+    var `text`: kotlin.String, 
+    var `caret`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMdWrapResult: FfiConverterRustBuffer<MdWrapResult> {
+    override fun read(buf: ByteBuffer): MdWrapResult {
+        return MdWrapResult(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: MdWrapResult) = (
+            FfiConverterString.allocationSize(value.`text`) +
+            FfiConverterUInt.allocationSize(value.`caret`)
+    )
+
+    override fun write(value: MdWrapResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`text`, buf)
+            FfiConverterUInt.write(value.`caret`, buf)
+    }
+}
+
+
+
+data class NotionLibraryView (
+    var `allCount`: kotlin.UInt, 
+    var `favCount`: kotlin.UInt, 
+    var `pdfCount`: kotlin.UInt, 
+    var `tplCount`: kotlin.UInt, 
+    var `sections`: List<LibrarySectionInfo>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeNotionLibraryView: FfiConverterRustBuffer<NotionLibraryView> {
+    override fun read(buf: ByteBuffer): NotionLibraryView {
+        return NotionLibraryView(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceTypeLibrarySectionInfo.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NotionLibraryView) = (
+            FfiConverterUInt.allocationSize(value.`allCount`) +
+            FfiConverterUInt.allocationSize(value.`favCount`) +
+            FfiConverterUInt.allocationSize(value.`pdfCount`) +
+            FfiConverterUInt.allocationSize(value.`tplCount`) +
+            FfiConverterSequenceTypeLibrarySectionInfo.allocationSize(value.`sections`)
+    )
+
+    override fun write(value: NotionLibraryView, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`allCount`, buf)
+            FfiConverterUInt.write(value.`favCount`, buf)
+            FfiConverterUInt.write(value.`pdfCount`, buf)
+            FfiConverterUInt.write(value.`tplCount`, buf)
+            FfiConverterSequenceTypeLibrarySectionInfo.write(value.`sections`, buf)
     }
 }
 
@@ -15796,6 +17898,312 @@ public object FfiConverterTypePageVersion: FfiConverterRustBuffer<PageVersion> {
 
 
 /**
+ * Eine Schnell-Aktion (Kennung + lokalisierter Anzeigetext der App) für den Filter.
+ */
+data class PaletteActionDef (
+    var `id`: kotlin.String, 
+    var `label`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePaletteActionDef: FfiConverterRustBuffer<PaletteActionDef> {
+    override fun read(buf: ByteBuffer): PaletteActionDef {
+        return PaletteActionDef(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PaletteActionDef) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`label`)
+    )
+
+    override fun write(value: PaletteActionDef, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`label`, buf)
+    }
+}
+
+
+
+/**
+ * Ein Seitentreffer der Befehlspalette samt gekürztem Vorschau-Ausschnitt, Brotkrumen-Pfad und Archiv-Flag.
+ */
+data class PalettePageHit (
+    var `summary`: PageSummary, 
+    var `archived`: kotlin.Boolean, 
+    var `snippet`: kotlin.String, 
+    var `path`: kotlin.String, 
+    var `terms`: List<kotlin.String>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePalettePageHit: FfiConverterRustBuffer<PalettePageHit> {
+    override fun read(buf: ByteBuffer): PalettePageHit {
+        return PalettePageHit(
+            FfiConverterTypePageSummary.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PalettePageHit) = (
+            FfiConverterTypePageSummary.allocationSize(value.`summary`) +
+            FfiConverterBoolean.allocationSize(value.`archived`) +
+            FfiConverterString.allocationSize(value.`snippet`) +
+            FfiConverterString.allocationSize(value.`path`) +
+            FfiConverterSequenceString.allocationSize(value.`terms`)
+    )
+
+    override fun write(value: PalettePageHit, buf: ByteBuffer) {
+            FfiConverterTypePageSummary.write(value.`summary`, buf)
+            FfiConverterBoolean.write(value.`archived`, buf)
+            FfiConverterString.write(value.`snippet`, buf)
+            FfiConverterString.write(value.`path`, buf)
+            FfiConverterSequenceString.write(value.`terms`, buf)
+    }
+}
+
+
+
+data class ParsedCards (
+    var `cards`: List<PlainCard>, 
+    var `errors`: List<kotlin.String>, 
+    var `format`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParsedCards: FfiConverterRustBuffer<ParsedCards> {
+    override fun read(buf: ByteBuffer): ParsedCards {
+        return ParsedCards(
+            FfiConverterSequenceTypePlainCard.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParsedCards) = (
+            FfiConverterSequenceTypePlainCard.allocationSize(value.`cards`) +
+            FfiConverterSequenceString.allocationSize(value.`errors`) +
+            FfiConverterString.allocationSize(value.`format`)
+    )
+
+    override fun write(value: ParsedCards, buf: ByteBuffer) {
+            FfiConverterSequenceTypePlainCard.write(value.`cards`, buf)
+            FfiConverterSequenceString.write(value.`errors`, buf)
+            FfiConverterString.write(value.`format`, buf)
+    }
+}
+
+
+
+data class PatternData (
+    var `position`: List<RateRow>, 
+    var `timer`: List<RateRow>, 
+    var `hours`: List<HourRate>?, 
+    var `experiments`: List<ExpRow>, 
+    var `problems`: List<ProblemPage>, 
+    var `empty`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePatternData: FfiConverterRustBuffer<PatternData> {
+    override fun read(buf: ByteBuffer): PatternData {
+        return PatternData(
+            FfiConverterSequenceTypeRateRow.read(buf),
+            FfiConverterSequenceTypeRateRow.read(buf),
+            FfiConverterOptionalSequenceTypeHourRate.read(buf),
+            FfiConverterSequenceTypeExpRow.read(buf),
+            FfiConverterSequenceTypeProblemPage.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PatternData) = (
+            FfiConverterSequenceTypeRateRow.allocationSize(value.`position`) +
+            FfiConverterSequenceTypeRateRow.allocationSize(value.`timer`) +
+            FfiConverterOptionalSequenceTypeHourRate.allocationSize(value.`hours`) +
+            FfiConverterSequenceTypeExpRow.allocationSize(value.`experiments`) +
+            FfiConverterSequenceTypeProblemPage.allocationSize(value.`problems`) +
+            FfiConverterBoolean.allocationSize(value.`empty`)
+    )
+
+    override fun write(value: PatternData, buf: ByteBuffer) {
+            FfiConverterSequenceTypeRateRow.write(value.`position`, buf)
+            FfiConverterSequenceTypeRateRow.write(value.`timer`, buf)
+            FfiConverterOptionalSequenceTypeHourRate.write(value.`hours`, buf)
+            FfiConverterSequenceTypeExpRow.write(value.`experiments`, buf)
+            FfiConverterSequenceTypeProblemPage.write(value.`problems`, buf)
+            FfiConverterBoolean.write(value.`empty`, buf)
+    }
+}
+
+
+
+data class PeakDayRecord (
+    var `date`: kotlin.String, 
+    var `n`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePeakDayRecord: FfiConverterRustBuffer<PeakDayRecord> {
+    override fun read(buf: ByteBuffer): PeakDayRecord {
+        return PeakDayRecord(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PeakDayRecord) = (
+            FfiConverterString.allocationSize(value.`date`) +
+            FfiConverterUInt.allocationSize(value.`n`)
+    )
+
+    override fun write(value: PeakDayRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`date`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+    }
+}
+
+
+
+data class PlainCard (
+    var `front`: kotlin.String, 
+    var `back`: kotlin.String, 
+    var `deck`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePlainCard: FfiConverterRustBuffer<PlainCard> {
+    override fun read(buf: ByteBuffer): PlainCard {
+        return PlainCard(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PlainCard) = (
+            FfiConverterString.allocationSize(value.`front`) +
+            FfiConverterString.allocationSize(value.`back`) +
+            FfiConverterString.allocationSize(value.`deck`)
+    )
+
+    override fun write(value: PlainCard, buf: ByteBuffer) {
+            FfiConverterString.write(value.`front`, buf)
+            FfiConverterString.write(value.`back`, buf)
+            FfiConverterString.write(value.`deck`, buf)
+    }
+}
+
+
+
+data class ProblemPage (
+    var `pageId`: kotlin.String, 
+    var `minutes`: kotlin.Int, 
+    var `lost`: kotlin.Int
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeProblemPage: FfiConverterRustBuffer<ProblemPage> {
+    override fun read(buf: ByteBuffer): ProblemPage {
+        return ProblemPage(
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ProblemPage) = (
+            FfiConverterString.allocationSize(value.`pageId`) +
+            FfiConverterInt.allocationSize(value.`minutes`) +
+            FfiConverterInt.allocationSize(value.`lost`)
+    )
+
+    override fun write(value: ProblemPage, buf: ByteBuffer) {
+            FfiConverterString.write(value.`pageId`, buf)
+            FfiConverterInt.write(value.`minutes`, buf)
+            FfiConverterInt.write(value.`lost`, buf)
+    }
+}
+
+
+
+data class RateRow (
+    var `label`: kotlin.String, 
+    var `n`: kotlin.Int, 
+    var `rate`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRateRow: FfiConverterRustBuffer<RateRow> {
+    override fun read(buf: ByteBuffer): RateRow {
+        return RateRow(
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RateRow) = (
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterInt.allocationSize(value.`n`) +
+            FfiConverterDouble.allocationSize(value.`rate`)
+    )
+
+    override fun write(value: RateRow, buf: ByteBuffer) {
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterInt.write(value.`n`, buf)
+            FfiConverterDouble.write(value.`rate`, buf)
+    }
+}
+
+
+
+/**
  * Ergebnis von [`CloudSync::refetch_all`].
  */
 data class RefetchReport (
@@ -15874,6 +18282,78 @@ public object FfiConverterTypeRelatedPage: FfiConverterRustBuffer<RelatedPage> {
     override fun write(value: RelatedPage, buf: ByteBuffer) {
             FfiConverterString.write(value.`pageId`, buf)
             FfiConverterFloat.write(value.`score`, buf)
+    }
+}
+
+
+
+data class RetentionBucketRecord (
+    var `n`: kotlin.UInt, 
+    var `rate`: kotlin.Double?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRetentionBucketRecord: FfiConverterRustBuffer<RetentionBucketRecord> {
+    override fun read(buf: ByteBuffer): RetentionBucketRecord {
+        return RetentionBucketRecord(
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RetentionBucketRecord) = (
+            FfiConverterUInt.allocationSize(value.`n`) +
+            FfiConverterOptionalDouble.allocationSize(value.`rate`)
+    )
+
+    override fun write(value: RetentionBucketRecord, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`n`, buf)
+            FfiConverterOptionalDouble.write(value.`rate`, buf)
+    }
+}
+
+
+
+data class RetentionRecord (
+    var `day1`: RetentionBucketRecord, 
+    var `day3`: RetentionBucketRecord, 
+    var `day7`: RetentionBucketRecord, 
+    var `day14`: RetentionBucketRecord
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRetentionRecord: FfiConverterRustBuffer<RetentionRecord> {
+    override fun read(buf: ByteBuffer): RetentionRecord {
+        return RetentionRecord(
+            FfiConverterTypeRetentionBucketRecord.read(buf),
+            FfiConverterTypeRetentionBucketRecord.read(buf),
+            FfiConverterTypeRetentionBucketRecord.read(buf),
+            FfiConverterTypeRetentionBucketRecord.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RetentionRecord) = (
+            FfiConverterTypeRetentionBucketRecord.allocationSize(value.`day1`) +
+            FfiConverterTypeRetentionBucketRecord.allocationSize(value.`day3`) +
+            FfiConverterTypeRetentionBucketRecord.allocationSize(value.`day7`) +
+            FfiConverterTypeRetentionBucketRecord.allocationSize(value.`day14`)
+    )
+
+    override fun write(value: RetentionRecord, buf: ByteBuffer) {
+            FfiConverterTypeRetentionBucketRecord.write(value.`day1`, buf)
+            FfiConverterTypeRetentionBucketRecord.write(value.`day3`, buf)
+            FfiConverterTypeRetentionBucketRecord.write(value.`day7`, buf)
+            FfiConverterTypeRetentionBucketRecord.write(value.`day14`, buf)
     }
 }
 
@@ -16107,6 +18587,236 @@ public object FfiConverterTypeSemanticHit: FfiConverterRustBuffer<SemanticHit> {
 
 
 
+data class SeriesDayRecord (
+    var `date`: kotlin.String, 
+    var `n`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSeriesDayRecord: FfiConverterRustBuffer<SeriesDayRecord> {
+    override fun read(buf: ByteBuffer): SeriesDayRecord {
+        return SeriesDayRecord(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SeriesDayRecord) = (
+            FfiConverterString.allocationSize(value.`date`) +
+            FfiConverterUInt.allocationSize(value.`n`)
+    )
+
+    override fun write(value: SeriesDayRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`date`, buf)
+            FfiConverterUInt.write(value.`n`, buf)
+    }
+}
+
+
+
+/**
+ * Ein Eintrag des Einstellungs-Suchindex (von der App übergeben oder aus dem Standard-Katalog).
+ */
+data class SettingsSearchEntry (
+    var `id`: kotlin.String, 
+    var `section`: kotlin.String, 
+    var `sectionLabel`: kotlin.String, 
+    var `group`: kotlin.String, 
+    var `label`: kotlin.String, 
+    var `description`: kotlin.String, 
+    var `keywords`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSettingsSearchEntry: FfiConverterRustBuffer<SettingsSearchEntry> {
+    override fun read(buf: ByteBuffer): SettingsSearchEntry {
+        return SettingsSearchEntry(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SettingsSearchEntry) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`section`) +
+            FfiConverterString.allocationSize(value.`sectionLabel`) +
+            FfiConverterString.allocationSize(value.`group`) +
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterString.allocationSize(value.`description`) +
+            FfiConverterString.allocationSize(value.`keywords`)
+    )
+
+    override fun write(value: SettingsSearchEntry, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`section`, buf)
+            FfiConverterString.write(value.`sectionLabel`, buf)
+            FfiConverterString.write(value.`group`, buf)
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterString.write(value.`description`, buf)
+            FfiConverterString.write(value.`keywords`, buf)
+    }
+}
+
+
+
+/**
+ * Treffer der Einstellungssuche.
+ */
+data class SettingsSearchHit (
+    var `id`: kotlin.String, 
+    var `section`: kotlin.String, 
+    var `score`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSettingsSearchHit: FfiConverterRustBuffer<SettingsSearchHit> {
+    override fun read(buf: ByteBuffer): SettingsSearchHit {
+        return SettingsSearchHit(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SettingsSearchHit) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`section`) +
+            FfiConverterUInt.allocationSize(value.`score`)
+    )
+
+    override fun write(value: SettingsSearchHit, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`section`, buf)
+            FfiConverterUInt.write(value.`score`, buf)
+    }
+}
+
+
+
+data class SidebarRowInfo (
+    var `rowId`: kotlin.String, 
+    var `kind`: kotlin.String, 
+    var `title`: kotlin.String, 
+    var `collapseKey`: kotlin.String?, 
+    var `workspaceId`: kotlin.String?, 
+    var `page`: PageSummary?, 
+    var `depth`: kotlin.UInt, 
+    var `hasKids`: kotlin.Boolean, 
+    var `collapsed`: kotlin.Boolean, 
+    var `section`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSidebarRowInfo: FfiConverterRustBuffer<SidebarRowInfo> {
+    override fun read(buf: ByteBuffer): SidebarRowInfo {
+        return SidebarRowInfo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalTypePageSummary.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SidebarRowInfo) = (
+            FfiConverterString.allocationSize(value.`rowId`) +
+            FfiConverterString.allocationSize(value.`kind`) +
+            FfiConverterString.allocationSize(value.`title`) +
+            FfiConverterOptionalString.allocationSize(value.`collapseKey`) +
+            FfiConverterOptionalString.allocationSize(value.`workspaceId`) +
+            FfiConverterOptionalTypePageSummary.allocationSize(value.`page`) +
+            FfiConverterUInt.allocationSize(value.`depth`) +
+            FfiConverterBoolean.allocationSize(value.`hasKids`) +
+            FfiConverterBoolean.allocationSize(value.`collapsed`) +
+            FfiConverterString.allocationSize(value.`section`)
+    )
+
+    override fun write(value: SidebarRowInfo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`rowId`, buf)
+            FfiConverterString.write(value.`kind`, buf)
+            FfiConverterString.write(value.`title`, buf)
+            FfiConverterOptionalString.write(value.`collapseKey`, buf)
+            FfiConverterOptionalString.write(value.`workspaceId`, buf)
+            FfiConverterOptionalTypePageSummary.write(value.`page`, buf)
+            FfiConverterUInt.write(value.`depth`, buf)
+            FfiConverterBoolean.write(value.`hasKids`, buf)
+            FfiConverterBoolean.write(value.`collapsed`, buf)
+            FfiConverterString.write(value.`section`, buf)
+    }
+}
+
+
+
+data class Slot (
+    var `label`: kotlin.String, 
+    var `hint`: kotlin.String, 
+    var `n`: kotlin.Int, 
+    var `rate`: kotlin.Double?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSlot: FfiConverterRustBuffer<Slot> {
+    override fun read(buf: ByteBuffer): Slot {
+        return Slot(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Slot) = (
+            FfiConverterString.allocationSize(value.`label`) +
+            FfiConverterString.allocationSize(value.`hint`) +
+            FfiConverterInt.allocationSize(value.`n`) +
+            FfiConverterOptionalDouble.allocationSize(value.`rate`)
+    )
+
+    override fun write(value: Slot, buf: ByteBuffer) {
+            FfiConverterString.write(value.`label`, buf)
+            FfiConverterString.write(value.`hint`, buf)
+            FfiConverterInt.write(value.`n`, buf)
+            FfiConverterOptionalDouble.write(value.`rate`, buf)
+    }
+}
+
+
+
 /**
  * Ergebnis von [`ImpalaCore::storage_check`]; im Normalfall alles 0.
  */
@@ -16271,6 +18981,86 @@ public object FfiConverterTypeSubjectGrades: FfiConverterRustBuffer<SubjectGrade
             FfiConverterString.write(value.`subject`, buf)
             FfiConverterOptionalDouble.write(value.`average`, buf)
             FfiConverterSequenceTypeGradeInfo.write(value.`grades`, buf)
+    }
+}
+
+
+
+data class SubjectRow (
+    var `subject`: kotlin.String, 
+    var `now`: kotlin.Double, 
+    var `before`: kotlin.Double, 
+    var `delta`: kotlin.Int, 
+    var `deck`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSubjectRow: FfiConverterRustBuffer<SubjectRow> {
+    override fun read(buf: ByteBuffer): SubjectRow {
+        return SubjectRow(
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SubjectRow) = (
+            FfiConverterString.allocationSize(value.`subject`) +
+            FfiConverterDouble.allocationSize(value.`now`) +
+            FfiConverterDouble.allocationSize(value.`before`) +
+            FfiConverterInt.allocationSize(value.`delta`) +
+            FfiConverterString.allocationSize(value.`deck`)
+    )
+
+    override fun write(value: SubjectRow, buf: ByteBuffer) {
+            FfiConverterString.write(value.`subject`, buf)
+            FfiConverterDouble.write(value.`now`, buf)
+            FfiConverterDouble.write(value.`before`, buf)
+            FfiConverterInt.write(value.`delta`, buf)
+            FfiConverterString.write(value.`deck`, buf)
+    }
+}
+
+
+
+data class Subjects (
+    var `rows`: List<SubjectRow>, 
+    var `worst`: SubjectRow?, 
+    var `text`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSubjects: FfiConverterRustBuffer<Subjects> {
+    override fun read(buf: ByteBuffer): Subjects {
+        return Subjects(
+            FfiConverterSequenceTypeSubjectRow.read(buf),
+            FfiConverterOptionalTypeSubjectRow.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Subjects) = (
+            FfiConverterSequenceTypeSubjectRow.allocationSize(value.`rows`) +
+            FfiConverterOptionalTypeSubjectRow.allocationSize(value.`worst`) +
+            FfiConverterString.allocationSize(value.`text`)
+    )
+
+    override fun write(value: Subjects, buf: ByteBuffer) {
+            FfiConverterSequenceTypeSubjectRow.write(value.`rows`, buf)
+            FfiConverterOptionalTypeSubjectRow.write(value.`worst`, buf)
+            FfiConverterString.write(value.`text`, buf)
     }
 }
 
@@ -18353,6 +21143,124 @@ public object FfiConverterTypeHeftShape : FfiConverterRustBuffer<HeftShape>{
 
 
 
+sealed class HomeNudgeInfo {
+    
+    object None : HomeNudgeInfo()
+    
+    
+    data class StreakAtRisk(
+        val `streakDays`: kotlin.UInt) : HomeNudgeInfo() {
+        companion object
+    }
+    
+    data class GoalInReach(
+        val `minutesLeft`: kotlin.Double) : HomeNudgeInfo() {
+        companion object
+    }
+    
+    object GoalReached : HomeNudgeInfo()
+    
+    
+    data class TodayProgress(
+        val `minutes`: kotlin.UInt) : HomeNudgeInfo() {
+        companion object
+    }
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHomeNudgeInfo : FfiConverterRustBuffer<HomeNudgeInfo>{
+    override fun read(buf: ByteBuffer): HomeNudgeInfo {
+        return when(buf.getInt()) {
+            1 -> HomeNudgeInfo.None
+            2 -> HomeNudgeInfo.StreakAtRisk(
+                FfiConverterUInt.read(buf),
+                )
+            3 -> HomeNudgeInfo.GoalInReach(
+                FfiConverterDouble.read(buf),
+                )
+            4 -> HomeNudgeInfo.GoalReached
+            5 -> HomeNudgeInfo.TodayProgress(
+                FfiConverterUInt.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: HomeNudgeInfo) = when(value) {
+        is HomeNudgeInfo.None -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is HomeNudgeInfo.StreakAtRisk -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`streakDays`)
+            )
+        }
+        is HomeNudgeInfo.GoalInReach -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterDouble.allocationSize(value.`minutesLeft`)
+            )
+        }
+        is HomeNudgeInfo.GoalReached -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is HomeNudgeInfo.TodayProgress -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`minutes`)
+            )
+        }
+    }
+
+    override fun write(value: HomeNudgeInfo, buf: ByteBuffer) {
+        when(value) {
+            is HomeNudgeInfo.None -> {
+                buf.putInt(1)
+                Unit
+            }
+            is HomeNudgeInfo.StreakAtRisk -> {
+                buf.putInt(2)
+                FfiConverterUInt.write(value.`streakDays`, buf)
+                Unit
+            }
+            is HomeNudgeInfo.GoalInReach -> {
+                buf.putInt(3)
+                FfiConverterDouble.write(value.`minutesLeft`, buf)
+                Unit
+            }
+            is HomeNudgeInfo.GoalReached -> {
+                buf.putInt(4)
+                Unit
+            }
+            is HomeNudgeInfo.TodayProgress -> {
+                buf.putInt(5)
+                FfiConverterUInt.write(value.`minutes`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
 
 enum class LeechAction {
     
@@ -18874,6 +21782,154 @@ public object FfiConverterTypeMdListStyle : FfiConverterRustBuffer<MdListStyle>{
 
 
 
+sealed class MdShortcutType {
+    
+    object H1 : MdShortcutType()
+    
+    
+    object H2 : MdShortcutType()
+    
+    
+    object H3 : MdShortcutType()
+    
+    
+    object Bullet : MdShortcutType()
+    
+    
+    object Number : MdShortcutType()
+    
+    
+    data class Todo(
+        val `checked`: kotlin.Boolean) : MdShortcutType() {
+        companion object
+    }
+    
+    object Quote : MdShortcutType()
+    
+    
+    object Code : MdShortcutType()
+    
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMdShortcutType : FfiConverterRustBuffer<MdShortcutType>{
+    override fun read(buf: ByteBuffer): MdShortcutType {
+        return when(buf.getInt()) {
+            1 -> MdShortcutType.H1
+            2 -> MdShortcutType.H2
+            3 -> MdShortcutType.H3
+            4 -> MdShortcutType.Bullet
+            5 -> MdShortcutType.Number
+            6 -> MdShortcutType.Todo(
+                FfiConverterBoolean.read(buf),
+                )
+            7 -> MdShortcutType.Quote
+            8 -> MdShortcutType.Code
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: MdShortcutType) = when(value) {
+        is MdShortcutType.H1 -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.H2 -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.H3 -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.Bullet -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.Number -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.Todo -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterBoolean.allocationSize(value.`checked`)
+            )
+        }
+        is MdShortcutType.Quote -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is MdShortcutType.Code -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+    }
+
+    override fun write(value: MdShortcutType, buf: ByteBuffer) {
+        when(value) {
+            is MdShortcutType.H1 -> {
+                buf.putInt(1)
+                Unit
+            }
+            is MdShortcutType.H2 -> {
+                buf.putInt(2)
+                Unit
+            }
+            is MdShortcutType.H3 -> {
+                buf.putInt(3)
+                Unit
+            }
+            is MdShortcutType.Bullet -> {
+                buf.putInt(4)
+                Unit
+            }
+            is MdShortcutType.Number -> {
+                buf.putInt(5)
+                Unit
+            }
+            is MdShortcutType.Todo -> {
+                buf.putInt(6)
+                FfiConverterBoolean.write(value.`checked`, buf)
+                Unit
+            }
+            is MdShortcutType.Quote -> {
+                buf.putInt(7)
+                Unit
+            }
+            is MdShortcutType.Code -> {
+                buf.putInt(8)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
 
 enum class PageKind {
     
@@ -19332,6 +22388,38 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalInt: FfiConverterRustBuffer<kotlin.Int?> {
+    override fun read(buf: ByteBuffer): kotlin.Int? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterInt.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Int?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterInt.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Int?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterInt.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
     override fun read(buf: ByteBuffer): kotlin.ULong? {
         if (buf.get().toInt() == 0) {
@@ -19354,6 +22442,38 @@ public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
         } else {
             buf.put(1)
             FfiConverterULong.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
+    override fun read(buf: ByteBuffer): kotlin.Long? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterLong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Long?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterLong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Long?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterLong.write(value, buf)
         }
     }
 }
@@ -19780,6 +22900,38 @@ public object FfiConverterOptionalTypeChatData: FfiConverterRustBuffer<ChatData?
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeClozeRecall: FfiConverterRustBuffer<ClozeRecall?> {
+    override fun read(buf: ByteBuffer): ClozeRecall? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeClozeRecall.read(buf)
+    }
+
+    override fun allocationSize(value: ClozeRecall?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeClozeRecall.allocationSize(value)
+        }
+    }
+
+    override fun write(value: ClozeRecall?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeClozeRecall.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeCoreLockHold: FfiConverterRustBuffer<CoreLockHold?> {
     override fun read(buf: ByteBuffer): CoreLockHold? {
         if (buf.get().toInt() == 0) {
@@ -20036,6 +23188,38 @@ public object FfiConverterOptionalTypeHeftRect: FfiConverterRustBuffer<HeftRect?
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeHomeAnalysis: FfiConverterRustBuffer<HomeAnalysis?> {
+    override fun read(buf: ByteBuffer): HomeAnalysis? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeHomeAnalysis.read(buf)
+    }
+
+    override fun allocationSize(value: HomeAnalysis?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeHomeAnalysis.allocationSize(value)
+        }
+    }
+
+    override fun write(value: HomeAnalysis?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeHomeAnalysis.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeHomeArticleInfo: FfiConverterRustBuffer<HomeArticleInfo?> {
     override fun read(buf: ByteBuffer): HomeArticleInfo? {
         if (buf.get().toInt() == 0) {
@@ -20090,6 +23274,38 @@ public object FfiConverterOptionalTypeLearningSessionInfo: FfiConverterRustBuffe
         } else {
             buf.put(1)
             FfiConverterTypeLearningSessionInfo.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeMdShortcutResult: FfiConverterRustBuffer<MdShortcutResult?> {
+    override fun read(buf: ByteBuffer): MdShortcutResult? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeMdShortcutResult.read(buf)
+    }
+
+    override fun allocationSize(value: MdShortcutResult?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeMdShortcutResult.allocationSize(value)
+        }
+    }
+
+    override fun write(value: MdShortcutResult?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeMdShortcutResult.write(value, buf)
         }
     }
 }
@@ -20186,6 +23402,70 @@ public object FfiConverterOptionalTypePageSummary: FfiConverterRustBuffer<PageSu
         } else {
             buf.put(1)
             FfiConverterTypePageSummary.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeSlot: FfiConverterRustBuffer<Slot?> {
+    override fun read(buf: ByteBuffer): Slot? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeSlot.read(buf)
+    }
+
+    override fun allocationSize(value: Slot?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeSlot.allocationSize(value)
+        }
+    }
+
+    override fun write(value: Slot?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeSlot.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeSubjectRow: FfiConverterRustBuffer<SubjectRow?> {
+    override fun read(buf: ByteBuffer): SubjectRow? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeSubjectRow.read(buf)
+    }
+
+    override fun allocationSize(value: SubjectRow?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeSubjectRow.allocationSize(value)
+        }
+    }
+
+    override fun write(value: SubjectRow?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeSubjectRow.write(value, buf)
         }
     }
 }
@@ -20356,6 +23636,70 @@ public object FfiConverterOptionalSequenceTypeDbColumn: FfiConverterRustBuffer<L
 /**
  * @suppress
  */
+public object FfiConverterOptionalSequenceTypeHourRate: FfiConverterRustBuffer<List<HourRate>?> {
+    override fun read(buf: ByteBuffer): List<HourRate>? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterSequenceTypeHourRate.read(buf)
+    }
+
+    override fun allocationSize(value: List<HourRate>?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterSequenceTypeHourRate.allocationSize(value)
+        }
+    }
+
+    override fun write(value: List<HourRate>?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterSequenceTypeHourRate.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalSequenceTypeMdBlock: FfiConverterRustBuffer<List<MdBlock>?> {
+    override fun read(buf: ByteBuffer): List<MdBlock>? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterSequenceTypeMdBlock.read(buf)
+    }
+
+    override fun allocationSize(value: List<MdBlock>?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterSequenceTypeMdBlock.allocationSize(value)
+        }
+    }
+
+    override fun write(value: List<MdBlock>?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterSequenceTypeMdBlock.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalSequenceTypeDiffRow: FfiConverterRustBuffer<List<DiffRow>?> {
     override fun read(buf: ByteBuffer): List<DiffRow>? {
         if (buf.get().toInt() == 0) {
@@ -20378,6 +23722,62 @@ public object FfiConverterOptionalSequenceTypeDiffRow: FfiConverterRustBuffer<Li
         } else {
             buf.put(1)
             FfiConverterSequenceTypeDiffRow.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceInt: FfiConverterRustBuffer<List<kotlin.Int>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Int> {
+        val len = buf.getInt()
+        return List<kotlin.Int>(len) {
+            FfiConverterInt.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Int>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterInt.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Int>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterInt.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceULong: FfiConverterRustBuffer<List<kotlin.ULong>> {
+    override fun read(buf: ByteBuffer): List<kotlin.ULong> {
+        val len = buf.getInt()
+        return List<kotlin.ULong>(len) {
+            FfiConverterULong.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.ULong>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterULong.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.ULong>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterULong.write(it, buf)
         }
     }
 }
@@ -20490,6 +23890,34 @@ public object FfiConverterSequenceTypeAiModel: FfiConverterRustBuffer<List<AiMod
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeAiModel.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeArticleNoteItem: FfiConverterRustBuffer<List<ArticleNoteItem>> {
+    override fun read(buf: ByteBuffer): List<ArticleNoteItem> {
+        val len = buf.getInt()
+        return List<ArticleNoteItem>(len) {
+            FfiConverterTypeArticleNoteItem.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ArticleNoteItem>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeArticleNoteItem.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ArticleNoteItem>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeArticleNoteItem.write(it, buf)
         }
     }
 }
@@ -20780,6 +24208,34 @@ public object FfiConverterSequenceTypeDbColumn: FfiConverterRustBuffer<List<DbCo
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeDeckEntry: FfiConverterRustBuffer<List<DeckEntry>> {
+    override fun read(buf: ByteBuffer): List<DeckEntry> {
+        val len = buf.getInt()
+        return List<DeckEntry>(len) {
+            FfiConverterTypeDeckEntry.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<DeckEntry>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeDeckEntry.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<DeckEntry>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeDeckEntry.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeDeckInfo: FfiConverterRustBuffer<List<DeckInfo>> {
     override fun read(buf: ByteBuffer): List<DeckInfo> {
         val len = buf.getInt()
@@ -20836,6 +24292,34 @@ public object FfiConverterSequenceTypeDeckOverview: FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeDeckRowRecord: FfiConverterRustBuffer<List<DeckRowRecord>> {
+    override fun read(buf: ByteBuffer): List<DeckRowRecord> {
+        val len = buf.getInt()
+        return List<DeckRowRecord>(len) {
+            FfiConverterTypeDeckRowRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<DeckRowRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeDeckRowRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<DeckRowRecord>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeDeckRowRecord.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeDriveIntervalOption: FfiConverterRustBuffer<List<DriveIntervalOption>> {
     override fun read(buf: ByteBuffer): List<DriveIntervalOption> {
         val len = buf.getInt()
@@ -20854,6 +24338,62 @@ public object FfiConverterSequenceTypeDriveIntervalOption: FfiConverterRustBuffe
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeDriveIntervalOption.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeExpRow: FfiConverterRustBuffer<List<ExpRow>> {
+    override fun read(buf: ByteBuffer): List<ExpRow> {
+        val len = buf.getInt()
+        return List<ExpRow>(len) {
+            FfiConverterTypeExpRow.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ExpRow>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeExpRow.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ExpRow>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeExpRow.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeForecastDayRecord: FfiConverterRustBuffer<List<ForecastDayRecord>> {
+    override fun read(buf: ByteBuffer): List<ForecastDayRecord> {
+        val len = buf.getInt()
+        return List<ForecastDayRecord>(len) {
+            FfiConverterTypeForecastDayRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ForecastDayRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeForecastDayRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ForecastDayRecord>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeForecastDayRecord.write(it, buf)
         }
     }
 }
@@ -20892,6 +24432,62 @@ public object FfiConverterSequenceTypeGradeInfo: FfiConverterRustBuffer<List<Gra
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeHardCardRecord: FfiConverterRustBuffer<List<HardCardRecord>> {
+    override fun read(buf: ByteBuffer): List<HardCardRecord> {
+        val len = buf.getInt()
+        return List<HardCardRecord>(len) {
+            FfiConverterTypeHardCardRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HardCardRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHardCardRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HardCardRecord>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHardCardRecord.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeHeatmapCellRecord: FfiConverterRustBuffer<List<HeatmapCellRecord>> {
+    override fun read(buf: ByteBuffer): List<HeatmapCellRecord> {
+        val len = buf.getInt()
+        return List<HeatmapCellRecord>(len) {
+            FfiConverterTypeHeatmapCellRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HeatmapCellRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHeatmapCellRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HeatmapCellRecord>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHeatmapCellRecord.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeHeftFolder: FfiConverterRustBuffer<List<HeftFolder>> {
     override fun read(buf: ByteBuffer): List<HeftFolder> {
         val len = buf.getInt()
@@ -20910,6 +24506,34 @@ public object FfiConverterSequenceTypeHeftFolder: FfiConverterRustBuffer<List<He
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeHeftFolder.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeHeftFolderCount: FfiConverterRustBuffer<List<HeftFolderCount>> {
+    override fun read(buf: ByteBuffer): List<HeftFolderCount> {
+        val len = buf.getInt()
+        return List<HeftFolderCount>(len) {
+            FfiConverterTypeHeftFolderCount.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HeftFolderCount>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHeftFolderCount.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HeftFolderCount>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHeftFolderCount.write(it, buf)
         }
     }
 }
@@ -21032,6 +24656,34 @@ public object FfiConverterSequenceTypeHeftPdfPage: FfiConverterRustBuffer<List<H
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeHeftShelfCard: FfiConverterRustBuffer<List<HeftShelfCard>> {
+    override fun read(buf: ByteBuffer): List<HeftShelfCard> {
+        val len = buf.getInt()
+        return List<HeftShelfCard>(len) {
+            FfiConverterTypeHeftShelfCard.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HeftShelfCard>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHeftShelfCard.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HeftShelfCard>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHeftShelfCard.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeHeftStroke: FfiConverterRustBuffer<List<HeftStroke>> {
     override fun read(buf: ByteBuffer): List<HeftStroke> {
         val len = buf.getInt()
@@ -21088,6 +24740,34 @@ public object FfiConverterSequenceTypeHeftText: FfiConverterRustBuffer<List<Heft
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeHighlightSpan: FfiConverterRustBuffer<List<HighlightSpan>> {
+    override fun read(buf: ByteBuffer): List<HighlightSpan> {
+        val len = buf.getInt()
+        return List<HighlightSpan>(len) {
+            FfiConverterTypeHighlightSpan.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HighlightSpan>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHighlightSpan.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HighlightSpan>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHighlightSpan.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeHomeArticleInfo: FfiConverterRustBuffer<List<HomeArticleInfo>> {
     override fun read(buf: ByteBuffer): List<HomeArticleInfo> {
         val len = buf.getInt()
@@ -21116,6 +24796,34 @@ public object FfiConverterSequenceTypeHomeArticleInfo: FfiConverterRustBuffer<Li
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeHourRate: FfiConverterRustBuffer<List<HourRate>> {
+    override fun read(buf: ByteBuffer): List<HourRate> {
+        val len = buf.getInt()
+        return List<HourRate>(len) {
+            FfiConverterTypeHourRate.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<HourRate>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeHourRate.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<HourRate>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeHourRate.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeLearningSessionInfo: FfiConverterRustBuffer<List<LearningSessionInfo>> {
     override fun read(buf: ByteBuffer): List<LearningSessionInfo> {
         val len = buf.getInt()
@@ -21134,6 +24842,62 @@ public object FfiConverterSequenceTypeLearningSessionInfo: FfiConverterRustBuffe
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeLearningSessionInfo.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeLibrarySectionInfo: FfiConverterRustBuffer<List<LibrarySectionInfo>> {
+    override fun read(buf: ByteBuffer): List<LibrarySectionInfo> {
+        val len = buf.getInt()
+        return List<LibrarySectionInfo>(len) {
+            FfiConverterTypeLibrarySectionInfo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<LibrarySectionInfo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeLibrarySectionInfo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<LibrarySectionInfo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeLibrarySectionInfo.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeLibraryTreeRowInfo: FfiConverterRustBuffer<List<LibraryTreeRowInfo>> {
+    override fun read(buf: ByteBuffer): List<LibraryTreeRowInfo> {
+        val len = buf.getInt()
+        return List<LibraryTreeRowInfo>(len) {
+            FfiConverterTypeLibraryTreeRowInfo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<LibraryTreeRowInfo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeLibraryTreeRowInfo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<LibraryTreeRowInfo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeLibraryTreeRowInfo.write(it, buf)
         }
     }
 }
@@ -21256,6 +25020,146 @@ public object FfiConverterSequenceTypePageVersion: FfiConverterRustBuffer<List<P
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypePaletteActionDef: FfiConverterRustBuffer<List<PaletteActionDef>> {
+    override fun read(buf: ByteBuffer): List<PaletteActionDef> {
+        val len = buf.getInt()
+        return List<PaletteActionDef>(len) {
+            FfiConverterTypePaletteActionDef.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PaletteActionDef>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePaletteActionDef.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PaletteActionDef>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePaletteActionDef.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePalettePageHit: FfiConverterRustBuffer<List<PalettePageHit>> {
+    override fun read(buf: ByteBuffer): List<PalettePageHit> {
+        val len = buf.getInt()
+        return List<PalettePageHit>(len) {
+            FfiConverterTypePalettePageHit.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PalettePageHit>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePalettePageHit.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PalettePageHit>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePalettePageHit.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePlainCard: FfiConverterRustBuffer<List<PlainCard>> {
+    override fun read(buf: ByteBuffer): List<PlainCard> {
+        val len = buf.getInt()
+        return List<PlainCard>(len) {
+            FfiConverterTypePlainCard.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PlainCard>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePlainCard.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PlainCard>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePlainCard.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeProblemPage: FfiConverterRustBuffer<List<ProblemPage>> {
+    override fun read(buf: ByteBuffer): List<ProblemPage> {
+        val len = buf.getInt()
+        return List<ProblemPage>(len) {
+            FfiConverterTypeProblemPage.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ProblemPage>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeProblemPage.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ProblemPage>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeProblemPage.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeRateRow: FfiConverterRustBuffer<List<RateRow>> {
+    override fun read(buf: ByteBuffer): List<RateRow> {
+        val len = buf.getInt()
+        return List<RateRow>(len) {
+            FfiConverterTypeRateRow.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<RateRow>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeRateRow.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<RateRow>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeRateRow.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeRelatedPage: FfiConverterRustBuffer<List<RelatedPage>> {
     override fun read(buf: ByteBuffer): List<RelatedPage> {
         val len = buf.getInt()
@@ -21340,6 +25244,146 @@ public object FfiConverterSequenceTypeSemanticHit: FfiConverterRustBuffer<List<S
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeSeriesDayRecord: FfiConverterRustBuffer<List<SeriesDayRecord>> {
+    override fun read(buf: ByteBuffer): List<SeriesDayRecord> {
+        val len = buf.getInt()
+        return List<SeriesDayRecord>(len) {
+            FfiConverterTypeSeriesDayRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SeriesDayRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSeriesDayRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SeriesDayRecord>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSeriesDayRecord.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSettingsSearchEntry: FfiConverterRustBuffer<List<SettingsSearchEntry>> {
+    override fun read(buf: ByteBuffer): List<SettingsSearchEntry> {
+        val len = buf.getInt()
+        return List<SettingsSearchEntry>(len) {
+            FfiConverterTypeSettingsSearchEntry.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SettingsSearchEntry>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSettingsSearchEntry.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SettingsSearchEntry>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSettingsSearchEntry.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSettingsSearchHit: FfiConverterRustBuffer<List<SettingsSearchHit>> {
+    override fun read(buf: ByteBuffer): List<SettingsSearchHit> {
+        val len = buf.getInt()
+        return List<SettingsSearchHit>(len) {
+            FfiConverterTypeSettingsSearchHit.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SettingsSearchHit>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSettingsSearchHit.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SettingsSearchHit>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSettingsSearchHit.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSidebarRowInfo: FfiConverterRustBuffer<List<SidebarRowInfo>> {
+    override fun read(buf: ByteBuffer): List<SidebarRowInfo> {
+        val len = buf.getInt()
+        return List<SidebarRowInfo>(len) {
+            FfiConverterTypeSidebarRowInfo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SidebarRowInfo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSidebarRowInfo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SidebarRowInfo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSidebarRowInfo.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSlot: FfiConverterRustBuffer<List<Slot>> {
+    override fun read(buf: ByteBuffer): List<Slot> {
+        val len = buf.getInt()
+        return List<Slot>(len) {
+            FfiConverterTypeSlot.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<Slot>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSlot.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<Slot>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSlot.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeSubjectGrades: FfiConverterRustBuffer<List<SubjectGrades>> {
     override fun read(buf: ByteBuffer): List<SubjectGrades> {
         val len = buf.getInt()
@@ -21358,6 +25402,34 @@ public object FfiConverterSequenceTypeSubjectGrades: FfiConverterRustBuffer<List
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeSubjectGrades.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeSubjectRow: FfiConverterRustBuffer<List<SubjectRow>> {
+    override fun read(buf: ByteBuffer): List<SubjectRow> {
+        val len = buf.getInt()
+        return List<SubjectRow>(len) {
+            FfiConverterTypeSubjectRow.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SubjectRow>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSubjectRow.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SubjectRow>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSubjectRow.write(it, buf)
         }
     }
 }
@@ -21564,6 +25636,84 @@ public object FfiConverterSequenceSequenceTypeMdBlock: FfiConverterRustBuffer<Li
 /**
  * @suppress
  */
+public object FfiConverterMapStringUInt: FfiConverterRustBuffer<Map<kotlin.String, kotlin.UInt>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.UInt> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.UInt>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterUInt.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.UInt>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren = value.map { (k, v) ->
+            FfiConverterString.allocationSize(k) +
+            FfiConverterUInt.allocationSize(v)
+        }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(value: Map<kotlin.String, kotlin.UInt>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterUInt.write(v, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringULong: FfiConverterRustBuffer<Map<kotlin.String, kotlin.ULong>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.ULong> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.ULong>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterULong.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.ULong>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren = value.map { (k, v) ->
+            FfiConverterString.allocationSize(k) +
+            FfiConverterULong.allocationSize(v)
+        }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(value: Map<kotlin.String, kotlin.ULong>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterULong.write(v, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterMapStringBoolean: FfiConverterRustBuffer<Map<kotlin.String, kotlin.Boolean>> {
     override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.Boolean> {
         val len = buf.getInt()
@@ -21648,6 +25798,124 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * Zählt Duplikate innerhalb der Karten und gegenüber bestehenden Schlüsseln.
+         */ fun `cardDuplicateCount`(`cards`: List<PlainCard>, `seenKeys`: List<kotlin.String>): kotlin.ULong {
+            return FfiConverterULong.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_duplicate_count(
+        FfiConverterSequenceTypePlainCard.lower(`cards`),FfiConverterSequenceString.lower(`seenKeys`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * CSV-Format schreiben (`impala67-karten.csv`).
+         */ fun `cardExportCsv`(`cards`: List<PlainCard>): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_export_csv(
+        FfiConverterSequenceTypePlainCard.lower(`cards`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Impala-TXT-Format schreiben (`impala67-karten.txt`).
+         */ fun `cardExportTxt`(`cards`: List<PlainCard>): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_export_txt(
+        FfiConverterSequenceTypePlainCard.lower(`cards`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Eindeutiger Kartenschlüssel für Duplikate.
+         */ fun `cardKey`(`front`: kotlin.String, `back`: kotlin.String, `deck`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_key(
+        FfiConverterString.lower(`front`),FfiConverterString.lower(`back`),FfiConverterString.lower(`deck`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Erkennt das Format automatisch (Impala-TXT vs. Tabelle/Anki) und parst Karten.
+         */ fun `cardParseCardText`(`text`: kotlin.String, `defaultDeck`: kotlin.String): ParsedCards {
+            return FfiConverterTypeParsedCards.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_parse_card_text(
+        FfiConverterString.lower(`text`),FfiConverterString.lower(`defaultDeck`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Impala-TXT-Dateien einlesen.
+         */ fun `cardParseImpalaTxt`(`text`: kotlin.String, `defaultDeck`: kotlin.String): ParsedCards {
+            return FfiConverterTypeParsedCards.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_parse_impala_txt(
+        FfiConverterString.lower(`text`),FfiConverterString.lower(`defaultDeck`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Tabellarische Karten (CSV/TSV oder Anki-Text) einlesen.
+         */ fun `cardParseTableCards`(`text`: kotlin.String, `defaultDeck`: kotlin.String): ParsedCards {
+            return FfiConverterTypeParsedCards.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_parse_table_cards(
+        FfiConverterString.lower(`text`),FfiConverterString.lower(`defaultDeck`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * HTML aus Anki-Feldern in Klartext umwandeln.
+         */ fun `cardStripHtml`(`html`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_card_strip_html(
+        FfiConverterString.lower(`html`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Maskiert alle Lücken mit `＿＿＿` und liefert die Antworten der Reihe nach.
+         * Liefert `None`, wenn der Text keine Cloze-Lücke enthält.
+         */ fun `clozeRecall`(`front`: kotlin.String): ClozeRecall? {
+            return FfiConverterOptionalTypeClozeRecall.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_cloze_recall(
+        FfiConverterString.lower(`front`),_status)
+}
+    )
+    }
+    
+ fun `computeGoal`(`goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `today`: kotlin.Int, `pace`: kotlin.Double): Goal {
+            return FfiConverterTypeGoal.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_compute_goal(
+        FfiConverterInt.lower(`goalMin`),FfiConverterSequenceDouble.lower(`days`),FfiConverterInt.lower(`today`),FfiConverterDouble.lower(`pace`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Zweispaltiger Vergleich zweier Fassungen für den Konflikt-Dialog. `None`, wenn der abweichende
          * Mittelteil zu groß ist (dann beide Volltexte nebeneinander zeigen).
          */ fun `conflictDiffRows`(`left`: kotlin.String, `right`: kotlin.String): List<DiffRow>? {
@@ -21679,6 +25947,30 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_core_long_lock_holds(
         _status)
+}
+    )
+    }
+    
+
+        /**
+         * Kurzname eines Stapels („Mathe::Analysis“ → „Analysis“).
+         */ fun `deckLabel`(`name`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_deck_label(
+        FfiConverterString.lower(`name`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Elternteil eines Stapels („Mathe::Analysis“ → Some("Mathe"), „Mathe“ → None).
+         */ fun `deckParent`(`name`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_deck_parent(
+        FfiConverterString.lower(`name`),_status)
 }
     )
     }
@@ -21884,6 +26176,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * Stapel-Übersicht in hierarchische Tiefenreihenfolge bringen; eingeklappte Äste entfallen.
+         */ fun `flattenDecks`(`overview`: List<DeckOverview>, `collapsed`: List<kotlin.String>): List<DeckEntry> {
+            return FfiConverterSequenceTypeDeckEntry.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_flatten_decks(
+        FfiConverterSequenceTypeDeckOverview.lower(`overview`),FfiConverterSequenceString.lower(`collapsed`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Speicheranzeige vor dem ersten Abruf.
          */ fun `formatSyncUsage`(`bytes`: kotlin.Double): kotlin.String {
             return FfiConverterString.lift(
@@ -21903,6 +26207,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCallWithError(SyncFailure) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_generate_sync_key(
         _status)
+}
+    )
+    }
+    
+
+        /**
+         * Farb-Stufe einer Note (1..=5).
+         */ fun `gradeTier`(`grade`: kotlin.Double): kotlin.UByte {
+            return FfiConverterUByte.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_grade_tier(
+        FfiConverterDouble.lower(`grade`),_status)
 }
     )
     }
@@ -22078,6 +26394,87 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     )
     }
     
+ fun `learningTimeCycleGoal`(`current`: kotlin.UInt): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_cycle_goal(
+        FfiConverterUInt.lower(`current`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeHomeNudge`(`streak`: kotlin.UInt, `todaySeconds`: kotlin.ULong, `weekSeconds`: kotlin.ULong, `goalMin`: kotlin.UInt, `currentHour`: kotlin.UInt): HomeNudgeInfo {
+            return FfiConverterTypeHomeNudgeInfo.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_home_nudge(
+        FfiConverterUInt.lower(`streak`),FfiConverterULong.lower(`todaySeconds`),FfiConverterULong.lower(`weekSeconds`),FfiConverterUInt.lower(`goalMin`),FfiConverterUInt.lower(`currentHour`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeHomeNudgeText`(`streak`: kotlin.UInt, `todaySeconds`: kotlin.ULong, `weekSeconds`: kotlin.ULong, `goalMin`: kotlin.UInt, `currentHour`: kotlin.UInt): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_home_nudge_text(
+        FfiConverterUInt.lower(`streak`),FfiConverterULong.lower(`todaySeconds`),FfiConverterULong.lower(`weekSeconds`),FfiConverterUInt.lower(`goalMin`),FfiConverterUInt.lower(`currentHour`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeMergedSeconds`(`sessions`: List<LearningSessionInfo>): kotlin.ULong {
+            return FfiConverterULong.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_merged_seconds(
+        FfiConverterSequenceTypeLearningSessionInfo.lower(`sessions`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeNormalizeGoal`(`stored`: kotlin.UInt): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_normalize_goal(
+        FfiConverterUInt.lower(`stored`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeStreakDays`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_streak_days(
+        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeTotalsByDay`(`sessions`: List<LearningSessionInfo>, `offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong> {
+            return FfiConverterMapStringULong.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_totals_by_day(
+        FfiConverterSequenceTypeLearningSessionInfo.lower(`sessions`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeWeekData`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong> {
+            return FfiConverterSequenceULong.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_week_data(
+        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`weekOffset`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    )
+    }
+    
+ fun `learningTimeWeekdayIndex`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_weekday_index(
+        FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
+}
+    )
+    }
+    
 
         /**
          * Stand des lokalen Modells im Verzeichnis `model_dir`.
@@ -22150,6 +26547,60 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     )
     }
     
+ fun `mdContinuationBlock`(`block`: MdBlock, `newId`: kotlin.String): List<MdBlock>? {
+            return FfiConverterOptionalSequenceTypeMdBlock.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_continuation_block(
+        FfiConverterTypeMdBlock.lower(`block`),FfiConverterString.lower(`newId`),_status)
+}
+    )
+    }
+    
+ fun `mdConvertBlock`(`block`: MdBlock, `targetType`: kotlin.String): MdBlock {
+            return FfiConverterTypeMdBlock.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_convert_block(
+        FfiConverterTypeMdBlock.lower(`block`),FfiConverterString.lower(`targetType`),_status)
+}
+    )
+    }
+    
+ fun `mdIndentBlock`(`block`: MdBlock, `delta`: kotlin.Int): MdBlock {
+            return FfiConverterTypeMdBlock.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_indent_block(
+        FfiConverterTypeMdBlock.lower(`block`),FfiConverterInt.lower(`delta`),_status)
+}
+    )
+    }
+    
+ fun `mdListNumbers`(`blocks`: List<MdBlock>): Map<kotlin.String, kotlin.UInt> {
+            return FfiConverterMapStringUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_list_numbers(
+        FfiConverterSequenceTypeMdBlock.lower(`blocks`),_status)
+}
+    )
+    }
+    
+ fun `mdShortcutType`(`line`: kotlin.String): MdShortcutResult? {
+            return FfiConverterOptionalTypeMdShortcutResult.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_shortcut_type(
+        FfiConverterString.lower(`line`),_status)
+}
+    )
+    }
+    
+ fun `mdWrapMarkers`(`text`: kotlin.String, `startUtf16`: kotlin.UInt, `endUtf16`: kotlin.UInt, `before`: kotlin.String, `after`: kotlin.String): MdWrapResult {
+            return FfiConverterTypeMdWrapResult.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_md_wrap_markers(
+        FfiConverterString.lower(`text`),FfiConverterUInt.lower(`startUtf16`),FfiConverterUInt.lower(`endUtf16`),FfiConverterString.lower(`before`),FfiConverterString.lower(`after`),_status)
+}
+    )
+    }
+    
 
         /**
          * Drei-Wege-Abgleich eines Textes (`base` = gemeinsamer Stand): der zusammengeführte Text, oder
@@ -22171,6 +26622,27 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_overview_subject(
         _status)
+}
+    )
+    }
+    
+
+        /**
+         * Eigenes Thema für den Tagesartikel wählen.
+         */ fun `pickArticleTopic`(`topicsRaw`: kotlin.String, `historyFirstTopics`: List<kotlin.String>): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_pick_article_topic(
+        FfiConverterString.lower(`topicsRaw`),FfiConverterSequenceString.lower(`historyFirstTopics`),_status)
+}
+    )
+    }
+    
+ fun `resolvedHeftCover`(`cover`: kotlin.String, `title`: kotlin.String, `id`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_resolved_heft_cover(
+        FfiConverterString.lower(`cover`),FfiConverterString.lower(`title`),FfiConverterString.lower(`id`),_status)
 }
     )
     }
@@ -22204,6 +26676,66 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * Filtert Schnell-Aktionen nach `query` (ohne Groß-/Kleinschreibung); liefert die passenden IDs in Eingabereihenfolge.
+         */ fun `searchFilterActions`(`actions`: List<PaletteActionDef>, `query`: kotlin.String): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_search_filter_actions(
+        FfiConverterSequenceTypePaletteActionDef.lower(`actions`),FfiConverterString.lower(`query`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Zu markierende UTF-16-Bereiche in `text` für `query` und optionale Wortformen `terms`.
+         */ fun `searchHighlightRanges`(`text`: kotlin.String, `query`: kotlin.String, `terms`: List<kotlin.String>): List<HighlightSpan> {
+            return FfiConverterSequenceTypeHighlightSpan.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_search_highlight_ranges(
+        FfiConverterString.lower(`text`),FfiConverterString.lower(`query`),FfiConverterSequenceString.lower(`terms`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Kürzt einen Ausschnitt auf 110 Zeichen (`snippet.replace(/\s+/g, " ").trim().slice(0, 110)`).
+         */ fun `searchPreview`(`snippet`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_search_preview(
+        FfiConverterString.lower(`snippet`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Durchsucht den Standard-Einstellungskatalog (`platform`: `"web"`, `"native"`, oder `None` für alle).
+         */ fun `searchSettingsCatalog`(`query`: kotlin.String, `limit`: kotlin.UInt, `platform`: kotlin.String?): List<SettingsSearchHit> {
+            return FfiConverterSequenceTypeSettingsSearchHit.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_search_settings_catalog(
+        FfiConverterString.lower(`query`),FfiConverterUInt.lower(`limit`),FfiConverterOptionalString.lower(`platform`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Durchsucht übergebene Einstellungs-Einträge nach `query` wie `searchSettings` der PWA.
+         */ fun `searchSettingsItems`(`entries`: List<SettingsSearchEntry>, `query`: kotlin.String, `limit`: kotlin.UInt): List<SettingsSearchHit> {
+            return FfiConverterSequenceTypeSettingsSearchHit.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_search_settings_items(
+        FfiConverterSequenceTypeSettingsSearchEntry.lower(`entries`),FfiConverterString.lower(`query`),FfiConverterUInt.lower(`limit`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Wartezeit vor dem n-ten WebSocket-Neuaufbau (ab 1, mit Streuung).
          */ fun `syncReconnectDelayMs`(`attempt`: kotlin.UInt): kotlin.ULong {
             return FfiConverterULong.lift(
@@ -22222,6 +26754,19 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_sync_retry_delay_ms(
         FfiConverterUInt.lower(`attempt`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine
+         * leere Lücke an der Schreibmarke. Positionen als UTF-16-Code-Units (Swift / Kotlin).
+         */ fun `wrapCloze`(`text`: kotlin.String, `selectionStart`: kotlin.UInt, `selectionEnd`: kotlin.UInt): ClozeWrap {
+            return FfiConverterTypeClozeWrap.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_wrap_cloze(
+        FfiConverterString.lower(`text`),FfiConverterUInt.lower(`selectionStart`),FfiConverterUInt.lower(`selectionEnd`),_status)
 }
     )
     }
