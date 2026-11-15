@@ -1,6 +1,6 @@
 # Impala67
 
-Impala67 ist eine installierbare, local-first Progressive Web App für Notizen, PDFs, Handschrift, Karteikarten und KI-gestütztes Lernen. Die App läuft statisch im Browser und benötigt keinen Desktop-Wrapper oder eigenen Anwendungsserver.
+Impala67 ist eine local-first App für Notizen, PDFs, Handschrift, Karteikarten und KI-gestütztes Lernen – als installierbare PWA, native Android-App und native iPad-App. Alle drei teilen sich einen Rust-Kern und dieselben Daten; ein eigener Anwendungsserver ist nicht nötig.
 
 ## App öffnen & herunterladen
 
@@ -18,10 +18,9 @@ Impala67 ist eine installierbare, local-first Progressive Web App für Notizen, 
 - Daten lokal im Browser speichern
 - Mehrgeräte-Sync über einen optionalen Cloudflare-Kanal mit Ende-zu-Ende-Verschlüsselung
 - Google Drive optional als privates Backup und Langzeitspeicher verwenden
-- Notion über einen optionalen Zwei-Wege-Sync anbinden
 - KI-Anbieter direkt, lokal oder über den geschützten Groq-Proxy nutzen
 
-Die fachlichen Daten bleiben local-first im Browser (IndexedDB). Cloudflare-Sync und Google Drive sind optionale Dienste; ohne sie funktioniert die lokale App weiterhin. Impala67 funktioniert auf modernen Browsern sowie als installierte PWA.
+Die fachlichen Daten bleiben local-first im Browser (IndexedDB). Cloudflare-Sync und Google Drive sind optionale Dienste; ohne sie funktioniert die lokale App weiterhin. Aufbau und Regeln für Entwickler: [AGENTS.md](AGENTS.md).
 
 ## Cloudflare-Sync und Server
 

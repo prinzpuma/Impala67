@@ -7,8 +7,8 @@ Impala67 ist Local-First und wird in **drei Versionen** gepflegt, die sich einen
 | Version | Code | Technik | Hauptzweck | Eigene Regeln / Stand |
 |---|---|---|---|---|
 | **PWA** | `web/` | native ES-Module, Standard-CSS, kein Bundler; Kern als WASM (`web/core/` über `web/rust-core.js`) | Laptop/PC (Markdown-Editor), Fallback auf allen Geräten | dieses Dokument |
-| **Android-App** | `android/` | Kotlin/Compose, Material 3 Expressive; Kern über UniFFI (`core/impala-ffi`) | Smartphone: schnelles Lesen, Kurznotizen; Tablet | `android/PORTING.md`, `android/UI-INVENTAR.md` |
-| **iPad-App** | `ios/` | SwiftUI/PencilKit (iPadOS 27); Kern über UniFFI (`core/impala-ffi`) | Handschrift und Zeichnen mit dem Stift (Heft) | `ios/README.md`, `ios/PARITAET.md` |
+| **Android-App** | `android/` | Kotlin/Compose, Material 3 Expressive; Kern über UniFFI (`core/impala-ffi`) | Smartphone: schnelles Lesen, Kurznotizen; Tablet | `android/PORTING.md`, `docs/PARITAET.md` |
+| **iPad-App** | `ios/` | SwiftUI/PencilKit (iPadOS 27); Kern über UniFFI (`core/impala-ffi`) | Handschrift und Zeichnen mit dem Stift (Heft) | `ios/README.md`, `docs/PARITAET.md` |
 
 - **Die PWA ist die Vorlage**: Aussehen, Verhalten und Texte der nativen Apps richten sich nach der PWA (mit Plattform-Feinschliff). Die nativen Apps nutzen `web/` nicht und übernehmen nichts aus der alten Capacitor-App.
 - **Logik gehört in den Kern**: Was keine Oberfläche ist, steht in Rust (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`) und gilt damit automatisch für alle drei. Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall). Fehlt einer App eine Funktion, die FFI-Hülle erweitern – nicht in Kotlin/Swift nachbauen.
@@ -23,7 +23,7 @@ Vor jeder Änderung klären, wo sie landen muss:
   - PWA: `npm run build:core`, `web/core/` + `core/wasm-build.json` committen (FFI-Änderungen ändern den WASM-Stempel nicht).
   - Android: `npm run build:android-core` (bei Änderungen in `core/impala-ffi`).
   - iPad: `npm run build:ios-core`, erzeugte Swift-Bindings (`ios/Impala67/Core/Generated/`, `ios/Bindings/`) committen.
-- **Nur Oberfläche einer Version** → nur dort ändern. Ist es ein Verhalten, das die PWA vorgibt, den Abgleich festhalten: iPad in `ios/PARITAET.md`, Android in `android/UI-INVENTAR.md`. Neue PWA-Funktionen dort als offene Lücke eintragen, statt sie ungefragt in allen Apps nachzubauen.
+- **Nur Oberfläche einer Version** → nur dort ändern. Ist es ein Verhalten, das die PWA vorgibt, den Abgleich in `docs/PARITAET.md` festhalten (eine Lückenliste für Android und iPad; erledigte Zeilen löschen). Neue PWA-Funktionen dort als offene Lücke eintragen, statt sie ungefragt in allen Apps nachzubauen.
 - **Gespeicherte oder synchronisierte Formate** → müssen zwischen allen Versionen austauschbar bleiben (eine ältere App darf neuere Daten nicht zerstören).
 - **Icons** kommen für alle aus `web/icons.svg` (`npm run android:icons`, `npm run ios:icons`).
 
@@ -43,9 +43,9 @@ Vor jeder Änderung klären, wo sie landen muss:
 - **Daten & Sync**: `web/db.js`, `web/state.js` (Ein-/Ausgabe und Abfragen für das Rust-Datenmodell `ModelCore`), `web/state-views.js` (nur lesbare Ansichten in `S`), `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
 - **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`, Fächer: `core/impala-fach`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`; UniFFI-Hülle für native Apps `core/impala-ffi` (ändert den WASM-Stempel nicht)
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`
-- **Native Apps**: `android/` (Kotlin/Compose, Regeln: `android/PORTING.md`), `ios/` (SwiftUI/PencilKit, Stand: `ios/README.md`, Parität: `ios/PARITAET.md`), gemeinsame Brücke `core/impala-ffi`
+- **Native Apps**: `android/` (Kotlin/Compose, Regeln: `android/PORTING.md`), `ios/` (SwiftUI/PencilKit, Stand: `ios/README.md`), Parität beider Apps: `docs/PARITAET.md`, gemeinsame Brücke `core/impala-ffi`
 - **Offline & Cache**: `web/service-worker.js`, `web/updater.js`, `web/version.json`
-- **Doku**: `docs/ARCHITEKTUR.md`, `docs/NATIV-PLAN.md`, `docs/IPAD-TESTAUFTRAG.md` und Testberichte `docs/IPAD-TESTBERICHT-*.md`
+- **Doku**: `docs/ARCHITEKTUR.md`, `docs/NATIV-PLAN.md`, `docs/PARITAET.md`, `docs/IPAD-TESTAUFTRAG.md` (Testberichte nur, solange offen)
 - **Veröffentlichung**: `.github/workflows/release.yml` (manuelles Release mit Android-APK), `deploy-pwa.yml` (PWA bei jedem Push), `android-check.yml` (Debug-Bau), `ios-build.yml` (unsignierte IPA); Versionen aus `.github/scripts/version-from-tags.mjs`, gesetzt über `.github/scripts/set-version.mjs`
 - **Backlog**: `TODO.md`
 

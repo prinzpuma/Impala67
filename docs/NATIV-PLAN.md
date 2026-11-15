@@ -1,271 +1,90 @@
-# Impala67 – Plan: Rust-Kern & native Apps
+# Impala67 – Rust-Kern & native Apps
 
-Stand: 7. November 2026 (Plan vom 27. Oktober, fortgeschrieben)
+Stand: 15.11.2026. Ablauf und Messwerte der Umstellung (Okt./Nov. 2026) stehen in der Git-Historie dieser Datei.
 
-## Ziel
+## Ziel und Stand
 
-Langfristig native Apps für iPadOS/iOS, Android, Windows und Linux, alleine pflegbar. Weg dorthin:
-ein gemeinsamer **Rust-Kern** übernimmt so viel Logik wie möglich, die Plattformen liefern nur dünne Oberflächen
-und ersetzen Kern-Funktionen schrittweise durch native, wo es sich lohnt. Die PWA bleibt erhalten und nutzt denselben Kern (WASM).
+Ein gemeinsamer **Rust-Kern** (`core/`) enthält alle Logik; die Versionen liefern nur Oberflächen.
+
+| Version | Anbindung | Stand |
+|---|---|---|
+| PWA | WASM (`core/impala-wasm` → `web/core/`, ≈ 2,4 MB) | vollständig auf Rust, kein JS-Rückfall |
+| Android | UniFFI (`core/impala-ffi`, Kotlin) | Compose-App, ersetzt Capacitor; Lücken: `docs/PARITAET.md` |
+| iPad | UniFFI (`core/impala-ffi`, Swift) | SwiftUI/PencilKit, läuft am Gerät (iPadOS 27); Lücken: `docs/PARITAET.md` |
+| Windows/Linux | PWA | native Apps nur, wenn sie spürbar mehr bringen |
 
 ## Grundregeln
 
-- **Neu schreiben, nicht übersetzen**: Jedes Modul wird beim Umzug in idiomatischem Rust neu entworfen
-  (klare Typen statt loser Objekte, `enum`s statt String-Flags, `Result` statt Ausnahmen, reine Funktionen ohne versteckten Zustand).
-  Was sich als unnötig erweist, entfällt. Maßstab ist das Verhalten, nicht die JS-Struktur.
-- **Formate bleiben byte-kompatibel**: Sync-Pakete, Verschlüsselung, Blob-Layout und IndexedDB-Daten müssen alte Daten
-  lesen und von älteren App-Versionen lesbar bleiben. Jedes Modul bekommt Vergleichstests gegen die JS-Implementierung (Golden-Files).
-- **Rust only**: Ein umgestellter Bereich läuft nur noch in Rust; die JS-Fassung wird gelöscht, es gibt keinen
-  JS-Rückfall (Entscheidung 27. Oktober 2026). Die App bleibt nach jedem Bereich auslieferbar; der Umbau läuft auf
-  einem eigenen Branch und geht nach `main`, wenn der Bereich im Browser geprüft ist.
-- **Kern ohne Ein-/Ausgabe** (Muster von Crux): Der Kern rechnet nur und fragt die Plattform über asynchrone Traits
-  (`HttpClient`, `SyncStore`, `DriveStore`, `TokenSource`, `ToolExecutor` …). Im Browser stecken `fetch`,
-  IndexedDB und JS-Promises dahinter, auf iOS URLSession, auf Android OkHttp, nativ SQLite/ureq mit `block_on`.
-  Der Kern bringt keine eigene Async-Laufzeit mit.
-- **Fähigkeiten mit Standard-Implementierung**: Austauschbares liegt hinter einem Trait mit Rust-Standard;
-  jede Plattform darf eine native Implementierung einsetzen, muss aber nicht.
+- **Neu schreiben, nicht übersetzen**: idiomatisches Rust (Typen, `enum`s, `Result`, reine Funktionen). Maßstab ist
+  das Verhalten, nicht die JS-Struktur.
+- **Formate byte-kompatibel**: Sync-Pakete, Verschlüsselung, Blob-Layout und IndexedDB-Daten lesen alte Daten und
+  bleiben für ältere Versionen lesbar. Golden-Tests gegen das JS-Original (`core/tools/gen-golden-*.mjs`).
+- **Rust only**: Umgestellte Bereiche laufen nur noch in Rust, die JS-Fassung wird gelöscht.
+- **Kern ohne Ein-/Ausgabe** (Muster Crux): Der Kern rechnet und fragt die Plattform über asynchrone Traits
+  (`HttpClient`, `SyncStore`, `DriveStore`, `TokenSource`, `ToolExecutor` …). Keine eigene Async-Laufzeit;
+  nativ `impala_net::block_on`, parallele Anfragen über `impala_net::join_all`.
+- **Fähigkeiten mit Standard**: Austauschbares hinter einem Trait mit Rust-Standard, Plattformen dürfen native
+  Implementierungen einsetzen:
 
 ```
-InkRecognizer  Standard: ONNX-Modell (ort)  | iOS: Vision · Android: ML Kit Digital Ink
-Embedder       Standard: ONNX               | iOS: NLEmbedding/Core ML · Windows: Windows ML
-LlmProvider    Standard: API (reqwest)      | iOS: Foundation Models · Android: Gemini Nano
-SecureStore    Standard: verschl. Datei     | Keychain · Keystore · DPAPI · libsecret
-Storage        Standard: SQLite (rusqlite)  | Web: IndexedDB-Adapter (Bestandsdaten!)
+InkRecognizer  ONNX (ort)        | iOS: Vision · Android: ML Kit Digital Ink
+Embedder       ONNX              | iOS: NLEmbedding
+LlmProvider    API (reqwest)     | später: Apple Foundation Models, Gemini Nano
+SecureStore    verschl. Datei    | Keychain · Android Keystore
+Storage        SQLite            | Web: IndexedDB (Bestandsdaten!)
 ```
-
-## Was in den Kern gehört
-
-Datenmodell & Events · Sync v4 (Envelopes, Chunking, Reihenfolge, Kompaktierung) · E2EE (PBKDF2 → AES-GCM, Blob-Layout) ·
-Markdown-Parsing · Suche/RAG (Chunking, Vektorsuche, Ranking) · Heft-Geometrie (Glättung, Hit-Test, Radierer, Lasso, Export) ·
-Handschrift-Dekodierung (CTC-Beam-Search + Wörterbuch) · FSRS · Drive-/KI-API-Logik.
 
 **Nicht** in den Kern: DOM/Rendering, Eingabe-Ereignisse, Plattform-UI.
 
-## Technik
+## Aufbau `core/`
 
-- `core/` als Cargo-Workspace im selben Repo (Monorepo, gemeinsame Tests und Formate).
-- Web: `wasm-bindgen`, Ausgabe als natives ES-Modul (`--target web`) – kein Bundler in `web/`.
-  Neue Dateien in `APP_FILES` im Service Worker eintragen.
-- Native Anbindung: **UniFFI** (Swift, Kotlin; C# über `uniffi-bindgen-cs`). Linux-UI direkt in Rust (`gtk-rs`, GTK4/libadwaita).
-- Architekturvorbild: Crux (Kern = reine Logik, Shells zeichnen nur).
+Ein Crate je Fachgebiet, Fassade `impala-core`, Regeln: `core/AGENT-REGELN.md`.
 
-## Reihenfolge
+| Crate | Inhalt |
+|---|---|
+| `impala-model` | Zustand, Reducer, Laden/Reihenfolge, Checkpoints, merge3, Konflikte, Lernwarteschlange (`ModelCore`) |
+| `impala-sync` | Protokoll v4: Wire-Format, Chunking, Pakete, `SyncClient`, Kompaktierung (Skill `cloudflare-sync-v4`) |
+| `impala-crypto` | PBKDF2, AES-GCM-Pakete, Blob-Layout, `SecureStore` |
+| `impala-storage` | `Storage`-Trait, SQLite, Export/Import, Checkpoints |
+| `impala-drive` | Drive-Formate, API v3, Backup-Ablauf, Status-Regeln (`DriveCore`) |
+| `impala-heft` | Dokument, `heftOps`, Diff, Geometrie, Lasso, Radierer, PDF/SVG |
+| `impala-ink` | Handschrift-Vorverarbeitung, CTC-Beam-Search + Wörterbuch |
+| `impala-scan` | Dokument-Scanner (Erkennung, Entzerrung) |
+| `impala-search` | Chunking, Vektorsuche, RAG-Ranking, Unscharf-Suche |
+| `impala-markdown` | Markdown ↔ Blöcke, Text-Helfer |
+| `impala-srs` | FSRS-5 |
+| `impala-fach` | Fach-Erkennung (nutzt bisher nur die iPad-App) |
+| `impala-ai` | Anbieter, Stream-Parser, Agent-Schleife |
+| `impala-net` | `HttpClient`-Trait, ureq-Standard, `block_on`, `join_all` |
 
-1. ✅ **Spike**: `core/` angelegt, Event-Kompaktierung in Rust (Ergebnis siehe unten). Weil WASM hier langsamer
-   als JS ist, bleibt die PWA bei JS; die Worker-Anbindung des Spikes wurde nicht übernommen.
-2. ✅ **Ganze Nicht-UI-Logik als Rust-Kern** (27. Oktober 2026, Stand siehe unten). Die PWA ist noch nicht
-   umgestellt; als WASM vorbereitet ist nur, was gemessen schneller ist (Suche/RAG, CTC-Dekodierung).
-   Nächster Schritt: UniFFI-Schnittstelle (`impala-core`) und RAG-Index im PWA-Worker hinter Rückfall auf JS.
-3. ✅ **Speicherschicht** im Kern (`impala-storage`, SQLite). Web behält IndexedDB (`web/db.js`).
-3a. ✅ **Kern ohne eigene Ein-/Ausgabe** (27. Oktober 2026): `HttpClient` und alle Plattform-Traits in Sync, Drive
-   und KI sind asynchron; Warten (Backoff) liefert die Plattform. Native Werkzeuge und Tests nutzen `impala_net::block_on`.
-3b. ✅ **PWA-Sync läuft in Rust** (27. Oktober 2026): `SyncCore` (`core/impala-wasm/src/sync.rs`) führt den ganzen
-   Cloudflare-Ablauf aus; `web/sync-cloudflare.js` reicht nur fetch, IndexedDB, localStorage und App-Zustand herein und
-   hält Timer, WebSocket, Status. JS-Verschlüsselung, Paketbau, Chunking und Cursor-Logik sind gelöscht.
-   Geprüft: `cargo test`, `test/sync.test.mjs` (Rust-Client gegen den echten Worker-Code) und die Browser-E2E-Suite
-   (`npm run test:e2e`, 15/16 – die rote Prüfung meldet nur nicht erreichbare CDNs im Container).
-   Offen: WASM-Größe (582 KB, 267 KB gzip, lädt erst beim Einrichten des Syncs),
-   PBKDF2 (100 000 Runden) läuft beim Verbinden einmal im Hauptthread.
-3c. ✅ **PWA-Drive-Backup läuft in Rust** (27. Oktober 2026): `DriveCore` (`core/impala-wasm/src/drive.rs`) führt den
-   ganzen Durchgang aus (Dateiindex über die Changes-API, Snapshot + Änderungspakete, Dateien, Verdichten, Token-Bereinigung,
-   Uhren-Drift, Wiederholungen bei 429/5xx); `web/drive.js` behält Anmeldung (Google-Popup), Timer, Web Lock und Status und
-   reicht fetch, localStorage (dieselben Schlüssel wie bisher) und IndexedDB herein. JS-Paketbau, Dateiliste, gzip und
-   Hash-Cache sind gelöscht. Alte Backups (v1-Snapshot, gzip-Deltas) und lokale Drive-Zustände werden weiter gelesen.
-   In JS bleiben die synchronen Anzeige- und Timer-Regeln (`drive-status.js`, `drive-sync-policy.js`, `backup-status.js`),
-   weil sie vor dem Laden des Kerns gebraucht werden; ihre Golden-Files (`rules.json`) erzeugt weiter
-   `core/tools/gen-golden-drive.mjs`, `flows.json` ist eingefroren.
-   Geprüft: `cargo test`, `DriveCore` in Node gegen eine nachgebaute Drive-API, `web/drive.js` in Chromium (zwei Geräte,
-   v1-Altbestand, Bilder, Reload, abgelaufene Sitzung). Offen: WASM +90 KB
-   (686 KB, 310 KB gzip), Test mit echtem Google-Konto (Login, resumable Upload ab 5 MB).
-3d. ✅ **Dateien wieder parallel** (27. Oktober 2026): `impala_net::join_all` wartet ohne Laufzeit auf mehrere
-   Anfragen (im Browser laufen die `fetch`-Aufrufe gleichzeitig, mit `block_on` nacheinander). Sync überträgt Dateien zu
-   dritt, Drive lädt Snapshot/Deltas/Dateien zu sechst, lädt Dateien zu dritt hoch und löscht zu sechst – wie die
-   frühere JS-Fassung. Große Dateien gehen häppchenweise, im Speicher liegen höchstens so viele wie gleichzeitig laufen.
-3e. ✅ **PWA nutzt den Kern für alles außer dem Datenmodell** (28. Oktober 2026): Der Kern lädt beim Start
-   (`web/rust-core.js`, top-level await) und wird synchron genutzt. Nur noch in Rust: FSRS, Markdown samt
-   Text-Helfern, Seitensuche/Tippfehler-Suche/RAG-Ranking (Index im RAG-Worker), Handschrift-Ablauf (Inferenz bleibt
-   ONNX Runtime Web), Heft-Logik (Gesten über ein Binärformat, `packStrokes`), KI samt Agent-Schleife
-   (`AiRun`), Log-Kompaktierung. WASM 1,75 MB (≈ 740 KB gzip).
-3f. ✅ **Datenmodell nur noch in Rust** (28. Oktober 2026): `ModelCore` (`core/impala-wasm/src/model.rs`) hält den
-   Zustand; Reducer, Laden aus Checkpoint/Log, Reihenfolge, Checkpoints, Import-Konflikte/merge3, Konflikt-Dialog-Logik,
-   Migration alter Zugangsdaten und alle Abfragen laufen im Kern. JS liest IndexedDB vorab (asynchron) und schreibt,
-   was der Kern zurückmeldet. Die Oberfläche liest über schreibgeschützte Ansichten (`web/state-views.js`: nur, was
-   sich laut Kern geändert hat; Seiteninhalte beim Zugriff) und gezielte Abfragen; Hefte nur einzeln
-   (`heftDoc`/`heftPage`). Der Heft-Editor arbeitet auf einer Arbeitskopie, Fremdänderungen legt der Kern als Vorschau
-   über noch Ungespeichertes (`heftPreview`). Hefte aus dem Checkpoint liest der Kern erst beim ersten Zugriff
-   (geprüfter Text), unveränderte schreibt der nächste Checkpoint nicht neu. Alte Checkpoints und Logs laden
-   bytegenau wie vorher (Browser-Vergleich alt/neu, 2000 Striche; 500 Seiten/2000 Karten/20 000 Striche).
-   Messung (Chromium, gleiche Daten): Start vom Checkpoint 500 Seiten/2000 Karten/10 Hefte ≈ 330–390 ms (JS 290 ms),
-   Heft mit 2000 Strichen öffnen ≈ 360–520 ms (JS ≈ 350 ms), Fremdstrich im offenen Heft ≈ 55 ms (JS 170 ms),
-   100 000 Events abspielen 2,0 s (JS 2,0 s), 10 000 Fremd-Events 270 ms (JS 320 ms). WASM 2,29 MB.
-3g. **UniFFI-Hülle `impala-ffi`** (28. Oktober 2026, erster Stand): Anders als die WASM-Hülle hält sie Speicher
-   (SQLite), Zustand, Suchindex und die hybride Uhr selbst – die native App reicht nur noch den Datenbankpfad herein.
-   `ImpalaCore`: `open`, Seiten anlegen/ändern/in den Papierkorb, beliebige Events (`dispatch` mit JSON), Seitenbaum,
-   Brotkrumen, zuletzt geänderte Seiten, Workspaces, Volltextsuche, Checkpoint, Export/Import im PWA-Format,
-   Bilder/Dateien (`add_file` → `img:…`/`file:…`), Karteikarten (Stapel, Lernwarteschlange, FSRS-Bewertung als
-   `cardReview` wie die PWA), Hefte (Seiten lesen, Striche als `[x, y, druck, …]` hinzufügen/radieren, Seiten).
-   Freie Funktionen: Markdown ↔ Blöcke (`markdown_to_blocks`, `blocks_to_markdown`).
-   `CloudSync` (`sync.rs`): ganzer Cloudflare-Ablauf auf einem eigenen Thread (ureq + `block_on`), Konflikt-Prüfung
-   wie `importAll`, Rückrufe `SyncListener` (Fortschritt, „Sync nötig“ nach lokalen Änderungen); WebSocket und Timer
-   hält die App. Geprüft mit zwei Geräten gegen einen nachgebauten Worker.
-   **Gefundener Modell-Fehler (auch in der PWA)**: Kommt ein älteres Fremd-Event nach einem neueren eigenen
-   derselben Seite an, überschrieb es den neueren Stand im laufenden Zustand bis zum nächsten Start. Behoben:
-   `impala-ffi` lädt dann sofort sortiert neu (`replay_ordered`), die PWA ebenso (`ModelCore.replayOrdered`,
-   `reloadSorted` in `web/state.js`, in der dispatch-Kette).
-   Randfall: Gleicher Millisekunden-Zeitstempel auf zwei Geräten entscheidet der Replay per lokaler `seq`.
-   Bindings: `cargo run -p impala-ffi --bin uniffi-bindgen -- generate --library <lib> --language kotlin|swift`.
-3h. ✅ **`impala-ffi` vollständig** (28. Oktober 2026): Alles, was die PWA kann, außer Handschrift-Erkennung
-   (die bleibt plattformnativ; nur der erkannte Text wird gespeichert). 71 Tests.
-   - **Änderungs-Rückruf** `ChangeListener` (`changes.rs`): nach jeder eigenen Änderung und jedem Sync-/Drive-Import
-     ein `Changes`-Record (Seiten, Karten, Chats, Hefte, Heft-Bilder, zu schließende Seiten …), außerhalb der Sperre.
-   - **Seiten** (`pages.rs`): verschieben (Position, Workspace), Archiv, Papierkorb, endgültig löschen, Rückverweise,
-     Wiki-Links, Verlauf, Workspaces, Einstellungen (`settings_json`/`update_settings`).
-   - **Hefte** (`heft*.rs`): eine Geste = ein `heftOps`-Event (`heft_apply`), Rückgängig über vom Kern berechnete
-     Umkehr-Operationen, Bilder als `heftBlob`, Textfelder, Formen, Lasso, Seiten, SVG/PDF-Export (Plattform rendert
-     JPEGs), Regal-Ordner.
-   - **Lernen** (`card_ops.rs`, `decks.rs`, `cloze.rs`, `study_records.rs`): Karten-/Stapel-Verwaltung, Bewertung
-     rückgängig, Stapel-Optionen, Lückentext-Karten, Noten, Lernzeit, Tagesartikel.
-   - **Konflikte** (`conflicts.rs`): Liste (Meta `pendingConflicts`), Diff-Zeilen, Auflösen, merge3.
-   - **Drive-Backup** (`drive.rs`): `DriveSync` auf eigenem Thread; Token liefert die App (natives Google-SDK) über
-     `DriveTokens`. Zustand in Meta `drive:*`. Import wie Cloudflare über `Inner::import_remote`.
-   - **KI** (`ai.rs`, `ai_tools.rs`, `chats.rs`, `rag.rs`): `AiAssistant` mit Agent-Schleife, Werkzeuge
-     (`inspect`, `change` samt Rückgängig) in Rust, Chats; `SemanticSearch` mit Embeddings der Plattform
-     (`TextEmbedder`) oder Cloud, Vektoren in SQLite.
-   Android-Build (NDK, `cargo-ndk`, Bindings im App-Projekt) und iOS-CI-Build stehen. Offen: Test mit echtem
-   Google-Konto, echtem KI-Anbieter und echtem Embedding-Modell; Cloze-Regeln liegen doppelt (Rust in
-   `impala-ffi/src/cloze.rs`, JS in `web/extras.js`) bis die PWA sie über den WASM-Kern nutzt; KI-Chats werden erst
-   am Lauf-Ende gespeichert.
-4. **iPad nativ** (SwiftUI + PencilKit) – größter Gewinn durch Stift-Latenz. Beschlossen am 4. November 2026,
-   Details siehe „iPad-App“ unten. Stand 7. November 2026: App läuft auf dem Gerät (iPadOS 27.2, `2.2.124+25`);
-   Startseite, Heft, Suche, Graph, KI, Bibliothek und Sync wurden geprüft. Bericht:
-   `docs/IPAD-TESTBERICHT-2026-11-07.md`. Build als unsignierte `.ipa` über `.github/workflows/ios-build.yml`.
-5. **Android nativ** (Compose + Jetpack Ink) – ersetzt die Capacitor-Hülle.
-6. **Windows/Linux** – bis dahin PWA mit WASM-Kern; native Apps nur, wenn sie spürbar mehr bringen.
+**Hüllen**
+- `impala-wasm`: dünn; JS reicht `fetch`, IndexedDB und localStorage herein und hält Timer/WebSocket. Die PWA liest
+  über schreibgeschützte Ansichten (`web/state-views.js`), Hefte nur einzeln (`heftDoc`/`heftPage`).
+- `impala-ffi`: hält Speicher (SQLite), Zustand, Suchindex und Uhr selbst; die App reicht nur den Datenbankpfad
+  herein. Rückruf `ChangeListener` meldet Änderungen, `CloudSync`/`DriveSync` laufen auf eigenen Threads.
+  Handschrift-Erkennung bleibt plattformnativ (nur der Text wird gespeichert).
 
-## Spike-Ergebnis (27. Oktober 2026)
+**Bauen**
+- WASM: `npm run build:core` (braucht `wasm32-unknown-unknown` und `wasm-bindgen-cli 0.2.129`). Die Ausgabe wird
+  committet, damit der Deploy keine Rust-Toolchain braucht; `core/wasm-build.json` hält Hashes fest,
+  `npm run check:core` (Teil von `verify`) schlägt bei vergessenem Neubau fehl.
+- Android: `npm run build:android-core`. iPad: `npm run build:ios-core` (XCFramework nur auf dem macOS-Runner).
 
-**Aufbau**
-- `core/impala-core`: reine Logik ohne Abhängigkeiten. Plattformen reichen ihre Werte über das Trait `JsLike` herein
-  (JSON in Tests, `JsValue` in der PWA, später Swift/Kotlin-Objekte); der Kern fragt nur die Felder ab, die er braucht.
-- `core/impala-wasm`: dünne `wasm-bindgen`-Hülle → `web/core/impala_core.js` + `impala_core_bg.wasm` (`--target web`, natives ES-Modul).
-- `web/compact-core.js` lädt den Kern; `web/compact-worker.js` rechnet damit. Rückfall auf `compactEvents` (JS), wenn das
-  Modul nicht lädt oder ein Event eine Form hat, die nur die JS-Regeln abdecken (der Kern lehnt dann ab, statt zu raten).
-- Tests: `cargo test` in `core/` vergleicht mit Golden-Files aus dem JS-Original (`core/tools/gen-golden.mjs`, Grenzfälle +
-  Zufalls-Logs); `node core/tools/bench.mjs` prüft zusätzlich 300 Zufalls-Logs Rust gegen JS und misst die Laufzeit.
+## Lehren zur WASM-Grenze
 
-**WASM-Ausgabe wird committet** (nicht in `deploy-pwa.yml` gebaut): Ein Push auf `main` geht sofort live – der Deploy soll
-keine Rust-Toolchain brauchen, die Capacitor-Hülle kopiert `web/` unverändert, und der Dev-Server läuft ohne Rust.
-Gegen vergessene Neubauten hält `core/wasm-build.json` Hashes von Quellen und Ausgabe fest; `npm run check:core`
-(Teil von `verify`, also auch im Deploy) schlägt fehl, wenn sie nicht passen. Lokal bauen: `npm run build:core`
-(braucht `rustup target add wasm32-unknown-unknown` und `cargo install wasm-bindgen-cli --version 0.2.129 --locked`).
+- WASM lohnt sich, wenn wenige grobe Aufrufe viel Rechenarbeit auslösen und Daten als Bytes oder typisierte Arrays
+  wandern (RAG-Index, CTC, Heft-Gesten über `packStrokes`). Viele kleine Aufrufe kosten mehr, als sie sparen.
+- Kein `serde-wasm-bindgen` für große Objekt-Bäume (zu langsam, zu groß); gezielter Zugriff über Traits.
+- WebCrypto und `CompressionStream` sind im Browser schon schnell; WASM bringt dort Einheitlichkeit, kein Tempo.
+- tract (reines Rust-ONNX) ist ~8× langsamer als ONNX Runtime → nativ Plattform-Erkenner oder `ort`.
 
-**Messwerte** (Node 22 bzw. Chromium, realistisches Log mit 3 KB Inhalt je Seiten-Patch)
-- Größe: `.wasm` 50,5 KB (21 KB gzip), Glue-JS 11 KB. Erster Entwurf mit `serde-wasm-bindgen`: 112 KB.
-- Laufzeit reine Kompaktierung: 10 000 Events JS 6 ms / WASM 14 ms; 100 000 Events JS 52 ms / WASM 155–170 ms.
-  Rust nativ ohne Grenze: 29 ms für 100 000 Events.
-- Die Zeit steckt in der JS↔WASM-Grenze (mehrere Aufrufe je Event, Strings kopieren), nicht in der Logik.
-  Erster Entwurf mit generischem serde-Decoder: 580 ms.
-- Im Worker zählt das kaum: Ein Lauf über 20 000 Events dauert in Chromium ~1,4 s – fast alles IndexedDB
-  (`getAll`, Löschen), mit WASM wie mit JS gleich lang.
-- Chromium: WASM lädt im Worker (`application/wasm`), Ergebnis identisch, Rückfall bei blockierter `.wasm` greift.
-  Android-WebView ist dieselbe Engine; auf einem echten Gerät noch nicht geprüft. Der Glue fällt bei falschem
-  MIME-Typ selbst auf `WebAssembly.instantiate` zurück; WebViews ohne Reference-Types/Bulk-Memory nehmen JS.
+## iPad-App
 
-**Lehren für Schritt 2**
-- Tempo gewinnt WASM in der PWA nur, wenn wenige grobe Aufrufe viel Rechenarbeit auslösen und Daten als Bytes oder
-  typisierte Arrays wandern (CTC-Logits, Embedding-Vektoren). Für Logik über viele kleine JS-Objekte ist V8 schon schnell.
-- Die Kompaktierung wird erst schneller, wenn die Events gar nicht mehr über die Grenze müssen (Speicherschicht im Kern, Schritt 3).
-- Kein `serde-wasm-bindgen` für große Objekt-Bäume: zu langsam und zu groß. Gezielter Zugriff über ein Trait hält den Kern
-  zudem plattformneutral – dasselbe Muster passt für UniFFI.
-
-## Stand Rust-Kern (27. Oktober 2026, historische Messung)
-
-Workspace `core/`: ein Crate je Fachgebiet, Fassade `impala-core`, WASM-Hülle `impala-wasm`. Regeln für Arbeiten
-daran: `core/AGENT-REGELN.md`. Jedes Crate hat Golden-Tests aus dem JS-Original (`core/tools/gen-golden-*.mjs`).
-Gesamt: 242 Tests grün, `cargo clippy -D warnings` sauber, alles außer ONNX/SQLite/HTTP baut für wasm32.
-
-| Crate | Inhalt | Rust nativ vs. JS |
-|---|---|---|
-| `impala-crypto` | PBKDF2, AES-GCM-Pakete, Blob-Layout byte-gleich; `SecureStore` (verschl. Tresor) | Einheitlichkeit, kein Tempo (WebCrypto) |
-| `impala-sync` | Protokoll v4: Wire-Format, Chunking, Pakete, Worker-API, `SyncClient`, Kompaktierung | Paketbau ~2,5×, Kompaktierung ≈ gleich |
-| `impala-storage` | `Storage`-Trait, SQLite + Speicher, exportAll/importAll, Checkpoints 1–3 | Lesen ~2× (gegen fake-indexeddb) |
-| `impala-model` | Zustand, Reducer (46 Typen), Laden/Reihenfolge, merge3, Konflikte, Lernwarteschlange | Replay 100 000 Events 2,5–3× |
-| `impala-heft` | Dokument, heftOps, Diff, Geometrie, Lasso, Radierer, PDF (byte-gleich), SVG neu | 2–6× |
-| `impala-ink` | Vorverarbeitung, Rasterung, CTC-Beam-Search + Wörterbuch, `InkRecognizer` | Dekodieren ~4× |
-| `impala-search` | Chunking, Vektorsuche, RAG-Ranking, Unscharf-Suche, `Embedder` (ONNX optional) | Vektor 5×, RAG-Anfrage 20× (Index) |
-| `impala-markdown` | Markdown ↔ Blöcke, Text-Helfer | parse 2×, serialize 8× |
-| `impala-srs` | FSRS-5 | – |
-| `impala-ai` | Anbieter, Anfragen, Stream-Parser, Agent-Schleife, `LlmProvider`, `ToolExecutor` | netzgebunden |
-| `impala-drive` | Drive-Formate, API v3, Backup-Ablauf, Status-Regeln | netzgebunden |
-| `impala-net` | `HttpClient`-Trait, ureq-Standard | – |
-
-**WASM in der PWA** (Node, gleiche Ergebnisse geprüft, `node core/tools/bench-wasm.mjs`):
-
-| Messung | JS | WASM | Entscheidung |
-|---|---|---|---|
-| RAG-Anfrage 20 000 Chunks | 463 ms | 48 ms (+0,6 s einmaliger Indexbau) | Binding vorbereitet; lohnt sich |
-| Vektorsuche 20 000 × 384, Top-10 | 15–35 ms | 10 ms | Binding vorbereitet |
-| CTC-Dekodierung 10 Zeilen + Wörterbuch | 24–29 ms | 20–22 ms | Binding vorbereitet, allein keine Umstellung |
-| Heft-Treffer-Test/Lasso/Radierer | 1,5–2,3× langsamer | – | verworfen: < 1 ms je Ereignis, doppelter Zustand |
-| Markdown parse/serialize | 11 / 6 ms | 15–31 / 12–18 ms | verworfen: JSON über die Grenze |
-| Kompaktierung 100 000 Events | 52 ms | 155–170 ms | verworfen (Spike) |
-
-`.wasm` mit Kompaktierung, Suche und Dekodierung: 277 KB (117 KB gzip). `opt-level 3` wäre 15–25 % schneller, aber ~30 % größer.
-
-**Grenzen**: tract (reines Rust-ONNX) ist ~8× langsamer als ONNX Runtime → für native Apps Plattform-Erkenner
-(Vision, ML Kit) oder `ort`. Das Bekko-Embedding-Modell war im Container nicht ladbar, Ende-zu-Ende ungeprüft.
-Rust-Code ist meist 1,5–2× länger als das JS (Typen, Doku, JS-genaue Zahlen-/Text-Semantik).
-
-## iPad-App (beschlossen 4. November 2026)
-
-**Ziel**: zuerst nur iPad (Gerät mit Apple Intelligence). iPhone später.
-
-**Aufbau** wie bei Android: SwiftUI-Oberfläche über `impala-ffi` (UniFFI-Swift-Bindings). Logik nur im Kern,
-Swift liefert Oberfläche und Plattform-Anbindung (URLSession, Keychain, WebSocket, Timer).
-
-**Heft: PencilKit zeichnet, der Kern speichert** (Muster von `android/…/heft/HeftInk.kt` mit `androidx.ink`):
-- Neue Striche nimmt eine durchsichtige `PKCanvasView` auf (Apples Latenz und Stiftgefühl). Ein fertiger Strich
-  wird in `[x, y, druck, …]` umgewandelt und über `heft_apply` (`HeftChange::AddStroke`) gespeichert; eine
-  Zuordnungstabelle merkt sich Strich-ID ↔ `PKStroke`.
-- Angezeigt wird eine `PKDrawing`, die aus den Kernstrichen aufgebaut wird (auch nach Sync-Änderungen).
-- Gespeichert wird nur das Kernformat; ein Strich darf auf dem iPad etwas anders aussehen als in der PWA.
-- Radierer, Lasso, Formen, Rückgängig sind eigene Werkzeuge über den Kern (`heft_strokes_at`, `heft_apply`,
-  `heft_apply_ops`), nicht die PencilKit-Werkzeuge – so muss die Zeichnung nie mit dem Kern abgeglichen werden.
-- Papier (Linien, Karos) und Bilder liegen als eigene Ebene unter der `PKCanvasView`.
-- Apple Pencil Pro: Squeeze/Doppeltippen (`UIPencilInteraction`), Barrel Roll (`rollAngle`), Hover.
-- Smart Script und Math Notes haben keine öffentliche API → nicht eingeplant.
-
-**Oberfläche**: 3 Spalten mit `NavigationSplitView`, Liquid Glass (`.glassEffect()`, `GlassEffectContainer`, ab
-iPadOS 26). Schmale Breiten nur für Split View/Slide Over.
-
-**KI**: zuerst über die vorhandenen API-Anbieter im Kern (`AiAssistant`, Swift liefert nur den Netzzugang).
-Apple Foundation Models (`@Generable`, ~4k Tokens Kontext) kommt später als `LlmProvider` – sinnvoll, sobald das
-neue Siri in der EU verfügbar ist. Lokale Embeddings zurückgestellt. Keine Abhängigkeit von Siri.
-
-**Reihenfolge**: Kern-Anbindung und Seitenliste → Heft (Stift, Radierer, Lasso) → Cloudflare-Sync und Drive →
-Editor und Karteikarten → Layout-Feinschliff → Foundation Models.
-
-**Stand 7. November 2026**: Der Gerätetest ist durch (App `2.2.124+25`, iPadOS 27.2). Startseite, Seitenleiste,
-Heft-Laden, Sync unter Last, Suche, Wissensgraph, KI-Streaming und Bibliothek laufen ohne Hänger. Offen sind
-laut `docs/IPAD-TESTBERICHT-2026-11-07.md` vor allem: Kartenübersicht (193 ms) und Einstellungen (258 ms)
-entkoppeln, Kern-Sperre bei Karten-Sync (429 ms) und Kaltstart (789 ms) senken, Versionsverlauf für Seiten und
-Hefte, Seiten dazwischen einfügen sowie die Bridge-Lücken (`impala_create_page`/`impala_update_page`;
-`impala_type` wurde nach dem Test nachgebessert).
-
-### iOS ohne Mac
-
-- Kein Mac geplant. Swift unter Windows schreiben (VS Code + Swift-Erweiterung); kein Simulator, keine SwiftUI-Vorschau.
-- Gebaut und installiert wird erst, wenn die App größtenteils steht. Bis dahin je größerer Etappe ein reiner
-  Compile-Lauf in GitHub Actions (macOS-Runner, `xcodebuild build`, unsigniert), um Fehler früh zu finden.
-- Rust-Kern für `aarch64-apple-ios` als XCFramework, ebenfalls nur auf dem macOS-Runner.
-- Build → unsignierte `.ipa` als Artefakt; Installation mit kostenloser Apple-ID über **SideStore**
-  (7 Tage gültig, Auto-Refresh; max. 3 Apps, 10 App-IDs pro Woche, kein iCloud/Push). Sync startet beim Öffnen
-  und gelegentlich per `BGAppRefreshTask`.
-
-## Nutzen für die PWA
-
-- **Ja**: rechenintensive Teile (Replay/Kompaktierung beim Start, Vektorsuche, CTC-Beam-Search, Heft-Geometrie)
-  im Worker; eine einzige, getestete Sync-Implementierung für alle Geräte; strengere Typen fangen Fehler früher.
-- **Nein / Vorsicht**: WebCrypto und `CompressionStream` sind schon nativ schnell – Krypto in WASM bringt dort
-  Einheitlichkeit, keine Geschwindigkeit. WASM vergrößert den Download (Größe im Blick behalten);
-  viele kleine Aufrufe über die JS↔WASM-Grenze kosten Zeit; DOM-nahe Logik bleibt in JS.
+- **Heft: PencilKit zeichnet, der Kern speichert.** Eine durchsichtige `PKCanvasView` nimmt neue Striche auf; ein
+  fertiger Strich geht als `[x, y, druck, …]` über `heft_apply` in den Kern. Angezeigt wird, was der Kern liefert
+  (auch nach Sync). Radierer, Lasso, Formen und Rückgängig sind eigene Werkzeuge über den Kern, nicht die
+  PencilKit-Werkzeuge. Papier und Bilder liegen als Ebene darunter.
+- **Oberfläche**: `NavigationSplitView`, Liquid Glass; Apple Pencil Pro (Squeeze, Barrel Roll, Hover).
+- **KI**: API-Anbieter über den Kern; Apple Foundation Models später als `LlmProvider`.
+- **Ohne Mac**: Swift unter Windows schreiben; `ios-build.yml` baut auf dem macOS-Runner eine unsignierte `.ipa`,
+  Installation per SideStore (7 Tage gültig, Auto-Refresh). Sync beim Öffnen und per `BGAppRefreshTask`.

@@ -6,6 +6,7 @@ leichten Plattformanpassungen – aber deutlich kompakter sein, weil Compose, Ma
 Android-Bausteine das meiste schon mitbringen.
 
 **Vorlage für jeden Bildschirm: die Startseite** (`app/src/main/java/org/impala67/app/home/`).
+Lücken zur PWA: `docs/PARITAET.md`. Frühere Status-Tabellen: Git-Historie dieser Datei.
 
 ## 1. Regeln (für Menschen und Subagents)
 
@@ -35,15 +36,13 @@ Android-Bausteine das meiste schon mitbringen.
 
 ```
 org.impala67.app
-├─ ImpalaApp.kt          Kern öffnen (Hintergrund), Geräte-Einstellungen
-├─ MainActivity.kt       Single Activity, Edge-to-Edge, Splash bis der Kern geladen ist
-├─ core/ImpalaStore.kt   query / write / dispatch + Touches (Änderungsgruppen)
-├─ ui/theme/             Tokens.kt (CSS-Variablen), ImpalaTheme.kt (MaterialExpressiveTheme)
-├─ ui/components/        PanelCard, TintButton, riseIn, pressScale …
-├─ ui/shell/             AppShell (NavigationSuiteScaffold + NavDisplay), Routes, Platzhalter
-├─ home/                 Startseite (Muster)
-├─ study/LearningTime.kt Lernzeit-Auswertung (aus lernzeit.js)
-└─ settings/DevicePrefs  Geräte-Einstellungen (DataStore; in der PWA: localStorage)
+├─ ImpalaApp.kt, MainActivity.kt   Kern öffnen, Single Activity, Edge-to-Edge, Splash
+├─ core/ImpalaStore.kt             query / write / dispatch + Touches (Änderungsgruppen)
+├─ ui/theme, ui/components         Tokens (CSS-Variablen), Theme, PanelCard, TintButton, riseIn …
+├─ ui/shell                        Telefon-Shell (NavigationSuiteScaffold + NavDisplay), Routes, ShellNav
+├─ ui/desk                         Tablet-Layout wie die PWA (Seitenleiste, Tabs, KI-Panel)
+├─ home, notes, editor, heft, library, study, ai, graph, notebook, daily, search, settings, sync, share, more, diag
+└─ settings/DevicePrefs            Geräte-Einstellungen (DataStore; in der PWA: localStorage)
 ```
 
 **Navigation:** Ziele sind `@Serializable`-`NavKey`s in `ui/shell/Routes.kt`. Ein neuer Bildschirm =
@@ -111,66 +110,23 @@ Emulator: AVDs `impala_phone` (Pixel 9) und `impala_tablet` (Pixel Tablet), API 
 Dunkel: `adb shell cmd uimode night yes`. Screenshots mit `adb shell screencap` + `adb pull` und
 neben die PWA (gleiche Breite) legen.
 
-## 7. Offene Punkte vor einem Release
+## 7. Native Bausteine (Auswahl)
 
-- Ein Release baut aus diesem Stand eine APK, die erst die Startseite kann – Release erst nach den
-  Kernbildschirmen.
-- Rundschrift `--b-display` (SF Pro Rounded/Nunito) gibt es auf Android nicht; derzeit Systemschrift.
-- Startseite: Heft-Vorschaubild (mit Heft-Modul), PDF-Seiten (`pdfId` fehlt in `PageSummary`), Lernanalyse
-  (lernanalyse.js), Backup-Hinweis (backup-status.js, mit Sync), Tagesartikel schreiben (KI) und als
-  Markdown zeigen (derzeit Klartext), „Startseite anpassen“, Vorlagenwahl bei „Neue Seite“
-  (derzeit leere Notiz).
+| PWA | Android |
+|---|---|
+| Heft-Zeichnen (`heft*.js`) | `androidx.ink` + Heft-FFI (`heftPage`, `heftApply` …) |
+| Handschrift (`handschrift.js`, `heft-indexer.js`) | ML Kit Digital Ink |
+| Scanner (`heft-scan*.js`) | ML Kit Document Scanner oder eigener Scanner (Kern `scan_*`) |
+| QR (`qr-scanner.js`) | Google-Codescanner |
+| Sync-WebSocket, Hintergrund | OkHttp-WebSocket, WorkManager (`sync/BackgroundWork.kt`) |
+| Drive-Anmeldung | Google Identity (`drive.appdata`) |
+| Diktat (`voice.js`) | `SpeechRecognizer` |
+| Update (`updater.js`) | APK-Update über GitHub Releases (`settings/AppUpdater.kt`) |
+| Teilen an die App | `share/Incoming.kt` |
+| Profiler, MCP-Bridge | ➖ (Logcat/Android-Profiler; keine Live-Bridge) |
 
-## 8. Web-Modul → native Ersetzung
+## 8. Release und Versionen
 
-Status: ✅ fertig · 🟡 teilweise · ⬜ offen · ➖ entfällt nativ
-
-| Web-Modul | Native Ersetzung | Kotlin-Datei | Status |
-|---|---|---|---|
-| `index.html`, `main.js`, `boot.js`, `app.js`, `app-ui.js` | Single Activity, Compose, Splash | `MainActivity.kt`, `ImpalaApp.kt` | ✅ |
-| `css/variables.css`, `design.css`, `css/base.css`, `styles.css` (Tokens) | `MaterialExpressiveTheme`, `MotionScheme.expressive()` | `ui/theme/*` | ✅ |
-| `icons.js`, `icons.svg` | Vector Drawables (erzeugt) | `res/drawable/ic_i_*.xml`, `tools/android-icons.mjs` | ✅ |
-| `motion.js` | Expressive-MotionScheme, `AnimatedVisibility` | `ui/components/Motion.kt` | 🟡 |
-| `state.js`, `state-views.js`, `db.js`, `db-view.js`, `event-bus.js`, `rust-core.js` | `ImpalaCore` (FFI) + `StateFlow` | `core/ImpalaStore.kt` | ✅ |
-| `checkpoint-scheduler.js`, `compact-*.js` | `saveCheckpoint()` in `onStop` | `MainActivity.kt` | 🟡 |
-| `home-view.js`, `home.css` | Compose | `home/*` | ✅ (Lücken § 7) |
-| `home-article.js` | Anzeige/Gelesen/Verlauf; Schreiben über Rust-KI | `home/HomeArticle.kt` | 🟡 |
-| `lernzeit.js`, `lernzeit-context.js` | Auswertung in Kotlin; Erfassung offen | `study/LearningTime.kt` | 🟡 |
-| `lernanalyse.js`, `lernmuster.js`, `anki-stats.js` | Compose-Diagramme (Canvas) | `study/` | ⬜ |
-| `mobile*.js`, `mobile*.css`, `layout.css`, `tabs.js`, `nav-history.js`, `app-sidebar-events.js`, `collapse.js` | `NavigationSuiteScaffold`, Navigation 3, List-Detail | `ui/shell/*` (Ziele: `Destinations.kt`) | ✅ |
-| `popovers.js`, `app-dialogs.js`, `mobile-sheet.js` | `DropdownMenu`, `AlertDialog`, `ModalBottomSheet` | je Bereich | ✅ |
-| `app-click-*.js`, `controller.js`, `shortcuts.js` | Callbacks/ViewModels; Tastatur über `onKeyEvent` | je Bereich | ➖ |
-| `render.js` (Seitenbaum, Seiten), `mobile-notes.js`, Papierkorb/Archiv | `LazyColumn`, `DropdownMenu`, List-Detail | `notes/`, `more/` | 🟡 (Vorlagen ✅; eigenes Cover-Bild offen – braucht FFI) |
-| `editor*.js`, `css/editor.css` | Blöcke aus `markdownToBlocks` (FFI), `BasicTextField`, Expressive Floating Toolbar | `editor/` | 🟡 (Slash-Menü und Markdown-Kürzel ✅; weitere Blockarten im Slash-Menü, Icon/Cover, Formeln offen) |
-| `editor-markdown.js`, Markdown-Anzeige | `markdown.rs` im FFI (`markdownToBlocks`/`blocksToMarkdown`) + Compose-Renderer | `editor/MarkdownView.kt` | ✅ |
-| `heft.js`, `heft-viewport.js`, `heft-pages-*.js`, `heft-storage.js`, `heft-document-core.js`, `css/heft.css` | `androidx.ink` (Rendering) + Heft-FFI (`heftPage`, `heftApply` …) | `heft/` | 🟡 (Seitenübersicht und Seiten ziehen ✅; Bilder/Text offen) |
-| `heft-input.js`, `heft-lasso.js`, `heft-geometry.js`, `heft-tools.js` | `androidx.ink` (InProgressStrokes, Geometrie) | `heft/` | 🟡 (Stift/Marker/Radierer, Formerkennung, Laser und Lasso ✅ – Auswählen, Verschieben, Skalieren, Duplizieren, Löschen; Gesten: Pinch, Doppeltipp, Zwei-/Drei-Finger-Tipp ✅; Lasso-Trainingsbeispiel offen) |
-| `heft-toolbar-ui.js` | Expressive Floating Toolbar + Button-Gruppen | `heft/HeftToolbar.kt` | ✅ |
-| `heft-scan*.js`, `heft-scanner-ui.js`, `scan-ocr.js` | ML Kit Document Scanner | `heft/scan/` | 🟡 (Scannen ✅; OCR offen) |
-| `handschrift.js`, `handwriting-worker.js`, `heft-label.js`, `heft-indexer.js` | ML Kit Digital Ink (bzw. Kern-Index) | `heft/ink/` | 🟡 (Seitentext für die Suche ✅; Zeilen-Segmentierung über `impala-ink`, Lasso → Text offen) |
-| `heft-import.js`, `heft-export.js`, `export-media.js` | Storage Access Framework, `heft_export` (FFI) | `heft/` | ⬜ |
-| `render-anki.js`, `srs.js`, `app-click-anki.js` | Karten-FFI (`studyQueue`, `reviewCard`, Decks) | `study/` | 🟡 (Import/Export, Karten-Papierkorb offen) |
-| `abschreiben*.js`, `experimente.js`, `schulnoten.js`, `fach.js` | Compose; Noten über FFI (`grades`) | `study/` | ⬜ |
-| `ai.js`, `chats.js`, `chat-*.js`, `tools.js`, `types.js` | Rust-KI (`ai.rs`, `ai_tools.rs`, `chats.rs`) | `ai/` | 🟡 (Chat im KI-Panel + Chat-Liste ✅; Anhänge, Modellwahl, RAG, Chat-Tabs, Umbenennen offen) |
-| `rag*.js`, `embedding*.js`, `vector-math.js`, `related-pages.js` | Rust (`rag.rs`, Bekko a8m über tract im Kern) | `ai/SemanticIndex.kt`, `editor/PageFooter.kt` | ✅ (Modell-Download, Index im Hintergrund, KI-Chat, „Verwandt“) |
-| `voice.js` | `SpeechRecognizer` | `ai/Dictation.kt` | 🟡 (Diktat ✅, Vorlesen offen) |
-| `search.js` | `ImpalaCore.search` + `SearchBar` | `search/` | ✅ (Chats folgen mit KI) |
-| `sync-*.js`, `conflict-ui.js`, `backup-status.js` | Rust-Sync (`sync.rs`, `conflicts.rs`), OkHttp-WebSocket | `sync/CloudSyncController.kt` | 🟡 (Sync + Konflikte ✅, nur im Vordergrund; QR-Kopplung, Backup-Hinweis offen) |
-| `drive*.js` | Rust-Drive (`drive.rs`) + Play-Services-Autorisierung (`drive.appdata`) | `sync/DriveController.kt` | 🟡 (Anmeldung, Sync, Intervall ✅; „nach jeder Änderung“ offen; braucht Android-OAuth-Client im Projekt der PWA-Client-ID) |
-| `settings*.js` | Compose-Listen, `settingsJson`/`updateSettings` + `DevicePrefs` | `settings/` | 🟡 (Sync/KI/Speicher-Abschnitte offen) |
-| `library.js`, `notebooklm.js`, `extras.js` | Compose-Listen | `library/` | 🟡 (PDF-Liste, Öffnen, Import ✅; Tabs/Filter, NotebookLM offen) |
-| `pdfs.js`, `pdfpaste.js` | externer PDF-Betrachter (FileProvider) | `library/` | 🟡 (Textauszug für die Suche, KI-Zusammenfassung offen) |
-| `graph.js`, `graph-worker.js`, `diagram.js` | Compose `Canvas` | `graph/` | ⬜ |
-| `qrcode.js`, `qr-scanner.js` | ML Kit Barcode (+ CameraX) | `sync/` | ⬜ |
-| `telemetrie.js`, `perf-hint.js`, `performance-profiler*.js` | Android-Profiler / Logcat | – | ➖ |
-| `service-worker.js`, `updater.js`, `version.json`, `optional-modules.js`, `platform*.js` | APK-Update über GitHub Releases | `settings/AppUpdater.kt`, `settings/SettingsUpdate.kt` | ✅ |
-| `mcp-bridge*.js` | (vorerst keine Live-Bridge für die native App) | – | ➖ |
-| `util.js`, `html-escape.js`, `cooperative.js`, `storage-tools.js`, `app-badge.js` | Kotlin-Standard / je Bereich | – | ➖ |
-
-## 9. Versionen (Stand 2026-10-28)
-
-Gradle 9.8.2 · AGP 9.5.0 (eingebautes Kotlin) · Kotlin + Compose-Compiler 2.4.21 · Coroutines 1.11.0 ·
-Compose-BOM 2026.09.00 · Material 3 + Navigation Suite 1.5.0-beta02 · Adaptive 1.3.0 · Navigation 3 1.2.0 ·
-Lifecycle 2.11.0 · Activity 1.13.0 · Core 1.19.1 · Splashscreen 1.2.0 · DataStore 1.3.0 · JNA 5.19.1 ·
-`compileSdk`/`targetSdk` 37 (Android 17), `minSdk` 26. Vorgemerkt: Ink 1.0.0, CameraX 1.6.2,
-pdf-viewer 1.0.0-beta01, ML Kit Document Scanner 16.0.0 / Digital Ink 19.0.0 / Barcode 17.3.0, WorkManager 2.12.0.
+- Release-APK mit R8 und JNI-Kompression (≈ 21 MB). ML Kit braucht Keep-Regeln (`app/proguard-rules.pro`), sonst stürzen Hefte im Release ab –
+  nach neuen Bibliotheken immer die Release-Variante prüfen.
+- Abhängigkeiten nur in `gradle/libs.versions.toml`; SDK-Stufen in `app/build.gradle.kts` (`compileSdk` 37, `minSdk` 26).

@@ -1,11 +1,11 @@
 ---
 name: impala67-pwa
-description: Project skill for Notion (Impala67). Covers local-first PWA architecture (native ES modules, IndexedDB), Cloudflare Sync Protocol v4 (WebSockets, Durable Objects, D1, R2, E2EE), Notion two-way sync, Service Worker offline caching, and testing workflows.
+description: Project skill for Impala67. Covers local-first PWA architecture (native ES modules, IndexedDB, Rust core as WASM), Cloudflare Sync Protocol v4 (WebSockets, Durable Objects, D1, R2, E2EE), Service Worker offline caching, and testing workflows.
 ---
 
-# Notion (Impala67) Project Skill
+# Impala67 Project Skill
 
-Use this skill when developing, refactoring, or testing within the **Notion** project repository (`Impala67`).
+Use this skill when developing, refactoring, or testing within the **Impala67** repository.
 
 ---
 
@@ -41,11 +41,7 @@ Use this skill when developing, refactoring, or testing within the **Notion** pr
 
 ## 3. Testing & Verification Workflows
 
-* **Run targeted unit tests first**:
-  ```bash
-  npm test
-  ```
-  Run individual test files before full test runs to keep context short and clear.
+* **Run targeted unit tests first**: `node --test test/<name>.test.mjs`; `npm run verify` only when needed.
 * **Inspect before release**:
   ```bash
   git diff --check
