@@ -98,6 +98,14 @@ impl Storage for Prefetched {
         Ok(source.iter().filter(in_range).take(limit.unwrap_or(usize::MAX)).cloned().collect())
     }
 
+    /// Nur `loadFinish` liest das ganze Log, einmal: abgeben statt kopieren.
+    fn take_all_events(&mut self) -> Result<Vec<Object>, Error> {
+        match self.all.take() {
+            Some(all) => Ok(all),
+            None => self.events_after(0, None, None),
+        }
+    }
+
     fn event_at(&self, seq: u64) -> Result<Option<Object>, Error> {
         if let Some(all) = &self.all {
             return Ok(all.iter().find(|e| seq_of(e.get("seq")) == seq).cloned());

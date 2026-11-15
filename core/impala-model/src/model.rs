@@ -319,7 +319,7 @@ impl Model {
             }
             other => {
                 let reason = other.err().or(Some("missing"));
-                let raw = storage.all_events()?;
+                let raw = storage.take_all_events()?;
                 let raw_len = raw.len() as u64;
                 let mut events: Vec<LogEvent> = raw.into_iter().filter_map(LogEvent::from_object_owned).collect();
                 order::sort_events(&mut events);
@@ -335,9 +335,10 @@ impl Model {
                     // Nur den Kernzustand verwerfen: Heft-Bilder sind inhaltsadressiert und bleiben gültig.
                     let _ = storage.clear_checkpoint(true);
                 }
-                if replayed > 0 {
-                    let _ = m.save_checkpoint(storage);
-                }
+                // Kein Checkpoint hier: Vor `base_seq` (unten) zählte jedes Event als „nach dem Laden
+                // unbekannt“, der Versuch endete immer als `Stale` – nach einem erneuten Lesen des
+                // ganzen Logs. Den Checkpoint schreibt die App (PWA-Planer, native beim Wechsel in
+                // den Hintergrund).
                 (replayed, reason)
             }
         };

@@ -83,6 +83,12 @@ pub trait Storage {
         out.retain(crate::event::is_own);
         Ok(out)
     }
+    /// Das ganze Log zum einmaligen Abspielen beim Start (Voll-Replay). Ein Speicher, der die
+    /// Events schon im Arbeitsspeicher hält (WASM: vorab aus IndexedDB gereicht), darf sie
+    /// abgeben statt sie zu kopieren und liefert sie danach nicht mehr.
+    fn take_all_events(&mut self) -> Result<Vec<Object>, Error> {
+        self.events_after(0, None, None)
+    }
     fn log_info(&self) -> Result<LogInfo, Error>;
     /// Welche der Schlüssel ([`crate::event::id_key`]) schon als Event-`id` vorkommen.
     fn known_ids(&self, keys: &[String]) -> Result<HashSet<String>, Error> {
