@@ -328,6 +328,13 @@ typedef void (*UniffiCallbackInterfaceChangeListenerMethod0)(uint64_t, RustBuffe
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_ZONE_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_ZONE_METHOD0
+typedef void (*UniffiCallbackInterfaceDeviceZoneMethod0)(uint64_t, int64_t, int32_t* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_LISTENER_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_LISTENER_METHOD0
 typedef void (*UniffiCallbackInterfaceDownloadListenerMethod0)(uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, int8_t* _Nonnull, 
@@ -428,6 +435,14 @@ typedef struct UniffiVTableCallbackInterfaceChangeListener {
     UniffiCallbackInterfaceChangeListenerMethod0 _Nonnull onChanged;
     UniffiCallbackInterfaceFree _Nonnull uniffiFree;
 } UniffiVTableCallbackInterfaceChangeListener;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DEVICE_ZONE
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DEVICE_ZONE
+typedef struct UniffiVTableCallbackInterfaceDeviceZone {
+    UniffiCallbackInterfaceDeviceZoneMethod0 _Nonnull offsetMinutes;
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+} UniffiVTableCallbackInterfaceDeviceZone;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DOWNLOAD_LISTENER
@@ -683,6 +698,26 @@ RustBuffer uniffi_impala_ffi_fn_method_cloudsync_ws_auth_message(void*_Nonnull p
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_WS_URL
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_CLOUDSYNC_WS_URL
 RustBuffer uniffi_impala_ffi_fn_method_cloudsync_ws_url(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_DEVICEZONE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_DEVICEZONE
+void*_Nonnull uniffi_impala_ffi_fn_clone_devicezone(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FREE_DEVICEZONE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FREE_DEVICEZONE
+void uniffi_impala_ffi_fn_free_devicezone(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_INIT_CALLBACK_VTABLE_DEVICEZONE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_INIT_CALLBACK_VTABLE_DEVICEZONE
+void uniffi_impala_ffi_fn_init_callback_vtable_devicezone(const UniffiVTableCallbackInterfaceDeviceZone* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DEVICEZONE_OFFSET_MINUTES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_DEVICEZONE_OFFSET_MINUTES
+int32_t uniffi_impala_ffi_fn_method_devicezone_offset_minutes(void*_Nonnull ptr, int64_t utc_ms, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_DOWNLOADLISTENER
@@ -1369,7 +1404,7 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_style_strokes(void*_Nonnu
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ANALYSIS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ANALYSIS
-RustBuffer uniffi_impala_ffi_fn_method_impalacore_home_analysis(void*_Nonnull ptr, int64_t now_ms, int32_t tz_offset_minutes, int32_t goal_min, RustBuffer days, double pace, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_home_analysis(void*_Nonnull ptr, int64_t now_ms, void*_Nonnull zone, int32_t goal_min, RustBuffer days, double pace, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HOME_ARTICLE
@@ -1404,27 +1439,12 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_sessions(void*_Nonnul
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS
-RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_stats(void*_Nonnull ptr, RustBuffer deck, RustBuffer now_ms, RustBuffer utc_offset_minutes, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_stats(void*_Nonnull ptr, RustBuffer deck, RustBuffer now_ms, void*_Nonnull zone, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STATS_JSON
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
-uint32_t uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(void*_Nonnull ptr, int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
-RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(void*_Nonnull ptr, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_WEEK_DATA
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LEARNING_WEEK_DATA
-RustBuffer uniffi_impala_ffi_fn_method_impalacore_learning_week_data(void*_Nonnull ptr, int64_t now_ms, int32_t week_offset, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LIBRARY_ARCHIVE_VIEW
@@ -2187,22 +2207,22 @@ uint32_t uniffi_impala_ffi_fn_func_learning_time_normalize_goal(uint32_t stored,
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_STREAK_DAYS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_STREAK_DAYS
-uint32_t uniffi_impala_ffi_fn_func_learning_time_streak_days(RustBuffer totals, int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+uint32_t uniffi_impala_ffi_fn_func_learning_time_streak_days(RustBuffer totals, int64_t now_ms, void*_Nonnull zone, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_TOTALS_BY_DAY
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_TOTALS_BY_DAY
-RustBuffer uniffi_impala_ffi_fn_func_learning_time_totals_by_day(RustBuffer sessions, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_totals_by_day(RustBuffer sessions, void*_Nonnull zone, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEK_DATA
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEK_DATA
-RustBuffer uniffi_impala_ffi_fn_func_learning_time_week_data(RustBuffer totals, int64_t now_ms, int32_t week_offset, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_impala_ffi_fn_func_learning_time_week_data(RustBuffer totals, int64_t now_ms, int32_t week_offset, void*_Nonnull zone, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEKDAY_INDEX
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LEARNING_TIME_WEEKDAY_INDEX
-uint32_t uniffi_impala_ffi_fn_func_learning_time_weekday_index(int64_t now_ms, int32_t offset_minutes, RustCallStatus *_Nonnull out_status
+uint32_t uniffi_impala_ffi_fn_func_learning_time_weekday_index(int64_t now_ms, void*_Nonnull zone, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_LOCAL_EMBEDDING_MODEL
@@ -3312,6 +3332,12 @@ uint16_t uniffi_impala_ffi_checksum_method_cloudsync_ws_url(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DEVICEZONE_OFFSET_MINUTES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DEVICEZONE_OFFSET_MINUTES
+uint16_t uniffi_impala_ffi_checksum_method_devicezone_offset_minutes(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DOWNLOADLISTENER_ON_PROGRESS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_DOWNLOADLISTENER_ON_PROGRESS
 uint16_t uniffi_impala_ffi_checksum_method_downloadlistener_on_progress(void
@@ -4065,24 +4091,6 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_stats(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STATS_JSON
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_STREAK_DAYS
-uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_TOTALS_BY_DAY
-uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_WEEK_DATA
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LEARNING_WEEK_DATA
-uint16_t uniffi_impala_ffi_checksum_method_impalacore_learning_week_data(void
     
 );
 #endif

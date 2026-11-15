@@ -54,6 +54,5 @@ fun uniffi.impala_ffi.ImpalaCore.homeAnalysis(
     val today = now.atZone(zone).toLocalDate()
     val days = time.week(today).map { it / 60.0 }
     val pace = (1L..14L).sumOf { time.seconds(today.minusDays(it)) / 60.0 } / 14.0
-    val tzOffset = zone.rules.getOffset(now).totalSeconds / 60
-    return homeAnalysis(now.toEpochMilli(), tzOffset, goalMin, days, pace)
+    return homeAnalysis(now.toEpochMilli(), org.impala67.app.study.SystemZone(zone), goalMin, days, pace)
 }

@@ -1,7 +1,6 @@
 package org.impala67.app.study
 
 import uniffi.impala_ffi.LearningSessionInfo
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -11,9 +10,9 @@ import java.time.ZoneId
  * Delegiert an den Rust-Kern (`core/impala-ffi`).
  */
 class LearningTime(sessions: List<LearningSessionInfo>, private val zone: ZoneId = ZoneId.systemDefault()) {
-    private val offsetMinutes: Int = zone.rules.getOffset(Instant.now()).totalSeconds / 60
+    private val coreZone = SystemZone(zone)
 
-    private val rawTotals: Map<String, ULong> = uniffi.impala_ffi.learningTimeTotalsByDay(sessions, offsetMinutes)
+    private val rawTotals: Map<String, ULong> = uniffi.impala_ffi.learningTimeTotalsByDay(sessions, coreZone)
 
     /** Sekunden je Kalendertag (lokal), nach Beginn der Sitzung. */
     val totals: Map<LocalDate, Long> = rawTotals.mapNotNull { (k, v) ->
@@ -25,13 +24,13 @@ class LearningTime(sessions: List<LearningSessionInfo>, private val zone: ZoneId
     /** Die 7 Tage der Woche (Mo–So) mit `offset` Wochen Abstand zu heute. */
     fun week(today: LocalDate = LocalDate.now(zone), offset: Long = 0): List<Long> {
         val nowMs = today.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
-        return uniffi.impala_ffi.learningTimeWeekData(rawTotals, nowMs, offset.toInt(), offsetMinutes).map { it.toLong() }
+        return uniffi.impala_ffi.learningTimeWeekData(rawTotals, nowMs, offset.toInt(), coreZone).map { it.toLong() }
     }
 
     /** Aufeinanderfolgende Tage mit ≥ 5 Minuten; ein noch leerer heutiger Tag bricht die Serie nicht. */
     fun streakDays(today: LocalDate = LocalDate.now(zone)): Int {
         val nowMs = today.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
-        return uniffi.impala_ffi.learningTimeStreakDays(rawTotals, nowMs, offsetMinutes).toInt()
+        return uniffi.impala_ffi.learningTimeStreakDays(rawTotals, nowMs, coreZone).toInt()
     }
 
     companion object {
@@ -41,8 +40,7 @@ class LearningTime(sessions: List<LearningSessionInfo>, private val zone: ZoneId
 
         /** Montag als 0, Sonntag als 6 (wie in iOS LearningTime.weekdayIndex). */
         fun weekdayIndex(nowMs: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): Int {
-            val offsetMinutes = zone.rules.getOffset(Instant.ofEpochMilli(nowMs)).totalSeconds / 60
-            return uniffi.impala_ffi.learningTimeWeekdayIndex(nowMs, offsetMinutes).toInt()
+            return uniffi.impala_ffi.learningTimeWeekdayIndex(nowMs, SystemZone(zone)).toInt()
         }
     }
 }

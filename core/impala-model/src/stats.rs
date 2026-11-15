@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use impala_srs::{MS_PER_DAY, MS_PER_MINUTE, Timestamp, civil_from_days, days_from_civil};
+use impala_srs::{LocalZone, MS_PER_DAY, Timestamp, civil_from_days, days_from_civil, local_midnight};
 
 use crate::tree::deck_in_tree;
 use crate::types::{Card, Review, State, Telemetry};
@@ -17,11 +17,12 @@ pub const MIN_N: usize = 10;
 pub const REIF_TAGE: f64 = 21.0;
 pub const WOCHEN: i64 = 30;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub struct StatsOptions<'a> {
     pub deck: Option<&'a str>,
     pub now: Timestamp,
-    pub tz_offset_minutes: i64,
+    /// Ortszeit für Tagesgrenzen (Verlauf, Prognose, Serie).
+    pub zone: &'a dyn LocalZone,
     pub think_ms: Option<i64>,
 }
 
@@ -378,12 +379,12 @@ pub fn compute_stats(
     let mut per_day: HashMap<String, usize> = HashMap::new();
     for r in &filtered_reviews {
         if let Some(t) = Timestamp::parse_iso(r.t()) {
-            let k = t.day_key(options.tz_offset_minutes);
+            let k = t.day_key(options.zone);
             *per_day.entry(k).or_default() += 1;
         }
     }
 
-    let end_day = options.now.days_since_epoch(options.tz_offset_minutes);
+    let end_day = options.now.local_days(options.zone);
     let mut series = Vec::with_capacity(WOCHEN as usize);
     for i in (0..WOCHEN).rev() {
         let day = end_day - i;
@@ -401,8 +402,8 @@ pub fn compute_stats(
 
     let mut forecast = Vec::with_capacity(7);
     for i in 0..7 {
-        let d0_ms = (end_day + i) * MS_PER_DAY - options.tz_offset_minutes * MS_PER_MINUTE;
-        let d1_ms = (end_day + i + 1) * MS_PER_DAY - options.tz_offset_minutes * MS_PER_MINUTE;
+        let d0_ms = local_midnight(end_day + i, options.zone);
+        let d1_ms = local_midnight(end_day + i + 1, options.zone);
         let from_ms = if i == 0 { 0 } else { d0_ms };
         let n = filtered_cards
             .iter()

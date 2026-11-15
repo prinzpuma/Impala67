@@ -2030,6 +2030,188 @@ public func FfiConverterTypeCloudSync_lower(_ value: CloudSync) -> UnsafeMutable
 
 
 /**
+ * Versatz der Ortszeit zu UTC in Minuten für einen Zeitpunkt (iOS: `TimeZone.current
+ * .secondsFromGMT(for:)`, Android: `TimeZone.getDefault().getOffset(ms)`).
+ */
+public protocol DeviceZone: AnyObject, Sendable {
+    
+    func offsetMinutes(utcMs: Int64)  -> Int32
+    
+}
+/**
+ * Versatz der Ortszeit zu UTC in Minuten für einen Zeitpunkt (iOS: `TimeZone.current
+ * .secondsFromGMT(for:)`, Android: `TimeZone.getDefault().getOffset(ms)`).
+ */
+open class DeviceZoneImpl: DeviceZone, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_impala_ffi_fn_clone_devicezone(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_impala_ffi_fn_free_devicezone(pointer, $0) }
+    }
+
+    
+
+    
+open func offsetMinutes(utcMs: Int64) -> Int32  {
+    return try!  FfiConverterInt32.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_devicezone_offset_minutes(self.uniffiClonePointer(),
+        FfiConverterInt64.lower(utcMs),$0
+    )
+})
+}
+    
+
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceDeviceZone {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfaceDeviceZone] = [UniffiVTableCallbackInterfaceDeviceZone(
+        offsetMinutes: { (
+            uniffiHandle: UInt64,
+            utcMs: Int64,
+            uniffiOutReturn: UnsafeMutablePointer<Int32>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Int32 in
+                guard let uniffiObj = try? FfiConverterTypeDeviceZone.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.offsetMinutes(
+                     utcMs: try FfiConverterInt64.lift(utcMs)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterInt32.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterTypeDeviceZone.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface DeviceZone: handle missing in uniffiFree")
+            }
+        }
+    )]
+}
+
+private func uniffiCallbackInitDeviceZone() {
+    uniffi_impala_ffi_fn_init_callback_vtable_devicezone(UniffiCallbackInterfaceDeviceZone.vtable)
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceZone: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<DeviceZone>()
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = DeviceZone
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> DeviceZone {
+        return DeviceZoneImpl(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: DeviceZone) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceZone {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: DeviceZone, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceZone_lift(_ pointer: UnsafeMutableRawPointer) throws -> DeviceZone {
+    return try FfiConverterTypeDeviceZone.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceZone_lower(_ value: DeviceZone) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeDeviceZone.lower(value)
+}
+
+
+
+
+
+
+/**
  * Fortschritt des Modell-Downloads.
  */
 public protocol DownloadListener: AnyObject, Sendable {
@@ -3645,7 +3827,7 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     /**
      * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
      */
-    func homeAnalysis(nowMs: Int64, tzOffsetMinutes: Int32, goalMin: Int32, days: [Double], pace: Double)  -> HomeAnalysis?
+    func homeAnalysis(nowMs: Int64, zone: DeviceZone, goalMin: Int32, days: [Double], pace: Double)  -> HomeAnalysis?
     
     func homeArticle(id: String)  -> HomeArticleInfo?
     
@@ -3674,28 +3856,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     /**
      * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
      */
-    func learningStats(deck: String?, nowMs: Int64?, utcOffsetMinutes: Int32?)  -> LearningStats
+    func learningStats(deck: String?, nowMs: Int64?, zone: DeviceZone)  -> LearningStats
     
     /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */
     func learningStatsJson()  -> String
-    
-    /**
-     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
-     */
-    func learningStreakDays(nowMs: Int64, offsetMinutes: Int32)  -> UInt32
-    
-    /**
-     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
-     */
-    func learningTotalsByDay(offsetMinutes: Int32)  -> [String: UInt64]
-    
-    /**
-     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
-     */
-    func learningWeekData(nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32)  -> [UInt64]
     
     /**
      * Archiv-Liste für die Bibliothek samt Filter-Zählern.
@@ -5369,11 +5536,11 @@ open func heftStyleStrokes(pageId: String, heftPageId: String, ids: [String], co
     /**
      * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
      */
-open func homeAnalysis(nowMs: Int64, tzOffsetMinutes: Int32, goalMin: Int32, days: [Double], pace: Double) -> HomeAnalysis?  {
+open func homeAnalysis(nowMs: Int64, zone: DeviceZone, goalMin: Int32, days: [Double], pace: Double) -> HomeAnalysis?  {
     return try!  FfiConverterOptionTypeHomeAnalysis.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_home_analysis(self.uniffiClonePointer(),
         FfiConverterInt64.lower(nowMs),
-        FfiConverterInt32.lower(tzOffsetMinutes),
+        FfiConverterTypeDeviceZone_lower(zone),
         FfiConverterInt32.lower(goalMin),
         FfiConverterSequenceDouble.lower(days),
         FfiConverterDouble.lower(pace),$0
@@ -5442,12 +5609,12 @@ open func learningSessions() -> [LearningSessionInfo]  {
     /**
      * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
      */
-open func learningStats(deck: String?, nowMs: Int64?, utcOffsetMinutes: Int32?) -> LearningStats  {
+open func learningStats(deck: String?, nowMs: Int64?, zone: DeviceZone) -> LearningStats  {
     return try!  FfiConverterTypeLearningStats_lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_learning_stats(self.uniffiClonePointer(),
         FfiConverterOptionString.lower(deck),
         FfiConverterOptionInt64.lower(nowMs),
-        FfiConverterOptionInt32.lower(utcOffsetMinutes),$0
+        FfiConverterTypeDeviceZone_lower(zone),$0
     )
 })
 }
@@ -5459,42 +5626,6 @@ open func learningStats(deck: String?, nowMs: Int64?, utcOffsetMinutes: Int32?) 
 open func learningStatsJson() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-    /**
-     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
-     */
-open func learningStreakDays(nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
-    return try!  FfiConverterUInt32.lift(try! rustCall() {
-    uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(self.uniffiClonePointer(),
-        FfiConverterInt64.lower(nowMs),
-        FfiConverterInt32.lower(offsetMinutes),$0
-    )
-})
-}
-    
-    /**
-     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
-     */
-open func learningTotalsByDay(offsetMinutes: Int32) -> [String: UInt64]  {
-    return try!  FfiConverterDictionaryStringUInt64.lift(try! rustCall() {
-    uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(self.uniffiClonePointer(),
-        FfiConverterInt32.lower(offsetMinutes),$0
-    )
-})
-}
-    
-    /**
-     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
-     */
-open func learningWeekData(nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32) -> [UInt64]  {
-    return try!  FfiConverterSequenceUInt64.lift(try! rustCall() {
-    uniffi_impala_ffi_fn_method_impalacore_learning_week_data(self.uniffiClonePointer(),
-        FfiConverterInt64.lower(nowMs),
-        FfiConverterInt32.lower(weekOffset),
-        FfiConverterInt32.lower(offsetMinutes),$0
     )
 })
 }
@@ -26056,38 +26187,41 @@ public func learningTimeNormalizeGoal(stored: UInt32) -> UInt32  {
     )
 })
 }
-public func learningTimeStreakDays(totals: [String: UInt64], nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
+public func learningTimeStreakDays(totals: [String: UInt64], nowMs: Int64, zone: DeviceZone) -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_learning_time_streak_days(
         FfiConverterDictionaryStringUInt64.lower(totals),
         FfiConverterInt64.lower(nowMs),
-        FfiConverterInt32.lower(offsetMinutes),$0
+        FfiConverterTypeDeviceZone_lower(zone),$0
     )
 })
 }
-public func learningTimeTotalsByDay(sessions: [LearningSessionInfo], offsetMinutes: Int32) -> [String: UInt64]  {
+/**
+ * Sekunden je lokalem Kalendertag (nach Beginn der Sitzung, mit der Ortszeit dieses Tages).
+ */
+public func learningTimeTotalsByDay(sessions: [LearningSessionInfo], zone: DeviceZone) -> [String: UInt64]  {
     return try!  FfiConverterDictionaryStringUInt64.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_learning_time_totals_by_day(
         FfiConverterSequenceTypeLearningSessionInfo.lower(sessions),
-        FfiConverterInt32.lower(offsetMinutes),$0
+        FfiConverterTypeDeviceZone_lower(zone),$0
     )
 })
 }
-public func learningTimeWeekData(totals: [String: UInt64], nowMs: Int64, weekOffset: Int32, offsetMinutes: Int32) -> [UInt64]  {
+public func learningTimeWeekData(totals: [String: UInt64], nowMs: Int64, weekOffset: Int32, zone: DeviceZone) -> [UInt64]  {
     return try!  FfiConverterSequenceUInt64.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_learning_time_week_data(
         FfiConverterDictionaryStringUInt64.lower(totals),
         FfiConverterInt64.lower(nowMs),
         FfiConverterInt32.lower(weekOffset),
-        FfiConverterInt32.lower(offsetMinutes),$0
+        FfiConverterTypeDeviceZone_lower(zone),$0
     )
 })
 }
-public func learningTimeWeekdayIndex(nowMs: Int64, offsetMinutes: Int32) -> UInt32  {
+public func learningTimeWeekdayIndex(nowMs: Int64, zone: DeviceZone) -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_learning_time_weekday_index(
         FfiConverterInt64.lower(nowMs),
-        FfiConverterInt32.lower(offsetMinutes),$0
+        FfiConverterTypeDeviceZone_lower(zone),$0
     )
 })
 }
@@ -26550,16 +26684,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_learning_time_normalize_goal() != 18288) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 45686) {
+    if (uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 33618) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 4986) {
+    if (uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 44002) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_learning_time_week_data() != 27895) {
+    if (uniffi_impala_ffi_checksum_func_learning_time_week_data() != 6305) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 40126) {
+    if (uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 63472) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957) {
@@ -26725,6 +26859,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_cloudsync_ws_url() != 17198) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_devicezone_offset_minutes() != 35879) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_downloadlistener_on_progress() != 52070) {
@@ -27078,7 +27215,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes() != 61548) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 52076) {
+    if (uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 22543) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_home_article() != 46611) {
@@ -27099,19 +27236,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_learning_sessions() != 60078) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 13464) {
+    if (uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 38649) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json() != 14105) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days() != 23959) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day() != 2938) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_impala_ffi_checksum_method_impalacore_learning_week_data() != 18399) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_library_archive_view() != 22816) {
@@ -27397,6 +27525,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitAiListener()
     uniffiCallbackInitAiPlatform()
     uniffiCallbackInitChangeListener()
+    uniffiCallbackInitDeviceZone()
     uniffiCallbackInitDownloadListener()
     uniffiCallbackInitDriveProgress()
     uniffiCallbackInitDriveTokens()

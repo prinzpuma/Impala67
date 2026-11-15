@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use impala_srs::Timestamp;
+use impala_srs::{LocalZone, Timestamp, day_key_of};
 use serde::{Deserialize, Serialize};
 
 pub const MIN_STREAK_SECONDS: u64 = 300; // 5 Minuten
@@ -128,49 +128,9 @@ impl From<&crate::types::LearningSession> for LearningSessionData {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Kalender-Hilfsfunktionen (Algorithmus nach H. Hinnant)
-// ---------------------------------------------------------------------------
-
-pub fn civil_from_days(days: i64) -> (i32, u8, u8) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u8;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u8;
-    let year = (yoe + era * 400 + i64::from(month <= 2)) as i32;
-    (year, month, day)
-}
-
-pub fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
-    let y = year as i64 - i64::from(month <= 2);
-    let m = month as i64;
-    let d = day as i64;
-    let era = y.div_euclid(400);
-    let yoe = y.rem_euclid(400);
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
-}
-
-pub fn local_days(utc_ms: i64, offset_minutes: i32) -> i64 {
-    let secs = utc_ms.div_euclid(1000) + i64::from(offset_minutes) * 60;
-    secs.div_euclid(86_400)
-}
-
-pub fn day_key(utc_ms: i64, offset_minutes: i32) -> String {
-    let days = local_days(utc_ms, offset_minutes);
-    let (y, m, d) = civil_from_days(days);
-    format!("{y:04}-{m:02}-{d:02}")
-}
-
 /// Wochentag für Ortszeit (Montag = 0 .. Sonntag = 6).
-pub fn weekday_index(utc_ms: i64, offset_minutes: i32) -> u32 {
-    let days = local_days(utc_ms, offset_minutes);
-    (days + 3).rem_euclid(7) as u32
+pub fn weekday_index(utc_ms: i64, zone: &dyn LocalZone) -> u32 {
+    (Timestamp(utc_ms).local_days(zone) + 3).rem_euclid(7) as u32
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +191,7 @@ pub fn merged_seconds(sessions: &[LearningSessionData]) -> u64 {
 pub fn totals_by_day(
     sessions: &[LearningSessionData],
     live: Option<&LearningSessionData>,
-    offset_minutes: i32,
+    zone: &dyn LocalZone,
 ) -> HashMap<String, u64> {
     let mut all_sessions: Vec<LearningSessionData> = Vec::with_capacity(sessions.len() + 1);
 
@@ -250,7 +210,7 @@ pub fn totals_by_day(
 
     for s in all_sessions {
         if let Some(start_ms) = parse_ms(&s.started_at) {
-            let key = day_key(start_ms, offset_minutes);
+            let key = Timestamp(start_ms).day_key(zone);
             groups.entry(key).or_default().push(s);
         }
     }
@@ -259,30 +219,26 @@ pub fn totals_by_day(
 }
 
 /// Die 7 Tage der Woche (Montag bis Sonntag) als Sekunden-Array.
-pub fn week_data(totals: &HashMap<String, u64>, now_ms: i64, week_offset: i32, offset_minutes: i32) -> [u64; 7] {
-    let today_days = local_days(now_ms, offset_minutes);
+pub fn week_data(totals: &HashMap<String, u64>, now_ms: i64, week_offset: i32, zone: &dyn LocalZone) -> [u64; 7] {
+    let today_days = Timestamp(now_ms).local_days(zone);
     let weekday = (today_days + 3).rem_euclid(7); // Mo=0..So=6
     let monday = today_days - weekday + i64::from(week_offset) * 7;
 
     let mut result = [0u64; 7];
     for (i, item) in result.iter_mut().enumerate() {
-        let (y, m, d) = civil_from_days(monday + i as i64);
-        let key = format!("{y:04}-{m:02}-{d:02}");
-        *item = totals.get(&key).copied().unwrap_or(0);
+        *item = totals.get(&day_key_of(monday + i as i64)).copied().unwrap_or(0);
     }
     result
 }
 
 /// Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
 /// Ein noch leerer heutiger Tag bricht die Serie nicht ab.
-pub fn streak_days(totals: &HashMap<String, u64>, now_ms: i64, offset_minutes: i32) -> u32 {
-    let today_days = local_days(now_ms, offset_minutes);
+pub fn streak_days(totals: &HashMap<String, u64>, now_ms: i64, zone: &dyn LocalZone) -> u32 {
+    let today_days = Timestamp(now_ms).local_days(zone);
     let mut streak: u32 = 0;
 
     for i in 0..365i64 {
-        let (y, m, d) = civil_from_days(today_days - i);
-        let key = format!("{y:04}-{m:02}-{d:02}");
-        let sec = totals.get(&key).copied().unwrap_or(0);
+        let sec = totals.get(&day_key_of(today_days - i)).copied().unwrap_or(0);
 
         if sec >= MIN_STREAK_SECONDS {
             streak += 1;
@@ -551,7 +507,7 @@ mod tests {
             let ref_date = c["referenceDate"].as_str().unwrap();
             let ref_ms = Timestamp::parse_iso(&format!("{ref_date}T12:00:00.000Z")).unwrap().millis();
             let expected = c["expectedStreak"].as_u64().unwrap() as u32;
-            assert_eq!(streak_days(&totals, ref_ms, 0), expected, "streakDays Fall: {name}");
+            assert_eq!(streak_days(&totals, ref_ms, &0i64), expected, "streakDays Fall: {name}");
         }
 
         // 3. Weeks
@@ -565,7 +521,7 @@ mod tests {
             for d in days {
                 sample.insert(d["date"].as_str().unwrap().to_owned(), d["seconds"].as_u64().unwrap());
             }
-            let res = week_data(&sample, ref_ms, offset, 0);
+            let res = week_data(&sample, ref_ms, offset, &0i64);
             for (i, d) in days.iter().enumerate() {
                 assert_eq!(res[i], d["seconds"].as_u64().unwrap(), "weekData Fall: {name} Tag {i}");
             }
@@ -684,16 +640,16 @@ mod tests {
     #[test]
     fn weekday_und_totals() {
         // 1970-01-01 war Donnerstag (Index 3: Mo=0, Di=1, Mi=2, Do=3, Fr=4, Sa=5, So=6)
-        assert_eq!(weekday_index(0, 0), 3);
+        assert_eq!(weekday_index(0, &0i64), 3);
         // 1970-01-05 war Montag (Index 0)
-        assert_eq!(weekday_index(4 * 86_400 * 1000, 0), 0);
+        assert_eq!(weekday_index(4 * 86_400 * 1000, &0i64), 0);
         // 1970-01-04 war Sonntag (Index 6)
-        assert_eq!(weekday_index(3 * 86_400 * 1000, 0), 6);
+        assert_eq!(weekday_index(3 * 86_400 * 1000, &0i64), 6);
 
         // Zeitzonen-Versatz: 1970-01-01 23:30 UTC ist mit +60min (UTC+1) der 1970-01-02 (Freitag, Index 4)
         let utc_2330 = (23 * 3600 + 30 * 60) * 1000;
-        assert_eq!(weekday_index(utc_2330, 0), 3);
-        assert_eq!(weekday_index(utc_2330, 60), 4);
+        assert_eq!(weekday_index(utc_2330, &0i64), 3);
+        assert_eq!(weekday_index(utc_2330, &60i64), 4);
 
         // normalize_week_goal
         assert_eq!(normalize_week_goal(0), 300);
@@ -730,7 +686,24 @@ mod tests {
             subject_source: None,
             source_id: None,
         };
-        let totals = totals_by_day(&[s1], Some(&live), 0);
+        let totals = totals_by_day(std::slice::from_ref(&s1), Some(&live), &0i64);
         assert_eq!(totals.get("2026-11-07"), Some(&1200));
+
+        // Sommerzeit: 22:30 UTC im Juli ist 00:30 MESZ am Folgetag, auch wenn jetzt Winterzeit ist.
+        let summer = (
+            Timestamp::parse_iso("2026-03-29T01:00:00Z").unwrap().millis(),
+            Timestamp::parse_iso("2026-10-25T01:00:00Z").unwrap().millis(),
+        );
+        let berlin = impala_srs::CachedZone::new(|ms| if ms >= summer.0 && ms < summer.1 { 120 } else { 60 });
+        let night = LearningSessionData {
+            id: "s2".into(),
+            started_at: "2026-07-10T22:30:00.000Z".into(),
+            ended_at: Some("2026-07-10T22:40:00.000Z".into()),
+            duration_seconds: 600,
+            segments: vec![],
+            ..s1
+        };
+        let totals = totals_by_day(&[night], None, &berlin);
+        assert_eq!(totals.get("2026-07-11"), Some(&600));
     }
 }

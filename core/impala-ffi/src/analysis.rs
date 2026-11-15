@@ -6,7 +6,10 @@ use impala_model::analysis::{
     GoalAnalysis, HomeAnalysis as CoreHomeAnalysis, PatternData as CorePatternData, compute_goal as core_compute_goal,
 };
 
+use std::sync::Arc;
+
 use crate::ImpalaCore;
+use crate::zone::{DeviceZone, local_zone};
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct Goal {
@@ -210,7 +213,7 @@ impl ImpalaCore {
     pub fn home_analysis(
         &self,
         now_ms: i64,
-        tz_offset_minutes: i32,
+        zone: Arc<dyn DeviceZone>,
         goal_min: i32,
         days: Vec<f64>,
         pace: f64,
@@ -219,7 +222,7 @@ impl ImpalaCore {
         inner
             .model
             .state()
-            .home_analysis(now_ms, tz_offset_minutes, goal_min.max(0) as u32, &days, pace)
+            .home_analysis(now_ms, &local_zone(zone), goal_min.max(0) as u32, &days, pace)
             .map(Into::into)
     }
 
@@ -239,7 +242,7 @@ mod tests {
     fn home_analysis_und_pattern_data_in_memory() {
         let core = ImpalaCore::open_in_memory().unwrap();
         // Noch keine Lerndaten -> None
-        let a = core.home_analysis(1_700_000_000_000, 60, 60, vec![0.0; 7], 0.0);
+        let a = core.home_analysis(1_700_000_000_000, Arc::new(crate::zone::Fixed(60)), 60, vec![0.0; 7], 0.0);
         assert_eq!(a, None);
 
         let p = core.pattern_data(None);

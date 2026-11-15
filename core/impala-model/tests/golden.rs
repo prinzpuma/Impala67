@@ -459,7 +459,7 @@ fn lernzeit_wie_js() {
         let totals: HashMap<String, u64> = serde_json::from_value(case["totals"].clone()).unwrap();
         let ref_date = case["referenceDate"].as_str().unwrap();
         let now_ms = impala_model::learning_time::parse_ms(&format!("{ref_date}T12:00:00.000Z")).unwrap();
-        let got = impala_model::learning_time::streak_days(&totals, now_ms, 0);
+        let got = impala_model::learning_time::streak_days(&totals, now_ms, &0i64);
         assert_eq!(got, case["expectedStreak"].as_u64().unwrap() as u32, "streak case {name}");
     }
 
@@ -483,7 +483,7 @@ fn lernzeit_wie_js() {
         let offset = case["offset"].as_i64().unwrap() as i32;
         let expected_days: Vec<u64> =
             case["days"].as_array().unwrap().iter().map(|d| d["seconds"].as_u64().unwrap()).collect();
-        let got = impala_model::learning_time::week_data(&sample_totals, now_ms, offset, 0);
+        let got = impala_model::learning_time::week_data(&sample_totals, now_ms, offset, &0i64);
         assert_eq!(got.to_vec(), expected_days, "week case {name}");
     }
     for case in g["cycle"].as_array().unwrap() {
@@ -520,7 +520,7 @@ fn statistik_wie_js() {
         let telemetry: Vec<impala_model::Telemetry> =
             objects(&case["telemetry"]).into_iter().map(impala_model::Telemetry::from_object).collect();
         let think_ms = case["expected"]["thinkMs"].as_i64();
-        let options = impala_model::stats::StatsOptions { deck, now, tz_offset_minutes, think_ms };
+        let options = impala_model::stats::StatsOptions { deck, now, zone: &tz_offset_minutes, think_ms };
         let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);
         let actual = serde_json::to_value(&stats).unwrap();
         assert_same(&actual, &case["expected"], &format!("statistik {name}"));

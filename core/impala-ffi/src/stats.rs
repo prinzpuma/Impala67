@@ -8,7 +8,10 @@ use impala_model::stats::{
 use impala_srs::Timestamp;
 use serde_json::{Value, json};
 
+use std::sync::Arc;
+
 use crate::ImpalaCore;
+use crate::zone::{DeviceZone, local_zone};
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct BestandRecord {
@@ -192,7 +195,7 @@ impl ImpalaCore {
         &self,
         deck: Option<String>,
         now_ms: Option<i64>,
-        utc_offset_minutes: Option<i32>,
+        zone: Arc<dyn DeviceZone>,
     ) -> LearningStats {
         let mut inner = self.lock();
         let now = now_ms
@@ -201,7 +204,7 @@ impl ImpalaCore {
         let options = StatsOptions {
             deck: deck.as_deref().filter(|d| !d.is_empty()),
             now,
-            tz_offset_minutes: utc_offset_minutes.unwrap_or(0) as i64,
+            zone: &local_zone(zone),
             think_ms: None,
         };
         let stats = inner.model.state().learning_stats(&options);
@@ -248,7 +251,7 @@ mod tests {
     fn stats_berechnung_und_json() {
         let core = ImpalaCore::open_in_memory().unwrap();
         // Leere Statistik
-        let empty = core.learning_stats(None, None, Some(60));
+        let empty = core.learning_stats(None, None, Arc::new(crate::zone::Fixed(60)));
         assert_eq!(empty.n, 0);
         assert_eq!(empty.reviews_all, 0);
         assert_eq!(empty.bestand.neu, 0);
@@ -259,19 +262,19 @@ mod tests {
 
         // Karte anlegen
         let card_id = core.create_card("Vorderseite".into(), "Rückseite".into(), Some("Mathe".into()), None).unwrap();
-        let stats = core.learning_stats(None, None, Some(60));
+        let stats = core.learning_stats(None, None, Arc::new(crate::zone::Fixed(60)));
         assert_eq!(stats.n, 1);
         assert_eq!(stats.bestand.neu, 1);
         assert_eq!(stats.decks.len(), 1);
         assert_eq!(stats.decks[0].name, "Mathe");
 
         // Deck-Filter
-        let bio_stats = core.learning_stats(Some("Bio".into()), None, Some(60));
+        let bio_stats = core.learning_stats(Some("Bio".into()), None, Arc::new(crate::zone::Fixed(60)));
         assert_eq!(bio_stats.n, 0);
 
         // Karte bewerten
         core.review_card(card_id, 3).unwrap();
-        let after_review = core.learning_stats(None, None, Some(60));
+        let after_review = core.learning_stats(None, None, Arc::new(crate::zone::Fixed(60)));
         assert_eq!(after_review.reviews_all, 1);
         assert_eq!(after_review.bestand.neu, 0);
         assert_eq!(after_review.bestand.lernen, 1);

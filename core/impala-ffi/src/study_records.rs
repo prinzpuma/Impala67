@@ -7,6 +7,9 @@ use impala_model::js;
 use impala_model::types::{Grade, HomeArticle, LearningSession};
 use serde_json::{Value, json};
 
+use std::sync::Arc;
+
+use crate::zone::{DeviceZone, local_zone};
 use crate::{CoreError, ImpalaCore, invalid};
 
 // ---------------------------------------------------------------------------
@@ -184,14 +187,15 @@ pub fn learning_time_merged_seconds(sessions: Vec<LearningSessionInfo>) -> u64 {
     impala_model::learning_time::merged_seconds(&data)
 }
 
+/// Sekunden je lokalem Kalendertag (nach Beginn der Sitzung, mit der Ortszeit dieses Tages).
 #[uniffi::export]
 pub fn learning_time_totals_by_day(
     sessions: Vec<LearningSessionInfo>,
-    offset_minutes: i32,
+    zone: Arc<dyn DeviceZone>,
 ) -> std::collections::HashMap<String, u64> {
     let data: Vec<impala_model::learning_time::LearningSessionData> =
         sessions.iter().map(session_info_to_data).collect();
-    impala_model::learning_time::totals_by_day(&data, None, offset_minutes)
+    impala_model::learning_time::totals_by_day(&data, None, &local_zone(zone))
 }
 
 #[uniffi::export]
@@ -199,23 +203,23 @@ pub fn learning_time_week_data(
     totals: std::collections::HashMap<String, u64>,
     now_ms: i64,
     week_offset: i32,
-    offset_minutes: i32,
+    zone: Arc<dyn DeviceZone>,
 ) -> Vec<u64> {
-    impala_model::learning_time::week_data(&totals, now_ms, week_offset, offset_minutes).to_vec()
+    impala_model::learning_time::week_data(&totals, now_ms, week_offset, &local_zone(zone)).to_vec()
 }
 
 #[uniffi::export]
 pub fn learning_time_streak_days(
     totals: std::collections::HashMap<String, u64>,
     now_ms: i64,
-    offset_minutes: i32,
+    zone: Arc<dyn DeviceZone>,
 ) -> u32 {
-    impala_model::learning_time::streak_days(&totals, now_ms, offset_minutes)
+    impala_model::learning_time::streak_days(&totals, now_ms, &local_zone(zone))
 }
 
 #[uniffi::export]
-pub fn learning_time_weekday_index(now_ms: i64, offset_minutes: i32) -> u32 {
-    impala_model::learning_time::weekday_index(now_ms, offset_minutes)
+pub fn learning_time_weekday_index(now_ms: i64, zone: Arc<dyn DeviceZone>) -> u32 {
+    impala_model::learning_time::weekday_index(now_ms, &local_zone(zone))
 }
 
 #[uniffi::export]
@@ -461,32 +465,6 @@ impl ImpalaCore {
         self.learning_sessions().iter().map(|s| s.duration_seconds).sum()
     }
 
-    /// Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
-    pub fn learning_totals_by_day(&self, offset_minutes: i32) -> std::collections::HashMap<String, u64> {
-        let inner = self.lock();
-        let sessions: Vec<impala_model::learning_time::LearningSessionData> = inner
-            .model
-            .state()
-            .learning_sessions
-            .values()
-            .filter(|s| !s.truthy("deleted") && s.duration_seconds.unwrap_or(0.0) > 0.0)
-            .map(impala_model::learning_time::LearningSessionData::from)
-            .collect();
-        impala_model::learning_time::totals_by_day(&sessions, None, offset_minutes)
-    }
-
-    /// Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
-    pub fn learning_week_data(&self, now_ms: i64, week_offset: i32, offset_minutes: i32) -> Vec<u64> {
-        let totals = self.learning_totals_by_day(offset_minutes);
-        impala_model::learning_time::week_data(&totals, now_ms, week_offset, offset_minutes).to_vec()
-    }
-
-    /// Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
-    pub fn learning_streak_days(&self, now_ms: i64, offset_minutes: i32) -> u32 {
-        let totals = self.learning_totals_by_day(offset_minutes);
-        impala_model::learning_time::streak_days(&totals, now_ms, offset_minutes)
-    }
-
     /// Tagesartikel der Startseite, neueste zuerst (`limit` 0 = alle; die PWA zeigt 30).
     pub fn home_articles(&self, limit: u32) -> Vec<HomeArticleInfo> {
         let inner = self.lock();
@@ -700,16 +678,16 @@ mod tests {
         let merged = learning_time_merged_seconds(sessions.clone());
         assert_eq!(merged, 1800);
 
-        let totals = learning_time_totals_by_day(sessions, 0);
+        let totals = learning_time_totals_by_day(sessions, crate::zone::utc());
         assert_eq!(totals.get("2026-11-04").copied(), Some(1800));
 
         let ref_ms = impala_srs::Timestamp::parse_iso("2026-11-04T12:00:00.000Z").unwrap().millis();
-        let week = learning_time_week_data(totals.clone(), ref_ms, 0, 0);
+        let week = learning_time_week_data(totals.clone(), ref_ms, 0, crate::zone::utc());
         assert_eq!(week.len(), 7);
         // Mittwoch ist Index 2 (Mo=0, Di=1, Mi=2)
         assert_eq!(week[2], 1800);
 
-        let streak = learning_time_streak_days(totals, ref_ms, 0);
+        let streak = learning_time_streak_days(totals, ref_ms, crate::zone::utc());
         assert_eq!(streak, 1);
 
         assert_eq!(learning_time_normalize_goal(20), 300);
@@ -720,13 +698,6 @@ mod tests {
         assert_eq!(nudge, HomeNudgeInfo::TodayProgress { minutes: 30 });
         let text = learning_time_home_nudge_text(1, 1800, 1800, 300, 15);
         assert_eq!(text, " Heute schon 30 Min gelernt.");
-
-        let core_totals = core.learning_totals_by_day(0);
-        assert_eq!(core_totals.get("2026-11-04").copied(), Some(1800));
-        let core_week = core.learning_week_data(ref_ms, 0, 0);
-        assert_eq!(core_week[2], 1800);
-        let core_streak = core.learning_streak_days(ref_ms, 0);
-        assert_eq!(core_streak, 1);
     }
 }
 

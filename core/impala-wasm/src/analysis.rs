@@ -12,19 +12,12 @@ impl ModelCore {
     /// Liefert `{ goal, subjects, time, forecast, headline, action, actionDeck }`
     /// oder `null`, falls es noch gar keine Lerndaten gibt.
     #[wasm_bindgen(js_name = homeAnalysis)]
-    pub fn home_analysis(
-        &self,
-        now_ms: f64,
-        tz_offset_minutes: i32,
-        goal_min: u32,
-        days_json: &str,
-        pace: f64,
-    ) -> Result<JsValue, JsError> {
+    pub fn home_analysis(&self, now_ms: f64, goal_min: u32, days_json: &str, pace: f64) -> Result<JsValue, JsError> {
         let days: Vec<f64> =
             serde_json::from_str(days_json).map_err(|e| JsError::new(&format!("days_json ungültig: {e}")))?;
         let now_i64 = if now_ms.is_finite() { now_ms as i64 } else { js_sys::Date::now() as i64 };
 
-        let result = self.m.state().home_analysis(now_i64, tz_offset_minutes, goal_min, &days, pace);
+        let result = self.m.state().home_analysis(now_i64, &crate::js::browser_zone(), goal_min, &days, pace);
         match result {
             Some(analysis) => {
                 let v = serde_json::to_value(&analysis).map_err(|e| JsError::new(&format!("Serialisierung: {e}")))?;

@@ -4,7 +4,7 @@ use impala_model::learning_time::{self, LearningSessionData};
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
 
-use crate::js::{from_js, to_js};
+use crate::js::{browser_zone, from_js, to_js};
 
 /// Intervall-Vereinigung: Vereinigt überlappende Zeitabschnitte (Wanduhrzeit).
 #[wasm_bindgen(js_name = lzMergedSeconds)]
@@ -16,7 +16,7 @@ pub fn lz_merged_seconds(sessions: &JsValue) -> Result<f64, JsError> {
 
 /// Gruppiert Sitzungen nach Kalendertag (lokal nach Beginn der Sitzung).
 #[wasm_bindgen(js_name = lzTotalsByDay)]
-pub fn lz_totals_by_day(sessions: &JsValue, live: &JsValue, offset_minutes: i32) -> Result<JsValue, JsError> {
+pub fn lz_totals_by_day(sessions: &JsValue, live: &JsValue) -> Result<JsValue, JsError> {
     let val = from_js(sessions).map_err(|e| JsError::new(&e))?;
     let list: Vec<LearningSessionData> = serde_json::from_value(val).map_err(|e| JsError::new(&e.to_string()))?;
     let live_data: Option<LearningSessionData> = if live.is_null() || live.is_undefined() {
@@ -25,25 +25,25 @@ pub fn lz_totals_by_day(sessions: &JsValue, live: &JsValue, offset_minutes: i32)
         let lv = from_js(live).map_err(|e| JsError::new(&e))?;
         serde_json::from_value(lv).ok()
     };
-    let totals = learning_time::totals_by_day(&list, live_data.as_ref(), offset_minutes);
+    let totals = learning_time::totals_by_day(&list, live_data.as_ref(), &browser_zone());
     Ok(to_js(&serde_json::to_value(totals).unwrap_or(Value::Null)))
 }
 
 /// Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
 #[wasm_bindgen(js_name = lzWeekData)]
-pub fn lz_week_data(totals: &JsValue, now_ms: f64, week_offset: i32, offset_minutes: i32) -> Result<JsValue, JsError> {
+pub fn lz_week_data(totals: &JsValue, now_ms: f64, week_offset: i32) -> Result<JsValue, JsError> {
     let val = from_js(totals).map_err(|e| JsError::new(&e))?;
     let map: std::collections::HashMap<String, u64> = serde_json::from_value(val).unwrap_or_default();
-    let week = learning_time::week_data(&map, now_ms as i64, week_offset, offset_minutes);
+    let week = learning_time::week_data(&map, now_ms as i64, week_offset, &browser_zone());
     Ok(to_js(&serde_json::to_value(week).unwrap_or(Value::Null)))
 }
 
 /// Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
 #[wasm_bindgen(js_name = lzStreakDays)]
-pub fn lz_streak_days(totals: &JsValue, now_ms: f64, offset_minutes: i32) -> Result<u32, JsError> {
+pub fn lz_streak_days(totals: &JsValue, now_ms: f64) -> Result<u32, JsError> {
     let val = from_js(totals).map_err(|e| JsError::new(&e))?;
     let map: std::collections::HashMap<String, u64> = serde_json::from_value(val).unwrap_or_default();
-    Ok(learning_time::streak_days(&map, now_ms as i64, offset_minutes))
+    Ok(learning_time::streak_days(&map, now_ms as i64, &browser_zone()))
 }
 
 /// Wochenziel normalisieren (mindestens 30 min, Standard 300).

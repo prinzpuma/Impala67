@@ -15,7 +15,10 @@ use fsrs::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-pub use time::{MS_PER_DAY, MS_PER_MINUTE, Timestamp, civil_from_days, days_from_civil};
+pub use time::{
+    CachedZone, LocalZone, MS_PER_DAY, MS_PER_MINUTE, Timestamp, civil_from_days, day_key_of, days_from_civil,
+    local_midnight,
+};
 
 /// Bewertung einer Wiederholung (JS `grade` 1…4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -652,7 +652,7 @@ export const STATE = (() => {
 		const t = now instanceof Date ? now : new Date(now);
 		const deckArg = deck ? String(deck) : undefined;
 		const thinkArg = thinkMs != null ? Number(thinkMs) : undefined;
-		return JSON.parse(M.learningStats(deckArg, t.getTime(), -t.getTimezoneOffset(), thinkArg));
+		return JSON.parse(M.learningStats(deckArg, t.getTime(), thinkArg));
 	}
 
 	const thinkMedian = () => (M && typeof M.thinkMedian === "function") ? M.thinkMedian() : 0;
@@ -676,10 +676,9 @@ export const STATE = (() => {
 	const conflictResolve = (c, action) => JSON.parse(M.conflictResolve(JSON.stringify(c), String(action)));
 
 	// Lernanalyse (Wochenziel, Fächer, Tageszeit, Prognose) und Lernmuster aus dem Kern
-	function homeAnalysis(goalMin, days, pace, now = Date.now(), tzOffset = -(new Date().getTimezoneOffset())) {
+	function homeAnalysis(goalMin, days, pace, now = Date.now()) {
 		return M.homeAnalysis(
 			typeof now === "number" ? now : new Date(now).getTime(),
-			tzOffset,
 			goalMin,
 			JSON.stringify(days || []),
 			pace,

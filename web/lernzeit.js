@@ -246,8 +246,7 @@ export const LERNZEIT = (() => {
 	function totalsByDay() {
 		const sessions = activeSessions();
 		const live = currentAsSession();
-		const offsetMinutes = -new Date().getTimezoneOffset();
-		return CORE.lzTotalsByDay(sessions, live, offsetMinutes);
+		return CORE.lzTotalsByDay(sessions, live);
 	}
 	function totalForDay(key) {
 		const totals = totalsByDay();
@@ -261,8 +260,7 @@ export const LERNZEIT = (() => {
 	}
 	function weekData(offset = 0, totals = null) {
 		const t = totals || totalsByDay();
-		const offsetMinutes = -new Date().getTimezoneOffset();
-		const raw = CORE.lzWeekData(t, Date.now(), offset, offsetMinutes);
+		const raw = CORE.lzWeekData(t, Date.now(), offset);
 		const start = weekStart(offset);
 		return raw.map((seconds, index) => {
 			const d = new Date(start); d.setDate(d.getDate() + index);
@@ -271,8 +269,7 @@ export const LERNZEIT = (() => {
 	}
 	function streakDays(totals = null) {
 		const t = totals || totalsByDay();
-		const offsetMinutes = -new Date().getTimezoneOffset();
-		return CORE.lzStreakDays(t, Date.now(), offsetMinutes);
+		return CORE.lzStreakDays(t, Date.now());
 	}
 	function weekGoalMinutes() {
 		return CORE.lzNormalizeWeekGoal(Number(localStorage.getItem(GOAL_KEY)) || 0);

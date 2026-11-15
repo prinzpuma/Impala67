@@ -167,9 +167,8 @@ struct StatsScreen: View {
         }
         .task(id: store.cardsRevision) {
             let core = store.core
-            let offset = Int32(TimeZone.current.secondsFromGMT() / 60)
             let loaded = await Task.detached(priority: .userInitiated) {
-                LearnStats(stats: core.learningStats(deck: nil, nowMs: nil, utcOffsetMinutes: offset))
+                LearnStats(stats: core.learningStats(deck: nil, nowMs: nil, zone: SystemZone.shared))
             }.value
             if !Task.isCancelled { stats = loaded }
         }

@@ -25,6 +25,11 @@ import java.util.TimeZone
 /** Versatz der Ortszeit zu UTC für die Tagesgrenze des Kerns (MEZ +60, MESZ +120). */
 fun utcOffsetMinutes(): Int = TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000
 
+/** Ortszeit für Tagesgrenzen im Kern: Versatz je Zeitpunkt (Sommer-/Winterzeit des jeweiligen Datums). */
+class SystemZone(private val zone: ZoneId = ZoneId.systemDefault()) : uniffi.impala_ffi.DeviceZone {
+    override fun offsetMinutes(utcMs: Long): Int = zone.rules.getOffset(Instant.ofEpochMilli(utcMs)).totalSeconds / 60
+}
+
 /** Name des Standard-Stapels (nicht umbenennbar, nicht löschbar). */
 const val DEFAULT_DECK = "Standard"
 

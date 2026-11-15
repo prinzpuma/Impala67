@@ -60,6 +60,15 @@ enum Deck {
     static func cardsText(_ n: Int) -> String { n == 1 ? "1 Karte" : "\(n) Karten" }
 }
 
+/// Ortszeit für Tagesgrenzen im Kern: Versatz je Zeitpunkt (Sommer-/Winterzeit des jeweiligen Datums).
+final class SystemZone: DeviceZone, @unchecked Sendable {
+    static let shared = SystemZone()
+
+    func offsetMinutes(utcMs: Int64) -> Int32 {
+        Int32(TimeZone.current.secondsFromGMT(for: Date(timeIntervalSince1970: Double(utcMs) / 1000)) / 60)
+    }
+}
+
 extension DeckEntry: Identifiable {
     public var id: String { name }
 

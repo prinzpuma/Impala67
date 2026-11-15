@@ -687,6 +687,9 @@ internal interface UniffiCallbackInterfaceAiPlatformMethod3 : com.sun.jna.Callba
 internal interface UniffiCallbackInterfaceChangeListenerMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`changes`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
+internal interface UniffiCallbackInterfaceDeviceZoneMethod0 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`utcMs`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
 internal interface UniffiCallbackInterfaceDownloadListenerMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`file`: Int,`files`: Int,`done`: Long,`total`: Long,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,)
 }
@@ -789,6 +792,22 @@ internal open class UniffiVTableCallbackInterfaceChangeListener(
     }
 
 }
+@Structure.FieldOrder("offsetMinutes", "uniffiFree")
+internal open class UniffiVTableCallbackInterfaceDeviceZone(
+    @JvmField internal var `offsetMinutes`: UniffiCallbackInterfaceDeviceZoneMethod0? = null,
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+) : Structure() {
+    class UniffiByValue(
+        `offsetMinutes`: UniffiCallbackInterfaceDeviceZoneMethod0? = null,
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    ): UniffiVTableCallbackInterfaceDeviceZone(`offsetMinutes`,`uniffiFree`,), Structure.ByValue
+
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceDeviceZone) {
+        `offsetMinutes` = other.`offsetMinutes`
+        `uniffiFree` = other.`uniffiFree`
+    }
+
+}
 @Structure.FieldOrder("onProgress", "uniffiFree")
 internal open class UniffiVTableCallbackInterfaceDownloadListener(
     @JvmField internal var `onProgress`: UniffiCallbackInterfaceDownloadListenerMethod0? = null,
@@ -884,7 +903,6 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
     }
 
 }
-
 
 
 
@@ -1893,6 +1911,8 @@ fun uniffi_impala_ffi_checksum_method_cloudsync_ws_auth_message(
 ): Short
 fun uniffi_impala_ffi_checksum_method_cloudsync_ws_url(
 ): Short
+fun uniffi_impala_ffi_checksum_method_devicezone_offset_minutes(
+): Short
 fun uniffi_impala_ffi_checksum_method_downloadlistener_on_progress(
 ): Short
 fun uniffi_impala_ffi_checksum_method_drivechangetimer_on_change(
@@ -2145,12 +2165,6 @@ fun uniffi_impala_ffi_checksum_method_impalacore_learning_stats(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json(
 ): Short
-fun uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days(
-): Short
-fun uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day(
-): Short
-fun uniffi_impala_ffi_checksum_method_impalacore_learning_week_data(
-): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_library_archive_view(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf(
@@ -2378,6 +2392,7 @@ internal interface UniffiLib : Library {
             uniffiCallbackInterfaceAiListener.register(lib)
             uniffiCallbackInterfaceAiPlatform.register(lib)
             uniffiCallbackInterfaceChangeListener.register(lib)
+            uniffiCallbackInterfaceDeviceZone.register(lib)
             uniffiCallbackInterfaceDownloadListener.register(lib)
             uniffiCallbackInterfaceDriveProgress.register(lib)
             uniffiCallbackInterfaceDriveTokens.register(lib)
@@ -2478,6 +2493,14 @@ fun uniffi_impala_ffi_fn_method_cloudsync_ws_auth_message(`ptr`: Pointer,uniffi_
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_cloudsync_ws_url(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_clone_devicezone(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_impala_ffi_fn_free_devicezone(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_impala_ffi_fn_init_callback_vtable_devicezone(`vtable`: UniffiVTableCallbackInterfaceDeviceZone,
+): Unit
+fun uniffi_impala_ffi_fn_method_devicezone_offset_minutes(`ptr`: Pointer,`utcMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
 fun uniffi_impala_ffi_fn_clone_downloadlistener(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
 fun uniffi_impala_ffi_fn_free_downloadlistener(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -2750,7 +2773,7 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_strokes_bounds(`ptr`: Pointer,`p
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_style_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`color`: RustBuffer.ByValue,`size`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_home_analysis(`ptr`: Pointer,`nowMs`: Long,`tzOffsetMinutes`: Int,`goalMin`: Int,`days`: RustBuffer.ByValue,`pace`: Double,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_method_impalacore_home_analysis(`ptr`: Pointer,`nowMs`: Long,`zone`: Pointer,`goalMin`: Int,`days`: RustBuffer.ByValue,`pace`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_home_article(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2764,15 +2787,9 @@ fun uniffi_impala_ffi_fn_method_impalacore_learning_session(`ptr`: Pointer,`id`:
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_learning_sessions(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_learning_stats(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`nowMs`: RustBuffer.ByValue,`utcOffsetMinutes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_method_impalacore_learning_stats(`ptr`: Pointer,`deck`: RustBuffer.ByValue,`nowMs`: RustBuffer.ByValue,`zone`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(`ptr`: Pointer,`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-fun uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(`ptr`: Pointer,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_learning_week_data(`ptr`: Pointer,`nowMs`: Long,`weekOffset`: Int,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_library_archive_view(`ptr`: Pointer,`filter`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3074,13 +3091,13 @@ fun uniffi_impala_ffi_fn_func_learning_time_merged_seconds(`sessions`: RustBuffe
 ): Long
 fun uniffi_impala_ffi_fn_func_learning_time_normalize_goal(`stored`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
-fun uniffi_impala_ffi_fn_func_learning_time_streak_days(`totals`: RustBuffer.ByValue,`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_learning_time_streak_days(`totals`: RustBuffer.ByValue,`nowMs`: Long,`zone`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
-fun uniffi_impala_ffi_fn_func_learning_time_totals_by_day(`sessions`: RustBuffer.ByValue,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_learning_time_totals_by_day(`sessions`: RustBuffer.ByValue,`zone`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_func_learning_time_week_data(`totals`: RustBuffer.ByValue,`nowMs`: Long,`weekOffset`: Int,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_learning_time_week_data(`totals`: RustBuffer.ByValue,`nowMs`: Long,`weekOffset`: Int,`zone`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_func_learning_time_weekday_index(`nowMs`: Long,`offsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_learning_time_weekday_index(`nowMs`: Long,`zone`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun uniffi_impala_ffi_fn_func_local_embedding_model(`modelDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3429,16 +3446,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_learning_time_normalize_goal() != 18288.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 45686.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_streak_days() != 33618.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 4986.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_totals_by_day() != 44002.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_learning_time_week_data() != 27895.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_week_data() != 6305.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 40126.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_learning_time_weekday_index() != 63472.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_local_embedding_model() != 46957.toShort()) {
@@ -3604,6 +3621,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_cloudsync_ws_url() != 17198.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_devicezone_offset_minutes() != 35879.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_downloadlistener_on_progress() != 52070.toShort()) {
@@ -3957,7 +3977,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_style_strokes() != 61548.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 52076.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_home_analysis() != 22543.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_home_article() != 46611.toShort()) {
@@ -3978,19 +3998,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_sessions() != 60078.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 13464.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats() != 38649.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_stats_json() != 14105.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_streak_days() != 23959.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_totals_by_day() != 2938.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_learning_week_data() != 18399.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_library_archive_view() != 22816.toShort()) {
@@ -6754,6 +6765,285 @@ public object FfiConverterTypeCloudSync: FfiConverter<CloudSync, Pointer> {
 
 
 /**
+ * Versatz der Ortszeit zu UTC in Minuten für einen Zeitpunkt (iOS: `TimeZone.current
+ * .secondsFromGMT(for:)`, Android: `TimeZone.getDefault().getOffset(ms)`).
+ */
+public interface DeviceZone {
+    
+    fun `offsetMinutes`(`utcMs`: kotlin.Long): kotlin.Int
+    
+    companion object
+}
+
+/**
+ * Versatz der Ortszeit zu UTC in Minuten für einen Zeitpunkt (iOS: `TimeZone.current
+ * .secondsFromGMT(for:)`, Android: `TimeZone.getDefault().getOffset(ms)`).
+ */
+open class DeviceZoneImpl: Disposable, AutoCloseable, DeviceZone
+{
+
+    constructor(pointer: Pointer) {
+        this.pointer = pointer
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
+    }
+
+    /**
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noPointer: NoPointer) {
+        this.pointer = null
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
+    }
+
+    protected val pointer: Pointer?
+    protected val cleanable: UniffiCleaner.Cleanable
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithPointer(block: (ptr: Pointer) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the pointer being freed concurrently.
+        try {
+            return block(this.uniffiClonePointer())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
+        override fun run() {
+            pointer?.let { ptr ->
+                uniffiRustCall { status ->
+                    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_free_devicezone(ptr, status)
+                }
+            }
+        }
+    }
+
+    fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
+            UniffiLib.INSTANCE.uniffi_impala_ffi_fn_clone_devicezone(pointer!!, status)
+        }
+    }
+
+    override fun `offsetMinutes`(`utcMs`: kotlin.Long): kotlin.Int {
+            return FfiConverterInt.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_devicezone_offset_minutes(
+        it, FfiConverterLong.lower(`utcMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+
+    
+    
+    companion object
+    
+}
+
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceDeviceZone {
+    internal object `offsetMinutes`: UniffiCallbackInterfaceDeviceZoneMethod0 {
+        override fun callback(`uniffiHandle`: Long,`utcMs`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeDeviceZone.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`offsetMinutes`(
+                    FfiConverterLong.lift(`utcMs`),
+                )
+            }
+            val writeReturn = { value: kotlin.Int -> uniffiOutReturn.setValue(FfiConverterInt.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeDeviceZone.handleMap.remove(handle)
+        }
+    }
+
+    internal var vtable = UniffiVTableCallbackInterfaceDeviceZone.UniffiByValue(
+        `offsetMinutes`,
+        uniffiFree,
+    )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_impala_ffi_fn_init_callback_vtable_devicezone(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDeviceZone: FfiConverter<DeviceZone, Pointer> {
+    internal val handleMap = UniffiHandleMap<DeviceZone>()
+
+    override fun lower(value: DeviceZone): Pointer {
+        return Pointer(handleMap.insert(value))
+    }
+
+    override fun lift(value: Pointer): DeviceZone {
+        return DeviceZoneImpl(value)
+    }
+
+    override fun read(buf: ByteBuffer): DeviceZone {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: DeviceZone) = 8UL
+
+    override fun write(value: DeviceZone, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+// This template implements a class for working with a Rust struct via a Pointer/Arc<T>
+// to the live Rust struct on the other side of the FFI.
+//
+// Each instance implements core operations for working with the Rust `Arc<T>` and the
+// Kotlin Pointer to work with the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque pointer to the underlying Rust struct.
+//     Method calls need to read this pointer from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its pointer should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the pointer, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the pointer, but is interrupted
+//      before it can pass the pointer over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read pointer value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+
+/**
  * Fortschritt des Modell-Downloads.
  */
 public interface DownloadListener {
@@ -8912,7 +9202,7 @@ public interface ImpalaCoreInterface {
     /**
      * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
      */
-    fun `homeAnalysis`(`nowMs`: kotlin.Long, `tzOffsetMinutes`: kotlin.Int, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis?
+    fun `homeAnalysis`(`nowMs`: kotlin.Long, `zone`: DeviceZone, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis?
     
     fun `homeArticle`(`id`: kotlin.String): HomeArticleInfo?
     
@@ -8941,28 +9231,13 @@ public interface ImpalaCoreInterface {
     /**
      * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
      */
-    fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `utcOffsetMinutes`: kotlin.Int?): LearningStats
+    fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `zone`: DeviceZone): LearningStats
     
     /**
      * `{ cards: [{ id, front, deck, pageId, state, stability, lapses, due, suspended }], reviews: [...],
      * telemetry: [...] }` als JSON; Bewertungen und Telemetrie wie in `S.reviews` / `S.telemetry`.
      */
     fun `learningStatsJson`(): kotlin.String
-    
-    /**
-     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
-     */
-    fun `learningStreakDays`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt
-    
-    /**
-     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
-     */
-    fun `learningTotalsByDay`(`offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong>
-    
-    /**
-     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
-     */
-    fun `learningWeekData`(`nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong>
     
     /**
      * Archiv-Liste für die Bibliothek samt Filter-Zählern.
@@ -11016,12 +11291,12 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     
     /**
      * Lernanalyse der Startseite: `null`, falls es noch gar keine Lerndaten gibt.
-     */override fun `homeAnalysis`(`nowMs`: kotlin.Long, `tzOffsetMinutes`: kotlin.Int, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis? {
+     */override fun `homeAnalysis`(`nowMs`: kotlin.Long, `zone`: DeviceZone, `goalMin`: kotlin.Int, `days`: List<kotlin.Double>, `pace`: kotlin.Double): HomeAnalysis? {
             return FfiConverterOptionalTypeHomeAnalysis.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_home_analysis(
-        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`tzOffsetMinutes`),FfiConverterInt.lower(`goalMin`),FfiConverterSequenceDouble.lower(`days`),FfiConverterDouble.lower(`pace`),_status)
+        it, FfiConverterLong.lower(`nowMs`),FfiConverterTypeDeviceZone.lower(`zone`),FfiConverterInt.lower(`goalMin`),FfiConverterSequenceDouble.lower(`days`),FfiConverterDouble.lower(`pace`),_status)
 }
     }
     )
@@ -11116,12 +11391,12 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     
     /**
      * Berechnete Statistik-Kennzahlen (`StatsData` / `anki-stats.js`).
-     */override fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `utcOffsetMinutes`: kotlin.Int?): LearningStats {
+     */override fun `learningStats`(`deck`: kotlin.String?, `nowMs`: kotlin.Long?, `zone`: DeviceZone): LearningStats {
             return FfiConverterTypeLearningStats.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_stats(
-        it, FfiConverterOptionalString.lower(`deck`),FfiConverterOptionalLong.lower(`nowMs`),FfiConverterOptionalInt.lower(`utcOffsetMinutes`),_status)
+        it, FfiConverterOptionalString.lower(`deck`),FfiConverterOptionalLong.lower(`nowMs`),FfiConverterTypeDeviceZone.lower(`zone`),_status)
 }
     }
     )
@@ -11138,51 +11413,6 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_stats_json(
         it, _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
-     */override fun `learningStreakDays`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
-            return FfiConverterUInt.lift(
-    callWithPointer {
-    uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_streak_days(
-        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Liefert die Summe der Lernsekunden je Kalendertag (lokal nach Beginn der Sitzung).
-     */override fun `learningTotalsByDay`(`offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong> {
-            return FfiConverterMapStringULong.lift(
-    callWithPointer {
-    uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_totals_by_day(
-        it, FfiConverterInt.lower(`offsetMinutes`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Die 7 Tage der Woche (Mo–So) als Sekunden-Array.
-     */override fun `learningWeekData`(`nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong> {
-            return FfiConverterSequenceULong.lift(
-    callWithPointer {
-    uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_learning_week_data(
-        it, FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`weekOffset`),FfiConverterInt.lower(`offsetMinutes`),_status)
 }
     }
     )
@@ -26439,38 +26669,41 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     )
     }
     
- fun `learningTimeStreakDays`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
+ fun `learningTimeStreakDays`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `zone`: DeviceZone): kotlin.UInt {
             return FfiConverterUInt.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_streak_days(
-        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
+        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterTypeDeviceZone.lower(`zone`),_status)
 }
     )
     }
     
- fun `learningTimeTotalsByDay`(`sessions`: List<LearningSessionInfo>, `offsetMinutes`: kotlin.Int): Map<kotlin.String, kotlin.ULong> {
+
+        /**
+         * Sekunden je lokalem Kalendertag (nach Beginn der Sitzung, mit der Ortszeit dieses Tages).
+         */ fun `learningTimeTotalsByDay`(`sessions`: List<LearningSessionInfo>, `zone`: DeviceZone): Map<kotlin.String, kotlin.ULong> {
             return FfiConverterMapStringULong.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_totals_by_day(
-        FfiConverterSequenceTypeLearningSessionInfo.lower(`sessions`),FfiConverterInt.lower(`offsetMinutes`),_status)
+        FfiConverterSequenceTypeLearningSessionInfo.lower(`sessions`),FfiConverterTypeDeviceZone.lower(`zone`),_status)
 }
     )
     }
     
- fun `learningTimeWeekData`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `offsetMinutes`: kotlin.Int): List<kotlin.ULong> {
+ fun `learningTimeWeekData`(`totals`: Map<kotlin.String, kotlin.ULong>, `nowMs`: kotlin.Long, `weekOffset`: kotlin.Int, `zone`: DeviceZone): List<kotlin.ULong> {
             return FfiConverterSequenceULong.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_week_data(
-        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`weekOffset`),FfiConverterInt.lower(`offsetMinutes`),_status)
+        FfiConverterMapStringULong.lower(`totals`),FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`weekOffset`),FfiConverterTypeDeviceZone.lower(`zone`),_status)
 }
     )
     }
     
- fun `learningTimeWeekdayIndex`(`nowMs`: kotlin.Long, `offsetMinutes`: kotlin.Int): kotlin.UInt {
+ fun `learningTimeWeekdayIndex`(`nowMs`: kotlin.Long, `zone`: DeviceZone): kotlin.UInt {
             return FfiConverterUInt.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_learning_time_weekday_index(
-        FfiConverterLong.lower(`nowMs`),FfiConverterInt.lower(`offsetMinutes`),_status)
+        FfiConverterLong.lower(`nowMs`),FfiConverterTypeDeviceZone.lower(`zone`),_status)
 }
     )
     }

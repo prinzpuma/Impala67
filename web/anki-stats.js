@@ -45,7 +45,6 @@ export function statsData(options = {}) {
 		JSON.stringify(tele),
 		deck ? String(deck) : null,
 		t.getTime(),
-		-t.getTimezoneOffset(),
 		thinkMs != null ? Number(thinkMs) : null
 	);
 	return JSON.parse(res);

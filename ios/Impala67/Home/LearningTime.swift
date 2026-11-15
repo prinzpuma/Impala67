@@ -6,12 +6,10 @@ struct LearningTime {
     /// Sekunden je Kalendertag (lokal, Schlüssel `JJJJ-MM-TT`), nach Beginn der Sitzung.
     private let totals: [String: Int]
     private let calendar: Calendar
-    private let offsetMinutes: Int32
 
     init(_ sessions: [LearningSessionInfo], calendar: Calendar = .monday) {
         self.calendar = calendar
-        self.offsetMinutes = Int32(TimeZone.current.secondsFromGMT() / 60)
-        let rawTotals = learningTimeTotalsByDay(sessions: sessions, offsetMinutes: offsetMinutes)
+        let rawTotals = learningTimeTotalsByDay(sessions: sessions, zone: SystemZone.shared)
         self.totals = rawTotals.mapValues { Int($0) }
     }
 
@@ -20,21 +18,20 @@ struct LearningTime {
     /// Die 7 Tage der laufenden Woche (Mo–So).
     func week(_ today: Date = .now) -> [Int] {
         let ms = Int64(today.timeIntervalSince1970 * 1000)
-        let raw = learningTimeWeekData(totals: totals.mapValues { UInt64($0) }, nowMs: ms, weekOffset: 0, offsetMinutes: offsetMinutes)
+        let raw = learningTimeWeekData(totals: totals.mapValues { UInt64($0) }, nowMs: ms, weekOffset: 0, zone: SystemZone.shared)
         return raw.map { Int($0) }
     }
 
     /// Aufeinanderfolgende Tage mit ≥ 5 Minuten; ein noch leerer heutiger Tag bricht die Serie nicht.
     func streakDays(_ today: Date = .now) -> Int {
         let ms = Int64(today.timeIntervalSince1970 * 1000)
-        return Int(learningTimeStreakDays(totals: totals.mapValues { UInt64($0) }, nowMs: ms, offsetMinutes: offsetMinutes))
+        return Int(learningTimeStreakDays(totals: totals.mapValues { UInt64($0) }, nowMs: ms, zone: SystemZone.shared))
     }
 
     /// Montag als 0, Sonntag als 6.
     static func weekdayIndex(_ date: Date = .now) -> Int {
         let ms = Int64(date.timeIntervalSince1970 * 1000)
-        let offset = Int32(TimeZone.current.secondsFromGMT() / 60)
-        return Int(learningTimeWeekdayIndex(nowMs: ms, offsetMinutes: offset))
+        return Int(learningTimeWeekdayIndex(nowMs: ms, zone: SystemZone.shared))
     }
 
     private static func key(_ date: Date, _ calendar: Calendar) -> String {

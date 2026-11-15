@@ -863,18 +863,12 @@ impl ModelCore {
 
     /// Statistik-Kennzahlen (`anki-stats.js` `statsData`).
     #[wasm_bindgen(js_name = learningStats)]
-    pub fn learning_stats(
-        &self,
-        deck: Option<String>,
-        now: f64,
-        tz_offset_minutes: i32,
-        think_ms: Option<f64>,
-    ) -> String {
+    pub fn learning_stats(&self, deck: Option<String>, now: f64, think_ms: Option<f64>) -> String {
         let now_ts = Timestamp::from_millis(now as i64);
         let options = impala_model::stats::StatsOptions {
             deck: deck.as_deref().filter(|d| !d.is_empty()),
             now: now_ts,
-            tz_offset_minutes: tz_offset_minutes as i64,
+            zone: &crate::js::browser_zone(),
             think_ms: think_ms.map(|ms| ms as i64),
         };
         let stats = self.m.state().learning_stats(&options);
@@ -1107,7 +1101,6 @@ pub fn compute_card_stats_js(
     telemetry_json: &str,
     deck: Option<String>,
     now_ms: f64,
-    tz_offset_minutes: i32,
     think_ms: Option<f64>,
 ) -> Result<String, JsError> {
     let cards: Vec<impala_model::Card> =
@@ -1120,7 +1113,7 @@ pub fn compute_card_stats_js(
     let options = impala_model::stats::StatsOptions {
         deck: deck.as_deref().filter(|d| !d.is_empty()),
         now,
-        tz_offset_minutes: tz_offset_minutes as i64,
+        zone: &crate::js::browser_zone(),
         think_ms: think_ms.map(|ms| ms as i64),
     };
     let stats = impala_model::stats::compute_stats(&cards, &reviews, &telemetry, &options);

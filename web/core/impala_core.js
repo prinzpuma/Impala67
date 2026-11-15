@@ -1703,18 +1703,17 @@ export class ModelCore {
      * Liefert `{ goal, subjects, time, forecast, headline, action, actionDeck }`
      * oder `null`, falls es noch gar keine Lerndaten gibt.
      * @param {number} now_ms
-     * @param {number} tz_offset_minutes
      * @param {number} goal_min
      * @param {string} days_json
      * @param {number} pace
      * @returns {any}
      */
-    homeAnalysis(now_ms, tz_offset_minutes, goal_min, days_json, pace) {
+    homeAnalysis(now_ms, goal_min, days_json, pace) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(days_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
-            wasm.modelcore_homeAnalysis(retptr, this.__wbg_ptr, now_ms, tz_offset_minutes, goal_min, ptr0, len0, pace);
+            wasm.modelcore_homeAnalysis(retptr, this.__wbg_ptr, now_ms, goal_min, ptr0, len0, pace);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -1840,18 +1839,17 @@ export class ModelCore {
      * Statistik-Kennzahlen (`anki-stats.js` `statsData`).
      * @param {string | null | undefined} deck
      * @param {number} now
-     * @param {number} tz_offset_minutes
      * @param {number | null} [think_ms]
      * @returns {string}
      */
-    learningStats(deck, now, tz_offset_minutes, think_ms) {
+    learningStats(deck, now, think_ms) {
         let deferred2_0;
         let deferred2_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             var ptr0 = isLikeNone(deck) ? 0 : passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             var len0 = WASM_VECTOR_LEN;
-            wasm.modelcore_learningStats(retptr, this.__wbg_ptr, ptr0, len0, now, tz_offset_minutes, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
+            wasm.modelcore_learningStats(retptr, this.__wbg_ptr, ptr0, len0, now, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred2_0 = r0;
@@ -3571,11 +3569,10 @@ export function compactOrder(events, live, since) {
  * @param {string} telemetry_json
  * @param {string | null | undefined} deck
  * @param {number} now_ms
- * @param {number} tz_offset_minutes
  * @param {number | null} [think_ms]
  * @returns {string}
  */
-export function computeCardStats(cards_json, reviews_json, telemetry_json, deck, now_ms, tz_offset_minutes, think_ms) {
+export function computeCardStats(cards_json, reviews_json, telemetry_json, deck, now_ms, think_ms) {
     let deferred6_0;
     let deferred6_1;
     try {
@@ -3588,7 +3585,7 @@ export function computeCardStats(cards_json, reviews_json, telemetry_json, deck,
         const len2 = WASM_VECTOR_LEN;
         var ptr3 = isLikeNone(deck) ? 0 : passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         var len3 = WASM_VECTOR_LEN;
-        wasm.computeCardStats(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, now_ms, tz_offset_minutes, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
+        wasm.computeCardStats(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, now_ms, !isLikeNone(think_ms), isLikeNone(think_ms) ? 0 : think_ms);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -4730,13 +4727,12 @@ export function lzNormalizeWeekGoal(stored) {
  * Aufeinanderfolgende Tage mit mindestens 5 Minuten Lernzeit.
  * @param {any} totals
  * @param {number} now_ms
- * @param {number} offset_minutes
  * @returns {number}
  */
-export function lzStreakDays(totals, now_ms, offset_minutes) {
+export function lzStreakDays(totals, now_ms) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.lzStreakDays(retptr, addBorrowedObject(totals), now_ms, offset_minutes);
+        wasm.lzStreakDays(retptr, addBorrowedObject(totals), now_ms);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -4754,13 +4750,12 @@ export function lzStreakDays(totals, now_ms, offset_minutes) {
  * Gruppiert Sitzungen nach Kalendertag (lokal nach Beginn der Sitzung).
  * @param {any} sessions
  * @param {any} live
- * @param {number} offset_minutes
  * @returns {any}
  */
-export function lzTotalsByDay(sessions, live, offset_minutes) {
+export function lzTotalsByDay(sessions, live) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.lzTotalsByDay(retptr, addBorrowedObject(sessions), addBorrowedObject(live), offset_minutes);
+        wasm.lzTotalsByDay(retptr, addBorrowedObject(sessions), addBorrowedObject(live));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -4780,13 +4775,12 @@ export function lzTotalsByDay(sessions, live, offset_minutes) {
  * @param {any} totals
  * @param {number} now_ms
  * @param {number} week_offset
- * @param {number} offset_minutes
  * @returns {any}
  */
-export function lzWeekData(totals, now_ms, week_offset, offset_minutes) {
+export function lzWeekData(totals, now_ms, week_offset) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.lzWeekData(retptr, addBorrowedObject(totals), now_ms, week_offset, offset_minutes);
+        wasm.lzWeekData(retptr, addBorrowedObject(totals), now_ms, week_offset);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -5841,6 +5835,10 @@ function __wbg_get_imports() {
         __wbg_getRandomValues_a608c4436c19407a: function() { return handleError(function (arg0, arg1) {
             globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
         }, arguments); },
+        __wbg_getTimezoneOffset_2e851fdaecc2dc92: function(arg0) {
+            const ret = getObject(arg0).getTimezoneOffset();
+            return ret;
+        },
         __wbg_get_1cb66d26171de5d7: function(arg0, arg1) {
             const ret = Reflect.get(getObject(arg0), getObject(arg1));
             return addHeapObject(ret);
@@ -5929,6 +5927,10 @@ function __wbg_get_imports() {
             const ret = new Error(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
+        __wbg_new_34e56228080aa9f8: function(arg0) {
+            const ret = new Date(getObject(arg0));
+            return addHeapObject(ret);
+        },
         __wbg_new_5502aad30c185fc8: function(arg0, arg1) {
             try {
                 var state0 = {a: arg0, b: arg1};
@@ -5936,7 +5938,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5441(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5450(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -5982,7 +5984,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5441(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5450(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6074,8 +6076,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 197, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5385);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 199, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5394);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6102,14 +6104,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5441(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5441(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5450(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5450(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5385(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5394(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5385(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5394(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

@@ -7,6 +7,11 @@ use serde_json::Value;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+/// Ortszeit des Browsers je Zeitpunkt (mit Sommer-/Winterzeit des jeweiligen Datums).
+pub(crate) fn browser_zone() -> impala_srs::CachedZone<impl Fn(i64) -> i64> {
+    impala_srs::CachedZone::new(|ms| -(js_sys::Date::new(&JsValue::from_f64(ms as f64)).get_timezone_offset() as i64))
+}
+
 pub(crate) fn to_js(v: &Value) -> JsValue {
     JSON::parse(&v.to_string()).unwrap_or(JsValue::NULL)
 }

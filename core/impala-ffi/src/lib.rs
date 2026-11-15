@@ -37,6 +37,7 @@ mod study_records;
 mod subjects;
 mod sync;
 mod ui;
+mod zone;
 
 use std::fmt;
 use std::sync::mpsc::Sender;

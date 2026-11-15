@@ -11,6 +11,52 @@ pub const MS_PER_DAY: i64 = 86_400_000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(pub i64);
 
+/// Ortszeit der App: Versatz zu UTC in Minuten **für einen bestimmten Zeitpunkt** (MEZ +60,
+/// MESZ +120). Nur so landen Einträge aus der Sommerzeit auch im Winter am richtigen Tag.
+pub trait LocalZone {
+    fn offset_minutes_at(&self, utc_ms: i64) -> i64;
+}
+
+/// Fester Versatz (Tests, Golden-Files).
+impl LocalZone for i64 {
+    fn offset_minutes_at(&self, _: i64) -> i64 {
+        *self
+    }
+}
+
+/// Fragt die Ortszeit der Plattform ab und merkt sich das Ergebnis je Viertelstunde
+/// (Zeitumstellungen liegen in allen Zonen auf Viertelstunden).
+pub struct CachedZone<F: Fn(i64) -> i64> {
+    lookup: F,
+    cache: std::cell::RefCell<std::collections::HashMap<i64, i64>>,
+}
+
+impl<F: Fn(i64) -> i64> CachedZone<F> {
+    pub fn new(lookup: F) -> Self {
+        CachedZone { lookup, cache: Default::default() }
+    }
+}
+
+impl<F: Fn(i64) -> i64> LocalZone for CachedZone<F> {
+    fn offset_minutes_at(&self, utc_ms: i64) -> i64 {
+        let slot = utc_ms.div_euclid(15 * MS_PER_MINUTE);
+        *self.cache.borrow_mut().entry(slot).or_insert_with(|| (self.lookup)(utc_ms))
+    }
+}
+
+/// UTC-Zeitpunkt von 00:00 Uhr Ortszeit am lokalen Tag `days` (Tage seit 1970-01-01).
+pub fn local_midnight(days: i64, zone: &dyn LocalZone) -> i64 {
+    let naive = days * MS_PER_DAY;
+    let guess = naive - zone.offset_minutes_at(naive) * MS_PER_MINUTE;
+    naive - zone.offset_minutes_at(guess) * MS_PER_MINUTE
+}
+
+/// Tagesschlüssel „JJJJ-MM-TT“ zu Tagen seit 1970-01-01.
+pub fn day_key_of(days: i64) -> String {
+    let (y, m, d) = civil_from_days(days);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
 impl Timestamp {
     pub fn from_millis(ms: i64) -> Self {
         Timestamp(ms)
@@ -29,29 +75,19 @@ impl Timestamp {
         (self.0 - earlier.0) as f64 / MS_PER_DAY as f64
     }
 
-    /// Tage seit 1970-01-01 (UTC) für einen UTC-Versatz in Minuten.
-    pub fn days_since_epoch(self, offset_minutes: i64) -> i64 {
-        let local_ms = self.0 + offset_minutes * MS_PER_MINUTE;
-        local_ms.div_euclid(MS_PER_DAY)
+    /// Millisekunden seit 1970 in Ortszeit (Versatz des Zeitpunkts selbst, also mit Sommerzeit).
+    pub fn local_millis(self, zone: &dyn LocalZone) -> i64 {
+        self.0 + zone.offset_minutes_at(self.0) * MS_PER_MINUTE
     }
 
-    /// Lokaler Tagesschlüssel „JJJJ-MM-TT“ für einen UTC-Versatz in Minuten (z. B. +60 für MEZ).
-    pub fn day_key(self, offset_minutes: i64) -> String {
-        let days = self.days_since_epoch(offset_minutes);
-        let (y, m, d) = civil_from_days(days);
-        format!("{y:04}-{m:02}-{d:02}")
+    /// Lokaler Kalendertag als Tage seit 1970-01-01.
+    pub fn local_days(self, zone: &dyn LocalZone) -> i64 {
+        self.local_millis(zone).div_euclid(MS_PER_DAY)
     }
 
-    /// Datumskomponenten (Jahr, Monat 1..=12, Tag 1..=31) für einen UTC-Versatz in Minuten.
-    pub fn civil_date(self, offset_minutes: i64) -> (i64, i64, i64) {
-        let days = self.days_since_epoch(offset_minutes);
-        civil_from_days(days)
-    }
-
-    /// Start des Tages (00:00:00 Uhr lokaler Zeit) als UTC-Timestamp.
-    pub fn start_of_day(self, offset_minutes: i64) -> Self {
-        let days = self.days_since_epoch(offset_minutes);
-        Timestamp(days * MS_PER_DAY - offset_minutes * MS_PER_MINUTE)
+    /// Lokaler Tagesschlüssel „JJJJ-MM-TT“.
+    pub fn day_key(self, zone: &dyn LocalZone) -> String {
+        day_key_of(self.local_days(zone))
     }
 
     /// Liest ISO-8601 wie es `toISOString` schreibt, dazu die üblichen Varianten: ohne

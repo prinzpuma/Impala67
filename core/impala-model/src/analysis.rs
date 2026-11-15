@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use impala_srs::Timestamp;
+use impala_srs::{LocalZone, Timestamp, local_midnight};
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Card, Review, State, Telemetry};
@@ -219,9 +219,8 @@ pub struct BestTimeAnalysis {
     pub tone: String,
 }
 
-pub fn compute_best_time(reviews: &[Review], now_ms: i64, tz_offset_minutes: i32) -> BestTimeAnalysis {
+pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) -> BestTimeAnalysis {
     let cut = now_ms - 56 * 86_400_000i64;
-    let tz_offset_ms = tz_offset_minutes as i64 * 60_000;
 
     let slot_meta =
         [("Morgens", "5–12 Uhr"), ("Mittags", "12–17 Uhr"), ("Abends", "17–22 Uhr"), ("Nachts", "22–5 Uhr")];
@@ -241,8 +240,7 @@ pub fn compute_best_time(reviews: &[Review], now_ms: i64, tz_offset_minutes: i32
         if t < cut {
             continue;
         }
-        let local_ms = t + tz_offset_ms;
-        let hour = (local_ms.rem_euclid(86_400_000) / 3_600_000) as u8;
+        let hour = (ts.local_millis(zone).rem_euclid(86_400_000) / 3_600_000) as u8;
 
         let slot_idx = match hour {
             5..12 => 0,
@@ -311,13 +309,11 @@ pub struct ForecastAnalysis {
     pub tone: String,
 }
 
-pub fn compute_forecast(active_cards: &[&Card], now_ms: i64, tz_offset_minutes: i32, today: u8) -> ForecastAnalysis {
-    let tz_offset_ms = tz_offset_minutes as i64 * 60_000;
-    let local_ms = now_ms + tz_offset_ms;
-    let local_days = local_ms.div_euclid(86_400_000);
+pub fn compute_forecast(active_cards: &[&Card], now_ms: i64, zone: &dyn LocalZone, today: u8) -> ForecastAnalysis {
+    let local_days = Timestamp(now_ms).local_days(zone);
 
     // Tagesgrenzen (00:00 Uhr lokaler Zeit der nächsten 7 Tage in UTC)
-    let ends: [i64; 7] = std::array::from_fn(|i| (local_days + (i as i64) + 1) * 86_400_000 - tz_offset_ms);
+    let ends: [i64; 7] = std::array::from_fn(|i| local_midnight(local_days + (i as i64) + 1, zone));
 
     let mut counts = [0u32; 7];
     for c in active_cards {
@@ -389,7 +385,7 @@ impl State {
     pub fn home_analysis(
         &self,
         now_ms: i64,
-        tz_offset_minutes: i32,
+        zone: &dyn LocalZone,
         goal_min: u32,
         days: &[f64],
         pace: f64,
@@ -398,14 +394,12 @@ impl State {
             return None;
         }
 
-        let local_ms = now_ms + tz_offset_minutes as i64 * 60_000;
-        let local_days = local_ms.div_euclid(86_400_000);
-        let today = ((local_days + 3).rem_euclid(7)) as u8;
+        let today = ((Timestamp(now_ms).local_days(zone) + 3).rem_euclid(7)) as u8;
 
         let goal = compute_goal(goal_min, days, today, pace);
         let subjects = compute_subjects(&self.reviews, now_ms);
-        let time = compute_best_time(&self.reviews, now_ms, tz_offset_minutes);
-        let forecast = compute_forecast(&self.active_cards(), now_ms, tz_offset_minutes, today);
+        let time = compute_best_time(&self.reviews, now_ms, zone);
+        let forecast = compute_forecast(&self.active_cards(), now_ms, zone, today);
 
         let (headline, action, action_deck) = if let Some(worst) = &subjects.worst {
             (subjects.text.clone(), Some(format!("{} lernen", worst.subject)), Some(worst.deck.clone()))
@@ -729,11 +723,11 @@ mod tests {
     #[test]
     fn test_compute_best_time() {
         let now_ms = 1_700_000_000_000i64;
-        let tz_offset_minutes = 60; // UTC+1
+        let tz_offset_minutes = 60i64; // UTC+1
         let tz_offset_ms = 60 * 60_000i64;
 
         // Zu wenig Reviews
-        let res1 = compute_best_time(&[], now_ms, tz_offset_minutes);
+        let res1 = compute_best_time(&[], now_ms, &tz_offset_minutes);
         assert!(res1.best.is_none());
         assert!(res1.text.contains("Noch zu wenig Daten"));
 
@@ -756,7 +750,7 @@ mod tests {
             });
         }
 
-        let res2 = compute_best_time(&reviews, now_ms, tz_offset_minutes);
+        let res2 = compute_best_time(&reviews, now_ms, &tz_offset_minutes);
         let best = res2.best.expect("best time slot expected");
         assert_eq!(best.label, "Morgens");
         assert_eq!(best.n, 20);
@@ -774,7 +768,7 @@ mod tests {
         let today = ((local_days + 3).rem_euclid(7)) as u8;
 
         // Keine fälligen Karten
-        let res1 = compute_forecast(&[], now_ms, tz_offset_minutes, today);
+        let res1 = compute_forecast(&[], now_ms, &tz_offset_minutes, today);
         assert_eq!(res1.peak, None);
         assert_eq!(res1.counts, vec![0; 7]);
         assert_eq!(res1.text, "In den nächsten 7 Tagen wird nichts fällig.");
@@ -797,7 +791,7 @@ mod tests {
             cards.push(c);
         }
         let refs: Vec<&Card> = cards.iter().collect();
-        let res2 = compute_forecast(&refs, now_ms, tz_offset_minutes, today);
+        let res2 = compute_forecast(&refs, now_ms, &tz_offset_minutes, today);
         assert_eq!(res2.counts[1], 35);
         assert_eq!(res2.peak, Some(1));
         assert!(res2.text.contains("Morgen werden 35 Karten fällig"));
