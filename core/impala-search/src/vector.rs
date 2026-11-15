@@ -6,6 +6,8 @@
 //! Die Vektorsuche nimmt eine flache Zeilen-Matrix (`&[f32]`, `n × dim`) – ein Aufruf über
 //! die WASM-Grenze statt eines Aufrufs je Vektor.
 
+use impala_sort::SortExt;
+
 /// Fehler bei falsch geformten Eingaben der Vektorsuche.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorError {
@@ -161,7 +163,7 @@ fn best_of(mut all: Vec<Scored>, k: usize) -> Vec<Scored> {
         all.select_nth_unstable_by(k - 1, order);
         all.truncate(k);
     }
-    all.sort_by(order);
+    all.sort_small_by(order);
     all
 }
 

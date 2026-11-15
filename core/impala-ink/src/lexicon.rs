@@ -8,6 +8,8 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
+
 use crate::vocab::{self, BLANK, CLASSES};
 
 /// Vorsprung (log-Wahrscheinlichkeit) der Wörterbuch-Lesung (Okt. 2026 auf Heft-Mitschriften und ScaDS am besten).
@@ -40,7 +42,7 @@ impl Lexicon {
         let mut words: Vec<&str> =
             list.split('\n').map(|w| w.strip_suffix('\r').unwrap_or(w)).filter(|w| !w.is_empty()).collect();
         if !words.is_sorted() {
-            words.sort_unstable();
+            words.sort_small();
         }
         words.dedup();
         let mut text = String::with_capacity(list.len());
@@ -235,6 +237,7 @@ impl Lexicon {
                 }
             }
             let mut scored: Vec<(f64, WordBeam)> = next.into_iter().map(|b| (log_add(b.pb, b.pnb), b)).collect();
+            // Heißer Pfad (je Zeitschritt): `sort_by` ist bei zufälliger Reihenfolge schneller als `sort_small_by`.
             scored.sort_by(|x, y| y.0.partial_cmp(&x.0).unwrap_or(std::cmp::Ordering::Equal));
             scored.truncate(BEAM_WIDTH);
             beams = scored.into_iter().map(|(_, b)| b).collect();

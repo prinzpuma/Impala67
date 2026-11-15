@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
+
 use crate::InkError;
 use crate::ctc::{self, DecodeOptions, Mode, Status};
 use crate::lexicon::Lexicon;
@@ -263,7 +265,7 @@ pub fn line_signature(strokes: &[Stroke], options: &DecodeOptions) -> String {
             format!("{}:{}:{}:{}", s.id, s.points.len(), point(s.points.first()), point(s.points.last()))
         })
         .collect();
-    parts.sort();
+    parts.sort_small();
     cyrb53(&format!("{}|{}", options_json(options), parts.join("|")))
 }
 

@@ -1,6 +1,7 @@
 //! Lückentext-Karten (Cloze): `{{c1::Antwort::Hinweis}}`. Pro Lücken-Nummer entsteht
 //! eine eigene Karte (Geschwisterkarten). Aus `==Markierungen==` werden Lücken.
 
+use impala_sort::SortExt;
 use serde::{Deserialize, Serialize};
 
 /// Eine Lücke `{{cN::Antwort(::Hinweis)?}}` mit Byte-Bereich im Text.
@@ -98,7 +99,7 @@ pub fn replace_gaps(text: &str, f: impl Fn(&Gap) -> String) -> String {
 /// Lücken-Nummern, aufsteigend und ohne Doppelte.
 pub fn indexes(text: &str) -> Vec<u32> {
     let mut v: Vec<u32> = gaps(text).iter().map(|g| g.n).collect();
-    v.sort_unstable();
+    v.sort_small();
     v.dedup();
     v
 }

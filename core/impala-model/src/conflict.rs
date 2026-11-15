@@ -11,6 +11,7 @@
 
 use std::collections::HashSet;
 
+use impala_sort::SortExt;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -130,7 +131,7 @@ pub fn reconstruct_page<'a>(events: impl IntoIterator<Item = &'a Object>, id: &s
         .into_iter()
         .filter(|ev| payload(ev).is_some_and(|p| is_id(p.get("id")) || is_id(p.get("pageId"))))
         .collect();
-    relevant.sort_by(|a, b| js::cmp(ev_time(a), ev_time(b)));
+    relevant.sort_small_by(|a, b| js::cmp(ev_time(a), ev_time(b)));
     let apply = |pg: &mut Reconstructed, src: &Object, patch: bool| {
         let present = |k: &str| if patch { src.contains_key(k) } else { src.get(k).is_some_and(js::truthy) };
         if present("title") {
@@ -668,7 +669,7 @@ pub fn legacy_copy_info(copy: &Page, pages: &[&Page]) -> LegacyInfo {
     let copy_lines = text_lines(copy.content());
     let mut others: Vec<&Page> =
         pages.iter().copied().filter(|p| p.id() != copy.id() && !p.title().starts_with(CONFLICT_PREFIX)).collect();
-    others.sort_by(|a, b| js::cmp(b.updated(), a.updated()));
+    others.sort_small_by(|a, b| js::cmp(b.updated(), a.updated()));
     let missing_in = |p: &Page| {
         let have: HashSet<&str> = text_lines(p.content()).into_iter().collect();
         copy_lines.iter().filter(|l| !have.contains(*l)).count()

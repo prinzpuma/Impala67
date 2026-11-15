@@ -4,6 +4,7 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use serde_json::Value;
 
 use crate::event::LogEvent;
@@ -14,7 +15,7 @@ use crate::types::{Card, Page, State};
 
 /// Neueste zuerst nach einem Zeitfeld (stabil).
 fn newest_first<T>(mut list: Vec<&T>, at: impl Fn(&T) -> String) -> Vec<&T> {
-    list.sort_by(|a, b| js::cmp(&at(b), &at(a)));
+    list.sort_small_by(|a, b| js::cmp(&at(b), &at(a)));
     list
 }
 
@@ -102,7 +103,7 @@ impl State {
             .filter(|p| p.parent().unwrap_or("") == id.unwrap_or(""))
             .filter(|p| !p.is_trashed() && !p.is_archived() && p.workspace() == ws)
             .collect();
-        kids.sort_by(by_sidebar);
+        kids.sort_small_by(by_sidebar);
         kids
     }
 
@@ -131,7 +132,7 @@ impl State {
             index.entry((p.parent().unwrap_or(""), p.workspace())).or_default().push(p);
         }
         for kids in index.values_mut() {
-            kids.sort_by(by_sidebar);
+            kids.sort_small_by(by_sidebar);
         }
         index
     }
@@ -235,7 +236,7 @@ impl State {
         let mut roots: Vec<&String> =
             names.iter().copied().filter(|n| !names.iter().any(|p| p != n && deck_in_tree(n, p))).collect();
         let stamp = |n: &String| self.decks.get(n).map(&at).unwrap_or_default();
-        roots.sort_by(|a, b| js::cmp(&stamp(b), &stamp(a)));
+        roots.sort_small_by(|a, b| js::cmp(&stamp(b), &stamp(a)));
         roots.into_iter().cloned().collect()
     }
 

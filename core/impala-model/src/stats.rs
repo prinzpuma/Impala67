@@ -4,6 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -200,7 +201,7 @@ pub fn compute_think_median(telemetry: &[Telemetry]) -> i64 {
         }
     }
     if vals.len() >= 12 {
-        vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        vals.sort_small_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let m = vals.len() / 2;
         let med = if vals.len() % 2 == 1 { vals[m] } else { (vals[m - 1] + vals[m]) / 2.0 };
         med.round() as i64
@@ -216,7 +217,7 @@ struct ReviewRow<'a> {
 
 pub fn compute_retention(all_reviews: &[Review], filtered_review_ids: &HashSet<&str>) -> RetentionStats {
     let mut sorted: Vec<&Review> = all_reviews.iter().filter(|r| r.grade.unwrap_or(0.0) > 0.0).collect();
-    sorted.sort_by(|a, b| a.t().cmp(b.t()));
+    sorted.sort_small_by(|a, b| a.t().cmp(b.t()));
 
     let mut previous: HashMap<&str, i64> = HashMap::new();
     let mut rows: Vec<ReviewRow> = Vec::with_capacity(sorted.len());
@@ -374,7 +375,7 @@ pub fn compute_stats(
             DeckRow { name: row.name, n: row.n, due: row.due, reif: row.reif, rate }
         })
         .collect();
-    decks.sort_by(|a, b| b.due.cmp(&a.due).then_with(|| a.name.cmp(&b.name)));
+    decks.sort_small_by(|a, b| b.due.cmp(&a.due).then_with(|| a.name.cmp(&b.name)));
 
     let mut per_day: HashMap<String, usize> = HashMap::new();
     for r in &filtered_reviews {
@@ -423,7 +424,7 @@ pub fn compute_stats(
     }
 
     let mut keys: Vec<String> = per_day.keys().cloned().collect();
-    keys.sort();
+    keys.sort_small();
     let mut streak_longest = 0;
     let mut run = 0;
     let mut prev_day: Option<i64> = None;
@@ -467,7 +468,7 @@ pub fn compute_stats(
             }
         })
         .collect();
-    hard_cards.sort_by_key(|a| std::cmp::Reverse(a.lapses));
+    hard_cards.sort_small_by_key(|a| std::cmp::Reverse(a.lapses));
     hard_cards.truncate(5);
 
     let think_ms = options.think_ms.unwrap_or_else(|| compute_think_median(telemetry));

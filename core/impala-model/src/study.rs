@@ -11,6 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use impala_srs::Timestamp;
 use serde_json::Value;
 
@@ -138,7 +139,7 @@ impl State {
             })
             .collect();
         let sorted = |mut v: Vec<&'s Card>| {
-            v.sort_by(by_due);
+            v.sort_small_by(by_due);
             v
         };
         let learn_all: Vec<&Card> =
@@ -218,7 +219,7 @@ impl State {
         let mut rev_new: Vec<&Card> = limited_rev.iter().chain(limited_new.iter()).copied().collect();
         if o.mix {
             let day = &o.now.to_iso()[..10];
-            rev_new.sort_by_key(|c| mix_key(c.id(), day));
+            rev_new.sort_small_by_key(|c| mix_key(c.id(), day));
         }
         let mut due_now: Vec<&Card> = learn_due.iter().chain(rev_new.iter()).copied().collect();
         if due_now.is_empty() && !ahead_free.is_empty() {

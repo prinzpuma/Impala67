@@ -2,6 +2,7 @@
 //! Sucht über normalisierte Stichwörter, IDs und Bereichs-IDs.
 //! Formatierte UI-Texte (Labels, Beschreibungen, Icons) verbleiben in der jeweiligen App.
 
+use impala_sort::SortExt;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::settings_catalog::DEFAULT_CATALOG;
@@ -115,7 +116,7 @@ impl SettingsIndex {
             hits.push((SettingsHit { id: item.id.clone(), section: item.section.clone(), score }, item.title.clone()));
         }
 
-        hits.sort_by(|a, b| b.0.score.cmp(&a.0.score).then_with(|| a.1.cmp(&b.1)));
+        hits.sort_small_by(|a, b| b.0.score.cmp(&a.0.score).then_with(|| a.1.cmp(&b.1)));
         hits.truncate(limit);
         hits.into_iter().map(|(h, _)| h).collect()
     }

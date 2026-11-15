@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
+
 use crate::fuzzy::FuzzyIndex;
 use crate::text::{js_trim, lower, slice_utf16, utf16_len, utf16_pos};
 
@@ -157,7 +159,7 @@ impl NoteIndex {
                 Some((*e, score, first, None))
             })
             .collect();
-        exact.sort_by(by_rank);
+        exact.sort_small_by(by_rank);
         exact.truncate(MAX_HITS);
         if exact.len() < MAX_HITS && utf16_len(js_trim(&q)) >= 3 {
             let skip: Vec<&str> = exact.iter().map(|h| h.0.doc.id.as_str()).collect();
@@ -174,7 +176,7 @@ impl NoteIndex {
                     (e, h.score + if title_hit { 10 } else { 0 }, first, Some(h.forms))
                 })
                 .collect();
-            fuzzy.sort_by(by_rank);
+            fuzzy.sort_small_by(by_rank);
             fuzzy.truncate(MAX_HITS - exact.len());
             exact.extend(fuzzy);
         }

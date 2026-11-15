@@ -1,6 +1,8 @@
 //! Striche einer Seite → Textzeilen: Filtern, Zeilentrennung, Reihenfolge in der Zeile, Begradigen.
 //! Verhalten wie `web/handwriting-preprocessor.js`.
 
+use impala_sort::SortExt;
+
 /// Punkt in Seiten-Einheiten.
 pub type Point = [f64; 2];
 
@@ -152,7 +154,7 @@ pub fn segment_lines(strokes: &[Stroke]) -> Vec<Line> {
     let is_small = |b: &Bbox| b.h() < ref_h * 0.4 && b.w() < ref_h;
     // 1) Buchstabengroße Striche bilden die Zeilen
     let mut main: Vec<usize> = (0..items.len()).filter(|&k| !is_small(&items[k].bbox)).collect();
-    main.sort_by(|&a, &b| items[a].bbox.cy().total_cmp(&items[b].bbox.cy()));
+    main.sort_small_by(|&a, &b| items[a].bbox.cy().total_cmp(&items[b].bbox.cy()));
     for k in main {
         let b = &items[k].bbox;
         let r = match nearest(&rows, b, ref_h * 0.75, false) {
@@ -182,7 +184,7 @@ pub fn segment_lines(strokes: &[Stroke]) -> Vec<Line> {
         }
     }
 
-    rows.sort_by(|a, b| a.bbox.min_y.total_cmp(&b.bbox.min_y));
+    rows.sort_small_by(|a, b| a.bbox.min_y.total_cmp(&b.bbox.min_y));
     rows.into_iter()
         .map(|r| {
             let line_items: Vec<&Item> = r.items.iter().map(|&k| &items[k]).collect();
@@ -198,7 +200,7 @@ fn sort_line_items(items: &[&Item]) -> Vec<usize> {
         return items.iter().map(|it| it.idx).collect();
     }
     let mut sorted = items.to_vec();
-    sorted.sort_by(|a, b| a.bbox.min_x.total_cmp(&b.bbox.min_x));
+    sorted.sort_small_by(|a, b| a.bbox.min_x.total_cmp(&b.bbox.min_x));
     struct Cluster {
         bbox: Bbox,
         idx: Vec<usize>,
@@ -218,11 +220,11 @@ fn sort_line_items(items: &[&Item]) -> Vec<usize> {
             None => clusters.push(Cluster { bbox: *b, idx: vec![it.idx] }),
         }
     }
-    clusters.sort_by(|a, b| a.bbox.min_x.total_cmp(&b.bbox.min_x));
+    clusters.sort_small_by(|a, b| a.bbox.min_x.total_cmp(&b.bbox.min_x));
     clusters
         .into_iter()
         .flat_map(|mut cl| {
-            cl.idx.sort_unstable();
+            cl.idx.sort_small();
             cl.idx
         })
         .collect()
@@ -294,7 +296,7 @@ fn estimate_orientation(strokes: &[Stroke]) -> f64 {
 }
 
 fn median(mut values: Vec<f64>) -> f64 {
-    values.sort_by(f64::total_cmp);
+    values.sort_small_by(f64::total_cmp);
     let mid = values.len() / 2;
     if values.len() % 2 == 1 { values[mid] } else { (values[mid - 1] + values[mid]) / 2.0 }
 }

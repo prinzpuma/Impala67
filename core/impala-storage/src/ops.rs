@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use impala_sort::SortExt;
 use serde_json::Value;
 
 use crate::checkpoint::{self, HeftPart, Loaded};
@@ -128,7 +129,7 @@ pub trait StorageExt: Storage {
         let still: HashSet<&str> = stay.iter().filter_map(|ev| heft_blob_hash(ev)).collect();
         let mut dropped_blobs: Vec<String> =
             gone.iter().filter_map(|ev| heft_blob_hash(ev)).filter(|h| !still.contains(h)).map(str::to_owned).collect();
-        dropped_blobs.sort();
+        dropped_blobs.sort_small();
         dropped_blobs.dedup();
         // Ohne Heft-Zustand bleibt der Checkpoint-Teil (der Speicher macht daraus eine Kopie);
         // mit ihm ist sicher, dass kein Heft das Bild zeigt, und der Teil fällt gleich mit.

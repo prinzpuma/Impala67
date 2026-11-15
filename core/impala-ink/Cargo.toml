@@ -18,6 +18,7 @@ default = []
 onnx = ["dep:tract-onnx"]
 
 [dependencies]
+impala-sort = { path = "../impala-sort" }
 tract-onnx = { version = "0.23", optional = true }
 
 [dev-dependencies]

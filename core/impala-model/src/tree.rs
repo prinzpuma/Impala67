@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use impala_sort::SortExt;
 use serde_json::{Value, json};
 
 use crate::js::{self, Object};
@@ -273,7 +274,7 @@ impl State {
             }
         }
         let mut names: Vec<String> = set.into_iter().collect();
-        names.sort_by(|a, b| {
+        names.sort_small_by(|a, b| {
             let (oa, ob) = (self.decks.get(a).and_then(|d| d.order), self.decks.get(b).and_then(|d| d.order));
             (b == "Standard")
                 .cmp(&(a == "Standard"))

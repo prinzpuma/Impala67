@@ -3,6 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -250,7 +251,7 @@ pub struct ArchiveTreeResult {
 fn archived_children_of<'a>(state: &'a State, parent_id: &str) -> Vec<&'a Page> {
     let mut kids: Vec<&'a Page> =
         state.child_pages_of(Some(parent_id)).into_iter().filter(|c| c.is_archived() && !c.is_trashed()).collect();
-    kids.sort_by(|a, b| sort_key_of(a).total_cmp(&sort_key_of(b)));
+    kids.sort_small_by(|a, b| sort_key_of(a).total_cmp(&sort_key_of(b)));
     kids
 }
 
@@ -458,7 +459,7 @@ pub fn gn_shelf(state: &State, folder_id: Option<&str>, filter: &str, query: &st
                 ));
             }
         }
-        combined.sort_by(|a, b| a.0.total_cmp(&b.0));
+        combined.sort_small_by(|a, b| a.0.total_cmp(&b.0));
     } else {
         for f in state.gn_folders.values() {
             if f.parent() == valid_folder.as_deref() {
@@ -480,7 +481,7 @@ pub fn gn_shelf(state: &State, folder_id: Option<&str>, filter: &str, query: &st
                 ));
             }
         }
-        combined.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        combined.sort_small_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     }
 
     let ancestors = gn_ancestors(state, valid_folder.as_deref()).into_iter().filter_map(|f| f.id.clone()).collect();
@@ -517,7 +518,7 @@ pub struct SidebarTreeRowData {
 pub fn sidebar_tree_rows(state: &State) -> Vec<SidebarTreeRowData> {
     let mut rows = Vec::new();
     let mut active = state.active_pages();
-    active.sort_by(|a, b| b.updated().cmp(a.updated()));
+    active.sort_small_by(|a, b| b.updated().cmp(a.updated()));
     let favorites: Vec<&Page> = active.iter().copied().filter(|p| page_favorite(p)).collect();
     let parent_ids: HashSet<&str> = active.iter().filter_map(|p| p.parent()).collect();
 

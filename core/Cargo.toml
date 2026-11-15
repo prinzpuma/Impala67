@@ -18,6 +18,7 @@ members = [
     "impala-net",
     "impala-scan",
     "impala-search",
+    "impala-sort",
     "impala-srs",
     "impala-storage",
     "impala-sync",

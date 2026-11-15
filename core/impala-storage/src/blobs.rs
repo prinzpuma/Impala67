@@ -7,6 +7,7 @@
 
 use std::collections::HashSet;
 
+use impala_sort::SortExt;
 use serde_json::Value;
 
 use crate::Error;
@@ -166,7 +167,7 @@ pub fn heft_versions(keys: &[String], page: &str) -> Vec<HeftVersion> {
             Some(HeftVersion { key: k.clone(), t_ms, rev })
         })
         .collect();
-    out.sort_by_key(|v| std::cmp::Reverse(v.t_ms));
+    out.sort_small_by_key(|v| std::cmp::Reverse(v.t_ms));
     out
 }
 

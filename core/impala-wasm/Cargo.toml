@@ -12,6 +12,7 @@ workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+impala-sort = { path = "../impala-sort" }
 impala-sync = { path = "../impala-sync" }
 impala-crypto = { path = "../impala-crypto", default-features = false }
 impala-drive = { path = "../impala-drive", default-features = false }

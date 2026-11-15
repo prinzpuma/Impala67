@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use impala_srs::{LocalZone, Timestamp, local_midnight};
 use serde::{Deserialize, Serialize};
 
@@ -168,13 +169,13 @@ pub fn compute_subjects(reviews: &[Review], now_ms: i64) -> SubjectsAnalysis {
         let delta = (now_rate * 100.0).round() as i32 - (before_rate * 100.0).round() as i32;
 
         let mut sorted_decks: Vec<(&String, &usize)> = c.decks.iter().collect();
-        sorted_decks.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        sorted_decks.sort_small_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
         let deck = sorted_decks.first().map(|(d, _)| (*d).clone()).unwrap_or_else(|| subj.clone());
 
         rows.push(SubjectRow { subject: subj.clone(), now: now_rate, before: before_rate, delta, deck });
     }
 
-    rows.sort_by(|a, b| a.delta.cmp(&b.delta).then_with(|| a.subject.cmp(&b.subject)));
+    rows.sort_small_by(|a, b| a.delta.cmp(&b.delta).then_with(|| a.subject.cmp(&b.subject)));
     let worst = rows.iter().find(|r| r.delta <= -8).cloned();
     let text = if rows.is_empty() {
         format!(
@@ -266,8 +267,9 @@ pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) 
         .collect();
 
     let mut valid: Vec<&TimeSlot> = slots.iter().filter(|s| s.n >= MIN_SLOT_REVIEWS as u32).collect();
-    valid
-        .sort_by(|a, b| b.rate.unwrap_or(0.0).partial_cmp(&a.rate.unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal));
+    valid.sort_small_by(|a, b| {
+        b.rate.unwrap_or(0.0).partial_cmp(&a.rate.unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let best = if valid.len() >= 2 {
         let first_pct = (valid[0].rate.unwrap() * 100.0).round() as i32;
@@ -603,7 +605,7 @@ pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -
 
     let mut problem_candidates: Vec<(&String, &(u64, u64))> =
         dwell.iter().filter(|(id, v)| live_pages.contains(*id) && v.0 >= 5 * 60_000).collect();
-    problem_candidates.sort_by(|a, b| {
+    problem_candidates.sort_small_by(|a, b| {
         let score_b = (b.1).0 + (b.1).1 * 60_000;
         let score_a = (a.1).0 + (a.1).1 * 60_000;
         score_b.cmp(&score_a).then_with(|| a.0.cmp(b.0))

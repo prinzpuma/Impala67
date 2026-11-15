@@ -10,6 +10,7 @@ description = "Sync-Protokoll v4: Event-Kompaktierung, Wire-Format, Chunking, Pa
 workspace = true
 
 [dependencies]
+impala-sort = { path = "../impala-sort" }
 impala-crypto = { path = "../impala-crypto", default-features = false }
 impala-net = { path = "../impala-net", default-features = false }
 # preserve_order: Schlüsselreihenfolge wie JSON.stringify; float_roundtrip: Zahlen exakt wie JSON.parse.

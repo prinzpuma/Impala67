@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 use base64::Engine;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
+use impala_sort::SortExt;
 use serde_json::Value;
 
 use crate::event::{self, Object};
@@ -53,7 +54,7 @@ pub fn export_all<S: Storage + ?Sized>(storage: &S, opts: &ExportOptions) -> Res
     let order = compaction::keep_indices(&all, None).unwrap_or_else(|| {
         // Ohne Kompaktierung (unbekannte Event-Form) trotzdem dieselbe Reihenfolge.
         let mut order: Vec<usize> = (0..all.len()).collect();
-        order.sort_by(|&a, &b| {
+        order.sort_small_by(|&a, &b| {
             js::cmp(event::time(&all[a]), event::time(&all[b])).then(event::seq(&all[a]).cmp(&event::seq(&all[b])))
         });
         order

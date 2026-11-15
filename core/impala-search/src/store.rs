@@ -9,6 +9,7 @@
 //! ([`f32_from_le_bytes`] für deren Bytes); als JSON gelesen gilt ein Zahlen-Array, aber auch
 //! die Objektform `{"0":…, "1":…}`, die `JSON.stringify` aus einem `Float32Array` macht.
 
+use impala_sort::SortExt;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::chunk::chunk;
@@ -136,7 +137,7 @@ fn opt_vec<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<f32>>, D::Error
                 let Ok(i) = k.parse::<usize>() else { continue };
                 pairs.push((i, x.map_or(f32::NAN, |x| x as f32)));
             }
-            pairs.sort_by_key(|p| p.0);
+            pairs.sort_small_by_key(|p| p.0);
             // Lücken machen den Vektor ungültig statt ihn zu verschieben.
             if pairs.iter().enumerate().any(|(n, p)| p.0 != n) {
                 return Ok(Some(vec![f32::NAN]));

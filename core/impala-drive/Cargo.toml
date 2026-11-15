@@ -15,6 +15,7 @@ default = ["client"]
 client = ["impala-net/client"]
 
 [dependencies]
+impala-sort = { path = "../impala-sort" }
 impala-crypto = { path = "../impala-crypto", default-features = false }
 impala-net = { path = "../impala-net", default-features = false }
 impala-storage = { path = "../impala-storage", default-features = false }

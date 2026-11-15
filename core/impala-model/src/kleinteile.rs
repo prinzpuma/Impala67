@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use impala_sort::SortExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -73,7 +74,7 @@ fn grade_from_record(id: &str, g: &Grade) -> Option<GradeInfo> {
 /// Alle gültigen, nicht gelöschten Noten, neueste zuerst (`date || created`).
 pub fn all_grades(state: &State) -> Vec<GradeInfo> {
     let mut out: Vec<GradeInfo> = state.grades.iter().filter_map(|(id, g)| grade_from_record(id, g)).collect();
-    out.sort_by(|a, b| {
+    out.sort_small_by(|a, b| {
         let da = if !a.date.is_empty() { a.date.as_str() } else { a.created.as_str() };
         let db = if !b.date.is_empty() { b.date.as_str() } else { b.created.as_str() };
         db.cmp(da)
@@ -111,7 +112,9 @@ pub fn grades_by_subject(state: &State) -> Vec<SubjectGrades> {
             SubjectGrades { subject, grades, average }
         })
         .collect();
-    out.sort_by(|a, b| a.subject.to_lowercase().cmp(&b.subject.to_lowercase()).then_with(|| a.subject.cmp(&b.subject)));
+    out.sort_small_by(|a, b| {
+        a.subject.to_lowercase().cmp(&b.subject.to_lowercase()).then_with(|| a.subject.cmp(&b.subject))
+    });
     out
 }
 
@@ -190,7 +193,7 @@ pub struct ArticleChoice {
 /// Gespeicherte Tagesartikel, neueste zuerst (höchstens 30).
 pub fn sorted_home_articles(state: &State) -> Vec<&HomeArticle> {
     let mut list: Vec<&HomeArticle> = state.home_articles.values().collect();
-    list.sort_by(|a, b| {
+    list.sort_small_by(|a, b| {
         let ca = a.created.as_deref().unwrap_or("");
         let cb = b.created.as_deref().unwrap_or("");
         cb.cmp(ca)
@@ -271,7 +274,7 @@ pub fn choose_article_notes(
     }
 
     let mut subj_list: Vec<(&str, SubjGroup)> = by_subject.into_iter().collect();
-    subj_list.sort_by(|(a, x), (b, y)| {
+    subj_list.sort_small_by(|(a, x), (b, y)| {
         let lf_a = u8::from(last_focus.contains(a));
         let lf_b = u8::from(last_focus.contains(b));
         let fr_a = if x.fresh > 0 { 0u8 } else { 1u8 };
@@ -291,7 +294,9 @@ pub fn choose_article_notes(
     };
 
     let mut in_focus: Vec<&Usable<'_>> = usable.iter().filter(|n| n.item.subject == *focus_name).collect();
-    in_focus.sort_by(|a, b| u8::from(a.used).cmp(&u8::from(b.used)).then_with(|| b.item.updated.cmp(&a.item.updated)));
+    in_focus.sort_small_by(|a, b| {
+        u8::from(a.used).cmp(&u8::from(b.used)).then_with(|| b.item.updated.cmp(&a.item.updated))
+    });
 
     let all_candidates = !has_active;
     let main: Vec<&str> = in_focus
@@ -360,7 +365,7 @@ fn chat_sort_ts(c: &Value) -> &str {
 
 /// Sortiert eine Liste von Chat-Sitzungen absteigend nach `updated || created`.
 pub fn sort_chat_values(mut list: Vec<Value>) -> Vec<Value> {
-    list.sort_by(|a, b| chat_sort_ts(b).cmp(chat_sort_ts(a)));
+    list.sort_small_by(|a, b| chat_sort_ts(b).cmp(chat_sort_ts(a)));
     list
 }
 
@@ -441,7 +446,7 @@ pub fn merged_chat_sessions(state: &State, local_raw: &[Value], now: &str) -> Ve
 /// Nicht gelöschte Chat-Sitzungen des Zustands, absteigend nach `updated || created` sortiert.
 pub fn sorted_state_chats(state: &State) -> Vec<&ChatSession> {
     let mut out: Vec<&ChatSession> = state.chat_sessions.values().filter(|c| !c.is_deleted()).collect();
-    out.sort_by(|a, b| {
+    out.sort_small_by(|a, b| {
         let ta = a.updated.as_deref().filter(|s| !s.is_empty()).or(a.created.as_deref()).unwrap_or("");
         let tb = b.updated.as_deref().filter(|s| !s.is_empty()).or(b.created.as_deref()).unwrap_or("");
         tb.cmp(ta)

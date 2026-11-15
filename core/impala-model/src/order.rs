@@ -9,6 +9,7 @@
 
 use std::cmp::Ordering;
 
+use impala_sort::SortExt;
 use indexmap::IndexMap;
 use serde_json::Value;
 
@@ -157,9 +158,9 @@ pub fn times_to_object(t: &OrderTimes) -> Object {
 pub fn sort_events(events: &mut [LogEvent]) {
     // Meist ASCII-Zeitstempel: dann genügt der Byte-Vergleich (gleiche Ordnung wie UTF-16).
     if events.iter().all(|e| e.t.is_ascii()) {
-        events.sort_by(|a, b| a.t.as_bytes().cmp(b.t.as_bytes()).then(a.seq.cmp(&b.seq)));
+        events.sort_small_by(|a, b| a.t.as_bytes().cmp(b.t.as_bytes()).then(a.seq.cmp(&b.seq)));
     } else {
-        events.sort_by(compare_events);
+        events.sort_small_by(compare_events);
     }
 }
 

@@ -12,6 +12,7 @@ use std::collections::HashSet;
 
 use impala_crypto::{OsRandom, Random, gzip, hex_encode};
 use impala_net::{HttpClient, Request, Response, join_all};
+use impala_sort::SortExt;
 use impala_storage::checkpoint::is_checkpoint_key;
 use impala_storage::event::{redact_secrets, strip_local_flags};
 use impala_storage::js::iso_from_ms;
@@ -420,7 +421,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
     ) -> Result<(), DriveError> {
         let mut remote_blobs: Vec<&DriveFile> =
             files.iter().filter(|f| matches!(f.kind(), FileKind::Blob { .. })).collect();
-        remote_blobs.sort_by(|a, b| b.modified_time.cmp(&a.modified_time));
+        remote_blobs.sort_small_by(|a, b| b.modified_time.cmp(&a.modified_time));
         let mut remote_hashes: HashSet<String> = remote_blobs.iter().filter_map(|f| blob_file_hash(f)).collect();
         let mut local_order = self.store.blob_ids().await?;
         let mut local: HashSet<String> = local_order.iter().cloned().collect();

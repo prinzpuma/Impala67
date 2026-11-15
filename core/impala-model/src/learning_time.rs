@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
 use impala_srs::{LocalZone, Timestamp, day_key_of};
 use serde::{Deserialize, Serialize};
 
@@ -160,7 +161,7 @@ pub fn merged_seconds(sessions: &[LearningSessionData]) -> u64 {
         }
     }
 
-    intervals.sort_by_key(|&(start, _)| start);
+    intervals.sort_small_by_key(|&(start, _)| start);
 
     let mut total_ms: i64 = 0;
     let mut cur: Option<(i64, i64)> = None;

@@ -18,6 +18,8 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
+use impala_sort::SortExt;
+
 use crate::event::{Body, Event, Patch, Snapshot};
 
 pub const KEEP_CONTENT_VERSIONS: usize = 10;
@@ -40,7 +42,7 @@ pub fn compact(events: &[Event]) -> Vec<usize> {
 /// Wie [`compact`]; mit `blobs` fallen auch Bilder weg, die kein Heft mehr zeigt.
 pub fn compact_with(events: &[Event], blobs: Option<&BlobKeep>) -> Vec<usize> {
     let mut order: Vec<usize> = (0..events.len()).collect();
-    order.sort_by(|&a, &b| js_cmp(&events[a].t, &events[b].t).then(events[a].seq.cmp(&events[b].seq)));
+    order.sort_small_by(|&a, &b| js_cmp(&events[a].t, &events[b].t).then(events[a].seq.cmp(&events[b].seq)));
 
     let deleted = Deletions::of(events, &order);
     let snapshots = Snapshots::of(events, &order);
@@ -201,7 +203,7 @@ impl Snapshots {
             _ => "",
         };
         let mut articles: Vec<usize> = slots.iter().filter(|s| s.0).map(|s| s.1).collect();
-        articles.sort_by(|&a, &b| js_cmp(created(b), created(a)));
+        articles.sort_small_by(|&a, &b| js_cmp(created(b), created(a)));
         articles.truncate(ARTICLE_KEEP);
         let mut winners = vec![false; events.len()];
         let mut kept_articles = vec![false; events.len()];

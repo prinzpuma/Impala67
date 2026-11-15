@@ -11,6 +11,8 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
+
 use crate::embed::{EmbedError, Embedder, EmbeddingIdentity};
 use crate::store::VecRecord;
 use crate::text::{FxMap, lower, slice_utf16, utf16_len};
@@ -143,7 +145,7 @@ fn count_terms(lc: &str, vocab: &mut FxMap<String, u32>) -> (Vec<(u32, u32)>, u3
         counts.push((id, 1));
         len += 1;
     }
-    counts.sort_unstable_by_key(|c| c.0);
+    counts.sort_small_by_key(|c| c.0);
     counts.dedup_by(|b, a| {
         let same = a.0 == b.0;
         if same {
@@ -232,6 +234,7 @@ pub fn rank_rag(
             (score, semantic_raw, lex, ci)
         })
         .collect();
+    // Alle Chunks in zufälliger Reihenfolge: `sort_by` ist hier schneller als `sort_small_by`.
     hits.sort_by(|a, b| b.0.total_cmp(&a.0));
 
     // Höchstens zwei Chunks je Seite; Seiten sind 0..pages.len() durchnummeriert.
@@ -357,7 +360,7 @@ pub fn related(index: &VectorIndex, pages: &HashMap<String, PageMeta>, page_id: 
             (score >= RELATED_MIN).then(|| RelatedHit { page_id: id.clone(), score })
         })
         .collect();
-    hits.sort_by(|a, b| b.score.total_cmp(&a.score));
+    hits.sort_small_by(|a, b| b.score.total_cmp(&a.score));
     hits.truncate(k);
     hits
 }

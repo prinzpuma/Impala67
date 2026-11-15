@@ -10,6 +10,7 @@ description = "Datenmodell: Event-Typen, Reducer (Event → Zustand), Checkpoint
 workspace = true
 
 [dependencies]
+impala-sort = { path = "../impala-sort" }
 impala-heft = { path = "../impala-heft" }
 impala-markdown = { path = "../impala-markdown" }
 impala-search = { path = "../impala-search", default-features = false }

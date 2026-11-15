@@ -14,6 +14,7 @@ use impala_model::study::StudyOptions;
 use impala_model::tree::deck_in_tree;
 use impala_model::types::Page;
 use impala_model::{CheckpointSave, LogEvent, Merge3, Model, merge3, migrate, touched};
+use impala_sort::SortExt;
 use impala_srs::Timestamp;
 use impala_storage::{Blob, CheckpointSlot, Error, LogInfo, Object, PartKind, Storage, Write};
 use js_sys::Function;
@@ -292,7 +293,7 @@ impl ModelCore {
             .enumerate()
             .filter_map(|(i, o)| LogEvent::from_object(o).map(|e| (i, e)))
             .collect();
-        list.sort_by(|a, b| impala_model::order::compare_events(&a.1, &b.1));
+        list.sort_small_by(|a, b| impala_model::order::compare_events(&a.1, &b.1));
         let mut out = Vec::with_capacity(list.len());
         for (i, ev) in list {
             let probe = ev.clone();

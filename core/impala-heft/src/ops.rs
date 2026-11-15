@@ -8,6 +8,7 @@
 use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 
+use impala_sort::SortExt;
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::Value;
@@ -279,7 +280,7 @@ pub(crate) fn reorder<T>(items: &mut Vec<T>, order: &[String], id: impl Fn(&T) -
     }
     let mut keyed: Vec<(usize, T)> =
         items.drain(..).map(|t| (pos.get(id(&t)).copied().unwrap_or(usize::MAX), t)).collect();
-    keyed.sort_by_key(|(rank, _)| *rank);
+    keyed.sort_small_by_key(|(rank, _)| *rank);
     items.extend(keyed.into_iter().map(|(_, t)| t));
 }
 
@@ -605,7 +606,7 @@ impl Hefte {
             .filter_map(|i| i.r#ref.as_deref())
             .filter(|r| !r.is_empty())
             .collect();
-        out.sort_unstable();
+        out.sort_small();
         out.dedup();
         out
     }
