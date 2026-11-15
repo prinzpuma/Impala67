@@ -9,5 +9,5 @@ Du setzt eine fertig geplante Änderung im Impala67-Repo um. Halte dich an `AGEN
 - Nur die genannten Dateien/Bereiche ändern; bei Unklarheit abbrechen und zurückmelden statt raten.
 - Große Dateien nur per Grep + Zeilenausschnitt lesen.
 - Danach betroffene Einzeltests laufen lassen: `node --test test/<name>.test.mjs`.
-- Geänderte gecachte Dateien in `web/` → Cache-Version im Service-Worker prüfen.
+- Neue Dateien in `web/` → in `APP_FILES` im Service Worker eintragen (Cache-Version nie von Hand ändern).
 - Rückmeldung: max. ~10 Zeilen – was geändert wurde (Datei:Zeile), Testergebnis, offene Punkte.

@@ -3,7 +3,7 @@
 Gilt für alle, die ein Crate unter `core/` schreiben (auch Subagents). Projektweite Regeln: `AGENTS.md`, `CLAUDE.md`, Plan: `docs/NATIV-PLAN.md`.
 
 ## Ziel
-Die Nicht-UI-Logik der App (heute JS in `web/`) wird als Rust-Kern neu geschrieben, damit native Apps (Swift/Kotlin über UniFFI, Windows, Linux) und später die PWA (WASM) ihn nutzen. DOM, Eingabe-Ereignisse und Rendering bleiben in JS.
+Die ganze Nicht-UI-Logik liegt im Rust-Kern; die PWA nutzt ihn als WASM, Android und iPad über UniFFI (`impala-ffi`). DOM, Eingabe-Ereignisse und Rendering bleiben in den Oberflächen. Neue Logik kommt direkt hierher, nicht erst nach JS.
 
 ## Grundsätze
 - **Neu schreiben, nicht übersetzen**: idiomatisches Rust, klare Typen statt loser Objekte, `enum`s statt String-Flags, `Result` statt Ausnahmen, reine Funktionen ohne versteckten Zustand. Unnötiges weglassen. Maßstab ist das **Verhalten**, nicht die JS-Struktur.
