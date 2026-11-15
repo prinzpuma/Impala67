@@ -23,7 +23,7 @@ Vor jeder Änderung klären, wo sie landen muss:
   - PWA: `npm run build:core`, `web/core/` + `core/wasm-build.json` committen (FFI-Änderungen ändern den WASM-Stempel nicht).
   - Android: `npm run build:android-core` (bei Änderungen in `core/impala-ffi`).
   - iPad: `npm run build:ios-core`, erzeugte Swift-Bindings (`ios/Impala67/Core/Generated/`, `ios/Bindings/`) committen.
-- **Nur Oberfläche einer Version** → nur dort ändern. Ist es ein Verhalten, das die PWA vorgibt, den Abgleich in `docs/PARITAET.md` festhalten (eine Lückenliste für Android und iPad; erledigte Zeilen löschen). Neue PWA-Funktionen dort als offene Lücke eintragen, statt sie ungefragt in allen Apps nachzubauen.
+- **Nur Oberfläche einer Version** → nur dort ändern. Ist es ein Verhalten, das die PWA vorgibt, den Abgleich im Funktionskatalog `docs/funktionen.json` festhalten (daraus erzeugt `npm run check:paritaet -- --schreiben` die Lückenliste `docs/PARITAET.md`). Neue PWA-Funktionen dort als offene Lücke eintragen, statt sie ungefragt in allen Apps nachzubauen. Geschlossene Lücke: Status im Katalog löschen und die Umsetzung im nativen Code mit `// funktion: <id>` markieren. Langsame Abläufe bekommen im Katalog ein Zeitbudget (`leistung`) mit dem Messpunkt-Namen je Plattform; Logik-Optimierungen gehören in den Kern.
 - **Gespeicherte oder synchronisierte Formate** → müssen zwischen allen Versionen austauschbar bleiben (eine ältere App darf neuere Daten nicht zerstören).
 - **Icons** kommen für alle aus `web/icons.svg` (`npm run android:icons`, `npm run ios:icons`).
 

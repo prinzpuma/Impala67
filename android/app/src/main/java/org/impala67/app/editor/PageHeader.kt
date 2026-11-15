@@ -41,6 +41,7 @@ import org.impala67.app.ui.theme.Space
 import org.impala67.app.ui.theme.Radius
 import uniffi.impala_ffi.PageSummary
 
+// funktion: shell.seitenkopf
 /** Zurück + Brotkrumen (render.js `breadcrumbHtml`): Arbeitsbereich / Eltern … / aktuelle Seite. */
 @Composable
 internal fun Breadcrumbs(

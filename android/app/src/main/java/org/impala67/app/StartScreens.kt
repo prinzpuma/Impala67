@@ -29,6 +29,7 @@ import org.impala67.app.ui.theme.TextSize
 /** Nach so vielen ms Start zeigt die App einen Hinweis (index.html `#bootSplash`: 12 s). */
 internal const val SLOW_START_MS = 12_000L
 
+// funktion: shell.boot-splash
 /** Kern lädt noch: Ladeanzeige, nach [SLOW_START_MS] mit Hinweis. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

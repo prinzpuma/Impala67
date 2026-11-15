@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// „↙ N Rückverweise“ unter dem Titel (render.js `backlinksChipHtml`): Antippen klappt die Liste auf.
+// funktion: shell.seitenkopf
 struct BacklinksChip: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
