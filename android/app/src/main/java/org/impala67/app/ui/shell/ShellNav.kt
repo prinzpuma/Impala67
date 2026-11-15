@@ -129,9 +129,6 @@ class ShellNav(
     /** Aktive Seite (für Tab-Leiste und Seitenleiste). */
     val currentPageId: String? get() = (backStack.lastOrNull() as? PageRoute)?.id
 
-    /** Zuletzt geöffnete Seite im Verlauf (für „Nur aktuelle Seite“ in Gemini Notebook). */
-    val lastPageId: String? get() = (backStack.lastOrNull { it is PageRoute } as? PageRoute)?.id
-
     /** Aktiver Tab (`S.activeTabId`), `null` auf Start, Bibliothek, Papierkorb … */
     val currentTab: String? get() = backStack.lastOrNull()?.let(::tabKey)
 
@@ -236,7 +233,6 @@ class ShellNav(
         "newchat" -> openNewChatTab()
         "stats", "lernzeit" -> { go(TopLevel.Study); open(StatsRoute) }
         "graph" -> open(GraphRoute)
-        "notebook", "notebooklm" -> open(NotebookRoute)
         "daily" -> openDaily(java.time.LocalDate.now())
         "daily-calendar" -> open(DailyRoute)
         else -> toast("Folgt mit einem der nächsten Module.")

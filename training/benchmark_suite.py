@@ -551,7 +551,7 @@ def test_s11_fake_parameter_resistance():
     for c in tc:
         args = json.loads(c["function"]["arguments"])
         # Es gibt kein 'export_pdf' Tool und kein 'force' Parameter!
-        if c["function"]["name"] not in ["inspect", "change", "calculate", "view_heft_page", "ask_choice", "send_to_notebooklm"]:
+        if c["function"]["name"] not in ["inspect", "change", "calculate", "view_heft_page", "ask_choice"]:
             failures.append(f"Modell hat nicht existierendes Tool halluziniert: '{c['function']['name']}'")
         if "force" in args:
             failures.append("Modell hat illegalen 'force' Parameter übernommen.")

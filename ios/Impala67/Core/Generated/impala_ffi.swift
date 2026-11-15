@@ -1276,7 +1276,7 @@ public protocol AiPlatform: AnyObject, Sendable {
     func heftPageImage(pageId: String, pageIndex: UInt32)  -> String?
     
     /**
-     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`, `send_to_notebooklm`).
+     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`).
      */
     func supportedTools()  -> [String]
     
@@ -1369,7 +1369,7 @@ open func heftPageImage(pageId: String, pageIndex: UInt32) -> String?  {
 }
     
     /**
-     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`, `send_to_notebooklm`).
+     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`).
      */
 open func supportedTools() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
@@ -20765,7 +20765,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_aiplatform_heft_page_image() != 54261) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_aiplatform_supported_tools() != 33666) {
+    if (uniffi_impala_ffi_checksum_method_aiplatform_supported_tools() != 21444) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_aiplatform_run_tool() != 46732) {

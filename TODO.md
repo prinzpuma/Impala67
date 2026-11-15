@@ -13,7 +13,7 @@ Stand: 15.11.2026.
   behoben; Kartenübersicht (193 ms) und Kaltstart (789 ms) messen;
   Hänger-Fixes vom 14.11. (Heft öffnen, Notiz speichern, ferne Heftseiten entladen) und Zwei-/Drei-Finger-Tipp
   für Rückgängig/Wiederholen im Heft prüfen. Weitere Punkte: `docs/PARITAET.md` → Leistung.
-- **Android**: Module vom 2./3.11. (Graph, Gemini Notebook, Bibliothek/PDF, Daily, Statistik, Import/Export, KI-Extras,
+- **Android**: Module vom 2./3.11. (Graph, Bibliothek/PDF, Daily, Statistik, Import/Export, KI-Extras,
   Scanner) sind nur im Code geprüft; ein Punkt gilt erst als erledigt, wenn der Emulator-Screenshot zur PWA passt.
 - **Drive**: Login und Upload großer Dateien (resumable, `Location`-Header) mit echtem Google-Konto.
 

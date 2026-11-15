@@ -28,9 +28,9 @@ ios/
    ├─ Core/       ImpalaStore (Änderungs-Meldungen → Revisionen), Generated/ (Swift-Bindings, nie von Hand ändern)
    ├─ Theme/      Farben, Maße, Icon, Liquid Glass
    ├─ Shell/      Seitenleiste, Seitenbaum, Tab-Leiste, Suche, Papierkorb, PageOps
-   ├─ Library/    Bibliothek (Notion, GoodNotes-Regal, Archiv, Gemini Notebook), PDFKit-Ansicht
+   ├─ Library/    Bibliothek (Notion, GoodNotes-Regal, Archiv), PDFKit-Ansicht
    ├─ Home/       Startseite, Lernzeit, Tagesartikel
-   ├─ Graph/      Wissensgraph, Gemini Notebook
+   ├─ Graph/      Wissensgraph
    ├─ Notes/      Notiz-Editor (NoteModel, BlockOps, InlineMarkdown, RichView), MarkdownView
    ├─ Cards/      Karteikarten: Stapelbaum, Übersicht, Lernen, Editor, Statistik, Import/Export
    ├─ Chat/       KI-Chat (ChatModel = Rückrufe des Rust-Assistenten), Panel, Liste

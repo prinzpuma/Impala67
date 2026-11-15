@@ -112,7 +112,6 @@ function actionItems() {
 		// FIX: #btnCards gibt es in index.html nicht mehr (UI-Entrümpelung) —
 		// stummer No-Op. Direkt den Anki-Browser öffnen (wie case "btnCards" in app.js).
 		{ type: "action", icon: "cards", label: "Karten verwalten", run: () => openAnki("browser") },
-		{ type: "action", icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)", run: click("btnNotebookLM") },
 		{ type: "action", icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design", run: () => {
 			localStorage.setItem("impala67Theme", light ? "dark" : "light");
 			SETTINGS.applyTheme();

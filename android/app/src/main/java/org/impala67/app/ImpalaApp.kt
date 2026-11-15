@@ -58,6 +58,8 @@ class ImpalaApp : Application() {
             ImpalaStore(ImpalaCore.open(db.absolutePath), scope)
         }
         semantic = SemanticIndex(filesDir, store, scope)
+        // Gemini-Notebook-Anbindung entfernt: ihre alten lokalen Dateien verwerfen (no-op, wenn leer).
+        scope.launch(Dispatchers.IO) { File(filesDir, "nlm").deleteRecursively(); deleteSharedPreferences("nlm") }
     }
 
     override fun onTrimMemory(level: Int) {

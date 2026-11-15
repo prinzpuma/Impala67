@@ -155,7 +155,7 @@ private struct MainContent: View {
         if let kind = shell.tabInfo(tab).kind { return kind == .heft ? "heft" : "note" }
         if tab.hasPrefix("chat:") { return "chat" }
         if tab == ShellModel.cardsTab { return "cards" }
-        return tab == "nlm:main" ? "notebook" : "other"
+        return "other"
     }
 
     @ViewBuilder
@@ -168,8 +168,6 @@ private struct MainContent: View {
                 ChatScreen(chatId: String(tab.dropFirst(5)))
             } else if tab == ShellModel.cardsTab {
                 CardsScreen()
-            } else if tab == "nlm:main" {
-                NotebookView()
             } else {
                 Placeholder(icon: "file", title: "Seite nicht gefunden", text: "Die Seite wurde gelöscht oder ist noch nicht synchronisiert.")
             }

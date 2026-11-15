@@ -283,7 +283,7 @@ val TOOL_LABELS: Map<String, String> = mapOf(
     "read_page" to "Seite gelesen", "search_notes" to "Notizen durchsucht", "semantic_search" to "Semantische Suche",
     "create_page" to "Seite erstellt", "append_to_page" to "Seite ergänzt", "replace_page_content" to "Seite überschrieben",
     "create_flashcard" to "Karteikarte erstellt", "create_cloze_card" to "Cloze-Karten erstellt", "move_page" to "Seite verschoben",
-    "list_pages" to "Seiten aufgelistet", "list_due_cards" to "Fällige Karten", "send_to_notebooklm" to "An NotebookLM",
+    "list_pages" to "Seiten aufgelistet", "list_due_cards" to "Fällige Karten",
     "ask_choice" to "Rückfrage gestellt", "delete_page" to "Seite gelöscht", "delete_flashcard" to "Karte gelöscht",
     "delete_deck" to "Stapel gelöscht", "create_flashcards" to "Karteikarten erstellt", "delete_flashcards" to "Karten gelöscht",
     "list_flashcards" to "Karten durchgesehen", "list_decks" to "Stapel aufgelistet", "create_deck" to "Stapel angelegt",

@@ -4,7 +4,6 @@ import { S, STATE } from "./state.js";
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { BUS } from "./event-bus.js";
-import { NLM } from "./notebooklm.js";
 import { TABS } from "./tabs.js";
 import { COLLAPSE } from "./collapse.js";
 import { HEFT } from "./heft.js";
@@ -211,15 +210,14 @@ function openLibCoverPicker(pageId) {
 	hydrateCovers(o);
 }
 
-// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 🗄 Archiv · 📥 Gemini Notebook ----------
+// ---------- Ansichts-Umschalter: 📝 Notion · 📓 GoodNotes · 🗄 Archiv ----------
 // Dasselbe Heft existiert nur EINMAL (eine Seiten-ID) — die Ansichten sind nur
 // verschiedene Zuordnungen: Notion = Seitenbaum (Hefte als normale Unterseiten),
-// GoodNotes = flaches Regal mit Ordnern (= Workspaces), Gemini Notebook = Artefakt-
-// Mediathek (Inbox + eingeordnete Downloads). Keine Kopien, nie zwei IDs.
+// GoodNotes = flaches Regal mit Ordnern (= Workspaces). Keine Kopien, nie zwei IDs.
 function libModeTabsHtml() {
 	const mode = S.libMode || "notion";
 	const b = (m, label) => '<button class="lib-mode' + (mode === m ? " active" : "") + '" data-libmode="' + m + '">' + label + "</button>";
-	return '<div class="lib-modes">' + b("notion", lead("note") + "Notion") + b("hefte", lead("notebook") + "GoodNotes") + b("archive", lead("archive") + "Archiv") + b("nlm", lead("inbox") + "Gemini Notebook") + "</div>";
+	return '<div class="lib-modes">' + b("notion", lead("note") + "Notion") + b("hefte", lead("notebook") + "GoodNotes") + b("archive", lead("archive") + "Archiv") + "</div>";
 }
 
 // Einheitlicher Aufbau aller Bibliotheks-Ansichten: Titel + Modi, darunter eine feste Werkzeugzeile
@@ -251,7 +249,6 @@ export function renderLibrary(main) {
 	const mode = S.libMode || "notion";
 	if (mode === "hefte") { renderHefteShelf(main); return; }
 	if (mode === "archive") { renderArchiveLibrary(main); return; }
-	if (mode === "nlm") { renderNlmLibrary(main); return; }
 	// Notion bleibt ein kompakter Baum: Eltern, Unterseiten und ihre gespeicherte
 	// Reihenfolge werden nicht in eine nach Datum sortierte Tabelle aufgelöst.
 	renderNotionTree(main);
@@ -444,44 +441,6 @@ export function renderHefteShelf(main) {
 	hydrateCovers(main);
 }
 
-// ---------- Gemini-Notebook-Ansicht (ehemals NotebookLM): Inbox + Mediathek ----------
-const NLM_FILTERS = [["all", "Alle"], ["inbox", lead("inbox") + "Inbox"], ["audio", lead("headphones") + "Podcasts"], ["video", lead("film") + "Videos"], ["mindmap", lead("graph") + "Mind Maps"], ["slides", lead("slides") + "Folien"]];
-export function renderNlmLibrary(main) {
-	main.innerHTML = '<div class="library lib-docs lib-nlm">' + libToolbarHtml('<div id="nlmTabs" class="lib-tabs"></div>', "") +
-		'<div id="nlmLibBody" class="lib-body"><div class="empty small">Lade Mediathek…</div></div></div>';
-	NLM.listArtifacts().then((list) => {
-		const body = U.el("nlmLibBody");
-		if (!body) return;
-		const filter = S.nlmLibFilter || "all";
-		const match = (f) => filter === "all"
-			|| (filter === "inbox" && !f.placedPageId)
-			|| (filter === "slides" && (f.kind === "slides-pdf" || f.kind === "slides-pptx"))
-			|| f.kind === filter;
-		const inboxN = list.filter((f) => !f.placedPageId).length;
-		const tabs = NLM_FILTERS.map(([id, label]) =>
-			'<button class="lib-tab' + (filter === id ? " active" : "") + '" data-nlmfilter="' + id + '">' + label +
-			(id === "inbox" && inboxN ? '<span class="lib-tab-n">' + inboxN + "</span>" : "") + "</button>").join("");
-		const rows = list.filter(match).map((f) => {
-			const src = (f.sourcePageIds || []).map((id) => S.pages[id]).filter((p) => p && !p.trashed);
-			const placed = (f.placedPageId && S.pages[f.placedPageId] && !S.pages[f.placedPageId].trashed) ? S.pages[f.placedPageId] : null;
-			const sub = placed
-				? lead("file") + 'eingeordnet in <a href="#" data-nlmgoto="' + placed.id + '">' + U.esc((placed.title || "Ohne Titel").slice(0, 40)) + "</a>"
-				: (src.length ? "Quelle: " + U.esc(src.map((p) => p.title || "Ohne Titel").join(", ").slice(0, 60)) : lead("inbox") + "Inbox — noch nicht eingeordnet");
-			return '<div class="nlm-lib-row' + (placed ? "" : " nlm-lib-inbox") + '">' +
-				'<span class="nlm-lib-icon">' + NLM.kindSvg(f.kind) + "</span>" +
-				'<span class="nlm-lib-main"><span class="nlm-lib-name">' + U.esc(f.name) + "</span>" +
-				'<span class="nlm-lib-sub">' + NLM.kindLabel(f.kind) + " · " + U.fmtDate(new Date(f.ts).toISOString()) + (f.size ? " · " + (Math.round(f.size / 1048576 * 10) / 10) + " MB" : "") + " · " + sub + "</span></span>" +
-				'<span class="nlm-lib-btns"><button data-nlmlibplay="' + f.id + '" title="Öffnen/Abspielen">' + icon("play") + '</button>' +
-				'<button data-nlmlibplace="' + f.id + '" title="Einordnen">' + icon("pin") + '</button>' +
-				'<button data-nlmlibsave="' + f.id + '" title="Herunterladen">' + icon("download") + '</button>' +
-				'<button data-nlmlibdel="' + f.id + '" title="Löschen">' + icon("trash") + '</button></span></div>';
-		}).join("");
-		const tabsEl = U.el("nlmTabs");
-		if (tabsEl) tabsEl.innerHTML = tabs;
-		body.innerHTML = rows || '<div class="empty small">Noch keine Gemini-Notebook-Dateien — Downloads im Gemini-Notebook-Tab importieren (Knopf oder Drag & Drop), dann erscheinen sie hier.</div>';
-	});
-}
-
 // ---------- Archiv-Ansicht: dieselbe Baum-Struktur wie die Bibliothek (Notion) ----------
 // STATE.childrenOf überspringt archivierte Seiten. Unterseiten archivierter Seiten sind aber
 // ebenfalls archiviert — deshalb eigene Suche, sonst wären sie im Archiv nicht zu öffnen.
@@ -533,7 +492,7 @@ export function renderArchiveLibrary(main) {
 	U.morph(main, html + "</div></div>");	hydrateCovers(main);
 }
 
-// Ansichts-Umschalter + NotebookLM-Mediathek: eigene Delegation (Styles: css/library.css).
+// Ansichts-Umschalter: eigene Delegation (Styles: css/library.css).
 
 document.addEventListener("click", async (e) => {
 	const hit = (sel) => e.target && e.target.closest && e.target.closest(sel);
@@ -669,17 +628,6 @@ document.addEventListener("click", async (e) => {
 		}
 		return;
 	}
-	if ((el = hit("[data-nlmfilter]"))) { S.nlmLibFilter = el.dataset.nlmfilter; renderMain(); return; }
-	if ((el = hit("[data-nlmgoto]"))) { e.preventDefault(); TABS.openPage(el.dataset.nlmgoto); return; }
-	if ((el = hit("[data-nlmlibplay]"))) { NLM.playById(el.dataset.nlmlibplay); return; }
-	if ((el = hit("[data-nlmlibplace]"))) { NLM.placeById(el.dataset.nlmlibplace); return; }
-	if ((el = hit("[data-nlmlibsave]"))) { NLM.saveById(el.dataset.nlmlibsave); return; }
-	if ((el = hit("[data-nlmlibdel]"))) {
-		if (!await U.confirm("Datei endgültig aus der Mediathek löschen?", { title: "Löschen", ok: "Löschen", danger: true })) return;
-		await NLM.deleteById(el.dataset.nlmlibdel);
-		renderMain();
-		return;
-	}
 });
 
 // GoodNotes-Drag-and-drop ist absichtlich vollständig vom globalen Notion-Drag
@@ -752,7 +700,6 @@ export const LIBRARY = {
 	exportWorkspaceZip,
 	renderLibrary,
 	renderHefteShelf,
-	renderNlmLibrary,
 	libCardHtml,
 	libDocHtml,
 	libCoverHtml,

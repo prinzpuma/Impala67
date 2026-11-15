@@ -30,7 +30,6 @@ enum class LibraryMode(val label: String, @DrawableRes val icon: Int) {
     NOTION("Notion", R.drawable.ic_i_note),
     HEFTE("GoodNotes", R.drawable.ic_i_notebook),
     ARCHIVE("Archiv", R.drawable.ic_i_archive),
-    NLM("Gemini Notebook", R.drawable.ic_i_inbox),
 }
 
 data class TreeRow(val page: PageSummary, val depth: Int, val hasKids: Boolean, val collapsed: Boolean)
@@ -45,7 +44,7 @@ sealed interface ShelfEntry {
 
 data class ShelfLoaded(val path: List<HeftFolder>, val entries: List<ShelfEntry>, val total: Int, val rootFolders: List<HeftFolder>)
 
-/** Bibliothek (web/library.js & LibraryScreen.swift): Notion-Baum, Heft-Regal, Archiv und Gemini Notebook. */
+/** Bibliothek (web/library.js & LibraryScreen.swift): Notion-Baum, Heft-Regal und Archiv. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(val store: ImpalaStore) : ViewModel() {
     var mode by mutableStateOf(initialMode.also { initialMode = LibraryMode.NOTION })

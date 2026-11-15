@@ -3117,7 +3117,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_aiplatform_heft_page_image() != 54261.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_aiplatform_supported_tools() != 33666.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_aiplatform_supported_tools() != 21444.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_aiplatform_run_tool() != 46732.toShort()) {
@@ -5166,7 +5166,7 @@ public interface AiPlatform {
     fun `heftPageImage`(`pageId`: kotlin.String, `pageIndex`: kotlin.UInt): kotlin.String?
     
     /**
-     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`, `send_to_notebooklm`).
+     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`).
      */
     fun `supportedTools`(): List<kotlin.String>
     
@@ -5298,7 +5298,7 @@ open class AiPlatformImpl: Disposable, AutoCloseable, AiPlatform
 
     
     /**
-     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`, `send_to_notebooklm`).
+     * Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`).
      */override fun `supportedTools`(): List<kotlin.String> {
             return FfiConverterSequenceString.lift(
     callWithPointer {

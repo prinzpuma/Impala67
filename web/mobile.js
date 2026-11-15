@@ -183,7 +183,6 @@ export const MOBILE = (() => {
 	const DESKTOP_BUTTON = {
 		library: "#btnLibrary",
 		graph: "#btnGraph",
-		notebooklm: "#btnNotebookLM",
 		lernzeit: "#btnLernzeit",
 		trash: "#btnTrash",
 		settings: "#btnSettings",

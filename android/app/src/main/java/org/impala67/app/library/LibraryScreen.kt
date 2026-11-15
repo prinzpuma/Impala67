@@ -39,7 +39,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import org.impala67.app.R
 import org.impala67.app.core.ImpalaStore
-import org.impala67.app.notebook.NotebookScreen
 import org.impala67.app.notes.EmptyState
 import org.impala67.app.notes.formatDate
 import org.impala67.app.notes.ownEmoji
@@ -53,7 +52,7 @@ import uniffi.impala_ffi.PageSummary
 
 private const val TAG = "LibraryScreen"
 
-/** Bibliothek (`web/library.js` & `LibraryScreen.swift`): Notion-Baum, GoodNotes-Regal, Archiv und Gemini Notebook. */
+/** Bibliothek (`web/library.js` & `LibraryScreen.swift`): Notion-Baum, GoodNotes-Regal und Archiv. */
 @Composable
 fun LibraryScreen(
     store: ImpalaStore,
@@ -92,10 +91,6 @@ fun LibraryScreen(
                 LibraryMode.NOTION -> NotionTreeContent(vm, query, openPage, onOpenPage) { pickPdf.launch(arrayOf("application/pdf")) }
                 LibraryMode.HEFTE -> HeftShelfContent(vm, query, vm::setQuery) { onOpenPage(it) }
                 LibraryMode.ARCHIVE -> ArchiveListContent(vm, query, openPage)
-                LibraryMode.NLM -> {
-                    LibToolbar(vm.mode, { vm.mode = it; vm.setQuery("") }, query, vm::setQuery, prompt = null)
-                    NotebookScreen(store, null, onOpenPage, onToast, Modifier.weight(1f), background = Color.Transparent)
-                }
             }
         }
     }

@@ -26,7 +26,6 @@ import org.impala67.app.R
 /** Archiv der Karteikarten (Anki-Tab „Archiv“). */
 @Serializable data object CardArchiveRoute : NavKey
 @Serializable data object GraphRoute : NavKey
-@Serializable data object NotebookRoute : NavKey
 /** Daily-Notes-Kalender (render.js `renderDaily`). */
 @Serializable data object DailyRoute : NavKey
 /** Eingebettete PDF-Ansicht (pdfs.js) für eine Datei des Kerns. */
@@ -47,7 +46,7 @@ fun NavKey.topLevel(): TopLevel = when (this) {
     NotesRoute, is PageRoute -> TopLevel.Notes
     StudyRoute, is ReviewRoute, is CardBrowserRoute, StatsRoute, CardArchiveRoute -> TopLevel.Study
     MoreRoute, SettingsRoute, is SettingsSectionRoute, ConflictsRoute, TrashRoute, ArchiveRoute, LibraryRoute,
-    GraphRoute, NotebookRoute, DailyRoute, is PdfRoute -> TopLevel.More
+    GraphRoute, DailyRoute, is PdfRoute -> TopLevel.More
     else -> TopLevel.Home
 }
 
@@ -63,7 +62,6 @@ fun NavKey.title(): String = when (this) {
     StatsRoute -> "Statistik"
     CardArchiveRoute -> "Archiv"
     GraphRoute -> "Wissensgraph"
-    NotebookRoute -> "Gemini Notebook"
     DailyRoute -> "Daily Notes"
     is PdfRoute -> title
     is CardBrowserRoute -> "Karten"

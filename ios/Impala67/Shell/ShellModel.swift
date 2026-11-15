@@ -11,11 +11,11 @@ extension EnvironmentValues {
 
 /// Overlays der Shell (Suche, Papierkorb …).
 enum ShellSheet: String, Identifiable {
-    case search, trash, settings, graph, notebook, conflicts
+    case search, trash, settings, graph, conflicts
     var id: String { rawValue }
 }
 
-/// Offene Tabs wie `web/tabs.js` (und `ShellNav.kt`): Seiten-IDs bzw. `chat:<id>`, `anki:main`, `nlm:main`.
+/// Offene Tabs wie `web/tabs.js` (und `ShellNav.kt`): Seiten-IDs bzw. `chat:<id>`, `anki:main`.
 /// Gespeichert im Kern (`setUiTabs`) und damit auf allen Geräten gleich; höchstens 12.
 @MainActor @Observable
 final class ShellModel {
@@ -104,7 +104,7 @@ final class ShellModel {
     }
 
     private func isValidEntry(_ id: String) -> Bool {
-        if id == "home" || id == Self.cardsTab || id == "nlm:main" { return true }
+        if id == "home" || id == Self.cardsTab { return true }
         if id.hasPrefix("chat:") {
             let chatId = String(id.dropFirst(5))
             return store.core.chat(id: chatId) != nil
@@ -192,9 +192,6 @@ final class ShellModel {
         if target == Self.cardsTab {
             return HistoryItem(id: i, index: i, title: "Karteikarten", icon: "cards")
         }
-        if target == "nlm:main" {
-            return HistoryItem(id: i, index: i, title: "Gemini Notebook", icon: "book")
-        }
         if target.hasPrefix("chat:") {
             let chatId = String(target.dropFirst(5))
             let chatTitle = store.core.chat(id: chatId)?.title ?? ""
@@ -261,7 +258,6 @@ final class ShellModel {
             return TabItem(title: title.isEmpty ? "Chat" : title, icon: "sparkles", emoji: nil, kind: nil)
         }
         if tab == Self.cardsTab { return TabItem(title: "Karteikarten", icon: "cards", emoji: nil, kind: nil) }
-        if tab == "nlm:main" { return TabItem(title: "Gemini Notebook", icon: "book", emoji: nil, kind: nil) }
         guard let p = store.core.page(id: tab), !p.trashed else {
             return TabItem(title: "Unbenannt", icon: "file", emoji: nil, kind: nil)
         }

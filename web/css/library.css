@@ -110,26 +110,6 @@ body .lib-modes .lib-mode.active { color: var(--gn-ink); background: var(--b-tin
 	.notion-tree-row:hover .archive-row-actions, .archive-row-actions:focus-within { opacity: 1 }
 }
 
-/* ---------- Gemini-Notebook-Dateien ---------- */
-.nlm-lib-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--edge-soft); border-radius: 12px; margin-bottom: 8px }
-.nlm-lib-row.nlm-lib-inbox { border-color: var(--accent-border); background: var(--accent-soft) }
-.nlm-lib-icon { flex: none; font-size: 22px }
-.nlm-lib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px }
-.nlm-lib-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.nlm-lib-sub { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.nlm-lib-btns { display: flex; gap: 4px; flex: none }
-.nlm-lib-btns button { min-height: 0; border: none; background: var(--b-tint); border-radius: 8px; padding: 5px 8px; cursor: pointer; color: inherit }
-.nlm-lib-btns button:hover { background: var(--b-tint-3) }
-/* In der Bibliothek: eine Karte mit Zeilen wie im Seitenbaum */
-.lib-nlm .nlm-lib-row { box-shadow: inset 0 0 0 1px var(--gn-paper-edge) }
-.lib-nlm .nlm-lib-row { min-height: 60px; margin: 0 0 8px; padding: 8px 10px; border: 0; border-radius: 14px; background: var(--gn-sheet); transition: background-color .12s ease }
-.lib-nlm .nlm-lib-row:hover { background: color-mix(in srgb, var(--gn-sheet) 92%, var(--gn-ink)) }
-.lib-nlm .nlm-lib-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--b-tint); color: var(--accent); font-size: 18px }
-.lib-nlm .nlm-lib-inbox .nlm-lib-icon { background: var(--accent); color: var(--on-accent) }
-.lib-nlm .nlm-lib-btns button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 10px; background: transparent; color: var(--text2) }
-.lib-nlm .nlm-lib-btns button:hover { background: var(--b-tint-2); color: var(--text) }
-.lib-nlm .nlm-lib-btns .i { margin: 0 }
-
 /* ---------- Heft-Kacheln, Dialoge ---------- */
 .lib-card-visual { position: relative }
 .lib-cover-btn { position: absolute; right: 5px; bottom: 5px; z-index: 3; min-height: 26px; padding: 0 7px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; background: rgba(15,16,19,.58); color: #fff; font-size: 10px; letter-spacing: 1px; opacity: 0; cursor: pointer; backdrop-filter: blur(6px); transition: opacity .12s }

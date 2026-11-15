@@ -23,7 +23,7 @@ pub const REQUEST_TOOLS: &str = "request_tools";
 pub fn request_tools_def() -> ToolDef {
     ToolDef {
         name: REQUEST_TOOLS.into(),
-        description: "Schaltet die vollständige Werkzeugliste frei (Notizen lesen/erstellen/ändern, Suche, Karteikarten, NotebookLM …). Rufe dieses Werkzeug auf, sobald die Anfrage Zugriff auf Notizen, Karten, Hefte oder Aktionen im Workspace erfordern könnte.".into(),
+        description: "Schaltet die vollständige Werkzeugliste frei (Notizen lesen/erstellen/ändern, Suche, Karteikarten …). Rufe dieses Werkzeug auf, sobald die Anfrage Zugriff auf Notizen, Karten, Hefte oder Aktionen im Workspace erfordern könnte.".into(),
         parameters: json!({ "type": "object", "properties": {}, "required": [] }),
     }
 }

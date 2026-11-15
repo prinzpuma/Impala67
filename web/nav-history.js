@@ -4,7 +4,7 @@ import { S } from "./state.js";
 import { CHATS } from "./chats.js";
 
 // nav-history.js — reiner Zustand der Zurück/Vor-Navigation (ohne Rendern).
-// S.navHistory enthält Ziel-IDs (Seiten-ID, "chat:…", "nlm:main", "anki:main" oder "home").
+// S.navHistory enthält Ziel-IDs (Seiten-ID, "chat:…", "anki:main" oder "home").
 // S.navIndex = -1 ist der feste Anfang: die Home-Übersicht vor dem ersten Eintrag.
 // Jeder Eintrag hat genau einen Browser-Verlaufseintrag mit { sid, navIndex }; so führen
 // Zurück-Pfeil, Android-Zurücktaste, Wischgeste und Browser-Zurück denselben Weg.
@@ -30,7 +30,6 @@ export function displayedEntry() {
 		case "home": return HOME;
 		case "page": return S.currentPageId;
 		case "chat": return S.currentChatId ? "chat:" + S.currentChatId : null;
-		case "notebooklm": return "nlm:main";
 		case "anki": return "anki:main";
 		default: return null;
 	}
@@ -39,7 +38,7 @@ export function displayedEntry() {
 // Gelöschte Seiten, Seiten im Papierkorb und gelöschte Chats werden übersprungen.
 export function isValidEntry(id) {
 	if (!id) return false;
-	if (id === HOME || id === "nlm:main" || id === "anki:main") return true;
+	if (id === HOME || id === "anki:main") return true;
 	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5)));
 	const pg = S.pages[id];
 	return Boolean(pg && !pg.trashed);

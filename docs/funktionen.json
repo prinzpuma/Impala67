@@ -24,7 +24,6 @@
 		{ "id": "shell.tastatur-navigation", "bereich": "shell", "titel": "Escape-Kaskade, Palette mit ↑ ↓ Enter, Strg/⌘+K", "pwa": ["shortcuts.js"], "android": "🟡", "ios": "🟡" },
 		{ "id": "shell.palette-gruppen", "bereich": "shell", "titel": "Befehlspalette: Präfix „Archiv · “, Gruppe „Chats“", "android": "prüfen", "ios": "🟡 Präfix fehlt" },
 		{ "id": "shell.wissensgraph", "bereich": "shell", "titel": "Wissensgraph: Modi, Suche, Analyse", "pwa": ["graph.js"], "ios": "🟡 nur Erkunden" },
-		{ "id": "shell.notebook-inbox", "bereich": "shell", "titel": "Gemini Notebook mit Inbox", "pwa": ["notebooklm.js"], "ios": "🟡 keine Inbox" },
 		{ "id": "shell.perf-hinweis", "bereich": "shell", "titel": "Performance-Hinweis „Einschalten“", "pwa": ["perf-hint.js"], "android": "❌", "ios": "❌" },
 		{ "id": "shell.heft-vollbild", "bereich": "shell", "titel": "Heft-Vollbild blendet Seitenleiste und Tabs aus", "android": "🟡 nur KI-Knopf", "ios": "prüfen" },
 

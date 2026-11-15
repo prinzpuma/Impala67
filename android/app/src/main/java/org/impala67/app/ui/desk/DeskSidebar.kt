@@ -110,7 +110,6 @@ fun DeskSidebar(store: ImpalaStore, nav: ShellNav, current: NavKey, ai: AiChatVi
         }
         HorizontalDivider(color = c.edgeSoft)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FootButton(R.drawable.ic_i_book, "Gemini Notebook") { nav.action("notebooklm") }
             FootButton(R.drawable.ic_i_graph, "Wissensgraph") { nav.action("graph") }
             FootButton(R.drawable.ic_i_library, "Bibliothek") { nav.action("library") }
             FootButton(R.drawable.ic_i_trash, "Papierkorb") { nav.action("trash") }

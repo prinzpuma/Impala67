@@ -4,7 +4,6 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { SRS } from "./srs.js";
 import { RAG } from "./rag.js";
-import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
@@ -843,18 +842,6 @@ export const TOOLS = (() => {
 					await STATE.dispatch("cardUpdate", { id: c.id, patch: { srs: SRS.newCard(now), leech: false, suspended: false } });
 				}
 				return { ok: true, reset: sel.cards.length, note: "Die Karten stehen wieder als „neu“ in der Warteschlange. Das Wiederholungs-Protokoll (Statistik/Heatmap) bleibt erhalten." };
-			}
-			case "send_to_notebooklm": {
-				// Übergibt an notebooklm.js: kopiert die Seiteninhalte und öffnet Gemini Notebook.
-				// Das passiert am Ende einer KI-Antwort, also OHNE direkten Klick — Browser
-				// verweigern das Kopieren dann gern. Dieser Fehler darf nicht still verschwinden.
-				try {
-					const raw = a.page_titles || a.titles || a.pages || a.page_title || a.title || [];
-					const titles = (Array.isArray(raw) ? raw : [raw]).filter(Boolean).map(String);
-					return (await NLM.sendPages(titles)) || { ok: true };
-				} catch (e) {
-					return { error: "Übergabe an Gemini Notebook fehlgeschlagen: " + String((e && e.message) || e) + ". Häufigste Ursache: Die Zwischenablage ist ohne direkten Klick gesperrt — Inhalte bitte manuell kopieren." };
-				}
 			}
 			case "ask_choice": {
 				// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und

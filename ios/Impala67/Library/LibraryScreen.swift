@@ -2,9 +2,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Ansichten der Bibliothek wie `libModeTabsHtml` in web/library.js. Dieselbe Seite gibt es nur einmal;
-/// die Ansichten ordnen sie nur anders an (Baum, Heft-Regal, Archiv, Gemini Notebook).
+/// die Ansichten ordnen sie nur anders an (Baum, Heft-Regal, Archiv).
 enum LibraryMode: String, CaseIterable, Identifiable {
-    case notion, hefte, archive, nlm
+    case notion, hefte, archive
 
     var id: String { rawValue }
 
@@ -13,7 +13,6 @@ enum LibraryMode: String, CaseIterable, Identifiable {
         case .notion: "Notion"
         case .hefte: "GoodNotes"
         case .archive: "Archiv"
-        case .nlm: "Gemini Notebook"
         }
     }
 
@@ -22,7 +21,6 @@ enum LibraryMode: String, CaseIterable, Identifiable {
         case .notion: "note"
         case .hefte: "notebook"
         case .archive: "archive"
-        case .nlm: "inbox"
         }
     }
 }
@@ -52,11 +50,6 @@ struct LibraryScreen: View {
                     case .notion: NotionTree(query: $query, onOpen: open, onImport: { importing = true })
                     case .hefte: HeftShelf(query: $query, onOpen: open)
                     case .archive: ArchiveList(query: $query, onOpen: open)
-                    case .nlm:
-                        VStack(spacing: 0) {
-                            LibToolbar(query: $query, prompt: nil) { EmptyView() } trailing: { EmptyView() }
-                            NotebookView(background: .clear)
-                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -157,7 +150,7 @@ struct LibFilter: Identifiable {
 struct LibToolbar<Left: View, Trailing: View>: View {
     @AppStorage("impala67LibMode") private var modeRaw = LibraryMode.notion.rawValue
     @Binding var query: String
-    /// `nil` = keine Suche (Gemini Notebook).
+    /// `nil` = keine Suche.
     let prompt: String?
     let left: Left
     let trailing: Trailing

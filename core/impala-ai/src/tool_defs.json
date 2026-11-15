@@ -241,24 +241,5 @@
 				]
 			}
 		}
-	},
-	{
-		"type": "function",
-		"function": {
-			"name": "send_to_notebooklm",
-			"description": "Übergibt Seiten als Quellen an Gemini Notebook.",
-			"parameters": {
-				"type": "object",
-				"properties": {
-					"page_titles": {
-						"type": "array",
-						"items": {
-							"type": "string"
-						}
-					}
-				},
-				"required": []
-			}
-		}
 	}
 ]

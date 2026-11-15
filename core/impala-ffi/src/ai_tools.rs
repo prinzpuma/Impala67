@@ -1,7 +1,7 @@
 //! Werkzeuge der KI gegen den Kern (Namen und Schemas wie `web/tools.js`, Definitionen in
 //! `impala-ai/src/tool_defs.json`): `inspect` zum Nachsehen und `change` für atomare, rückgängig
 //! machbare Änderungen an Seiten, Karten, Stapeln und Heften. Was nur die Plattform kann
-//! (`calculate`, `send_to_notebooklm`, Heftseite als Bild, Rückfragen), geht über [`AiPlatform`].
+//! (`calculate`, Heftseite als Bild, Rückfragen), geht über [`AiPlatform`].
 //!
 //! Rückgängig: `change` liefert einen Änderungs-Satz `{ pages, cards, decks, heftDocs }` mit je
 //! `{ id, before, after }` im Format der PWA (`undoSet`); [`apply_undo`] spielt ihn zurück, wenn die

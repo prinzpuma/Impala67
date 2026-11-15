@@ -263,7 +263,7 @@ pub trait AiPlatform: Send + Sync {
     fn ask(&self, question: String, options: Vec<String>) -> Option<String>;
     /// Heftseite als Bild (Data-URL, z. B. PNG) für `view_heft_page`; `None` = nicht möglich.
     fn heft_page_image(&self, page_id: String, page_index: u32) -> Option<String>;
-    /// Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`, `send_to_notebooklm`).
+    /// Namen weiterer Werkzeuge, die [`AiPlatform::run_tool`] ausführt (`calculate`).
     fn supported_tools(&self) -> Vec<String>;
     /// Führt eines davon aus: Argumente und Ergebnis als JSON-Text (das Ergebnis geht ans Modell;
     /// Fehler als `{"error": "…"}`). `None` = unbekannt.
@@ -384,7 +384,7 @@ fn tool_defs(platform: Option<&Arc<dyn AiPlatform>>) -> Vec<ToolDef> {
         .iter()
         .filter(|t| match t.name.as_str() {
             "ask_choice" | "view_heft_page" => platform.is_some(),
-            "calculate" | "send_to_notebooklm" => extra.contains(&t.name),
+            "calculate" => extra.contains(&t.name),
             _ => true,
         })
         .cloned()

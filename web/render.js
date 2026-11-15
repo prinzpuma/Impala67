@@ -12,7 +12,6 @@ import { TABS } from "./tabs.js";
 import { U } from "./util.js";
 import { SETTINGS } from "./settings.js";
 import { LIBRARY } from "./library.js";
-import { NLM } from "./notebooklm.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { LERNZEIT } from "./lernzeit.js";
@@ -372,7 +371,6 @@ function syncActiveSidebarRow(tree) {
 function isActiveTab(id) {
 	if (!id || id !== S.activeTabId) return false;
 	if (id.startsWith("chat:")) return S.view === "chat";
-	if (id === "nlm:main") return S.view === "notebooklm";
 	if (id === "anki:main") return S.view === "anki";
 	return S.view === "page";
 }
@@ -422,14 +420,11 @@ function sidebarTabsHtml() {
 		'</div><div class="sidebar-tabs">';
 
 	html += S.tabs.map((id) => {
-		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
+		const isChat = id.startsWith("chat:"), isAnki = id === "anki:main";
 		let tabIcon = lead("file"), title = "Unbenannt";
 		if (isChat) {
 			tabIcon = "✦ ";
 			title = chatById.get(id.slice(5))?.title || "Chat";
-		} else if (isNlm) {
-			tabIcon = lead("book");
-			title = "Gemini Notebook";
 		} else if (isAnki) {
 			tabIcon = lead("cards");
 			title = "Karteikarten";
@@ -608,11 +603,10 @@ function renderTabs() {
 		`<button class="navbtn" id="btnNavForward" ${canFwd ? "" : "disabled"} title="Vor">›</button>` +
 		'<div class="tabstrip">';
 	html += S.tabs.map((id) => {
-		const isChat = id.startsWith("chat:"), isNlm = id === "nlm:main", isAnki = id === "anki:main";
+		const isChat = id.startsWith("chat:"), isAnki = id === "anki:main";
 		let title;
 		if (isChat) title = "✦ " + esc(chatById.get(id.slice(5))?.title || "Chat"); // ✦ = KI-Markenzeichen wie Home/FAB
-		else if (isNlm) title = lead("book") + "Gemini Notebook";
-		else if (isAnki) title = lead("cards") + "Karteikarten"; // eigener Tab seit 23. Juli — gleiche Mechanik wie nlm:main
+		else if (isAnki) title = lead("cards") + "Karteikarten"; // eigener Tab seit 23. Juli
 		else {
 			const pg = S.pages[id];
 			if (!pg) return "";
@@ -648,7 +642,7 @@ function renderMain() {
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
-	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat, notebooklm: (m) => NLM.renderPane(m) };
+	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat };
 	if (views[S.view]) {
 		// Fremde Renderer verwalten #main selbst. Ihr DOM darf nie mit einem alten
 		// Seitenshell-Cache verwechselt werden, wenn man später zur Seite zurückkehrt.
@@ -1163,7 +1157,7 @@ const TOOL_LABELS = {
 	read_page: "Seite gelesen", search_notes: "Notizen durchsucht", semantic_search: "Semantische Suche",
 	create_page: "Seite erstellt", append_to_page: "Seite ergänzt", replace_page_content: "Seite überschrieben",
 	create_flashcard: "Karteikarte erstellt", create_cloze_card: "Cloze-Karten erstellt", move_page: "Seite verschoben",
-	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten", send_to_notebooklm: "An NotebookLM",
+	list_pages: "Seiten aufgelistet", list_due_cards: "Fällige Karten",
 	ask_choice: "Rückfrage gestellt", delete_page: "Seite gelöscht", delete_flashcard: "Karte gelöscht", delete_deck: "Stapel gelöscht",
 	// 26. Juli: Karten-Verwaltung, Hefte und Werkzeuge zeigten bisher nur ihren rohen
 	// Tool-Namen im Chip (z.B. „move_flashcards“) — jetzt alle mit Klartext-Beschriftung.

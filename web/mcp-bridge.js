@@ -462,7 +462,6 @@ export function initMcpBridge() {
 									if (typeof tabId !== "string") return { id: null, title: "Unbekannt" };
 									if (tabId.startsWith("chat:")) return { id: tabId, title: "KI-Chat" };
 									if (tabId === "anki:main") return { id: tabId, title: "Karteikarten" };
-									if (tabId === "nlm:main") return { id: tabId, title: "NotebookLM" };
 									return { id: tabId, title: S.pages[tabId]?.title || "Ohne Titel" };
 								}),
 								totalPages: Object.keys(S.pages || {}).length,

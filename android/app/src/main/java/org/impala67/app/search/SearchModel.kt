@@ -40,7 +40,6 @@ object SearchText {
         SearchRow.Action("cards-manage", "Karten verwalten", R.drawable.ic_i_cards),
         SearchRow.Action("daily", "Daily Note von heute öffnen", R.drawable.ic_i_calendar),
         SearchRow.Action("daily-calendar", "Daily-Notes-Kalender öffnen", R.drawable.ic_i_calendar),
-        SearchRow.Action("notebook", "Gemini Notebook öffnen (ehemals NotebookLM)", R.drawable.ic_i_book),
         SearchRow.Action("archive", "Archiv in Bibliothek öffnen", R.drawable.ic_i_archive),
         SearchRow.Action("trash", "Papierkorb öffnen", R.drawable.ic_i_trash),
         SearchRow.Action("sync", "Drive-Sync in Einstellungen öffnen", R.drawable.ic_i_cloud),

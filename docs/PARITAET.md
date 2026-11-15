@@ -59,7 +59,6 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 | Escape-Kaskade, Palette mit ↑ ↓ Enter, Strg/⌘+K | 🟡 | 🟡 |
 | Befehlspalette: Präfix „Archiv · “, Gruppe „Chats“ | prüfen | 🟡 Präfix fehlt |
 | Wissensgraph: Modi, Suche, Analyse | ✅ | 🟡 nur Erkunden |
-| Gemini Notebook mit Inbox | ✅ | 🟡 keine Inbox |
 | Performance-Hinweis „Einschalten“ | ❌ | ❌ |
 | Heft-Vollbild blendet Seitenleiste und Tabs aus | 🟡 nur KI-Knopf | prüfen |
 

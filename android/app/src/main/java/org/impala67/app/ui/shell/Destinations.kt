@@ -30,7 +30,6 @@ import org.impala67.app.study.ReviewScreen
 import org.impala67.app.study.StudyScreen
 import org.impala67.app.study.stats.StatsScreen
 import org.impala67.app.graph.GraphScreen
-import org.impala67.app.notebook.NotebookScreen
 import org.impala67.app.library.PdfViewer
 
 /** Alle Ziele der App: welche Route welchen Bildschirm zeigt und in welchem Bereich (Liste/Detail). */
@@ -82,7 +81,6 @@ fun EntryProviderScope<NavKey>.appEntries(nav: ShellNav, store: ImpalaStore, pre
         GraphScreen(store, prefs, onStudyDeck = { deck -> nav.go(TopLevel.Study); nav.open(ReviewRoute(deck)) }, onToast = nav::toast)
     }
     entry<DailyRoute> { DailyScreen(store, onOpenDay = nav::openDaily) }
-    entry<NotebookRoute> { NotebookScreen(store, nav.lastPageId, onOpenPage = { nav.open(PageRoute(it)) }, onToast = nav::toast) }
     entry<PdfRoute> { PdfViewer(store, it.fileId, it.title, onToggleFullscreen = { nav.immersive = !nav.immersive }) }
     entry<SearchRoute> {
         SearchScreen(

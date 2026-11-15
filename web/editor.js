@@ -1884,7 +1884,7 @@ export const EDITOR = (() => {
 		});
 	}
 
-	// ---------- Styles für Datei-/Medienblöcke (einmalig injiziert, wie notebooklm.js) ----------
+	// ---------- Styles für Datei-/Medienblöcke (einmalig injiziert) ----------
 	function injectStyles() {
 		if (styleInjected) return;
 		styleInjected = true;

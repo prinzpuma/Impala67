@@ -53,7 +53,6 @@ function moreHtml() {
   <div class="m-group">
 ${moreRow("library", "blue", "library", "Bibliothek", "PDFs &amp; Dokumente")}
 ${moreRow("graph", "purple", "graph", "Wissensgraph", "Vernetzte Notizen")}
-${moreRow("notebooklm", "green", "notebook", "Gemini Notebook", "Quellen &amp; Synthese")}
 ${moreRow("lernzeit", "orange", "chart", "Lernanalyse", "Zeiten &amp; Statistiken")}
   </div>
   <h2 class="m-section-label">Ablage</h2>

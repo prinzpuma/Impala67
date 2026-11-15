@@ -18,7 +18,7 @@ const syncableTabs = () => S.tabs.filter((id) => {
 	if (typeof id !== "string") return false;
 	// Der offene, noch leere „Neuer Chat“ zählt mit (Sitzung entsteht erst mit der ersten Nachricht)
 	if (id.startsWith("chat:")) return Boolean(CHATS.get(id.slice(5))) || id === "chat:" + S.currentChatId;
-	return (S.pages[id] && !S.pages[id].trashed) || id === "nlm:main" || id === "anki:main";
+	return (S.pages[id] && !S.pages[id].trashed) || id === "anki:main";
 }).slice(-12);
 // Zuletzt im Event-Log stehender Tab-Stand. Unverändertes wird nicht erneut geschrieben:
 // Jeder App-Wechsel (visibilitychange/pagehide/freeze) erzeugte sonst ein neues
@@ -156,7 +156,6 @@ export function openPage(pageId, opts) {
 		S.highlightedDiff = null;
 	}
 	const isChat = String(pageId).startsWith("chat:");
-	const isNlm = pageId === "nlm:main";
 	if (isChat) {
 		const chatId = pageId.slice(5);
 		S.currentChatId = chatId;
@@ -166,10 +165,8 @@ export function openPage(pageId, opts) {
 		// FIX: Ein Chat lebt nur an EINER Stelle. Hing dieselbe Sitzung noch am
 		// Seitenpanel, überschrieben sich Panel und Tab beim Speichern gegenseitig.
 		if (S.sideChatId === chatId) { S.sideChat = []; S.sideChatId = null; }
-	} else if (isNlm) {
-		S.view = "notebooklm";
 	} else if (pageId === "anki:main") {
-		// 🃏 Karteikarten als eigener Tab (23. Juli) — exakt dieselbe Mechanik wie nlm:main.
+		// 🃏 Karteikarten als eigener Tab (23. Juli).
 		S.view = "anki";
 		S.sidebarMode = "files"; // Stapel-Baum in der Sidebar
 	} else {
@@ -196,7 +193,7 @@ export function openPage(pageId, opts) {
 // Plus in der Tab-Leiste: neuen Tab mit der aktuellen Seite (oder Home-Seite) öffnen.
 export function openNewTab(pageId) {
 	const id = pageId || S.currentPageId || S.activeTabId;
-	if (!id || String(id).startsWith("chat:") || id === "nlm:main" || id === "anki:main") {
+	if (!id || String(id).startsWith("chat:") || id === "anki:main") {
 		// Ohne konkrete Seite: leeren Tab-Zustand → Home, ohne Tab zu pushen
 		S.view = "home";
 		S.currentPageId = null;

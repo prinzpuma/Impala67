@@ -4,7 +4,6 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
 import { S, STATE } from "./state.js";
 import { BUS } from "./event-bus.js";
-import { NLM } from "./notebooklm.js";
 import { HEFT } from "./heft.js";
 import { EXPORT_MEDIA } from "./export-media.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
@@ -625,12 +624,6 @@ Sie erzeugen den Großteil des ATP durch Zellatmung.
 		const safe = String(pg.title || "Seite").replace(/[\\/:*?"<>|#]/g, "_").trim().slice(0, 80) || "Seite";
 		U.downloadText(safe + ".md", "# " + pg.title + "\n\n" + (pg.content || ""));
 	}
-
-	// ---- 📓-Knopf in der Sidebar: Gemini-Notebook-Dialog (ehemals NotebookLM) ----
-	// Die komplette Öffnen-/Fenster-Logik lebt jetzt in notebooklm.js (NLM.openExternal),
-	// damit sie nur an EINER Stelle existiert (DRY) — hier nur noch die Verdrahtung.
-	const btnNlm = document.getElementById("btnNotebookLM");
-	if (btnNlm) btnNlm.addEventListener("click", () => NLM.openDialog());
 
 	// ---- Eigene Event-Delegation für alle neuen Knöpfe (app.js bleibt unberührt) ----
 	document.addEventListener("click", async (e) => {

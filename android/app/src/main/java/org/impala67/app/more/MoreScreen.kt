@@ -56,7 +56,6 @@ private data class MoreItem(val action: String, val tint: Tint, val icon: Int, v
 private val AREAS = listOf(
     MoreItem("library", Tint.Blue, R.drawable.ic_i_library, "Bibliothek", "PDFs & Dokumente"),
     MoreItem("graph", Tint.Purple, R.drawable.ic_i_graph, "Wissensgraph", "Vernetzte Notizen"),
-    MoreItem("notebooklm", Tint.Green, R.drawable.ic_i_notebook, "Gemini Notebook", "Quellen & Synthese"),
     MoreItem("lernzeit", Tint.Orange, R.drawable.ic_i_chart, "Lernanalyse", "Zeiten & Statistiken"),
 )
 

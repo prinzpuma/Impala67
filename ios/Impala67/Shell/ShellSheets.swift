@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Sync-Konflikte, Wissensgraph, Gemini Notebook.
+/// Overlays der Shell: Suche, Papierkorb, Einstellungen, Sync-Konflikte, Wissensgraph.
 struct ShellSheetView: View {
     let sheet: ShellSheet
 
@@ -22,7 +22,6 @@ struct ShellSheetView: View {
                 case .settings: EmptyView()
                 case .conflicts: ConflictsSheet()
                 case .graph: GraphView()
-                case .notebook: NotebookView()
                 }
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { CloseButton() } }
@@ -199,7 +198,6 @@ private struct SearchSheet: View {
                 dismiss(); shell.openCards(.review(deck: nil, mix: false))
             },
             Action(icon: "cards", label: "Karten verwalten") { dismiss(); shell.openCards(.decks) },
-            Action(icon: "book", label: "Gemini Notebook öffnen (ehemals NotebookLM)") { dismiss(); shell.open("nlm:main") },
             Action(icon: light ? "moon" : "sun", label: light ? "Dunkles Design" : "Helles Design") {
                 theme = light ? AppTheme.dark.rawValue : AppTheme.light.rawValue
             },

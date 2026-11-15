@@ -57,8 +57,7 @@ export const S = {
 	modelMenuSection: "root", // "root" | "models" | "thinking"
 	customModelProviderPick: null, // im Dropdown gewählte Quelle für ein eigenes Modell
 	refineOpenMid: null, // mid einer Assistenten-Antwort, deren "Anpassen"-Menü offen ist
-	libMode: "notion", // Bibliothek-Ansicht: "notion" (Dokumente/Seitenbaum) | "hefte" (GoodNotes-Regal) | "nlm" (NotebookLM-Mediathek)
-	nlmLibFilter: "all", // NotebookLM-Mediathek-Filter: "all" | "inbox" | "audio" | "video" | "mindmap" | "slides"
+	libMode: "notion", // Bibliothek-Ansicht: "notion" (Dokumente/Seitenbaum) | "hefte" (GoodNotes-Regal)
 	libFolder: null, // geöffneter GoodNotes-Ordner im Hefte-Regal (gnFolders-ID), null = Wurzel
 	libFilter: "", // Filtertext der Bibliothek (Titel + Tags)
 	pageMenuOpenId: null, // ID der Seite, deren ⋯-Menü in der Sidebar gerade offen ist

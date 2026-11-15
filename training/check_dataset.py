@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent
 MAX_SEQ_LENGTH = 4096
 FILES = [ROOT / "data" / "impala_tools_train.jsonl", ROOT / "data" / "impala_tools_val.jsonl"]
 
-TOOL_NAMES = {"inspect", "change", "view_heft_page", "ask_choice", "calculate", "send_to_notebooklm"}
+TOOL_NAMES = {"inspect", "change", "view_heft_page", "ask_choice", "calculate"}
 REQUIRED = {  # vereinfachte Pflichtfelder je Operation
     "page.create": ["title"], "page.append": ["title"], "page.replace": ["title"],
     "page.patch": ["title", "search", "replace"], "page.rename": ["title", "to"],

@@ -152,7 +152,6 @@ const APP_FILES = [
 	"./voice.js",
 	"./render-anki.js",
 	"./extras.js",
-	"./notebooklm.js",
 	"./heft.js",
 	"./heft-viewport.js",
 	"./heft-stroke-draw.js",

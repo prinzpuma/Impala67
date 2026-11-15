@@ -134,7 +134,7 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `srs.js` | Hülle um FSRS im Rust-Kern |
 | `extras.js` | Lückentext, CSV/Anki-Import/Export, Seiten-PDF, Multi-Tab |
 | `lernzeit.js`, `telemetrie.js`, `lernmuster.js`, `fach.js` | Lernzeit, Statistik, Fächer-Erkennung |
-| `schulnoten.js`, `notebooklm.js`, `voice.js` | Noten, NotebookLM-Panel, Sprache |
+| `schulnoten.js`, `voice.js` | Noten, Sprache |
 | `experimente.js` | experimentelle Lernmodi (standardmäßig aus) |
 | `graph.js` + `graph-worker.js` | Wissensgraph (Knopf unten links; verdrahtet sich beim Import selbst an `#btnGraph`) |
 

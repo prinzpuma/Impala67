@@ -172,6 +172,8 @@ export async function initApp() {
 	// bevor schwere Nacharbeiten (Mobile-Init, Heft-Bilder) den Kreis einfrieren.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
+	// Gemini-Notebook-Anbindung entfernt: ihren alten lokalen Dateispeicher verwerfen (no-op, wenn leer).
+	try { indexedDB.deleteDatabase("impala67-nlm"); localStorage.removeItem("impala67.nlmSources"); } catch {}
 	// Heft-Bilder lädt HEFT.mount (heft.js load) selbst — nur die des geöffneten Hefts.
 	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
 	MOBILE.init();

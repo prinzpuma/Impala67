@@ -346,7 +346,7 @@ private let toolLabels: [String: String] = [
     "read_page": "Seite gelesen", "search_notes": "Notizen durchsucht", "semantic_search": "Semantische Suche",
     "create_page": "Seite erstellt", "append_to_page": "Seite ergänzt", "replace_page_content": "Seite überschrieben",
     "create_flashcard": "Karteikarte erstellt", "create_cloze_card": "Cloze-Karten erstellt", "move_page": "Seite verschoben",
-    "list_pages": "Seiten aufgelistet", "list_due_cards": "Fällige Karten", "send_to_notebooklm": "An NotebookLM",
+    "list_pages": "Seiten aufgelistet", "list_due_cards": "Fällige Karten",
     "ask_choice": "Rückfrage gestellt", "delete_page": "Seite gelöscht", "delete_flashcard": "Karte gelöscht",
     "delete_deck": "Stapel gelöscht", "create_flashcards": "Karteikarten erstellt", "delete_flashcards": "Karten gelöscht",
     "list_flashcards": "Karten durchgesehen", "list_decks": "Stapel aufgelistet", "create_deck": "Stapel angelegt",
