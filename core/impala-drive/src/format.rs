@@ -11,8 +11,8 @@
 //! lediglich gzip-komprimiert. Die Kodierung steht in `appProperties.encoding`; fehlt sie, gilt
 //! die Endung `.gz`.
 
-use impala_crypto::json::stringify;
-use impala_crypto::{base64_decode, base64_encode, hex_encode, sha256};
+use impala_crypto::json::{stringify, write_string, write_value};
+use impala_crypto::{base64_decode, base64_encode_into, hex_encode, sha256};
 pub use impala_sync::files::Encoding;
 use impala_sync::files::RemoteFile;
 use serde_json::{Map, Value, json};
@@ -154,8 +154,21 @@ pub fn delta_payload(events: Vec<Value>, exported_at: &str) -> String {
 
 /// Inhalt einer Blob-Datei. `meta` fehlt bei Alt-Datensätzen und wird dann `{}` (JS: `meta || {}`).
 pub fn blob_payload(id: &str, meta: &Value, data: &[u8]) -> String {
-    let meta = if truthy(meta) { meta.clone() } else { json!({}) };
-    stringify(&json!({ "id": id, "meta": meta, "b64": base64_encode(data) }))
+    // Direkt als Text (`JSON.stringify({ id, meta, b64 })`): Base64 braucht keine Maskierung und
+    // muss bei großen Dateien nicht erst als eigener Text entstehen.
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4 + id.len() + 64);
+    out.push_str("{\"id\":");
+    write_string(&mut out, id);
+    out.push_str(",\"meta\":");
+    if truthy(meta) {
+        write_value(&mut out, meta);
+    } else {
+        out.push_str("{}");
+    }
+    out.push_str(",\"b64\":\"");
+    base64_encode_into(&mut out, data);
+    out.push_str("\"}");
+    out
 }
 
 /// Dateiname-Hash einer Blob-Datei: SHA-256 (Hex) über ihren JSON-Text.

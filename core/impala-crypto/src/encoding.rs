@@ -19,6 +19,11 @@ pub fn base64_encode(bytes: &[u8]) -> String {
     ENCODER.encode(bytes)
 }
 
+/// Wie [`base64_encode`], hängt aber an `out` an (kein Zwischentext bei großen Daten).
+pub fn base64_encode_into(out: &mut String, bytes: &[u8]) {
+    ENCODER.encode_string(bytes, out);
+}
+
 /// Base64 wie `atob`: ASCII-Leerraum wird ignoriert. `None` bei ungültigen Zeichen.
 pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
     if text.bytes().any(|b| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | b'\x0c')) {

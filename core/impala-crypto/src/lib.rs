@@ -19,7 +19,7 @@ mod usage;
 
 use std::fmt;
 
-pub use encoding::{base64_decode, base64_encode, hex_decode, hex_encode, sha256, sha256_hex};
+pub use encoding::{base64_decode, base64_encode, base64_encode_into, hex_decode, hex_encode, sha256, sha256_hex};
 pub use key::{CipherKey, SyncCredentials, SyncKey};
 pub use packet::{
     BlobRecord, EncryptedBlob, EncryptedPacket, GZIP_THRESHOLD, decrypt_blob, decrypt_bytes, decrypt_payload,

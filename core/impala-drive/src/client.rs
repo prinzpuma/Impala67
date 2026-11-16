@@ -457,47 +457,49 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             report.blobs_downloaded += 1;
         }
 
-        let mut uploads = Vec::new();
+        // Erst nur festlegen, WAS hochgeht (ID und Datei-Hash). Die Inhalte entstehen erst je
+        // Portion: Sonst läge beim ersten Sichern jede Datei gleichzeitig als Base64 im Speicher.
+        let mut uploads: Vec<(String, String)> = Vec::new();
         for id in &local_order {
             if is_local_only(id) {
                 continue; // [H4] Heft-Verlauf und Start-Checkpoint bleiben auf dem Gerät
             }
-            let cached = st.upload_hashes.get(id).cloned();
-            if cached.as_ref().is_some_and(|c| remote_hashes.contains(&c.hash)) {
+            let cached = st.upload_hashes.get(id);
+            if cached.is_some_and(|c| remote_hashes.contains(&c.hash)) {
                 continue;
             }
             let Some(rec) = self.store.get_blob(id).await? else { continue };
             let content_hash = rec.meta.get("hash").and_then(Value::as_str).unwrap_or("").to_owned();
             let size = rec.data.len() as u64;
-            let (raw, hash) = match cached {
-                Some(c) if c.content_hash == content_hash && c.size == size => (None, c.hash),
+            let hash = match cached {
+                Some(c) if c.content_hash == content_hash && c.size == size => c.hash.clone(),
                 _ => {
-                    let raw = blob_payload(id, &rec.meta, &rec.data);
-                    let hash = blob_hash(&raw);
+                    let hash = blob_hash(&blob_payload(id, &rec.meta, &rec.data));
                     st.upload_hashes.insert(id.clone(), UploadHash { content_hash, size, hash: hash.clone() });
-                    (Some(raw), hash)
+                    hash
                 }
             };
-            if !remote_hashes.insert(hash.clone()) {
-                continue;
+            if remote_hashes.insert(hash.clone()) {
+                uploads.push((id.clone(), hash));
             }
-            let raw = raw.unwrap_or_else(|| blob_payload(id, &rec.meta, &rec.data));
-            uploads.push((id.clone(), raw, hash));
         }
         if !uploads.is_empty() {
             on_phase(Phase::UploadBlobs(uploads.len()));
         }
         for chunk in uploads.chunks(PARALLEL_UPLOADS) {
-            let files: Vec<(String, Vec<u8>)> =
-                chunk.iter().map(|(_, raw, hash)| (blob_name(hash), gzip(raw.as_bytes()))).collect();
-            let ups: Vec<Upload<'_>> = chunk
+            let mut files = Vec::with_capacity(chunk.len());
+            for (id, hash) in chunk {
+                // Inzwischen gelöscht: beim nächsten Durchgang fehlt die Datei auch lokal.
+                let Some(rec) = self.store.get_blob(id).await? else { continue };
+                files.push((id, hash, blob_name(hash), gzip(blob_payload(id, &rec.meta, &rec.data).as_bytes())));
+            }
+            let ups: Vec<Upload<'_>> = files
                 .iter()
-                .zip(&files)
-                .map(|((id, _, hash), (name, bytes))| Upload {
+                .map(|(id, hash, name, bytes)| Upload {
                     name,
                     file_id: None,
                     encoding: Encoding::Gzip,
-                    properties: vec![("hash", hash.clone()), ("blobId", id.clone())],
+                    properties: vec![("hash", (*hash).clone()), ("blobId", (*id).clone())],
                     bytes,
                 })
                 .collect();
