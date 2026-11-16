@@ -501,11 +501,12 @@ impl ModelCore {
     /// Ein Feld eines Eintrags, das [`ModelCore::records`] auslässt (`content`).
     #[wasm_bindgen(js_name = recordField)]
     pub fn record_field(&self, kind: &str, id: &str, key: &str) -> JsValue {
-        let s = self.m.state();
-        let v = match kind {
-            "pages" => s.pages.get(id).and_then(|p| p.get(key)),
-            _ => None,
-        };
+        let page = if kind == "pages" { self.m.state().pages.get(id) } else { None };
+        // Der Seiteninhalt (häufigster Fall, oft groß) direkt, ohne Zwischenkopie als JSON-Wert.
+        if let ("content", Some(text)) = (key, page.and_then(|p| p.content.as_deref())) {
+            return JsValue::from_str(text);
+        }
+        let v = page.and_then(|p| p.get(key));
         match v {
             Some(Value::String(t)) => JsValue::from_str(&t),
             Some(v) => to_js(&v),
