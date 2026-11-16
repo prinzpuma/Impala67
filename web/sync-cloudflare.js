@@ -122,7 +122,6 @@ export const CLOUDFLARE_SYNC = (() => {
 			filterForUpload: (events) => DB.filterEventsForSync(SETTINGS_SYNC.sanitizeEvents(events, allowSecrets())),
 			async importRemote(events, unsyncedAfterSeq) {
 				const result = await PERF_PROFILER.run("cloudflare.import", async () => DB.importAll({ app: "impala67", events }, {
-					localEvents: await DB.eventsAfterSeqAll(unsyncedAfterSeq),
 					unsyncedAfterSeq,
 					conflictCheck: STATE.importConflicts,
 					remote: true,

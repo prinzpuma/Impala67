@@ -63,8 +63,19 @@ function contMeta(pg) {
 // „Weißt du's noch?“: täglich eine andere schon gelernte Karte, nur zum Aufdecken (keine Bewertung,
 // der Lernplan bleibt unberührt). Bilder/Formeln/HTML raus, Lückentext wird zur Lücke.
 const cardText = (md) => CORE.mdCardText(String(md || ""));
+const _frontOk = new Map();
+function frontOk(front) {
+	const key = String(front || "");
+	let ok = _frontOk.get(key);
+	if (ok === undefined) {
+		if (_frontOk.size > 10000) _frontOk.clear();
+		ok = cardText(key).length >= 3;
+		_frontOk.set(key, ok);
+	}
+	return ok;
+}
 function recall(cards) {
-	const pool = cards.filter((c) => c && !c.suspended && c.srs && c.srs.state === "review" && cardText(c.front).length >= 3);
+	const pool = cards.filter((c) => c && !c.suspended && c.srs && c.srs.state === "review" && frontOk(c.front));
 	if (pool.length < 5) return "";
 	const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
 	const c = pool[(day * 2654435761 >>> 0) % pool.length];

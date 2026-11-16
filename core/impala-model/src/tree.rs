@@ -298,17 +298,16 @@ impl State {
     ) -> Vec<DeckTreeEntry> {
         let names = self.active_deck_names(None);
         let active = self.active_cards();
+        let all_counts = self.deck_tree_counts(&names, study_opts_fn);
 
         let entries: Vec<DeckTreeEntry> = names
-            .iter()
-            .map(|name| {
-                let opts = study_opts_fn(name);
-                let snap = self.study_snapshot(&opts);
-                let counts = snap.counts;
+            .into_iter()
+            .zip(all_counts)
+            .map(|(name, (counts, done))| {
                 let mut total = 0u64;
                 let mut suspended = 0u64;
                 for c in &active {
-                    if deck_in_tree(c.deck_name(), name) {
+                    if deck_in_tree(c.deck_name(), &name) {
                         total += 1;
                         if c.is_suspended() {
                             suspended += 1;
@@ -321,12 +320,12 @@ impl State {
                 let review_cnt = counts.review as u64;
                 let due = review_cnt + learn_cnt;
                 let due_now = review_cnt + learn_now_cnt;
-                let open = !snap.done;
-                let label = deck_label(name).to_owned();
-                let parent = deck_parent(name).map(str::to_owned);
-                let order = self.decks.get(name).and_then(|d| d.order);
+                let open = !done;
+                let label = deck_label(&name).to_owned();
+                let parent = deck_parent(&name).map(str::to_owned);
+                let order = self.decks.get(&name).and_then(|d| d.order);
                 DeckTreeEntry {
-                    name: name.clone(),
+                    name,
                     label,
                     parent,
                     depth: 0,

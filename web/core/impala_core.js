@@ -994,6 +994,29 @@ export class ModelCore {
         }
     }
     /**
+     * Wie [`checkpoint_save`](Self::checkpoint_save), liefert aber direkt ein JS-Objekt ohne
+     * zweites JSON-String-Escaping über den großen Checkpoint- und Teil-Texten.
+     * @param {string} meta
+     * @returns {any}
+     */
+    checkpointSaveJs(meta) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(meta, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_checkpointSaveJs(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Checkpoint berechnen: `{ info, after, blobHashes, heftHashes }` – `after` sind die Events
      * nach `baseSeq()` bis `info.maxSeq`, die Hashes die schon gespeicherten Teile. Liefert
      * `{ status, checkpoint?, blobs?, hefte? }`; bei `written` schreibt JS alles in einer Transaktion
@@ -5959,7 +5982,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4683(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4701(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6005,7 +6028,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4683(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4701(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6098,7 +6121,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 202, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4626);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4644);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6125,14 +6148,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4683(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4683(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4701(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4701(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4626(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4644(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4626(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4644(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

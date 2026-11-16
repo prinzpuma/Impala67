@@ -266,7 +266,7 @@ fn owned_heads(m: crate::JsMap<&Object>) -> Vec<(String, Object)> {
 pub fn detect_import_conflicts(fresh: &mut Vec<Object>, ctx: ImportContext) -> ImportConflicts {
     let ImportContext { local, unsynced_after_seq: after, known, history, page_info, now } = ctx;
     let mut out = ImportConflicts::default();
-    if fresh.is_empty() {
+    if fresh.is_empty() || !local.iter().any(|e| is_local_only(e, after)) {
         return out;
     }
     let fresh_ids: HashSet<String> = fresh.iter().map(ev_id).collect();

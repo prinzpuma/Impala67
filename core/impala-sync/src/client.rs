@@ -466,7 +466,14 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             self.state.last_uploaded_seq = confirmed;
             self.save().await?;
         }
-        Ok(self.store.import_remote(candidates, self.state.last_uploaded_seq).await?)
+        let all_confirmed = confirmed == max_seq;
+        self.store.import_remote(candidates, self.state.last_uploaded_seq).await?;
+        if all_confirmed {
+            // Ohne unbestätigte eigene Events entstehen keine abgeleiteten Events; die
+            // importierten Fremd-Events liegen bis `max_seq` und müssen nicht erneut geprüft werden.
+            self.state.last_uploaded_seq = self.store.max_seq().await?;
+        }
+        Ok(())
     }
 
     /// Lädt lokale Änderungen hoch. Nach einem Generationsschnitt (Cursor 0) oder mit

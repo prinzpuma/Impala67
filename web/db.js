@@ -629,14 +629,15 @@ export const DB = (() => {
 		// ALLE lokalen ids, die Drei-Wege-Basis die ganze Historie. Mit nur dem Delta wurden
 		// längst vorhandene Events erneut importiert und gelöste Konflikte als neue Kopien angelegt.
 		const partialLocal = Array.isArray(opts.localEvents);
-		const local = partialLocal ? opts.localEvents : await allEvents();
+		const useKnownIds = partialLocal || typeof opts.unsyncedAfterSeq === "number";
+		const local = partialLocal ? opts.localEvents : (useKnownIds ? [] : await allEvents());
 		// Bekannte ids nur nachschlagen, nicht kopieren (~80k je Pull-Seite). Neue ids landen in
 		// einer eigenen Menge: Scheitert der Import, darf der Cache nichts Ungeschriebenes kennen.
-		const known = partialLocal ? await ensureKnownEventIds() : null;
+		const knownEventIds = useKnownIds ? await ensureKnownEventIds() : null;
 		const added = new Set();
-		const seenIds = { has: (id) => added.has(id) || !!known?.has(id), add: (id) => { added.add(id); } };
+		const seenIds = { has: (id) => added.has(id) || !!knownEventIds?.has(id), add: (id) => { added.add(id); } };
 		local.forEach((e) => seenIds.add(e.id));
-		let fullLog = partialLocal ? null : local;
+		let fullLog = useKnownIds ? null : local;
 		const history = async () => (fullLog ??= await allEvents());
 		const floor = compactFloor();
 		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,
@@ -694,15 +695,19 @@ export const DB = (() => {
 			// Der Kern braucht nur die lokalen Events nach dem Wasserstand; das ganze Log nur bei einem
 			// Kandidaten (dann meldet er needHistory).
 			const after = opts.unsyncedAfterSeq;
-			const freshJson = JSON.stringify(fresh);
-			const localJson = JSON.stringify(local.filter((ev) => (Number(ev?.seq) || 0) > after));
-			const known = (id) => seenIds.has(id);
-			const now = () => U.now();
-			let res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, undefined, known, now));
-			if (res.needHistory) res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, JSON.stringify(await history()), known, now));
-			conflictDetails.push(...res.conflicts);
-			mergedDetails.push(...res.merged);
-			fresh.push(...res.added);
+			const delta = partialLocal ? opts.localEvents : await eventsAfterSeqAll(after);
+			const unsyncedLocal = delta.filter((ev) => !ev?._remote && !ev?._derived && (Number(ev?.seq) || 0) > after);
+			if (unsyncedLocal.length) {
+				const freshJson = JSON.stringify(fresh);
+				const localJson = JSON.stringify(unsyncedLocal);
+				const known = (id) => seenIds.has(id);
+				const now = () => U.now();
+				let res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, undefined, known, now));
+				if (res.needHistory) res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, JSON.stringify(await history()), known, now));
+				conflictDetails.push(...res.conflicts);
+				mergedDetails.push(...res.merged);
+				fresh.push(...res.added);
+			}
 		}
 		fresh.forEach((ev) => {
 			delete ev.seq;

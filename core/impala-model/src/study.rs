@@ -9,6 +9,7 @@
 //! damit Lernen nach Mitternacht noch zum Vortag zählt. Tagesgrenzen und Einstellungen kommen vom
 //! Aufrufer – der Kern kennt weder Zeitzone noch localStorage.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use impala_sort::SortExt;
@@ -16,8 +17,8 @@ use impala_srs::Timestamp;
 use serde_json::Value;
 
 use crate::js;
-use crate::tree::deck_in_tree;
-use crate::types::{Card, State};
+use crate::tree::{DeckConf, deck_in_tree};
+use crate::types::{Card, Review, State};
 
 pub const LEARN_AHEAD_MS: i64 = 20 * 60_000;
 /// Frisch bewertete Karten nicht vorzeitig per Learn-Ahead zeigen.
@@ -96,19 +97,57 @@ fn le(a: &Value, b: &Value) -> bool {
     }
 }
 
-fn due(c: &Card) -> Value {
-    c.srs().and_then(|s| s.get("due")).cloned().unwrap_or(Value::Null)
+fn due_ref(c: &Card) -> &Value {
+    c.srs().and_then(|s| s.get("due")).unwrap_or(&Value::Null)
 }
 
 fn by_due(a: &&Card, b: &&Card) -> std::cmp::Ordering {
-    let (x, y) = (due(a), due(b));
-    if js::value_lt(&x, &y) {
+    let (x, y) = (due_ref(a), due_ref(b));
+    if js::value_lt(x, y) {
         std::cmp::Ordering::Less
-    } else if js::value_lt(&y, &x) {
+    } else if js::value_lt(y, x) {
         std::cmp::Ordering::Greater
     } else {
         std::cmp::Ordering::Equal
     }
+}
+
+type DeckUsage<'s> = HashMap<Cow<'s, str>, f64>;
+
+struct ReviewUsage<'s> {
+    used_new: DeckUsage<'s>,
+    used_rev: DeckUsage<'s>,
+    fresh: HashSet<&'s str>,
+}
+
+struct PreparedStudy<'s> {
+    ahead_iso: Value,
+    learn_due: Vec<&'s Card>,
+    learn_waiting: Vec<&'s Card>,
+    reviews_raw: Vec<&'s Card>,
+    new_raw: Vec<&'s Card>,
+}
+
+fn finalize_counts(
+    learn_due_cnt: usize,
+    learn_waiting_cnt: usize,
+    limited_rev_cnt: usize,
+    limited_new_cnt: usize,
+    ahead_free_cnt: usize,
+) -> (StudyCounts, bool, bool) {
+    let base_due = learn_due_cnt + limited_rev_cnt + limited_new_cnt;
+    let due_now_cnt = if base_due > 0 { base_due } else { ahead_free_cnt };
+    let available = due_now_cnt > 0;
+    let counts = StudyCounts {
+        learn: learn_due_cnt + learn_waiting_cnt,
+        learn_now: learn_due_cnt,
+        learn_waiting: learn_waiting_cnt,
+        review: limited_rev_cnt,
+        new: limited_new_cnt,
+        total: due_now_cnt + if available { 0 } else { learn_waiting_cnt },
+    };
+    let done = !available && learn_waiting_cnt == 0;
+    (counts, available, done)
 }
 
 /// Stabile Misch-Reihenfolge je Tag (`((h << 5) - h + code) | 0` über UTF-16).
@@ -121,134 +160,246 @@ fn mix_key(id: &str, day: &str) -> i32 {
 }
 
 impl State {
-    /// Lernstand jetzt (`computeStudySnapshot`).
-    pub fn study_snapshot<'s>(&'s self, o: &StudyOptions) -> StudySnapshot {
-        let t_iso = Value::from(o.now.to_iso());
-        let eod_iso = Value::from(o.day_end.to_iso());
-        let ahead_iso = Value::from(o.now.add_millis(LEARN_AHEAD_MS).to_iso());
-        let state = |c: &Card| c.srs_state().map(str::to_owned);
-        let all: Vec<&'s Card> = self
-            .cards
-            .values()
-            .filter(|c| {
-                !c.is_trashed()
-                    && !self.is_card_archived(c)
-                    && !c.is_suspended()
-                    && c.srs().is_some_and(js::truthy)
-                    && o.deck.is_none_or(|d| deck_in_tree(c.deck_name(), d))
+    fn review_deck<'a>(&'a self, r: &'a Review) -> Cow<'a, str> {
+        fn field<'x>(typed: Option<&'x str>, extra: &'x crate::js::Object) -> Option<Cow<'x, str>> {
+            if let Some(s) = typed {
+                return (!s.is_empty()).then_some(Cow::Borrowed(s));
+            }
+            extra.get("deck").filter(|v| js::truthy(v)).map(|v| Cow::Owned(js::to_string(v)))
+        }
+        field(r.deck.as_deref(), &r.extra)
+            .or_else(|| {
+                let card = r.card_id.as_deref().and_then(|id| self.cards.get(id))?;
+                field(card.deck.as_deref(), &card.extra)
             })
-            .collect();
-        let sorted = |mut v: Vec<&'s Card>| {
-            v.sort_small_by(by_due);
-            v
-        };
-        let learn_all: Vec<&Card> =
-            all.iter().copied().filter(|c| matches!(state(c).as_deref(), Some("learning" | "relearning"))).collect();
-        let learn_due = sorted(learn_all.iter().copied().filter(|c| le(&due(c), &t_iso)).collect());
-        let learn_waiting = sorted(
-            learn_all
-                .iter()
-                .copied()
-                .filter(|c| js::value_lt(&t_iso, &due(c)) && js::value_lt(&due(c), &eod_iso))
-                .collect(),
-        );
-        let learn_ahead: Vec<&Card> = learn_waiting.iter().copied().filter(|c| le(&due(c), &ahead_iso)).collect();
-        let learn_later: Vec<&Card> =
-            learn_waiting.iter().copied().filter(|c| js::value_lt(&ahead_iso, &due(c))).collect();
-        // Wiederholungen nach Lerntag (alles bis Tagesende), neue Karten ab ihrem Zeitpunkt.
-        let due_in = |s: &str, is_due: &dyn Fn(&Value) -> bool| {
-            sorted(all.iter().copied().filter(|c| state(c).as_deref() == Some(s) && is_due(&due(c))).collect())
-        };
-        let reviews_raw = due_in("review", &|d| js::value_lt(d, &eod_iso));
-        let new_raw = due_in("new", &|d| le(d, &t_iso));
+            .unwrap_or(Cow::Borrowed("Standard"))
+    }
 
-        // Tagesverbrauch aus dem Protokoll (Lernschritte zählen nicht). Nicht chronologisch:
-        // Sync hängt ältere Einträge hinten an, darum ganz durchlaufen.
-        let cut = o.day_start.to_iso();
-        let (mut used_new, mut used_rev): (HashMap<String, f64>, HashMap<String, f64>) = Default::default();
-        for r in &self.reviews {
-            if js::lt(r.t(), &cut) || r.truthy("learning") {
+    fn prepare_study<'s>(&'s self, now: Timestamp, day_end: Timestamp, deck: Option<&str>) -> PreparedStudy<'s> {
+        let t_iso = Value::from(now.to_iso());
+        let eod_iso = Value::from(day_end.to_iso());
+        let ahead_iso = Value::from(now.add_millis(LEARN_AHEAD_MS).to_iso());
+        let (mut learn_due, mut learn_waiting, mut reviews_raw, mut new_raw) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for c in self.cards.values() {
+            if c.is_trashed()
+                || self.is_card_archived(c)
+                || c.is_suspended()
+                || !c.srs().is_some_and(js::truthy)
+                || !deck.is_none_or(|d| deck_in_tree(c.deck_name(), d))
+            {
                 continue;
             }
-            let d = js::or(r.get("deck").as_ref())
-                .map(js::to_string)
-                .or_else(|| {
-                    let card = r.card_id.as_deref().and_then(|id| self.cards.get(id));
-                    card.and_then(|c| js::or(c.get("deck").as_ref()).map(js::to_string))
-                })
-                .unwrap_or_else(|| "Standard".into());
-            let m = if r.truthy("first") { &mut used_new } else { &mut used_rev };
-            *m.entry(d).or_default() += 1.0;
+            let d = due_ref(c);
+            match c.srs_state() {
+                Some("learning" | "relearning") => {
+                    if le(d, &t_iso) {
+                        learn_due.push(c);
+                    } else if js::value_lt(&t_iso, d) && js::value_lt(d, &eod_iso) {
+                        learn_waiting.push(c);
+                    }
+                }
+                // Wiederholungen nach Lerntag (alles bis Tagesende), neue Karten ab ihrem Zeitpunkt.
+                Some("review") if js::value_lt(d, &eod_iso) => reviews_raw.push(c),
+                Some("new") if le(d, &t_iso) => new_raw.push(c),
+                _ => {}
+            }
         }
-        let mut conf_cache: HashMap<&str, crate::tree::DeckConf> = HashMap::new();
-        let mut take = |list: &[&'s Card], new: bool, conf_cache: &mut HashMap<&'s str, crate::tree::DeckConf>| {
-            let mut out = Vec::new();
-            for c in list {
-                let d = c.deck_name();
-                let conf = conf_cache.entry(d).or_insert_with(|| self.deck_conf(d));
-                let rev = Value::from(used_rev.get(d).copied().unwrap_or(0.0));
-                if js::value_ge(&rev, conf.rev_per_day()) {
+        learn_due.sort_small_by(by_due);
+        learn_waiting.sort_small_by(by_due);
+        reviews_raw.sort_small_by(by_due);
+        new_raw.sort_small_by(by_due);
+        PreparedStudy { ahead_iso, learn_due, learn_waiting, reviews_raw, new_raw }
+    }
+
+    /// Tagesverbrauch (Lernschritte zählen nicht) und frisch bewertete Karten für die
+    /// Overlearning-Sperre in einem Durchlauf über das Review-Protokoll.
+    fn collect_review_usage<'s>(
+        &'s self,
+        day_start: Timestamp,
+        now: Timestamp,
+        collect_fresh: bool,
+    ) -> ReviewUsage<'s> {
+        let cut = day_start.to_iso();
+        let lock_cut = collect_fresh.then(|| now.add_millis(-OVERLEARN_LOCK_MS).to_iso());
+        let (mut used_new, mut used_rev): (DeckUsage<'s>, DeckUsage<'s>) = Default::default();
+        let mut fresh = HashSet::new();
+        // Nicht chronologisch: Sync hängt ältere Einträge hinten an, darum ganz durchlaufen.
+        for r in &self.reviews {
+            let t = r.t();
+            if !js::lt(t, &cut) && !r.truthy("learning") {
+                let d = self.review_deck(r);
+                let m = if r.truthy("first") { &mut used_new } else { &mut used_rev };
+                *m.entry(d).or_default() += 1.0;
+            }
+            if let Some(lock_cut) = &lock_cut
+                && js::lt(lock_cut, t)
+                && let Some(cid) = r.card_id.as_deref()
+            {
+                fresh.insert(cid);
+            }
+        }
+        ReviewUsage { used_new, used_rev, fresh }
+    }
+
+    fn take_limited<'s>(
+        &'s self,
+        list: impl Iterator<Item = &'s Card>,
+        new: bool,
+        used_new: &mut DeckUsage<'s>,
+        used_rev: &mut DeckUsage<'s>,
+        conf_cache: &mut HashMap<&'s str, DeckConf>,
+        mut on_take: impl FnMut(&'s Card),
+    ) {
+        for c in list {
+            let d = c.deck_name();
+            let conf = conf_cache.entry(d).or_insert_with(|| self.deck_conf(d));
+            let rev = Value::from(used_rev.get(d).copied().unwrap_or(0.0));
+            if js::value_ge(&rev, conf.rev_per_day()) {
+                continue;
+            }
+            if new {
+                let n = Value::from(used_new.get(d).copied().unwrap_or(0.0));
+                if js::value_ge(&n, conf.new_per_day()) {
                     continue;
                 }
-                if new {
-                    let n = Value::from(used_new.get(d).copied().unwrap_or(0.0));
-                    if js::value_ge(&n, conf.new_per_day()) {
-                        continue;
-                    }
-                    *used_new.entry(d.to_owned()).or_default() += 1.0;
-                } else {
-                    *used_rev.entry(d.to_owned()).or_default() += 1.0;
-                }
-                out.push(*c);
+                *used_new.entry(Cow::Borrowed(d)).or_default() += 1.0;
+            } else {
+                *used_rev.entry(Cow::Borrowed(d)).or_default() += 1.0;
             }
-            out
-        };
-        let limited_rev = take(&reviews_raw, false, &mut conf_cache);
-        let limited_new = take(&new_raw, true, &mut conf_cache);
+            on_take(c);
+        }
+    }
 
-        let lock_cut = o.now.add_millis(-OVERLEARN_LOCK_MS).to_iso();
-        let fresh: HashSet<&str> =
-            self.reviews.iter().filter(|r| js::lt(&lock_cut, r.t())).filter_map(|r| r.card_id.as_deref()).collect();
+    /// Lernstand jetzt (`computeStudySnapshot`).
+    pub fn study_snapshot<'s>(&'s self, o: &StudyOptions) -> StudySnapshot {
+        let prep = self.prepare_study(o.now, o.day_end, o.deck);
+        let learn_ahead: Vec<&Card> =
+            prep.learn_waiting.iter().copied().filter(|c| le(due_ref(c), &prep.ahead_iso)).collect();
+        let learn_later: Vec<&Card> =
+            prep.learn_waiting.iter().copied().filter(|c| js::value_lt(&prep.ahead_iso, due_ref(c))).collect();
+
+        let ReviewUsage { mut used_new, mut used_rev, fresh } =
+            self.collect_review_usage(o.day_start, o.now, o.overlearn_lock);
+        let mut conf_cache: HashMap<&'s str, DeckConf> = HashMap::new();
+        let mut limited_rev = Vec::new();
+        self.take_limited(
+            prep.reviews_raw.iter().copied(),
+            false,
+            &mut used_new,
+            &mut used_rev,
+            &mut conf_cache,
+            |c| limited_rev.push(c),
+        );
+        let mut limited_new = Vec::new();
+        self.take_limited(prep.new_raw.iter().copied(), true, &mut used_new, &mut used_rev, &mut conf_cache, |c| {
+            limited_new.push(c);
+        });
+
         let ahead_free: Vec<&Card> = if o.overlearn_lock {
             learn_ahead.iter().copied().filter(|c| !fresh.contains(c.id())).collect()
         } else {
             learn_ahead.clone()
         };
         let locked_ahead = learn_ahead.len() - ahead_free.len();
+        let ahead_free_len = ahead_free.len();
 
         let mut rev_new: Vec<&Card> = limited_rev.iter().chain(limited_new.iter()).copied().collect();
         if o.mix {
             let day = &o.now.to_iso()[..10];
             rev_new.sort_small_by_key(|c| mix_key(c.id(), day));
         }
-        let mut due_now: Vec<&Card> = learn_due.iter().chain(rev_new.iter()).copied().collect();
+        let mut due_now: Vec<&Card> = prep.learn_due.iter().chain(rev_new.iter()).copied().collect();
         if due_now.is_empty() && !ahead_free.is_empty() {
             due_now = ahead_free;
         }
-        let next_learn_at = learn_waiting.first().and_then(|c| c.srs_due()).map(str::to_owned);
-        let available = !due_now.is_empty();
+        let next_learn_at = prep.learn_waiting.first().and_then(|c| c.srs_due()).map(str::to_owned);
+        let (counts, available, done) = finalize_counts(
+            prep.learn_due.len(),
+            prep.learn_waiting.len(),
+            limited_rev.len(),
+            limited_new.len(),
+            ahead_free_len,
+        );
         let ids = |v: &[&Card]| v.iter().map(|c| c.id().to_owned()).collect::<Vec<_>>();
         StudySnapshot {
-            counts: StudyCounts {
-                learn: learn_due.len() + learn_waiting.len(),
-                learn_now: learn_due.len(),
-                learn_waiting: learn_waiting.len(),
-                review: limited_rev.len(),
-                new: limited_new.len(),
-                total: due_now.len() + if available { 0 } else { learn_waiting.len() },
-            },
+            counts,
             due_now: ids(&due_now),
-            learn_due: ids(&learn_due),
-            learn_waiting: ids(&learn_waiting),
+            learn_due: ids(&prep.learn_due),
+            learn_waiting: ids(&prep.learn_waiting),
             learn_later_today: ids(&learn_later),
             reviews_due: ids(&limited_rev),
             new_due: ids(&limited_new),
             next_learn_at,
             locked_ahead,
-            done: !available && learn_waiting.is_empty(),
+            done,
             finished_for_now: !available,
             available,
         }
+    }
+
+    /// Zähler und `done` für viele Stapel auf einmal (für [`State::deck_tree`]): filtert und
+    /// sortiert aktive Karten sowie Reviews einmalig statt pro Stapel.
+    pub(crate) fn deck_tree_counts<'a>(
+        &'a self,
+        decks: &[String],
+        study_opts_fn: impl Fn(&str) -> StudyOptions<'_>,
+    ) -> Vec<(StudyCounts, bool)> {
+        let all_opts: Vec<StudyOptions<'_>> = decks.iter().map(|d| study_opts_fn(d)).collect();
+        let Some(first) = all_opts.first() else { return Vec::new() };
+        let same_window = all_opts.iter().all(|o| {
+            (o.now, o.day_start, o.day_end, o.overlearn_lock)
+                == (first.now, first.day_start, first.day_end, first.overlearn_lock)
+        });
+        if !same_window {
+            return all_opts
+                .iter()
+                .map(|o| {
+                    let s = self.study_snapshot(o);
+                    (s.counts, s.done)
+                })
+                .collect();
+        }
+        let prep = self.prepare_study(first.now, first.day_end, None);
+        let ReviewUsage { used_new, used_rev, fresh } =
+            self.collect_review_usage(first.day_start, first.now, first.overlearn_lock);
+        let mut conf_cache: HashMap<&'a str, DeckConf> = HashMap::new();
+        all_opts
+            .into_iter()
+            .map(|o| {
+                let in_deck = |c: &&Card| o.deck.is_none_or(|d| deck_in_tree(c.deck_name(), d));
+                let (mut d_new, mut d_rev) = (used_new.clone(), used_rev.clone());
+                let mut limited_rev = 0usize;
+                self.take_limited(
+                    prep.reviews_raw.iter().copied().filter(in_deck),
+                    false,
+                    &mut d_new,
+                    &mut d_rev,
+                    &mut conf_cache,
+                    |_| limited_rev += 1,
+                );
+                let mut limited_new = 0usize;
+                self.take_limited(
+                    prep.new_raw.iter().copied().filter(in_deck),
+                    true,
+                    &mut d_new,
+                    &mut d_rev,
+                    &mut conf_cache,
+                    |_| limited_new += 1,
+                );
+                let learn_due_cnt = prep.learn_due.iter().filter(|c| in_deck(c)).count();
+                let (mut learn_waiting_cnt, mut ahead_free_cnt) = (0usize, 0usize);
+                for &c in prep.learn_waiting.iter().filter(|c| in_deck(c)) {
+                    learn_waiting_cnt += 1;
+                    if le(due_ref(c), &prep.ahead_iso) && (!o.overlearn_lock || !fresh.contains(c.id())) {
+                        ahead_free_cnt += 1;
+                    }
+                }
+                let (counts, _, done) =
+                    finalize_counts(learn_due_cnt, learn_waiting_cnt, limited_rev, limited_new, ahead_free_cnt);
+                (counts, done)
+            })
+            .collect()
     }
 
     /// Jetzt fällige Karten in Lernreihenfolge (`dueCards`).
@@ -279,5 +430,147 @@ mod tests {
         assert_eq!((o.day_start, o.day_end), (t("2026-11-03T03:00:00Z"), t("2026-11-04T03:00:00Z")));
         let o = StudyOptions::with_offset(None, t("2026-11-04T09:00:00Z"), 60);
         assert_eq!((o.day_start, o.day_end), (t("2026-11-04T03:00:00Z"), t("2026-11-05T03:00:00Z")));
+    }
+
+    #[test]
+    fn deck_tree_counts_identisch_zu_study_snapshot() {
+        use crate::types::{Deck, Review};
+        use serde_json::json;
+
+        let mut st = State::default();
+        for name in ["Mathe", "Mathe::Analysis", "Mathe::LinAlg", "Bio"] {
+            st.decks.insert(name.into(), Deck::new(name, "2026-01-01T00:00:00Z"));
+        }
+        let mut archived = Deck::new("Alt", "2026-01-01T00:00:00Z");
+        archived.archived = Some(true);
+        st.decks.insert("Alt".into(), archived);
+        st.settings.deck_conf = Some(
+            json!({
+                "*": { "newPerDay": 2, "revPerDay": 3 },
+                "Mathe": { "newPerDay": 1, "revPerDay": 2 },
+                "Mathe::LinAlg": { "newPerDay": 3, "revPerDay": 1 }
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+
+        let add_card = |st: &mut State, id: &str, deck: &str, state: &str, due: &str, flags: (bool, bool, bool)| {
+            let mut c = Card {
+                id: Some(id.into()),
+                deck: Some(deck.into()),
+                trashed: flags.0.then_some(true),
+                suspended: flags.1.then_some(true),
+                archived: flags.2.then_some(true),
+                ..Default::default()
+            };
+            c.extra.insert("srs".into(), json!({ "state": state, "due": due }));
+            st.cards.insert(id.into(), c);
+        };
+
+        let now = Timestamp::parse_iso("2026-11-04T12:00:00Z").unwrap();
+        // Fällige Lernkarten, Learn-Ahead (mit/ohne Overlearn-Lock), spätere heute, morgen
+        add_card(&mut st, "l_due", "Mathe::Analysis", "learning", "2026-11-04T11:55:00Z", (false, false, false));
+        add_card(
+            &mut st,
+            "l_ahead_locked",
+            "Mathe::LinAlg",
+            "relearning",
+            "2026-11-04T12:05:00Z",
+            (false, false, false),
+        );
+        add_card(&mut st, "l_ahead_free", "Bio", "learning", "2026-11-04T12:15:00Z", (false, false, false));
+        add_card(&mut st, "l_later", "Standard", "learning", "2026-11-04T18:00:00Z", (false, false, false));
+        // Wiederholungen + neue Karten über Limits hinaus
+        for i in 0..4 {
+            add_card(
+                &mut st,
+                &format!("r_ma_{i}"),
+                "Mathe::Analysis",
+                "review",
+                &format!("2026-11-04T0{i}:00:00Z"),
+                (false, false, false),
+            );
+            add_card(
+                &mut st,
+                &format!("n_ma_{i}"),
+                "Mathe::Analysis",
+                "new",
+                "2026-11-01T00:00:00Z",
+                (false, false, false),
+            );
+        }
+        add_card(&mut st, "r_la", "Mathe::LinAlg", "review", "2026-11-04T10:00:00Z", (false, false, false));
+        add_card(&mut st, "n_la", "Mathe::LinAlg", "new", "2026-11-04T10:00:00Z", (false, false, false));
+        add_card(&mut st, "r_future", "Bio", "review", "2026-11-06T00:00:00Z", (false, false, false));
+        add_card(&mut st, "ignored_trashed", "Bio", "new", "2026-11-01T00:00:00Z", (true, false, false));
+        add_card(&mut st, "ignored_susp", "Bio", "new", "2026-11-01T00:00:00Z", (false, true, false));
+        add_card(&mut st, "ignored_arch", "Alt", "new", "2026-11-01T00:00:00Z", (false, false, false));
+
+        // Reviews heute: ein frisches Lern-Review (Overlearn-Lock), ein Review in Mathe::LinAlg (füllt revPerDay=1)
+        st.reviews = vec![
+            Review {
+                id: Some("rv1".into()),
+                card_id: Some("l_ahead_locked".into()),
+                deck: Some("Mathe::LinAlg".into()),
+                t: Some("2026-11-04T11:58:00Z".into()),
+                learning: Some(true),
+                ..Default::default()
+            },
+            Review {
+                id: Some("rv2".into()),
+                card_id: Some("r_la".into()),
+                deck: Some("Mathe::LinAlg".into()),
+                t: Some("2026-11-04T09:00:00Z".into()),
+                first: Some(false),
+                learning: Some(false),
+                ..Default::default()
+            },
+            // Alt-Review vor Tagesbeginn zählt nicht zum Tageslimit
+            Review {
+                id: Some("rv_old".into()),
+                card_id: Some("r_ma_0".into()),
+                deck: Some("Mathe::Analysis".into()),
+                t: Some("2026-11-03T09:00:00Z".into()),
+                first: Some(false),
+                learning: Some(false),
+                ..Default::default()
+            },
+        ];
+
+        fn make_opts(name: &str, now: Timestamp, overlearn_lock: bool, mix: bool) -> StudyOptions<'_> {
+            let mut o = StudyOptions::with_offset(Some(name), now, 60);
+            o.overlearn_lock = overlearn_lock;
+            o.mix = mix;
+            o
+        }
+
+        let names = st.active_deck_names(None);
+        for overlearn_lock in [true, false] {
+            for mix in [false, true] {
+                let fast = st.deck_tree_counts(&names, |name| make_opts(name, now, overlearn_lock, mix));
+                assert_eq!(fast.len(), names.len());
+                for (name, (counts, done)) in names.iter().zip(&fast) {
+                    let snap = st.study_snapshot(&make_opts(name, now, overlearn_lock, mix));
+                    assert_eq!((*counts, *done), (snap.counts, snap.done), "deck={name}");
+                }
+                let tree = st.deck_tree(&HashSet::new(), |name| make_opts(name, now, overlearn_lock, mix));
+                for entry in tree {
+                    let snap = st.study_snapshot(&make_opts(&entry.name, now, overlearn_lock, mix));
+                    assert_eq!(entry.new, snap.counts.new as u64);
+                    assert_eq!(entry.learn, snap.counts.learn as u64);
+                    assert_eq!(entry.learn_now, snap.counts.learn_now as u64);
+                    assert_eq!(entry.review, snap.counts.review as u64);
+                    assert_eq!(entry.open, !snap.done);
+                }
+            }
+        }
+
+        // Fallback bei abweichenden Optionen je Stapel
+        let fallback = st.deck_tree_counts(&names, |name| make_opts(name, now, name == "Mathe::LinAlg", false));
+        for (name, (counts, done)) in names.iter().zip(&fallback) {
+            let snap = st.study_snapshot(&make_opts(name, now, name == "Mathe::LinAlg", false));
+            assert_eq!((*counts, *done), (snap.counts, snap.done));
+        }
     }
 }

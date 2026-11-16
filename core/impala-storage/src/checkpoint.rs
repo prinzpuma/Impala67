@@ -285,6 +285,35 @@ fn sha256_hex(s: &str) -> String {
     Sha256::digest(s.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn collect_core(mut take: impl FnMut(&str) -> Option<Value>) -> Object {
+    core_keys().filter(|k| *k != "heftDocs").map(|k| (k.to_owned(), take(k).unwrap_or(Value::Null))).collect()
+}
+
+fn build_checkpoint(
+    core: Object,
+    blob_sizes: Object,
+    info: &LogInfo,
+    max_time: &str,
+    hefte: &[HeftPart],
+    order_times: Option<&Object>,
+) -> Object {
+    let hashes: Object = hefte.iter().map(|h| (h.page_id.clone(), Value::from(h.hash.clone()))).collect();
+    let mut cp = Object::new();
+    cp.insert("format".into(), Value::from(FORMAT));
+    cp.insert("maxSeq".into(), Value::from(info.max_seq));
+    cp.insert("eventCount".into(), Value::from(info.count));
+    cp.insert("lastEventId".into(), Value::from(info.last_event_id.clone()));
+    cp.insert("maxTime".into(), Value::from(max_time));
+    cp.insert("heftBlobSizes".into(), Value::Object(blob_sizes));
+    cp.insert("reconciledArchive".into(), Value::Bool(true));
+    cp.insert("state".into(), Value::Object(core));
+    cp.insert("heftDocHashes".into(), Value::Object(hashes));
+    if let Some(times) = order_times {
+        cp.insert("orderTimes".into(), Value::Object(times.clone()));
+    }
+    cp
+}
+
 /// Neuer Checkpoint im aktuellen Format (`makeStateCheckpoint`). `state` ist der ganze
 /// gespeicherte Zustand; `heftBlobs` und `heftDocs` gehen nicht in den Kern.
 pub fn make(
@@ -295,25 +324,23 @@ pub fn make(
     hefte: &[HeftPart],
     order_times: Option<&Object>,
 ) -> Object {
-    let core: Object = core_keys()
-        .filter(|k| *k != "heftDocs")
-        .map(|k| (k.to_owned(), state.get(k).cloned().unwrap_or(Value::Null)))
-        .collect();
-    let hashes: Object = hefte.iter().map(|h| (h.page_id.clone(), Value::from(h.hash.clone()))).collect();
-    let mut cp = Object::new();
-    cp.insert("format".into(), Value::from(FORMAT));
-    cp.insert("maxSeq".into(), Value::from(info.max_seq));
-    cp.insert("eventCount".into(), Value::from(info.count));
-    cp.insert("lastEventId".into(), Value::from(info.last_event_id.clone()));
-    cp.insert("maxTime".into(), Value::from(max_time));
-    cp.insert("heftBlobSizes".into(), Value::Object(heft_blob_sizes(state, known_blob_sizes)));
-    cp.insert("reconciledArchive".into(), Value::Bool(true));
-    cp.insert("state".into(), Value::Object(core));
-    cp.insert("heftDocHashes".into(), Value::Object(hashes));
-    if let Some(times) = order_times {
-        cp.insert("orderTimes".into(), Value::Object(times.clone()));
-    }
-    cp
+    let blob_sizes = heft_blob_sizes(state, known_blob_sizes);
+    let core = collect_core(|k| state.get(k).cloned());
+    build_checkpoint(core, blob_sizes, info, max_time, hefte, order_times)
+}
+
+/// Wie [`make`], übernimmt aber `state` und entnimmt die Schlüssel ohne erneutes Klonen.
+pub fn make_owned(
+    mut state: Object,
+    info: &LogInfo,
+    max_time: &str,
+    known_blob_sizes: Option<&Object>,
+    hefte: &[HeftPart],
+    order_times: Option<&Object>,
+) -> Object {
+    let blob_sizes = heft_blob_sizes(&state, known_blob_sizes);
+    let core = collect_core(|k| state.remove(k));
+    build_checkpoint(core, blob_sizes, info, max_time, hefte, order_times)
 }
 
 /// Schlüssel eines Objekts (`Object.keys`, auch für Arrays).
@@ -446,4 +473,30 @@ fn checked<S: Storage + ?Sized>(
         return Ok(Err(reason));
     }
     Ok(Ok((cp, tail)))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn make_owned_matches_make() {
+        let mut state = Object::new();
+        state.insert("pages".into(), json!({ "p1": { "id": "p1", "title": "A" } }));
+        state.insert("cards".into(), json!({ "c1": { "id": "c1" } }));
+        state.insert("heftDocs".into(), json!({ "h1": { "v": 1 } }));
+        state.insert("heftBlobs".into(), json!({ "b1": "data:abc" }));
+        let mut known_sizes = Object::new();
+        known_sizes.insert("b0".into(), json!(42));
+        let mut order_times = Object::new();
+        order_times.insert("page:p1".into(), json!("2026-01-01T00:00:00Z"));
+        let hefte = vec![HeftPart { page_id: "h1".into(), hash: "deadbeef".into(), json: String::new() }];
+        let info = LogInfo { count: 10, max_seq: 10, last_event_id: "e10".into() };
+
+        let cloned_cp = make(&state, &info, "2026-01-02T00:00:00Z", Some(&known_sizes), &hefte, Some(&order_times));
+        let owned_cp = make_owned(state, &info, "2026-01-02T00:00:00Z", Some(&known_sizes), &hefte, Some(&order_times));
+        assert_eq!(Value::Object(owned_cp).to_string(), Value::Object(cloned_cp).to_string());
+    }
 }

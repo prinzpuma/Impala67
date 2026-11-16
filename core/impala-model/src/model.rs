@@ -490,8 +490,14 @@ impl Model {
             })
             .collect();
         let times = self.order_complete.then(|| order::times_to_object(&self.order));
-        let written =
-            storage.save_checkpoint_parts(&state, &self.loaded_time, Some(&sizes), &dirty, times.as_ref(), &hefte)?;
+        let written = storage.save_checkpoint_parts_owned(
+            state,
+            &self.loaded_time,
+            Some(&sizes),
+            &dirty,
+            times.as_ref(),
+            &hefte,
+        )?;
         for part in hefte {
             self.state.hefte.set_stored_hash(&part.page_id, part.hash);
         }

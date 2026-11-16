@@ -77,8 +77,11 @@ function render() {
 	renderStatusDot();
 	renderModelBar();
 	// Nur bei Änderung schreiben: textContent ersetzt sonst bei JEDEM Render den Textknoten (Style-Neuberechnung).
-	const due = $("dueCount"), dueText = String(STATE.dueCards().length);
-	if (due && due.textContent !== dueText) due.textContent = dueText;
+	const due = $("dueCount");
+	if (due) {
+		const dueText = String(STATE.dueCards().length);
+		if (due.textContent !== dueText) due.textContent = dueText;
+	}
 	finishProfile();
 }
 
@@ -1008,7 +1011,7 @@ function renderHome(main) {
 	const lz = (LERNZEIT.statsForHome && (lzTotals ? LERNZEIT.statsForHome(lzTotals) : LERNZEIT.statsForHome())) || { goalPct: 0 };
 	const favPages = STATE.favoritePages().filter((p) => !isConflictPage(p));
 	const homeName = ((S.settings || {}).homeUserName || "").trim();
-	const homeAnalysisHtml = () => { const la = lernanalyseParts(); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
+	const homeAnalysisHtml = () => { const la = lernanalyseParts(lzTotals); return la ? '<section class="la">' + homeFold("insights", la.summary, la.body, false) + "</section>" : ""; };
 	// Eine Startseite für alle Geräte (home-view.js) — schmale Bildschirme über die Container-Query in home.css
 	const homeHtml = homeViewHtml({
 		greeting, name: homeName, dateLine, conflictCount, backup: BACKUP.homeHint(), last: recent[0], favPages, study: homeStudy, cards: STATE.activeCards(),

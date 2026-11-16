@@ -53,6 +53,18 @@ fn heft_blob_hash(ev: &Object) -> Option<&str> {
     (event::kind(ev) == "heftBlob").then(|| ev.get("payload")?.get("hash")?.as_str()).flatten()
 }
 
+fn write_checkpoint_with<S: Storage + ?Sized>(
+    storage: &mut S,
+    dirty_blobs: &[(String, String)],
+    hefte: &[HeftPart],
+    make: impl FnOnce(&LogInfo) -> Object,
+) -> Result<LogInfo, Error> {
+    let info = storage.log_info()?;
+    let cp = make(&info);
+    checkpoint::write(storage, cp, dirty_blobs, hefte)?;
+    Ok(info)
+}
+
 pub trait StorageExt: Storage {
     /// Hängt Events an (alle oder keins). Jedes bekommt eine neue lokale `seq`.
     fn add_events(&mut self, events: Vec<Object>) -> Result<Vec<Seq>, Error> {
@@ -232,10 +244,24 @@ pub trait StorageExt: Storage {
         order_times: Option<&Object>,
         hefte: &[HeftPart],
     ) -> Result<LogInfo, Error> {
-        let info = self.log_info()?;
-        let cp = checkpoint::make(state, &info, max_time, known_blob_sizes, hefte, order_times);
-        checkpoint::write(self, cp, dirty_blobs, hefte)?;
-        Ok(info)
+        write_checkpoint_with(self, dirty_blobs, hefte, |info| {
+            checkpoint::make(state, info, max_time, known_blob_sizes, hefte, order_times)
+        })
+    }
+
+    /// Wie [`save_checkpoint_parts`](Self::save_checkpoint_parts), übernimmt aber `state` ohne Klon.
+    fn save_checkpoint_parts_owned(
+        &mut self,
+        state: Object,
+        max_time: &str,
+        known_blob_sizes: Option<&Object>,
+        dirty_blobs: &[(String, String)],
+        order_times: Option<&Object>,
+        hefte: &[HeftPart],
+    ) -> Result<LogInfo, Error> {
+        write_checkpoint_with(self, dirty_blobs, hefte, |info| {
+            checkpoint::make_owned(state, info, max_time, known_blob_sizes, hefte, order_times)
+        })
     }
 
     fn clear_checkpoint(&mut self, keep_heft_blobs: bool) -> Result<(), Error> {

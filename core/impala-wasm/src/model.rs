@@ -64,6 +64,69 @@ fn strings(v: Value) -> Vec<String> {
     }
 }
 
+fn is_sorted_by_seq(events: &[Object]) -> bool {
+    events.windows(2).all(|w| seq_of(w[0].get("seq")) <= seq_of(w[1].get("seq")))
+}
+
+/// Event-Liste, die sich merkt, ob sie aufsteigend nach `seq` geordnet ist (`partition_point`
+/// statt O(N)-Scan ab Index 0).
+struct EventVec {
+    events: Vec<Object>,
+    sorted: bool,
+}
+
+impl Default for EventVec {
+    fn default() -> Self {
+        Self { events: Vec::new(), sorted: true }
+    }
+}
+
+impl EventVec {
+    fn from_vec(events: Vec<Object>) -> Self {
+        let sorted = is_sorted_by_seq(&events);
+        Self { events, sorted }
+    }
+
+    fn extend(&mut self, incoming: Vec<Object>) {
+        if self.sorted && !incoming.is_empty() {
+            let boundary_ok =
+                self.events.last().is_none_or(|prev| seq_of(prev.get("seq")) <= seq_of(incoming[0].get("seq")));
+            self.sorted = boundary_ok && is_sorted_by_seq(&incoming);
+        }
+        self.events.extend(incoming);
+    }
+
+    fn events_after(&self, after: u64, up_to: Option<u64>, limit: Option<usize>) -> Vec<Object> {
+        let limit = limit.unwrap_or(usize::MAX);
+        if self.sorted {
+            let start = self.events.partition_point(|e| seq_of(e.get("seq")) <= after);
+            return self.events[start..]
+                .iter()
+                .take_while(|e| up_to.is_none_or(|u| seq_of(e.get("seq")) <= u))
+                .take(limit)
+                .cloned()
+                .collect();
+        }
+        self.events
+            .iter()
+            .filter(|e| {
+                let s = seq_of(e.get("seq"));
+                s > after && up_to.is_none_or(|u| s <= u)
+            })
+            .take(limit)
+            .cloned()
+            .collect()
+    }
+
+    fn event_at(&self, seq: u64) -> Option<Object> {
+        if self.sorted {
+            let i = self.events.partition_point(|e| seq_of(e.get("seq")) < seq);
+            return self.events.get(i).filter(|e| seq_of(e.get("seq")) == seq).cloned();
+        }
+        self.events.iter().find(|e| seq_of(e.get("seq")) == seq).cloned()
+    }
+}
+
 /// Speicher aus vorab gelesenen Teilen. Was fehlt, ist ein Fehler ([`NEED_ALL`] für das Log);
 /// Schreibvorgänge werden nur gesammelt.
 #[derive(Default)]
@@ -74,9 +137,9 @@ struct Prefetched {
     boundary: Option<Object>,
     /// Events nach `tail_after` (in `seq`-Reihenfolge).
     tail_after: u64,
-    tail: Vec<Object>,
+    tail: EventVec,
     /// Das ganze Log, falls geliefert.
-    all: Option<Vec<Object>>,
+    all: Option<EventVec>,
     parts: HashMap<(PartKind, String), String>,
     part_hashes: HashMap<PartKind, Vec<String>>,
     writes: Vec<Write>,
@@ -92,24 +155,20 @@ impl Storage for Prefetched {
             None if after >= self.tail_after => &self.tail,
             None => return Err(Error::Backend(NEED_ALL.into())),
         };
-        let in_range = |e: &&Object| {
-            let s = seq_of(e.get("seq"));
-            s > after && up_to.is_none_or(|u| s <= u)
-        };
-        Ok(source.iter().filter(in_range).take(limit.unwrap_or(usize::MAX)).cloned().collect())
+        Ok(source.events_after(after, up_to, limit))
     }
 
     /// Nur `loadFinish` liest das ganze Log, einmal: abgeben statt kopieren.
     fn take_all_events(&mut self) -> Result<Vec<Object>, Error> {
         match self.all.take() {
-            Some(all) => Ok(all),
+            Some(all) => Ok(all.events),
             None => self.events_after(0, None, None),
         }
     }
 
     fn event_at(&self, seq: u64) -> Result<Option<Object>, Error> {
         if let Some(all) = &self.all {
-            return Ok(all.iter().find(|e| seq_of(e.get("seq")) == seq).cloned());
+            return Ok(all.event_at(seq));
         }
         Ok(self.boundary.clone().filter(|b| seq_of(b.get("seq")) == seq))
     }
@@ -220,7 +279,7 @@ impl ModelCore {
         let events = objects(parse(json)?);
         let load = self.load.as_mut().ok_or_else(|| JsError::new("loadBegin fehlt"))?;
         if full {
-            load.all.get_or_insert_with(Vec::new).extend(events);
+            load.all.get_or_insert_with(EventVec::default).extend(events);
         } else {
             load.tail.extend(events);
         }
@@ -333,21 +392,20 @@ impl ModelCore {
 
     // ---- Checkpoint -----------------------------------------------------------------------
 
-    /// Checkpoint berechnen: `{ info, after, blobHashes, heftHashes }` – `after` sind die Events
-    /// nach `baseSeq()` bis `info.maxSeq`, die Hashes die schon gespeicherten Teile. Liefert
-    /// `{ status, checkpoint?, blobs?, hefte? }`; bei `written` schreibt JS alles in einer Transaktion
-    /// und meldet einen Fehlschlag mit `checkpointNotWritten(Object.keys(blobs))`.
-    #[wasm_bindgen(js_name = checkpointSave)]
-    pub fn checkpoint_save(&mut self, meta: &str) -> Result<String, JsError> {
-        let meta: Value = parse(meta)?;
+    fn save_checkpoint_with(&mut self, meta: &str) -> Result<(&'static str, CheckpointSave, Vec<Write>), JsError> {
+        let mut meta: Value = parse(meta)?;
+        let mut take = |k: &str| meta.as_object_mut().and_then(|o| o.remove(k));
+        let after = take("after").unwrap_or(Value::Null);
+        let blob_hashes = take("blobHashes").unwrap_or_default();
+        let heft_hashes = take("heftHashes").unwrap_or_default();
         let mut store = Prefetched {
             info: log_info(meta.get("info")),
             tail_after: self.m.base_seq(),
-            tail: objects(meta.get("after").cloned().unwrap_or(Value::Null)),
+            tail: EventVec::from_vec(objects(after)),
             ..Prefetched::default()
         };
-        store.part_hashes.insert(PartKind::HeftBlob, strings(meta.get("blobHashes").cloned().unwrap_or_default()));
-        store.part_hashes.insert(PartKind::HeftDoc, strings(meta.get("heftHashes").cloned().unwrap_or_default()));
+        store.part_hashes.insert(PartKind::HeftBlob, strings(blob_hashes));
+        store.part_hashes.insert(PartKind::HeftDoc, strings(heft_hashes));
         let status = self.m.save_checkpoint(&mut store).map_err(|e| JsError::new(&e.to_string()))?;
         let name = match status {
             CheckpointSave::Written => "written",
@@ -355,10 +413,20 @@ impl ModelCore {
             CheckpointSave::OutOfOrder => "out-of-order",
             CheckpointSave::Stale => "stale",
         };
+        Ok((name, status, store.writes))
+    }
+
+    /// Checkpoint berechnen: `{ info, after, blobHashes, heftHashes }` – `after` sind die Events
+    /// nach `baseSeq()` bis `info.maxSeq`, die Hashes die schon gespeicherten Teile. Liefert
+    /// `{ status, checkpoint?, blobs?, hefte? }`; bei `written` schreibt JS alles in einer Transaktion
+    /// und meldet einen Fehlschlag mit `checkpointNotWritten(Object.keys(blobs))`.
+    #[wasm_bindgen(js_name = checkpointSave)]
+    pub fn checkpoint_save(&mut self, meta: &str) -> Result<String, JsError> {
+        let (name, status, writes) = self.save_checkpoint_with(meta)?;
         let mut out = json!({ "status": name });
         if status == CheckpointSave::Written {
             let (mut blobs, mut hefte) = (Object::new(), Object::new());
-            for w in store.writes {
+            for w in writes {
                 match w {
                     Write::PutCheckpoint(_, cp) => {
                         // Text zum Speichern plus die Felder, die JS selbst braucht (db.js, Start).
@@ -382,6 +450,44 @@ impl ModelCore {
             out["hefte"] = Value::Object(hefte);
         }
         Ok(out.to_string())
+    }
+
+    /// Wie [`checkpoint_save`](Self::checkpoint_save), liefert aber direkt ein JS-Objekt ohne
+    /// zweites JSON-String-Escaping über den großen Checkpoint- und Teil-Texten.
+    #[wasm_bindgen(js_name = checkpointSaveJs)]
+    pub fn checkpoint_save_js(&mut self, meta: &str) -> Result<JsValue, JsError> {
+        let (name, status, writes) = self.save_checkpoint_with(meta)?;
+        let out = js_sys::Object::new();
+        crate::js::set(&out, "status", name);
+        if status == CheckpointSave::Written {
+            let (blobs, hefte) = (js_sys::Object::new(), js_sys::Object::new());
+            for w in writes {
+                match w {
+                    Write::PutCheckpoint(_, cp) => {
+                        crate::js::set(
+                            &out,
+                            "checkpointMeta",
+                            to_js(&json!({
+                                "maxSeq": cp.get("maxSeq"),
+                                "heftBlobSizes": cp.get("heftBlobSizes"),
+                                "heftDocHashes": cp.get("heftDocHashes"),
+                            })),
+                        );
+                        crate::js::set(&out, "checkpoint", JsValue::from_str(&Value::Object(cp).to_string()));
+                    }
+                    Write::PutPart(PartKind::HeftBlob, h, d) => {
+                        crate::js::set(&blobs, &h, d.as_str());
+                    }
+                    Write::PutPart(PartKind::HeftDoc, h, d) => {
+                        crate::js::set(&hefte, &h, d.as_str());
+                    }
+                    _ => {}
+                }
+            }
+            crate::js::set(&out, "blobs", blobs);
+            crate::js::set(&out, "hefte", hefte);
+        }
+        Ok(out.into())
     }
 
     #[wasm_bindgen(js_name = checkpointNotWritten)]
@@ -434,7 +540,7 @@ impl ModelCore {
         let recovered: HashMap<String, String> = parse(recovered)?;
         let store = Prefetched {
             parts: found.into_iter().map(|(h, d)| ((PartKind::HeftBlob, h), d)).collect(),
-            all: Some(
+            all: Some(EventVec::from_vec(
                 recovered
                     .into_iter()
                     .enumerate()
@@ -447,7 +553,7 @@ impl ModelCore {
                         o
                     })
                     .collect(),
-            ),
+            )),
             ..Prefetched::default()
         };
         self.m.hydrate_heft_blobs(&store, targets.as_deref()).map_err(|e| JsError::new(&e.to_string()))?;
@@ -981,9 +1087,13 @@ impl ModelCore {
         known: &Function,
         now: &Function,
     ) -> Result<String, JsError> {
+        let local = objects(parse(local)?);
+        let after_u64 = unsynced_after_seq.max(0.0) as u64;
+        if !local.iter().any(|e| conflict::is_local_only(e, after_u64)) {
+            return Ok(r#"{"added":[],"conflicts":[],"merged":[]}"#.to_owned());
+        }
         let mut fresh = objects(parse(fresh)?);
         let before = fresh.len();
-        let local = objects(parse(local)?);
         let mut history: Option<Vec<Object>> = match history {
             Some(h) => Some(objects(parse(&h)?)),
             None => None,
@@ -1004,7 +1114,7 @@ impl ModelCore {
             &mut fresh,
             ImportContext {
                 local: &local,
-                unsynced_after_seq: unsynced_after_seq.max(0.0) as u64,
+                unsynced_after_seq: after_u64,
                 known: &known_fn,
                 history: &mut get_history,
                 page_info: &page_info,
@@ -1239,4 +1349,44 @@ pub fn normalize_chat_session_js(raw_json: &str, now: &str) -> Result<Option<Str
 pub fn sort_chat_sessions_js(list_json: &str) -> Result<String, JsError> {
     let list: Vec<Value> = parse(list_json)?;
     Ok(text(&impala_model::kleinteile::sort_chat_values(list)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ev(seq: u64) -> Object {
+        let mut o = Object::new();
+        o.insert("seq".into(), Value::from(seq));
+        o.insert("id".into(), Value::from(format!("e{seq}")));
+        o
+    }
+
+    #[test]
+    fn event_vec_sorted_und_unsorted() {
+        // Sortiert + portionsweise angehängt
+        let mut v = EventVec::default();
+        v.extend((1..=5).map(ev).collect());
+        v.extend(vec![ev(5), ev(6), ev(8), ev(10)]);
+        assert!(v.sorted);
+        let seqs = |list: Vec<Object>| list.into_iter().map(|o| seq_of(o.get("seq"))).collect::<Vec<_>>();
+        assert_eq!(seqs(v.events_after(0, Some(5), None)), vec![1, 2, 3, 4, 5, 5]);
+        assert_eq!(seqs(v.events_after(4, Some(8), Some(3))), vec![5, 5, 6]);
+        assert_eq!(seqs(v.events_after(5, None, Some(2))), vec![6, 8]);
+        assert_eq!(v.event_at(5).unwrap()["seq"], 5);
+        assert!(v.event_at(7).is_none());
+
+        // Erstes Stück sortiert, zweites verletzt die Grenze → fällt auf linearen Scan zurück
+        let mut u = EventVec::default();
+        u.extend(vec![ev(1), ev(5)]);
+        u.extend(vec![ev(3), ev(7)]);
+        assert!(!u.sorted);
+        assert_eq!(seqs(u.events_after(2, Some(6), None)), vec![5, 3]);
+        assert_eq!(u.event_at(3).unwrap()["seq"], 3);
+
+        // Einzelner Baustein in sich unsortiert
+        let single = EventVec::from_vec(vec![ev(1), ev(4), ev(2), ev(5)]);
+        assert!(!single.sorted);
+        assert_eq!(seqs(single.events_after(1, Some(4), None)), vec![4, 2]);
+    }
 }

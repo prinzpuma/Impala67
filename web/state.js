@@ -97,6 +97,7 @@ export const STATE = (() => {
 	// zwischengespeicherten Abfrage-Ergebnisse ungültig.
 	let _pageRev = 0;
 	let _cardRev = 0;
+	let _learningRev = 0;
 	let _stateRevision = 0;
 	let _loading = false;
 	let _queuedRemoteEvents = [];
@@ -141,6 +142,7 @@ export const STATE = (() => {
 		VIEWS.touch(touched);
 		if (touched.pages || touched.heft) _pageRev++;
 		if (touched.cards || touched.decks || touched.reviews || touched.settings) _cardRev++;
+		if (touched.learningSessions) _learningRev++;
 		if (touched.heft) _heftMeta.delete(touched.heft);
 		if (touched.blob) _heftMeta.clear();
 		if (touched.closedPages) closePageTabs(touched.closedPages);
@@ -183,22 +185,22 @@ export const STATE = (() => {
 		const p = ev?.payload || {};
 		switch (type) {
 			case "pageCreate":
-				BUS.emit("state:page-created", { id: p.id, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-created", { id: p.id, get page() { return S.pages[p.id]; }, event: ev });
 				break;
 			case "pageUpdate":
 			case "pageMove":
 			case "pageRestore":
-				BUS.emit("state:page-updated", { id: p.id, patch: p.patch, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-updated", { id: p.id, patch: p.patch, get page() { return S.pages[p.id]; }, event: ev });
 				break;
 			case "pageTrash":
-				BUS.emit("state:page-updated", { id: p.id, trashed: true, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-updated", { id: p.id, trashed: true, get page() { return S.pages[p.id]; }, event: ev });
 				BUS.emit("state:page-deleted", { id: p.id, trashed: true, event: ev });
 				break;
 			case "pageArchive":
-				BUS.emit("state:page-updated", { id: p.id, archived: true, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-updated", { id: p.id, archived: true, get page() { return S.pages[p.id]; }, event: ev });
 				break;
 			case "pageUnarchive":
-				BUS.emit("state:page-updated", { id: p.id, archived: false, page: S.pages[p.id], event: ev });
+				BUS.emit("state:page-updated", { id: p.id, archived: false, get page() { return S.pages[p.id]; }, event: ev });
 				break;
 			case "pageDelete":
 				deletePageVector(p.id);
@@ -351,7 +353,7 @@ export const STATE = (() => {
 			// Der neue Kernzustand kennt den offenen Chat nicht (sortiertes Neuladen im laufenden Betrieb).
 			M.setCurrentChatId(_currentChatId == null ? undefined : String(_currentChatId));
 			VIEWS.reset();
-			_pageRev++; _cardRev++; _stateRevision++;
+			_pageRev++; _cardRev++; _learningRev++; _stateRevision++;
 			_memo.clear(); _heftMeta.clear();
 			adoptTabs();
 			_loading = false;
@@ -467,12 +469,15 @@ export const STATE = (() => {
 			const parts = await DB.stateCheckpointPartHashes();
 			// Der Checkpoint muss genau zu current.maxSeq passen: Kam inzwischen ein Event dazu, später erneut.
 			if (revision !== _stateRevision) { finishProfile({ stale: true }); return false; }
-			const res = PERF_PROFILER.measure("state.checkpoint-build", () => JSON.parse(M.checkpointSave(JSON.stringify({
+			const metaJson = JSON.stringify({
 				info: current,
 				after: after.map((event) => ({ id: event?.id, seq: event?.seq })),
 				blobHashes: parts.blobs,
 				heftHashes: parts.hefte,
-			}))), { eventCount: current.count }, 5);
+			});
+			const res = PERF_PROFILER.measure("state.checkpoint-build", () => (
+				typeof M.checkpointSaveJs === "function" ? M.checkpointSaveJs(metaJson) : JSON.parse(M.checkpointSave(metaJson))
+			), { eventCount: current.count }, 5);
 			if (res.status === "written") {
 				// Neue Bilder als Verweis auf ihr heftBlob-Event speichern statt als zweite Kopie.
 				const blobSeqs = {};
@@ -569,13 +574,23 @@ export const STATE = (() => {
 	const deckParent = (name) => CORE.deckParent(String(name || ""));
 	// Overlearning-Sperre ist standardmäßig aus (nur „on“ schaltet sie ein).
 	const overlearnLock = () => { try { return localStorage.getItem("impala67Overlearn") === "on"; } catch { return false; } };
-	function deckTree(collapsed = [], now = new Date()) {
+	function studyDayWindow(now = new Date()) {
 		const t = now instanceof Date ? now : new Date(now);
+		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).
 		const back = t.getHours() < 4 ? 1 : 0;
 		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4);
 		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 1, 4);
+		return { t, dayStart, eod };
+	}
+	function computeDeckTree(collapsedList, now = new Date()) {
+		const { t, dayStart, eod } = studyDayWindow(now);
+		return Object.freeze(JSON.parse(M.deckTree(JSON.stringify(collapsedList), t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock())));
+	}
+	function deckTree(collapsed = [], now) {
 		const collapsedList = Array.isArray(collapsed) ? collapsed : Array.from(collapsed);
-		return JSON.parse(M.deckTree(JSON.stringify(collapsedList), t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock()));
+		if (now !== undefined) return computeDeckTree(collapsedList, now);
+		const key = "tree|" + collapsedList.join("\u0000") + "|" + (S.ankiMix ? 1 : 0) + "|" + (overlearnLock() ? 1 : 0);
+		return snapCached(key, () => computeDeckTree(collapsedList));
 	}
 	const deckConfOf = (deck) => cardMemo("deckConf|" + (deck || ""), () => Object.freeze(JSON.parse(M.deckConf(String(deck || "")))));
 	const pageTitles = () => activePages().map((pg) => pg.title);
@@ -604,20 +619,22 @@ export const STATE = (() => {
 	// zeitabhängig); ein ausdrückliches `now` umgeht den Zwischenspeicher.
 	const LEARN_AHEAD_MS = 20 * 60e3;
 	const _snapCache = { rev: -1, t: 0, map: new Map() };
+	function snapCached(key, compute) {
+		const t = Date.now();
+		if (_snapCache.rev !== _cardRev || t - _snapCache.t > 2000) {
+			_snapCache.map.clear();
+			_snapCache.rev = _cardRev;
+			_snapCache.t = t;
+		}
+		if (_snapCache.map.has(key)) return _snapCache.map.get(key);
+		const value = compute();
+		_snapCache.map.set(key, value);
+		return value;
+	}
 	function computeStudySnapshot(deck, now = new Date()) {
-		const t = now instanceof Date ? now : new Date(now);
-		// Lerntag beginnt um 4 Uhr Ortszeit (wie Anki, `DAY_CUTOFF_HOURS` im Kern).
-		const back = t.getHours() < 4 ? 1 : 0;
-		const dayStart = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back, 4);
-		const eod = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 1, 4);
+		const { t, dayStart, eod } = studyDayWindow(now);
 		const s = JSON.parse(M.studySnapshot(deck || undefined, t.getTime(), dayStart.getTime(), eod.getTime(), !!S.ankiMix, overlearnLock()));
-		return {
-			dueNow: cardsOf(s.dueNow),
-			learnDue: cardsOf(s.learnDue),
-			learnWaiting: cardsOf(s.learnWaiting),
-			learnLaterToday: cardsOf(s.learnLaterToday),
-			reviewsDue: cardsOf(s.reviewsDue),
-			newDue: cardsOf(s.newDue),
+		const snap = {
 			counts: s.counts,
 			nextLearnAt: s.nextLearnAt ? new Date(s.nextLearnAt) : null,
 			lockedAhead: s.lockedAhead,
@@ -628,22 +645,19 @@ export const STATE = (() => {
 			endOfDay: eod,
 			learnAheadMs: LEARN_AHEAD_MS,
 		};
+		for (const k of ["dueNow", "learnDue", "learnWaiting", "learnLaterToday", "reviewsDue", "newDue"]) {
+			let list = null;
+			Object.defineProperty(snap, k, {
+				get: () => (list ??= cardsOf(s[k])),
+				enumerable: true,
+			});
+		}
+		return snap;
 	}
 	function studySnapshot(deck, now) {
 		if (now !== undefined) return computeStudySnapshot(deck, now);
-		const key = (deck || "") + "|" + (S.ankiMix ? 1 : 0) + "|" + (overlearnLock() ? 1 : 0);
-		const t = Date.now();
-		if (_snapCache.rev !== _cardRev || t - _snapCache.t > 2000) {
-			_snapCache.map.clear();
-			_snapCache.rev = _cardRev;
-			_snapCache.t = t;
-		}
-		let snap = _snapCache.map.get(key);
-		if (!snap) {
-			snap = PERF_PROFILER.measure("anki.study-snapshot", () => computeStudySnapshot(deck), { deck: String(deck || "all") }, 15);
-			_snapCache.map.set(key, snap);
-		}
-		return snap;
+		const key = "snap|" + (deck || "") + "|" + (S.ankiMix ? 1 : 0) + "|" + (overlearnLock() ? 1 : 0);
+		return snapCached(key, () => PERF_PROFILER.measure("anki.study-snapshot", () => computeStudySnapshot(deck), { deck: String(deck || "all") }, 15));
 	}
 	// .slice(): Aufrufer dürfen das Ergebnis verändern, ohne den Zwischenspeicher zu beschädigen.
 	const dueCards = () => studySnapshot(null).dueNow.slice();
@@ -676,13 +690,15 @@ export const STATE = (() => {
 	const conflictResolve = (c, action) => JSON.parse(M.conflictResolve(JSON.stringify(c), String(action)));
 
 	// Lernanalyse (Wochenziel, Fächer, Tageszeit, Prognose) und Lernmuster aus dem Kern
-	function homeAnalysis(goalMin, days, pace, now = Date.now()) {
-		return M.homeAnalysis(
-			typeof now === "number" ? now : new Date(now).getTime(),
-			goalMin,
-			JSON.stringify(days || []),
-			pace,
-		);
+	function homeAnalysis(goalMin, days, pace, now) {
+		const daysJson = JSON.stringify(days || []);
+		const compute = (ts) => M.homeAnalysis(ts, goalMin, daysJson, pace);
+		if (now !== undefined) {
+			const ts = now ?? Date.now();
+			return compute(typeof ts === "number" ? ts : new Date(ts).getTime());
+		}
+		const key = "home|" + _learningRev + "|" + goalMin + "|" + pace + "|" + daysJson;
+		return snapCached(key, () => compute(Date.now()));
 	}
 	function computeGoal(goalMin, days, today, pace) {
 		return M.computeGoal(goalMin, JSON.stringify(days || []), today, pace);

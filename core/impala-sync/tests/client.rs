@@ -320,6 +320,13 @@ fn two_devices_converge_without_echo() {
     // Fremdevent geht nicht zurück (Echo), der Cursor steht trotzdem oben.
     assert_eq!(b.state().last_uploaded_seq, 1);
 
+    // Nach Abruf ohne eigene unbestätigte Events springt `last_uploaded_seq` sofort nach oben
+    // (ohne dass `push()` erst alle importierten Events nachlesen müsste).
+    let mut c = device(&worker, "C");
+    let c_received = block_on(c.pull()).unwrap();
+    assert_eq!(c_received, 1);
+    assert_eq!(c.state().last_uploaded_seq, 1);
+
     b.store_mut().add(ev("b1", "2026-01-01T00:00:04Z", "pageUpdate", json!({"id": "p1", "patch": {"title": "Zwei"}})));
     block_on(b.sync(false)).unwrap();
     let r = block_on(a.sync(false)).unwrap();

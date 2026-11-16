@@ -67,13 +67,13 @@ function block(q, a, tone, visual) {
 
 // summary = Kernaussage, body = die vier Fragen. render.js legt beides in den Fold.
 // null = noch gar keine Lerndaten: dann zeigt die Startseite keine Analyse statt leerer Kacheln
-export function lernanalyseParts() {
-	const totals = LERNZEIT.totalsByDay();
+export function lernanalyseParts(totals = null) {
+	const t = totals || LERNZEIT.totalsByDay();
 	const goalMin = LERNZEIT.weekGoalMinutes();
-	const week = LERNZEIT.weekData(0, totals);
+	const week = LERNZEIT.weekData(0, t);
 	const days = week.map((x) => x.seconds / 60);
 	let past = 0;
-	for (let i = 1; i <= 14; i++) past += (totals[dayKey(startOfDay(-i))] || 0) / 60;
+	for (let i = 1; i <= 14; i++) past += (t[dayKey(startOfDay(-i))] || 0) / 60;
 	const pace = past / 14;
 
 	const d = STATE.homeAnalysis(goalMin, days, pace);
