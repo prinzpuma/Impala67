@@ -137,10 +137,10 @@ fn builds_and_reads_packets_like_js() {
         .collect();
     let (events, last) = open_packets(&key, &server, 0).unwrap();
     assert_eq!(last, js.len() as u64);
-    let expected: Vec<Value> = wire
+    let expected: Vec<Value> = arr(&g["wire"])
         .iter()
         .map(|w| {
-            let mut v = w.value.clone();
+            let mut v = w.clone();
             v.as_object_mut().unwrap().insert("_remote".into(), json!(true));
             v.as_object_mut().unwrap().insert("_remoteSource".into(), json!("cloudflare"));
             v

@@ -11,17 +11,22 @@ use serde_json::Value;
 use crate::SyncError;
 use crate::wire::{envelope_json, prepare_incoming_cloud_events};
 
-/// Ein Wire-Event samt seinem `JSON.stringify`-Text.
+/// Ein Wire-Event als `JSON.stringify`-Text. Vom Wert bleibt nur die `id` (Paket-ID,
+/// Echo-Erkennung): Der JSON-Baum eines ganzen Uploads muss nicht neben dem Text liegen.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WireEvent {
-    pub value: Value,
+    pub id: Option<Value>,
     pub json: String,
 }
 
 impl WireEvent {
     pub fn new(value: Value) -> WireEvent {
         let json = stringify(&value);
-        WireEvent { value, json }
+        let id = match value {
+            Value::Object(mut fields) => fields.remove("id"),
+            _ => None,
+        };
+        WireEvent { id, json }
     }
 }
 
@@ -61,7 +66,7 @@ pub fn chunk_cloud_events(events: &[WireEvent], limits: ChunkLimits) -> Vec<Rang
 /// Paket-ID: `p-` + SHA-256 der Event-IDs (eine je Zeile). Gleiche Events → gleiche ID, der
 /// Server verwirft Doppelte.
 pub fn packet_id(events: &[WireEvent]) -> String {
-    let ids: Vec<String> = events.iter().map(|ev| js_string(ev.value.get("id"))).collect();
+    let ids: Vec<String> = events.iter().map(|ev| js_string(ev.id.as_ref())).collect();
     format!("p-{}", sha256_hex(&ids.join("\n")))
 }
 
@@ -77,15 +82,23 @@ pub struct OutgoingPacket {
 impl OutgoingPacket {
     /// `JSON.stringify({ id, ...encrypted })`.
     pub fn to_json(&self) -> String {
-        let mut out = String::with_capacity(self.data.len() + self.id.len() + 64);
-        out.push_str("{\"id\":");
-        impala_crypto::json::write_string(&mut out, &self.id);
-        out.push_str(",\"iv\":");
-        impala_crypto::json::write_string(&mut out, &self.iv);
-        out.push_str(",\"data\":");
-        impala_crypto::json::write_string(&mut out, &self.data);
-        out.push_str(&format!(",\"size\":{}}}", self.size));
+        let mut out = String::new();
+        self.write_json(&mut out);
         out
+    }
+
+    /// Hängt [`Self::to_json`] an `out` an.
+    fn write_json(&self, out: &mut String) {
+        out.reserve(self.data.len() + self.id.len() + 64);
+        out.push_str("{\"id\":");
+        impala_crypto::json::write_string(out, &self.id);
+        out.push_str(",\"iv\":");
+        impala_crypto::json::write_string(out, &self.iv);
+        out.push_str(",\"data\":");
+        impala_crypto::json::write_string(out, &self.data);
+        out.push_str(",\"size\":");
+        out.push_str(&self.size.to_string());
+        out.push('}');
     }
 }
 
@@ -121,19 +134,28 @@ pub(crate) fn upload_bodies_with(packets: &[OutgoingPacket], max_packets: usize,
     let mut bodies = Vec::new();
     let mut i = 0;
     while i < packets.len() {
-        let mut parts: Vec<String> = Vec::new();
-        let mut bytes = 0;
-        while i < packets.len() && parts.len() < max_packets {
-            let json = packets[i].to_json();
-            let n = json.len() + 1;
-            if !parts.is_empty() && bytes + n > max_bytes {
+        // Pakete direkt in den Körper schreiben (ihr Base64 nicht mehrfach kopieren).
+        let mut body = String::from("{\"events\":[");
+        let (mut count, mut bytes) = (0, 0);
+        while i < packets.len() && count < max_packets {
+            let before = body.len();
+            if count > 0 {
+                body.push(',');
+            }
+            let start = body.len();
+            packets[i].write_json(&mut body);
+            let n = body.len() - start + 1;
+            if count > 0 && bytes + n > max_bytes {
+                // Passt nicht mehr: gehört in den nächsten Körper.
+                body.truncate(before);
                 break;
             }
-            parts.push(json);
             bytes += n;
+            count += 1;
             i += 1;
         }
-        bodies.push(format!("{{\"events\":[{}]}}", parts.join(",")));
+        body.push_str("]}");
+        bodies.push(body);
     }
     bodies
 }

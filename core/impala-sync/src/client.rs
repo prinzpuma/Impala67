@@ -512,7 +512,9 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
 
         self.report("Bereite Notizen vor…", 0, 1);
         let packets = build_packets(&wire, self.limits, &self.key, self.rng.as_ref())?;
+        report.packets = packets.len();
         let bodies = upload_bodies(&packets);
+        drop(packets);
         let total: u64 = bodies.iter().map(|b| b.len() as u64).sum();
         let mut done = 0;
         self.report("Übertrage Notizen…", 0, total);
@@ -535,12 +537,11 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
             done += len;
             self.report("Übertrage Notizen…", done, total);
         }
-        self.pending_uploaded.extend(wire.iter().filter_map(|ev| id_key(&ev.value)));
+        self.pending_uploaded.extend(wire.iter().filter_map(|ev| id_key_of(ev.id.as_ref())));
         self.state.last_uploaded_seq = max_seq;
         self.save().await?;
         report.uploaded = true;
         report.events = wire.len();
-        report.packets = packets.len();
         Ok(report)
     }
 
@@ -705,7 +706,11 @@ pub fn is_uploadable(store: &impl SyncStore, ev: &Value) -> bool {
 
 /// Event-ID als Mengenschlüssel; der JSON-Text hält `5` und `"5"` auseinander wie JS-`Set`.
 fn id_key(ev: &Value) -> Option<String> {
-    ev.get("id").filter(|id| truthy(Some(id))).map(stringify)
+    id_key_of(ev.get("id"))
+}
+
+fn id_key_of(id: Option<&Value>) -> Option<String> {
+    id.filter(|id| truthy(Some(id))).map(stringify)
 }
 
 /// Behält die Einträge an `keep` (aufsteigend oder beliebig, ohne Doppelte) in dieser Reihenfolge.

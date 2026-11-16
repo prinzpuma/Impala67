@@ -9,7 +9,7 @@ use flate2::bufread::GzDecoder;
 use flate2::write::GzEncoder;
 use serde_json::{Map, Value};
 
-use crate::encoding::{base64_decode, base64_encode, hex_decode, hex_encode};
+use crate::encoding::{base64_decode, base64_encode_into, hex_decode, hex_encode};
 use crate::{CipherKey, CryptoError, Random, json};
 
 /// Ab dieser JSON-Größe (Bytes) wird vor dem Verschlüsseln gzip versucht.
@@ -95,7 +95,10 @@ pub fn encrypt_payload(key: &CipherKey, json_text: &str, rng: &dyn Random) -> Re
     };
     let (iv, ct) = encrypt_bytes(key, plain, rng)?;
     let size = (ct.len() + IV_LEN) as u64;
-    Ok(EncryptedPacket { iv, data: format!("{prefix}{}", base64_encode(&ct)), size })
+    let mut data = String::with_capacity(prefix.len() + ct.len().div_ceil(3) * 4);
+    data.push_str(prefix);
+    base64_encode_into(&mut data, &ct);
+    Ok(EncryptedPacket { iv, data, size })
 }
 
 /// Entschlüsselt ein Paket und liefert den JSON-Klartext (Bytes, noch nicht geparst).
@@ -168,6 +171,7 @@ pub fn decrypt_blob(key: &CipherKey, iv: &str, ciphertext: &[u8]) -> Result<Blob
 mod tests {
     use super::*;
     use crate::CounterRandom;
+    use crate::encoding::base64_encode;
 
     fn key() -> CipherKey {
         CipherKey::from_bytes([9; 32])
