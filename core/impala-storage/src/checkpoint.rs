@@ -14,7 +14,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::event::{LogInfo, Object};
-use crate::storage::{CheckpointSlot, PartKind, Storage, Write};
+use crate::storage::{CheckpointRecord, CheckpointSlot, PartKind, Storage, Write};
 use crate::{Error, js};
 
 pub const FORMAT: u64 = 3;
@@ -291,8 +291,9 @@ fn collect_core(mut take: impl FnMut(&str) -> Option<Value>) -> Object {
     core_keys().filter(|k| *k != "heftDocs").map(|k| (k.to_owned(), take(k).unwrap_or(Value::Null))).collect()
 }
 
+/// Ohne `core` fehlt `state`: Es kommt dann als fertiger Text dazu ([`make_json`]).
 fn build_checkpoint(
-    core: Object,
+    core: Option<Object>,
     blob_sizes: Object,
     info: &LogInfo,
     max_time: &str,
@@ -308,7 +309,9 @@ fn build_checkpoint(
     cp.insert("maxTime".into(), Value::from(max_time));
     cp.insert("heftBlobSizes".into(), Value::Object(blob_sizes));
     cp.insert("reconciledArchive".into(), Value::Bool(true));
-    cp.insert("state".into(), Value::Object(core));
+    if let Some(core) = core {
+        cp.insert("state".into(), Value::Object(core));
+    }
     cp.insert("heftDocHashes".into(), Value::Object(hashes));
     if let Some(times) = order_times {
         cp.insert("orderTimes".into(), Value::Object(times.clone()));
@@ -328,21 +331,24 @@ pub fn make(
 ) -> Object {
     let blob_sizes = heft_blob_sizes(state, known_blob_sizes);
     let core = collect_core(|k| state.get(k).cloned());
-    build_checkpoint(core, blob_sizes, info, max_time, hefte, order_times)
+    build_checkpoint(Some(core), blob_sizes, info, max_time, hefte, order_times)
 }
 
-/// Wie [`make`], übernimmt aber `state` und entnimmt die Schlüssel ohne erneutes Klonen.
-pub fn make_owned(
-    mut state: Object,
+/// Wie [`make`], Zustand und Zeiten aber schon als JSON-Text: `state_json` ist der Kernzustand
+/// (alle [`core_keys`] außer `heftDocs`), `order_times_json` die Zeiten je Sache. `blob_sizes`
+/// ist vollständig (der Zustand trägt hier keine Bilder).
+pub fn make_json(
+    state_json: String,
     info: &LogInfo,
     max_time: &str,
-    known_blob_sizes: Option<&Object>,
+    blob_sizes: Object,
     hefte: &[HeftPart],
-    order_times: Option<&Object>,
-) -> Object {
-    let blob_sizes = heft_blob_sizes(&state, known_blob_sizes);
-    let core = collect_core(|k| state.remove(k));
-    build_checkpoint(core, blob_sizes, info, max_time, hefte, order_times)
+    order_times_json: Option<String>,
+) -> CheckpointRecord {
+    let head = build_checkpoint(None, blob_sizes, info, max_time, hefte, None);
+    let mut raw = vec![("state", state_json)];
+    raw.extend(order_times_json.map(|t| ("orderTimes", t)));
+    CheckpointRecord { head, raw }
 }
 
 /// Schlüssel eines Objekts (`Object.keys`, auch für Arrays), für Objekte ohne Kopie.
@@ -386,12 +392,13 @@ fn partition_parts<'a, S: Storage + ?Sized, K: Borrow<str> + Eq + Hash>(
 /// unveränderlich), Teile, die der Checkpoint nicht mehr kennt, fliegen in derselben Transaktion.
 pub fn write<S: Storage + ?Sized>(
     storage: &mut S,
-    cp: Object,
+    cp: impl Into<CheckpointRecord>,
     heft_blobs: &[(String, String)],
     hefte: &[HeftPart],
 ) -> Result<(), Error> {
-    let known_blobs = keys_of(cp.get("heftBlobSizes"));
-    let known_hefte: Option<HashSet<&str>> = match cp.get("heftDocHashes") {
+    let cp = cp.into();
+    let known_blobs = keys_of(cp.head.get("heftBlobSizes"));
+    let known_hefte: Option<HashSet<&str>> = match cp.head.get("heftDocHashes") {
         Some(Value::Object(o)) => Some(o.values().filter_map(Value::as_str).collect()),
         Some(Value::Array(a)) => Some(a.iter().filter_map(Value::as_str).collect()),
         _ => None,
@@ -509,21 +516,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn make_owned_matches_make() {
+    fn make_json_matches_make() {
         let mut state = Object::new();
-        state.insert("pages".into(), json!({ "p1": { "id": "p1", "title": "A" } }));
-        state.insert("cards".into(), json!({ "c1": { "id": "c1" } }));
+        state.insert("pages".into(), json!({ "p1": { "id": "p1", "title": "A \"x\"" } }));
+        state.insert("cards".into(), json!({ "c1": { "id": "c1", "ease": 2.5 } }));
         state.insert("heftDocs".into(), json!({ "h1": { "v": 1 } }));
-        state.insert("heftBlobs".into(), json!({ "b1": "data:abc" }));
-        let mut known_sizes = Object::new();
-        known_sizes.insert("b0".into(), json!(42));
+        let mut sizes = Object::new();
+        sizes.insert("b0".into(), json!(42));
         let mut order_times = Object::new();
         order_times.insert("page:p1".into(), json!("2026-01-01T00:00:00Z"));
         let hefte = vec![HeftPart { page_id: "h1".into(), hash: "deadbeef".into(), json: String::new() }];
         let info = LogInfo { count: 10, max_seq: 10, last_event_id: "e10".into() };
 
-        let cloned_cp = make(&state, &info, "2026-01-02T00:00:00Z", Some(&known_sizes), &hefte, Some(&order_times));
-        let owned_cp = make_owned(state, &info, "2026-01-02T00:00:00Z", Some(&known_sizes), &hefte, Some(&order_times));
-        assert_eq!(Value::Object(owned_cp).to_string(), Value::Object(cloned_cp).to_string());
+        let want = make(&state, &info, "2026-01-02T00:00:00Z", Some(&sizes), &hefte, Some(&order_times));
+        let core = Value::Object(collect_core(|k| state.get(k).cloned())).to_string();
+        let times = Value::Object(order_times).to_string();
+        let record = make_json(core, &info, "2026-01-02T00:00:00Z", sizes, &hefte, Some(times));
+        assert_eq!(record.to_object().unwrap(), want);
+        // Der gespeicherte Text ist derselbe Checkpoint (nur die Feldreihenfolge weicht ab).
+        assert_eq!(serde_json::from_str::<Object>(&record.into_json()).unwrap(), want);
+        // Ohne Text-Felder bleibt der Text genau der des Objekts.
+        assert_eq!(CheckpointRecord::from(want.clone()).into_json(), Value::Object(want).to_string());
     }
 }

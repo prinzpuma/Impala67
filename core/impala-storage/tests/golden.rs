@@ -192,7 +192,7 @@ fn legacy_checkpoint_loads() {
                 serde_json::json!({"id": format!("e{i}"), "t": format!("2026-01-01T00:00:0{i}.000Z"), "type": "x"});
             s.add_events(vec![obj(&ev)]).unwrap();
         }
-        s.apply(vec![Write::PutCheckpoint(CheckpointSlot::Legacy, obj(&case["checkpoint"]))]).unwrap();
+        s.apply(vec![Write::PutCheckpoint(CheckpointSlot::Legacy, obj(&case["checkpoint"]).into())]).unwrap();
         match s.load_checkpoint(|_, _| true).unwrap() {
             checkpoint::Loaded::Usable { state, tail, .. } => {
                 assert_eq!(Value::Object(state), case["saved"], "{name}");

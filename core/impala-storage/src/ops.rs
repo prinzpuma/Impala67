@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::checkpoint::{self, HeftPart, Loaded};
 use crate::event::{self, LogInfo, Object, Seq};
 use crate::exchange::{self, COMPACT_FLOOR_KEY, ExportOptions, ImportOptions, ImportReport, PreparedImport};
-use crate::storage::{Blob, CheckpointSlot, PartKind, Storage, Write};
+use crate::storage::{Blob, CheckpointRecord, CheckpointSlot, PartKind, Storage, Write};
 use crate::{Error, compaction};
 
 /// Erst nach so vielen neuen Events lohnt die nächste Kompaktierungs-Prüfung – und erst ab so
@@ -53,11 +53,11 @@ fn heft_blob_hash(ev: &Object) -> Option<&str> {
     (event::kind(ev) == "heftBlob").then(|| ev.get("payload")?.get("hash")?.as_str()).flatten()
 }
 
-fn write_checkpoint_with<S: Storage + ?Sized>(
+fn write_checkpoint_with<S: Storage + ?Sized, R: Into<CheckpointRecord>>(
     storage: &mut S,
     dirty_blobs: &[(String, String)],
     hefte: &[HeftPart],
-    make: impl FnOnce(&LogInfo) -> Object,
+    make: impl FnOnce(&LogInfo) -> R,
 ) -> Result<LogInfo, Error> {
     let info = storage.log_info()?;
     let cp = make(&info);
@@ -249,18 +249,19 @@ pub trait StorageExt: Storage {
         })
     }
 
-    /// Wie [`save_checkpoint_parts`](Self::save_checkpoint_parts), übernimmt aber `state` ohne Klon.
-    fn save_checkpoint_parts_owned(
+    /// Wie [`save_checkpoint_parts`](Self::save_checkpoint_parts), Zustand und Zeiten aber schon als
+    /// JSON-Text ([`checkpoint::make_json`]): der Weg des Datenmodells, ohne `Value`-Baum.
+    fn save_checkpoint_json(
         &mut self,
-        state: Object,
+        state_json: String,
         max_time: &str,
-        known_blob_sizes: Option<&Object>,
+        blob_sizes: Object,
         dirty_blobs: &[(String, String)],
-        order_times: Option<&Object>,
+        order_times_json: Option<String>,
         hefte: &[HeftPart],
     ) -> Result<LogInfo, Error> {
         write_checkpoint_with(self, dirty_blobs, hefte, |info| {
-            checkpoint::make_owned(state, info, max_time, known_blob_sizes, hefte, order_times)
+            checkpoint::make_json(state_json, info, max_time, blob_sizes, hefte, order_times_json)
         })
     }
 

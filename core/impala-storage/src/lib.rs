@@ -27,7 +27,7 @@ pub use memory::MemoryStorage;
 pub use ops::{Compacted, StorageExt};
 #[cfg(feature = "sqlite")]
 pub use sqlite::{SqliteStorage, StorageCheck};
-pub use storage::{Blob, CheckpointSlot, PartKind, Storage, Write};
+pub use storage::{Blob, CheckpointRecord, CheckpointSlot, PartKind, Storage, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {

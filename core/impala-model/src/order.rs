@@ -150,8 +150,14 @@ pub fn times_from_object(o: &Object) -> OrderTimes {
     o.iter().map(|(k, v)| (k.clone(), js::str_or_empty(Some(v)))).collect()
 }
 
-pub fn times_to_object(t: &OrderTimes) -> Object {
-    t.iter().map(|(k, v)| (k.clone(), Value::from(v.clone()))).collect()
+/// Die Zeiten als JSON-Text (Checkpoint-Feld `orderTimes`), ohne Umweg über ein Objekt.
+pub fn times_to_json(t: &OrderTimes) -> String {
+    let mut out = Vec::with_capacity(t.len() * 72 + 2);
+    // Schreiben in einen Vec scheitert nicht; Schlüssel und Werte sind Text.
+    if serde::Serializer::collect_map(&mut serde_json::Serializer::new(&mut out), t).is_err() {
+        return String::from("{}");
+    }
+    String::from_utf8(out).unwrap_or_else(|_| String::from("{}"))
 }
 
 /// Replay-Reihenfolge (`sortEvents`): nach Zeit, bei Gleichstand nach `seq`; stabil.

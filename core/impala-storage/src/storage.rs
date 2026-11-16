@@ -40,6 +40,58 @@ pub enum CheckpointSlot {
     Legacy,
 }
 
+/// Ein Checkpoint zum Speichern: ein JSON-Objekt aus `head` und den Feldern in `raw`. Die großen
+/// Felder (`state`, `orderTimes`) liegen in `raw` schon als JSON-Text vor – für sie entsteht nie
+/// ein `Value`-Baum, der nur gebaut würde, um gleich wieder Text zu werden.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CheckpointRecord {
+    pub head: Object,
+    /// (Feldname, JSON-Text des Werts). Namen sind schlichte ASCII-Bezeichner und fehlen in `head`.
+    pub raw: Vec<(&'static str, String)>,
+}
+
+impl From<Object> for CheckpointRecord {
+    fn from(head: Object) -> Self {
+        CheckpointRecord { head, raw: Vec::new() }
+    }
+}
+
+impl CheckpointRecord {
+    /// Der gespeicherte JSON-Text.
+    pub fn into_json(self) -> String {
+        let head = Value::Object(self.head).to_string();
+        if self.raw.is_empty() {
+            return head;
+        }
+        let extra: usize = self.raw.iter().map(|(k, v)| k.len() + v.len() + 4).sum();
+        let mut out = String::with_capacity(head.len() + extra);
+        out.push_str(head.strip_suffix('}').unwrap_or(&head));
+        let mut first = head == "{}";
+        for (key, json) in &self.raw {
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            out.push('"');
+            out.push_str(key);
+            out.push_str("\":");
+            out.push_str(json);
+        }
+        out.push('}');
+        out
+    }
+
+    /// Als Objekt, wie ein Leser den gespeicherten Text sieht.
+    pub fn to_object(&self) -> Result<Object, Error> {
+        let mut cp = self.head.clone();
+        for (key, json) in &self.raw {
+            let value = serde_json::from_str(json).map_err(|e| Error::Json(e.to_string()))?;
+            cp.insert((*key).to_owned(), value);
+        }
+        Ok(cp)
+    }
+}
+
 /// Inhaltsadressierte Checkpoint-Teile (Schlüssel = Hash, Wert = Text).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PartKind {
@@ -60,7 +112,7 @@ pub enum Write {
     PutVec(String, Value),
     DeleteVec(String),
     ClearVecs,
-    PutCheckpoint(CheckpointSlot, Object),
+    PutCheckpoint(CheckpointSlot, CheckpointRecord),
     DeleteCheckpoint(CheckpointSlot),
     PutPart(PartKind, String, String),
     DeletePart(PartKind, String),

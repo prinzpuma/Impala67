@@ -431,11 +431,11 @@ impl ModelCore {
                     Write::PutCheckpoint(_, cp) => {
                         // Text zum Speichern plus die Felder, die JS selbst braucht (db.js, Start).
                         out["checkpointMeta"] = json!({
-                            "maxSeq": cp.get("maxSeq"),
-                            "heftBlobSizes": cp.get("heftBlobSizes"),
-                            "heftDocHashes": cp.get("heftDocHashes"),
+                            "maxSeq": cp.head.get("maxSeq"),
+                            "heftBlobSizes": cp.head.get("heftBlobSizes"),
+                            "heftDocHashes": cp.head.get("heftDocHashes"),
                         });
-                        out["checkpoint"] = Value::String(Value::Object(cp).to_string());
+                        out["checkpoint"] = Value::String(cp.into_json());
                     }
                     Write::PutPart(PartKind::HeftBlob, h, d) => {
                         blobs.insert(h, Value::from(d));
@@ -468,12 +468,12 @@ impl ModelCore {
                             &out,
                             "checkpointMeta",
                             to_js(&json!({
-                                "maxSeq": cp.get("maxSeq"),
-                                "heftBlobSizes": cp.get("heftBlobSizes"),
-                                "heftDocHashes": cp.get("heftDocHashes"),
+                                "maxSeq": cp.head.get("maxSeq"),
+                                "heftBlobSizes": cp.head.get("heftBlobSizes"),
+                                "heftDocHashes": cp.head.get("heftDocHashes"),
                             })),
                         );
-                        crate::js::set(&out, "checkpoint", JsValue::from_str(&Value::Object(cp).to_string()));
+                        crate::js::set(&out, "checkpoint", JsValue::from_str(&cp.into_json()));
                     }
                     Write::PutPart(PartKind::HeftBlob, h, d) => {
                         crate::js::set(&blobs, &h, d.as_str());

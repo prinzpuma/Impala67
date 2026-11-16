@@ -184,9 +184,9 @@ fn laden_wie_js() {
         let mut writes = Vec::new();
         for (key, rec) in case["checkpointRecords"].as_object().unwrap() {
             if key == CURRENT_KEY {
-                writes.push(Write::PutCheckpoint(CheckpointSlot::Current, rec.as_object().unwrap().clone()));
+                writes.push(Write::PutCheckpoint(CheckpointSlot::Current, rec.as_object().unwrap().clone().into()));
             } else if key == LEGACY_KEY {
-                writes.push(Write::PutCheckpoint(CheckpointSlot::Legacy, rec.as_object().unwrap().clone()));
+                writes.push(Write::PutCheckpoint(CheckpointSlot::Legacy, rec.as_object().unwrap().clone().into()));
             } else if let Some(h) = key.strip_prefix(BLOB_PREFIX) {
                 writes.push(Write::PutPart(PartKind::HeftBlob, h.into(), rec.as_str().unwrap().into()));
             } else if let Some(h) = key.strip_prefix(HEFT_PREFIX) {
@@ -219,6 +219,12 @@ fn laden_wie_js() {
                 "{name}: {saved:?}"
             );
         }
+        // Der Checkpoint schreibt den Zustand direkt als Text: derselbe wie über einen `Value`-Baum.
+        assert_eq!(
+            serde_json::to_string(m.state()).unwrap(),
+            serde_json::to_value(m.state()).unwrap().to_string(),
+            "{name}: Zustand als Text"
+        );
         // Der eigene Checkpoint lädt wieder zum selben Zustand.
         if m.save_checkpoint(&mut s).unwrap() != impala_model::CheckpointSave::OutOfOrder {
             m.hydrate_heft_blobs(&s, None).unwrap();

@@ -295,7 +295,7 @@ fn apply_one(tx: &Transaction, w: Write, added: &mut Vec<Seq>) -> Result<(), Err
             tx.execute("DELETE FROM vecs", []).map_err(db)?;
         }
         Write::PutCheckpoint(slot, cp) => {
-            let rec = serde_json::to_string(&cp).map_err(json_err)?;
+            let rec = cp.into_json();
             tx.prepare_cached("INSERT OR REPLACE INTO checkpoints (slot, rec) VALUES (?1, ?2)")
                 .and_then(|mut s| s.execute(params![slot_id(slot), rec]))
                 .map_err(db)?;

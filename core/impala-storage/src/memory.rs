@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::Error;
 use crate::event::{LogInfo, Object, Seq};
-use crate::storage::{Blob, CheckpointSlot, PartKind, Storage, Write};
+use crate::storage::{Blob, CheckpointRecord, CheckpointSlot, PartKind, Storage, Write};
 
 #[derive(Debug, Clone, Default)]
 pub struct MemoryStorage {
@@ -16,7 +16,7 @@ pub struct MemoryStorage {
     last_seq: Seq,
     blobs: BTreeMap<String, Blob>,
     vecs: BTreeMap<String, Value>,
-    checkpoints: HashMap<CheckpointSlot, Object>,
+    checkpoints: HashMap<CheckpointSlot, CheckpointRecord>,
     parts: HashMap<PartKind, BTreeMap<String, String>>,
     meta: HashMap<String, String>,
 }
@@ -91,7 +91,8 @@ impl Storage for MemoryStorage {
     }
 
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error> {
-        Ok(self.checkpoints.get(&slot).cloned())
+        // Wie die echten Speicher: gelesen wird, was als Text geschrieben wurde.
+        self.checkpoints.get(&slot).map(CheckpointRecord::to_object).transpose()
     }
 
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error> {

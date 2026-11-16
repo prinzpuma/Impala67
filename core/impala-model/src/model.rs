@@ -504,10 +504,10 @@ impl Model {
             .iter()
             .filter_map(|h| self.state.hefte.blobs.get(h).map(|d| (h.clone(), d.clone())))
             .collect();
-        let state = match serde_json::to_value(CoreOnly(&self.state)) {
-            Ok(Value::Object(o)) => o,
-            _ => return Err(Error::Json("Zustand nicht serialisierbar".into())),
-        };
+        // Direkt als Text: Ein `Value`-Baum des ganzen Zustands (mehrere MB) kostete mehr als das
+        // Schreiben selbst und wurde gleich danach doch nur zu Text.
+        let state = serde_json::to_string(&CoreOnly(&self.state))
+            .map_err(|_| Error::Json("Zustand nicht serialisierbar".into()))?;
         // Unveränderte Hefte, die schon gespeichert liegen, behalten ihren Teil (kein Neuschreiben,
         // kein Lesen); nur geänderte werden serialisiert.
         let hefte: Vec<HeftPart> = if self.state.hefte.ids().next().is_none() {
@@ -530,15 +530,8 @@ impl Model {
                 })
                 .collect()
         };
-        let times = self.order_complete.then(|| order::times_to_object(&self.order));
-        let written = storage.save_checkpoint_parts_owned(
-            state,
-            &self.loaded_time,
-            Some(&sizes),
-            &dirty,
-            times.as_ref(),
-            &hefte,
-        )?;
+        let times = self.order_complete.then(|| order::times_to_json(&self.order));
+        let written = storage.save_checkpoint_json(state, &self.loaded_time, sizes, &dirty, times, &hefte)?;
         for part in hefte {
             self.state.hefte.set_stored_hash(&part.page_id, part.hash);
         }
