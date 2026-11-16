@@ -575,20 +575,17 @@ fn line_quads(ctx: &Context, lines: &[HoughLine]) -> Vec<Quad> {
                 hough_intersect(&a0, &b1),
             ];
 
-            let invalid = c.iter().any(|pt| match pt {
-                None => true,
-                Some(p) => p.0 < -tol || p.1 < -tol || p.0 > (dw - 1) as f64 + tol || p.1 > (dh - 1) as f64 + tol,
-            });
-            if invalid {
+            let [Some(c0), Some(c1), Some(c2), Some(c3)] = c else {
+                continue;
+            };
+            let pts = [c0, c1, c2, c3];
+            let max_x = (dw - 1) as f64;
+            let max_y = (dh - 1) as f64;
+            if pts.iter().any(|p| p.0 < -tol || p.1 < -tol || p.0 > max_x + tol || p.1 > max_y + tol) {
                 continue;
             }
 
-            let quad = Quad([
-                Point(c[0].unwrap().0.clamp(0.0, (dw - 1) as f64), c[0].unwrap().1.clamp(0.0, (dh - 1) as f64)),
-                Point(c[1].unwrap().0.clamp(0.0, (dw - 1) as f64), c[1].unwrap().1.clamp(0.0, (dh - 1) as f64)),
-                Point(c[2].unwrap().0.clamp(0.0, (dw - 1) as f64), c[2].unwrap().1.clamp(0.0, (dh - 1) as f64)),
-                Point(c[3].unwrap().0.clamp(0.0, (dw - 1) as f64), c[3].unwrap().1.clamp(0.0, (dh - 1) as f64)),
-            ]);
+            let quad = Quad(pts.map(|p| Point(p.0.clamp(0.0, max_x), p.1.clamp(0.0, max_y))));
 
             if is_convex(&quad) {
                 out.push(quad);

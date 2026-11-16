@@ -9,11 +9,11 @@ use impala_heft::{
     BBox, HeftDoc, HeftPage, Image, Paper, Point, Shadow, Stroke, StrokeEraser, compose_page_text, diff_document,
     export, fit_stroke_shape, hit_box, lasso_bounds, near_point, parse_ops, point_in_polygon, select_strokes_by_lasso,
 };
-use js_sys::{Float64Array, Function, Object};
+use js_sys::{Float64Array, Function, JSON, Object};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
-use crate::js::{from_js, set, to_js};
+use crate::js::{from_js, js_message, set, to_js};
 
 fn value(v: &JsValue) -> Result<Value, JsError> {
     from_js(v).map_err(|e| JsError::new(&e))
@@ -72,17 +72,28 @@ fn unpack(coords: &[f64], counts: &[u32], sizes: &[f64], bboxes: &[f64], shapes:
 
 /// Neue Geometrie im Binärformat: `{ xy, counts, sizes, bboxes, shapes }` – `xy` je Punkt x, y
 /// (`counts` Punkte je Strich, wie in der Eingabe), Grenzen wie bei [`unpack`], `shapes` `{ Index: shape }` oder `null`.
-fn pack_geometry(strokes: &[Stroke]) -> JsValue {
-    let xy: Vec<f64> = strokes.iter().flat_map(|s| s.pts.iter().flat_map(|p| [p.x, p.y])).collect();
-    let sizes: Vec<f64> = strokes.iter().map(|s| s.size.unwrap_or(f64::NAN)).collect();
-    let bboxes: Vec<f64> =
-        strokes.iter().flat_map(|s| s.bbox.map_or([f64::NAN; 4], |b| [b.min_x, b.min_y, b.max_x, b.max_y])).collect();
-    let shapes: serde_json::Map<String, Value> = strokes
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| Some((i.to_string(), serde_json::to_value(s.shape.as_ref()?).ok()?)))
-        .collect();
-    let counts: Vec<u32> = strokes.iter().map(|s| s.pts.len() as u32).collect();
+fn pack_geometry<'a>(strokes: impl ExactSizeIterator<Item = &'a Stroke> + Clone) -> JsValue {
+    let n = strokes.len();
+    let total_pts: usize = strokes.clone().map(|s| s.pts.len()).sum();
+    let mut xy = Vec::with_capacity(total_pts * 2);
+    let mut counts = Vec::with_capacity(n);
+    let mut sizes = Vec::with_capacity(n);
+    let mut bboxes = Vec::with_capacity(n * 4);
+    let mut shapes = serde_json::Map::new();
+    for (i, s) in strokes.enumerate() {
+        for p in &s.pts {
+            xy.push(p.x);
+            xy.push(p.y);
+        }
+        counts.push(s.pts.len() as u32);
+        sizes.push(s.size.unwrap_or(f64::NAN));
+        bboxes.extend_from_slice(&s.bbox.map_or([f64::NAN; 4], |b| [b.min_x, b.min_y, b.max_x, b.max_y]));
+        if let Some(shape) = s.shape.as_ref()
+            && let Ok(v) = serde_json::to_value(shape)
+        {
+            shapes.insert(i.to_string(), v);
+        }
+    }
     let o = Object::new();
     set(&o, "xy", Float64Array::from(xy.as_slice()));
     set(&o, "counts", js_sys::Uint32Array::from(counts.as_slice()));
@@ -199,7 +210,7 @@ impl HeftTransform {
     }
 
     fn packed(&self) -> JsValue {
-        pack_geometry(&self.items.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>())
+        pack_geometry(self.items.iter().map(|(s, _)| s))
     }
 
     /// Nach Skalieren um den Anker (`scaleStrokeFrom`); die Dicke wächst mit.
@@ -215,8 +226,6 @@ impl HeftTransform {
 #[wasm_bindgen]
 pub struct HeftEraser {
     strokes: Vec<Stroke>,
-    /// Laufende Nummer je Strich in der Eingabe, damit JS die Objekte findet.
-    index: Vec<u32>,
     eraser: StrokeEraser,
 }
 
@@ -233,31 +242,24 @@ impl HeftEraser {
         radius: f64,
     ) -> Result<HeftEraser, JsError> {
         let mut strokes = unpack(coords, counts, sizes, bboxes, shapes)?;
-        // Ids für den Abgleich nach dem Radieren (die Eingabe kennt nur die Reihenfolge).
+        // Eingabe-Index je Strich, damit `erase_at` entfernte Indizes ohne Klonen abliest.
         strokes.iter_mut().enumerate().for_each(|(i, s)| s.id = i.to_string());
-        let index = (0..strokes.len() as u32).collect();
-        Ok(HeftEraser { strokes, index, eraser: StrokeEraser::new(radius) })
+        Ok(HeftEraser { strokes, eraser: StrokeEraser::new(radius) })
     }
 
     /// Radiert an (x, y): Indizes (in die Eingabe von `new`) der entfernten Striche.
     #[wasm_bindgen(js_name = eraseAt)]
     pub fn erase_at(&mut self, x: f64, y: f64) -> Vec<u32> {
-        let before: Vec<String> = self.strokes.iter().map(|s| s.id.clone()).collect();
         let removed = self.eraser.erase_at(&mut self.strokes, x, y);
         if removed.is_empty() {
             return Vec::new();
         }
-        // Reihenfolge der übrigen bleibt: Treffer sind die Lücken zwischen alter und neuer Liste.
-        let (mut kept, mut gone, mut k) = (Vec::new(), Vec::new(), 0);
-        for (i, id) in before.iter().enumerate() {
-            if k < self.strokes.len() && self.strokes[k].id == *id {
-                kept.push(self.index[i]);
-                k += 1;
-            } else {
-                gone.push(self.index[i]);
+        let mut gone = Vec::with_capacity(removed.len());
+        for s in &removed {
+            if let Ok(i) = s.id.parse::<u32>() {
+                gone.push(i);
             }
         }
-        self.index = kept;
         gone
     }
 }
@@ -382,6 +384,17 @@ pub fn heft_blob_id(data: &str) -> String {
     impala_heft::blob_id(data)
 }
 
+fn doc_from(v: &JsValue) -> Result<HeftDoc, JsError> {
+    if v.is_undefined() || v.is_null() {
+        return Ok(HeftDoc::default());
+    }
+    let text = JSON::stringify(v).map_err(|e| JsError::new(&js_message(&e)))?;
+    if text.is_undefined() {
+        return Ok(HeftDoc::default());
+    }
+    serde_json::from_str(&String::from(text)).map_err(|e| JsError::new(&e.to_string()))
+}
+
 /// Zuletzt veröffentlichter Stand eines Hefts (je Element nur eine Signatur).
 #[wasm_bindgen]
 pub struct HeftShadow(pub(crate) Shadow);
@@ -390,7 +403,7 @@ pub struct HeftShadow(pub(crate) Shadow);
 impl HeftShadow {
     /// Schatten eines Dokuments.
     pub fn of(doc: &JsValue) -> Result<HeftShadow, JsError> {
-        Ok(HeftShadow(Shadow::of(&HeftDoc::from_value(value(doc)?))))
+        Ok(HeftShadow(Shadow::of(&doc_from(doc)?)))
     }
 
     /// Log-Operationen fortschreiben (gleiche Regeln wie der Reducer).
@@ -423,7 +436,7 @@ impl HeftDiff {
 }
 
 fn diff_from(previous: Option<&Shadow>, doc: &JsValue) -> Result<HeftDiff, JsError> {
-    let (ops, shadow) = diff_document(previous, &HeftDoc::from_value(value(doc)?));
+    let (ops, shadow) = diff_document(previous, &doc_from(doc)?);
     Ok(HeftDiff { ops: serde_json::to_value(ops).unwrap_or(Value::Null), shadow: Some(HeftShadow(shadow)) })
 }
 

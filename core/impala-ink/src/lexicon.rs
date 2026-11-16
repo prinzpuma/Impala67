@@ -237,8 +237,7 @@ impl Lexicon {
                 }
             }
             let mut scored: Vec<(f64, WordBeam)> = next.into_iter().map(|b| (log_add(b.pb, b.pnb), b)).collect();
-            // Heißer Pfad (je Zeitschritt): `sort_by` ist bei zufälliger Reihenfolge schneller als `sort_small_by`.
-            scored.sort_by(|x, y| y.0.partial_cmp(&x.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.sort_small_by(|x, y| y.0.total_cmp(&x.0));
             scored.truncate(BEAM_WIDTH);
             beams = scored.into_iter().map(|(_, b)| b).collect();
         }

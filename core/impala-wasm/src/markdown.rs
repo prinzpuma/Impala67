@@ -108,7 +108,7 @@ pub fn shortcut_type(line: &str) -> JsValue {
 pub fn convert_block(block: &JsValue, target_type: &str) -> Result<JsValue, JsError> {
     let b = block_from(block)?;
     let res = impala_markdown::convert_block(&b, target_type);
-    Ok(to_js(&serde_json::to_value(&res).unwrap()))
+    Ok(to_js(&serde_json::to_value(&res).map_err(|e| JsError::new(&e.to_string()))?))
 }
 
 #[wasm_bindgen(js_name = mdContinuationBlock)]
@@ -126,7 +126,7 @@ pub fn continuation_block(block: &JsValue, new_id: &str) -> Result<JsValue, JsEr
 pub fn indent_block(block: &JsValue, delta: i32) -> Result<JsValue, JsError> {
     let b = block_from(block)?;
     let res = impala_markdown::indent_block(&b, delta);
-    Ok(to_js(&serde_json::to_value(&res).unwrap()))
+    Ok(to_js(&serde_json::to_value(&res).map_err(|e| JsError::new(&e.to_string()))?))
 }
 
 #[wasm_bindgen(js_name = mdListNumbers)]
@@ -134,7 +134,7 @@ pub fn list_numbers(blocks: &JsValue) -> Result<JsValue, JsError> {
     let bs = blocks_from(blocks)?;
     let nums = impala_markdown::list_numbers(&bs);
     let map: std::collections::HashMap<String, u32> = nums.into_iter().collect();
-    Ok(to_js(&serde_json::to_value(&map).unwrap()))
+    Ok(to_js(&serde_json::to_value(&map).map_err(|e| JsError::new(&e.to_string()))?))
 }
 
 #[wasm_bindgen(js_name = mdWrapMarkers)]

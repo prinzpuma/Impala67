@@ -271,29 +271,25 @@ pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) 
         b.rate.unwrap_or(0.0).partial_cmp(&a.rate.unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let best = if valid.len() >= 2 {
-        let first_pct = (valid[0].rate.unwrap() * 100.0).round() as i32;
-        let last_pct = (valid.last().unwrap().rate.unwrap() * 100.0).round() as i32;
-        if first_pct - last_pct >= 5 { Some((*valid[0]).clone()) } else { None }
+    let (best, text) = if let [first, .., last] = valid.as_slice()
+        && let (Some(r_first), Some(r_last)) = (first.rate, last.rate)
+    {
+        let first_pct = (r_first * 100.0).round() as i32;
+        let last_pct = (r_last * 100.0).round() as i32;
+        if first_pct - last_pct >= 5 {
+            let text = format!(
+                "{} bist du am stärksten: {} % richtig, {} nur {} %.",
+                first.label,
+                first_pct,
+                last.label.to_lowercase(),
+                last_pct
+            );
+            (Some((*first).clone()), text)
+        } else {
+            (None, "Die Tageszeit macht bei dir kaum einen Unterschied.".to_string())
+        }
     } else {
-        None
-    };
-
-    let text = if valid.len() < 2 {
-        format!("Noch zu wenig Daten: Es braucht je {} Wiederholungen zu zwei Tageszeiten.", MIN_SLOT_REVIEWS)
-    } else if let Some(b) = &best {
-        let first_pct = (b.rate.unwrap() * 100.0).round() as i32;
-        let last = valid.last().unwrap();
-        let last_pct = (last.rate.unwrap() * 100.0).round() as i32;
-        format!(
-            "{} bist du am stärksten: {} % richtig, {} nur {} %.",
-            b.label,
-            first_pct,
-            last.label.to_lowercase(),
-            last_pct
-        )
-    } else {
-        "Die Tageszeit macht bei dir kaum einen Unterschied.".to_string()
+        (None, format!("Noch zu wenig Daten: Es braucht je {} Wiederholungen zu zwei Tageszeiten.", MIN_SLOT_REVIEWS))
     };
 
     BestTimeAnalysis { slots, best, text, tone: "ok".to_string() }

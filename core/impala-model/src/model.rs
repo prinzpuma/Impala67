@@ -167,7 +167,9 @@ impl Model {
     /// Voll-Replay eines Logs (ohne Speicher), z. B. für Tests und Werkzeuge.
     pub fn from_events(mut events: Vec<LogEvent>) -> Self {
         let mut m = Model::default();
-        order::sort_events(&mut events);
+        if events.len() > 1 {
+            order::sort_events(&mut events);
+        }
         m.loaded_time = events.last().map(|e| e.t.clone()).unwrap_or_default();
         for ev in events {
             m.reduce(ev, true);
@@ -226,11 +228,21 @@ impl Model {
         let live = (!loading).then_some(Live { current_chat_id: self.current_chat_id.as_deref() });
         let fx = self.state.apply_owned(ev, live);
         if let Some((hash, len)) = &fx.blob {
-            self.blob_sizes.insert(hash.clone(), *len);
-            self.dirty_blobs.insert(hash.clone());
+            if let Some(cur) = self.blob_sizes.get_mut(hash) {
+                *cur = *len;
+            } else {
+                self.blob_sizes.insert(hash.clone(), *len);
+            }
+            if !self.dirty_blobs.contains(hash) {
+                self.dirty_blobs.insert(hash.clone());
+            }
         }
         if let (Some(page), Some(t)) = (&fx.heft_page, t) {
-            self.heft_updated.insert(page.clone(), t);
+            if let Some(cur) = self.heft_updated.get_mut(page) {
+                *cur = t;
+            } else {
+                self.heft_updated.insert(page.clone(), t);
+            }
         }
         if let Some(page) = &fx.deleted_page {
             self.heft_updated.remove(page);
@@ -252,9 +264,12 @@ impl Model {
             Err(_) => (Err("read-error"), false),
         };
         let (replayed, reject) = match loaded {
-            Ok((cp, saved, docs, tail)) => {
+            Ok((mut cp, saved, docs, tail)) => {
                 let format = cp.get("format").and_then(Value::as_u64).unwrap_or(0);
                 let partitioned = format == checkpoint::FORMAT || format == checkpoint::HEFT_JSON_FORMAT;
+                let max_seq = impala_storage::js::seq_of(cp.get("maxSeq"));
+                let event_count = impala_storage::js::seq_of(cp.get("eventCount"));
+                let reconciled = cp.get("reconciledArchive").is_some_and(js::truthy);
                 m.state = State::restore(saved, now);
                 match docs {
                     Some(StoredHefte::Text(parts)) => {
@@ -270,12 +285,12 @@ impl Model {
                     None => {}
                 }
                 m.blob_sizes = if partitioned {
-                    cp.get("heftBlobSizes")
-                        .and_then(Value::as_object)
-                        .into_iter()
-                        .flatten()
-                        .map(|(h, n)| (h.clone(), n.as_f64().map_or(0, |n| n.max(0.0) as usize)))
-                        .collect()
+                    match cp.remove("heftBlobSizes") {
+                        Some(Value::Object(o)) => {
+                            o.into_iter().map(|(h, n)| (h, n.as_f64().map_or(0, |n| n.max(0.0) as usize))).collect()
+                        }
+                        _ => BTreeMap::new(),
+                    }
                 } else {
                     blob_sizes_of(&m.state)
                 };
@@ -284,33 +299,38 @@ impl Model {
                     m.dirty_blobs = m.blob_sizes.keys().cloned().collect();
                 }
                 let mut tail: Vec<LogEvent> = tail.into_iter().filter_map(LogEvent::from_object_owned).collect();
-                order::sort_events(&mut tail);
-                let saved_times = cp.get("orderTimes").and_then(Value::as_object).map(order::times_from_object);
+                if tail.len() > 1 {
+                    order::sort_events(&mut tail);
+                }
+                let saved_times = cp.remove("orderTimes").and_then(take_order_times);
                 m.order_complete = saved_times.is_some();
                 m.order = saved_times.unwrap_or_default();
-                m.loaded_time = js::str_or_empty(cp.get("maxTime"));
+                m.loaded_time = take_str_or_empty(cp.remove("maxTime"));
                 let replayed = tail.len();
                 for ev in tail {
                     m.reduce(ev, true);
                 }
-                let num = |k: &str| impala_storage::js::seq_of(cp.get(k));
                 m.checkpoint_info = Some(CheckpointInfo {
                     format,
-                    max_seq: num("maxSeq"),
-                    event_count: num("eventCount"),
-                    last_event_id: js::str_or_empty(cp.get("lastEventId")),
+                    max_seq,
+                    event_count,
+                    last_event_id: take_str_or_empty(cp.remove("lastEventId")),
                 });
                 // Checkpoints von vor dem Archiv-Abgleich: Archiv-Events einmalig nachspielen.
                 // (Den Artikel-Abgleich des JS braucht es nicht: ein Checkpoint ohne `homeArticles`
                 // scheitert schon an der Schlüsselprüfung und wird voll abgespielt.)
-                if !cp.get("reconciledArchive").is_some_and(js::truthy) {
+                if !reconciled {
                     let mut all: Vec<LogEvent> = storage
                         .all_events()?
                         .into_iter()
+                        .filter(|e| {
+                            matches!(e.get("type").and_then(Value::as_str), Some("pageArchive" | "pageUnarchive"))
+                        })
                         .filter_map(LogEvent::from_object_owned)
-                        .filter(|e| e.kind == "pageArchive" || e.kind == "pageUnarchive")
                         .collect();
-                    order::sort_events(&mut all);
+                    if all.len() > 1 {
+                        order::sort_events(&mut all);
+                    }
                     for ev in all {
                         m.reduce(ev, true);
                     }
@@ -322,9 +342,10 @@ impl Model {
                 let raw = storage.take_all_events()?;
                 let raw_len = raw.len() as u64;
                 let mut events: Vec<LogEvent> = raw.into_iter().filter_map(LogEvent::from_object_owned).collect();
-                order::sort_events(&mut events);
+                if events.len() > 1 {
+                    order::sort_events(&mut events);
+                }
                 info = log_info_of(&events, raw_len);
-                m.state = State::restore(State::default().to_object(), now);
                 m.loaded_time = events.last().map(|e| e.t.clone()).unwrap_or_default();
                 let replayed = events.len();
                 for ev in events {
@@ -358,7 +379,9 @@ impl Model {
     /// Bereits gespeicherte Fremd-Events anwenden (`applyRemoteEvents`): in Zeitreihenfolge.
     /// Liefert die IDs in Anwendungsreihenfolge.
     pub fn apply_remote(&mut self, mut events: Vec<LogEvent>) -> Vec<String> {
-        order::sort_events(&mut events);
+        if events.len() > 1 {
+            order::sort_events(&mut events);
+        }
         let mut ids = Vec::with_capacity(events.len());
         for ev in events {
             ids.push(ev.id.clone());
@@ -442,29 +465,39 @@ impl Model {
         }
         let current = storage.log_info()?;
         // Nur die IDs, portionsweise gelesen: Nach einem großen Import liegt fast das ganze Log hier.
-        let mut post_ids: Vec<String> = Vec::new();
         let mut after = self.base_seq;
         while after < current.max_seq {
             let page = storage.events_after(after, Some(current.max_seq), Some(CHECKPOINT_SCAN))?;
             let Some(last) = page.last() else { break };
-            after = impala_storage::js::seq_of(last.get("seq"));
-            post_ids.extend(page.iter().filter_map(|e| e.get("id")).filter(|v| js::truthy(v)).map(js::to_string));
+            let next_after = impala_storage::js::seq_of(last.get("seq"));
+            if next_after <= after {
+                break;
+            }
+            after = next_after;
+            for ev in &page {
+                let Some(v) = ev.get("id").filter(|v| js::truthy(v)) else { continue };
+                let known = match v {
+                    Value::String(id) => self.applied_after_load.contains(id),
+                    other => self.applied_after_load.contains(&js::to_string(other)),
+                };
+                if !known {
+                    return Ok(CheckpointSave::Stale);
+                }
+            }
         }
-        if post_ids.iter().any(|id| !self.applied_after_load.contains(id)) {
-            return Ok(CheckpointSave::Stale);
-        }
-        let same = CheckpointInfo {
-            format: checkpoint::FORMAT,
-            max_seq: current.max_seq,
-            event_count: current.count,
-            last_event_id: current.last_event_id.clone(),
-        };
-        if self.checkpoint_info.as_ref() == Some(&same) {
+        if self.checkpoint_info.as_ref().is_some_and(|ci| {
+            ci.format == checkpoint::FORMAT
+                && ci.max_seq == current.max_seq
+                && ci.event_count == current.count
+                && ci.last_event_id == current.last_event_id
+        }) {
             return Ok(CheckpointSave::Unchanged);
         }
         let mut sizes: Object = self.blob_sizes.iter().map(|(h, n)| (h.clone(), Value::from(*n))).collect();
         for (h, d) in &self.state.hefte.blobs {
-            sizes.insert(h.clone(), Value::from(js::len16(d)));
+            if !sizes.get(h).and_then(Value::as_u64).is_some_and(|n| n > 0) {
+                sizes.insert(h.clone(), Value::from(js::len16(d)));
+            }
         }
         let dirty: Vec<(String, String)> = self
             .dirty_blobs
@@ -477,18 +510,26 @@ impl Model {
         };
         // Unveränderte Hefte, die schon gespeichert liegen, behalten ihren Teil (kein Neuschreiben,
         // kein Lesen); nur geänderte werden serialisiert.
-        let existing: HashSet<String> = storage.part_hashes(PartKind::HeftDoc)?.into_iter().collect();
-        let hefte: Vec<HeftPart> = self
-            .state
-            .hefte
-            .ids()
-            .map(|id| match self.state.hefte.stored_hash(id) {
-                Some(h) if existing.contains(h) => {
-                    HeftPart { page_id: id.clone(), hash: h.to_owned(), json: String::new() }
-                }
-                _ => checkpoint::heft_part(id, self.state.hefte.get(id).expect("Heft vorhanden")),
-            })
-            .collect();
+        let hefte: Vec<HeftPart> = if self.state.hefte.ids().next().is_none() {
+            Vec::new()
+        } else {
+            let existing: HashSet<String> =
+                if self.state.hefte.ids().any(|id| self.state.hefte.stored_hash(id).is_some()) {
+                    storage.part_hashes(PartKind::HeftDoc)?.into_iter().collect()
+                } else {
+                    HashSet::new()
+                };
+            self.state
+                .hefte
+                .ids()
+                .map(|id| match self.state.hefte.stored_hash(id) {
+                    Some(h) if existing.contains(h) => {
+                        HeftPart { page_id: id.clone(), hash: h.to_owned(), json: String::new() }
+                    }
+                    _ => checkpoint::heft_part(id, self.state.hefte.get(id).expect("Heft vorhanden")),
+                })
+                .collect()
+        };
         let times = self.order_complete.then(|| order::times_to_object(&self.order));
         let written = storage.save_checkpoint_parts_owned(
             state,
@@ -512,8 +553,12 @@ impl Model {
         });
         self.base_seq = written.max_seq;
         self.loaded_seq = written.max_seq;
-        for id in post_ids {
-            self.applied_after_load.remove(&id);
+        if after >= current.max_seq && written.max_seq <= current.max_seq {
+            if self.applied_after_load.capacity() > 256 {
+                self.applied_after_load = HashSet::new();
+            } else {
+                self.applied_after_load.clear();
+            }
         }
         Ok(CheckpointSave::Written)
     }
@@ -554,12 +599,20 @@ impl Model {
         if self.blob_sizes.is_empty() || (self.payload_loaded && targets.is_none()) {
             return Vec::new();
         }
-        let mut seen = HashSet::new();
-        let requested: Vec<&String> = match targets {
-            Some(t) => t.iter().filter(|h| self.blob_sizes.contains_key(*h) && seen.insert(*h)).collect(),
-            None => self.blob_sizes.keys().collect(),
-        };
-        requested.into_iter().filter(|h| !self.state.hefte.blobs.contains_key(*h)).cloned().collect()
+        match targets {
+            Some(t) => {
+                let mut seen = HashSet::new();
+                t.iter()
+                    .filter(|h| {
+                        self.blob_sizes.contains_key(*h)
+                            && !self.state.hefte.blobs.contains_key(*h)
+                            && seen.insert(h.as_str())
+                    })
+                    .cloned()
+                    .collect()
+            }
+            None => self.blob_sizes.keys().filter(|h| !self.state.hefte.blobs.contains_key(*h)).cloned().collect(),
+        }
     }
 
     /// Bilder aus dem Checkpoint nachladen (`hydrateHeftBlobs`): bestimmte oder alle. Fehlt ein
@@ -576,14 +629,7 @@ impl Model {
         if self.payload_loaded && targets.is_none() {
             return Ok(true);
         }
-        let requested: Vec<String> = match targets {
-            Some(t) => {
-                let mut seen = HashSet::new();
-                t.iter().filter(|h| self.blob_sizes.contains_key(*h) && seen.insert(*h)).cloned().collect()
-            }
-            None => self.blob_sizes.keys().cloned().collect(),
-        };
-        let needed: Vec<String> = requested.into_iter().filter(|h| !self.state.hefte.blobs.contains_key(h)).collect();
+        let needed = self.blobs_to_hydrate(targets);
         let all_loaded = |m: &Model| m.blob_sizes.keys().all(|h| m.state.hefte.blobs.contains_key(h));
         if needed.is_empty() {
             if targets.is_none() || all_loaded(self) {
@@ -591,16 +637,16 @@ impl Model {
             }
             return Ok(true);
         }
-        let mut found: BTreeMap<String, String> = BTreeMap::new();
-        for h in &needed {
+        let mut missing = BTreeSet::new();
+        for h in needed {
             // Lesefehler wie im JS: das Bild gilt als fehlend und wird im Log gesucht.
-            if let Ok(Some(data)) = storage.part(PartKind::HeftBlob, h) {
-                found.insert(h.clone(), data);
+            if let Ok(Some(data)) = storage.part(PartKind::HeftBlob, &h) {
+                self.state.hefte.blobs.entry(h).or_insert(data);
+            } else {
+                missing.insert(h);
             }
         }
-        let mut missing: BTreeSet<String> = needed.iter().filter(|h| !found.contains_key(*h)).cloned().collect();
         if !missing.is_empty() {
-            let mut recovered = Vec::new();
             for ev in storage.all_events()? {
                 if missing.is_empty() {
                     break;
@@ -614,19 +660,15 @@ impl Model {
                 if let (Some(h), Some(d)) = (hash, data)
                     && missing.remove(h)
                 {
-                    recovered.push((h.to_owned(), d.to_owned()));
+                    if !self.dirty_blobs.contains(h) {
+                        self.dirty_blobs.insert(h.to_owned());
+                    }
+                    self.state.hefte.blobs.entry(h.to_owned()).or_insert_with(|| d.to_owned());
                 }
-            }
-            for (h, d) in recovered {
-                self.dirty_blobs.insert(h.clone());
-                found.insert(h, d);
             }
             for h in missing {
                 self.blob_sizes.remove(&h);
             }
-        }
-        for (h, d) in found {
-            self.state.hefte.blobs.entry(h).or_insert(d);
         }
         if targets.is_none() || all_loaded(self) {
             self.payload_loaded = true;
@@ -697,6 +739,21 @@ fn read_hefte(hefte: Option<HeftJson>) -> Option<Option<StoredHefte>> {
             _ => Some(StoredHefte::Docs(Vec::new())),
         },
     })
+}
+
+/// `String(x || "")`, übernimmt vorhandenen Text ohne Kopie.
+fn take_str_or_empty(v: Option<Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s,
+        Some(other) if js::truthy(&other) => js::to_string(&other),
+        _ => String::new(),
+    }
+}
+
+/// Übernimmt `orderTimes` aus einem Checkpoint ohne Schlüssel- oder Zeitstempel-Kopien.
+fn take_order_times(v: Value) -> Option<OrderTimes> {
+    let Value::Object(o) = v else { return None };
+    Some(o.into_iter().map(|(k, v)| (k, take_str_or_empty(Some(v)))).collect())
 }
 
 /// `eventLogInfoOf` über das sortierte Log: Event mit der höchsten `seq` (bei Gleichstand das letzte).

@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use impala_sort::SortExt;
+
 use crate::InkError;
 use crate::lexicon::Lexicon;
 use crate::vocab::{self, BLANK, CLASSES, SPACE};
@@ -357,19 +359,12 @@ fn beam_search<'a>(rows: impl Iterator<Item = &'a [f32]>) -> String {
             }
         }
         let mut scored: Vec<(f64, Beam)> = next.into_iter().map(|b| (score(&b), b)).collect();
-        scored.sort_by(|x, y| y.0.partial_cmp(&x.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_small_by(|x, y| y.0.total_cmp(&x.0));
         scored.truncate(BEAM_WIDTH);
         beams = scored.into_iter().map(|(_, b)| b).collect();
     }
-    // Erster mit der höchsten Wertung (Liste ist absteigend sortiert)
-    let mut best: Option<(f64, &Beam)> = None;
-    for b in &beams {
-        let s = score(b);
-        if best.is_none_or(|(bs, _)| s > bs) {
-            best = Some((s, b));
-        }
-    }
-    best.map(|(_, b)| b.text.clone()).unwrap_or_default()
+    // `beams` ist nach der Schleife bereits absteigend nach `score` sortiert (bei `t == 0` 1 Leerelement).
+    beams.into_iter().next().map(|b| b.text).unwrap_or_default()
 }
 
 /// Leere Spaltenbereiche `[von, bis)` des Zeilenbilds sind Wortgrenzen, auch wo das Modell kein Leerzeichen

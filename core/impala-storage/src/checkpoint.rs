@@ -6,7 +6,9 @@
 //! - 2: Heft-Bilder als eigene Teile ([`PartKind::HeftBlob`]), alle Hefte als ein JSON-Text `heftDocsJson`.
 //! - 3: zusätzlich jedes Heft als eigener, per SHA-256 adressierter JSON-Text ([`PartKind::HeftDoc`]).
 
+use std::borrow::{Borrow, Cow};
 use std::collections::HashSet;
+use std::hash::Hash;
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -343,13 +345,41 @@ pub fn make_owned(
     build_checkpoint(core, blob_sizes, info, max_time, hefte, order_times)
 }
 
-/// Schlüssel eines Objekts (`Object.keys`, auch für Arrays).
-fn keys_of(v: Option<&Value>) -> Option<HashSet<String>> {
+/// Schlüssel eines Objekts (`Object.keys`, auch für Arrays), für Objekte ohne Kopie.
+fn keys_of(v: Option<&Value>) -> Option<HashSet<Cow<'_, str>>> {
     match v? {
-        Value::Object(o) => Some(o.keys().cloned().collect()),
-        Value::Array(a) => Some((0..a.len()).map(|i| i.to_string()).collect()),
+        Value::Object(o) => Some(o.keys().map(|k| Cow::Borrowed(k.as_str())).collect()),
+        Value::Array(a) => Some((0..a.len()).map(|i| Cow::Owned(i.to_string())).collect()),
         _ => None,
     }
+}
+
+fn partition_parts<'a, S: Storage + ?Sized, K: Borrow<str> + Eq + Hash>(
+    storage: &S,
+    kind: PartKind,
+    entries: impl Iterator<Item = (&'a str, &'a str)>,
+    known: Option<&HashSet<K>>,
+    writes: &mut Vec<Write>,
+) -> Result<(), Error> {
+    let existing_list = storage.part_hashes(kind)?;
+    if existing_list.is_empty() {
+        for (hash, data) in entries {
+            if !hash.is_empty() && !data.is_empty() {
+                writes.push(Write::PutPart(kind, hash.to_owned(), data.to_owned()));
+            }
+        }
+        return Ok(());
+    }
+    let existing: HashSet<String> = existing_list.into_iter().collect();
+    for (hash, data) in entries {
+        if !hash.is_empty() && !data.is_empty() && !existing.contains(hash) {
+            writes.push(Write::PutPart(kind, hash.to_owned(), data.to_owned()));
+        }
+    }
+    if let Some(known) = known {
+        writes.extend(existing.into_iter().filter(|h| !known.contains(h.as_str())).map(|h| Write::DeletePart(kind, h)));
+    }
+    Ok(())
 }
 
 /// Schreibvorgang für `putStateCheckpoint`: neue Teile nur, wenn ihr Hash fehlt (Inhalt ist
@@ -361,31 +391,27 @@ pub fn write<S: Storage + ?Sized>(
     hefte: &[HeftPart],
 ) -> Result<(), Error> {
     let known_blobs = keys_of(cp.get("heftBlobSizes"));
-    let known_hefte: Option<HashSet<String>> = match cp.get("heftDocHashes") {
-        Some(Value::Object(o)) => Some(o.values().filter_map(Value::as_str).map(str::to_owned).collect()),
-        Some(Value::Array(a)) => Some(a.iter().filter_map(Value::as_str).map(str::to_owned).collect()),
+    let known_hefte: Option<HashSet<&str>> = match cp.get("heftDocHashes") {
+        Some(Value::Object(o)) => Some(o.values().filter_map(Value::as_str).collect()),
+        Some(Value::Array(a)) => Some(a.iter().filter_map(Value::as_str).collect()),
         _ => None,
     };
     let mut writes = Vec::new();
-    let mut partition = |kind: PartKind, entries: Vec<(&str, &str)>, known: Option<&HashSet<String>>| {
-        let existing: HashSet<String> = storage.part_hashes(kind)?.into_iter().collect();
-        for (hash, data) in entries {
-            if !hash.is_empty() && !data.is_empty() && !existing.contains(hash) {
-                writes.push(Write::PutPart(kind, hash.to_owned(), data.to_owned()));
-            }
-        }
-        if let Some(known) = known {
-            writes.extend(existing.into_iter().filter(|h| !known.contains(h)).map(|h| Write::DeletePart(kind, h)));
-        }
-        Ok::<_, Error>(())
-    };
-    partition(
+    partition_parts(
+        storage,
         PartKind::HeftBlob,
-        heft_blobs.iter().map(|(h, d)| (h.as_str(), d.as_str())).collect(),
+        heft_blobs.iter().map(|(h, d)| (h.as_str(), d.as_str())),
         known_blobs.as_ref(),
+        &mut writes,
     )?;
     if let Some(known) = &known_hefte {
-        partition(PartKind::HeftDoc, hefte.iter().map(|h| (h.hash.as_str(), h.json.as_str())).collect(), Some(known))?;
+        partition_parts(
+            storage,
+            PartKind::HeftDoc,
+            hefte.iter().map(|h| (h.hash.as_str(), h.json.as_str())),
+            Some(known),
+            &mut writes,
+        )?;
     }
     writes.push(Write::PutCheckpoint(CheckpointSlot::Current, cp));
     writes.push(Write::DeleteCheckpoint(CheckpointSlot::Legacy));
@@ -438,12 +464,13 @@ pub fn load_raw<S: Storage + ?Sized>(
         Ok(x) => x,
         Err(r) => return Ok(LoadedRaw::Rejected(r)),
     };
+    let hefte = match hefte_raw(storage, &cp)? {
+        Ok(hefte) => hefte,
+        Err(reason) => return Ok(LoadedRaw::Rejected(reason)),
+    };
     // Den (großen) Zustand herausnehmen statt kopieren; `checkpoint` behält nur die Kennzahlen.
     let Some(Value::Object(state)) = cp.remove("state") else { return Ok(LoadedRaw::Rejected(Reject::NoState)) };
-    Ok(match hefte_raw(storage, &cp)? {
-        Ok(hefte) => LoadedRaw::Usable { checkpoint: cp, state, hefte, tail },
-        Err(reason) => LoadedRaw::Rejected(reason),
-    })
+    Ok(LoadedRaw::Usable { checkpoint: cp, state, hefte, tail })
 }
 
 /// Ergebnis von [`load_raw`].

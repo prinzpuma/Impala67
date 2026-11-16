@@ -1371,25 +1371,28 @@ fn op_to_tool(op: &Value) -> Option<(&'static str, Value)> {
 // ---------------------------------------------------------------------------
 // Änderungs-Satz und Rückgängig
 
-/// Stand vor einer KI-Aktion (Seiten, Karten, Stapel und die beschriebenen Hefte).
+/// Stand vor einer KI-Aktion (nur die potenziell betroffenen Sammlungen und die beschriebenen Hefte).
 struct Snapshot {
-    pages: impala_model::JsMap<impala_model::Page>,
-    cards: impala_model::JsMap<impala_model::Card>,
-    decks: impala_model::JsMap<impala_model::Deck>,
+    pages: Option<impala_model::JsMap<impala_model::Page>>,
+    cards: Option<impala_model::JsMap<impala_model::Card>>,
+    decks: Option<impala_model::JsMap<impala_model::Deck>>,
     hefte: Vec<(String, Option<HeftDoc>)>,
 }
 
 fn changed<T: PartialEq + serde::Serialize>(
-    before: &impala_model::JsMap<T>,
+    before: Option<&impala_model::JsMap<T>>,
     after: &impala_model::JsMap<T>,
-) -> Vec<Value> {
-    let mut ids: Vec<&String> = before.keys().chain(after.keys()).collect();
-    ids.sort();
-    ids.dedup();
-    ids.into_iter()
-        .filter(|id| before.get(id) != after.get(id))
-        .map(|id| json!({ "id": id, "before": before.get(id).map(ser), "after": after.get(id).map(ser) }))
-        .collect()
+) -> Value {
+    let Some(before) = before else {
+        return json!([]);
+    };
+    let ids: BTreeSet<&String> = before.keys().chain(after.keys()).collect();
+    Value::Array(
+        ids.into_iter()
+            .filter(|id| before.get(id) != after.get(id))
+            .map(|id| json!({ "id": id, "before": before.get(id).map(ser), "after": after.get(id).map(ser) }))
+            .collect(),
+    )
 }
 
 /// Heft-Vergleich ohne `rev` (der Zähler unterscheidet sich zwischen Geräten).
@@ -1400,15 +1403,42 @@ fn heft_json(doc: Option<&HeftDoc>) -> Value {
 impl Snapshot {
     fn take(operations: &[Value], tools: &Tools<'_>) -> Snapshot {
         let state = tools.inner.model.state();
+        let (mut need_pages, mut need_cards, mut need_decks) = (false, false, false);
         let mut hefte: Vec<(String, Option<HeftDoc>)> = vec![];
-        for op in operations.iter().filter(|o| o.get("op").and_then(Value::as_str) == Some("heft.append")) {
-            if let Some(id) = tools.page_id(&str_of(&op["title"]))
+        for op in operations {
+            let kind = op.get("op").and_then(Value::as_str);
+            match kind {
+                Some(
+                    "page.create" | "page.append" | "page.replace" | "page.patch" | "page.rename" | "page.move"
+                    | "page.trash" | "page.archive" | "page.unarchive" | "heft.append",
+                ) => need_pages = true,
+                Some(
+                    "card.create" | "card.update" | "card.move" | "deck.create" | "deck.rename" | "deck.move"
+                    | "deck.trash",
+                ) => {
+                    need_cards = true;
+                    need_decks = true;
+                }
+                Some("card.trash" | "card.suspend" | "card.reset") => need_cards = true,
+                _ => {
+                    need_pages = true;
+                    need_cards = true;
+                    need_decks = true;
+                }
+            }
+            if kind == Some("heft.append")
+                && let Some(id) = tools.page_id(&str_of(&op["title"]))
                 && !hefte.iter().any(|(h, _)| *h == id)
             {
                 hefte.push((id.clone(), state.hefte.get(&id).cloned()));
             }
         }
-        Snapshot { pages: state.pages.clone(), cards: state.cards.clone(), decks: state.decks.clone(), hefte }
+        Snapshot {
+            pages: need_pages.then(|| state.pages.clone()),
+            cards: need_cards.then(|| state.cards.clone()),
+            decks: need_decks.then(|| state.decks.clone()),
+            hefte,
+        }
     }
 
     fn undo_set(&self, inner: &Inner) -> Value {
@@ -1423,8 +1453,10 @@ impl Snapshot {
             })
             .collect();
         json!({
-            "pages": changed(&self.pages, &state.pages), "cards": changed(&self.cards, &state.cards),
-            "decks": changed(&self.decks, &state.decks), "heftDocs": heft,
+            "pages": changed(self.pages.as_ref(), &state.pages),
+            "cards": changed(self.cards.as_ref(), &state.cards),
+            "decks": changed(self.decks.as_ref(), &state.decks),
+            "heftDocs": heft,
         })
     }
 }
@@ -1894,5 +1926,53 @@ mod tests {
         assert!(r["error"].as_str().unwrap().contains("Stapel nicht gefunden"), "{r}");
         let (r, _) = run(&mut e, "calculate", json!({ "expression": "1+1" }));
         assert!(r["error"].as_str().unwrap().contains("nicht verfügbar"));
+    }
+
+    #[test]
+    fn snapshot_klont_nur_betroffene_sammlungen() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        core.create_page("Seite".into(), "Text".into(), None, None).unwrap();
+        core.create_card("F".into(), "A".into(), Some("Mathe".into()), None).unwrap();
+        let mut inner = lock(&core.inner);
+        let now = LocalTime { year: 2026, month: 10, day: 28, weekday: 3, hour: 14, minute: 5 };
+        let tools = Tools { inner: &mut inner, active_page: None, now, utc_offset: 60 };
+
+        let page_snap = Snapshot::take(&[json!({ "op": "page.patch" }), json!({ "op": "heft.append" })], &tools);
+        assert!(page_snap.pages.is_some() && page_snap.cards.is_none() && page_snap.decks.is_none());
+        let empty = page_snap.undo_set(tools.inner);
+        assert_eq!(empty["cards"], json!([]));
+        assert_eq!(empty["decks"], json!([]));
+
+        let card_only = Snapshot::take(&[json!({ "op": "card.trash" }), json!({ "op": "card.suspend" })], &tools);
+        assert!(card_only.pages.is_none() && card_only.cards.is_some() && card_only.decks.is_none());
+
+        let card_deck = Snapshot::take(&[json!({ "op": "card.create" })], &tools);
+        assert!(card_deck.pages.is_none() && card_deck.cards.is_some() && card_deck.decks.is_some());
+
+        let deck_op = Snapshot::take(&[json!({ "op": "deck.rename" })], &tools);
+        assert!(deck_op.pages.is_none() && deck_op.cards.is_some() && deck_op.decks.is_some());
+
+        let unknown = Snapshot::take(&[json!({ "op": "future.op" })], &tools);
+        assert!(unknown.pages.is_some() && unknown.cards.is_some() && unknown.decks.is_some());
+    }
+
+    #[test]
+    fn deck_und_card_change_bleiben_ohne_pages_klon_rueckgaengig() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        core.create_card("Frage 1".into(), "Antwort 1".into(), Some("Alt".into()), None).unwrap();
+        let (transcript, notify) = (RefCell::new(vec![]), |_: &Value| {});
+        let mut e = env(&core.inner, &transcript, &notify);
+
+        let (res, undo) =
+            run(&mut e, "change", json!({ "operations": [{ "op": "deck.rename", "deck": "Alt", "to": "Neu" }] }));
+        assert_eq!(res["ok"], true, "{res}");
+        let undo = undo.unwrap();
+        assert_eq!(undo["pages"], json!([]));
+        assert_eq!(undo["cards"].as_array().unwrap().len(), 1);
+        assert_eq!(core.cards_in_deck("Neu".into()).len(), 1);
+
+        core.undo_ai_changes(undo.to_string()).unwrap();
+        assert_eq!(core.cards_in_deck("Alt".into()).len(), 1);
+        assert!(core.cards_in_deck("Neu".into()).is_empty());
     }
 }

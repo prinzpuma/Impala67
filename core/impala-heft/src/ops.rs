@@ -599,13 +599,21 @@ impl Hefte {
 
     /// Bildreferenzen aller Hefte (für Aufräumen und Sync).
     pub fn referenced_blobs(&self) -> Vec<&str> {
-        let mut out: Vec<&str> = self
-            .iter()
-            .flat_map(|(_, d)| d.pages.iter())
-            .flat_map(|p| p.images.iter())
-            .filter_map(|i| i.r#ref.as_deref())
-            .filter(|r| !r.is_empty())
-            .collect();
+        let mut out: Vec<&str> = Vec::new();
+        for slot in self.docs.values() {
+            // Ungeparstes Heft ohne `"ref"`-Schlüssel im JSON kann keine Bild-Referenz tragen.
+            if slot.doc.get().is_none() && !slot.json.borrow().as_deref().is_some_and(|j| j.contains("\"ref\"")) {
+                continue;
+            }
+            out.extend(
+                slot.doc()
+                    .pages
+                    .iter()
+                    .flat_map(|p| p.images.iter())
+                    .filter_map(|i| i.r#ref.as_deref())
+                    .filter(|r| !r.is_empty()),
+            );
+        }
         out.sort_small();
         out.dedup();
         out
