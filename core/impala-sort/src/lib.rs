@@ -4,9 +4,9 @@
 //! Sortiermaschine (≈ 4 KB WASM je Aufrufstelle, im Kern zusammen ≈ 250 KB). Hier sortiert eine
 //! nicht generische Routine nur Indizes; je Aufrufstelle bleiben der Vergleich und das Umordnen.
 //!
-//! Ergebnis wie `sort_by` (stabil). Vorsortierte Eingaben kosten einen Durchlauf; große zufällige
-//! Listen dauern etwa viermal so lang wie mit `sort_by` (Messung: `examples/bench.rs`). Wo eine
-//! solche Liste in einem heißen Pfad sortiert wird, bleibt `sort_by` stehen.
+//! Ergebnis wie `sort_by` (stabil). Kurze und vorsortierte Listen sind so schnell wie mit
+//! `sort_by`; große zufällige Listen dauern etwa viermal so lang (Messung: `examples/bench.rs`).
+//! Wo eine solche Liste in einem heißen Pfad sortiert wird, bleibt `sort_by` stehen.
 
 use std::cmp::Ordering;
 
@@ -24,7 +24,19 @@ pub trait SortExt<T> {
 
 impl<T> SortExt<T> for [T] {
     fn sort_small_by(&mut self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
-        if self.len() < 2 {
+        if self.len() <= INSERTION_MAX {
+            // Kurze Listen direkt durch Einfügen, ohne Hilfsspeicher.
+            for i in 1..self.len() {
+                let mut at = i;
+                while at > 0 && cmp(&self[at - 1], &self[at]) == Ordering::Greater {
+                    self.swap(at - 1, at);
+                    at -= 1;
+                }
+            }
+            return;
+        }
+        // Schon sortiert (Event-Log, gespeicherte Listen): ein Durchlauf ohne Hilfsspeicher.
+        if self.windows(2).all(|w| cmp(&w[0], &w[1]) != Ordering::Greater) {
             return;
         }
         let mut order = sorted_order(self.len(), &mut |a, b| cmp(&self[a], &self[b]) == Ordering::Greater);
@@ -61,18 +73,6 @@ const INSERTION_MAX: usize = 16;
 #[inline(never)]
 fn sorted_order(n: usize, greater: &mut dyn FnMut(usize, usize) -> bool) -> Vec<usize> {
     let mut order: Vec<usize> = (0..n).collect();
-    if n <= INSERTION_MAX {
-        // Kurze Listen: Einfügen, ohne weitere Puffer.
-        for i in 1..n {
-            let mut at = i;
-            while at > 0 && greater(order[at - 1], i) {
-                order[at] = order[at - 1];
-                at -= 1;
-            }
-            order[at] = i;
-        }
-        return order;
-    }
     // Anfänge der Läufe, dahinter `n` als Ende.
     let mut runs = vec![0];
     for i in 1..n {
