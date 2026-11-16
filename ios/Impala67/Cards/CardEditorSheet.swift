@@ -58,7 +58,7 @@ struct CardEditorSheet: View {
                     }
                 }
                 Section {
-                    Button("［…］ Lücke einfügen") { wrapCloze() }
+                    Button("［…］ Lücke einfügen") { insertCloze() }
                         .disabled(preview)
                     Button("Als Lückentext speichern") { saveCloze() }
                 }
@@ -165,7 +165,8 @@ struct CardEditorSheet: View {
 
     /// Markierten Text in `{{cN::…}}` setzen (N = nächste freie Nummer); ohne Markierung eine leere Lücke
     /// an der Schreibmarke.
-    private func wrapCloze() {
+    // Eigener Name: Eine Methode `wrapCloze` verdeckt hier die gleichnamige Kern-Funktion.
+    private func insertCloze() {
         var range = front.endIndex..<front.endIndex
         if let sel = selection {
             switch sel.indices {
