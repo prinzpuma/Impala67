@@ -22,7 +22,7 @@ use crate::api::{self, Endpoint, MAX_BLOB_BYTES, PAGE_LIMIT, PullResponse, Serve
 use crate::blobs::{BlobAliveChecker, PageTexts, blob_opaque_key, blob_refs_in_event, is_sync_blob_id};
 use crate::js::{compact_values, count_or, truthy};
 use crate::packet::{ChunkLimits, WireEvent, build_packets, open_packets, upload_bodies};
-use crate::wire::{Transport, prepare_cloud_events, prune_for_upload, should_upload_to};
+use crate::wire::{Transport, is_ui_state, prepare_cloud_events, should_upload_to};
 
 /// Gleichzeitige Datei-Übertragungen (hoch wie herunter), wie früher in JS.
 const PARALLEL_TRANSFERS: usize = 3;
@@ -76,7 +76,9 @@ pub trait SyncStore {
     /// Lokale Events mit `after_seq < seq <= up_to_seq`, nach `seq` geordnet, samt `seq`.
     async fn events_after(&self, after_seq: u64, up_to_seq: u64) -> Result<Vec<Value>, StoreError>;
     /// App-Regeln vor dem Upload: Geheimnisse entfernen, lokale Seiten auslassen
-    /// (`SETTINGS_SYNC.sanitizeEvents`, `DB.filterEventsForSync`). Darf Events weglassen.
+    /// (`SETTINGS_SYNC.sanitizeEvents`, `DB.filterEventsForSync`). Darf Events weglassen, aber
+    /// weder `type` noch `_remoteSource` ändern: UI-Zustand und das eigene Echo sortiert der
+    /// Client schon vorher aus.
     fn filter_for_upload(&self, events: Vec<Value>) -> Vec<Value> {
         events
     }
@@ -692,16 +694,24 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     }
 }
 
-/// Ablage-Filter, UI-Zustand weg, ohne lokale Metadaten (und ohne Cloudflare-Echo,
-/// außer beim Neuaufbau).
+/// UI-Zustand weg, Ablage-Filter, ohne lokale Metadaten (und ohne Cloudflare-Echo, außer beim
+/// Neuaufbau). Die Regeln des Kerns zuerst: Was ohnehin nicht hochgeht, muss nicht durch den
+/// Ablage-Filter (in der PWA: als JSON nach JS und zurück).
 fn wire_events(store: &impl SyncStore, events: Vec<Value>, include_remote: bool) -> Vec<Value> {
-    prepare_cloud_events(prune_for_upload(store.filter_for_upload(events)), include_remote)
+    let events = events.into_iter().filter(|ev| goes_to_cloud(ev, include_remote)).collect();
+    prepare_cloud_events(store.filter_for_upload(events), include_remote)
+}
+
+/// Kein UI-Zustand und (außer beim Neuaufbau) kein Cloudflare-Echo.
+fn goes_to_cloud(ev: &Value, include_remote: bool) -> bool {
+    !is_ui_state(ev) && (include_remote || should_upload_to(ev, Transport::Cloudflare))
 }
 
 /// [`SyncClient::is_uploadable`] ohne Client – für Plattformen, die während eines laufenden
 /// Durchgangs fragen.
 pub fn is_uploadable(store: &impl SyncStore, ev: &Value) -> bool {
-    ev.is_object() && !wire_events(store, vec![ev.clone()], false).is_empty()
+    // Kopiert wird das Event nur, wenn der Ablage-Filter es wirklich sehen muss.
+    ev.is_object() && goes_to_cloud(ev, false) && !store.filter_for_upload(vec![ev.clone()]).is_empty()
 }
 
 /// Event-ID als Mengenschlüssel; der JSON-Text hält `5` und `"5"` auseinander wie JS-`Set`.

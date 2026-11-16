@@ -33,12 +33,14 @@ pub fn should_upload_to(event: &Value, target: Transport) -> bool {
     event.get("_remoteSource").and_then(Value::as_str) != Some(target.as_str())
 }
 
-/// `pruneEventsForUpload`: UI-Zustand (Tabs, Baum) bleibt auf dem Gerät.
+/// UI-Zustand (Tabs, Baum) bleibt auf dem Gerät.
+pub fn is_ui_state(event: &Value) -> bool {
+    matches!(event.get("type").and_then(Value::as_str), Some("uiTabsSet" | "uiTreeSet"))
+}
+
+/// `pruneEventsForUpload`: ohne UI-Zustand.
 pub fn prune_for_upload(events: Vec<Value>) -> Vec<Value> {
-    events
-        .into_iter()
-        .filter(|ev| !matches!(ev.get("type").and_then(Value::as_str), Some("uiTabsSet" | "uiTreeSet")))
-        .collect()
+    events.into_iter().filter(|ev| !is_ui_state(ev)).collect()
 }
 
 /// `prepareCloudEvents`: ohne Cloudflare-Echo (außer `include_remote`, beim Neuaufbau nach einem
