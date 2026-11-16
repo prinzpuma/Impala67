@@ -21,7 +21,7 @@ pub mod schedule;
 pub mod wire;
 
 pub use api::{DEFAULT_WORKER_URL, Endpoint, ServerMessage, acknowledged_upload_cursor};
-pub use blobs::{BlobAliveChecker, blob_opaque_key, is_sync_blob_id};
+pub use blobs::{BlobAliveChecker, PageTexts, blob_opaque_key, is_sync_blob_id};
 pub use client::{
     BlobReport, CompactReport, LocalBlob, PassReport, Progress, PushReport, StoreError, SyncClient, SyncState,
     SyncStore, WsAction, is_uploadable,

@@ -18,6 +18,10 @@ pub trait Field: Sized {
     fn same(&self, v: &Value) -> bool;
     /// Schreibt das Feld ohne Kopie.
     fn write<M: serde::ser::SerializeMap>(&self, m: &mut M, key: &str) -> Result<(), M::Error>;
+    /// Der Text eines Textfeldes (ohne Kopie).
+    fn as_text(&self) -> Option<&str> {
+        None
+    }
 }
 
 impl Field for Vec<Value> {
@@ -71,6 +75,9 @@ impl Field for String {
     }
     fn write<M: serde::ser::SerializeMap>(&self, m: &mut M, key: &str) -> Result<(), M::Error> {
         m.serialize_entry(key, self.as_str())
+    }
+    fn as_text(&self) -> Option<&str> {
+        Some(self)
     }
 }
 
@@ -166,6 +173,17 @@ macro_rules! record {
                 match key {
                     $($key if self.$field.is_some() => self.$field.as_ref().map($crate::record::Field::to_json),)*
                     _ => self.extra.get(key).cloned(),
+                }
+            }
+
+            /// Alle nicht leeren Textfelder der obersten Ebene, ohne Kopie
+            /// (`Object.values(obj)`, nur Strings).
+            pub fn for_each_text(&self, mut f: impl FnMut(&str)) {
+                $(if let Some(t) = self.$field.as_ref().and_then($crate::record::Field::as_text).filter(|t| !t.is_empty()) {
+                    f(t);
+                })*
+                for t in self.extra.values().filter_map(serde_json::Value::as_str).filter(|t| !t.is_empty()) {
+                    f(t);
                 }
             }
 

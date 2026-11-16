@@ -15,11 +15,11 @@ use impala_crypto::{
     CipherKey, OsRandom, Random, StorageUsage, SyncCredentials, decrypt_blob, encrypt_blob, format_storage_usage,
 };
 use impala_net::{HttpClient, join_all};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::SyncError;
 use crate::api::{self, Endpoint, MAX_BLOB_BYTES, PAGE_LIMIT, PullResponse, ServerMessage};
-use crate::blobs::{BlobAliveChecker, blob_opaque_key, blob_refs_in_event, is_sync_blob_id};
+use crate::blobs::{BlobAliveChecker, PageTexts, blob_opaque_key, blob_refs_in_event, is_sync_blob_id};
 use crate::js::{compact_values, count_or, truthy};
 use crate::packet::{ChunkLimits, WireEvent, build_packets, open_packets, upload_bodies};
 use crate::wire::{Transport, prepare_cloud_events, prune_for_upload, should_upload_to};
@@ -83,8 +83,8 @@ pub trait SyncStore {
     /// Fremdevents übernehmen (Merge mit unbestätigten lokalen Änderungen nach `unsynced_after_seq`).
     /// Jedes Event bekommt einen neuen lokalen Schlüssel; `_remote`/`_remoteSource` sind gesetzt.
     async fn import_remote(&mut self, events: Vec<Value>, unsynced_after_seq: u64) -> Result<(), StoreError>;
-    /// Seiten (ID → Seite) für die Prüfung, welche Blobs noch verwendet werden.
-    fn pages(&self) -> Map<String, Value>;
+    /// Seiten-IDs und Textfelder aller Seiten für die Prüfung, welche Blobs noch verwendet werden.
+    fn page_texts(&self) -> PageTexts;
     async fn blob_ids(&self) -> Result<Vec<String>, StoreError>;
     async fn get_blob(&self, id: &str) -> Result<Option<LocalBlob>, StoreError>;
     async fn put_blob(&mut self, id: &str, blob: LocalBlob) -> Result<(), StoreError>;
@@ -561,8 +561,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
     /// Gleicht Dateien ab: lebende lokale hoch, fehlende herunter, verwaiste ignorieren.
     pub async fn sync_blobs(&mut self) -> Result<BlobReport, SyncError> {
         let checked_refs: Vec<String> = self.pending_blob_refs.drain().collect();
-        let pages = self.store.pages();
-        let alive = BlobAliveChecker::new(&pages);
+        let alive = BlobAliveChecker::new(self.store.page_texts());
         let local_ids: Vec<String> =
             self.store.blob_ids().await?.into_iter().filter(|id| is_sync_blob_id(id) && alive.is_alive(id)).collect();
         let local: Vec<(String, String)> = local_ids.iter().map(|id| (self.opaque_key(id), id.clone())).collect();

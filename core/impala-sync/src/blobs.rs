@@ -41,40 +41,84 @@ pub fn blob_opaque_key(id: &str) -> String {
     impala_crypto::sha256_hex(&format!("impala67_blob:{id}"))
 }
 
-/// Prüft, ob ein lokaler Blob noch von einer Seite verwendet wird. Die Seitentexte werden
-/// einmal eingesammelt; UUID-Verweise landen bei Bedarf in einer Menge (ein Durchlauf statt
-/// eines Textvergleichs je Blob).
-pub struct BlobAliveChecker<'a> {
-    pages: &'a Map<String, Value>,
-    /// Alle nicht-leeren Text-Felder aller Seiten, getrennt durch `\0`.
+/// Was die Blob-Prüfung von den Seiten braucht: welche es gibt und alle ihre Textfelder.
+/// Die Plattform füllt das direkt aus ihrem Seitenbestand – die Seiten selbst (als JSON-Baum)
+/// braucht die Prüfung nicht.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PageTexts {
+    ids: HashSet<String>,
+    /// Alle nicht leeren Textfelder aller Seiten, getrennt durch `\0`.
     text: String,
+}
+
+impl PageTexts {
+    /// Aus fertigen Teilen (Übergabe über eine Plattformgrenze): Seiten-IDs und [`Self::into_text`].
+    pub fn from_joined(ids: impl IntoIterator<Item = String>, text: String) -> Self {
+        PageTexts { ids: ids.into_iter().collect(), text }
+    }
+
+    /// Alle Textfelder, getrennt durch `\0`.
+    pub fn into_text(self) -> String {
+        self.text
+    }
+
+    /// Diese Seite gibt es (hält `heft:<id>` am Leben).
+    pub fn add_page(&mut self, id: &str) {
+        self.ids.insert(id.to_owned());
+    }
+
+    /// Ein Textfeld der obersten Ebene einer Seite.
+    pub fn add_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if !self.text.is_empty() {
+            self.text.push('\0');
+        }
+        self.text.push_str(text);
+    }
+
+    /// Aus Seiten als JSON (`{ id: Seite }`): für Tests und Ablagen ohne eigenes Modell.
+    pub fn from_pages(pages: &Map<String, Value>) -> Self {
+        let mut out = PageTexts::default();
+        for (id, page) in pages {
+            if truthy(Some(page)) {
+                out.add_page(id);
+            }
+            if let Value::Object(fields) = page {
+                fields.values().filter_map(Value::as_str).for_each(|s| out.add_text(s));
+            }
+        }
+        out
+    }
+}
+
+/// Prüft, ob ein lokaler Blob noch von einer Seite verwendet wird. UUID-Verweise landen bei
+/// Bedarf in einer Menge (ein Durchlauf statt eines Textvergleichs je Blob).
+pub struct BlobAliveChecker {
+    pages: PageTexts,
     refs: OnceLock<HashSet<String>>,
 }
 
-impl<'a> BlobAliveChecker<'a> {
-    pub fn new(pages: &'a Map<String, Value>) -> Self {
-        let mut strings = Vec::new();
-        for page in pages.values() {
-            if let Value::Object(fields) = page {
-                strings.extend(fields.values().filter_map(Value::as_str).filter(|s| !s.is_empty()));
-            }
-        }
-        BlobAliveChecker { pages, text: strings.join("\0"), refs: OnceLock::new() }
+impl BlobAliveChecker {
+    pub fn new(pages: PageTexts) -> Self {
+        BlobAliveChecker { pages, refs: OnceLock::new() }
     }
 
     /// Alle Teiltexte der Form `[img:|file:|cover:]UUID` (auch überlappend), wie `BLOB_REF_SCAN`.
     fn refs(&self) -> &HashSet<String> {
         self.refs.get_or_init(|| {
-            let text = self.text.as_bytes();
+            let all = self.pages.text.as_str();
+            let text = all.as_bytes();
             let mut refs = HashSet::new();
             for at in 0..text.len().saturating_sub(UUID_LEN - 1) {
                 if text[at + 8] != b'-' || !uuid_at(&text[at..]) {
                     continue;
                 }
                 // ASCII-Treffer liegen immer auf Zeichengrenzen.
-                refs.insert(self.text[at..at + UUID_LEN].to_owned());
+                refs.insert(all[at..at + UUID_LEN].to_owned());
                 if let Some(start) = ref_prefix_before(text, at) {
-                    refs.insert(self.text[start..at + UUID_LEN].to_owned());
+                    refs.insert(all[start..at + UUID_LEN].to_owned());
                 }
             }
             refs
@@ -93,7 +137,7 @@ impl<'a> BlobAliveChecker<'a> {
             Some(p) => is_uuid(&target[p.len()..]),
             None => is_uuid(target),
         };
-        if exact { self.refs().contains(target) } else { self.text.contains(target) }
+        if exact { self.refs().contains(target) } else { self.pages.text.contains(target) }
     }
 
     pub fn is_alive(&self, key: &str) -> bool {
@@ -101,7 +145,7 @@ impl<'a> BlobAliveChecker<'a> {
             return false;
         }
         if let Some(page) = key.strip_prefix("heft:") {
-            return truthy(self.pages.get(page));
+            return self.pages.ids.contains(page);
         }
         if let Some(target) = key.strip_prefix("pdftext:") {
             return self.referenced(target);
@@ -177,8 +221,7 @@ mod tests {
             "p2": { "content": "file:abc.pdf" },
             "h": { "kind": "heft" },
         });
-        let pages = pages.as_object().unwrap();
-        let alive = BlobAliveChecker::new(pages);
+        let alive = BlobAliveChecker::new(PageTexts::from_pages(pages.as_object().unwrap()));
         assert!(alive.is_alive(&format!("img:{U}")));
         assert!(alive.is_alive(U));
         assert!(alive.is_alive(&U.to_uppercase()));

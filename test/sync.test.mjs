@@ -147,7 +147,11 @@ function memoryDevice() {
 		eventsAfter: (after, upTo) => d.events.filter((e) => e.seq > after && e.seq <= upTo),
 		filterForUpload: (events) => events,
 		importRemote: (events) => { for (const ev of events) if (!d.events.some((e) => e.id === ev.id)) d.add(ev); },
-		pages: () => d.pages,
+		// In der App liefert der Kern den Text (ModelCore.pageTexts): alle Textfelder, getrennt durch \0.
+		pageTexts: () => ({
+			ids: Object.keys(d.pages),
+			text: Object.values(d.pages).flatMap((pg) => Object.values(pg).filter((v) => typeof v === "string" && v)).join("\0"),
+		}),
 		blobIds: () => [...d.blobs.keys()],
 		getBlob: (id) => d.blobs.get(id) || null,
 		putBlob: (id, meta, data) => { d.blobs.set(id, { meta, data }); },

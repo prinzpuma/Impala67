@@ -243,8 +243,8 @@ impl SyncStore for Mem {
         }
         Ok(())
     }
-    fn pages(&self) -> Map<String, Value> {
-        self.pages.clone()
+    fn page_texts(&self) -> PageTexts {
+        PageTexts::from_pages(&self.pages)
     }
     async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {
         let mut ids: Vec<String> = self.blobs.keys().cloned().collect();

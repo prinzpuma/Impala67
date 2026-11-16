@@ -133,7 +133,8 @@ export const CLOUDFLARE_SYNC = (() => {
 				// Offene Hefte brauchen hier keinen Flush: ihr Veröffentlichungs-Schatten folgt dem Log (heft.js).
 				if (imported.length) await STATE.applyRemoteEventsCooperative(imported);
 			},
-			pages: () => S.pages,
+			// Für die Prüfung, welche Dateien noch gebraucht werden: der Kern liefert die Seitentexte am Stück.
+			pageTexts: () => ({ ids: Object.keys(S.pages), text: STATE.pageTexts() }),
 			blobIds: () => DB.allBlobKeys(),
 			async getBlob(blobId) {
 				const record = await DB.getBlob(blobId);

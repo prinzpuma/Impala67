@@ -10,11 +10,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use impala_crypto::{OsRandom, StorageUsage, SyncKey};
 use impala_sync::api::{ServerMessage, WS_PING_INTERVAL_MS, WS_PING_MESSAGE, parse_server_message};
 use impala_sync::{
-    LocalBlob, PassReport, StoreError, SyncClient, SyncError, SyncState, SyncStore, WsAction, is_uploadable,
+    LocalBlob, PageTexts, PassReport, StoreError, SyncClient, SyncError, SyncState, SyncStore, WsAction, is_uploadable,
     reconnect_delay_ms, retry_delay_ms, should_compact_cloud,
 };
 use js_sys::{Array, Function, Object, Promise, Uint8Array};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
@@ -82,12 +82,12 @@ impl SyncStore for JsStore {
             .map_err(store_err)
     }
 
-    fn pages(&self) -> Map<String, Value> {
-        call_sync(&self.0, "pages", &[])
-            .ok()
-            .and_then(|v| from_js(&v).ok())
-            .and_then(|v| if let Value::Object(m) = v { Some(m) } else { None })
-            .unwrap_or_default()
+    /// `pageTexts()` → `{ ids, text }`; `text` kommt fertig aus dem Kern (`ModelCore.pageTexts`).
+    fn page_texts(&self) -> PageTexts {
+        let Ok(v) = call_sync(&self.0, "pageTexts", &[]) else { return PageTexts::default() };
+        let ids = Array::from(&get(&v, "ids"));
+        let ids = ids.iter().filter_map(|id| id.as_string());
+        PageTexts::from_joined(ids, get(&v, "text").as_string().unwrap_or_default())
     }
 
     async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {

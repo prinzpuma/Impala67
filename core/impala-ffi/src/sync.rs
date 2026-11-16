@@ -18,10 +18,10 @@ use impala_net::{HttpClient, UreqClient, block_on};
 use impala_storage::{Blob, ImportOptions, Storage, StorageExt, Write};
 use impala_sync::api::{ServerMessage, WS_PING_INTERVAL_MS, WS_PING_MESSAGE, parse_server_message};
 use impala_sync::{
-    CompactReport, DEFAULT_WORKER_URL, Endpoint, LocalBlob, PassReport, StoreError, SyncClient, SyncError, SyncState,
-    SyncStore, WsAction,
+    CompactReport, DEFAULT_WORKER_URL, Endpoint, LocalBlob, PageTexts, PassReport, StoreError, SyncClient, SyncError,
+    SyncState, SyncStore, WsAction,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use crate::{ImpalaCore, Inner, Shared};
 
@@ -351,13 +351,13 @@ impl SyncStore for NativeStore {
         Ok(())
     }
 
-    fn pages(&self) -> Map<String, Value> {
-        // Unter der Sperre nur kopieren; das JSON (alle Seiten samt Inhalt) entsteht danach.
-        let pages = crate::lock(&self.core).model.state().pages.clone();
-        match serde_json::to_value(&pages) {
-            Ok(Value::Object(m)) => m,
-            _ => Map::new(),
+    fn page_texts(&self) -> PageTexts {
+        let mut texts = PageTexts::default();
+        for (id, page) in crate::lock(&self.core).model.state().pages.iter() {
+            texts.add_page(id);
+            page.for_each_text(|t| texts.add_text(t));
         }
+        texts
     }
 
     async fn blob_ids(&self) -> Result<Vec<String>, StoreError> {

@@ -698,6 +698,7 @@ export const STATE = (() => {
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, favoritePages, archivedPages, archivedPageRoots, activeCards,
 		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
+		pageTexts: () => M.pageTexts(),
 		dueCards, studySnapshot, learningStats, thinkMedian, retentionStats, deckConfOf, backlinksOf, pageHistory,
 		homeAnalysis, computeGoal, patternData, activeDeckNames, deckTree, deckLabel, deckParent,
 		libraryNotionTree: (smart = null, tag = null, query = "") => JSON.parse(M.libraryNotionTree(smart || undefined, tag || undefined, String(query || ""))),

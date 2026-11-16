@@ -168,7 +168,7 @@ fn heft_baseline_like_js() {
 fn blob_rules_like_js() {
     let g = &golden()["blobs"];
     let pages = g["pages"].as_object().unwrap();
-    let alive = BlobAliveChecker::new(pages);
+    let alive = BlobAliveChecker::new(PageTexts::from_pages(pages));
     for case in arr(&g["cases"]) {
         let key = case["key"].as_str().unwrap();
         assert_eq!(alive.is_alive(key), case["alive"].as_bool().unwrap(), "alive {key:?}");

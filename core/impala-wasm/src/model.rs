@@ -487,6 +487,17 @@ impl ModelCore {
         Ok(Value::Object(out).to_string())
     }
 
+    /// Alle Textfelder aller Seiten für die Blob-Prüfung des Syncs (`impala_sync::PageTexts`),
+    /// direkt aus dem Zustand statt über die Seiten-Ansichten und JSON.
+    #[wasm_bindgen(js_name = pageTexts)]
+    pub fn page_texts(&self) -> String {
+        let mut texts = impala_sync::PageTexts::default();
+        for page in self.m.state().pages.values() {
+            page.for_each_text(|t| texts.add_text(t));
+        }
+        texts.into_text()
+    }
+
     /// Ein Feld eines Eintrags, das [`ModelCore::records`] auslässt (`content`).
     #[wasm_bindgen(js_name = recordField)]
     pub fn record_field(&self, kind: &str, id: &str, key: &str) -> JsValue {
