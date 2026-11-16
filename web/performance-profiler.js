@@ -327,6 +327,16 @@ function recordAt(kind, durationMs, meta = {}, at = wallTime(), contextOverride 
 
 function record(kind, durationMs, meta = {}) { recordAt(kind, durationMs, meta); }
 
+// Absturz des Rust-Kerns (WASM): Ein Panic endet dort als `unreachable` (RuntimeError aus
+// core/impala_core); danach lehnt wasm-bindgen jeden Zugriff auf das noch gesperrte Objekt ab.
+// Der Kern ist dann bis zum Neuladen tot – im Trace eine eigene Art, kein gewöhnlicher Fehler.
+function isCoreCrash(error) {
+	const text = String(error?.message || "");
+	if (/recursive use of an object detected|null pointer passed to rust/.test(text)) return true;
+	if (typeof WebAssembly === "undefined" || !(error instanceof WebAssembly.RuntimeError)) return false;
+	return !error.stack || String(error.stack).includes("impala_core");
+}
+
 function errorMeta(error) {
 	const status = Number(error?.status);
 	return {
@@ -335,7 +345,16 @@ function errorMeta(error) {
 		errorMessage: error?.message || String(error || "Fehler"),
 		errorStack: error?.stack ? String(error.stack).slice(0, 800) : undefined,
 		...(Number.isFinite(status) && status > 0 ? { status } : {}),
+		...(isCoreCrash(error) ? { coreCrash: true } : {}),
 	};
+}
+
+// Fehlermeta einer gescheiterten Operation; ein Kern-Absturz bekommt zusätzlich einen eigenen
+// Eintrag, weil Aufrufer den Fehler oft abfangen und er sonst nur als langsame Operation erschiene.
+function failure(name, error) {
+	const meta = errorMeta(error);
+	if (meta.coreCrash) record("core-crash", 0, { ...meta, via: name });
+	return meta;
 }
 
 function error(kind, errorValue, meta = {}) {
@@ -351,7 +370,10 @@ function error(kind, errorValue, meta = {}) {
 			errObj = new Error(String(errorValue || "Fehler"));
 		}
 	}
-	record(String(kind || "error"), 0, { ...errorMeta(errObj), ...safeMeta(meta) });
+	const failed = errorMeta(errObj);
+	const name = String(kind || "error");
+	if (failed.coreCrash) record("core-crash", 0, { ...failed, ...safeMeta(meta), via: name });
+	else record(name, 0, { ...failed, ...safeMeta(meta) });
 }
 
 function performanceWallTime(startMs) {
@@ -460,14 +482,14 @@ function start(name, meta = {}, minMs = 25) {
 async function run(name, fn, meta = {}, minMs = 25) {
 	const finish = start(name, meta, minMs);
 	try { return await fn(); }
-	catch (error) { finish(errorMeta(error)); throw error; }
+	catch (error) { finish(failure(name, error)); throw error; }
 	finally { finish(); }
 }
 
 function measure(name, fn, meta = {}, minMs = 16) {
 	const finish = start(name, meta, minMs);
 	try { return fn(); }
-	catch (error) { finish(errorMeta(error)); throw error; }
+	catch (error) { finish(failure(name, error)); throw error; }
 	finally { finish(); }
 }
 
