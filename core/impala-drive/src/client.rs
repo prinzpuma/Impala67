@@ -586,9 +586,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         while lo < to {
             let hi = to.min(lo.saturating_add(UPLOAD_SCAN_SEQS));
             events.extend(
-                self.store
-                    .events_between(lo, hi)
-                    .await?
+                prune_for_upload(self.store.events_between(lo, hi).await?)
                     .into_iter()
                     .filter(|ev| should_upload_to(ev, Transport::Drive))
                     .filter_map(|ev| match ev {
@@ -596,18 +594,13 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
                         Value::Object(o) => redact_secrets(o),
                         _ => None,
                     })
-                    .map(Value::Object),
+                    // Abweichung von JS: JS lud die gerätelokalen Marken (`seq`, `_remote`,
+                    // `_remoteSource`, `_derived`) mit hoch. Empfänger ersetzen sie ohnehin; hier
+                    // fallen sie wie bei Cloudflare weg.
+                    .map(|o| Value::Object(strip_local_flags(o))),
             );
             lo = hi;
         }
-        // Abweichung von JS: JS lud die gerätelokalen Marken (`seq`, `_remote`, `_remoteSource`,
-        // `_derived`) mit hoch. Empfänger ersetzen sie ohnehin; hier fallen sie wie bei Cloudflare weg.
-        let events: Vec<Value> = prune_for_upload(events)
-            .into_iter()
-            .filter_map(|ev| ev.as_object().cloned())
-            .map(strip_local_flags)
-            .map(Value::Object)
-            .collect();
         let count = events.len();
         if count > 0 {
             let text = delta_payload(events, &self.now_iso());
