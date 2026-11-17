@@ -63,6 +63,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     init {
         viewModelScope.launch { tools = HeftTools.fromJson(prefs.heftTools.first()).copy(tool = tools.tool, expanded = tools.expanded) }
+        // Beim Öffnen: ältere PDF-Seiten und Scans (seitenfüllendes Bild) werden Seitenhintergrund.
+        viewModelScope.launch { runCatching { store.write { it.heftAdoptBackgrounds(pageId) } } }
     }
 
     var canUndo by mutableStateOf(false)

@@ -652,6 +652,14 @@ impl ModelCore {
         self.m.state().hefte.get(page_id).map(|d| text(&impala_heft::doc::DocView(d)))
     }
 
+    /// Operationen, die seitenfüllende Bilder älterer Importe zum Seitenhintergrund machen
+    /// (`null`, wenn nichts zu tun ist).
+    #[wasm_bindgen(js_name = heftAdoptBackgroundOps)]
+    pub fn heft_adopt_background_ops(&self, page_id: &str) -> Option<String> {
+        let ops = impala_heft::background::adopt_background_ops(self.m.state().hefte.get(page_id)?);
+        (!ops.is_empty()).then(|| text(&ops))
+    }
+
     /// Eine Heftseite nach Position.
     #[wasm_bindgen(js_name = heftPage)]
     pub fn heft_page(&self, page_id: &str, index: usize) -> Option<String> {
@@ -709,7 +717,7 @@ impl ModelCore {
     }
 
     /// Übersicht aller Hefte für den Handschrift-Index, ohne Punkte:
-    /// `[{ pageId, pages: [{ id, strokes, ocrText, images: [{ id, ref, scan, ocr, x, y, w, h }] }] }]`
+    /// `[{ pageId, pages: [{ id, strokes, ocrText, images: [{ id, ref, scan, ocr, x, y, w, h }], bg }] }]`
     /// (`strokes`: Anzahl; `ocr`: nur vorhanden, wenn das Bild schon erkannt ist).
     #[wasm_bindgen(js_name = heftIndexSummary)]
     pub fn heft_index_summary(&self) -> String {
@@ -723,21 +731,18 @@ impl ModelCore {
                     .pages
                     .iter()
                     .map(|p| {
-                        let images: Vec<Value> = p
-                            .images
-                            .iter()
-                            .map(|im| {
-                                let mut o = match serde_json::to_value(im) {
-                                    Ok(Value::Object(o)) => o,
-                                    _ => Object::new(),
-                                };
-                                o.remove("src");
-                                if o.contains_key("ocr") {
-                                    o.insert("ocr".into(), Value::Bool(true));
-                                }
-                                Value::Object(o)
-                            })
-                            .collect();
+                        let summary = |im: &impala_heft::Image| {
+                            let mut o = match serde_json::to_value(im) {
+                                Ok(Value::Object(o)) => o,
+                                _ => Object::new(),
+                            };
+                            o.remove("src");
+                            if o.contains_key("ocr") {
+                                o.insert("ocr".into(), Value::Bool(true));
+                            }
+                            Value::Object(o)
+                        };
+                        let images: Vec<Value> = p.images.iter().map(summary).collect();
                         json!({
                             "id": p.id,
                             "strokes": p.strokes.len(),
@@ -747,6 +752,7 @@ impl ModelCore {
                             "contentKey": impala_heft::ocr::content_key(p),
                             "needsOcr": impala_heft::ocr::needs_ocr(p, "pwa"),
                             "images": images,
+                            "bg": p.background.as_ref().map(summary),
                         })
                     })
                     .collect();

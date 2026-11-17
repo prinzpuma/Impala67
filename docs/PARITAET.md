@@ -95,7 +95,7 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 | ⋯-Menü im Heft: Favorit, Icon, Cover, Duplizieren, Verlauf | ❌ | 🟡 |
 | Mausrad/Trackpad blättert, Strg/⌘ zoomt | ❌ | ❌ |
 | Handballen-Rücknahme (350 ms), zweiter Finger bricht Strich ab | ❌ | prüfen |
-| Seitenhintergrund (PDF-Seite, Arbeitsblatt): liegt fest, nicht auswählbar; ältere Apps zeigen „bitte aktualisieren“ | 🟡 Anzeige und Sperre, kein PDF-Import ins Heft | ✅ |
+| Seitenhintergrund (PDF-Seite, Arbeitsblatt): liegt fest, nicht auswählbar; ältere Apps zeigen „bitte aktualisieren“ | 🟡 Scans als Hintergrund, kein PDF-Import ins Heft | ✅ |
 | Import-Dialog mit Ziel und Position; PDF-Text übernehmen | 🟡 | 🟡 |
 | Zuletzt angesehene Seite merken | 🟡 nur Sitzung | prüfen |
 | „Heft-Seite als Bild an KI anhängen“ | prüfen | prüfen |

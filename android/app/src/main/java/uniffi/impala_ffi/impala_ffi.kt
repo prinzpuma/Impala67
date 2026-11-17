@@ -1670,6 +1670,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2074,6 +2076,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_shape(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_stroke(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_text(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_adopt_backgrounds(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_apply(
 ): Short
@@ -2703,6 +2707,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_add_stroke(`ptr`: Pointer,`pageI
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_add_text(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: RustBuffer.ByValue,`color`: RustBuffer.ByValue,`size`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_adopt_backgrounds(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_impala_ffi_fn_method_impalacore_heft_apply(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`changes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_apply_ops(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`opsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3870,6 +3876,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_add_text() != 7381.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_adopt_backgrounds() != 41558.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_apply() != 10528.toShort()) {
@@ -9019,6 +9028,12 @@ public interface ImpalaCoreInterface {
     fun `heftAddText`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `text`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double?, `color`: kotlin.String?, `size`: kotlin.Double?): HeftEdit
     
     /**
+     * Beim Öffnen eines Hefts: seitenfüllende Bilder älterer Importe (PDF-Seite, Scan) werden zum
+     * Seitenhintergrund. `true`, wenn sich etwas geändert hat.
+     */
+    fun `heftAdoptBackgrounds`(`pageId`: kotlin.String): kotlin.Boolean
+    
+    /**
      * Mehrere Änderungen als EIN Event (eine Geste). Liefert neue IDs und die Umkehr.
      */
     fun `heftApply`(`pageId`: kotlin.String, `changes`: List<HeftChange>): HeftEdit
@@ -10712,6 +10727,23 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_add_text(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterString.lower(`text`),FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterOptionalDouble.lower(`w`),FfiConverterOptionalString.lower(`color`),FfiConverterOptionalDouble.lower(`size`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Beim Öffnen eines Hefts: seitenfüllende Bilder älterer Importe (PDF-Seite, Scan) werden zum
+     * Seitenhintergrund. `true`, wenn sich etwas geändert hat.
+     */
+    @Throws(CoreException::class)override fun `heftAdoptBackgrounds`(`pageId`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_adopt_backgrounds(
+        it, FfiConverterString.lower(`pageId`),_status)
 }
     }
     )

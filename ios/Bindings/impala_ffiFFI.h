@@ -1217,6 +1217,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_add_stroke(void*_Nonnull 
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_add_text(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer text, double x, double y, RustBuffer w, RustBuffer color, RustBuffer size, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADOPT_BACKGROUNDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADOPT_BACKGROUNDS
+int8_t uniffi_impala_ffi_fn_method_impalacore_heft_adopt_backgrounds(void*_Nonnull ptr, RustBuffer page_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_APPLY
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_APPLY
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_apply(void*_Nonnull ptr, RustBuffer page_id, RustBuffer changes, RustCallStatus *_Nonnull out_status
@@ -3820,6 +3825,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_add_stroke(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_TEXT
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_add_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADOPT_BACKGROUNDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADOPT_BACKGROUNDS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_adopt_backgrounds(void
     
 );
 #endif

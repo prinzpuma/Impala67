@@ -3635,6 +3635,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftAddText(pageId: String, heftPageId: String, text: String, x: Double, y: Double, w: Double?, color: String?, size: Double?) throws  -> HeftEdit
     
     /**
+     * Beim Öffnen eines Hefts: seitenfüllende Bilder älterer Importe (PDF-Seite, Scan) werden zum
+     * Seitenhintergrund. `true`, wenn sich etwas geändert hat.
+     */
+    func heftAdoptBackgrounds(pageId: String) throws  -> Bool
+    
+    /**
      * Mehrere Änderungen als EIN Event (eine Geste). Liefert neue IDs und die Umkehr.
      */
     func heftApply(pageId: String, changes: [HeftChange]) throws  -> HeftEdit
@@ -5059,6 +5065,18 @@ open func heftAddText(pageId: String, heftPageId: String, text: String, x: Doubl
         FfiConverterOptionDouble.lower(w),
         FfiConverterOptionString.lower(color),
         FfiConverterOptionDouble.lower(size),$0
+    )
+})
+}
+    
+    /**
+     * Beim Öffnen eines Hefts: seitenfüllende Bilder älterer Importe (PDF-Seite, Scan) werden zum
+     * Seitenhintergrund. `true`, wenn sich etwas geändert hat.
+     */
+open func heftAdoptBackgrounds(pageId: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_adopt_backgrounds(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),$0
     )
 })
 }
@@ -27146,6 +27164,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_add_text() != 7381) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_adopt_backgrounds() != 41558) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_apply() != 10528) {

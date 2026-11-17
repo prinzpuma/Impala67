@@ -96,9 +96,8 @@ export function imagePage(im, paper, bleed, {
 		...(im.scan ? { scan: true } : {}),
 		...(im.ocr ? { ocr: im.ocr } : {})
 	};
-	// Importierte PDF-/Bildseite: Seitenhintergrund (kein Element, liegt fest). Scans bleiben Bilder.
-	if (im.background) pg.bg = item;
-	else (pg.images || (pg.images = [])).push(item);
+	// PDF-Seite, Scan oder Bild als eigene Seite: Seitenhintergrund (kein Element, liegt fest).
+	pg.bg = item;
 	return pg;
 }
 
@@ -172,7 +171,7 @@ export async function importPdf(f, at, targetDoc, {
 			const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
 			const ocr = text.length >= 20 ? text : undefined;
 			const pg = imagePage(
-				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, background: true, ocr },
+				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, ocr },
 				"blank",
 				true,
 				{ blobRef, newPage, pageW, pageH }
@@ -222,7 +221,7 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 			at = await importPdf(f, at, targetDoc, { blobRef, newPage, pageW, pageH, pdfs, toast });
 		} else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
 			const im = await fileToImageData(f, 1600);
-			const pg = imagePage({ ...im, background: true }, "blank", false, { blobRef, newPage, pageW, pageH });
+			const pg = imagePage(im, "blank", false, { blobRef, newPage, pageW, pageH });
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}

@@ -322,3 +322,25 @@ fn seitenhintergrund_mit_update_hinweis_fuer_alte_apps() {
     doc.apply_ops(ops);
     assert!(doc.pages[0].background.is_none() && doc.pages[0].bg_note.is_none());
 }
+
+#[test]
+fn altbestand_seitenfuellende_bilder_werden_hintergrund() {
+    use impala_heft::background::adopt_background_ops;
+    use impala_heft::doc::HeftDoc;
+    use serde_json::json;
+
+    let mut doc = HeftDoc::from_value(json!({ "v": 2, "pages": [
+        { "id": "pdf", "paper": "blank", "images": [{ "id": "a", "ref": "bx-1", "x": 0, "y": 0, "w": 1000, "h": 1414, "ocr": "Blatt" }] },
+        { "id": "scan", "paper": "blank", "images": [{ "id": "b", "ref": "bx-2", "x": 0, "y": 57, "w": 1000, "h": 1300, "scan": true }] },
+        { "id": "foto", "paper": "blank", "images": [{ "id": "c", "ref": "bx-3", "x": 150, "y": 200, "w": 700, "h": 500 }] },
+        { "id": "liniert", "paper": "lined", "images": [{ "id": "d", "ref": "bx-4", "x": 0, "y": 0, "w": 1000, "h": 1414 }] }
+    ] }));
+    let ops = adopt_background_ops(&doc);
+    doc.apply_ops(ops);
+    let bg = |i: usize| doc.pages[i].background.as_ref().map(|b| b.id.as_str());
+    assert_eq!((bg(0), bg(1), bg(2), bg(3)), (Some("a"), Some("b"), None, None));
+    assert!(doc.pages[0].images.is_empty() && doc.pages[0].bg_note.is_some());
+    assert_eq!(doc.pages[1].background.as_ref().unwrap().extra.get("scan"), Some(&json!(true)));
+    assert_eq!(impala_heft::doc::compose_page_text("", &doc.pages[0]), "Blatt");
+    assert!(adopt_background_ops(&doc).is_empty());
+}

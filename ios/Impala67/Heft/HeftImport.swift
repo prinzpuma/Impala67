@@ -31,11 +31,11 @@ enum HeftImport {
 
     // funktion: heft.seitenhintergrund
     /// Neue Seite mit `image` an Stelle `at` (nil = am Ende); `bleed` = randlos (PDF, Scan).
-    /// `background`: als Seitenhintergrund (PDF-Seite, importiertes Bild – liegt fest, wie in der PWA),
-    /// sonst als Bild-Element (Scan). Liefert die Seiten-ID.
+    /// Das Bild wird Seitenhintergrund (liegt fest, wie in der PWA); `text`: eingebetteter PDF-Text.
+    /// Liefert die Seiten-ID.
     @discardableResult
     static func addImagePage(core: ImpalaCore, pageId: String, image: UIImage, at: Int?, bleed: Bool,
-                             background: Bool, paper: String = "blank", text: String? = nil) -> String? {
+                             paper: String = "blank", text: String? = nil) -> String? {
         guard let (data, size) = jpeg(image, maxEdge: pageMaxEdge),
               let id = attempt("heftAddPage", { try core.heftAddPage(pageId: pageId, at: at.map { UInt32($0) }, paper: paper) }),
               let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return nil }
@@ -44,23 +44,12 @@ enum HeftImport {
         let k = min((page.width - pad * 2) / sw, (page.height - pad * 2) / sh)
         let w = sw * k, h = sh * k
         let pageText = text.flatMap { $0.count >= 20 ? $0 : nil }
-        if background {
-            _ = attempt("heftSetBackground", { try core.heftSetBackground(
-                pageId: pageId, heftPageId: id, bytes: data, mime: "image/jpeg",
-                x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h, ocr: pageText
-            ) })
-            if let pageText {
-                _ = attempt("heftSetPageText", { try core.heftSetPageText(pageId: pageId, heftPageId: id, text: pageText) })
-            }
-            return id
-        }
-        guard let imageId = attempt("heftAddImage", { try core.heftAddImage(
+        _ = attempt("heftSetBackground", { try core.heftSetBackground(
             pageId: pageId, heftPageId: id, bytes: data, mime: "image/jpeg",
-            x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h
-        ) })?.ids.first else { return id }
-        if let text, text.count >= 20 {
-            _ = attempt("heftSetImageText", { try core.heftSetImageText(pageId: pageId, heftPageId: id, imageId: imageId, text: text) })
-            _ = attempt("heftSetPageText", { try core.heftSetPageText(pageId: pageId, heftPageId: id, text: text) })
+            x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h, ocr: pageText
+        ) })
+        if let pageText {
+            _ = attempt("heftSetPageText", { try core.heftSetPageText(pageId: pageId, heftPageId: id, text: pageText) })
         }
         return id
     }
@@ -78,13 +67,13 @@ enum HeftImport {
                 for i in 0..<doc.pageCount {
                     guard let p = doc.page(at: i), let img = render(p) else { continue }
                     let text = p.string.map(cleanText)
-                    if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true, background: true, text: text) {
+                    if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true, text: text) {
                         last = id
                         next = next.map { $0 + 1 }
                     }
                 }
             } else if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
-                if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: false, background: true) {
+                if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: false) {
                     last = id
                     next = next.map { $0 + 1 }
                 }
@@ -98,7 +87,7 @@ enum HeftImport {
         var next = at
         var last: String?
         for img in images {
-            if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true, background: false) {
+            if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true) {
                 last = id
                 next = next.map { $0 + 1 }
             }

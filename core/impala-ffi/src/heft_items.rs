@@ -448,6 +448,18 @@ impl ImpalaCore {
         inner.heft_edit(&page_id, ops, ids)
     }
 
+    /// Beim Öffnen eines Hefts: seitenfüllende Bilder älterer Importe (PDF-Seite, Scan) werden zum
+    /// Seitenhintergrund. `true`, wenn sich etwas geändert hat.
+    pub fn heft_adopt_backgrounds(&self, page_id: String) -> Result<bool, CoreError> {
+        let mut inner = self.lock();
+        let ops = impala_heft::background::adopt_background_ops(inner.heft(&page_id)?);
+        if ops.is_empty() {
+            return Ok(false);
+        }
+        inner.heft_ops(&page_id, ops)?;
+        Ok(true)
+    }
+
     /// Operationen im Wire-Format (`HeftEdit::undo`) anwenden: Rückgängig bzw. Wiederholen.
     /// Das Ergebnis enthält wieder die Umkehr.
     pub fn heft_apply_ops(&self, page_id: String, ops_json: String) -> Result<HeftEdit, CoreError> {
@@ -674,7 +686,7 @@ impl ImpalaCore {
             };
             (Some(bg), Some((hash, data)))
         };
-        let ops = impala_heft::diff::background_ops(&heft_page_id, had, bg);
+        let ops = impala_heft::background::background_ops(&heft_page_id, had, bg);
         if let Some((hash, data)) = blob
             && !inner.model.has_heft_blob(&hash)
         {

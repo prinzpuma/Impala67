@@ -270,6 +270,12 @@ export const HEFT = (() => {
 		}
 		try { localStorage.removeItem(INK_LEGACY(p)); } catch {  }
 		if (!d) return null;
+		// Wer das Heft öffnet, übernimmt ältere PDF-Seiten und Scans (seitenfüllendes Bild) als Hintergrund.
+		const adopt = create && STATE.heftAdoptBackgroundOps(p);
+		if (adopt) {
+			await STATE.dispatch("heftOps", { pageId: p, ops: adopt }, { origin: EDITOR });
+			d = STATE.heftDoc(p);
+		}
 		docs[p] = d;
 		// Schatten des Log-Stands direkt im Kern (die frisch geholte Kopie ist genau dieser Stand).
 		published[p] = PERF_PROFILER.measure("heft.shadow", () => STATE.heftShadow(p) || documentShadow(d), { pages: d?.pages?.length }, 16);
@@ -1343,7 +1349,7 @@ export const HEFT = (() => {
 	function insertScannedPages(images) {
 		if (!doc || !images.length) { if (U.toast) U.toast("Keine fertigen Scans zum Einfügen", "error"); return; }
 		let at = insertIndex();
-		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; });
+		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; }); // als Seitenhintergrund
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
 		BUS.emit("heft:start-background-scan");

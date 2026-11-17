@@ -118,7 +118,8 @@ export const HEFT_INDEXER = (() => {
 	const fillsPage = (im) => (im.x <= EDGE_PX && PAGE_W - (im.x + im.w) <= EDGE_PX) || (im.y <= EDGE_PX && PAGE_H - (im.y + im.h) <= EDGE_PX);
 	function isPendingScan(pg, im) {
 		if (!im || !im.ref || im.ocr !== undefined) return false;
-		if (im.scan === true) return true;
+		// Seitenhintergrund (Scan, PDF-Seite ohne Text, Arbeitsblatt): immer lesen.
+		if (im === pg.bg || im.scan === true) return true;
 		// Ältere Scans ohne Flag: einziges Bild einer strichlosen Seite, das die Seite ausfüllt.
 		return !(Array.isArray(pg.strokes) ? pg.strokes.length : pg.strokes) && pg.images.length === 1 && fillsPage(im);
 	}
@@ -147,7 +148,7 @@ export const HEFT_INDEXER = (() => {
 						jobs.push({ kind: "strokes", key, pageId, pageIdx: idx, pageKey: pg.id });
 					}
 				}
-				for (const im of pg.images || []) {
+				for (const im of pg.bg ? [pg.bg, ...(pg.images || [])] : pg.images || []) {
 					const key = scanKey(pageId, pg, im);
 					if (!checked.has(key) && !crashedTooOften(key) && isPendingScan(pg, im)) {
 						jobs.push({ kind: "scan", key, pageId, pageIdx: idx, pageKey: pg.id, imageId: im.id });
@@ -210,7 +211,8 @@ export const HEFT_INDEXER = (() => {
 	async function indexScanImage(job) {
 		const { pageId } = job;
 		const pg = pageOf(job);
-		const im = (pg?.images || []).find((x) => x.id === job.imageId);
+		const isBg = pg?.bg?.id === job.imageId;
+		const im = isBg ? pg.bg : (pg?.images || []).find((x) => x.id === job.imageId);
 		if (!pg || !im) return;
 		try {
 			let strokeText = "";
@@ -220,8 +222,8 @@ export const HEFT_INDEXER = (() => {
 			const { text } = await SCAN_OCR.recognize(src);
 			// Neue Fassung nur als Kopie: Seite und Bild gehören dem Kern bzw. dem Heft-Editor.
 			const image = { ...im, ocr: text };
-			const updatedPage = { ...pg, images: pg.images.map((x) => (x.id === im.id ? image : x)) };
-			const ops = [{ t: "i=", p: pg.id, o: image }];
+			const updatedPage = isBg ? { ...pg, bg: image } : { ...pg, images: pg.images.map((x) => (x.id === im.id ? image : x)) };
+			const ops = [isBg ? { t: "pgb", p: pg.id, bg: image } : { t: "i=", p: pg.id, o: image }];
 			const op = ocrOp(updatedPage, strokeText, SRC);
 			if (op) ops.push(op);
 			await STATE.dispatch("heftOps", { pageId, ops });

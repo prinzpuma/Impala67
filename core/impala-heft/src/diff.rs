@@ -8,7 +8,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::doc::{HeftDoc, HeftPage, Image, Paper, Point, Shape, Stroke, TextBox, bg_note, bg_note_id};
+use crate::background::background_ops;
+use crate::doc::{HeftDoc, HeftPage, Image, Paper, Point, Shape, Stroke, TextBox};
 use crate::json::{js_len, same_num};
 use crate::ops::{HeftOp, Item, ItemKind, insert_index, reorder};
 
@@ -329,20 +330,6 @@ impl DiffItem for TextBox {
 }
 
 /// Vergleicht die Elemente einer Art und liefert die neuen Signaturen (`diffItems`).
-/// Operationen, die den Hintergrund einer Seite setzen oder (`None`) entfernen. Ältere Apps kennen
-/// `pgb` nicht: Mit dem ersten Hintergrund bekommen sie ein Textfeld mit der Bitte um ein Update,
-/// das mit dem letzten wieder verschwindet. `had`: Die Seite hat bisher einen Hintergrund.
-pub fn background_ops(page: &str, had: bool, bg: Option<Image>) -> Vec<HeftOp> {
-    let set = bg.is_some();
-    let mut ops = vec![HeftOp::PageBackground { page: page.to_owned(), bg }];
-    if set && !had {
-        ops.push(HeftOp::Add { page: page.to_owned(), item: Item::Text(bg_note(page)) });
-    } else if !set && had {
-        ops.push(HeftOp::Remove { page: page.to_owned(), kind: ItemKind::Text, ids: vec![bg_note_id(page)] });
-    }
-    ops
-}
-
 fn diff_items<T: DiffItem>(
     ops: &mut Vec<HeftOp>,
     page: &str,

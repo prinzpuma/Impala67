@@ -444,6 +444,8 @@ export const STATE = (() => {
 	const heftImageRefs = (pageId) => ids(M.heftImageRefs(String(pageId)));
 	// Alle Hefte ohne Strichpunkte (Handschrift-Index): [{ pageId, pages: [{ id, strokes, ocrText, images }] }].
 	const heftIndexSummary = () => JSON.parse(M.heftIndexSummary());
+	// Altbestand: seitenfüllende Bilder (PDF-Seiten, Scans) als Seitenhintergrund – Operationen oder null.
+	const heftAdoptBackgroundOps = (pageId) => { const json = M.heftAdoptBackgroundOps(String(pageId)); return json ? JSON.parse(json) : null; };
 	// { rev, pages, ocrText, updated, bytes } — gemerkt bis zum nächsten Event dieses Hefts.
 	function heftMeta(pageId) {
 		if (!pageId) return null;
@@ -709,7 +711,7 @@ export const STATE = (() => {
 
 	return {
 		onChange: null, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
-		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftMeta, heftPreview,
+		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftAdoptBackgroundOps, heftMeta, heftPreview,
 		scheduleCheckpoint, checkpointNow: persistCheckpoint, loadedSeq: () => M.loadedSeq(), loadedTime: () => M.loadedTime(), cardRevision: () => _cardRev, pageRevision: () => _pageRev,
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, favoritePages, archivedPages, archivedPageRoots, activeCards,

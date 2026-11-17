@@ -4,6 +4,7 @@
 //! Austauschbar mit der JS-App: Das JSON der Hefte, `heftOps`, `heftSnap` und `heftBlob`
 //! liest und schreibt dieses Crate in derselben Form (siehe `docs/ARCHITEKTUR.md`, Heft-Daten).
 
+pub mod background;
 pub mod diff;
 pub mod doc;
 pub mod eraser;

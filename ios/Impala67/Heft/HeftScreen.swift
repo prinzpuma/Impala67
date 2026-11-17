@@ -243,6 +243,8 @@ struct HeftScreen: View {
         defer { done() }
         // Beim ersten Laden die zuletzt angezeigte Seite dieses Hefts.
         let old = currentId == nil ? (HeftLastPage.index[pageId] ?? 0) : index
+        // Beim Öffnen: ältere PDF-Seiten und Scans (seitenfüllendes Bild) werden Seitenhintergrund.
+        if currentId == nil { _ = attempt("heftAdoptBackgrounds", { try store.core.heftAdoptBackgrounds(pageId: pageId) }) }
         pageIds = store.core.heftPageIds(pageId: pageId)
         if !(currentId.map { pageIds.contains($0) } ?? false) {
             currentId = pageIds.isEmpty ? nil : pageIds[min(old, pageIds.count - 1)]

@@ -56,7 +56,7 @@
 		{ "id": "heft.mehr-menue", "bereich": "heft", "titel": "⋯-Menü im Heft: Favorit, Icon, Cover, Duplizieren, Verlauf", "android": "❌", "ios": "🟡" },
 		{ "id": "heft.mausrad-zoom", "bereich": "heft", "titel": "Mausrad/Trackpad blättert, Strg/⌘ zoomt", "pwa": ["heft-viewport.js"], "android": "❌", "ios": "❌" },
 		{ "id": "heft.handballen", "bereich": "heft", "titel": "Handballen-Rücknahme (350 ms), zweiter Finger bricht Strich ab", "pwa": ["heft-input.js"], "android": "❌", "ios": "prüfen" },
-		{ "id": "heft.seitenhintergrund", "bereich": "heft", "titel": "Seitenhintergrund (PDF-Seite, Arbeitsblatt): liegt fest, nicht auswählbar; ältere Apps zeigen „bitte aktualisieren“", "pwa": ["heft-import.js"], "android": "🟡 Anzeige und Sperre, kein PDF-Import ins Heft", "ios": "✅" },
+		{ "id": "heft.seitenhintergrund", "bereich": "heft", "titel": "Seitenhintergrund (PDF-Seite, Arbeitsblatt): liegt fest, nicht auswählbar; ältere Apps zeigen „bitte aktualisieren“", "pwa": ["heft-import.js"], "android": "🟡 Scans als Hintergrund, kein PDF-Import ins Heft", "ios": "✅" },
 		{ "id": "heft.import-dialog", "bereich": "heft", "titel": "Import-Dialog mit Ziel und Position; PDF-Text übernehmen", "pwa": ["heft-import.js"], "android": "🟡", "ios": "🟡" },
 		{ "id": "heft.letzte-seite", "bereich": "heft", "titel": "Zuletzt angesehene Seite merken", "android": "🟡 nur Sitzung", "ios": "prüfen" },
 		{ "id": "heft.seite-an-ki", "bereich": "heft", "titel": "„Heft-Seite als Bild an KI anhängen“", "android": "prüfen", "ios": "prüfen" },

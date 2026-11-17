@@ -64,15 +64,15 @@ fun rememberDocumentScan(onScanned: (List<ScannedPage>) -> Unit, onError: (Strin
 }
 
 /**
- * Je Scan eine neue Heftseite (Papier „Blanko“) mit dem Bild seitenfüllend, wie `insertScannedPages`
- * in heft.js. Die Seiten stehen ab Position [at] nacheinander. Liefert die erste neue Seiten-ID.
+ * Je Scan eine neue Heftseite (Papier „Blanko“) mit dem Bild als Seitenhintergrund, wie
+ * `insertScannedPages` in heft.js. Die Seiten stehen ab Position [at] nacheinander. Liefert die erste neue Seiten-ID.
  */
 fun ImpalaCore.insertScannedPages(pageId: String, at: Int, scans: List<ScannedPage>): String? {
     var first: String? = null
     scans.forEachIndexed { i, scan ->
         val heftPageId = heftAddPage(pageId, (at + i).toUInt(), Paper.BLANK.id)
         val f = scanFrame(scan)
-        heftAddImage(pageId, heftPageId, scan.jpeg, "image/jpeg", f.x, f.y, f.w, f.h)
+        heftSetBackground(pageId, heftPageId, scan.jpeg, "image/jpeg", f.x, f.y, f.w, f.h, null)
         if (first == null) first = heftPageId
     }
     return first
