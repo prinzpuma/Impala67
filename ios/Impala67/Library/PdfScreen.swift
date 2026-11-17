@@ -5,9 +5,10 @@ import SwiftUI
 /// aus dem Kern (`file`); fehlt die Datei noch (Sync läuft), steht da „PDF nicht gefunden“ wie in der PWA.
 struct PdfScreen: View {
     let page: PageSummary
+    /// Zurück zur Bibliothek (liegt über ihr, kein eigener Navigationsstapel).
+    let dismiss: () -> Void
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-    @Environment(\.dismiss) private var dismiss
     @State private var document: PDFDocument?
     @State private var shareURL: URL?
     @State private var missing = false

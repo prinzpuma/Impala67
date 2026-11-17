@@ -28,21 +28,23 @@ enum LibraryMode: String, CaseIterable, Identifiable {
 /// Bibliothek als Hauptansicht wie in der PWA (`S.view = "library"`, nicht als Fenster): oben Titel mit Zähler,
 /// darunter ein warmes Papier-Panel mit einer Leiste (Ansichten + Suche), Filter bzw. Pfad und dem Inhalt.
 /// PDFs öffnen nativ mit PDFKit, alles andere öffnet die Seite im Tab.
+/// Das PDF liegt über der Bibliothek statt in einem eigenen NavigationStack: Ein Stapel im Detail der
+/// NavigationSplitView behielt nach Zu-/Aufklappen der Seitenleiste die alte Breite (Bibliothek abgeschnitten).
 struct LibraryScreen: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @AppStorage("impala67LibMode") private var modeRaw = LibraryMode.notion.rawValue
-    @State private var path: [String] = []
+    /// Geöffnetes PDF (Seiten-ID).
+    @State private var pdf: String?
     @State private var query = ""
     @State private var importing = false
     @State private var failed = false
     @State private var counts: (pages: Int, hefte: Int)?
-    @Namespace private var zoom
 
     private var mode: LibraryMode { LibraryMode(rawValue: modeRaw) ?? .notion }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        ZStack {
             VStack(alignment: .leading, spacing: Space.s3) {
                 header
                 Group {
@@ -60,15 +62,14 @@ struct LibraryScreen: View {
                 .padding(.bottom, Space.s4)
             }
             .background(Impala.panel)
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { id in
-                if let page = store.core.page(id: id)?.summary {
-                    PdfScreen(page: page)
-                        .navigationTransition(.zoom(sourceID: id, in: zoom))
-                }
+            .accessibilityHidden(pdf != nil)
+            if let pdf, let page = store.core.page(id: pdf)?.summary {
+                PdfScreen(page: page, dismiss: { self.pdf = nil })
+                    .background(Impala.panel)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .environment(\.libraryZoom, zoom)
+        .animation(.smooth(duration: 0.22), value: pdf)
         .onChange(of: modeRaw) { query = "" }
         .task(id: store.pageMetaRevision) {
             let core = store.core
@@ -111,7 +112,7 @@ struct LibraryScreen: View {
 
     /// PDF-Seiten nativ lesen, alles andere als Tab öffnen.
     private func open(_ page: PageSummary) {
-        if page.pdfId != nil { path.append(page.id) } else { shell.open(page.id) }
+        if page.pdfId != nil { pdf = page.id } else { shell.open(page.id) }
     }
 
     /// Gewählte PDFs in den Kern; das letzte öffnet sich gleich.
@@ -127,13 +128,8 @@ struct LibraryScreen: View {
             }
             last = id
         }
-        if let last { path = [last] }
+        if let last { pdf = last }
     }
-}
-
-extension EnvironmentValues {
-    /// Zoom-Quelle für das Öffnen eines PDFs aus einer Bibliothekszeile.
-    @Entry var libraryZoom: Namespace.ID? = nil
 }
 
 // MARK: Werkzeugzeile
@@ -306,7 +302,6 @@ private struct LibAction: View {
 private struct NotionTree: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-    @Environment(\.libraryZoom) private var zoom
     @Binding var query: String
     let onOpen: (PageSummary) -> Void
     let onImport: () -> Void
@@ -356,7 +351,6 @@ private struct NotionTree: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { onOpen(row.page) }
                                     .hoverEffect(.highlight)
-                                    .modifier(ZoomSource(id: row.page.id, ns: zoom))
                                     .contextMenu { PageMenu(page: row.page, onOpen: onOpen) }
                             }
                         }
@@ -548,15 +542,6 @@ struct PageMenu: View {
             shell.close(page.id)
             attempt("trashPage", { try store.core.trashPage(id: page.id) })
         }
-    }
-}
-
-private struct ZoomSource: ViewModifier {
-    let id: String
-    let ns: Namespace.ID?
-
-    func body(content: Content) -> some View {
-        if let ns { content.matchedTransitionSource(id: id, in: ns) } else { content }
     }
 }
 
