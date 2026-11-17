@@ -43,7 +43,6 @@ struct HeftShelf: View {
     @State private var newHeft = false
     @State private var showNewFolder = false
     @State private var newFolderTitle = ""
-    @State private var width: CGFloat = 0
 
     fileprivate struct Loaded {
         var entries: [ShelfEntry] = []
@@ -63,24 +62,27 @@ struct HeftShelf: View {
         self.onOpen = onOpen
     }
 
-    private var pad: CGFloat { width > 0 && width < 640 ? 14 : 26 }
-
     var body: some View {
         let l = loaded ?? Loaded()
-        let m = ShelfMetrics(width: width - 2 * pad)
         VStack(spacing: 0) {
             LibToolbar(query: $query, prompt: "Hefte suchen") {
                 crumbs(l.crumbs)
             } trailing: {
                 newMenu
             }
-            ScrollView {
-                shelf(l, m)
-                    .padding(.horizontal, pad)
-                    .padding(.top, 18)
-                    .padding(.bottom, 26)
+            // Breite vom GeometryReader (immer der angebotene Platz), nicht vom Regal selbst: Maß am Regal
+            // blieb nach dem Aufklappen der Seitenleiste bei der alten, breiteren Spaltenzahl hängen
+            // (Regal ragte über und wurde links und rechts abgeschnitten).
+            GeometryReader { geo in
+                let width = geo.size.width
+                let pad: CGFloat = width < 640 ? 14 : 26
+                ScrollView {
+                    shelf(l, ShelfMetrics(width: width - 2 * pad))
+                        .padding(.horizontal, pad)
+                        .padding(.top, 18)
+                        .padding(.bottom, 26)
+                }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
         .task(id: LoadKey(meta: store.pageMetaRevision, ui: store.uiRevision, query: query, folder: folderId)) {
             let core = store.core
