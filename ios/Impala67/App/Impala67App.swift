@@ -29,8 +29,8 @@ struct Impala67App: App {
             .preferredColorScheme(AppTheme(rawValue: theme)?.scheme)
             .dynamicTypeSize(AppFontSize(rawValue: fontSize)?.dynamicTypeSize ?? .large)
             .task {
-                await app.open()
                 if scenePhase == .active { app.onForeground() }
+                await app.open()
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -59,6 +59,8 @@ final class AppModel {
     private(set) var drive: DriveController?
     private(set) var startError: String?
     @ObservationIgnored private var opening: Task<Void, Never>?
+    /// Fenster sichtbar (letztes `onForeground` ohne folgendes `onBackground`).
+    @ObservationIgnored private var isForeground = false
 
     /// Öffnet den Kern genau einmal (parallele Aufrufe warten auf denselben Start).
     func open() async {
@@ -79,6 +81,9 @@ final class AppModel {
                 self.sync = sync
                 self.drive = DriveController(store: store)
                 Profiler.shared.context = { [weak sync] in Self.reportContext(core: core, sync: sync) }
+                // Wurde die App sichtbar, während der Kern noch öffnete, lief `onForeground` ins Leere:
+                // jetzt nachholen, damit Sync, Drive und OCR starten.
+                if isForeground { onForeground() }
             } catch {
                 Profiler.shared.error("boot-error", String(describing: error), name: "boot.core-open")
                 startError = String(describing: error)
@@ -89,6 +94,7 @@ final class AppModel {
     }
 
     func onForeground() {
+        isForeground = true
         sync?.onForeground()
         drive?.onForeground()
         if let core = store?.core { HeftOcr.startBackgroundScan(core: core) }
@@ -98,6 +104,7 @@ final class AppModel {
     /// Wie die Android-App in onStop: Checkpoint schreiben, damit der nächste Start schnell ist;
     /// dann den nächsten Hintergrund-Durchgang anmelden.
     func onBackground() {
+        isForeground = false
         HeftOcr.stopBackgroundScan()
         DevBridge.shared.onBackground()
         sync?.onBackground()

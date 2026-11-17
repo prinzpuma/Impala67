@@ -114,6 +114,12 @@ final class SyncController {
     func syncNow(all: Bool = false) {
         if all { forceAll = true }
         pending = true
+        // Gekoppelt, aber der Kern-Sync läuft nicht (Start verpasst, Fehler beim Verbinden): erst
+        // verbinden – `createSync` stößt danach selbst den Durchgang an.
+        if sync == nil {
+            if isPaired { Task { await connect(key: deviceKey, url: settings.url) } }
+            return
+        }
         if !running { Task { await runPasses() } }
     }
 
