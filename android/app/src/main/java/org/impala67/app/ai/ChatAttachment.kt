@@ -108,7 +108,7 @@ suspend fun heftPageAttachment(store: ImpalaStore, pageId: String, index: Int, i
     val ids = store.write { it.heftPageIds(pageId) }
     val id = ids.getOrNull(index.coerceIn(0, max(0, ids.size - 1))) ?: return null
     val data = store.write { it.heftPage(pageId, id) }
-    val size = heftExportSize(null)
+    val size = heftExportSize(null, data.height)
     val w = 1200
     val h = (w * size.height.toFloat() / size.width.toFloat()).toInt()
     val images = loadHeftImages(store, pageId, id, data.images, maxSide = w)

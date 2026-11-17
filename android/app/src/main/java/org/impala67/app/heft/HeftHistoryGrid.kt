@@ -65,7 +65,7 @@ fun HeftHistoryGrid(snaps: List<HeftSnap>?, columns: Int?, modifier: Modifier = 
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     val shape = RoundedCornerShape(Radius.xs)
-                    PageSketch(page, Modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO).shadow(3.dp, shape).clip(shape))
+                    PageSketch(page, Modifier.fillMaxWidth().aspectRatio(HeftPage.ratio(page?.height?.toFloat() ?: HeftPage.HEIGHT)).shadow(3.dp, shape).clip(shape))
                     Text(stamp.format(Date(snap.t)), color = c.text2, fontSize = TextSize.xs2)
                 }
             }

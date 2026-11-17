@@ -32,7 +32,7 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
     /// Auf der Leinwand: Fingertipp bzw. Halten auf ein noch nicht gewähltes Element.
     let canvasTap = UITapGestureRecognizer()
     let canvasHold = UILongPressGestureRecognizer()
-    private var targets: [(item: Item, frame: CGRect)] = []
+    private var targets: [(item: Item, frame: CGRect, pageArea: CGFloat)] = []
     private(set) var selected: Item?
     private var frame0: CGRect?
     private var current: CGRect?
@@ -41,8 +41,8 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
     private var zoom: CGFloat = 1
     private let outline = CAShapeLayer()
     private let handle = CAShapeLayer()
-    /// Seitenfüllende Bilder (Scans, PDF-Seiten) nur per Halten – sonst griffe jeder Tipp die Seite.
-    private static let pageArea: CGFloat = 1000 * 1414 * 0.6
+    /// Seitenfüllende Bilder (Scans, PDF-Seiten; Anteil der Seitenfläche) nur per Halten – sonst griffe jeder Tipp die Seite.
+    private static let pageShare: CGFloat = 0.6
 
     init() {
         super.init(frame: .zero)
@@ -87,12 +87,13 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
         targets = []
         for page in pages {
             let (o, data) = (page.origin, page.data)
+            let area = CGFloat(data.width * data.height) * Self.pageShare
             // Der Seitenhintergrund ist kein Element: nicht antippen oder greifen.
             for im in data.images where !im.background {
-                targets.append((item: Item.image(im.id), frame: CGRect(x: im.x + o.x, y: im.y + o.y, width: im.w, height: im.h)))
+                targets.append((item: Item.image(im.id), frame: CGRect(x: im.x + o.x, y: im.y + o.y, width: im.w, height: im.h), pageArea: area))
             }
             for t in data.texts where !t.text.isEmpty {
-                targets.append((item: Item.text(t.id), frame: HeftTextStyle.frame(t).offsetBy(dx: o.x, dy: o.y)))
+                targets.append((item: Item.text(t.id), frame: HeftTextStyle.frame(t).offsetBy(dx: o.x, dy: o.y), pageArea: area))
             }
         }
         if let s = selected, !targets.contains(where: { $0.item == s }) { selected = nil }
@@ -122,7 +123,7 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
     private func hit(_ p: CGPoint, tap: Bool = false) -> Item? {
         targets.reversed().first {
             $0.frame.insetBy(dx: -6 / zoom, dy: -6 / zoom).contains(p)
-                && !(tap && $0.frame.width * $0.frame.height > Self.pageArea)
+                && !(tap && $0.frame.width * $0.frame.height > $0.pageArea)
         }?.item
     }
 

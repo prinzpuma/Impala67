@@ -22,9 +22,6 @@ const val SCAN_JPEG_QUALITY = 78
 /** Eine gescannte Seite als JPEG mit den Maßen in Pixeln. */
 class ScannedPage(val jpeg: ByteArray, val width: Int, val height: Int)
 
-/** Position und Größe des Bildes auf der Heftseite (Seitenmaße 1000 × 1414). */
-class ScanFrame(val x: Double, val y: Double, val w: Double, val h: Double)
-
 /**
  * Liest eine Scan-Datei und skaliert sie wie `fileToImageData` in der PWA. Die Größe wird
  * vorab mit `inSampleSize` verkleinert, damit der Speicher bei großen Fotos reicht.
@@ -94,13 +91,3 @@ fun importPages(context: Context, uri: Uri): List<ScannedPage> =
 
 /** Längste Kante importierter Bilder und Bild-Seiten (heft-import.js `fileToImageData(f, 1600)`). */
 const val IMPORT_MAX_EDGE = 1600
-
-/** Seitenfüllend und zentriert ohne Rand, wie `imagePage(im, "blank", true)` in heft-import.js. */
-fun scanFrame(scan: ScannedPage, pad: Double = 0.0): ScanFrame {
-    val pageW = HeftPage.WIDTH.toDouble()
-    val pageH = HeftPage.HEIGHT.toDouble()
-    val k = min((pageW - pad * 2) / scan.width, (pageH - pad * 2) / scan.height)
-    val w = scan.width * k
-    val h = scan.height * k
-    return ScanFrame((pageW - w) / 2, (pageH - h) / 2, w, h)
-}

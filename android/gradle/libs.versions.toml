@@ -28,6 +28,7 @@ pdf-viewer = "1.0.0-beta01"
 mlkit-document-scanner = "16.0.0"
 mlkit-digital-ink = "19.0.0"
 mlkit-barcode = "17.3.0"
+mlkit-text-recognition = "19.0.1"
 # QR-Kopplung (Cloudflare): Google-Code-Scanner ohne Kamera-Berechtigung, QR-Bild über zxing
 code-scanner = "16.1.0"
 zxing = "3.5.3"
@@ -76,6 +77,7 @@ androidx-camera-compose = { module = "androidx.camera:camera-compose", version.r
 androidx-pdf-viewer-fragment = { module = "androidx.pdf:pdf-viewer-fragment", version.ref = "pdf-viewer" }
 mlkit-document-scanner = { module = "com.google.android.gms:play-services-mlkit-document-scanner", version.ref = "mlkit-document-scanner" }
 mlkit-digital-ink = { module = "com.google.mlkit:digital-ink-recognition", version.ref = "mlkit-digital-ink" }
+mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-text-recognition", version.ref = "mlkit-text-recognition" }
 mlkit-barcode = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkit-barcode" }
 play-services-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "code-scanner" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }

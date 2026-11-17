@@ -40,6 +40,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -119,6 +120,9 @@ class HeftCamera(val lazy: LazyListState) {
     var colW by mutableFloatStateOf(1f)
         private set
 
+    /** Höhe der Seite in Seiteneinheiten (je Seite eigen; die Breite ist immer [HeftPage.WIDTH]). */
+    var pageHeight: (String) -> Float = { HeftPage.HEIGHT }
+
     /** Waagerechter Versatz: schmaler als die Ansicht mittig, sonst bündig an den Rändern begrenzt. */
     val tx: Float get() = clampTx(rawTx, z)
 
@@ -184,7 +188,8 @@ class HeftCamera(val lazy: LazyListState) {
         return Rect(x, y, x + w * z, y + h * z)
     }
 
-    private fun pageRect(item: LazyListItemInfo, before: Int) = rect(item, before, baseW, baseW / HeftPage.RATIO)
+    private fun pageRect(item: LazyListItemInfo, before: Int) =
+        rect(item, before, baseW, baseW / HeftPage.ratio(pageHeight(item.key as String)))
 
     /** Bildschirmrechteck einer sichtbaren Heftseite. */
     fun pageRect(key: String): Rect? {
@@ -306,7 +311,12 @@ fun HeftViewport(
         val fitH = steadyH - with(density) { (top + 40.dp).toPx() }
         val baseW = max(1f, floor(min(viewW - 2 * margin, fitH * HeftPage.RATIO)))
         val colW = baseW + 2 * margin
-        SideEffect { camera.layout(viewW, viewH, baseW, colW) }
+        // Höhe je Seite aus einem Kern-Aufruf (alle Seiten), nicht aus den geladenen Seiten.
+        val heights by vm.pageHeights.collectAsState()
+        SideEffect {
+            camera.pageHeight = { id -> heights?.get(id) ?: HeftPage.HEIGHT }
+            camera.layout(viewW, viewH, baseW, colW)
+        }
 
         // Doppeltipp: weich auf ca. 2,2× bzw. zurück auf Passbreite (heft-viewport.js `animateZoom`).
         fun zoomTo(c: Offset) {

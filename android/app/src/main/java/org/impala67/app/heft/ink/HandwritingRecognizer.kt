@@ -78,7 +78,7 @@ class HandwritingRecognizer : AutoCloseable {
 }
 
 /** Wartet auf ein ML-Kit-Task, ohne die Coroutines-Play-Services-Abhängigkeit. */
-private suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { cont ->
+internal suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { cont ->
     addOnSuccessListener { cont.resume(it) }
     addOnFailureListener { cont.resumeWithException(it) }
 }

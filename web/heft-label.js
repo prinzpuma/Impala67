@@ -3,7 +3,7 @@
 import { STATE } from "./state.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { CORE } from "./rust-core.js";
-import { PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, pageHeight } from "./heft-document-core.js";
 
 // web/heft-label.js — Heftseiten von einer Bild-KI beschriften lassen (MCP), damit das lokale
 // Modell aus echten Notizen lernt.
@@ -33,23 +33,23 @@ export const HEFT_LABEL = (() => {
 		return { doc, pg, strokes: filterInkStrokes(pg.strokes || []) };
 	}
 
-	function renderPage(strokes) {
+	function renderPage(strokes, pageH = PAGE_H) {
 		const canvas = document.createElement("canvas");
 		canvas.width = PAGE_W;
-		canvas.height = PAGE_H;
+		canvas.height = pageH;
 		const ctx = canvas.getContext("2d");
 		ctx.fillStyle = "#ffffff";
-		ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+		ctx.fillRect(0, 0, PAGE_W, pageH);
 		// Koordinatenraster, damit die KI Rahmen in Seitenkoordinaten angeben kann
 		ctx.strokeStyle = "#dfe5ef";
 		ctx.fillStyle = "#8a94a6";
 		ctx.lineWidth = 1;
 		ctx.font = "13px sans-serif";
 		for (let x = GRID; x < PAGE_W; x += GRID) {
-			ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, PAGE_H); ctx.stroke();
+			ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, pageH); ctx.stroke();
 			ctx.fillText(String(x), x + 3, 13);
 		}
-		for (let y = GRID; y < PAGE_H; y += GRID) {
+		for (let y = GRID; y < pageH; y += GRID) {
 			ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PAGE_W, y); ctx.stroke();
 			ctx.fillText(String(y), 3, y - 3);
 		}
@@ -84,10 +84,10 @@ export const HEFT_LABEL = (() => {
 			pageId: page_id,
 			pageIndex: page_index,
 			pageCount: doc.pages.length,
-			size: { width: PAGE_W, height: PAGE_H },
+			size: { width: PAGE_W, height: pageHeight(pg) },
 			inkStrokes: strokes.length,
 			appReading,
-			image: renderPage(strokes),
+			image: renderPage(strokes, pageHeight(pg)),
 		};
 	}
 

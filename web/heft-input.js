@@ -8,7 +8,7 @@
 // Eingabe braucht (aktive Stifte, Laser-Timer, Doppeltipp, Radierer-Frame) lebt hier.
 
 import { U } from "./util.js";
-import { PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, pageHeight } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, applyGeometries, packStrokes, nearPoint } from "./heft-geometry.js";
 import { CORE } from "./rust-core.js";
 import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, isLassoBodyHit, drawLassoPath } from "./heft-lasso.js";
@@ -349,7 +349,7 @@ export function createHeftInput(H) {
 			if (bb0.minX < anchor[0]) maxFactor = Math.min(maxFactor, anchor[0] / (anchor[0] - bb0.minX));
 			if (bb0.maxX > anchor[0]) maxFactor = Math.min(maxFactor, (PAGE_W - anchor[0]) / (bb0.maxX - anchor[0]));
 			if (bb0.minY < anchor[1]) maxFactor = Math.min(maxFactor, anchor[1] / (anchor[1] - bb0.minY));
-			if (bb0.maxY > anchor[1]) maxFactor = Math.min(maxFactor, (PAGE_H - anchor[1]) / (bb0.maxY - anchor[1]));
+			if (bb0.maxY > anchor[1]) maxFactor = Math.min(maxFactor, (pageHeight(H.doc.pages[H.drawing.pageIdx]) - anchor[1]) / (bb0.maxY - anchor[1]));
 			// Mindestens 1, falls die Auswahl schon über den Rand ragt (sonst würde sie zwanghaft schrumpfen)
 			maxFactor = Math.max(1, maxFactor);
 
@@ -376,7 +376,7 @@ export function createHeftInput(H) {
 			const im = H.drawing.im, o = H.drawing.orig;
 			if (H.drawing.imgMove) {
 				im.x = Math.min(PAGE_W - 20, Math.max(20 - im.w, o.x + dx));
-				im.y = Math.min(PAGE_H - 20, Math.max(20 - im.h, o.y + dy));
+				im.y = Math.min(pageHeight(H.doc.pages[H.drawing.pageIdx]) - 20, Math.max(20 - im.h, o.y + dy));
 			} else if (H.drawing.isText) {
 				im.w = Math.max(120, o.w + dx);
 			} else {

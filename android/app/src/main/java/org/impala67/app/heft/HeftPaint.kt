@@ -21,13 +21,13 @@ private const val GAP = 28f
 
 /**
  * Papier einer Seite wie `paintPaper` in heft.js: Linien, Raster und Punkte in der Akzentfarbe,
- * gezeichnet in Seitenkoordinaten (1000 × 1414), skaliert mit [k] (Pixel je Seiteneinheit).
+ * gezeichnet in Seitenkoordinaten (Breite 1000, Höhe [pageH]), skaliert mit [k] (Pixel je Seiteneinheit).
  */
-fun DrawScope.drawPaper(paper: Paper, ink: Color, k: Float) {
+fun DrawScope.drawPaper(paper: Paper, ink: Color, k: Float, pageH: Float = HeftPage.HEIGHT) {
     drawRect(PaperColor)
     if (paper == Paper.BLANK) return
     val w = HeftPage.WIDTH
-    val h = HeftPage.HEIGHT
+    val h = pageH
     withTransform({ scale(k, k, Offset.Zero) }) {
         when (paper) {
             Paper.DOTS -> {

@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use impala_ai::{HeftPage, HeftPageContent, LocalTime, ToolExecutor, ToolOutput};
 use impala_heft::diff::Shadow;
 use impala_heft::ink::content_bottom;
-use impala_heft::{HeftDoc, HeftOp, Item, PAGE_H, PAGE_W, Paper, TextBox, diff_document};
+use impala_heft::{HeftDoc, HeftOp, Item, PAGE_W, Paper, TextBox, diff_document};
 use impala_model::study::StudyOptions;
 use impala_model::tree::deck_in_tree;
 use impala_srs::{Srs, Timestamp};
@@ -659,7 +659,7 @@ impl Tools<'_> {
         let (mut pi, mut paper_page) = (0, doc.pages.last().cloned());
         if doc.pages.is_empty() {
             let id = new_id();
-            ops.push(HeftOp::PageAdd { at: None, page: id.clone(), paper: Some(Paper::default()) });
+            ops.push(HeftOp::PageAdd { at: None, page: id.clone(), paper: Some(Paper::default()), height: None });
             paper_page = Some(impala_heft::HeftPage::empty(id, Paper::default()));
         } else {
             pi = index.map_or(doc.pages.len() - 1, |i| i.min(doc.pages.len() - 1));
@@ -674,9 +674,9 @@ impl Tools<'_> {
         let h = (lines as f64 * size * 1.4 + 20.0).round();
         let mut y = content_bottom(&pg) + 30.0;
         let mut added = doc.pages.is_empty();
-        if index.is_none() && y > 80.0 && y + h.min(220.0) > PAGE_H - 50.0 && !doc.pages.is_empty() {
+        if index.is_none() && y > 80.0 && y + h.min(220.0) > pg.page_height() - 50.0 && !doc.pages.is_empty() {
             let id = new_id();
-            ops.push(HeftOp::PageAdd { at: None, page: id.clone(), paper: Some(pg.paper.clone()) });
+            ops.push(HeftOp::PageAdd { at: None, page: id.clone(), paper: Some(pg.paper.clone()), height: None });
             pg = impala_heft::HeftPage::empty(id, pg.paper.clone());
             pi = doc.pages.len();
             (y, added) = (60.0, true);
@@ -686,7 +686,7 @@ impl Tools<'_> {
         let text = TextBox {
             id: new_id(),
             x: Some(80.0),
-            y: Some(y.min(PAGE_H - 80.0)),
+            y: Some(y.min(pg.page_height() - 80.0)),
             w: Some(w),
             h: Some(h),
             text: Some(body.to_owned()),

@@ -48,11 +48,11 @@ fun PageSketch(data: HeftPageData?, modifier: Modifier = Modifier, images: Map<S
     val ink = Impala.colors.accent
     val cache = remember { StrokeCache() }
     val strokes = data?.strokes.orEmpty()
-    val layer = rememberStrokeLayer(strokes, cache, targetWidth = 512)
+    val layer = rememberStrokeLayer(strokes, cache, targetWidth = 512, pageH = data?.height?.toFloat() ?: HeftPage.HEIGHT)
 
     Canvas(modifier) {
         val k = size.width / HeftPage.WIDTH
-        drawPaper(Paper.of(data?.paper.orEmpty()), ink, k)
+        drawPaper(Paper.of(data?.paper.orEmpty()), ink, k, data?.height?.toFloat() ?: HeftPage.HEIGHT)
         drawHeftImages(data?.images.orEmpty(), images, k)
         layer.image?.let {
             drawImage(

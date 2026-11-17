@@ -9,10 +9,15 @@ pub const EXPORT_W: u32 = 2480;
 pub const A4_W: f64 = 595.28;
 pub const A4_H: f64 = 841.89;
 
-/// Pixelgröße und Maßstab einer Seite bei gegebener Breite (`paintInto`: Höhe folgt A4).
+/// Pixelgröße und Maßstab einer A4-Seite bei gegebener Breite (`paintInto`).
 pub fn page_canvas_size(width: u32) -> (u32, u32, f64) {
+    page_canvas_size_for(width, PAGE_H)
+}
+
+/// Wie [`page_canvas_size`] für eine Seite der Höhe `page_h` ([`crate::HeftPage::page_height`]).
+pub fn page_canvas_size_for(width: u32, page_h: f64) -> (u32, u32, f64) {
     let k = width as f64 / PAGE_W;
-    (width, js_round(PAGE_H * k) as u32, k)
+    (width, js_round(page_h * k) as u32, k)
 }
 
 /// Lage eines Seitenbilds auf der A4-Seite: eingepasst und zentriert, `(w, h, x, y)` in Punkten.

@@ -18,7 +18,6 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.impala67.app.heft.Paper
 import uniffi.impala_ffi.ImpalaCore
 
 /** Seitenlimit wie `PLATFORM_NATIVE.scanner.scan({ pageLimit: 25 })` in der PWA. */
@@ -64,15 +63,13 @@ fun rememberDocumentScan(onScanned: (List<ScannedPage>) -> Unit, onError: (Strin
 }
 
 /**
- * Je Scan eine neue Heftseite (Papier „Blanko“) mit dem Bild als Seitenhintergrund, wie
+ * Je Scan eine neue Heftseite im Format des Bildes mit dem Bild als Seitenhintergrund, wie
  * `insertScannedPages` in heft.js. Die Seiten stehen ab Position [at] nacheinander. Liefert die erste neue Seiten-ID.
  */
 fun ImpalaCore.insertScannedPages(pageId: String, at: Int, scans: List<ScannedPage>): String? {
     var first: String? = null
     scans.forEachIndexed { i, scan ->
-        val heftPageId = heftAddPage(pageId, (at + i).toUInt(), Paper.BLANK.id)
-        val f = scanFrame(scan)
-        heftSetBackground(pageId, heftPageId, scan.jpeg, "image/jpeg", f.x, f.y, f.w, f.h, null)
+        val heftPageId = heftAddBackgroundPage(pageId, (at + i).toUInt(), scan.jpeg, "image/jpeg", scan.width.toDouble(), scan.height.toDouble(), null)
         if (first == null) first = heftPageId
     }
     return first

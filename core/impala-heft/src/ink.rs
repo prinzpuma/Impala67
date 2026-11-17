@@ -7,7 +7,7 @@
 
 use std::fmt::Write as _;
 
-use crate::doc::{HeftPage, PAGE_H, PAGE_W, Paper, Point, Shape, Stroke, Tool};
+use crate::doc::{HeftPage, PAGE_W, Paper, Point, Shape, Stroke, Tool};
 use crate::json::{js_round, js_to_fixed};
 
 /// Ein Zeichenbefehl. Koordinaten in Seiteneinheiten (1000 × 1414).
@@ -228,7 +228,7 @@ fn esc(s: &str) -> String {
 /// Zeichenreihenfolge wie die App. Textfelder werden nur an `\n` umbrochen – der Umbruch nach
 /// Breite braucht die Schriftmetrik des Geräts und fehlt hier.
 pub fn page_svg(page: &HeftPage, opts: &SvgOptions) -> String {
-    let (w, h) = (PAGE_W, PAGE_H);
+    let (w, h) = (PAGE_W, page.page_height());
     let mut o = String::new();
     let _ = write!(
         o,

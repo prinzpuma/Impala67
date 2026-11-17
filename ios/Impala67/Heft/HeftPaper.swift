@@ -70,7 +70,7 @@ final class HeftPaperView: UIView {
     /// „Seite n“ unter dem Blatt (`.heft-page-label` der PWA).
     private let label = CATextLayer()
     private var size = CGSize.zero
-    private var kind = ""
+    private(set) var kind = ""
     /// Lage der Seite in der durchlaufenden Heft-Ansicht (Seitenkoordinaten).
     var origin = CGPoint.zero
 

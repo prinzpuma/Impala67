@@ -231,7 +231,7 @@ impl Shadow {
         for op in ops {
             let page = op.page().and_then(|id| self.pages.iter().position(|p| p.id == id));
             match op {
-                HeftOp::PageAdd { at, page: id, paper } => {
+                HeftOp::PageAdd { at, page: id, paper, .. } => {
                     if !self.pages.iter().any(|p| &p.id == id) {
                         let i = insert_index(*at, self.pages.len());
                         let paper = paper.clone().unwrap_or_default();
@@ -383,7 +383,12 @@ pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>,
     let mut added = false;
     for (i, p) in next.pages.iter().enumerate() {
         if !old_by_id.contains_key(p.id.as_str()) {
-            ops.push(HeftOp::PageAdd { at: Some(i as f64), page: p.id.clone(), paper: Some(p.paper.clone()) });
+            ops.push(HeftOp::PageAdd {
+                at: Some(i as f64),
+                page: p.id.clone(),
+                paper: Some(p.paper.clone()),
+                height: p.height,
+            });
             added = true;
         }
     }

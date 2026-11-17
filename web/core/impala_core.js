@@ -4029,6 +4029,18 @@ export function heftApplyGeometry(geometry) {
 }
 
 /**
+ * Seite für ein Hintergrundbild von `w`×`h` Pixeln: `{ height, x, y, w, h }` (Seitenhöhe und Lage des
+ * Bildes; die Seite übernimmt das Format des Bildes).
+ * @param {number} w
+ * @param {number} h
+ * @returns {any}
+ */
+export function heftBackgroundFit(w, h) {
+    const ret = wasm.heftBackgroundFit(w, h);
+    return takeObject(ret);
+}
+
+/**
  * ID eines Bild-Blobs aus seinen Daten (Teil des gespeicherten Formats).
  * @param {string} data
  * @returns {string}

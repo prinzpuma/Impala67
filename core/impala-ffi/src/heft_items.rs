@@ -105,6 +105,9 @@ pub struct HeftOcrJob {
     pub page_id: String,
     pub heft_page_id: String,
     pub content_key: String,
+    /// Bild-ID des Seitenhintergrunds, dessen Text noch fehlt: mitlesen (`heft_image_data`) und als
+    /// `background_text` an `heft_record_ocr` geben. `None`: nur die Handschrift.
+    pub background_id: Option<String>,
 }
 
 /// Rechteck in Seitenkoordinaten.
@@ -314,7 +317,7 @@ impl Inner {
                     return Err(invalid("Seite ohne ID"));
                 }
                 let paper = Some(parse_paper(paper.as_deref().unwrap_or("lined"))?);
-                Some(HeftOp::PageAdd { at: at.map(f64::from), page, paper })
+                Some(HeftOp::PageAdd { at: at.map(f64::from), page, paper, height: None })
             }
             HeftChange::RemovePage { page } => {
                 let doc = self.heft(page_id)?;
@@ -647,52 +650,53 @@ impl ImpalaCore {
         inner.heft_edit(&page_id, ops, vec![image_id])
     }
 
-    /// Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
-    /// Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
-    /// Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+    /// Neue Seite an Stelle `at` (`None`: hinten) mit einem Bild von `width`×`height` Pixeln als
+    /// Hintergrund (PDF-Seite, Scan, Arbeitsblatt): Die Seite übernimmt das Format des Bildes
+    /// (`impala_heft::background::background_fit`), `ocr` ist eingebetteter Text für die Suche.
+    /// Liefert die Seiten-ID.
     #[allow(clippy::too_many_arguments)]
-    pub fn heft_set_background(
+    pub fn heft_add_background_page(
         &self,
         page_id: String,
-        heft_page_id: String,
+        at: Option<u32>,
         bytes: Vec<u8>,
         mime: String,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+        width: f64,
+        height: f64,
         ocr: Option<String>,
-    ) -> Result<HeftEdit, CoreError> {
-        finite(&[x, y, w, h], "Hintergrund")?;
+    ) -> Result<String, CoreError> {
+        if bytes.is_empty() || !mime.starts_with("image/") || mime.contains([';', ',']) {
+            return Err(invalid("Hintergrund: Bytes und ein MIME-Typ wie image/png nötig"));
+        }
+        let data = format!("data:{mime};base64,{}", STANDARD.encode(&bytes));
+        let hash = blob_id(&data);
+        let (page_h, [x, y, w, h]) = impala_heft::background::background_fit(width, height);
+        let id = new_id();
+        let mut page = impala_heft::HeftPage::empty(id.clone(), impala_heft::Paper::Blank);
+        page.height = Some(page_h);
+        page.background = Some(Image {
+            id: new_id(),
+            r#ref: Some(hash.clone()),
+            x: Some(x),
+            y: Some(y),
+            w: Some(w),
+            h: Some(h),
+            ocr: ocr.map(|o| o.trim().to_owned()).filter(|o| !o.is_empty()),
+            ..Default::default()
+        });
+        let mut ops = vec![HeftOp::PageAdd { at: at.map(f64::from), page: id.clone(), paper: Some(impala_heft::Paper::Blank), height: Some(page_h) }];
+        ops.extend(impala_heft::background::background_ops(&id, false, page.background.clone()));
+        let text = impala_heft::compose_page_text("", &page);
+        if !text.is_empty() {
+            ops.push(HeftOp::Ocr { page: id.clone(), text, src: String::new(), key: impala_heft::ocr::content_key(&page) });
+        }
         let mut inner = self.lock();
-        let had = inner.heft_page(&page_id, &heft_page_id)?.background.is_some();
-        let (bg, blob) = if bytes.is_empty() {
-            (None, None)
-        } else {
-            if !mime.starts_with("image/") || mime.contains([';', ',']) {
-                return Err(invalid("Hintergrund: ein MIME-Typ wie image/png nötig"));
-            }
-            let data = format!("data:{mime};base64,{}", STANDARD.encode(&bytes));
-            let hash = blob_id(&data);
-            let bg = Image {
-                id: new_id(),
-                r#ref: Some(hash.clone()),
-                x: Some(x),
-                y: Some(y),
-                w: Some(w),
-                h: Some(h),
-                ocr: ocr.filter(|o| !o.trim().is_empty()),
-                ..Default::default()
-            };
-            (Some(bg), Some((hash, data)))
-        };
-        let ops = impala_heft::background::background_ops(&heft_page_id, had, bg);
-        if let Some((hash, data)) = blob
-            && !inner.model.has_heft_blob(&hash)
-        {
+        inner.heft(&page_id)?;
+        if !inner.model.has_heft_blob(&hash) {
             inner.dispatch("heftBlob", json!({ "hash": hash, "data": data }))?;
         }
-        inner.heft_edit(&page_id, ops, Vec::new())
+        inner.heft_ops(&page_id, ops)?;
+        Ok(id)
     }
 
     /// Bytes und MIME-Typ eines Bilds (lädt es bei Bedarf aus Checkpoint bzw. Log nach; Altbilder mit
@@ -844,15 +848,17 @@ impl ImpalaCore {
         page_id: String,
         heft_page_id: String,
         stroke_text: String,
+        background_text: Option<String>,
         src: String,
         expected_key: Option<String>,
     ) -> Result<bool, CoreError> {
         let mut inner = self.lock();
         let pg = inner.heft_page(&page_id, &heft_page_id)?;
-        let Some(op) = impala_heft::ocr::ocr_op(pg, &stroke_text, &src, expected_key.as_deref()) else {
+        let ops = impala_heft::ocr::record_ops(pg, &stroke_text, background_text.as_deref(), &src, expected_key.as_deref());
+        if ops.is_empty() {
             return Ok(false);
-        };
-        inner.heft_ops(&page_id, vec![op])?;
+        }
+        inner.heft_ops(&page_id, ops)?;
         Ok(true)
     }
 
@@ -867,11 +873,13 @@ impl ImpalaCore {
                 continue;
             }
             for pg in &doc.pages {
-                if impala_heft::ocr::needs_ocr(pg, &src) {
+                let background = impala_heft::ocr::background_needs_text(pg);
+                if background || impala_heft::ocr::needs_ocr(pg, &src) {
                     out.push(HeftOcrJob {
                         page_id: page_id.clone(),
                         heft_page_id: pg.id.clone(),
                         content_key: impala_heft::ocr::content_key(pg),
+                        background_id: pg.background.as_ref().filter(|_| background).map(|b| b.id.clone()),
                     });
                 }
             }

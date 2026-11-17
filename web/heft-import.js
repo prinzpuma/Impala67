@@ -4,7 +4,7 @@ import { S } from "./state.js";
 import { U } from "./util.js";
 import { PDFS } from "./pdfs.js";
 import { insertAt } from "./heft-pages-core.js";
-import { PAGE_W, PAGE_H, emptyHeftPage } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, emptyHeftPage, backgroundFit, pageHeight } from "./heft-document-core.js";
 import { SCAN_OUT_MAX_EDGE, SCAN_JPEG_QUALITY } from "./heft-scan-pixels.js";
 import { cleanOcrText } from "./scan-ocr.js";
 
@@ -76,28 +76,25 @@ export function fileToImageData(f, maxDim, mime = "image/jpeg", quality = 0.86) 
 	});
 }
 
-export function imagePage(im, paper, bleed, {
+// Neue Heftseite mit dem Bild als Seitenhintergrund (PDF-Seite, Scan, Bild): Die Seite übernimmt
+// das Format des Bildes (Querformat, Letter …), das Bild füllt sie (kein Element, liegt fest).
+export function imagePage(im, paper, {
 	blobRef = (src) => src,
-	newPage = (p) => emptyHeftPage(U.uid(), p),
-	pageW = PAGE_W,
-	pageH = PAGE_H
+	newPage = (p) => emptyHeftPage(U.uid(), p)
 } = {}) {
 	const pg = newPage(paper || "blank");
-	const pad = bleed ? 0 : 40;
-	const k = Math.min((pageW - pad * 2) / im.w, (pageH - pad * 2) / im.h);
-	const ref = im.ref || blobRef(im.src);
-	const item = {
+	const fit = backgroundFit(im.w, im.h);
+	if (fit.height !== PAGE_H) pg.h = fit.height;
+	pg.bg = {
 		id: U.uid(),
-		ref,
-		x: (pageW - im.w * k) / 2,
-		y: (pageH - im.h * k) / 2,
-		w: im.w * k,
-		h: im.h * k,
+		ref: im.ref || blobRef(im.src),
+		x: fit.x,
+		y: fit.y,
+		w: fit.w,
+		h: fit.h,
 		...(im.scan ? { scan: true } : {}),
 		...(im.ocr ? { ocr: im.ocr } : {})
 	};
-	// PDF-Seite, Scan oder Bild als eigene Seite: Seitenhintergrund (kein Element, liegt fest).
-	pg.bg = item;
 	return pg;
 }
 
@@ -107,13 +104,12 @@ export async function insertImageFile(f, {
 	blobRef = (src) => src,
 	pushUndo,
 	onInserted,
-	pageW = PAGE_W,
-	pageH = PAGE_H,
 	toast = U.toast
 } = {}) {
 	try {
 		const pg = typeof getPage === "function" ? getPage() : getPage;
 		if (!pg) return null;
+		const pageW = PAGE_W, pageH = pageHeight(pg);
 		const pageIdx = typeof getIdx === "function" ? getIdx() : getIdx;
 		const im = await fileToImageData(f, 1400);
 		const k = Math.min((pageW * 0.7) / im.w, (pageH * 0.7) / im.h, 1);
@@ -140,8 +136,6 @@ export async function insertImageFile(f, {
 export async function importPdf(f, at, targetDoc, {
 	blobRef,
 	newPage,
-	pageW = PAGE_W,
-	pageH = PAGE_H,
 	pdfs = PDFS,
 	toast = U.toast
 } = {}) {
@@ -173,8 +167,7 @@ export async function importPdf(f, at, targetDoc, {
 			const pg = imagePage(
 				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, ocr },
 				"blank",
-				true,
-				{ blobRef, newPage, pageW, pageH }
+				{ blobRef, newPage }
 			);
 			if (ocr) pg.ocrText = ocr;
 			targetDoc.pages.splice(at, 0, pg);
@@ -196,8 +189,6 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 	go,
 	blobRef,
 	newPage,
-	pageW = PAGE_W,
-	pageH = PAGE_H,
 	pdfs = PDFS,
 	toast = U.toast
 } = {}) {
@@ -218,10 +209,10 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 		if (onStatus) onStatus("Importiere " + f.name + " …");
 		const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
 		if (isPdf) {
-			at = await importPdf(f, at, targetDoc, { blobRef, newPage, pageW, pageH, pdfs, toast });
+			at = await importPdf(f, at, targetDoc, { blobRef, newPage, pdfs, toast });
 		} else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
 			const im = await fileToImageData(f, 1600);
-			const pg = imagePage(im, "blank", false, { blobRef, newPage, pageW, pageH });
+			const pg = imagePage(im, "blank", { blobRef, newPage });
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}

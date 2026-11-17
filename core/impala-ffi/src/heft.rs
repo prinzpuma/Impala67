@@ -2,10 +2,10 @@
 //! mit den Operationen des Kerns (`s+`, `s-`, `pg+` …), wie die PWA sie schreibt; Striche haben
 //! stabile IDs, damit zwei Geräte dieselben Striche als dieselben erkennen.
 //!
-//! Koordinaten sind Seitenkoordinaten (Breite [`PAGE_W`], Höhe [`PAGE_H`]). Punkte wandern als flache
+//! Koordinaten sind Seitenkoordinaten (Breite [`PAGE_W`], Höhe je Seite: `HeftPageData::height`). Punkte wandern als flache
 //! Liste `[x, y, druck, x, y, druck, …]`, damit große Seiten schnell über die Grenze kommen.
 
-use impala_heft::{HeftDoc, HeftOp, HeftPage, Image, Item, ItemKind, PAGE_H, PAGE_W, Paper, Shape, Stroke, Tool};
+use impala_heft::{HeftDoc, HeftOp, HeftPage, Image, Item, ItemKind, PAGE_W, Paper, Shape, Stroke, Tool};
 use serde_json::{Value, json};
 
 use crate::heft_items::build_stroke;
@@ -117,7 +117,7 @@ pub struct HeftImage {
     /// Erkannter Text eines Scans (von der Plattform geliefert).
     pub ocr: Option<String>,
     /// Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
-    /// ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+    /// ist aber kein Element – nicht antippen, greifen oder ändern. Neue Seite damit: `heft_add_background_page`.
     #[uniffi(default = false)]
     pub background: bool,
 }
@@ -195,7 +195,7 @@ pub(crate) fn page_data(pg: &HeftPage) -> HeftPageData {
         id: pg.id.clone(),
         paper: paper_name(&pg.paper),
         width: PAGE_W,
-        height: PAGE_H,
+        height: pg.page_height(),
         strokes: pg.strokes.iter().map(stroke_data).collect(),
         images: pg
             .background
@@ -255,7 +255,7 @@ pub(crate) fn parse_paper(name: &str) -> Result<Paper, CoreError> {
 fn new_page_op(at: Option<u32>, paper: Option<String>) -> Result<(String, HeftOp), CoreError> {
     let id = uuid::Uuid::new_v4().to_string();
     let paper = Some(parse_paper(paper.as_deref().unwrap_or("lined"))?);
-    Ok((id.clone(), HeftOp::PageAdd { at: at.map(f64::from), page: id, paper }))
+    Ok((id.clone(), HeftOp::PageAdd { at: at.map(f64::from), page: id, paper, height: None }))
 }
 
 #[uniffi::export]
@@ -277,6 +277,13 @@ impl ImpalaCore {
     pub fn heft_page_ids(&self, page_id: String) -> Vec<String> {
         let inner = self.lock();
         inner.heft(&page_id).map(|d| d.pages.iter().map(|p| p.id.clone()).collect()).unwrap_or_default()
+    }
+
+    /// Höhe jeder Seite in derselben Reihenfolge wie `heft_page_ids` (Breite immer 1000, A4 = 1414):
+    /// fürs Layout, ohne jede Seite einzeln zu lesen.
+    pub fn heft_page_heights(&self, page_id: String) -> Vec<f64> {
+        let inner = self.lock();
+        inner.heft(&page_id).map(|d| d.pages.iter().map(HeftPage::page_height).collect()).unwrap_or_default()
     }
 
     /// Eine Heftseite zum Zeichnen.

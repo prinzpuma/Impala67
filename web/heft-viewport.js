@@ -6,7 +6,7 @@
 // die Zeichenfunktionen herein; die Ansicht selbst (view, fitScale, Kacheln) lebt hier.
 
 import { U } from "./util.js";
-import { PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { PAGE_W, PAGE_H, pageHeight } from "./heft-document-core.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 
 export function createHeftViewport(ctx) {
@@ -143,16 +143,21 @@ export function createHeftViewport(ctx) {
 			paintView(false, isZoom);
 		});
 	}
-	function renderVisibleBasePages() {
-		if (!ctx.doc()) return;
+	// Basis-Auflösung einer Seite in ihrem Format (Breite fest, Höhe je Seite), im Pixel-Budget.
+	function baseRaster(pg) {
 		const nativeDpr = Math.min(MAX_RENDER_DPR, (window.devicePixelRatio || 1) * 1.5);
-		const pageW = PAGE_W * fitScale, pageH = PAGE_H * fitScale;
+		const pageW = PAGE_W * fitScale, pageH = pageHeight(pg) * fitScale;
 		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
 		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
-		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
+		return { pageW, pageH, safeDpr: Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr)) };
+	}
+	function renderVisibleBasePages() {
+		if (!ctx.doc()) return;
+		const pages = ctx.doc().pages;
 		for (const i of visiblePageIndices()) {
 			const cv = ctx.canvases()[i];
 			if (!cv) continue;
+			const { pageW, pageH, safeDpr } = baseRaster(pages[i]);
 			cv.__heftDpr = safeDpr; cv.__heftScale = fitScale;
 			const w = Math.max(1, Math.round(pageW * safeDpr));
 			const h = Math.max(1, Math.round(pageH * safeDpr));
@@ -416,18 +421,14 @@ export function createHeftViewport(ctx) {
 		// Die Basis-Seite wird IMMER in Basis-Aufloesung gefuellt, unabhaengig vom Zoom:
 		// beim Zoomen muss dadurch keine Zeichenflaeche wachsen und nichts neu gezeichnet
 		// werden. Die Schaerfe liefert die Detail-Kachel darueber.
-		const nativeDpr = Math.min(MAX_RENDER_DPR, (window.devicePixelRatio || 1) * 1.5);
-		const pageW = PAGE_W * fitScale, pageH = PAGE_H * fitScale;
-		const pixelBudgetDpr = Math.sqrt(MAX_RENDER_PIXELS / Math.max(1, pageW * pageH));
-		const edgeBudgetDpr = MAX_CANVAS_DIM / Math.max(pageW, pageH);
-
-		const safeDpr = Math.max(0.5, Math.min(nativeDpr, pixelBudgetDpr, edgeBudgetDpr));
+		const pages = ctx.doc() ? ctx.doc().pages : [];
 		ctx.canvases().forEach((cv, i) => {
 			if (!visible.has(i)) {
 				if (!keep.has(i) && (cv.width !== 1 || cv.height !== 1)) { cv.width = 1; cv.height = 1; }
 				hideLayer(ctx.detailCanvases()[i]); hideLayer(ctx.wetCanvases()[i]);
 				return;
 			}
+			const { pageW, pageH, safeDpr } = baseRaster(pages[i]);
 			cv.__heftDpr = safeDpr; cv.__heftScale = fitScale;
 			const w = Math.max(1, Math.round(pageW * safeDpr));
 			const h = Math.max(1, Math.round(pageH * safeDpr));
@@ -466,7 +467,6 @@ export function createHeftViewport(ctx) {
 		fitScale = Math.max(0.05, Math.min(availW / PAGE_W, availH / PAGE_H, 1));
 		if (pgs) {
 			pgs.style.setProperty("--heft-page-w", (PAGE_W * fitScale) + "px");
-			pgs.style.setProperty("--heft-page-h", (PAGE_H * fitScale) + "px");
 			// Der Rand ist Teil des Inhalts und zoomt mit. JS ist die einzige Quelle dafuer,
 			// damit CSS und Rechnung nie auseinanderlaufen.
 			pgs.style.padding = padT + "px " + PAD_X + "px " + PAD_BOTTOM + "px";

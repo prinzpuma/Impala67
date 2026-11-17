@@ -73,7 +73,7 @@ fn ops_sind_idempotent_und_vertauschbar() {
     // Zwei Geräte zeichnen gleichzeitig: Reihenfolge von Hinzufügen egal, Doppeltes zählt einmal.
     // (Ein erneutes Hinzufügen NACH dem Löschen holt den Strich zurück – wie in JS; der Sync
     // stellt jedes Event nur einmal zu.)
-    let base = vec![HeftOp::PageAdd { at: None, page: "p".into(), paper: None }];
+    let base = vec![HeftOp::PageAdd { at: None, page: "p".into(), paper: None, height: None }];
     let a = HeftOp::Add { page: "p".into(), item: Item::Stroke(pen("a", &[[1.0, 1.0]])) };
     let b = HeftOp::Add { page: "p".into(), item: Item::Stroke(pen("b", &[[2.0, 2.0]])) };
     let del = HeftOp::Remove { page: "p".into(), kind: impala_heft::ItemKind::Stroke, ids: vec!["a".into()] };
@@ -343,4 +343,49 @@ fn altbestand_seitenfuellende_bilder_werden_hintergrund() {
     assert_eq!(doc.pages[1].background.as_ref().unwrap().extra.get("scan"), Some(&json!(true)));
     assert_eq!(impala_heft::doc::compose_page_text("", &doc.pages[0]), "Blatt");
     assert!(adopt_background_ops(&doc).is_empty());
+}
+
+#[test]
+fn erkennung_liest_hintergrund_und_handschrift_zusammen() {
+    use impala_heft::doc::HeftDoc;
+    use impala_heft::ocr::{background_needs_text, content_key, record_ops};
+    use serde_json::json;
+
+    let mut doc = HeftDoc::from_value(json!({ "v": 2, "pages": [{ "id": "p", "paper": "blank",
+        "bg": { "id": "b", "ref": "bx-1", "x": 0, "y": 0, "w": 1000, "h": 1414 } }] }));
+    let pg = &doc.pages[0];
+    assert!(background_needs_text(pg));
+    let key = content_key(pg);
+    let ops = record_ops(pg, "", Some("Aufgabe 1: Integral"), "apple", Some(&key));
+    assert_eq!(ops.len(), 2);
+    doc.apply_ops(ops);
+    let pg = &doc.pages[0];
+    assert!(!background_needs_text(pg));
+    assert_eq!(pg.ocr_text, "Aufgabe 1: Integral");
+    // Veralteter Stand: nichts speichern.
+    assert!(record_ops(pg, "neu", None, "apple", Some("alt")).is_empty());
+}
+
+#[test]
+fn seite_uebernimmt_format_des_hintergrunds() {
+    use impala_heft::background::background_fit;
+    use impala_heft::doc::HeftDoc;
+    use serde_json::json;
+
+    // A4 hoch, A4 quer, sehr lang (begrenzt, eingepasst).
+    assert_eq!(background_fit(2480.0, 3508.0).0.round(), 1415.0);
+    let (h, [x, y, w, ih]) = background_fit(3508.0, 2480.0);
+    assert_eq!((h.round(), x, y, w), (707.0, 0.0, 0.0, 1000.0));
+    assert!((ih - h).abs() < 1e-9);
+    let (h, [x, _, w, _]) = background_fit(1000.0, 5000.0);
+    assert_eq!(h, 2828.0);
+    assert!(x > 0.0 && w < 1000.0);
+
+    // Höhe reist mit `pg+`; ältere Seiten ohne `h` sind A4.
+    let mut doc = HeftDoc::default();
+    doc.apply_ops(impala_heft::parse_ops(json!([{ "t": "pg+", "page": { "id": "q", "paper": "blank", "h": 707 } }, { "t": "pg+", "page": { "id": "a" } }])));
+    assert_eq!((doc.pages[0].page_height(), doc.pages[1].page_height()), (707.0, 1414.0));
+    let (ops, _) = impala_heft::diff_document(None, &doc);
+    assert_eq!(serde_json::to_value(&ops).unwrap()[0]["page"]["h"], json!(707));
+    assert_eq!(HeftDoc::from_value(serde_json::to_value(&doc).unwrap()), doc);
 }

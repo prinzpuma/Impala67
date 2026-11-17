@@ -85,6 +85,39 @@ pub fn ocr_op(page: &HeftPage, stroke_text: &str, src: &str, expected_key: Optio
     Some(HeftOp::Ocr { page: page.id.clone(), text, src: src.to_owned(), key })
 }
 
+/// Hat die Seite einen Hintergrund (Scan, PDF-Seite ohne Text, Arbeitsblatt), dessen Text noch
+/// niemand gelesen hat? Dann soll die Erkennung ihn zusammen mit der Handschrift lesen.
+pub fn background_needs_text(page: &HeftPage) -> bool {
+    page.background.as_ref().is_some_and(|bg| bg.has_source() && bg.ocr.is_none())
+}
+
+/// Ergebnis einer Seiten-Erkennung speichern: Handschrift (`stroke_text`) und, falls gelesen, der
+/// Text des Hintergrunds (`background_text`, nur wenn er noch keinen hat). Regeln wie [`ocr_op`];
+/// `expected_key` gilt für den Stand beim Start der Erkennung.
+pub fn record_ops(
+    page: &HeftPage,
+    stroke_text: &str,
+    background_text: Option<&str>,
+    src: &str,
+    expected_key: Option<&str>,
+) -> Vec<HeftOp> {
+    if expected_key.is_some_and(|k| k != content_key(page)) {
+        return Vec::new();
+    }
+    let mut ops = Vec::new();
+    let mut page = std::borrow::Cow::Borrowed(page);
+    if let Some(text) = background_text
+        && background_needs_text(&page)
+    {
+        let id = page.id.clone();
+        let bg = page.to_mut().background.as_mut().expect("geprüft");
+        bg.ocr = Some(text.trim().to_owned());
+        ops.push(HeftOp::PageBackground { page: id, bg: Some(bg.clone()) });
+    }
+    ops.extend(ocr_op(&page, stroke_text, src, None));
+    ops
+}
+
 /// FNV-1a (32 Bit) über Bytes.
 struct Fnv(u32);
 

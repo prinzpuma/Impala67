@@ -41,7 +41,7 @@ import uniffi.impala_ffi.HeftStroke
 import uniffi.impala_ffi.heftShapeOutline
 
 /**
- * Eine Heftseite im Hochformat (1000 × 1414 Einheiten) in Grundgröße: Papier, Bilder und gespeicherte
+ * Eine Heftseite (1000 Einheiten breit, Höhe je Seite) in Grundgröße: Papier, Bilder und gespeicherte
  * Striche; die Kamera ([HeftCamera]) skaliert sie. Eingaben kommen über die gemeinsame Stift-Ebene der
  * Ansicht, bei der sich die Seite in [targets] anmeldet. Frisch geschriebene und gerade radierte Striche
  * zeigt die Seite sofort selbst, bis der Kern die neue Fassung geliefert hat (kein Aufblitzen).
@@ -53,6 +53,9 @@ private val PageShape = RoundedCornerShape(Radius.xs)
 @Composable
 fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targets: HeftPageTargets, modifier: Modifier = Modifier) {
     val data by vm.page(heftPageId).collectAsStateWithLifecycle()
+    // Höhe aus der Seite, vorher aus der Höhenliste des Hefts: die Seite springt beim Laden nicht.
+    val heights by vm.pageHeights.collectAsStateWithLifecycle()
+    val pageH = data?.height?.toFloat() ?: heights?.get(heftPageId) ?: HeftPage.HEIGHT
     val cache = remember { StrokeCache() }
     val pending = remember { mutableStateListOf<HeftStroke>() }
     var erased by remember { mutableStateOf(emptySet<String>()) }
@@ -142,7 +145,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
     }
 
     BoxWithConstraints(
-        modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO)
+        modifier.fillMaxWidth().aspectRatio(HeftPage.ratio(pageH))
             // `.heft-canvas`: weicher Schatten (--elev-3) und feiner heller Ring.
             .shadow(10.dp, PageShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.6f))
             .clip(PageShape).border(1.dp, Color.White.copy(alpha = 0.06f), PageShape),
@@ -156,7 +159,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
             shownW <= 1280 -> 1024
             else -> 1536
         }
-        val layer = rememberStrokeLayer(settled, cache, bmpW)
+        val layer = rememberStrokeLayer(settled, cache, bmpW, pageH)
         LaunchedEffect(layer.drawnKeys, erased) {
             if (pending.isNotEmpty()) pending.removeAll { it.id in layer.drawnKeys || it.id in erased }
         }
@@ -192,7 +195,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
         }
 
         Canvas(Modifier.fillMaxSize()) {
-            drawPaper(paper, ink, k)
+            drawPaper(paper, ink, k, pageH)
             drawHeftImages(images, bitmaps, k)
             if (detailStrokes != null) {
                 drawInkStrokes(detailStrokes, k, lod = camera.baseW * camera.settled / HeftPage.WIDTH)

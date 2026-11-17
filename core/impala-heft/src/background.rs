@@ -1,6 +1,6 @@
 //! Seitenhintergrund (`bg`): PDF-Seite, Scan oder importiertes Bild fest unter einer Heftseite.
 
-use crate::doc::{HeftDoc, Image, PAGE_H, PAGE_W, Paper, bg_note, bg_note_id};
+use crate::doc::{HeftDoc, Image, MAX_PAGE_H, MIN_PAGE_H, PAGE_H, PAGE_W, Paper, bg_note, bg_note_id};
 use crate::ops::{HeftOp, Item, ItemKind};
 
 /// Operationen, die den Hintergrund einer Seite setzen oder (`None`) entfernen. Ältere Apps kennen
@@ -15,6 +15,19 @@ pub fn background_ops(page: &str, had: bool, bg: Option<Image>) -> Vec<HeftOp> {
         ops.push(HeftOp::Remove { page: page.to_owned(), kind: ItemKind::Text, ids: vec![bg_note_id(page)] });
     }
     ops
+}
+
+/// Seite für ein Hintergrundbild von `w`×`h` Pixeln (PDF-Seite, Scan, Arbeitsblatt): Die Seite
+/// übernimmt sein Format (Breite [`PAGE_W`], Höhe danach, begrenzt auf [`MIN_PAGE_H`]…[`MAX_PAGE_H`]),
+/// das Bild füllt sie eingepasst und zentriert. Liefert `(Seitenhöhe, [x, y, w, h])`.
+pub fn background_fit(w: f64, h: f64) -> (f64, [f64; 4]) {
+    if !(w > 0.0 && h > 0.0 && w.is_finite() && h.is_finite()) {
+        return (PAGE_H, [0.0, 0.0, PAGE_W, PAGE_H]);
+    }
+    let page_h = (PAGE_W * h / w).clamp(MIN_PAGE_H, MAX_PAGE_H);
+    let k = (PAGE_W / w).min(page_h / h);
+    let (iw, ih) = (w * k, h * k);
+    (page_h, [(PAGE_W - iw) / 2.0, (page_h - ih) / 2.0, iw, ih])
 }
 
 /// Füllt das Bild die Seite (eingepasst, zentriert: an zwei gegenüberliegenden Rändern)?

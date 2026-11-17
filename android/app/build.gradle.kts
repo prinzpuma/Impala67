@@ -100,6 +100,8 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.compose)
     implementation(libs.mlkit.digital.ink)
+    // Text von Seitenhintergründen (Scans, PDF-Seiten); Modell über Google Play, nicht in der APK.
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.play.services.code.scanner)
     implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)

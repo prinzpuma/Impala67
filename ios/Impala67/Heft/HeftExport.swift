@@ -134,7 +134,8 @@ enum HeftExport {
 
         return await Task.detached(priority: .userInitiated) { () -> URL? in
             guard !Task.isCancelled else { return nil }
-            let size = heftExportSize(width: nil)
+            guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return nil }
+            let size = heftExportSize(width: nil, pageHeight: page.height)
             guard let img = renderPage(core: core, pageId: pageId, heftPageId: heftPageId,
                                        width: CGFloat(size.width), scale: 1, background: background, imagePixels: 4096),
                   let png = img.pngData()
@@ -163,7 +164,6 @@ enum HeftExport {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         var urls: [URL] = []
-        let size = heftExportSize(width: nil)
 
         for (i, id) in targetIds.enumerated() {
             guard !Task.isCancelled else { return nil }
@@ -175,6 +175,8 @@ enum HeftExport {
 
             let fileUrl = await Task.detached(priority: .userInitiated) { () -> URL? in
                 guard !Task.isCancelled else { return nil }
+                guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return nil }
+                let size = heftExportSize(width: nil, pageHeight: page.height)
                 guard let img = renderPage(core: core, pageId: pageId, heftPageId: id,
                                            width: CGFloat(size.width), scale: 1, background: background, imagePixels: 4096),
                       let png = img.pngData()
@@ -203,7 +205,6 @@ enum HeftExport {
         let targetIds = heftPageIds ?? order
         guard !targetIds.isEmpty else { return nil }
 
-        let size = heftExportSize(width: nil)
         var pages: [HeftPdfPage] = []
 
         for (i, id) in targetIds.enumerated() {
@@ -213,6 +214,8 @@ enum HeftExport {
 
             let pdfPage = await Task.detached(priority: .userInitiated) { () -> HeftPdfPage? in
                 guard !Task.isCancelled else { return nil }
+                guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return nil }
+                let size = heftExportSize(width: nil, pageHeight: page.height)
                 guard let img = renderPage(core: core, pageId: pageId, heftPageId: id,
                                            width: CGFloat(size.width), scale: 1, background: .paper, imagePixels: 4096),
                       let cg = img.cgImage,
@@ -237,10 +240,11 @@ enum HeftExport {
 
     /// Synchrone PDF-Generierung für bestehenden Code.
     static func pdf(core: ImpalaCore, pageId: String) -> URL? {
-        let size = heftExportSize(width: nil)
         var pages: [HeftPdfPage] = []
         for id in core.heftPageIds(pageId: pageId) {
             autoreleasepool {
+                guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return }
+                let size = heftExportSize(width: nil, pageHeight: page.height)
                 guard let img = renderPage(core: core, pageId: pageId, heftPageId: id,
                                            width: CGFloat(size.width), scale: 1, background: .paper, imagePixels: 4096),
                       let cg = img.cgImage, let jpeg = img.jpegData(compressionQuality: 0.95) else { return }

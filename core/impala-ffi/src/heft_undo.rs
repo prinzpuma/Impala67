@@ -35,7 +35,8 @@ fn find(pg: &HeftPage, kind: ItemKind, id: &str) -> Option<Item> {
 
 fn restore_page(at: usize, pg: &HeftPage) -> Vec<HeftOp> {
     let page = || pg.id.clone();
-    let mut ops = vec![HeftOp::PageAdd { at: Some(at as f64), page: page(), paper: Some(pg.paper.clone()) }];
+    let mut ops =
+        vec![HeftOp::PageAdd { at: Some(at as f64), page: page(), paper: Some(pg.paper.clone()), height: pg.height }];
     if !pg.ocr_text.is_empty() || !pg.ocr_key.is_empty() {
         ops.push(HeftOp::Ocr {
             page: page(),

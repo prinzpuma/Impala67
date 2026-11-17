@@ -345,6 +345,14 @@ pub fn heft_empty_page(id: &str, paper: Option<String>) -> JsValue {
     out(HeftPage::empty(id, paper))
 }
 
+/// Seite für ein Hintergrundbild von `w`×`h` Pixeln: `{ height, x, y, w, h }` (Seitenhöhe und Lage des
+/// Bildes; die Seite übernimmt das Format des Bildes).
+#[wasm_bindgen(js_name = heftBackgroundFit)]
+pub fn heft_background_fit(w: f64, h: f64) -> JsValue {
+    let (height, [x, y, iw, ih]) = impala_heft::background::background_fit(w, h);
+    out(serde_json::json!({ "height": height, "x": x, "y": y, "w": iw, "h": ih }))
+}
+
 /// Durchsuchbarer Seitentext: Stricherkennung, danach der Text aller Scan-Bilder.
 #[wasm_bindgen(js_name = heftComposePageText)]
 pub fn heft_compose_page_text(stroke_text: &str, page: &JsValue) -> Result<String, JsError> {

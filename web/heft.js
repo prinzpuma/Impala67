@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, pageImages, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, pageImages, pageHeight, PAGE_W } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
@@ -446,10 +446,10 @@ export const HEFT = (() => {
 		const t = { id: U.uid(), text: body, x: 80, y: 0, w, h: 60, size, color: String(opts.color || "#1c1c1e") };
 		t.h = Math.round(wrapTextLines(probe, t).length * size * TEXT_LH + TEXT_PAD * 2);
 		let y = contentBottom(pg) + 30;
-		if (opts.pageIndex == null && y > 80 && y + Math.min(t.h, 220) > PAGE_H - 50) {
+		if (opts.pageIndex == null && y > 80 && y + Math.min(t.h, 220) > pageHeight(pg) - 50) {
 			pg = newPage(pg.paper); d.pages.push(pg); pi = d.pages.length - 1; addedPage = true; y = 60;
 		}
-		t.y = Math.min(y, PAGE_H - 80);
+		t.y = Math.min(y, pageHeight(pg) - 80);
 		textsOf(pg).push(t);
 		if (pid === p && doc === d) {
 
@@ -567,7 +567,7 @@ export const HEFT = (() => {
 	// Eine Seite in drei Lagen: Papier + Bilder, Striche, darüber Text und Auswahl. Die
 	// Striche einer dichten Basis-Seite rastert redrawBasePageAsync im Worker.
 	function renderPageUnder(x, pg, imgOf = imgEl) {
-		paintPaper(x, PAGE_W, PAGE_H, pg.paper);
+		paintPaper(x, PAGE_W, pageHeight(pg), pg.paper);
 		pageImages(pg).forEach((im) => {
 			const el = imgOf(im);
 			if (el instanceof ImageBitmap ? el.width : el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
@@ -817,8 +817,9 @@ export const HEFT = (() => {
 		trayPos,
 		hostHeight: host ? host.clientHeight : 0,
 	});
-	const pagesHtml = () => '<div class="heft-pages">' + doc.pages.map((_, i) =>
-		'<div class="heft-page-slot" data-hepage="' + i + '">' +
+	// Jede Seite in ihrem Format: Breite fest, Höhe als Verhältnis (--heft-ratio, CSS).
+	const pagesHtml = () => '<div class="heft-pages">' + doc.pages.map((pg, i) =>
+		'<div class="heft-page-slot" data-hepage="' + i + '" style="--heft-ratio:' + pageHeight(pg) / PAGE_W + '">' +
 			'<canvas class="heft-canvas"></canvas>' +
 			'<span class="heft-page-label">Seite ' + (i + 1) + '</span>' +
 		'</div>').join('') + addPageGhostHtml() + '</div>';
@@ -1185,10 +1186,10 @@ export const HEFT = (() => {
 		tray.addEventListener("pointercancel", onTrayPointerUp);
 	}
 
-	// Seite in ein vorhandenes Canvas einpassen (Breite vorgegeben, Höhe folgt A4)
+	// Seite in ein vorhandenes Canvas einpassen (Breite vorgegeben, Höhe folgt dem Seitenformat)
 	function paintInto(cv, pg, pi, imgOf) {
 		const k = cv.width / PAGE_W;
-		cv.height = Math.round(PAGE_H * k); // setzt die Höhe UND leert das Canvas
+		cv.height = Math.round(pageHeight(pg) * k); // setzt die Höhe UND leert das Canvas
 		const x = cv.getContext("2d");
 		x.setTransform(k, 0, 0, k, 0, 0);
 		renderPageTo(x, pg, pi, null, imgOf);
@@ -1286,7 +1287,7 @@ export const HEFT = (() => {
 	}
 
 	// Import-, Datei- und Bildverarbeitung (ausgelagert in heft-import.js)
-	const imagePage = (im, paper, bleed) => createImagePage(im, paper, bleed, { blobRef, newPage });
+	const imagePage = (im, paper) => createImagePage(im, paper, { blobRef, newPage });
 	const importPdf = (f, at, targetDoc = doc) => runImportPdf(f, at, targetDoc, { blobRef, newPage, pdfs: PDFS, toast: U.toast });
 
 	async function importFilesIntoHeft(targetId, files, position, onStatus) {
@@ -1349,7 +1350,7 @@ export const HEFT = (() => {
 	function insertScannedPages(images) {
 		if (!doc || !images.length) { if (U.toast) U.toast("Keine fertigen Scans zum Einfügen", "error"); return; }
 		let at = insertIndex();
-		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank", true)); at++; }); // als Seitenhintergrund
+		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank")); at++; }); // als Seitenhintergrund
 		scheduleSave(); rebuildScroll(); go(at - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
 		BUS.emit("heft:start-background-scan");
@@ -1455,7 +1456,7 @@ export const HEFT = (() => {
 		if (d.headdend) { addPageAtEnd(); return; }
 		if (d.heimport) { closePop(); importFiles(); return; }
 		if (d.hescan) { closePop(); openScanner(); return; }
-		if (d.hetextadd) { closePop(); openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, PAGE_H - 160), null); return; }
+		if (d.hetextadd) { closePop(); openTextEditor(idx, 80, Math.min(contentBottom(page()) + 30, pageHeight(page()) - 160), null); return; }
 		if (d.heimgadd) { closePop(); pickImage(false, insertImageFile); return; }
 		if (d.heimgcam) { closePop(); pickImage(true, insertImageFile); return; }
 		if (d.hepen != null) {

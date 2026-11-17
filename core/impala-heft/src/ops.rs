@@ -88,7 +88,8 @@ impl Serialize for Item {
 #[derive(Debug, Clone, PartialEq)]
 pub enum HeftOp {
     /// `pg+`: neue leere Seite an Position `at` (fehlt: hinten).
-    PageAdd { at: Option<f64>, page: String, paper: Option<Paper> },
+    /// `height`: Seitenhöhe (`page.h`, siehe [`HeftPage::height`]); ältere Apps übergehen sie.
+    PageAdd { at: Option<f64>, page: String, paper: Option<Paper>, height: Option<f64> },
     /// `pg-`
     PageRemove { page: String },
     /// `pgo`: neue Reihenfolge; unbekannte Seiten hängen hinten an.
@@ -126,7 +127,8 @@ impl HeftOp {
                 let Some(pg) = v.get("page") else { return Err(v) };
                 let Some(id) = pg.get("id").filter(|i| truthy(i)).and_then(id_str) else { return Err(v) };
                 let paper = pg.get("paper").filter(|p| truthy(p)).map(|p| Paper::parse(Some(p)));
-                HeftOp::PageAdd { at: v.get("at").and_then(Value::as_f64), page: id, paper }
+                let height = pg.get("h").and_then(crate::doc::page_height);
+                HeftOp::PageAdd { at: v.get("at").and_then(Value::as_f64), page: id, paper, height }
             }
             "pg-" => {
                 let Some(page) = page() else { return Err(v) };
@@ -196,12 +198,12 @@ impl Serialize for HeftOp {
         let mut m = s.serialize_map(None)?;
         match self {
             HeftOp::Other(_) => {}
-            HeftOp::PageAdd { at, page, paper } => {
+            HeftOp::PageAdd { at, page, paper, height } => {
                 m.serialize_entry("t", "pg+")?;
                 if let Some(at) = at {
                     m.serialize_entry("at", &crate::json::JsNum(*at))?;
                 }
-                m.serialize_entry("page", &PageRef(page, paper.as_ref()))?;
+                m.serialize_entry("page", &PageRef(page, paper.as_ref(), *height))?;
             }
             HeftOp::PageRemove { page } => {
                 m.serialize_entry("t", "pg-")?;
@@ -258,8 +260,8 @@ impl Serialize for OpCode {
     }
 }
 
-/// `{ id, paper? }` in `pg+`.
-struct PageRef<'a>(&'a String, Option<&'a Paper>);
+/// `{ id, paper?, h? }` in `pg+`.
+struct PageRef<'a>(&'a String, Option<&'a Paper>, Option<f64>);
 
 impl Serialize for PageRef<'_> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
@@ -267,6 +269,9 @@ impl Serialize for PageRef<'_> {
         m.serialize_entry("id", self.0)?;
         if let Some(p) = self.1 {
             m.serialize_entry("paper", p)?;
+        }
+        if let Some(h) = self.2 {
+            m.serialize_entry("h", &crate::json::JsNum(h))?;
         }
         m.end()
     }
@@ -351,11 +356,13 @@ impl HeftDoc {
     /// Wendet eine Operation an (ohne `rev` zu zählen).
     pub fn apply_op(&mut self, op: HeftOp) {
         match op {
-            HeftOp::PageAdd { at, page, paper } => {
+            HeftOp::PageAdd { at, page, paper, height } => {
                 // Zwei Geräte hängen gleichzeitig eine Seite an: beide bleiben erhalten.
                 if self.page(&page).is_none() {
                     let i = insert_index(at, self.pages.len());
-                    self.pages.insert(i, HeftPage::empty(page, paper.unwrap_or_default()));
+                    let mut pg = HeftPage::empty(page, paper.unwrap_or_default());
+                    pg.height = height;
+                    self.pages.insert(i, pg);
                 }
             }
             HeftOp::PageRemove { page } => {
@@ -425,7 +432,12 @@ impl HeftDoc {
             .pages
             .iter()
             .enumerate()
-            .map(|(at, p)| HeftOp::PageAdd { at: Some(at as f64), page: p.id.clone(), paper: Some(p.paper.clone()) })
+            .map(|(at, p)| HeftOp::PageAdd {
+                at: Some(at as f64),
+                page: p.id.clone(),
+                paper: Some(p.paper.clone()),
+                height: p.height,
+            })
             .collect();
         if !self.pages.is_empty() {
             ops.push(HeftOp::PageOrder { order: self.pages.iter().map(|p| p.id.clone()).collect() });

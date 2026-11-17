@@ -11,6 +11,12 @@ export const PAGE_W = 1000, PAGE_H = 1414;
 // Arbeitsblatt – kein Element, nicht auswählbar), dann die Bild-Elemente.
 export const pageImages = (pg) => (pg && pg.bg ? [pg.bg, ...(pg.images || [])] : (pg && pg.images) || []);
 
+// Höhe einer Heftseite in Seitenkoordinaten (Breite immer PAGE_W): folgt dem Format eines
+// Hintergrunds (Querformat, Letter …), sonst A4.
+export const pageHeight = (pg) => (pg && pg.h) || PAGE_H;
+// Seite für ein Hintergrundbild von w×h Pixeln: { height, x, y, w, h } (Regel im Kern).
+export const backgroundFit = (w, h) => CORE.heftBackgroundFit(Number(w) || 0, Number(h) || 0);
+
 // Leere Heftseite: eine Form für Reducer (state.js), Heft-Oberfläche und Import.
 export const emptyHeftPage = (id, paper) => CORE.heftEmptyPage(String(id), paper || undefined);
 

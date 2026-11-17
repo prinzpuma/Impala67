@@ -191,7 +191,7 @@ private fun PageTile(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(HeftPage.RATIO)
+            Modifier.fillMaxWidth().aspectRatio(HeftPage.ratio(data?.height?.toFloat() ?: HeftPage.HEIGHT))
                 .graphicsLayer {
                     val o = lift?.invoke() ?: return@graphicsLayer
                     translationX = o.x

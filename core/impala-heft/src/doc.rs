@@ -491,6 +491,9 @@ impl Serialize for Paper {
 pub struct HeftPage {
     pub id: String,
     pub paper: Paper,
+    /// Seitenhöhe (`h`) bei fester Breite [`PAGE_W`]: folgt dem Format eines Hintergrunds (Querformat,
+    /// Letter …). Fehlt: A4 ([`PAGE_H`]). Wird nur beim Anlegen gesetzt (`pg+`).
+    pub height: Option<f64>,
     pub strokes: Vec<Stroke>,
     pub images: Vec<Image>,
     pub texts: Vec<TextBox>,
@@ -534,6 +537,7 @@ impl HeftPage {
         let mut page = HeftPage {
             id: f.take("id", id_str).unwrap_or_default(),
             paper,
+            height: f.take("h", page_height),
             strokes: f.take_owned("strokes", list_of(Stroke::from_value)).unwrap_or_default(),
             images: f.take_owned("images", list_of(Image::from_value)).unwrap_or_default(),
             texts: f.take_owned("texts", list_of(TextBox::from_value)).unwrap_or_default(),
@@ -558,11 +562,24 @@ impl HeftPage {
         self.strokes.iter().find(|s| s.id == id)
     }
 
+    /// Seitenhöhe in Seitenkoordinaten (Breite immer [`PAGE_W`]).
+    pub fn page_height(&self) -> f64 {
+        self.height.unwrap_or(PAGE_H)
+    }
+
     /// Alle Bilder in Zeichenreihenfolge: erst der Hintergrund, dann die Bild-Elemente.
     pub fn all_images(&self) -> impl Iterator<Item = &Image> {
         self.background.iter().chain(&self.images)
     }
 }
+
+/// Gültige Seitenhöhe (`h`): endlich und in einem Rahmen, den alle Apps zeichnen können.
+pub fn page_height(v: &Value) -> Option<f64> {
+    v.as_f64().filter(|h| (MIN_PAGE_H..=MAX_PAGE_H).contains(h))
+}
+/// Kleinste und größte Seitenhöhe (Breite [`PAGE_W`]): flaches Querformat bis doppelt A4.
+pub const MIN_PAGE_H: f64 = 400.0;
+pub const MAX_PAGE_H: f64 = 2828.0;
 
 /// ID des Update-Hinweises zu einer Seite: fest, damit zwei Geräte ihn nur einmal anlegen.
 pub fn bg_note_id(page: &str) -> String {
@@ -629,6 +646,7 @@ impl HeftPage {
         let mut w = ObjWriter::new(s.serialize_map(None)?);
         w.id(&self.id)?;
         w.field("paper", &self.paper)?;
+        w.opt_num("h", self.height)?;
         w.list("strokes", &self.strokes, &self.extra)?;
         w.list("images", &self.images, &self.extra)?;
         match self.bg_note.as_ref().filter(|_| note) {

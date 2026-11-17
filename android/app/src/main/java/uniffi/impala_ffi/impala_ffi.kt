@@ -1672,6 +1672,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2067,6 +2069,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_grades(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_grades_by_subject(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_background_page(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_image(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_add_page(
@@ -2111,6 +2115,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_ocr_jobs(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_heights(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_page_svg(
@@ -2132,8 +2138,6 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_restore(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(
-): Short
-fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_background(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame(
 ): Short
@@ -2697,6 +2701,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_grades(`ptr`: Pointer,uniffi_out_err:
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_grades_by_subject(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_add_background_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`at`: RustBuffer.ByValue,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`width`: Double,`height`: Double,`ocr`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_add_image(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_add_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`at`: RustBuffer.ByValue,`paper`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2741,13 +2747,15 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(`ptr`: Pointer,`src`: R
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_page_heights(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_page_ids(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_page_svg(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`paperInk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_preview(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`changes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeText`: RustBuffer.ByValue,`src`: RustBuffer.ByValue,`expectedKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeText`: RustBuffer.ByValue,`backgroundText`: RustBuffer.ByValue,`src`: RustBuffer.ByValue,`expectedKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_images(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2762,8 +2770,6 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_restore(`ptr`: Pointer,`pageId`:
 fun uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`ax`: Double,`ay`: Double,`factor`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`polygon`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_method_impalacore_heft_set_background(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,`ocr`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_set_image_frame(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`imageId`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3069,7 +3075,7 @@ fun uniffi_impala_ffi_fn_func_heft_build_pdf(`pages`: RustBuffer.ByValue,uniffi_
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_export_file_name(`title`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_impala_ffi_fn_func_heft_export_size(`width`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_impala_ffi_fn_func_heft_export_size(`width`: RustBuffer.ByValue,`pageHeight`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_fit_shape(`points`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3407,7 +3413,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_heft_export_file_name() != 28062.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_heft_export_size() != 29300.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_heft_export_size() != 14959.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_fit_shape() != 48585.toShort()) {
@@ -3863,6 +3869,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_grades_by_subject() != 38907.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_add_background_page() != 12701.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_add_image() != 12230.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3929,6 +3938,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_page() != 40116.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_page_heights() != 15355.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids() != 2120.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3938,7 +3950,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_preview() != 62299.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 35369.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 18707.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_remove_images() != 45588.toShort()) {
@@ -3960,9 +3972,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_background() != 28511.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412.toShort()) {
@@ -9002,6 +9011,14 @@ public interface ImpalaCoreInterface {
     fun `gradesBySubject`(): List<SubjectGrades>
     
     /**
+     * Neue Seite an Stelle `at` (`None`: hinten) mit einem Bild von `width`×`height` Pixeln als
+     * Hintergrund (PDF-Seite, Scan, Arbeitsblatt): Die Seite übernimmt das Format des Bildes
+     * (`impala_heft::background::background_fit`), `ocr` ist eingebetteter Text für die Suche.
+     * Liefert die Seiten-ID.
+     */
+    fun `heftAddBackgroundPage`(`pageId`: kotlin.String, `at`: kotlin.UInt?, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `width`: kotlin.Double, `height`: kotlin.Double, `ocr`: kotlin.String?): kotlin.String
+    
+    /**
      * Bild einfügen (`bytes` in einem Format, das die Plattform anzeigen kann, `mime` z. B. `image/jpeg`).
      * Die Daten werden als `heftBlob` gespeichert, falls der Kern sie noch nicht kennt; liefert die Bild-ID.
      */
@@ -9120,6 +9137,12 @@ public interface ImpalaCoreInterface {
     fun `heftPage`(`pageId`: kotlin.String, `heftPageId`: kotlin.String): HeftPageData
     
     /**
+     * Höhe jeder Seite in derselben Reihenfolge wie `heft_page_ids` (Breite immer 1000, A4 = 1414):
+     * fürs Layout, ohne jede Seite einzeln zu lesen.
+     */
+    fun `heftPageHeights`(`pageId`: kotlin.String): List<kotlin.Double>
+    
+    /**
      * IDs der Heftseiten in Reihenfolge (leer, wenn `page_id` kein Heft ist).
      */
     fun `heftPageIds`(`pageId`: kotlin.String): List<kotlin.String>
@@ -9142,7 +9165,7 @@ public interface ImpalaCoreInterface {
      * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
      * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
      */
-    fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean
+    fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `backgroundText`: kotlin.String?, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean
     
     fun `heftRemoveImages`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit
     
@@ -9172,13 +9195,6 @@ public interface ImpalaCoreInterface {
      * Striche, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
      */
     fun `heftSelectByLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `polygon`: List<kotlin.Float>): List<kotlin.String>
-    
-    /**
-     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
-     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
-     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
-     */
-    fun `heftSetBackground`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double, `h`: kotlin.Double, `ocr`: kotlin.String?): HeftEdit
     
     /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
@@ -10654,6 +10670,25 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Neue Seite an Stelle `at` (`None`: hinten) mit einem Bild von `width`×`height` Pixeln als
+     * Hintergrund (PDF-Seite, Scan, Arbeitsblatt): Die Seite übernimmt das Format des Bildes
+     * (`impala_heft::background::background_fit`), `ocr` ist eingebetteter Text für die Suche.
+     * Liefert die Seiten-ID.
+     */
+    @Throws(CoreException::class)override fun `heftAddBackgroundPage`(`pageId`: kotlin.String, `at`: kotlin.UInt?, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `width`: kotlin.Double, `height`: kotlin.Double, `ocr`: kotlin.String?): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_add_background_page(
+        it, FfiConverterString.lower(`pageId`),FfiConverterOptionalUInt.lower(`at`),FfiConverterByteArray.lower(`bytes`),FfiConverterString.lower(`mime`),FfiConverterDouble.lower(`width`),FfiConverterDouble.lower(`height`),FfiConverterOptionalString.lower(`ocr`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Bild einfügen (`bytes` in einem Format, das die Plattform anzeigen kann, `mime` z. B. `image/jpeg`).
      * Die Daten werden als `heftBlob` gespeichert, falls der Kern sie noch nicht kennt; liefert die Bild-ID.
      */
@@ -11006,6 +11041,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Höhe jeder Seite in derselben Reihenfolge wie `heft_page_ids` (Breite immer 1000, A4 = 1414):
+     * fürs Layout, ohne jede Seite einzeln zu lesen.
+     */override fun `heftPageHeights`(`pageId`: kotlin.String): List<kotlin.Double> {
+            return FfiConverterSequenceDouble.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_page_heights(
+        it, FfiConverterString.lower(`pageId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * IDs der Heftseiten in Reihenfolge (leer, wenn `page_id` kein Heft ist).
      */override fun `heftPageIds`(`pageId`: kotlin.String): List<kotlin.String> {
             return FfiConverterSequenceString.lift(
@@ -11060,12 +11111,12 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
      * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
      * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
      */
-    @Throws(CoreException::class)override fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean {
+    @Throws(CoreException::class)override fun `heftRecordOcr`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeText`: kotlin.String, `backgroundText`: kotlin.String?, `src`: kotlin.String, `expectedKey`: kotlin.String?): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(
-        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterString.lower(`strokeText`),FfiConverterString.lower(`src`),FfiConverterOptionalString.lower(`expectedKey`),_status)
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterString.lower(`strokeText`),FfiConverterOptionalString.lower(`backgroundText`),FfiConverterString.lower(`src`),FfiConverterOptionalString.lower(`expectedKey`),_status)
 }
     }
     )
@@ -11170,24 +11221,6 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceFloat.lower(`polygon`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
-     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
-     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
-     */
-    @Throws(CoreException::class)override fun `heftSetBackground`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double, `h`: kotlin.Double, `ocr`: kotlin.String?): HeftEdit {
-            return FfiConverterTypeHeftEdit.lift(
-    callWithPointer {
-    uniffiRustCallWithError(CoreException) { _status ->
-    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_set_background(
-        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterByteArray.lower(`bytes`),FfiConverterString.lower(`mime`),FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterDouble.lower(`w`),FfiConverterDouble.lower(`h`),FfiConverterOptionalString.lower(`ocr`),_status)
 }
     }
     )
@@ -16437,7 +16470,7 @@ data class HeftImage (
     var `ocr`: kotlin.String?, 
     /**
      * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
-     * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+     * ist aber kein Element – nicht antippen, greifen oder ändern. Neue Seite damit: `heft_add_background_page`.
      */
     var `background`: kotlin.Boolean = false
 ) {
@@ -16578,7 +16611,12 @@ public object FfiConverterTypeHeftLassoHandle: FfiConverterRustBuffer<HeftLassoH
 data class HeftOcrJob (
     var `pageId`: kotlin.String, 
     var `heftPageId`: kotlin.String, 
-    var `contentKey`: kotlin.String
+    var `contentKey`: kotlin.String, 
+    /**
+     * Bild-ID des Seitenhintergrunds, dessen Text noch fehlt: mitlesen (`heft_image_data`) und als
+     * `background_text` an `heft_record_ocr` geben. `None`: nur die Handschrift.
+     */
+    var `backgroundId`: kotlin.String?
 ) {
     
     companion object
@@ -16593,19 +16631,22 @@ public object FfiConverterTypeHeftOcrJob: FfiConverterRustBuffer<HeftOcrJob> {
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
     override fun allocationSize(value: HeftOcrJob) = (
             FfiConverterString.allocationSize(value.`pageId`) +
             FfiConverterString.allocationSize(value.`heftPageId`) +
-            FfiConverterString.allocationSize(value.`contentKey`)
+            FfiConverterString.allocationSize(value.`contentKey`) +
+            FfiConverterOptionalString.allocationSize(value.`backgroundId`)
     )
 
     override fun write(value: HeftOcrJob, buf: ByteBuffer) {
             FfiConverterString.write(value.`pageId`, buf)
             FfiConverterString.write(value.`heftPageId`, buf)
             FfiConverterString.write(value.`contentKey`, buf)
+            FfiConverterOptionalString.write(value.`backgroundId`, buf)
     }
 }
 
@@ -26554,12 +26595,13 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
-         * Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi auf A4).
-         */ fun `heftExportSize`(`width`: kotlin.UInt?): HeftRasterSize {
+         * Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi
+         * auf A4; `page_height`: Höhe der Seite in Seitenkoordinaten, `HeftPageData::height`).
+         */ fun `heftExportSize`(`width`: kotlin.UInt?, `pageHeight`: kotlin.Double): HeftRasterSize {
             return FfiConverterTypeHeftRasterSize.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_export_size(
-        FfiConverterOptionalUInt.lower(`width`),_status)
+        FfiConverterOptionalUInt.lower(`width`),FfiConverterDouble.lower(`pageHeight`),_status)
 }
     )
     }

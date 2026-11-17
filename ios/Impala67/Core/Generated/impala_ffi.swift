@@ -3609,6 +3609,14 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func gradesBySubject()  -> [SubjectGrades]
     
     /**
+     * Neue Seite an Stelle `at` (`None`: hinten) mit einem Bild von `width`×`height` Pixeln als
+     * Hintergrund (PDF-Seite, Scan, Arbeitsblatt): Die Seite übernimmt das Format des Bildes
+     * (`impala_heft::background::background_fit`), `ocr` ist eingebetteter Text für die Suche.
+     * Liefert die Seiten-ID.
+     */
+    func heftAddBackgroundPage(pageId: String, at: UInt32?, bytes: Data, mime: String, width: Double, height: Double, ocr: String?) throws  -> String
+    
+    /**
      * Bild einfügen (`bytes` in einem Format, das die Plattform anzeigen kann, `mime` z. B. `image/jpeg`).
      * Die Daten werden als `heftBlob` gespeichert, falls der Kern sie noch nicht kennt; liefert die Bild-ID.
      */
@@ -3727,6 +3735,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftPage(pageId: String, heftPageId: String) throws  -> HeftPageData
     
     /**
+     * Höhe jeder Seite in derselben Reihenfolge wie `heft_page_ids` (Breite immer 1000, A4 = 1414):
+     * fürs Layout, ohne jede Seite einzeln zu lesen.
+     */
+    func heftPageHeights(pageId: String)  -> [Double]
+    
+    /**
      * IDs der Heftseiten in Reihenfolge (leer, wenn `page_id` kein Heft ist).
      */
     func heftPageIds(pageId: String)  -> [String]
@@ -3749,7 +3763,7 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
      * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
      */
-    func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, src: String, expectedKey: String?) throws  -> Bool
+    func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, backgroundText: String?, src: String, expectedKey: String?) throws  -> Bool
     
     func heftRemoveImages(pageId: String, heftPageId: String, ids: [String]) throws  -> HeftEdit
     
@@ -3779,13 +3793,6 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Striche, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
      */
     func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float]) throws  -> [String]
-    
-    /**
-     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
-     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
-     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
-     */
-    func heftSetBackground(pageId: String, heftPageId: String, bytes: Data, mime: String, x: Double, y: Double, w: Double, h: Double, ocr: String?) throws  -> HeftEdit
     
     /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
@@ -4989,6 +4996,26 @@ open func gradesBySubject() -> [SubjectGrades]  {
 }
     
     /**
+     * Neue Seite an Stelle `at` (`None`: hinten) mit einem Bild von `width`×`height` Pixeln als
+     * Hintergrund (PDF-Seite, Scan, Arbeitsblatt): Die Seite übernimmt das Format des Bildes
+     * (`impala_heft::background::background_fit`), `ocr` ist eingebetteter Text für die Suche.
+     * Liefert die Seiten-ID.
+     */
+open func heftAddBackgroundPage(pageId: String, at: UInt32?, bytes: Data, mime: String, width: Double, height: Double, ocr: String?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_add_background_page(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterOptionUInt32.lower(at),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),
+        FfiConverterDouble.lower(width),
+        FfiConverterDouble.lower(height),
+        FfiConverterOptionString.lower(ocr),$0
+    )
+})
+}
+    
+    /**
      * Bild einfügen (`bytes` in einem Format, das die Plattform anzeigen kann, `mime` z. B. `image/jpeg`).
      * Die Daten werden als `heftBlob` gespeichert, falls der Kern sie noch nicht kennt; liefert die Bild-ID.
      */
@@ -5281,6 +5308,18 @@ open func heftPage(pageId: String, heftPageId: String)throws  -> HeftPageData  {
 }
     
     /**
+     * Höhe jeder Seite in derselben Reihenfolge wie `heft_page_ids` (Breite immer 1000, A4 = 1414):
+     * fürs Layout, ohne jede Seite einzeln zu lesen.
+     */
+open func heftPageHeights(pageId: String) -> [Double]  {
+    return try!  FfiConverterSequenceDouble.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_heft_page_heights(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),$0
+    )
+})
+}
+    
+    /**
      * IDs der Heftseiten in Reihenfolge (leer, wenn `page_id` kein Heft ist).
      */
 open func heftPageIds(pageId: String) -> [String]  {
@@ -5325,12 +5364,13 @@ open func heftPreview(pageId: String, heftPageId: String, changes: [HeftChange])
      * an (`compose_page_text`). `expected_key`: Fingerabdruck beim Start der Erkennung (`None`:
      * ungeprüft). Liefert `true`, wenn der Text geschrieben wurde.
      */
-open func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, src: String, expectedKey: String?)throws  -> Bool  {
+open func heftRecordOcr(pageId: String, heftPageId: String, strokeText: String, backgroundText: String?, src: String, expectedKey: String?)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(self.uniffiClonePointer(),
         FfiConverterString.lower(pageId),
         FfiConverterString.lower(heftPageId),
         FfiConverterString.lower(strokeText),
+        FfiConverterOptionString.lower(backgroundText),
         FfiConverterString.lower(src),
         FfiConverterOptionString.lower(expectedKey),$0
     )
@@ -5417,27 +5457,6 @@ open func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float]
         FfiConverterString.lower(pageId),
         FfiConverterString.lower(heftPageId),
         FfiConverterSequenceFloat.lower(polygon),$0
-    )
-})
-}
-    
-    /**
-     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
-     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
-     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
-     */
-open func heftSetBackground(pageId: String, heftPageId: String, bytes: Data, mime: String, x: Double, y: Double, w: Double, h: Double, ocr: String?)throws  -> HeftEdit  {
-    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_impala_ffi_fn_method_impalacore_heft_set_background(self.uniffiClonePointer(),
-        FfiConverterString.lower(pageId),
-        FfiConverterString.lower(heftPageId),
-        FfiConverterData.lower(bytes),
-        FfiConverterString.lower(mime),
-        FfiConverterDouble.lower(x),
-        FfiConverterDouble.lower(y),
-        FfiConverterDouble.lower(w),
-        FfiConverterDouble.lower(h),
-        FfiConverterOptionString.lower(ocr),$0
     )
 })
 }
@@ -12879,7 +12898,7 @@ public struct HeftImage {
     public var ocr: String?
     /**
      * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
-     * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+     * ist aber kein Element – nicht antippen, greifen oder ändern. Neue Seite damit: `heft_add_background_page`.
      */
     public var background: Bool
 
@@ -12895,7 +12914,7 @@ public struct HeftImage {
          */ocr: String?, 
         /**
          * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
-         * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+         * ist aber kein Element – nicht antippen, greifen oder ändern. Neue Seite damit: `heft_add_background_page`.
          */background: Bool = false) {
         self.id = id
         self.blobId = blobId
@@ -13185,13 +13204,23 @@ public struct HeftOcrJob {
     public var pageId: String
     public var heftPageId: String
     public var contentKey: String
+    /**
+     * Bild-ID des Seitenhintergrunds, dessen Text noch fehlt: mitlesen (`heft_image_data`) und als
+     * `background_text` an `heft_record_ocr` geben. `None`: nur die Handschrift.
+     */
+    public var backgroundId: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(pageId: String, heftPageId: String, contentKey: String) {
+    public init(pageId: String, heftPageId: String, contentKey: String, 
+        /**
+         * Bild-ID des Seitenhintergrunds, dessen Text noch fehlt: mitlesen (`heft_image_data`) und als
+         * `background_text` an `heft_record_ocr` geben. `None`: nur die Handschrift.
+         */backgroundId: String?) {
         self.pageId = pageId
         self.heftPageId = heftPageId
         self.contentKey = contentKey
+        self.backgroundId = backgroundId
     }
 }
 
@@ -13211,6 +13240,9 @@ extension HeftOcrJob: Equatable, Hashable {
         if lhs.contentKey != rhs.contentKey {
             return false
         }
+        if lhs.backgroundId != rhs.backgroundId {
+            return false
+        }
         return true
     }
 
@@ -13218,6 +13250,7 @@ extension HeftOcrJob: Equatable, Hashable {
         hasher.combine(pageId)
         hasher.combine(heftPageId)
         hasher.combine(contentKey)
+        hasher.combine(backgroundId)
     }
 }
 
@@ -13232,7 +13265,8 @@ public struct FfiConverterTypeHeftOcrJob: FfiConverterRustBuffer {
             try HeftOcrJob(
                 pageId: FfiConverterString.read(from: &buf), 
                 heftPageId: FfiConverterString.read(from: &buf), 
-                contentKey: FfiConverterString.read(from: &buf)
+                contentKey: FfiConverterString.read(from: &buf), 
+                backgroundId: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -13240,6 +13274,7 @@ public struct FfiConverterTypeHeftOcrJob: FfiConverterRustBuffer {
         FfiConverterString.write(value.pageId, into: &buf)
         FfiConverterString.write(value.heftPageId, into: &buf)
         FfiConverterString.write(value.contentKey, into: &buf)
+        FfiConverterOptionString.write(value.backgroundId, into: &buf)
     }
 }
 
@@ -26069,12 +26104,14 @@ public func heftExportFileName(title: String?) -> String  {
 })
 }
 /**
- * Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi auf A4).
+ * Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi
+ * auf A4; `page_height`: Höhe der Seite in Seitenkoordinaten, `HeftPageData::height`).
  */
-public func heftExportSize(width: UInt32?) -> HeftRasterSize  {
+public func heftExportSize(width: UInt32?, pageHeight: Double) -> HeftRasterSize  {
     return try!  FfiConverterTypeHeftRasterSize_lift(try! rustCall() {
     uniffi_impala_ffi_fn_func_heft_export_size(
-        FfiConverterOptionUInt32.lower(width),$0
+        FfiConverterOptionUInt32.lower(width),
+        FfiConverterDouble.lower(pageHeight),$0
     )
 })
 }
@@ -26695,7 +26732,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_heft_export_file_name() != 28062) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_heft_export_size() != 29300) {
+    if (uniffi_impala_ffi_checksum_func_heft_export_size() != 14959) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_heft_fit_shape() != 48585) {
@@ -27151,6 +27188,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_grades_by_subject() != 38907) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_add_background_page() != 12701) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_add_image() != 12230) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27217,6 +27257,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_page() != 40116) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_page_heights() != 15355) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids() != 2120) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27226,7 +27269,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_preview() != 62299) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 35369) {
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_record_ocr() != 18707) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_remove_images() != 45588) {
@@ -27248,9 +27291,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_impala_ffi_checksum_method_impalacore_heft_set_background() != 28511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412) {

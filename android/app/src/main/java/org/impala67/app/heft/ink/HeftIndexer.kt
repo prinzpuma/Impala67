@@ -11,7 +11,8 @@ import org.impala67.app.heft.HeftActivity
 
 /**
  * Macht Heftseiten durchsuchbar (Gegenstück zu `heft-indexer.js`, Quelle `"android"`):
- * - Nach Strich-Änderungen wird die Seite verzögert erkannt und über `heftRecordOcr` gespeichert.
+ * - Nach Strich-Änderungen wird die Seite verzögert erkannt (Handschrift und ungelesener Seitenhintergrund)
+ *   und über `heftRecordOcr` gespeichert.
  *   Der Kern hängt den Text vorhandener Scan-Bilder an und beachtet die Rangfolge (`apple > android > pwa`).
  * - [startBackgroundScan] wertet im Leerlauf Seiten auf, die noch keinen Text haben oder bisher nur
  *   von der PWA erkannt wurden (`heftOcrJobs("android")`).
@@ -22,6 +23,7 @@ class HeftIndexer(
     private val heftId: String,
 ) : AutoCloseable {
     private val recognizer = HandwritingRecognizer()
+    private val textRecognizer = BackgroundTextRecognizer()
     private val jobs = HashMap<String, Job>()
 
     /** Seite nach einer Änderung erneut erkennen; eine laufende Erkennung derselben Seite wird verworfen. */
@@ -31,7 +33,7 @@ class HeftIndexer(
             delay(DEBOUNCE_MS)
             waitWhileWriting()
             try {
-                indexOne(store, recognizer, heftId, heftPageId)
+                indexOne(store, recognizer, textRecognizer, heftId, heftPageId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -42,6 +44,7 @@ class HeftIndexer(
 
     override fun close() {
         recognizer.close()
+        textRecognizer.close()
     }
 
     companion object {
@@ -62,15 +65,21 @@ class HeftIndexer(
             }
         }
 
+        /** Handschrift und – falls noch ungelesen – den Seitenhintergrund in einem Durchgang erkennen. */
         private suspend fun indexOne(
             store: ImpalaStore,
             recognizer: HandwritingRecognizer,
+            textRecognizer: BackgroundTextRecognizer,
             heftId: String,
             heftPageId: String,
         ) {
             val page = store.write { it.heftPage(heftId, heftPageId) }
             val strokeText = if (page.strokes.isEmpty()) "" else recognizer.recognize(page.strokes) ?: ""
-            store.write { it.heftRecordOcr(heftId, heftPageId, strokeText, SRC, page.contentKey) }
+            val bg = page.images.firstOrNull { it.background && it.ocr == null }
+            val bgText = bg?.let { b ->
+                store.write { it.heftImageData(heftId, heftPageId, b.id) }?.let { textRecognizer.recognize(it.bytes) }
+            }
+            store.write { it.heftRecordOcr(heftId, heftPageId, strokeText, bgText, SRC, page.contentKey) }
         }
 
         /**
@@ -82,7 +91,7 @@ class HeftIndexer(
             bgJob = scope.launch {
                 delay(BG_START_DELAY_MS)
                 val tried = HashSet<String>()
-                HandwritingRecognizer().use { rec ->
+                BackgroundTextRecognizer().use { text -> HandwritingRecognizer().use { rec ->
                     var failed = false
                     while (!failed) {
                         val jobs = store.write { it.heftOcrJobs(SRC) }
@@ -91,7 +100,7 @@ class HeftIndexer(
                         for (next in jobs) {
                             waitWhileWriting()
                             try {
-                                indexOne(store, rec, next.pageId, next.heftPageId)
+                                indexOne(store, rec, text, next.pageId, next.heftPageId)
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
@@ -102,7 +111,7 @@ class HeftIndexer(
                             delay(BG_PAUSE_MS)
                         }
                     }
-                }
+                } }
             }
         }
 

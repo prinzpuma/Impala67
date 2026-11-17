@@ -3,9 +3,10 @@ import SwiftUI
 import UIKit
 import Vision
 
-/// Handschrift-Erkennung auf dem iPad mit Apple Vision (Deutsch und Englisch, auf dem Gerät): automatische
+/// Handschrift- und Hintergrund-Erkennung (Scans, PDF-Seiten) auf dem iPad mit Apple Vision (Deutsch und Englisch, auf dem Gerät): automatische
 /// Seiten-Erkennung für Suche & KI (`schedule`, `startBackgroundScan`, Quelle `"apple"`, höchste Stufe über
 /// `"android"` und `"pwa"`). Handschrift in Text umwandeln macht die KI über das Seitenbild.
+// funktion: heft.hintergrund-text
 enum HeftOcr {
     private static let src = "apple"
     /// Nach dem letzten Strich warten, bevor die Seite erkannt wird (`PRIORITY_DEBOUNCE_MS` in heft-indexer.js).
@@ -61,8 +62,8 @@ enum HeftOcr {
         }
     }
 
-    /// Erkennt die Striche einer Heftseite mit Apple Vision und übergibt das Ergebnis an `heftRecordOcr`
-    /// (der Kern hängt den Text vorhandener Scan-Bilder an und prüft Fingerabdruck + Rangfolge).
+    /// Erkennt Striche und Seitenhintergrund einer Heftseite mit Apple Vision und übergibt beides an
+    /// `heftRecordOcr` (der Kern setzt den Seitentext zusammen und prüft Fingerabdruck + Rangfolge).
     /// Läuft ganz im Hintergrund: Seite laden und als Bild rendern dauert bei vollen Seiten Sekunden –
     /// auf dem Hauptthread waren das die Hänger, die der Profiler zeigte.
     static func indexPage(core: ImpalaCore, pageId: String, heftPageId: String) async {
@@ -73,18 +74,27 @@ enum HeftOcr {
 
     private static func indexPageInBackground(core: ImpalaCore, pageId: String, heftPageId: String) async {
         guard let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: heftPageId) }) else { return }
-        if page.strokes.isEmpty {
-            _ = attempt("heftRecordOcr", { try core.heftRecordOcr(
-                pageId: pageId, heftPageId: heftPageId, strokeText: "", src: src, expectedKey: page.contentKey
-            ) })
-            return
+        // Handschrift und – falls noch ungelesen – den Seitenhintergrund (Scan, PDF ohne Text,
+        // Arbeitsblatt) in einem Durchgang; der Kern speichert beides zusammen.
+        var strokeText = ""
+        if !page.strokes.isEmpty {
+            guard let cg = renderStrokes(page.strokes) else { return }
+            strokeText = await recognize(cg)
         }
-        guard let cg = renderStrokes(page.strokes) else { return }
-        let text = await recognize(cg)
+        let backgroundText = await readBackground(core: core, pageId: pageId, page: page)
         guard !Task.isCancelled else { return }
         _ = attempt("heftRecordOcr", { try core.heftRecordOcr(
-            pageId: pageId, heftPageId: heftPageId, strokeText: text, src: src, expectedKey: page.contentKey
+            pageId: pageId, heftPageId: heftPageId, strokeText: strokeText, backgroundText: backgroundText,
+            src: src, expectedKey: page.contentKey
         ) })
+    }
+
+    /// Text des Seitenhintergrunds, wenn er noch keinen hat (sonst `nil`).
+    private static func readBackground(core: ImpalaCore, pageId: String, page: HeftPageData) async -> String? {
+        guard let bg = page.images.first(where: { $0.background }), bg.ocr == nil,
+              let data = attempt("heftImageData", { try core.heftImageData(pageId: pageId, heftPageId: page.id, imageId: bg.id) }) ?? nil,
+              let cg = UIImage(data: data.bytes)?.cgImage else { return nil }
+        return await recognize(cg)
     }
 
     /// Rendert die Striche einer Seite dunkel auf weißem Grund (ohne Papierlinien, optimal für Vision).

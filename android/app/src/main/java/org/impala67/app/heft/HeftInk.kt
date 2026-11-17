@@ -155,16 +155,16 @@ class PageStrokeLayer {
     private val drawn = ArrayList<DrawnStroke>()
     private var current = StrokeLayerSnapshot()
 
-    suspend fun render(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot =
+    suspend fun render(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int, pageH: Float): StrokeLayerSnapshot =
         withContext(Dispatchers.Default) {
             mutex.withLock {
                 Profiler.measure("heft", "strokeLayer") {
-                    renderLocked(strokes, cache, targetWidth)
+                    renderLocked(strokes, cache, targetWidth, pageH)
                 }
             }
         }
 
-    private fun renderLocked(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot {
+    private fun renderLocked(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int, pageH: Float): StrokeLayerSnapshot {
         if (strokes.isEmpty() || targetWidth <= 0) {
             drawn.clear()
             bitmap = null
@@ -174,7 +174,7 @@ class PageStrokeLayer {
             current = StrokeLayerSnapshot()
             return current
         }
-        val targetHeight = (targetWidth / HeftPage.RATIO).roundToInt().coerceAtLeast(1)
+        val targetHeight = (targetWidth / HeftPage.ratio(pageH)).roundToInt().coerceAtLeast(1)
         val resolved = ArrayList<Pair<String, StrokeCache.Entry>>(strokes.size)
         for (s in strokes) {
             val e = cache.entry(s) ?: continue
@@ -279,12 +279,12 @@ class PageStrokeLayer {
 
 /** Hält die Strich-Bitmap einer Heftseite im Hintergrund aktuell. */
 @Composable
-fun rememberStrokeLayer(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int): StrokeLayerSnapshot {
+fun rememberStrokeLayer(strokes: List<HeftStroke>, cache: StrokeCache, targetWidth: Int, pageH: Float = HeftPage.HEIGHT): StrokeLayerSnapshot {
     val layer = remember { PageStrokeLayer() }
     DisposableEffect(layer) { onDispose { layer.release() } }
     var snapshot by remember { mutableStateOf(StrokeLayerSnapshot()) }
-    LaunchedEffect(strokes, targetWidth) {
-        snapshot = layer.render(strokes, cache, targetWidth)
+    LaunchedEffect(strokes, targetWidth, pageH) {
+        snapshot = layer.render(strokes, cache, targetWidth, pageH)
     }
     return snapshot
 }

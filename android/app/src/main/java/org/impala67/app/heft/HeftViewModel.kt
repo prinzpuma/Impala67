@@ -51,6 +51,11 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** IDs der Heftseiten in Reihenfolge. */
     val pageIds: StateFlow<List<String>?> = store.query(touched) { it.heftPageIds(pageId) }
 
+    /** Höhe je Seite (gleiche Reihenfolge wie [pageIds]) fürs Layout, ohne jede Seite zu lesen. */
+    val pageHeights: StateFlow<Map<String, Float>?> = store.query(touched) { core ->
+        core.heftPageIds(pageId).zip(core.heftPageHeights(pageId)) { id, h -> id to h.toFloat() }.toMap()
+    }
+
     private val pages = HashMap<String, StateFlow<HeftPageData?>>()
 
     /** Eine Heftseite zum Zeichnen; liest bei jeder Änderung des Hefts neu, solange sie sichtbar ist. */
@@ -475,7 +480,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** „Text schreiben“: neues Feld unter dem Inhalt der Seite, Werkzeug Auswahl. */
     fun startText(heftPageId: String) {
         val pg = page(heftPageId).value
-        val y = min((pg?.let(::contentBottom) ?: 40.0) + 30, HeftPage.HEIGHT - 160.0)
+        val y = min((pg?.let(::contentBottom) ?: 40.0) + 30, (pg?.height ?: HeftPage.HEIGHT.toDouble()) - 160.0)
         newText(heftPageId, 80.0, y)
     }
 
@@ -524,7 +529,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     /** Bild in die Mitte der Seite, höchstens 70 % groß; danach ausgewählt mit Werkzeug Auswahl. */
     fun addImage(heftPageId: String, img: ScannedPage) {
-        val k = minOf(HeftPage.WIDTH * 0.7 / img.width, HeftPage.HEIGHT * 0.7 / img.height, 1.0)
+        val pageH = page(heftPageId).value?.height ?: HeftPage.HEIGHT.toDouble()
+        val k = minOf(HeftPage.WIDTH * 0.7 / img.width, pageH * 0.7 / img.height, 1.0)
         val w = img.width * k
         val h = img.height * k
         write(after = { e ->
@@ -532,7 +538,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
                 lasso = null
                 objSel = ObjSel(heftPageId, ObjKind.IMAGE, id)
             }
-        }) { it.heftAddImage(pageId, heftPageId, img.jpeg, "image/jpeg", (HeftPage.WIDTH - w) / 2, (HeftPage.HEIGHT - h) / 2, w, h) }
+        }) { it.heftAddImage(pageId, heftPageId, img.jpeg, "image/jpeg", (HeftPage.WIDTH - w) / 2, (pageH - h) / 2, w, h) }
     }
 
     fun undo() { lasso = null; objSel = null; replay(undoStack, redoStack) }

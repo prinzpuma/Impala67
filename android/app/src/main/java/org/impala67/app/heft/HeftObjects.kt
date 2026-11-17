@@ -92,8 +92,8 @@ fun contentBottom(pg: HeftPageData): Double {
 /** Halten, bis ein Bild/Textfeld gegriffen wird (heft-input.js `PICK_HOLD_MS`). */
 const val PICK_HOLD_MS = 450L
 
-/** Seitenfüllende Bilder (Scans, PDF-Seiten) nur per Halten – sonst griffe jeder Tipp die Seite. */
-private const val PAGE_SIZED = HeftPage.WIDTH * HeftPage.HEIGHT * 0.6
+/** Seitenfüllende Bilder (Scans, PDF-Seiten; Anteil der Seitenfläche) nur per Halten – sonst griffe jeder Tipp die Seite. */
+private const val PAGE_SIZED = 0.6
 
 /**
  * Bilder und Textfelder einer Seite direkt auswählen (heft-input.js): Mit „Nur Stift“ wählt ein Fingertipp
@@ -130,7 +130,7 @@ class ObjGesture(private val vm: HeftViewModel, private val heftPageId: String) 
         pg.texts.lastOrNull { it.frame().contains(x, y) }?.let { return Hit(ObjKind.TEXT, it.id, it.frame()) }
         // funktion: heft.seitenhintergrund
         // Der Seitenhintergrund (PDF-Seite, Arbeitsblatt) ist kein Element: nie antippen oder greifen.
-        return pg.images.lastOrNull { i -> !i.background && i.frame().let { f -> f.contains(x, y) && !(tap && f.w * f.h > PAGE_SIZED) } }
+        return pg.images.lastOrNull { i -> !i.background && i.frame().let { f -> f.contains(x, y) && !(tap && f.w * f.h > HeftPage.WIDTH * pg.height * PAGE_SIZED) } }
             ?.let { Hit(ObjKind.IMAGE, it.id, it.frame()) }
     }
 
@@ -193,7 +193,7 @@ class ObjGesture(private val vm: HeftViewModel, private val heftPageId: String) 
             Mode.NONE -> return
             Mode.MOVE -> o.copy(
                 x = min(HeftPage.WIDTH - 20.0, max(20 - o.w, o.x + dx)),
-                y = min(HeftPage.HEIGHT - 20.0, max(20 - o.h, o.y + dy)),
+                y = min((vm.page(heftPageId).value?.height ?: HeftPage.HEIGHT.toDouble()) - 20.0, max(20 - o.h, o.y + dy)),
             )
             Mode.RESIZE -> if (sel.kind == ObjKind.TEXT) o.copy(w = max(120.0, o.w + dx))
             else max(40.0, o.w + dx).let { w -> o.copy(w = w, h = w * (o.h / o.w)) }

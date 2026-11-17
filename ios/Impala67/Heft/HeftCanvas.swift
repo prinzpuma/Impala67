@@ -93,14 +93,14 @@ struct HeftCanvas: UIViewRepresentable {
 
         // MARK: Lage der Seiten
 
-        /// Seitengröße des Kerns (`PAGE_W` × `PAGE_H`, für alle Seiten gleich).
+        /// Seitenbreite des Kerns (`PAGE_W`, für alle Seiten gleich) und Standardhöhe (`PAGE_H`, A4) für
+        /// Seiten, deren Höhe noch nicht bekannt ist. Die Höhe hat jede Seite selbst (`HeftPageData.height`).
         private static let pageSize = CGSize(width: 1000, height: 1414)
         /// Abstand zwischen den Seiten (Platz für „Seite n“ darunter), in Seitenkoordinaten.
         private static let gap: CGFloat = 44
         private static let gutter: CGFloat = 24
         /// Oben Platz für die schwebende Leiste.
         private static let topInset: CGFloat = 72
-        private static var step: CGFloat { pageSize.height + gap }
 
         private var order: [String] = []
         private var slot: [String: Int] = [:]
@@ -109,17 +109,82 @@ struct HeftCanvas: UIViewRepresentable {
         /// Sprungziel, das erst nach dem nächsten Seiten-Layout angewendet werden kann.
         private var pendingScroll: (id: String, animated: Bool)?
 
-        private func origin(_ index: Int) -> CGPoint { CGPoint(x: 0, y: CGFloat(index) * Self.step) }
+        /// Bekannte Seitenhöhen (Seitenkoordinaten); fehlt eine, gilt A4 bis sie gelesen ist.
+        private var heights: [String: CGFloat] = [:]
+        private var fetchingHeights: Set<String> = []
+        /// Oberkante jeder Seite in `order` (Seiten stehen mit [gap] Abstand untereinander).
+        private var tops: [CGFloat] = []
+
+        private func pageHeight(_ id: String) -> CGFloat { heights[id] ?? Self.pageSize.height }
+        private func sizeOf(_ id: String) -> CGSize { CGSize(width: Self.pageSize.width, height: pageHeight(id)) }
+
+        private func computeTops() {
+            var y: CGFloat = 0
+            tops = order.map { id in
+                defer { y += pageHeight(id) + Self.gap }
+                return y
+            }
+        }
+
+        private func origin(_ index: Int) -> CGPoint { CGPoint(x: 0, y: index < tops.count ? tops[index] : 0) }
         private func origin(of id: String) -> CGPoint { origin(slot[id] ?? 0) }
         private var contentSize: CGSize {
-            CGSize(width: Self.pageSize.width, height: max(1, CGFloat(order.count) * Self.step - Self.gap + 30))
+            let end = order.last.map { (tops.last ?? 0) + pageHeight($0) } ?? 0
+            return CGSize(width: Self.pageSize.width, height: max(1, end + 30))
+        }
+
+        /// Index der Seite, zu der die Höhe [y] der Fläche gehört (im Zwischenraum: die nähere/untere).
+        private func index(at y: CGFloat) -> Int {
+            var lo = 0, hi = tops.count - 1
+            while lo < hi {
+                let mid = (lo + hi + 1) / 2
+                if tops[mid] - Self.gap / 2 <= y { lo = mid } else { hi = mid - 1 }
+            }
+            return lo
         }
 
         /// Seite, zu der ein Punkt der Fläche gehört (im Zwischenraum: die nähere).
         private func pageAt(_ p: CGPoint) -> String? {
-            guard !order.isEmpty else { return nil }
-            let i = Int(floor((p.y + Self.gap / 2) / Self.step))
-            return order[min(max(i, 0), order.count - 1)]
+            guard !order.isEmpty, tops.count == order.count else { return nil }
+            return order[index(at: p.y)]
+        }
+
+        /// Höhen unbekannter Seiten im Hintergrund lesen (ein Kern-Lesen je Seite hinter allem Geschriebenen);
+        /// weichen sie von A4 ab, werden die Seiten neu gelegt.
+        private func fetchHeights() {
+            let missing = order.filter { heights[$0] == nil && !fetchingHeights.contains($0) }
+            guard !missing.isEmpty else { return }
+            fetchingHeights.formUnion(missing)
+            let (core, pageId) = (core, pageId)
+            writer.async {
+                // Ein Kern-Aufruf für alle Höhen (statt jede Seite einzeln zu lesen).
+                let ids = core.heftPageIds(pageId: pageId), hs = core.heftPageHeights(pageId: pageId)
+                var found: [String: CGFloat] = [:]
+                for (id, h) in zip(ids, hs) where missing.contains(id) { found[id] = CGFloat(h) }
+                let result = found
+                DispatchQueue.main.async { [weak self] in
+                    MainActor.assumeIsolated { self?.heightsFetched(missing, result) }
+                }
+            }
+        }
+
+        private func heightsFetched(_ asked: [String], _ found: [String: CGFloat]) {
+            fetchingHeights.subtract(asked)
+            let changed = found.contains { slot[$0.key] != nil && pageHeight($0.key) != $0.value }
+            for (id, h) in found { heights[id] = h }
+            if changed { relayout(order) }
+        }
+
+        private func relayoutSame() { relayout(order) }
+
+        /// Eine geladene Seite meldet ihre Höhe (Sync/Import kann sie ändern); weicht sie ab, neu legen.
+        private func learnHeight(_ d: HeftPageData) {
+            let h = CGFloat(d.height)
+            guard slot[d.id] != nil, heights[d.id] != h else { return }
+            let had = heights[d.id] != nil
+            heights[d.id] = h
+            // Unbekannt = A4 angenommen: nur bei Abweichung neu legen.
+            if had || h != Self.pageSize.height { DispatchQueue.main.async { [weak self] in self?.relayoutSame() } }
         }
 
         // MARK: Ebenen
@@ -372,6 +437,8 @@ struct HeftCanvas: UIViewRepresentable {
             flush()
             order = ids
             slot = Dictionary(ids.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { a, _ in a })
+            for id in heights.keys where slot[id] == nil { heights[id] = nil }
+            computeTops()
             guard let canvas else { return }
             imageLoad?.cancel()
             loaded.removeAll()
@@ -401,10 +468,11 @@ struct HeftCanvas: UIViewRepresentable {
                     v = existing
                 } else {
                     v = HeftPaperView()
-                    v.configure(size: Self.pageSize, paper: "blank")
+                    v.configure(size: sizeOf(id), paper: "blank")
                     paperBox.addSubview(v)
                     papers[id] = v
                 }
+                v.configure(size: sizeOf(id), paper: v.kind.isEmpty ? "blank" : v.kind)
                 v.origin = origin(i)
                 v.setNumber(i + 1)
             }
@@ -422,6 +490,7 @@ struct HeftCanvas: UIViewRepresentable {
                 scroll(to: target.id, animated: target.animated)
             }
             windowChanged()
+            fetchHeights()
         }
 
         /// Geladene Seiten neu lesen (fremde Änderung, Bilder/Textfelder, Papier).
@@ -484,6 +553,7 @@ struct HeftCanvas: UIViewRepresentable {
             guard !fresh.isEmpty else { return }
             let pages = Set(fresh.map(\.id))
             for d in fresh { loaded[d.id] = d }
+            fresh.forEach(learnHeight)
             // Die Seite kommt frisch aus dem Kern; gemerkte Stände ihrer Striche gelten nicht mehr.
             parked = parked.filter { !pages.contains($0.value.page) }
             let current = canvas.drawing.strokes
@@ -525,7 +595,7 @@ struct HeftCanvas: UIViewRepresentable {
                     out.append(f.pk)
                     known[f.pk.randomSeed] = old[f.pk.randomSeed]
                 }
-                papers[d.id]?.configure(size: Self.pageSize, paper: d.paper)
+                papers[d.id]?.configure(size: sizeOf(d.id), paper: d.paper)
             }
             let unchanged = out.count == current.count && zip(out, current).allSatisfy { $0.randomSeed == $1.randomSeed }
             if !unchanged {
@@ -548,9 +618,8 @@ struct HeftCanvas: UIViewRepresentable {
             let z = max(canvas.zoomScale, 0.01)
             let top = canvas.contentOffset.y / z
             let bottom = (canvas.contentOffset.y + canvas.bounds.height) / z
-            let last = order.count - 1
-            let a = min(max(Int(floor(top / Self.step)), 0), last)
-            let b = min(max(Int(floor(bottom / Self.step)), 0), last)
+            guard tops.count == order.count else { return nil }
+            let a = index(at: top), b = index(at: bottom)
             return min(a, b)...max(a, b)
         }
 
@@ -615,7 +684,7 @@ struct HeftCanvas: UIViewRepresentable {
             for id in clamped(r.lowerBound - 1, r.upperBound + 1) where inks[id] == nil && loaded[id] != nil {
                 let v = HeftInkView()
                 v.origin = origin(of: id)
-                v.configure(size: Self.pageSize)
+                v.configure(size: sizeOf(id))
                 v.follow(zoom: canvas?.zoomScale ?? 1)
                 inkBox.addSubview(v)
                 inks[id] = v
@@ -764,7 +833,7 @@ struct HeftCanvas: UIViewRepresentable {
             }
             let z = canvas.zoomScale
             let o = origin(i)
-            let y = (o.y + Self.pageSize.height / 2) * z - canvas.bounds.height / 2
+            let y = (o.y + pageHeight(id) / 2) * z - canvas.bounds.height / 2
             let minY = -canvas.contentInset.top
             let maxY = max(minY, canvas.contentSize.height + canvas.contentInset.bottom - canvas.bounds.height)
             currentPage = id
@@ -1122,7 +1191,7 @@ struct HeftCanvas: UIViewRepresentable {
                             y: (canvas.contentOffset.y + canvas.bounds.height / 2) / z)
             guard let id = pageAt(c) else { return nil }
             let o = origin(of: id)
-            let p = CGPoint(x: min(max(c.x - o.x, 0), Self.pageSize.width), y: min(max(c.y - o.y, 0), Self.pageSize.height))
+            let p = CGPoint(x: min(max(c.x - o.x, 0), Self.pageSize.width), y: min(max(c.y - o.y, 0), pageHeight(id)))
             return (heftPageId: id, point: p)
         }
 
@@ -1252,7 +1321,7 @@ struct HeftCanvas: UIViewRepresentable {
             let o = origin(of: page)
             // Erste Zeile so, dass der Tipp in ihrer Mitte liegt.
             let x = min(max(c.x - o.x - HeftTextStyle.pad, 0), Self.pageSize.width - 120)
-            let y = min(max(c.y - o.y - HeftTextStyle.pad - 21, 0), Self.pageSize.height - 60)
+            let y = min(max(c.y - o.y - HeftTextStyle.pad - 21, 0), pageHeight(page) - 60)
             beginInline(textId: nil, page: page, at: CGPoint(x: x, y: y), text: "",
                         width: min(400, Self.pageSize.width - x), size: 30, color: currentTextColor)
         }

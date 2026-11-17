@@ -26,10 +26,11 @@ pub struct HeftRasterSize {
     pub scale: f64,
 }
 
-/// Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi auf A4).
+/// Größe, in der die Plattform eine Seite für den Export rendern soll (`width`: `None` = 2480 px, 300 dpi
+/// auf A4; `page_height`: Höhe der Seite in Seitenkoordinaten, `HeftPageData::height`).
 #[uniffi::export]
-pub fn heft_export_size(width: Option<u32>) -> HeftRasterSize {
-    let (width, height, scale) = export::page_canvas_size(width.filter(|w| *w > 0).unwrap_or(EXPORT_W));
+pub fn heft_export_size(width: Option<u32>, page_height: f64) -> HeftRasterSize {
+    let (width, height, scale) = export::page_canvas_size_for(width.filter(|w| *w > 0).unwrap_or(EXPORT_W), page_height);
     HeftRasterSize { width, height, scale }
 }
 
@@ -103,9 +104,10 @@ mod tests {
         assert!(svg.starts_with("<svg") && svg.contains("#123456") && svg.contains("Titel"));
         assert!(svg.contains("href=\"data:image/png;base64,AQID\""));
 
-        let size = heft_export_size(None);
+        let size = heft_export_size(None, impala_heft::PAGE_H);
         assert_eq!((size.width, size.height), (2480, 3507));
-        assert_eq!(heft_export_size(Some(1000)).height, 1414);
+        assert_eq!(heft_export_size(Some(1000), impala_heft::PAGE_H).height, 1414);
+        assert_eq!(heft_export_size(Some(1000), 707.0).height, 707);
         assert_eq!(heft_export_file_name(Some("a/b:c".into())), "a_b_c");
         assert_eq!(heft_export_file_name(None), "Heft");
 

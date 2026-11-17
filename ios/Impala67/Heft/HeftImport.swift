@@ -7,7 +7,7 @@ import VisionKit
 /// - „Bild hinzufügen“/„Bild aufnehmen“: auf die aktuelle Seite, höchstens 70 % der Seite, mittig
 ///   (`insertImageFile`, längere Seite 1400 px).
 /// - „Bild als Seite“, „PDF oder Bild importieren“, „Dokument scannen“: je Bild bzw. PDF-Seite eine neue
-///   Seite (`imagePage`; Bilder mit 40 Rand, PDF-Seiten und Scans randlos, 1800 px, JPEG 0,78). Eingebetteter
+///   Seite im Format des Bildes (`heftAddBackgroundPage`; 1800 px, JPEG 0,78). Eingebetteter
 ///   PDF-Text wird als Texterkennung der Seite übernommen (ab 20 Zeichen), damit die Suche ihn findet.
 @MainActor
 enum HeftImport {
@@ -30,28 +30,16 @@ enum HeftImport {
     }
 
     // funktion: heft.seitenhintergrund
-    /// Neue Seite mit `image` an Stelle `at` (nil = am Ende); `bleed` = randlos (PDF, Scan).
-    /// Das Bild wird Seitenhintergrund (liegt fest, wie in der PWA); `text`: eingebetteter PDF-Text.
-    /// Liefert die Seiten-ID.
+    /// Neue Seite im Format von `image` an Stelle `at` (nil = am Ende). Das Bild wird Seitenhintergrund
+    /// (liegt fest, wie in der PWA); `text`: eingebetteter PDF-Text. Liefert die Seiten-ID.
     @discardableResult
-    static func addImagePage(core: ImpalaCore, pageId: String, image: UIImage, at: Int?, bleed: Bool,
-                             paper: String = "blank", text: String? = nil) -> String? {
-        guard let (data, size) = jpeg(image, maxEdge: pageMaxEdge),
-              let id = attempt("heftAddPage", { try core.heftAddPage(pageId: pageId, at: at.map { UInt32($0) }, paper: paper) }),
-              let page = attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: id) }) else { return nil }
-        let pad: Double = bleed ? 0 : 40
-        let sw = Double(size.width), sh = Double(size.height)
-        let k = min((page.width - pad * 2) / sw, (page.height - pad * 2) / sh)
-        let w = sw * k, h = sh * k
+    static func addImagePage(core: ImpalaCore, pageId: String, image: UIImage, at: Int?, text: String? = nil) -> String? {
+        guard let (data, size) = jpeg(image, maxEdge: pageMaxEdge) else { return nil }
         let pageText = text.flatMap { $0.count >= 20 ? $0 : nil }
-        _ = attempt("heftSetBackground", { try core.heftSetBackground(
-            pageId: pageId, heftPageId: id, bytes: data, mime: "image/jpeg",
-            x: (page.width - w) / 2, y: (page.height - h) / 2, w: w, h: h, ocr: pageText
+        return attempt("heftAddBackgroundPage", { try core.heftAddBackgroundPage(
+            pageId: pageId, at: at.map { UInt32($0) }, bytes: data, mime: "image/jpeg",
+            width: Double(size.width), height: Double(size.height), ocr: pageText
         ) })
-        if let pageText {
-            _ = attempt("heftSetPageText", { try core.heftSetPageText(pageId: pageId, heftPageId: id, text: pageText) })
-        }
-        return id
     }
 
     /// Dateien aus dem Dateiimporter: PDFs seitenweise, Bilder je als Seite, ab Stelle `at`.
@@ -67,13 +55,13 @@ enum HeftImport {
                 for i in 0..<doc.pageCount {
                     guard let p = doc.page(at: i), let img = render(p) else { continue }
                     let text = p.string.map(cleanText)
-                    if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true, text: text) {
+                    if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, text: text) {
                         last = id
                         next = next.map { $0 + 1 }
                     }
                 }
             } else if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
-                if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: false) {
+                if let id = addImagePage(core: core, pageId: pageId, image: img, at: next) {
                     last = id
                     next = next.map { $0 + 1 }
                 }
@@ -87,7 +75,7 @@ enum HeftImport {
         var next = at
         var last: String?
         for img in images {
-            if let id = addImagePage(core: core, pageId: pageId, image: img, at: next, bleed: true) {
+            if let id = addImagePage(core: core, pageId: pageId, image: img, at: next) {
                 last = id
                 next = next.map { $0 + 1 }
             }

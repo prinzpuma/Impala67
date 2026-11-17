@@ -84,7 +84,7 @@ fun renderHeftPage(data: HeftPageData, images: Map<String, ImageBitmap>, width: 
     val bmp = ImageBitmap(width, height)
     val k = width / HeftPage.WIDTH
     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bmp), Size(width.toFloat(), height.toFloat())) {
-        drawPaper(Paper.of(data.paper), ink, k)
+        drawPaper(Paper.of(data.paper), ink, k, data.height.toFloat())
         drawHeftImages(data.images, images, k)
         drawInkStrokes(data.strokes.mapNotNull(HeftInk::stroke), k)
         drawHeftTexts(data.texts, k)
@@ -110,9 +110,6 @@ suspend fun exportHeftPages(
     ink: Color,
     onStatus: (String) -> Unit,
 ): List<File> {
-    val size = heftExportSize(null)
-    val w = size.width.toInt()
-    val h = size.height.toInt()
     val order = store.write { it.heftPageIds(pageId) }
     val dir = withContext(Dispatchers.IO) { File(context.cacheDir, "heft-export").apply { deleteRecursively(); mkdirs() } }
     val shots = ArrayList<HeftPdfPage>()
@@ -120,6 +117,10 @@ suspend fun exportHeftPages(
     ids.forEachIndexed { n, id ->
         onStatus((if (pdf) "Erzeuge Seite " else "Erzeuge Bild ") + "${n + 1} von ${ids.size} …")
         val data = store.write { it.heftPage(pageId, id) }
+        // Jede Seite mit ihrer eigenen Höhe (Breite bleibt die Bezugsgröße).
+        val size = heftExportSize(null, data.height)
+        val w = size.width.toInt()
+        val h = size.height.toInt()
         val images = loadHeftImages(store, pageId, id, data.images, maxSide = w)
         withContext(Dispatchers.Default) {
             val bmp = renderHeftPage(data, images, w, h, ink)

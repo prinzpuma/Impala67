@@ -5,11 +5,18 @@ import androidx.compose.ui.graphics.Color
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Seitenmaße des Kerns (`impala_heft::PAGE_W/PAGE_H`, in der PWA `heft-document-core.js`). */
+/**
+ * Seitenmaße des Kerns (`impala_heft::PAGE_W/PAGE_H`, in der PWA `heft-document-core.js`). Die Breite ist
+ * immer [WIDTH]; die Höhe hat jede Seite selbst (`HeftPageData.height`), [HEIGHT] (A4) gilt für leere
+ * oder noch nicht geladene Seiten.
+ */
 object HeftPage {
     const val WIDTH = 1000f
     const val HEIGHT = 1414f
     const val RATIO = WIDTH / HEIGHT
+
+    /** Seitenverhältnis (Breite : Höhe) einer Seite der Höhe [height]. */
+    fun ratio(height: Float) = WIDTH / height
 }
 
 /**

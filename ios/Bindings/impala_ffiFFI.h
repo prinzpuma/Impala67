@@ -1192,6 +1192,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_grades(void*_Nonnull ptr, Rust
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_grades_by_subject(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADD_BACKGROUND_PAGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADD_BACKGROUND_PAGE
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_add_background_page(void*_Nonnull ptr, RustBuffer page_id, RustBuffer at, RustBuffer bytes, RustBuffer mime, double width, double height, RustBuffer ocr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADD_IMAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ADD_IMAGE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_add_image(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer bytes, RustBuffer mime, double x, double y, double w, double h, RustCallStatus *_Nonnull out_status
@@ -1302,6 +1307,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_ocr_jobs(void*_Nonnull pt
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_page(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE_HEIGHTS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE_HEIGHTS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_page_heights(void*_Nonnull ptr, RustBuffer page_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE_IDS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_PAGE_IDS
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_page_ids(void*_Nonnull ptr, RustBuffer page_id, RustCallStatus *_Nonnull out_status
@@ -1319,7 +1329,7 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_preview(void*_Nonnull ptr
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_RECORD_OCR
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_RECORD_OCR
-int8_t uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_text, RustBuffer src, RustBuffer expected_key, RustCallStatus *_Nonnull out_status
+int8_t uniffi_impala_ffi_fn_method_impalacore_heft_record_ocr(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_text, RustBuffer background_text, RustBuffer src, RustBuffer expected_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_REMOVE_IMAGES
@@ -1355,11 +1365,6 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(void*_Nonnu
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer polygon, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
-RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_set_background(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer bytes, RustBuffer mime, double x, double y, double w, double h, RustBuffer ocr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_IMAGE_FRAME
@@ -2130,7 +2135,7 @@ RustBuffer uniffi_impala_ffi_fn_func_heft_export_file_name(RustBuffer title, Rus
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_EXPORT_SIZE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_EXPORT_SIZE
-RustBuffer uniffi_impala_ffi_fn_func_heft_export_size(RustBuffer width, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_impala_ffi_fn_func_heft_export_size(RustBuffer width, double page_height, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_FIT_SHAPE
@@ -3798,6 +3803,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_grades_by_subject(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_BACKGROUND_PAGE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_BACKGROUND_PAGE
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_add_background_page(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_IMAGE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ADD_IMAGE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_add_image(void
@@ -3930,6 +3941,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_page(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE_HEIGHTS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE_HEIGHTS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_page_heights(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE_IDS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_PAGE_IDS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_page_ids(void
@@ -3993,12 +4010,6 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
-#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
-uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_set_background(void
     
 );
 #endif
