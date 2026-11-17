@@ -93,7 +93,9 @@ export function imagePage(im, paper, bleed, {
 		y: (pageH - im.h * k) / 2,
 		w: im.w * k,
 		h: im.h * k,
-		...(im.scan ? { scan: true } : {})
+		...(im.scan ? { scan: true } : {}),
+		// Seitenvorlage (importierte PDF-/Bildseite): liegt fest, lässt sich nicht greifen.
+		...(im.bg ? { bg: true } : {})
 	});
 	return pg;
 }
@@ -165,7 +167,7 @@ export async function importPdf(f, at, targetDoc, {
 			await p.render({ canvasContext: cx, viewport: vp }).promise;
 
 			const pg = imagePage(
-				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height },
+				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, bg: true },
 				"blank",
 				true,
 				{ blobRef, newPage, pageW, pageH }
@@ -209,7 +211,10 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 		: (loadDoc ? await loadDoc(targetId) : null);
 	if (!targetDoc) throw new Error("Ziel-Heft konnte nicht geöffnet werden.");
 	const current = targetId === activePid ? activeIdx : Math.max(0, (targetDoc.pages ? targetDoc.pages.length : 1) - 1);
-	let at = insertAt(position, current, targetDoc.pages.length);
+	// Zahl = fester Einfügeindex (MCP), sonst relativ zur aktuellen Seite ("start", "after", …).
+	let at = Number.isInteger(position)
+		? Math.max(0, Math.min(position, targetDoc.pages.length))
+		: insertAt(position, current, targetDoc.pages.length);
 	for (const f of files) {
 		if (onStatus) onStatus("Importiere " + f.name + " …");
 		const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
@@ -217,7 +222,7 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 			at = await importPdf(f, at, targetDoc, { blobRef, newPage, pageW, pageH, pdfs, toast });
 		} else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
 			const im = await fileToImageData(f, 1600);
-			const pg = imagePage(im, "blank", false, { blobRef, newPage, pageW, pageH });
+			const pg = imagePage({ ...im, bg: true }, "blank", false, { blobRef, newPage, pageW, pageH });
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}

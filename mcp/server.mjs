@@ -2,6 +2,7 @@
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { createInterface } from "node:readline";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -212,6 +213,8 @@ function getToolTimeoutMs(tool, args = {}) {
 	if (tool === "impala_get_performance_trace") return 15000;
 	// Handschrift-Modell muss evtl. erst laden, dann Erkennung pro Zeile
 	if (tool === "impala_heft_page_image" || tool === "impala_heft_label_lines") return 30000;
+	// PDF-Seiten werden einzeln gerendert
+	if (tool === "impala_heft_add_pages") return 60000;
 	return 10000; // Standard für reguläre UI- und Lese-Aufrufe
 }
 
@@ -514,6 +517,22 @@ const TOOLS = [
 		},
 	},
 	{
+		name: "impala_heft_add_pages",
+		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index) oder position (start, before, after, end; Standard end). Heft-IDs liefert impala_list_pages (kind heft), neues Heft per impala_create_page mit kind heft.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				page_id: { type: "string", description: "ID des Hefts" },
+				file_path: { type: "string", description: "Lokaler Pfad zu Bild oder PDF" },
+				data_base64: { type: "string", description: "Dateiinhalt als Base64 (oder Data-URL), falls kein file_path" },
+				filename: { type: "string", description: "Dateiname bei data_base64 (Endung bestimmt den Typ, z. B. blatt.pdf)" },
+				at: { type: "number", description: "Einfügeindex, 0-basiert (0 = vor der ersten Seite)" },
+				position: { type: "string", enum: ["start", "before", "after", "end"], description: "Relativ zur aktuellen Seite, wenn at fehlt (Standard end)" },
+			},
+			required: ["page_id"],
+		},
+	},
+	{
 		name: "impala_heft_label_lines",
 		description: "Speichert deine Lesung einer Heftseite als Trainingsbeispiele für das lokale Handschrift-Modell. Du legst selbst fest, was eine Zeile ist: pro Zeile ein Rahmen in Seitenkoordinaten (laut Raster), die Leserichtung und der exakte Text (wie geschrieben, inkl. Groß-/Kleinschreibung und Satzzeichen; Formeln als z. B. a^2+b^2=c^2). Skizzen/Zeichnungen weglassen. Jeder Strich gehört zum kleinsten Rahmen, der seinen Mittelpunkt enthält. Antwort: pro Zeile Modell-Lesung vs. dein Text, Zeichenfehlerrate des Modells, nicht zugeordnete Striche (zum Nachbessern) und wie oft die Zeilenzerlegung der App von deiner abweicht. Erneutes Beschriften derselben Seite ersetzt deren alte Beispiele; save=false prüft nur.",
 		inputSchema: {
@@ -564,6 +583,13 @@ export async function startServer() {
 	}
 
 	async function handleToolCall(name, args = {}) {
+		// Lokale Datei hier lesen: die App im Browser/iPad kommt nicht an das Dateisystem.
+		if (name === "impala_heft_add_pages" && args.file_path) {
+			let data;
+			try { data = readFileSync(args.file_path); } catch (e) { return { error: `Datei nicht lesbar: ${e.message}` }; }
+			const { file_path, ...rest } = args;
+			args = { ...rest, data_base64: data.toString("base64"), filename: rest.filename || basename(file_path) };
+		}
 		const result = await callLiveBrowser(name, args);
 		if (result === null) {
 			return { error: "Impala67 ist nicht verbunden. Öffne die App im Browser (http://localhost:8000 oder die PWA mit ?mcpBridge=1) oder koppel die iPad-App (node mcp/lan-setup.mjs)." };

@@ -1819,6 +1819,8 @@ export const HEFT = (() => {
 		// Arbeitskopie des geöffneten Hefts (sonst null): zeigt auch noch nicht Gespeichertes.
 		openDoc: (p) => (p && p === pid && doc ? doc : null),
 		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, pageAsDataUrl, pdfBlob, exportPdf, openImportDialog,
+		// Dateien (Bild/PDF) als Seitenvorlagen einfügen, ohne Dialog (MCP): position "start"|"before"|"after"|"end" oder Index.
+		importFiles: (targetId, files, position) => importFilesIntoHeft(targetId, files, position),
 		// Nur für test/heft.test.mjs nach außen gereicht:
 		renderPageTo, pageRectForTile, strokeGeometry, scaleStrokeFrom, lassoTouchAction,
 		get activeId() { return pid; },

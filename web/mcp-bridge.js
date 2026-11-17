@@ -632,6 +632,26 @@ export function initMcpBridge() {
 						};
 						break;
 					}
+					case "impala_heft_add_pages": {
+						const pg = S.pages?.[args.page_id];
+						if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft mit ID ${args.page_id}`);
+						const b64 = String(args.data_base64 || "").replace(/^data:[^,]*,/, "");
+						if (!b64) throw new Error("data_base64 fehlt");
+						const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+						const name = String(args.filename || "vorlage");
+						const type = String(args.mime || (/\.pdf$/i.test(name) ? "application/pdf" : "image/png"));
+						const { HEFT } = await import("./heft.js");
+						// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
+						const count = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? 0;
+						const before = count();
+						const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
+						const end = await HEFT.importFiles(args.page_id, [new File([bytes], name, { type })], pos);
+						const pageCount = count();
+						const added = pageCount - before;
+						if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
+						result = { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount };
+						break;
+					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.
 					case "impala_heft_page_image":
 						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage(args);

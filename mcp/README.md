@@ -43,6 +43,7 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 **Handschrift-Training**
 - `impala_heft_page_image` — Heftseite als Bild mit Raster plus Lesung des lokalen Modells.
 - `impala_heft_label_lines` — eigene Zeilen-Lesung als Trainingsbeispiele speichern.
+- `impala_heft_add_pages` — Bild oder PDF (`file_path` oder `data_base64`) als festliegende Seitenvorlage an beliebiger Stelle ins Heft legen.
 
 **Speicher**
 - `impala_storage_report` — größte PDFs und Cloudflare-Quota.
