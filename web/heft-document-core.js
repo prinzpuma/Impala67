@@ -7,6 +7,10 @@ import { CORE } from "./rust-core.js";
 // Seitenmaße einer Heftseite (Weltkoordinaten), gemeinsam für heft.js und den Indexer.
 export const PAGE_W = 1000, PAGE_H = 1414;
 
+// Alle Bilder einer Seite in Zeichenreihenfolge: erst der Seitenhintergrund (bg: PDF-Seite,
+// Arbeitsblatt – kein Element, nicht auswählbar), dann die Bild-Elemente.
+export const pageImages = (pg) => (pg && pg.bg ? [pg.bg, ...(pg.images || [])] : (pg && pg.images) || []);
+
 // Leere Heftseite: eine Form für Reducer (state.js), Heft-Oberfläche und Import.
 export const emptyHeftPage = (id, paper) => CORE.heftEmptyPage(String(id), paper || undefined);
 

@@ -625,7 +625,7 @@ impl ImpalaCore {
         let image_id = new_id();
         let mut inner = self.lock();
         inner.heft_page(&page_id, &heft_page_id)?;
-        let image = HeftImage { id: image_id.clone(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None };
+        let image = HeftImage { id: image_id.clone(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None, background: false };
         let ops = inner.change_ops(&page_id, vec![HeftChange::AddImage { page: heft_page_id, image }])?;
         // Erst das Bild, dann das Element: Fremdgeräte sehen es so nie ohne Daten. Ein im Checkpoint
         // schon bekanntes Bild braucht kein zweites (mehrere MB großes) Event.
@@ -633,6 +633,54 @@ impl ImpalaCore {
             inner.dispatch("heftBlob", json!({ "hash": hash, "data": data }))?;
         }
         inner.heft_edit(&page_id, ops, vec![image_id])
+    }
+
+    /// Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
+    /// Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
+    /// Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+    #[allow(clippy::too_many_arguments)]
+    pub fn heft_set_background(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        bytes: Vec<u8>,
+        mime: String,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        ocr: Option<String>,
+    ) -> Result<HeftEdit, CoreError> {
+        finite(&[x, y, w, h], "Hintergrund")?;
+        let mut inner = self.lock();
+        let had = inner.heft_page(&page_id, &heft_page_id)?.background.is_some();
+        let (bg, blob) = if bytes.is_empty() {
+            (None, None)
+        } else {
+            if !mime.starts_with("image/") || mime.contains([';', ',']) {
+                return Err(invalid("Hintergrund: ein MIME-Typ wie image/png nötig"));
+            }
+            let data = format!("data:{mime};base64,{}", STANDARD.encode(&bytes));
+            let hash = blob_id(&data);
+            let bg = Image {
+                id: new_id(),
+                r#ref: Some(hash.clone()),
+                x: Some(x),
+                y: Some(y),
+                w: Some(w),
+                h: Some(h),
+                ocr: ocr.filter(|o| !o.trim().is_empty()),
+                ..Default::default()
+            };
+            (Some(bg), Some((hash, data)))
+        };
+        let ops = impala_heft::diff::background_ops(&heft_page_id, had, bg);
+        if let Some((hash, data)) = blob
+            && !inner.model.has_heft_blob(&hash)
+        {
+            inner.dispatch("heftBlob", json!({ "hash": hash, "data": data }))?;
+        }
+        inner.heft_edit(&page_id, ops, Vec::new())
     }
 
     /// Bytes und MIME-Typ eines Bilds (lädt es bei Bedarf aus Checkpoint bzw. Log nach; Altbilder mit
@@ -647,8 +695,7 @@ impl ImpalaCore {
         let inner = &mut *guard;
         let image = inner
             .heft_page(&page_id, &heft_page_id)?
-            .images
-            .iter()
+            .all_images()
             .find(|i| i.id == image_id)
             .cloned()
             .ok_or_else(|| invalid(format!("Kein Bild {image_id}")))?;

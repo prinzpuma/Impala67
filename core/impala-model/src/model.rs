@@ -683,7 +683,7 @@ impl Model {
         let mut bytes = 0;
         for pg in &doc.pages {
             bytes += pg.strokes.iter().map(|s| 40 + s.pts.len() * 14).sum::<usize>();
-            for im in &pg.images {
+            for im in pg.all_images() {
                 bytes += 60
                     + match (&im.r#ref, &im.src) {
                         (Some(r), _) if !r.is_empty() => self

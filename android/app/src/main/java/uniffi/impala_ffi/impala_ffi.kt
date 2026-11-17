@@ -1668,6 +1668,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2126,6 +2128,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_restore(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_background(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame(
 ): Short
@@ -2752,6 +2756,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_restore(`ptr`: Pointer,`pageId`:
 fun uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`ax`: Double,`ay`: Double,`factor`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`polygon`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_set_background(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`bytes`: RustBuffer.ByValue,`mime`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,`ocr`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_set_image_frame(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`imageId`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3945,6 +3951,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_background() != 28511.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412.toShort()) {
@@ -9150,6 +9159,13 @@ public interface ImpalaCoreInterface {
     fun `heftSelectByLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `polygon`: List<kotlin.Float>): List<kotlin.String>
     
     /**
+     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
+     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
+     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+     */
+    fun `heftSetBackground`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double, `h`: kotlin.Double, `ocr`: kotlin.String?): HeftEdit
+    
+    /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
      */
     fun `heftSetImageFrame`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `imageId`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double, `h`: kotlin.Double): HeftEdit
@@ -11122,6 +11138,24 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceFloat.lower(`polygon`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
+     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
+     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+     */
+    @Throws(CoreException::class)override fun `heftSetBackground`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `bytes`: kotlin.ByteArray, `mime`: kotlin.String, `x`: kotlin.Double, `y`: kotlin.Double, `w`: kotlin.Double, `h`: kotlin.Double, `ocr`: kotlin.String?): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_set_background(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterByteArray.lower(`bytes`),FfiConverterString.lower(`mime`),FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterDouble.lower(`w`),FfiConverterDouble.lower(`h`),FfiConverterOptionalString.lower(`ocr`),_status)
 }
     }
     )
@@ -16368,7 +16402,12 @@ data class HeftImage (
     /**
      * Erkannter Text eines Scans (von der Plattform geliefert).
      */
-    var `ocr`: kotlin.String?
+    var `ocr`: kotlin.String?, 
+    /**
+     * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
+     * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+     */
+    var `background`: kotlin.Boolean = false
 ) {
     
     companion object
@@ -16387,6 +16426,7 @@ public object FfiConverterTypeHeftImage: FfiConverterRustBuffer<HeftImage> {
             FfiConverterDouble.read(buf),
             FfiConverterDouble.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -16397,7 +16437,8 @@ public object FfiConverterTypeHeftImage: FfiConverterRustBuffer<HeftImage> {
             FfiConverterDouble.allocationSize(value.`y`) +
             FfiConverterDouble.allocationSize(value.`w`) +
             FfiConverterDouble.allocationSize(value.`h`) +
-            FfiConverterOptionalString.allocationSize(value.`ocr`)
+            FfiConverterOptionalString.allocationSize(value.`ocr`) +
+            FfiConverterBoolean.allocationSize(value.`background`)
     )
 
     override fun write(value: HeftImage, buf: ByteBuffer) {
@@ -16408,6 +16449,7 @@ public object FfiConverterTypeHeftImage: FfiConverterRustBuffer<HeftImage> {
             FfiConverterDouble.write(value.`w`, buf)
             FfiConverterDouble.write(value.`h`, buf)
             FfiConverterOptionalString.write(value.`ocr`, buf)
+            FfiConverterBoolean.write(value.`background`, buf)
     }
 }
 

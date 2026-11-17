@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, PAGE_W, PAGE_H } from "./heft-document-core.js";
+import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, pageImages, PAGE_W, PAGE_H } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
@@ -423,7 +423,7 @@ export const HEFT = (() => {
 	function contentBottom(pg) {
 		let y = 40;
 		(pg.strokes || []).forEach((s) => (s.pts || []).forEach((p) => { if (p[1] > y) y = p[1]; }));
-		(pg.images || []).forEach((im) => { if (im.y + im.h > y) y = im.y + im.h; });
+		pageImages(pg).forEach((im) => { if (im.y + im.h > y) y = im.y + im.h; });
 		(pg.texts || []).forEach((t) => { if (t.y + (t.h || 60) > y) y = t.y + (t.h || 60); });
 		return y;
 	}
@@ -530,7 +530,7 @@ export const HEFT = (() => {
 				if (pid) dropThumbs(pid);
 
 				if (host && doc) {
-					const pageIndex = doc.pages.findIndex((pg) => (pg.images || []).some((item) => item.id === im.id));
+					const pageIndex = doc.pages.findIndex((pg) => pageImages(pg).some((item) => item.id === im.id));
 					if (pageIndex !== -1) { redrawPage(pageIndex); renderThumb(pageIndex); }
 				}
 			};
@@ -562,7 +562,7 @@ export const HEFT = (() => {
 	// Striche einer dichten Basis-Seite rastert redrawBasePageAsync im Worker.
 	function renderPageUnder(x, pg, imgOf = imgEl) {
 		paintPaper(x, PAGE_W, PAGE_H, pg.paper);
-		(pg.images || []).forEach((im) => {
+		pageImages(pg).forEach((im) => {
 			const el = imgOf(im);
 			if (el instanceof ImageBitmap ? el.width : el.complete && el.naturalWidth) x.drawImage(el, im.x, im.y, im.w, im.h);
 		});
@@ -1213,7 +1213,7 @@ export const HEFT = (() => {
 	async function paintThumbEl(t) {
 		const i = Number(t.dataset.hethumb), cv = t.querySelector("canvas"), pg = doc && doc.pages[i];
 		if (!cv || !pg) return;
-		const ims = pg.images || [];
+		const ims = pageImages(pg);
 		const bmps = await Promise.all(ims.map((im) => thumbBitmap(im, Math.max(1, Math.ceil(im.w * cv.width / PAGE_W)))));
 		if (!t.isConnected || !doc || doc.pages[i] !== pg) return; // Übersicht zu oder Seiten verschoben
 		// Eine inzwischen verdrängte (geschlossene) Bitmap hat Breite 0 → volles Bild als Rückfall.
@@ -1254,7 +1254,7 @@ export const HEFT = (() => {
 	async function deletePageAt(i) {
 		if (!doc || doc.pages.length <= 1 || !doc.pages[i]) return;
 		const pg = doc.pages[i];
-		const hasContent = (pg.strokes && pg.strokes.length) || (pg.images && pg.images.length) || (pg.texts && pg.texts.length);
+		const hasContent = (pg.strokes && pg.strokes.length) || pageImages(pg).length || (pg.texts && pg.texts.length);
 		if (hasContent && !(await confirmDelete("Diese Heftseite wirklich löschen?"))) return;
 		if (doc.pages[i] !== pg) return; // während des Dialogs geändert (z. B. Sync)
 		doc.pages.splice(i, 1);
@@ -1354,7 +1354,7 @@ export const HEFT = (() => {
 	// Canvases (Export, Vorschauen auf Startseite/Einbettungen, Seitenbild für die KI).
 	const scratchImages = () => { const cache = {}; return (im) => imgEl(im, cache); };
 	const imagesFor = (pageId) => (pageId === pid ? imgEl : scratchImages());
-	const decodeImages = (pages, imgOf) => Promise.all(pages.flatMap((pg) => (pg.images || []).map((im) => {
+	const decodeImages = (pages, imgOf) => Promise.all(pages.flatMap((pg) => pageImages(pg).map((im) => {
 		const el = imgOf(im);
 		return el.decode && el.src ? el.decode().catch(() => {}) : null;
 	})));
@@ -1674,7 +1674,7 @@ export const HEFT = (() => {
 			doc = await PERF_PROFILER.run("heft.load", () => load(pageId), { pageId }, 30);
 			if (token !== mountToken || pid !== pageId) return;
 			// Speicher: Bilder zuvor geöffneter Hefte freigeben (Scans sind schnell Hunderte MB).
-			STATE.releaseHeftBlobs(doc.pages.flatMap((pg) => (pg.images || []).map((im) => im.ref).filter(Boolean)));
+			STATE.releaseHeftBlobs(doc.pages.flatMap((pg) => pageImages(pg).map((im) => im.ref).filter(Boolean)));
 			finishView = PERF_PROFILER.start("heft.mount-view", { pages: doc.pages.length }, 16);
 			idx = Math.min(lastPage(pageId), doc.pages.length - 1); sel = null; undoStack = []; redoStack = []; insertPos = "after";
 			view.x = 0; view.y = 0; view.k = 1; navReset();
@@ -1800,7 +1800,7 @@ export const HEFT = (() => {
 		const i = Math.max(0, pageIdx | 0);
 		if (pageId === pid && doc) return doc.pages[i] || null;
 		const pg = STATE.heftPage(pageId, i);
-		const refs = (pg?.images || []).map((im) => im.ref).filter(Boolean);
+		const refs = pageImages(pg).map((im) => im.ref).filter(Boolean);
 		if (refs.length) await STATE.hydrateHeftBlobs(refs);
 		return pg;
 	}

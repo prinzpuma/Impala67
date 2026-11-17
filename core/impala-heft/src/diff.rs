@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::doc::{HeftDoc, HeftPage, Image, Paper, Point, Shape, Stroke, TextBox};
+use crate::doc::{HeftDoc, HeftPage, Image, Paper, Point, Shape, Stroke, TextBox, bg_note, bg_note_id};
 use crate::json::{js_len, same_num};
 use crate::ops::{HeftOp, Item, ItemKind, insert_index, reorder};
 
@@ -164,6 +164,8 @@ pub struct ShadowPage {
     pub ocr_text: String,
     pub ocr_src: String,
     pub ocr_key: String,
+    /// Signatur des Seitenhintergrunds (`bg`).
+    pub background: Option<Signature>,
     pub strokes: Signatures,
     pub images: Signatures,
     pub texts: Signatures,
@@ -212,6 +214,7 @@ impl Shadow {
                     ocr_text: p.ocr_text.clone(),
                     ocr_src: p.ocr_src.clone(),
                     ocr_key: p.ocr_key.clone(),
+                    background: p.background.as_ref().map(Signature::of_image),
                     strokes: signatures(&p.strokes, |s| &s.id, Signature::of_stroke),
                     images: signatures(&p.images, |s| &s.id, Signature::of_image),
                     texts: signatures(&p.texts, |s| &s.id, Signature::of_text),
@@ -243,6 +246,11 @@ impl Shadow {
                 HeftOp::PagePaper { paper, .. } => {
                     if let Some(i) = page {
                         self.pages[i].paper = paper.clone();
+                    }
+                }
+                HeftOp::PageBackground { bg, .. } => {
+                    if let Some(i) = page {
+                        self.pages[i].background = bg.as_ref().map(Signature::of_image);
                     }
                 }
                 HeftOp::Ocr { text, src, key, .. } => {
@@ -321,6 +329,20 @@ impl DiffItem for TextBox {
 }
 
 /// Vergleicht die Elemente einer Art und liefert die neuen Signaturen (`diffItems`).
+/// Operationen, die den Hintergrund einer Seite setzen oder (`None`) entfernen. Ältere Apps kennen
+/// `pgb` nicht: Mit dem ersten Hintergrund bekommen sie ein Textfeld mit der Bitte um ein Update,
+/// das mit dem letzten wieder verschwindet. `had`: Die Seite hat bisher einen Hintergrund.
+pub fn background_ops(page: &str, had: bool, bg: Option<Image>) -> Vec<HeftOp> {
+    let set = bg.is_some();
+    let mut ops = vec![HeftOp::PageBackground { page: page.to_owned(), bg }];
+    if set && !had {
+        ops.push(HeftOp::Add { page: page.to_owned(), item: Item::Text(bg_note(page)) });
+    } else if !set && had {
+        ops.push(HeftOp::Remove { page: page.to_owned(), kind: ItemKind::Text, ids: vec![bg_note_id(page)] });
+    }
+    ops
+}
+
 fn diff_items<T: DiffItem>(
     ops: &mut Vec<HeftOp>,
     page: &str,
@@ -405,6 +427,11 @@ pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>,
                     key: page.ocr_key.clone(),
                 });
             }
+            let background = page.background.as_ref().map(Signature::of_image);
+            if old.and_then(|o| o.background.as_ref()) != background.as_ref() {
+                let had = old.is_some_and(|o| o.background.is_some());
+                ops.extend(background_ops(&page.id, had, page.background.clone()));
+            }
             let id = &page.id;
             ShadowPage {
                 id: id.clone(),
@@ -412,6 +439,7 @@ pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>,
                 ocr_text: page.ocr_text.clone(),
                 ocr_src: page.ocr_src.clone(),
                 ocr_key: page.ocr_key.clone(),
+                background,
                 strokes: diff_items(&mut ops, id, old.map(|o| &o.strokes), &page.strokes),
                 images: diff_items(&mut ops, id, old.map(|o| &o.images), &page.images),
                 texts: diff_items(&mut ops, id, old.map(|o| &o.texts), &page.texts),

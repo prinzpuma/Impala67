@@ -95,6 +95,9 @@ pub enum HeftOp {
     PageOrder { order: Vec<String> },
     /// `pgp`
     PagePaper { page: String, paper: Paper },
+    /// `pgb`: Seitenhintergrund setzen (`bg`) oder entfernen (`None`). Ältere Apps überspringen die
+    /// Operation; sie sehen stattdessen den Update-Hinweis ([`crate::doc::bg_note`]).
+    PageBackground { page: String, bg: Option<Image> },
     /// `ocr`: Handschrift-Text der Seite, mit Quelle (`src`) und Fingerabdruck (`key`) der
     /// Erkennung; ältere Operationen haben beide nicht (leer). Regel: [`crate::ocr::accepts`].
     Ocr { page: String, text: String, src: String, key: String },
@@ -134,6 +137,11 @@ impl HeftOp {
                 let Some(page) = page() else { return Err(v) };
                 HeftOp::PagePaper { page, paper: Paper::parse(v.get("paper")) }
             }
+            "pgb" => {
+                let Some(page) = page() else { return Err(v) };
+                let bg = v.get("bg").and_then(|b| Image::from_value(b.clone())).filter(Image::has_source);
+                HeftOp::PageBackground { page, bg }
+            }
             "ocr" => {
                 let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
                 let Some(page) = page() else { return Err(v) };
@@ -170,6 +178,7 @@ impl HeftOp {
         match self {
             HeftOp::PageRemove { page }
             | HeftOp::PagePaper { page, .. }
+            | HeftOp::PageBackground { page, .. }
             | HeftOp::Ocr { page, .. }
             | HeftOp::Add { page, .. }
             | HeftOp::Set { page, .. }
@@ -206,6 +215,11 @@ impl Serialize for HeftOp {
                 m.serialize_entry("t", "pgp")?;
                 m.serialize_entry("p", page)?;
                 m.serialize_entry("paper", paper)?;
+            }
+            HeftOp::PageBackground { page, bg } => {
+                m.serialize_entry("t", "pgb")?;
+                m.serialize_entry("p", page)?;
+                m.serialize_entry("bg", bg)?;
             }
             HeftOp::Ocr { page, text, src, key } => {
                 m.serialize_entry("t", "ocr")?;
@@ -302,6 +316,10 @@ impl HeftPage {
         match item {
             Item::Stroke(s) if !self.strokes.iter().any(|x| x.id == s.id) => self.strokes.push(s),
             Item::Image(i) if !self.images.iter().any(|x| x.id == i.id) => self.images.push(i),
+            // Update-Hinweis für ältere Apps: hier kein Element ([`crate::doc::bg_note`]).
+            Item::Text(t) if t.is_bg_note() => {
+                self.bg_note.get_or_insert(t);
+            }
             Item::Text(t) if !self.texts.iter().any(|x| x.id == t.id) => self.texts.push(t),
             _ => {}
         }
@@ -310,6 +328,7 @@ impl HeftPage {
         match item {
             Item::Stroke(s) => replace_or_push(&mut self.strokes, s, |x| &x.id),
             Item::Image(i) => replace_or_push(&mut self.images, i, |x| &x.id),
+            Item::Text(t) if t.is_bg_note() => self.bg_note = Some(t),
             Item::Text(t) => replace_or_push(&mut self.texts, t, |x| &x.id),
         }
     }
@@ -318,7 +337,12 @@ impl HeftPage {
         match kind {
             ItemKind::Stroke => self.strokes.retain(|x| !gone.contains(x.id.as_str())),
             ItemKind::Image => self.images.retain(|x| !gone.contains(x.id.as_str())),
-            ItemKind::Text => self.texts.retain(|x| !gone.contains(x.id.as_str())),
+            ItemKind::Text => {
+                self.texts.retain(|x| !gone.contains(x.id.as_str()));
+                if self.bg_note.as_ref().is_some_and(|n| gone.contains(n.id.as_str())) {
+                    self.bg_note = None;
+                }
+            }
         }
     }
 }
@@ -343,6 +367,14 @@ impl HeftDoc {
             HeftOp::PagePaper { page, paper } => {
                 if let Some(pg) = self.page_mut(&page) {
                     pg.paper = paper;
+                }
+            }
+            HeftOp::PageBackground { page, bg } => {
+                if let Some(pg) = self.page_mut(&page) {
+                    if bg.is_some() && pg.bg_note.is_none() {
+                        pg.bg_note = Some(crate::doc::bg_note(&page));
+                    }
+                    pg.background = bg;
                 }
             }
             HeftOp::Ocr { page, text, src, key } => {
@@ -411,6 +443,12 @@ impl HeftDoc {
             ops.extend(p.strokes.iter().map(|s| HeftOp::Add { page: page(), item: Item::Stroke(s.clone()) }));
             ops.extend(p.images.iter().map(|s| HeftOp::Add { page: page(), item: Item::Image(s.clone()) }));
             ops.extend(p.texts.iter().map(|s| HeftOp::Add { page: page(), item: Item::Text(s.clone()) }));
+            if p.background.is_some() {
+                ops.push(HeftOp::PageBackground { page: page(), bg: p.background.clone() });
+            }
+            if let Some(n) = &p.bg_note {
+                ops.push(HeftOp::Add { page: page(), item: Item::Text(n.clone()) });
+            }
         }
         ops
     }
@@ -609,7 +647,7 @@ impl Hefte {
                 slot.doc()
                     .pages
                     .iter()
-                    .flat_map(|p| p.images.iter())
+                    .flat_map(|p| p.all_images())
                     .filter_map(|i| i.r#ref.as_deref())
                     .filter(|r| !r.is_empty()),
             );

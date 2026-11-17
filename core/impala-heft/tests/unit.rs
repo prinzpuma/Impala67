@@ -272,3 +272,53 @@ fn typisiert_wie_from_value() {
         assert_eq!(serde_json::to_string(&fast).unwrap(), serde_json::to_string(&HeftDoc::from_value(case)).unwrap());
     }
 }
+
+#[test]
+fn seitenhintergrund_mit_update_hinweis_fuer_alte_apps() {
+    use impala_heft::diff::diff_document;
+    use impala_heft::doc::{HeftDoc, bg_note_id};
+    use impala_heft::ops::HeftOp;
+    use serde_json::json;
+
+    let base = HeftDoc::from_value(json!({ "v": 2, "pages": [{ "id": "p1", "paper": "blank" }] }));
+    let (_, shadow) = diff_document(None, &base);
+    let next = HeftDoc::from_value(json!({ "v": 2, "pages": [{ "id": "p1", "paper": "blank",
+        "bg": { "id": "b1", "ref": "bx-1", "x": 0, "y": 0, "w": 1000, "h": 1414, "ocr": "Aufgabe 1" } }] }));
+    let (ops, shadow) = diff_document(Some(&shadow), &next);
+    assert!(matches!(&ops[0], HeftOp::PageBackground { bg: Some(_), .. }));
+    let ops_json = serde_json::to_value(&ops).unwrap();
+    assert_eq!(ops_json[0]["t"], "pgb");
+    assert_eq!(ops_json[1]["t"], "x+");
+    assert_eq!(ops_json[1]["o"]["id"], bg_note_id("p1"));
+
+    // Neue App: Hintergrund da, Hinweis ausgeblendet (kein Textfeld), Suche findet den PDF-Text.
+    let mut doc = base.clone();
+    doc.apply_ops(ops.iter().cloned());
+    let pg = &doc.pages[0];
+    assert_eq!(pg.background.as_ref().and_then(|b| b.r#ref.as_deref()), Some("bx-1"));
+    assert!(pg.texts.is_empty() && pg.bg_note.is_some());
+    assert_eq!(impala_heft::doc::compose_page_text("", pg), "Aufgabe 1");
+    assert!(doc.pages[0].all_images().any(|i| i.id == "b1"));
+
+    // Gespeichert und wieder gelesen; ältere Speicherstände tragen den Hinweis unter `texts`.
+    let round = HeftDoc::from_value(serde_json::to_value(&doc).unwrap());
+    assert_eq!(round, doc);
+    // Gespeichert steht der Hinweis in `texts` (ältere Apps zeigen ihn), die Ansicht lässt ihn weg
+    // und trägt ihn wieder eingelesen trotzdem.
+    let stored = serde_json::to_value(&doc).unwrap();
+    assert_eq!(stored["pages"][0]["texts"][0]["id"], bg_note_id("p1"));
+    let view = serde_json::to_value(impala_heft::doc::DocView(&doc)).unwrap();
+    assert_eq!(view["pages"][0]["texts"], json!([]));
+    assert_eq!(HeftDoc::from_value(view), doc);
+    // Ab leerem Heft (erstes Speichern) kommt der Hinweis ebenso mit.
+    let (ops, _) = diff_document(None, &HeftDoc::from_value(serde_json::to_value(impala_heft::doc::DocView(&next)).unwrap()));
+    assert!(serde_json::to_value(&ops).unwrap().as_array().unwrap().iter().any(|o| o["o"]["id"] == bg_note_id("p1")));
+
+    // Ohne Änderung kein neuer Diff; Entfernen nimmt auch den Hinweis mit.
+    assert!(diff_document(Some(&shadow), &next).0.is_empty());
+    let mut cleared = next.clone();
+    cleared.pages[0].background = None;
+    let (ops, _) = diff_document(Some(&shadow), &cleared);
+    doc.apply_ops(ops);
+    assert!(doc.pages[0].background.is_none() && doc.pages[0].bg_note.is_none());
+}

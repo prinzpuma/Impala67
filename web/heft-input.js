@@ -35,8 +35,7 @@ export function createHeftInput(H) {
 	const touchNavigates = () => H.viewOnly || (H.onlyPen && !penRecently());
 	// Nur der Zeiger, der die Geste begonnen hat, bewegt oder beendet sie.
 	const ownsDrawing = (e) => H.drawing.pointerId == null || e.pointerId === H.drawing.pointerId;
-	// Seitenvorlagen (bg) sind Hintergrund: nie auswählbar, Tipps und Halten gehen durch.
-	const hitImage = (pg, p) => hitBox(imagesOf(pg).filter((im) => !im.bg), p);
+	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
 	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
 	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
 	// Radierer-Feedback ("wo wirkt er?"): ein Ring in echter Radierer-Größe als DOM-Element

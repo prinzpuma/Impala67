@@ -364,6 +364,11 @@ pub struct Image {
 }
 
 impl Image {
+    /// Hat das Bild Daten (Blob-Referenz oder eingebettete dataURL)?
+    pub fn has_source(&self) -> bool {
+        self.r#ref.as_deref().is_some_and(|r| !r.is_empty()) || self.src.as_deref().is_some_and(|s| !s.is_empty())
+    }
+
     pub fn from_value(v: Value) -> Option<Self> {
         let mut f = Fields::of(v)?;
         Some(Image {
@@ -489,6 +494,13 @@ pub struct HeftPage {
     pub strokes: Vec<Stroke>,
     pub images: Vec<Image>,
     pub texts: Vec<TextBox>,
+    /// Seitenhintergrund (`bg`): ein Bild (PDF-Seite, Arbeitsblatt) fest unter allem. Kein Element:
+    /// nicht auswählbar, verschiebbar oder radierbar; geändert nur über `pgb`.
+    pub background: Option<Image>,
+    /// Hinweis für ältere Apps, die `bg` nicht kennen ([`bg_note`]). Gespeichert als gewöhnliches
+    /// Textfeld in `texts` (dort sehen ältere Apps es), hier ausgeblendet: kein Element, nicht in
+    /// [`PageView`]. Jede Seite mit Hintergrund hat ihn.
+    pub bg_note: Option<TextBox>,
     /// Handschrift-Erkennung dieser Seite (für die Suche).
     pub ocr_text: String,
     /// Wer den Text erkannt hat (`pwa`, `android`, `apple`; leer: ältere Texte), siehe [`crate::ocr`].
@@ -519,32 +531,111 @@ impl HeftPage {
         if f.0.get("paper").is_some_and(|p| p.as_str().is_some_and(|s| !s.is_empty())) {
             f.0.remove("paper");
         }
-        HeftPage {
+        let mut page = HeftPage {
             id: f.take("id", id_str).unwrap_or_default(),
             paper,
             strokes: f.take_owned("strokes", list_of(Stroke::from_value)).unwrap_or_default(),
             images: f.take_owned("images", list_of(Image::from_value)).unwrap_or_default(),
             texts: f.take_owned("texts", list_of(TextBox::from_value)).unwrap_or_default(),
+            background: f.take("bg", |v| Image::from_value(v.clone()).filter(Image::has_source)),
+            bg_note: None,
             ocr_text: f.take("ocrText", string).unwrap_or_default(),
             ocr_src: f.take("ocrSrc", string).unwrap_or_default(),
             ocr_key: f.take("ocrKey", string).unwrap_or_default(),
             extra: f.0,
+        };
+        if let Some(i) = page.texts.iter().position(TextBox::is_bg_note) {
+            page.bg_note = Some(page.texts.remove(i));
         }
+        // Auch eine Ansicht ohne Hinweis ([`PageView`]) wieder eingelesen trägt ihn.
+        if page.background.is_some() && page.bg_note.is_none() {
+            page.bg_note = Some(bg_note(&page.id));
+        }
+        page
     }
 
     pub fn stroke(&self, id: &str) -> Option<&Stroke> {
         self.strokes.iter().find(|s| s.id == id)
     }
+
+    /// Alle Bilder in Zeichenreihenfolge: erst der Hintergrund, dann die Bild-Elemente.
+    pub fn all_images(&self) -> impl Iterator<Item = &Image> {
+        self.background.iter().chain(&self.images)
+    }
+}
+
+/// ID des Update-Hinweises zu einer Seite: fest, damit zwei Geräte ihn nur einmal anlegen.
+pub fn bg_note_id(page: &str) -> String {
+    format!("bgnote-{page}")
+}
+
+/// Textfeld, das ältere Apps (ohne `bg`) statt des Hintergrunds zeigen. Markiert mit `bgNote`,
+/// damit neuere Versionen es erkennen und ausblenden.
+pub fn bg_note(page: &str) -> TextBox {
+    let mut extra = Map::new();
+    extra.insert("bgNote".into(), Value::Bool(true));
+    TextBox {
+        id: bg_note_id(page),
+        x: Some(60.0),
+        y: Some(60.0),
+        w: Some(880.0),
+        h: None,
+        text: Some("Diese Seite hat ein Arbeitsblatt bzw. eine PDF-Seite als Hintergrund. Deine Impala67-Version kann ihn noch nicht anzeigen – bitte die App aktualisieren.".into()),
+        color: Some("#c0392b".into()),
+        size: Some(28.0),
+        extra,
+    }
+}
+
+impl TextBox {
+    /// Update-Hinweis für ältere Apps ([`bg_note`])?
+    pub fn is_bg_note(&self) -> bool {
+        self.extra.get("bgNote").is_some_and(truthy)
+    }
+}
+
+/// Heftseite für die Oberfläche: ohne den Update-Hinweis für ältere Apps ([`HeftPage::bg_note`]).
+pub struct PageView<'a>(pub &'a HeftPage);
+/// Heft für die Oberfläche: Seiten als [`PageView`].
+pub struct DocView<'a>(pub &'a HeftDoc);
+
+impl Serialize for PageView<'_> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.0.write(s, false)
+    }
+}
+
+impl Serialize for DocView<'_> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let d = self.0;
+        let mut w = ObjWriter::new(s.serialize_map(None)?);
+        w.field("v", &JsNum(d.v))?;
+        w.field("rev", &d.rev)?;
+        let pages: Vec<PageView> = d.pages.iter().map(PageView).collect();
+        w.list("pages", &pages, &d.extra)?;
+        w.finish(&d.extra)
+    }
 }
 
 impl Serialize for HeftPage {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.write(s, true)
+    }
+}
+
+impl HeftPage {
+    /// Gespeicherte Form (`note`: mit Update-Hinweis in `texts`) oder Ansicht ([`PageView`]).
+    fn write<S: Serializer>(&self, s: S, note: bool) -> Result<S::Ok, S::Error> {
         let mut w = ObjWriter::new(s.serialize_map(None)?);
         w.id(&self.id)?;
         w.field("paper", &self.paper)?;
         w.list("strokes", &self.strokes, &self.extra)?;
         w.list("images", &self.images, &self.extra)?;
-        w.list("texts", &self.texts, &self.extra)?;
+        match self.bg_note.as_ref().filter(|_| note) {
+            Some(n) => w.list("texts", &self.texts.iter().chain([n]).collect::<Vec<_>>(), &self.extra)?,
+            None => w.list("texts", &self.texts, &self.extra)?,
+        }
+        w.opt("bg", &self.background)?;
         w.field("ocrText", &self.ocr_text)?;
         // Nur wenn gesetzt: Hefte ohne Rangfolge-Angaben bleiben unverändert.
         if !self.ocr_src.is_empty() {
@@ -605,7 +696,7 @@ impl HeftDoc {
         let mut n = 0;
         for pg in &self.pages {
             n += pg.strokes.iter().map(|s| 40 + s.pts.len() * 14).sum::<usize>();
-            for im in &pg.images {
+            for im in pg.all_images() {
                 n += 60
                     + match (im.r#ref.as_deref().filter(|r| !r.is_empty()), &im.src) {
                         (Some(r), _) => blob_len(r),
@@ -1058,7 +1149,7 @@ impl<'de> Deserialize<'de> for HeftDoc {
 /// der Text aller Scan-Bilder in Reihenfolge, mit Zeilenumbruch verbunden.
 pub fn compose_page_text(stroke_text: &str, page: &HeftPage) -> String {
     let mut parts = vec![js_trim(stroke_text)];
-    parts.extend(page.images.iter().filter_map(|im| im.ocr.as_deref()).filter(|o| !o.is_empty()).map(js_trim));
+    parts.extend(page.all_images().filter_map(|im| im.ocr.as_deref()).filter(|o| !o.is_empty()).map(js_trim));
     let parts: Vec<&str> = parts.into_iter().filter(|p| !p.is_empty()).collect();
     js_trim(&parts.join("\n")).to_owned()
 }

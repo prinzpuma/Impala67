@@ -43,7 +43,7 @@ pub fn content_key(page: &HeftPage) -> String {
         h.feed(b"|");
     }
     h.feed(b"#");
-    for o in page.images.iter().filter_map(|im| im.ocr.as_deref()) {
+    for o in page.all_images().filter_map(|im| im.ocr.as_deref()) {
         h.feed(o.as_bytes());
         h.feed(b"|");
     }

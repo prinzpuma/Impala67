@@ -87,7 +87,8 @@ final class HeftSelectLayer: UIView, UIGestureRecognizerDelegate {
         targets = []
         for page in pages {
             let (o, data) = (page.origin, page.data)
-            for im in data.images {
+            // Der Seitenhintergrund ist kein Element: nicht antippen oder greifen.
+            for im in data.images where !im.background {
                 targets.append((item: Item.image(im.id), frame: CGRect(x: im.x + o.x, y: im.y + o.y, width: im.w, height: im.h)))
             }
             for t in data.texts where !t.text.isEmpty {

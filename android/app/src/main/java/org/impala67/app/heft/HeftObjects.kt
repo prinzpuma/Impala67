@@ -128,7 +128,9 @@ class ObjGesture(private val vm: HeftViewModel, private val heftPageId: String) 
         val x = xf.toDouble()
         val y = yf.toDouble()
         pg.texts.lastOrNull { it.frame().contains(x, y) }?.let { return Hit(ObjKind.TEXT, it.id, it.frame()) }
-        return pg.images.lastOrNull { i -> i.frame().let { f -> f.contains(x, y) && !(tap && f.w * f.h > PAGE_SIZED) } }
+        // funktion: heft.seitenhintergrund
+        // Der Seitenhintergrund (PDF-Seite, Arbeitsblatt) ist kein Element: nie antippen oder greifen.
+        return pg.images.lastOrNull { i -> !i.background && i.frame().let { f -> f.contains(x, y) && !(tap && f.w * f.h > PAGE_SIZED) } }
             ?.let { Hit(ObjKind.IMAGE, it.id, it.frame()) }
     }
 

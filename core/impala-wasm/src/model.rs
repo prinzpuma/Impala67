@@ -649,13 +649,13 @@ impl ModelCore {
     /// Ein ganzes Heft (`{ v, rev, pages }`).
     #[wasm_bindgen(js_name = heftDoc)]
     pub fn heft_doc(&self, page_id: &str) -> Option<String> {
-        self.m.state().hefte.get(page_id).map(text)
+        self.m.state().hefte.get(page_id).map(|d| text(&impala_heft::doc::DocView(d)))
     }
 
     /// Eine Heftseite nach Position.
     #[wasm_bindgen(js_name = heftPage)]
     pub fn heft_page(&self, page_id: &str, index: usize) -> Option<String> {
-        self.m.state().hefte.get(page_id)?.pages.get(index).map(text)
+        self.m.state().hefte.get(page_id)?.pages.get(index).map(|p| text(&impala_heft::doc::PageView(p)))
     }
 
     /// Schatten des gespeicherten Hefts (Diff-Basis des Editors), direkt aus dem Kern.
@@ -668,7 +668,7 @@ impl ModelCore {
     /// Eine Heftseite nach ihrer ID.
     #[wasm_bindgen(js_name = heftPageById)]
     pub fn heft_page_by_id(&self, page_id: &str, key: &str) -> Option<String> {
-        self.m.state().hefte.get(page_id)?.page(key).map(text)
+        self.m.state().hefte.get(page_id)?.page(key).map(|p| text(&impala_heft::doc::PageView(p)))
     }
 
     /// IDs der Heftseiten in Reihenfolge (`null` ohne Heft).
@@ -701,7 +701,7 @@ impl ModelCore {
             .get(page_id)
             .into_iter()
             .flat_map(|d| d.pages.iter())
-            .flat_map(|p| p.images.iter())
+            .flat_map(|p| p.all_images())
             .filter_map(|i| i.r#ref.as_deref())
             .filter(|r| !r.is_empty())
             .collect();

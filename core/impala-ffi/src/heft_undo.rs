@@ -47,6 +47,10 @@ fn restore_page(at: usize, pg: &HeftPage) -> Vec<HeftOp> {
     ops.extend(pg.strokes.iter().map(|s| HeftOp::Add { page: page(), item: Item::Stroke(s.clone()) }));
     ops.extend(pg.images.iter().map(|s| HeftOp::Add { page: page(), item: Item::Image(s.clone()) }));
     ops.extend(pg.texts.iter().map(|s| HeftOp::Add { page: page(), item: Item::Text(s.clone()) }));
+    if pg.background.is_some() {
+        ops.push(HeftOp::PageBackground { page: page(), bg: pg.background.clone() });
+    }
+    ops.extend(pg.bg_note.iter().map(|n| HeftOp::Add { page: page(), item: Item::Text(n.clone()) }));
     ops
 }
 
@@ -63,6 +67,11 @@ fn inverse_one(doc: &HeftDoc, op: &HeftOp) -> Vec<HeftOp> {
         HeftOp::PagePaper { page, .. } => doc
             .page(page)
             .map(|p| HeftOp::PagePaper { page: page.clone(), paper: p.paper.clone() })
+            .into_iter()
+            .collect(),
+        HeftOp::PageBackground { page, .. } => doc
+            .page(page)
+            .map(|p| HeftOp::PageBackground { page: page.clone(), bg: p.background.clone() })
             .into_iter()
             .collect(),
         HeftOp::Ocr { page, .. } => doc

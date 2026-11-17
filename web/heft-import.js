@@ -86,7 +86,7 @@ export function imagePage(im, paper, bleed, {
 	const pad = bleed ? 0 : 40;
 	const k = Math.min((pageW - pad * 2) / im.w, (pageH - pad * 2) / im.h);
 	const ref = im.ref || blobRef(im.src);
-	(pg.images || (pg.images = [])).push({
+	const item = {
 		id: U.uid(),
 		ref,
 		x: (pageW - im.w * k) / 2,
@@ -94,9 +94,11 @@ export function imagePage(im, paper, bleed, {
 		w: im.w * k,
 		h: im.h * k,
 		...(im.scan ? { scan: true } : {}),
-		// Seitenvorlage (importierte PDF-/Bildseite): liegt fest, lässt sich nicht greifen.
-		...(im.bg ? { bg: true } : {})
-	});
+		...(im.ocr ? { ocr: im.ocr } : {})
+	};
+	// Importierte PDF-/Bildseite: Seitenhintergrund (kein Element, liegt fest). Scans bleiben Bilder.
+	if (im.background) pg.bg = item;
+	else (pg.images || (pg.images = [])).push(item);
 	return pg;
 }
 
@@ -166,18 +168,16 @@ export async function importPdf(f, at, targetDoc, {
 			cx.fillRect(0, 0, c.width, c.height);
 			await p.render({ canvasContext: cx, viewport: vp }).promise;
 
+			// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
+			const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
+			const ocr = text.length >= 20 ? text : undefined;
 			const pg = imagePage(
-				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, bg: true },
+				{ src: c.toDataURL("image/jpeg", SCAN_JPEG_QUALITY), w: c.width, h: c.height, background: true, ocr },
 				"blank",
 				true,
 				{ blobRef, newPage, pageW, pageH }
 			);
-			// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
-			const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
-			if (text.length >= 20) {
-				pg.images[0].ocr = text;
-				pg.ocrText = text;
-			}
+			if (ocr) pg.ocrText = ocr;
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}
@@ -222,7 +222,7 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 			at = await importPdf(f, at, targetDoc, { blobRef, newPage, pageW, pageH, pdfs, toast });
 		} else if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
 			const im = await fileToImageData(f, 1600);
-			const pg = imagePage({ ...im, bg: true }, "blank", false, { blobRef, newPage, pageW, pageH });
+			const pg = imagePage({ ...im, background: true }, "blank", false, { blobRef, newPage, pageW, pageH });
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}

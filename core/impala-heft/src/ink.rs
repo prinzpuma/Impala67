@@ -177,7 +177,7 @@ pub fn content_bottom(page: &HeftPage) -> f64 {
             }
         }
     }
-    for im in &page.images {
+    for im in page.all_images() {
         let b = im.y.unwrap_or(f64::NAN) + im.h.unwrap_or(f64::NAN);
         if b > y {
             y = b;
@@ -268,7 +268,7 @@ pub fn page_svg(page: &HeftPage, opts: &SvgOptions) -> String {
         }
         o.push_str("</g>");
     }
-    for im in &page.images {
+    for im in page.all_images() {
         let (Some(x), Some(y), Some(iw), Some(ih)) = (im.x, im.y, im.w, im.h) else { continue };
         if let Some(href) = (opts.image_href)(im) {
             let _ = write!(

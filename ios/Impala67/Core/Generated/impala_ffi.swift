@@ -3775,6 +3775,13 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float]) throws  -> [String]
     
     /**
+     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
+     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
+     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+     */
+    func heftSetBackground(pageId: String, heftPageId: String, bytes: Data, mime: String, x: Double, y: Double, w: Double, h: Double, ocr: String?) throws  -> HeftEdit
+    
+    /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
      */
     func heftSetImageFrame(pageId: String, heftPageId: String, imageId: String, x: Double, y: Double, w: Double, h: Double) throws  -> HeftEdit
@@ -5392,6 +5399,27 @@ open func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float]
         FfiConverterString.lower(pageId),
         FfiConverterString.lower(heftPageId),
         FfiConverterSequenceFloat.lower(polygon),$0
+    )
+})
+}
+    
+    /**
+     * Seitenhintergrund setzen (PDF-Seite, Arbeitsblatt; `bytes` wie bei `heft_add_image`, Rahmen in
+     * Seitenkoordinaten, `ocr`: eingebetteter Text für die Suche) oder mit leeren `bytes` entfernen.
+     * Ältere Apps zeigen statt des Hintergrunds die Bitte um ein Update.
+     */
+open func heftSetBackground(pageId: String, heftPageId: String, bytes: Data, mime: String, x: Double, y: Double, w: Double, h: Double, ocr: String?)throws  -> HeftEdit  {
+    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_set_background(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterData.lower(bytes),
+        FfiConverterString.lower(mime),
+        FfiConverterDouble.lower(x),
+        FfiConverterDouble.lower(y),
+        FfiConverterDouble.lower(w),
+        FfiConverterDouble.lower(h),
+        FfiConverterOptionString.lower(ocr),$0
     )
 })
 }
@@ -12831,6 +12859,11 @@ public struct HeftImage {
      * Erkannter Text eines Scans (von der Plattform geliefert).
      */
     public var ocr: String?
+    /**
+     * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
+     * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+     */
+    public var background: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -12841,7 +12874,11 @@ public struct HeftImage {
          */blobId: String?, x: Double, y: Double, w: Double, h: Double, 
         /**
          * Erkannter Text eines Scans (von der Plattform geliefert).
-         */ocr: String?) {
+         */ocr: String?, 
+        /**
+         * Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
+         * ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+         */background: Bool = false) {
         self.id = id
         self.blobId = blobId
         self.x = x
@@ -12849,6 +12886,7 @@ public struct HeftImage {
         self.w = w
         self.h = h
         self.ocr = ocr
+        self.background = background
     }
 }
 
@@ -12880,6 +12918,9 @@ extension HeftImage: Equatable, Hashable {
         if lhs.ocr != rhs.ocr {
             return false
         }
+        if lhs.background != rhs.background {
+            return false
+        }
         return true
     }
 
@@ -12891,6 +12932,7 @@ extension HeftImage: Equatable, Hashable {
         hasher.combine(w)
         hasher.combine(h)
         hasher.combine(ocr)
+        hasher.combine(background)
     }
 }
 
@@ -12909,7 +12951,8 @@ public struct FfiConverterTypeHeftImage: FfiConverterRustBuffer {
                 y: FfiConverterDouble.read(from: &buf), 
                 w: FfiConverterDouble.read(from: &buf), 
                 h: FfiConverterDouble.read(from: &buf), 
-                ocr: FfiConverterOptionString.read(from: &buf)
+                ocr: FfiConverterOptionString.read(from: &buf), 
+                background: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -12921,6 +12964,7 @@ public struct FfiConverterTypeHeftImage: FfiConverterRustBuffer {
         FfiConverterDouble.write(value.w, into: &buf)
         FfiConverterDouble.write(value.h, into: &buf)
         FfiConverterOptionString.write(value.ocr, into: &buf)
+        FfiConverterBool.write(value.background, into: &buf)
     }
 }
 
@@ -27183,6 +27227,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_set_background() != 28511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412) {

@@ -116,6 +116,10 @@ pub struct HeftImage {
     pub h: f64,
     /// Erkannter Text eines Scans (von der Plattform geliefert).
     pub ocr: Option<String>,
+    /// Seitenhintergrund (PDF-Seite, Arbeitsblatt): steht vorn in `images`, wird mitgezeichnet,
+    /// ist aber kein Element – nicht antippen, greifen oder ändern. Setzen über `heft_set_background`.
+    #[uniffi(default = false)]
+    pub background: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -182,6 +186,7 @@ pub(crate) fn image_data(i: &Image) -> HeftImage {
         w: i.w.unwrap_or(0.0),
         h: i.h.unwrap_or(0.0),
         ocr: i.ocr.clone().filter(|o| !o.is_empty()),
+        background: false,
     }
 }
 
@@ -192,7 +197,12 @@ pub(crate) fn page_data(pg: &HeftPage) -> HeftPageData {
         width: PAGE_W,
         height: PAGE_H,
         strokes: pg.strokes.iter().map(stroke_data).collect(),
-        images: pg.images.iter().map(image_data).collect(),
+        images: pg
+            .background
+            .iter()
+            .map(|b| HeftImage { background: true, ..image_data(b) })
+            .chain(pg.images.iter().map(image_data))
+            .collect(),
         texts: pg
             .texts
             .iter()

@@ -1352,6 +1352,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(void*_Nonnu
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer polygon, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_set_background(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer bytes, RustBuffer mime, double x, double y, double w, double h, RustBuffer ocr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_IMAGE_FRAME
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_IMAGE_FRAME
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_set_image_frame(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer image_id, double x, double y, double w, double h, RustCallStatus *_Nonnull out_status
@@ -3977,6 +3982,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SET_BACKGROUND
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_set_background(void
     
 );
 #endif

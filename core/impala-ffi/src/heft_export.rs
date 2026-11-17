@@ -60,8 +60,7 @@ impl ImpalaCore {
         let inner = &mut *guard;
         let missing: Vec<String> = inner
             .heft_page(&page_id, &heft_page_id)?
-            .images
-            .iter()
+            .all_images()
             .filter_map(|i| i.r#ref.clone().filter(|r| !r.is_empty()))
             .filter(|r| !inner.model.state().hefte.blobs.contains_key(r))
             .collect();

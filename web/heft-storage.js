@@ -2,7 +2,7 @@
 import { S, STATE } from "./state.js";
 import { DB } from "./db.js";
 import { U } from "./util.js";
-import { blobId } from "./heft-document-core.js";
+import { blobId, pageImages } from "./heft-document-core.js";
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 
@@ -54,7 +54,7 @@ export function blobRef(dataUrl) {
 }
 
 export async function persistReferencedBlobs(saveDoc) {
-	const refs = new Set((saveDoc?.pages || []).flatMap((pg) => (pg.images || []).map((im) => im.ref).filter(Boolean)));
+	const refs = new Set((saveDoc?.pages || []).flatMap((pg) => pageImages(pg).map((im) => im.ref).filter(Boolean)));
 	for (const ref of refs) {
 		const data = pendingBlobData.get(ref);
 		if (data) await ensureBlobPersisted(ref, data);
