@@ -44,19 +44,22 @@ jobs:
         working-directory: ios
         # Version wie PWA und Android aus den Release-Tags (nur Ziffern: Release bzw. nächster Patch),
         # Build-Nummer = Lauf-Nummer, damit jede .ipa als neuer erkannt wird.
+        # DEPLOYMENT_POSTPROCESSING/STRIP_*: Symboltabelle entfernen (~21 MB der App-Datei, nur fürs
+        # Debuggen nötig); `build` strippt sonst nicht, nur `archive`. Code bleibt identisch.
         run: |
           APP_VERSION=$(node ../.github/scripts/version-from-tags.mjs app)
           echo "iPad-Version: $APP_VERSION ($GITHUB_RUN_NUMBER)"
           xcodebuild -project Impala67.xcodeproj -scheme Impala67 -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES STRIP_STYLE=all \
             CODE_SIGNING_ALLOWED=NO build
       - name: .ipa packen
         working-directory: ios
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Impala67.app Payload/
-          zip -qry Impala67.ipa Payload
+          zip -qry9 Impala67.ipa Payload
       - uses: actions/upload-artifact@v7
         with:
           name: Impala67-ipa
