@@ -33,13 +33,17 @@ export const HEFT_LABEL = (() => {
 		return { doc, pg, strokes: filterInkStrokes(pg.strokes || []) };
 	}
 
-	function renderPage(strokes, pageH = PAGE_H) {
+	// base: fertig gezeichnete Seite der App (Hintergrund/PDF-Vorlage, Bilder, Textboxen, Striche).
+	// Dann kommt nur das Raster darüber; ohne base werden die Striche selbst gezeichnet.
+	function renderPage(strokes, pageH = PAGE_H, base = null) {
 		const canvas = document.createElement("canvas");
 		canvas.width = PAGE_W;
 		canvas.height = pageH;
 		const ctx = canvas.getContext("2d");
 		ctx.fillStyle = "#ffffff";
 		ctx.fillRect(0, 0, PAGE_W, pageH);
+		if (base) ctx.drawImage(base, 0, 0, PAGE_W, pageH);
+		ctx.globalAlpha = base ? 0.55 : 1;
 		// Koordinatenraster, damit die KI Rahmen in Seitenkoordinaten angeben kann
 		ctx.strokeStyle = "#dfe5ef";
 		ctx.fillStyle = "#8a94a6";
@@ -53,6 +57,8 @@ export const HEFT_LABEL = (() => {
 			ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PAGE_W, y); ctx.stroke();
 			ctx.fillText(String(y), 3, y - 3);
 		}
+		ctx.globalAlpha = 1;
+		if (base) return canvas.toDataURL("image/png");
 		ctx.strokeStyle = "#111111";
 		ctx.fillStyle = "#111111";
 		ctx.lineWidth = 2.5;
@@ -72,8 +78,25 @@ export const HEFT_LABEL = (() => {
 		return canvas.toDataURL("image/png");
 	}
 
+	// Seite so, wie die App sie zeigt (mit Hintergrund). null, wenn das nicht klappt.
+	async function appRender(pageId, pageIdx) {
+		try {
+			const { HEFT } = await import("./heft.js");
+			const url = await HEFT.pageAsDataUrl(pageId, pageIdx, PAGE_W);
+			if (!url || url.length < 32) return null;
+			const img = new Image();
+			img.src = url;
+			await img.decode();
+			return img;
+		} catch (e) {
+			console.warn("heft-label: Seitenbild ohne Hintergrund", e);
+			return null;
+		}
+	}
+
 	async function pageImage({ page_id, page_index = 0 }) {
 		const { doc, pg, strokes } = getPage(page_id, page_index);
+		const base = await appRender(page_id, page_index);
 		let appReading = "";
 		try {
 			appReading = strokes.length ? await HANDSCHRIFT.recognizeStrokes(pg.strokes, {}, "label") : "";
@@ -87,7 +110,8 @@ export const HEFT_LABEL = (() => {
 			size: { width: PAGE_W, height: pageHeight(pg) },
 			inkStrokes: strokes.length,
 			appReading,
-			image: renderPage(strokes, pageHeight(pg)),
+			background: !!pg.bg,
+			image: renderPage(strokes, pageHeight(pg), base),
 		};
 	}
 

@@ -19,7 +19,7 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 - **Lokal:** Auf `http://localhost:8000` ist die Bridge immer an.
 - **Gehostete PWA:** `?mcpBridge=1` anhängen oder in Einstellungen → Daten → Diagnose einschalten. Chrome/Firefox erlauben `ws://127.0.0.1` von HTTPS-Seiten, Safari/iPad meist nicht.
 - Die App verbindet sich per WebSocket mit `ws://127.0.0.1:8765` (Port per `IMPALA_WS_PORT` änderbar). Ein Aufruf wartet bis zu 3,5 s, falls die App gerade neu verbindet.
-- Mehrere MCP-Server (z. B. je Claude-Sitzung) teilen sich den Port: der erste spricht mit dem Browser, die anderen reichen ihre Aufrufe als Relay durch.
+- Mehrere MCP-Server (z. B. je Claude-Sitzung) teilen sich den Port: der erste spricht mit dem Browser, die anderen reichen ihre Aufrufe als Relay durch. Ein Relay schickt sein eigenes Timeout mit, damit ein älterer Primärserver neue, lang laufende Tools nicht nach 10 s abbricht.
 - Browser-Verbindungen werden nur von `localhost`, `127.0.0.1` und `https://prinzpuma.github.io` angenommen; weitere Herkunft per `IMPALA_ALLOWED_ORIGINS` (kommagetrennt).
 - **Native iPad-App im WLAN:** `node mcp/lan-setup.mjs` legt einen Kopplungs-Code in `mcp/.lan-token` an (nicht committet) und zeigt die Adresse `ws://<PC-IP>:8766/?token=…`. Nach einem Neustart des MCP-Servers lauscht der Primärserver zusätzlich auf Port 8766 (`IMPALA_LAN_PORT`) für alle Netzwerkschnittstellen, nimmt dort aber nur Verbindungen mit diesem Code an. Die Adresse kommt in die iPad-App unter Einstellungen → App & Speicher → Für Entwickler. Ohne Code bleibt der WLAN-Port zu. Auf dem iPad gibt es Diagnose, Profiler, Seiten/Suche, UI-Aktionen, `impala_screenshot` und die Bedienung über den Accessibility-Baum (`impala_ui_tree` listet Elemente, `impala_tap` löst sie aus, `impala_type` tippt ins fokussierte Feld), aber kein `impala_eval`.
 
@@ -28,8 +28,8 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 **Inhalte**
 - `impala_list_pages` — Notizen auflisten; Filter `query`, `kind`, `subject`, `archived`/`includeArchived`, `limit`.
 - `impala_get_page` — Inhalt per `id` oder `title`; bei Heften OCR- und Textbox-Text aller Seiten.
-- `impala_create_page` — neue Notiz (`title`, `content`, `subject`, `parentId`/`parent_title`, `kind`).
-- `impala_update_page` — Titel, Inhalt, Fach, Archiv. Bei Heften wird Text als neue Textbox auf Seite 1 gelegt, Striche bleiben unberührt.
+- `impala_create_page` — neue Notiz (`title`, `content`, `subject`, `parentId`/`parent_title`, `kind`, `props` für die Datenbankansicht der Elternseite).
+- `impala_update_page` — Titel, Inhalt, Fach, Archiv, `props` (werden zusammengeführt, `null` löscht ein Feld). Bei Heften wird Text als neue Textbox auf Seite 1 gelegt, Striche bleiben unberührt.
 - `impala_search` — Stichwortsuche in Notizen und Karteikarten; mit `semantic: true` Bedeutungssuche über den RAG-Index der App (braucht eingerichtete Embeddings, sonst Rückfall auf Stichworte).
 - `impala_list_flashcards`, `impala_create_flashcard` — Karteikarten.
 
@@ -41,9 +41,10 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 - `impala_run_ui_action` — `open_page`, `close_active_tab`, `search_ui`, `trigger_sync`, `toggle_sidebar`, `go_back`, `dismiss` (nur iPad).
 
 **Handschrift-Training**
-- `impala_heft_page_image` — Heftseite als Bild mit Raster plus Lesung des lokalen Modells.
+- `impala_heft_page_image` — Heftseite als Bild mit Raster (inkl. Seitenhintergrund wie PDF-Vorlagen) plus Lesung des lokalen Modells.
 - `impala_heft_label_lines` — eigene Zeilen-Lesung als Trainingsbeispiele speichern.
-- `impala_heft_add_pages` — Bild oder PDF (`file_path` oder `data_base64`) als festliegende Seitenvorlage an beliebiger Stelle ins Heft legen.
+- `impala_heft_add_pages` — Bild oder PDF (`file_path` oder `data_base64`) als festliegende Seitenvorlage an beliebiger Stelle ins Heft legen. Derselbe Aufruf (gleiches Heft, gleiche Datei, gleiche Stelle) wird in der App nur einmal ausgeführt, auch wenn er nach einem Timeout wiederholt wird (Antwort dann mit `deduplicated: true`).
+- `impala_heft_delete_pages` — Heftseiten per Index löschen; Seiten mit Handschrift, Bildern oder Textboxen nur mit `allow_content: true`.
 
 **Speicher**
 - `impala_storage_report` — größte PDFs und Cloudflare-Quota.

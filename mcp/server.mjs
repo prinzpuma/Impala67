@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { createInterface } from "node:readline";
@@ -94,7 +94,9 @@ function callViaRelay(tool, args) {
 			resolve({ error: `Timeout bei '${tool}' über den Primärserver.`, timeout: true });
 		}, getToolTimeoutMs(tool, args) + 5000);
 		pendingRelayCalls.set(relayCallId, (res) => { clearTimeout(timer); resolve(res); });
-		relayWs.send(JSON.stringify({ relayCallId, tool, args }));
+		// Eigenes Timeout mitschicken: Ein älterer Primärserver kennt neue Tools nicht und
+		// nähme sonst seinen Standard (10 s) — die App arbeitete dann ohne Rückmeldung weiter.
+		relayWs.send(JSON.stringify({ relayCallId, tool, args: { ...args, timeoutMs: getToolTimeoutMs(tool, args) } }));
 	});
 }
 
@@ -197,6 +199,9 @@ function getActiveBrowserWs() {
 	return null;
 }
 
+// Schreibende Tools: Nach einem Timeout kann die App die Aktion trotzdem abschließen.
+const WRITE_TOOLS = new Set(["impala_create_page", "impala_update_page", "impala_create_flashcard", "impala_heft_add_pages", "impala_heft_delete_pages", "impala_heft_label_lines", "impala_storage_cleanup", "impala_eval"]);
+
 function getToolTimeoutMs(tool, args = {}) {
 	if (args.timeoutMs && Number(args.timeoutMs) > 0) return Number(args.timeoutMs);
 	if (process.env.IMPALA_MCP_TIMEOUT_MS && Number(process.env.IMPALA_MCP_TIMEOUT_MS) > 0) {
@@ -215,6 +220,7 @@ function getToolTimeoutMs(tool, args = {}) {
 	if (tool === "impala_heft_page_image" || tool === "impala_heft_label_lines") return 30000;
 	// PDF-Seiten werden einzeln gerendert
 	if (tool === "impala_heft_add_pages") return 60000;
+	if (tool === "impala_heft_delete_pages") return 20000;
 	return 10000; // Standard für reguläre UI- und Lese-Aufrufe
 }
 
@@ -240,7 +246,8 @@ async function callLiveBrowser(tool, args = {}) {
 			pendingBrowserCalls.delete(callId);
 			const durationMs = Date.now() - startTime;
 			resolve({
-				error: `Timeout nach ${durationMs}ms bei '${tool}' in Browser-App. Die App hat nicht rechtzeitig geantwortet (mögliche Ursachen: Hintergrund-Tab drosselt JavaScript, langsame Netzwerk-Synchronisation oder blockierender Vorgang).`,
+				error: `Timeout nach ${durationMs}ms bei '${tool}' in Browser-App. Die App hat nicht rechtzeitig geantwortet (mögliche Ursachen: Hintergrund-Tab drosselt JavaScript, langsame Netzwerk-Synchronisation oder blockierender Vorgang).`
+					+ (WRITE_TOOLS.has(tool) ? " Die Aktion kann in der App trotzdem fertig werden: vor einem erneuten Versuch den Zustand prüfen (z. B. pageCount per impala_heft_page_image)." : ""),
 				timeout: true,
 				durationMs,
 			});
@@ -314,13 +321,14 @@ const TOOLS = [
 				parentId: { type: "string", description: "ID einer optionalen übergeordneten Notiz" },
 				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz (falls ID nicht bekannt)" },
 				kind: { type: "string", enum: ["notion", "heft"], description: "Art der Notiz: notion (Standard) oder heft" },
+				props: { type: "object", description: "Eigenschaften für die Datenbankansicht der Elternseite (z. B. Übungen: Nr, Datum, Abgabe, Status, Blatt …). Werden mit vorhandenen zusammengeführt; null löscht ein Feld." },
 			},
 			required: ["title"],
 		},
 	},
 	{
 		name: "impala_update_page",
-		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt, Fach, Archiv). Bei Handschrift-Heften bleiben Striche unangetastet: Text (content oder append_content) kommt als neue Textbox auf die erste Heftseite.",
+		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt, Fach, Archiv, Datenbank-Eigenschaften). Bei Handschrift-Heften bleiben Striche unangetastet: Text (content oder append_content) kommt als neue Textbox auf die erste Heftseite.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -331,6 +339,7 @@ const TOOLS = [
 				append_content: { type: "string", description: "Hängt Text am Ende an (bei Heften: neue Textbox)" },
 				subject: { type: "string", description: "Neues Fach der Notiz" },
 				archived: { type: "boolean", description: "true = archivieren, false = aus dem Archiv holen" },
+				props: { type: "object", description: "Eigenschaften für die Datenbankansicht der Elternseite (z. B. Übungen: Nr, Datum, Abgabe, Status, Blatt …). Werden mit vorhandenen zusammengeführt; null löscht ein Feld." },
 			},
 		},
 	},
@@ -506,7 +515,7 @@ const TOOLS = [
 	},
 	{
 		name: "impala_heft_page_image",
-		description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, graues Koordinatenraster alle 100 Einheiten) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Erster Schritt zum Beschriften: Seite lesen, dann impala_heft_label_lines aufrufen. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
+		description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, graues Koordinatenraster alle 100 Einheiten; mit Seitenhintergrund wie PDF-Vorlagen, Bildern und Textboxen) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Erster Schritt zum Beschriften: Seite lesen, dann impala_heft_label_lines aufrufen. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -530,6 +539,19 @@ const TOOLS = [
 				position: { type: "string", enum: ["start", "before", "after", "end"], description: "Relativ zur aktuellen Seite, wenn at fehlt (Standard end)" },
 			},
 			required: ["page_id"],
+		},
+	},
+	{
+		name: "impala_heft_delete_pages",
+		description: "Löscht Seiten aus einem Handschrift-Heft (0-basierte Indizes, z. B. doppelt eingefügte Vorlagen). Seiten mit Handschrift oder Textboxen werden nur mit allow_content=true gelöscht. Antwort: gelöschte Indizes und neue Seitenzahl. Über den Heft-Verlauf wiederherstellbar.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				page_id: { type: "string", description: "ID des Hefts" },
+				pages: { type: "array", items: { type: "number" }, description: "Heftseiten, 0-basiert" },
+				allow_content: { type: "boolean", description: "Auch Seiten mit Handschrift/Textboxen löschen (Standard false)" },
+			},
+			required: ["page_id", "pages"],
 		},
 	},
 	{
@@ -589,6 +611,11 @@ export async function startServer() {
 			try { data = readFileSync(args.file_path); } catch (e) { return { error: `Datei nicht lesbar: ${e.message}` }; }
 			const { file_path, ...rest } = args;
 			args = { ...rest, data_base64: data.toString("base64"), filename: rest.filename || basename(file_path) };
+		}
+		// Gleicher Aufruf (gleiches Heft, gleiche Datei, gleiche Stelle) wird in der App nur einmal
+		// ausgeführt — auch wenn er nach einem Timeout wiederholt wird.
+		if (name === "impala_heft_add_pages" && args.data_base64 && !args.op_key) {
+			args = { ...args, op_key: createHash("sha1").update(`${args.page_id}|${args.at ?? ""}|${args.position ?? ""}|`).update(String(args.data_base64)).digest("hex") };
 		}
 		const result = await callLiveBrowser(name, args);
 		if (result === null) {

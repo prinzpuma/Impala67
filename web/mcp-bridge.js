@@ -36,6 +36,43 @@ if (typeof document !== "undefined") {
 	}, true);
 }
 
+// Eigenschaften (Datenbankansicht der Elternseite) zusammenführen: null löscht ein Feld,
+// "Thema" (Titel-Spalte) folgt dem Seitentitel. Ergebnis null, wenn nichts übrig bleibt.
+export function mergeProps(current, update, title) {
+	if (!update || typeof update !== "object" || Array.isArray(update)) return current || null;
+	const out = { ...(current || {}) };
+	for (const [k, v] of Object.entries(update)) {
+		if (v === null || v === undefined) delete out[k];
+		else out[k] = Array.isArray(v) ? v.join(", ") : v;
+	}
+	if (title && ("Thema" in out || !current)) out.Thema = title;
+	return Object.keys(out).length ? out : null;
+}
+
+// Laufende/fertige impala_heft_add_pages-Aufrufe nach op_key (vom MCP-Server), damit eine
+// Wiederholung nach einem Timeout nicht dieselbe Vorlage nochmal einfügt.
+const addPagesOps = new Map();
+
+async function addHeftPages(args) {
+	const pg = S.pages?.[args.page_id];
+	if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft mit ID ${args.page_id}`);
+	const b64 = String(args.data_base64 || "").replace(/^data:[^,]*,/, "");
+	if (!b64) throw new Error("data_base64 fehlt");
+	const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+	const name = String(args.filename || "vorlage");
+	const type = String(args.mime || (/\.pdf$/i.test(name) ? "application/pdf" : "image/png"));
+	const { HEFT } = await import("./heft.js");
+	// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
+	const count = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? 0;
+	const before = count();
+	const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
+	const end = await HEFT.importFiles(args.page_id, [new File([bytes], name, { type })], pos);
+	const pageCount = count();
+	const added = pageCount - before;
+	if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
+	return { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount };
+}
+
 // impala_eval ohne 'unsafe-eval' (CSP): Der Code läuft als Inline-Skript ('unsafe-inline'
 // ist erlaubt) und liefert sein Ergebnis über einen einmaligen globalen Rückruf.
 function runEvalCode(code, ctx) {
@@ -260,10 +297,12 @@ export function initMcpBridge() {
 							parentId,
 							workspaceId: "default",
 						});
+						const props = mergeProps(null, args.props, title);
+						if (props) await STATE.dispatch("pageUpdate", { id, patch: { props } });
 						RENDER.render();
 						if (TABS && TABS.openPage) TABS.openPage(id);
 
-						result = { ok: true, id, title, kind, subject, parentId };
+						result = { ok: true, id, title, kind, subject, parentId, ...(props ? { props } : {}) };
 						break;
 					}
 					case "impala_update_page": {
@@ -279,6 +318,7 @@ export function initMcpBridge() {
 							const patch = {};
 							if (args.new_title) patch.title = String(args.new_title).trim();
 							if (args.subject !== undefined) patch.subject = args.subject ? String(args.subject).trim() : null;
+							if (args.props && typeof args.props === "object") patch.props = mergeProps(page.props, args.props, patch.title || page.title);
 							const newText = args.append_content || args.content;
 							if (page.kind === "heft") {
 								// Striche nie anfassen: Text kommt als neue Textbox auf die erste Heftseite
@@ -633,23 +673,45 @@ export function initMcpBridge() {
 						break;
 					}
 					case "impala_heft_add_pages": {
+						// Wiederholter Aufruf (z. B. nach Timeout beim Agenten) läuft nicht doppelt.
+						const key = args.op_key ? String(args.op_key) : null;
+						const known = key && addPagesOps.get(key);
+						if (known && Date.now() - known.at < 15 * 60 * 1000) {
+							result = { ...(await known.promise), deduplicated: true };
+							break;
+						}
+						const run = addHeftPages(args);
+						if (key) {
+							addPagesOps.set(key, { at: Date.now(), promise: run });
+							run.catch(() => addPagesOps.delete(key));
+						}
+						result = await run;
+						break;
+					}
+					case "impala_heft_delete_pages": {
 						const pg = S.pages?.[args.page_id];
 						if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft mit ID ${args.page_id}`);
-						const b64 = String(args.data_base64 || "").replace(/^data:[^,]*,/, "");
-						if (!b64) throw new Error("data_base64 fehlt");
-						const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-						const name = String(args.filename || "vorlage");
-						const type = String(args.mime || (/\.pdf$/i.test(name) ? "application/pdf" : "image/png"));
 						const { HEFT } = await import("./heft.js");
-						// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
-						const count = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? 0;
-						const before = count();
-						const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
-						const end = await HEFT.importFiles(args.page_id, [new File([bytes], name, { type })], pos);
-						const pageCount = count();
-						const added = pageCount - before;
-						if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
-						result = { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount };
+						const doc = HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id);
+						const pages = doc?.pages || [];
+						const want = [...new Set((Array.isArray(args.pages) ? args.pages : [args.pages]).map(Number))].filter((i) => Number.isInteger(i)).sort((a, b) => a - b);
+						if (!want.length) throw new Error("pages fehlt: z. B. [1, 2]");
+						const bad = want.filter((i) => i < 0 || i >= pages.length);
+						if (bad.length) throw new Error(`Seite(n) ${bad.join(", ")} gibt es nicht (Heft hat ${pages.length} Seiten, 0-basiert)`);
+						if (want.length >= pages.length) throw new Error("Ein Heft braucht mindestens eine Seite.");
+						const hasContent = (p) => (p.strokes || []).length > 0 || (p.texts || []).length > 0 || (p.images || []).length > 0;
+						const blocked = want.filter((i) => hasContent(pages[i]));
+						if (blocked.length && !args.allow_content) {
+							throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true löschen.`);
+						}
+						if (HEFT.openDoc(args.page_id)) await HEFT.saveNow();
+						const ids = want.map((i) => pages[i].id);
+						await STATE.dispatch("heftOps", { pageId: args.page_id, ops: ids.map((p) => ({ t: "pg-", p })) });
+						// Ein geöffnetes Heft übernimmt die Änderung asynchron: kurz warten, bis sie angekommen ist.
+						const expected = pages.length - want.length;
+						const countNow = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? null;
+						for (let i = 0; i < 20 && countNow() !== expected; i++) await new Promise((r) => setTimeout(r, 100));
+						result = { ok: true, deleted: want, pageCount: countNow() ?? expected };
 						break;
 					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.
