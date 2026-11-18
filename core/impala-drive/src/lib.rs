@@ -15,6 +15,7 @@
 pub mod api;
 pub mod client;
 pub mod clock;
+mod cloudflare;
 mod error;
 pub mod format;
 pub mod policy;
@@ -29,6 +30,7 @@ pub use client::{
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub use clock::SystemClock;
 pub use clock::{Clock, ClockSkew};
+pub use cloudflare::CloudflareLogin;
 pub use error::DriveError;
 pub use format::{DriveFile, Encoding, FileKind};
 pub use state::DriveState;

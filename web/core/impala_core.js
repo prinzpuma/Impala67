@@ -124,17 +124,20 @@ export class DriveCore {
     /**
      * Ein Durchgang. `mode`: `backup` (nur hochladen) oder `sync`, aus [`drive_mode`]; `restore`:
      * alles Fehlende holen („Aus Backup wiederherstellen“). `on_status(label)` meldet die Etappen
-     * (darf `undefined` sein). Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label }`.
+     * (darf `undefined` sein). `has_cloudflare`: Das Gerät hat schon einen Cloudflare-Schlüssel;
+     * ohne ihn liefert der erste Durchgang einen Zugang aus dem Backup als `cloudflare: { url, key }`
+     * und importiert nichts. Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label, cloudflare }`.
      * @param {boolean} allow_secrets
      * @param {string} mode
      * @param {boolean} restore
      * @param {any} on_status
+     * @param {boolean | null} [has_cloudflare]
      * @returns {Promise<any>}
      */
-    sync(allow_secrets, mode, restore, on_status) {
+    sync(allow_secrets, mode, restore, on_status, has_cloudflare) {
         const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.drivecore_sync(this.__wbg_ptr, allow_secrets, ptr0, len0, restore, addHeapObject(on_status));
+        const ret = wasm.drivecore_sync(this.__wbg_ptr, allow_secrets, ptr0, len0, restore, addHeapObject(on_status), isLikeNone(has_cloudflare) ? 0xFFFFFF : has_cloudflare ? 1 : 0);
         return takeObject(ret);
     }
 }
@@ -6022,7 +6025,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4718(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4731(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6068,7 +6071,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4718(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4731(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6161,7 +6164,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 203, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4661);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4674);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6188,14 +6191,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4718(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4718(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4731(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4731(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4661(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4674(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4661(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4674(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

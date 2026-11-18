@@ -158,6 +158,7 @@ fn report_json(r: &SyncReport) -> Value {
         "pulled": r.pulled,
         "label": r.label(),
         "clockWarningMinutes": r.clock_warning_minutes,
+        "cloudflare": r.cloudflare.as_ref().map(|c| json!({ "url": c.url, "key": c.key })),
     })
 }
 
@@ -214,10 +215,23 @@ impl DriveCore {
 
     /// Ein Durchgang. `mode`: `backup` (nur hochladen) oder `sync`, aus [`drive_mode`]; `restore`:
     /// alles Fehlende holen („Aus Backup wiederherstellen“). `on_status(label)` meldet die Etappen
-    /// (darf `undefined` sein). Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label }`.
-    pub fn sync(&self, allow_secrets: bool, mode: String, restore: bool, on_status: JsValue) -> Promise {
+    /// (darf `undefined` sein). `has_cloudflare`: Das Gerät hat schon einen Cloudflare-Schlüssel;
+    /// ohne ihn liefert der erste Durchgang einen Zugang aus dem Backup als `cloudflare: { url, key }`
+    /// und importiert nichts. Ergebnis: `{ imported, uploaded, conflicts, …, pulled, label, cloudflare }`.
+    pub fn sync(
+        &self,
+        allow_secrets: bool,
+        mode: String,
+        restore: bool,
+        on_status: JsValue,
+        has_cloudflare: Option<bool>,
+    ) -> Promise {
         with_backup(&self.backup, move |mut b| async move {
-            b.set_options(DriveOptions { allow_secrets, mode: parse_mode(&mode) });
+            b.set_options(DriveOptions {
+                allow_secrets,
+                mode: parse_mode(&mode),
+                has_cloudflare: has_cloudflare.unwrap_or(false),
+            });
             let f = on_status.dyn_into::<Function>().ok();
             let mut on_phase = |p: impala_drive::Phase| {
                 if let Some(f) = &f {

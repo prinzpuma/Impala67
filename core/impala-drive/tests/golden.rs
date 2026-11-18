@@ -376,6 +376,7 @@ fn flows_match_js() {
                 .with_options(DriveOptions {
                     allow_secrets: case["allowSecrets"].as_bool().unwrap(),
                     mode: impala_drive::policy::DriveMode::Sync,
+                    has_cloudflare: false,
                 });
 
         let mut check = |what: &str, ok: bool, detail: String| {

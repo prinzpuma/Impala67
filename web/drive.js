@@ -7,6 +7,7 @@ import { driveSyncAfterChange, driveSyncIntervalMs } from "./drive-sync-policy.j
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
 import { CORE } from "./rust-core.js";
+import { DEFAULT_WORKER_URL } from "./sync-cloudflare.js";
 // Google-Drive-Backup im privaten appDataFolder. Der Ablauf (Dateiindex über die Changes-API,
 // Snapshot + Änderungspakete, Dateien, Verdichten, Uhren-Drift, Wiederholungen) läuft im
 // Rust-Kern (core/impala-drive, über web/core/). Hier bleiben Anmeldung, Ein-/Ausgabe für den
@@ -273,8 +274,22 @@ export const DRIVE = (() => {
 	const mode = () => CORE.driveMode(String(S.settings.cfSyncKey || ""), String(S.settings.driveMode || ""));
 	const modeSelectable = () => CORE.driveModeSelectable(String(S.settings.cfSyncKey || ""));
 
+	// Erster Durchgang ohne Cloudflare-Schlüssel: Steht im Backup einer, liefert der Kern ihn statt
+	// eines Voll-Imports. Mit dem Schlüssel in den Einstellungen verbindet boot.js Cloudflare
+	// (impala67:sync-status), das den Bestand fortsetzbar in kleinen Paketen lädt.
+	async function adoptCloudflare(login) {
+		const patch = { cfSyncKey: login.key, cfUrl: login.url || S.settings.cfUrl || DEFAULT_WORKER_URL };
+		await STATE.dispatch("settingsSet", patch);
+	}
+
 	async function syncRaw(onStatus, restore = false) {
-		const report = await withCore((core) => core.sync(allowSecrets(), mode(), restore, (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }));
+		const hasCloudflare = !!String(S.settings.cfSyncKey || "").trim();
+		const report = await withCore((core) => core.sync(allowSecrets(), mode(), restore, (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }, hasCloudflare));
+		if (report.cloudflare?.key) {
+			await adoptCloudflare(report.cloudflare);
+			emitSyncStatus("ok", "Cloudflare-Sync übernommen", "Notizen werden über Cloudflare geladen.");
+			return report;
+		}
 		if (report.clockWarningMinutes) {
 			U.toast("Die Geräteuhr weicht ~" + report.clockWarningMinutes + " Min von der Serverzeit ab — Sync-Konflikte werden per Zeitstempel entschieden. Bitte Datum/Uhrzeit prüfen.", "error");
 		}

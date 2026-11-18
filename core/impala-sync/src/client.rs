@@ -28,6 +28,8 @@ use crate::wire::{Transport, is_ui_state, prepare_cloud_events, should_upload_to
 const PARALLEL_TRANSFERS: usize = 3;
 /// So viele `seq` liest ein Abschnitt beim Durchsuchen des lokalen Logs.
 const SCAN_SEQS: u64 = 500;
+/// Pakete je Übernahme beim Abruf (je Paket höchstens ≈1 MB JSON, siehe `ChunkLimits`).
+const IMPORT_PACKETS: usize = 10;
 
 /// Dauerhafter Sync-Zustand je Konto (JS: `localStorage`, Schlüssel mit User-ID).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -414,14 +416,20 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 }
                 return Ok(received);
             }
-            let (events, last_seq) = open_packets(&self.key, &page.packets, since)?;
-            received += events.len();
-            self.received_ids.extend(events.iter().filter_map(id_key));
-            self.import_remote(events).await?;
-            self.state.last_synced_seq = last_seq;
-            self.save().await?;
-            if max_seq > progress_start {
-                self.report("Empfange Notizen…", last_seq - progress_start, max_seq - progress_start);
+            // Eine Seite (bis 8 MB Pakete) in Gruppen öffnen und übernehmen: So liegt nie die ganze
+            // entpackte Seite auf einmal im Speicher, und der Abruf-Stand steht nach jeder Gruppe
+            // fest – ein Neuladen mitten im Erst-Sync setzt dort fort.
+            for group in page.packets.chunks(IMPORT_PACKETS) {
+                self.check_stop()?;
+                let (events, last_seq) = open_packets(&self.key, group, self.state.last_synced_seq)?;
+                received += events.len();
+                self.received_ids.extend(events.iter().filter_map(id_key));
+                self.import_remote(events).await?;
+                self.state.last_synced_seq = last_seq;
+                self.save().await?;
+                if max_seq > progress_start {
+                    self.report("Empfange Notizen…", last_seq - progress_start, max_seq - progress_start);
+                }
             }
             if let Some(usage) = page.usage {
                 self.usage = usage;

@@ -23,6 +23,7 @@ use serde_json::{Map, Value};
 use crate::DriveError;
 use crate::api::{self, Change, Outcome, Upload};
 use crate::clock::{Clock, ClockSkew, retry_delay_ms};
+use crate::cloudflare::{CloudflareLogin, Finder};
 use crate::format::{
     BLOB_PREFIX, DriveFile, Encoding, FileKind, SNAPSHOT_NAME, SNAPSHOT_NAMES, blob_hash, blob_name, blob_payload,
     delta_name, delta_payload, delta_properties, import_payload, parse_blob_payload,
@@ -64,11 +65,14 @@ pub struct DriveOptions {
     pub allow_secrets: bool,
     /// Sichern oder synchronisieren ([`crate::policy::drive_mode`]).
     pub mode: DriveMode,
+    /// Das Gerät hat schon einen Cloudflare-Schlüssel. Ohne ihn sucht der erste Durchgang zuerst
+    /// nur danach im Backup ([`SyncReport::cloudflare`]) und importiert dann nichts.
+    pub has_cloudflare: bool,
 }
 
 impl Default for DriveOptions {
     fn default() -> Self {
-        DriveOptions { allow_secrets: true, mode: DriveMode::Sync }
+        DriveOptions { allow_secrets: true, mode: DriveMode::Sync, has_cloudflare: false }
     }
 }
 
@@ -155,6 +159,10 @@ pub struct SyncReport {
     pub clock_skew_ms: f64,
     /// Gesetzt, wenn die Uhr so weit abweicht, dass der Nutzer gewarnt werden soll (Minuten).
     pub clock_warning_minutes: Option<u64>,
+    /// Erster Durchgang ohne eigenen Schlüssel: Im Backup steht ein Cloudflare-Zugang. Nichts wurde
+    /// importiert oder als gelesen markiert; die Plattform übernimmt den Zugang und lädt den Bestand
+    /// über Cloudflare. Der nächste Drive-Durchgang sichert dann nur noch (Backup-Modus).
+    pub cloudflare: Option<CloudflareLogin>,
 }
 
 impl SyncReport {
@@ -266,7 +274,11 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         let backup = self.options.mode == DriveMode::Backup;
         // Erster Durchgang dieses Geräts mit Drive: nie etwas gesichert oder gelesen.
         let first = st.uploaded_seq.is_none() && st.snapshot_stamp.is_none() && st.known_deltas.is_empty();
-        let pull = !backup || restore || first;
+        // Erster Durchgang ohne Cloudflare-Schlüssel: Wiederherstellung (samt Schlüssel). Mit
+        // Schlüssel kommt der Bestand über Cloudflare – ein zweiter Voll-Import aus Drive daneben
+        // verdoppelte Speicher und Arbeit.
+        let probe = first && !restore && !self.options.has_cloudflare;
+        let pull = !backup || restore || probe;
         if restore {
             // Alles neu lesen: auch Snapshot und Deltas, die als gelesen gelten.
             st.snapshot_stamp = None;
@@ -274,7 +286,11 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
         }
 
         if pull {
-            self.pull(&mut st, &files, uploaded_seq, &mut report, on_phase).await?;
+            if let Some(login) = self.pull(&mut st, &files, uploaded_seq, probe, &mut report, on_phase).await? {
+                // Nichts als gelesen markiert: Der nächste Durchgang (mit Schlüssel) sichert nur.
+                report.cloudflare = Some(login);
+                return Ok(report);
+            }
             report.pulled = true;
         }
         self.sync_blobs(&mut st, &files, pull, &mut report, on_phase).await?;
@@ -313,7 +329,7 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             let late = unseen_deltas(&files_after, &st);
             if !late.is_empty() {
                 on_phase(Phase::LateDeltas(late.len()));
-                self.import_files(&late.iter().collect::<Vec<_>>(), unsynced, &mut report, &mut |_| {}).await?;
+                self.import_files(&late.iter().collect::<Vec<_>>(), unsynced, None, &mut report, &mut |_| {}).await?;
                 late.iter().for_each(|f| st.add_known_delta(&f.id));
                 self.store.save_state(&st).await?;
             }
@@ -379,14 +395,17 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     /// Snapshot + alle unbekannten Deltas. Portionsweise Importe erzeugen keine Geister-Konflikte:
     /// übernommene Events tragen `_remote` und zählen nie als eigene ungesyncte Änderungen.
+    /// Mit `probe` wird zuerst nach einem Cloudflare-Zugang gesucht; steht einer im Backup, kommt
+    /// er zurück, und nichts gilt als gelesen.
     async fn pull(
         &mut self,
         st: &mut DriveState,
         files: &[DriveFile],
         uploaded_seq: u64,
+        probe: bool,
         report: &mut SyncReport,
         on_phase: &mut dyn FnMut(Phase),
-    ) -> Result<(), DriveError> {
+    ) -> Result<Option<CloudflareLogin>, DriveError> {
         let remote: Vec<RemoteFile> = files.iter().map(DriveFile::remote).collect();
         let snapshot = newest_file(&remote, &SNAPSHOT_NAMES)
             .and_then(|r| remote.iter().position(|x| std::ptr::eq(x, r)))
@@ -398,14 +417,17 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             on_phase(Phase::Pull { snapshot: need_snapshot, deltas: deltas.len() });
         }
         let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(&deltas).collect();
-        self.import_files(&wanted, uploaded_seq, report, on_phase).await?;
+        let mut finder = probe.then(Finder::default);
+        if let Some(login) = self.import_files(&wanted, uploaded_seq, finder.as_mut(), report, on_phase).await? {
+            return Ok(Some(login));
+        }
         // „Gelesen“ erst nach erfolgreichem Import: sonst würde ein Paket still übersprungen.
         if need_snapshot {
             st.snapshot_stamp = stamp;
         }
         deltas.iter().for_each(|f| st.add_known_delta(&f.id));
         self.store.save_state(st).await?;
-        Ok(())
+        Ok(None)
     }
 
     /// Unveränderliche Blobs (PDFs, Bilder): fehlende holen (nur mit `download`, sonst Backup-Modus),
@@ -669,17 +691,29 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
 
     /// Lädt `files` nacheinander und importiert ihre Events gesammelt – große Dateien in Portionen
     /// von etwa [`BATCH_BYTES`]. Im Speicher liegen nur die gepackten Bytes EINER Datei und eine Portion Events.
+    /// Mit `finder` wird jede Datei vorher nach einem Cloudflare-Zugang durchsucht: Ab dem ersten
+    /// Fund wird nichts mehr importiert, nur noch gelesen (ein späteres Delta kann den Schlüssel
+    /// wieder leeren – dann werden die übersprungenen Dateien doch noch importiert).
     async fn import_files(
         &mut self,
         files: &[&DriveFile],
         unsynced_after_seq: u64,
+        mut finder: Option<&mut Finder>,
         report: &mut SyncReport,
         on_phase: &mut dyn FnMut(Phase),
-    ) -> Result<(), DriveError> {
+    ) -> Result<Option<CloudflareLogin>, DriveError> {
         let (mut events, mut blobs, mut size) = (Vec::new(), Map::new(), 0);
+        let mut skipped: Vec<&DriveFile> = Vec::new();
         for (i, file) in files.iter().enumerate() {
             on_phase(Phase::Fetch { done: i, total: files.len() });
             let body = self.call(|t| api::download(t, &file.id)).await?.body;
+            if let Some(f) = finder.as_deref_mut() {
+                f.scan(&body, file.encoding())?;
+                if f.login().is_some() {
+                    skipped.push(file);
+                    continue;
+                }
+            }
             let mut reader = EventReader::new(&body, file.encoding());
             loop {
                 let batch = reader.next_batch(BATCH_BYTES.saturating_sub(size).max(1))?;
@@ -701,7 +735,13 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             on_phase(Phase::Import);
             self.import(events, blobs, unsynced_after_seq, report).await?;
         }
-        Ok(())
+        if let Some(login) = finder.and_then(|f| f.login()) {
+            return Ok(Some(login));
+        }
+        if !skipped.is_empty() {
+            Box::pin(self.import_files(&skipped, unsynced_after_seq, None, report, on_phase)).await?;
+        }
+        Ok(None)
     }
 
     // ---- Dateiliste ------------------------------------------------------------------

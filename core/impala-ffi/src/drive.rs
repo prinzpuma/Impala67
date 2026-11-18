@@ -351,8 +351,21 @@ type Backup<H> = DriveBackup<Stoppable<H>, Tokens, NativeDriveStore, NativeClock
 /// Optionen aus den Einstellungen: Geheimnisse und Modus ([`impala_drive::policy::drive_mode`]).
 fn options(inner: &Inner) -> DriveOptions {
     let settings = &inner.model.state().settings;
-    let mode = impala_drive::policy::drive_mode(settings.get("cfSyncKey").as_ref(), settings.get("driveMode").as_ref());
-    DriveOptions { allow_secrets: allow_secrets(inner), mode }
+    let key = settings.get("cfSyncKey");
+    let mode = impala_drive::policy::drive_mode(key.as_ref(), settings.get("driveMode").as_ref());
+    let has_cloudflare = key.as_ref().and_then(Value::as_str).is_some_and(|k| !k.trim().is_empty());
+    DriveOptions { allow_secrets: allow_secrets(inner), mode, has_cloudflare }
+}
+
+/// Zugang aus dem Backup übernehmen (erster Durchgang ohne Schlüssel): Der Bestand kommt dann
+/// über Cloudflare statt als zweiter Voll-Import aus Drive.
+fn adopt_cloudflare(shared: &Shared, login: &impala_drive::CloudflareLogin) {
+    let mut patch = serde_json::Map::new();
+    patch.insert("cfSyncKey".into(), Value::from(login.key.as_str()));
+    if !login.url.is_empty() {
+        patch.insert("cfUrl".into(), Value::from(login.url.as_str()));
+    }
+    let _ = crate::lock(shared).dispatch("settingsSet", Value::Object(patch));
 }
 
 fn run<H: HttpClient>(
@@ -382,6 +395,9 @@ fn run<H: HttpClient>(
                 } else {
                     block_on(backup.sync(&mut on_phase))
                 };
+                if let Some(login) = r.as_ref().ok().and_then(|r| r.cloudflare.as_ref()) {
+                    adopt_cloudflare(&shared, login);
+                }
                 // Verdichten erst mit dem Checkpoint im Hintergrund (siehe `sync.rs`).
                 settle_remote(&shared);
                 set_progress("");
@@ -1187,6 +1203,25 @@ mod tests {
         b.update_settings(r#"{"driveMode":"sync","cfSyncKey":"impala-test"}"#.into()).unwrap();
         let info = db.mode();
         assert_eq!((info.mode.as_str(), info.selectable), ("backup", false));
+    }
+
+    #[test]
+    fn neues_geraet_holt_erst_den_cloudflare_schluessel() {
+        let net = net();
+        let (a, da) = device(&net);
+        let (b, db) = device(&net);
+        a.update_settings(r#"{"cfUrl":"https://cf.test","cfSyncKey":"impala-k"}"#.into()).unwrap();
+        a.create_page("Erste".into(), "1".into(), None, None).unwrap();
+        da.sync(None).unwrap();
+        // B kennt keinen Schlüssel: Der erste Durchgang übernimmt nur den Zugang, importiert nichts.
+        let first = db.sync(None).unwrap();
+        assert!(!first.pulled && first.imported == 0 && first.uploaded == 0, "{first:?}");
+        assert!(titles(&b).is_empty());
+        let s = b.settings_json();
+        assert!(s.contains("impala-k") && s.contains("https://cf.test"), "{s}");
+        // Danach sichert B nur noch (Bestand kommt über Cloudflare).
+        let later = db.sync(None).unwrap();
+        assert!(!later.pulled && later.imported == 0, "{later:?}");
     }
 
     #[test]
