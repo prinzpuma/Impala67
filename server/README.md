@@ -78,6 +78,16 @@ R2 muss bei einem globalen manuellen Reset separat geleert werden; `db:reset` l�
 
 ---
 
+## Konten-Übersicht
+
+`node tools/konten.mjs` (aus dem Repository-Root, nach `npx wrangler login`) listet alle Konten mit Name, Größe und letzter Aktivität. Der Name ist der Begrüßungsname der App: Sie schickt ihn beim Verbinden des WebSockets im Klartext mit (`label` in der Auth-Nachricht), der Worker speichert ihn nur bei Änderungen in `user_storage.label`. Ältere Datenbanken brauchen einmal:
+
+```bash
+npx wrangler d1 execute impala67-db --remote --command "ALTER TABLE user_storage ADD COLUMN label TEXT"
+```
+
+---
+
 ## In Impala67 eintragen
 1. Impala67 → **Einstellungen → Sync & Dienste** öffnen.
 2. Worker-URL eintragen.

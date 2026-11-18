@@ -1799,7 +1799,7 @@ public protocol CloudSyncProtocol: AnyObject, Sendable {
     func sync(forceAll: Bool) throws  -> SyncReport
     
     /**
-     * Erste Nachricht nach dem Verbinden.
+     * Erste Nachricht nach dem Verbinden; trägt den aktuellen Begrüßungsnamen als Kontonamen.
      */
     func wsAuthMessage()  -> String
     
@@ -1952,7 +1952,7 @@ open func sync(forceAll: Bool)throws  -> SyncReport  {
 }
     
     /**
-     * Erste Nachricht nach dem Verbinden.
+     * Erste Nachricht nach dem Verbinden; trägt den aktuellen Begrüßungsnamen als Kontonamen.
      */
 open func wsAuthMessage() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
@@ -26954,7 +26954,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_cloudsync_sync() != 733) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_method_cloudsync_ws_auth_message() != 32389) {
+    if (uniffi_impala_ffi_checksum_method_cloudsync_ws_auth_message() != 19032) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_cloudsync_ws_url() != 17198) {

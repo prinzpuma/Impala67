@@ -7,6 +7,7 @@ const MAX_PACKETS = 20;
 const MAX_PACKET_CHARS = 12_000_000;
 const MAX_SYNC_CHARS = 8_000_000;
 const MAX_BLOB_BYTES = 100_000_000;
+const MAX_LABEL_CHARS = 40; // gleich MAX_LABEL_CHARS im Kern (impala-sync/src/api.rs)
 const enc = new TextEncoder();
 
 const UPSERT_USER_SQL = `
@@ -216,7 +217,7 @@ async function handleAi(request, env) {
 export class SyncRoom {
 	constructor(ctx, env) {
 		this.ctx = ctx; this.env = env;
-		this.userId = null; this.authHash = null; this.initialized = false; this.accountExists = false;
+		this.userId = null; this.authHash = null; this.initialized = false; this.accountExists = false; this.label = null;
 		this.maxSeq = 0; this.totalBytes = 0; this.generation = 1; this.protocolVersion = 0;
 		this.writeChain = Promise.resolve();
 		// Pings beantwortet Cloudflare selbst, ohne das Objekt aufzuwecken (gilt für alle Sockets).
@@ -244,10 +245,11 @@ export class SyncRoom {
 		}
 		const [eventState, account] = await Promise.all([
 			this.env.DB.prepare("SELECT COALESCE(MAX(seq),0) max_seq FROM sync_events WHERE user_id = ?").bind(userId).first(),
-			this.env.DB.prepare("SELECT auth_token_hash,total_bytes FROM user_storage WHERE user_id = ?").bind(userId).first(),
+			this.env.DB.prepare("SELECT auth_token_hash,total_bytes,label FROM user_storage WHERE user_id = ?").bind(userId).first(),
 		]);
 		this.maxSeq = Number(eventState?.max_seq) || 0;
 		this.totalBytes = Number(account?.total_bytes) || 0;
+		this.label = account?.label ?? null;
 		this.accountExists = !!account;
 		if (!this.authHash && account?.auth_token_hash) this.authHash = account.auth_token_hash;
 		this.initialized = true;
@@ -292,6 +294,17 @@ export class SyncRoom {
 		return true;
 	}
 
+	/** Kontoname aus der Auth-Nachricht merken; geschrieben wird nur bei einer Änderung. */
+	async saveLabel(raw) {
+		if (typeof raw !== "string" || !this.accountExists) return;
+		const label = [...raw.replace(/\p{Cc}/gu, "").trim()].slice(0, MAX_LABEL_CHARS).join("").trimEnd();
+		if (label === this.label) return;
+		try {
+			await this.env.DB.prepare("UPDATE user_storage SET label=? WHERE user_id=?").bind(label, this.userId).run();
+			this.label = label;
+		} catch (error) { console.error("save_label", error); }
+	}
+
 	broadcast(message, exceptClientId = null) {
 		const payload = JSON.stringify(message);
 		for (const ws of this.ctx?.getWebSockets?.() || []) {
@@ -328,6 +341,7 @@ export class SyncRoom {
 			attachment = { userId: this.userId, authenticated: true, protocol: CLOUD_SYNC_PROTOCOL, clientId };
 			ws.serializeAttachment?.(attachment);
 			ws.send(JSON.stringify({ type: "authenticated", protocol: CLOUD_SYNC_PROTOCOL, generation: this.generation }));
+			await this.saveLabel(msg.label);
 			return;
 		}
 		if (!attachment.authenticated || attachment.protocol !== CLOUD_SYNC_PROTOCOL) {

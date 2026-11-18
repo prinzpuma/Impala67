@@ -3635,7 +3635,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_cloudsync_sync() != 733.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_method_cloudsync_ws_auth_message() != 32389.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_method_cloudsync_ws_auth_message() != 19032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_cloudsync_ws_url() != 17198.toShort()) {
@@ -6409,7 +6409,7 @@ public interface CloudSyncInterface {
     fun `sync`(`forceAll`: kotlin.Boolean): SyncReport
     
     /**
-     * Erste Nachricht nach dem Verbinden.
+     * Erste Nachricht nach dem Verbinden; trägt den aktuellen Begrüßungsnamen als Kontonamen.
      */
     fun `wsAuthMessage`(): kotlin.String
     
@@ -6628,7 +6628,7 @@ open class CloudSync: Disposable, AutoCloseable, CloudSyncInterface
 
     
     /**
-     * Erste Nachricht nach dem Verbinden.
+     * Erste Nachricht nach dem Verbinden; trägt den aktuellen Begrüßungsnamen als Kontonamen.
      */override fun `wsAuthMessage`(): kotlin.String {
             return FfiConverterString.lift(
     callWithPointer {

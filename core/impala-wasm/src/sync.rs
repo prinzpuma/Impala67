@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use impala_crypto::{OsRandom, StorageUsage, SyncKey};
 use impala_sync::api::{ServerMessage, WS_PING_INTERVAL_MS, WS_PING_MESSAGE, parse_server_message};
 use impala_sync::{
-    LocalBlob, PageTexts, PassReport, StoreError, SyncClient, SyncError, SyncState, SyncStore, WsAction, is_uploadable,
+    Endpoint, LocalBlob, PageTexts, PassReport, StoreError, SyncClient, SyncError, SyncState, SyncStore, WsAction, is_uploadable,
     reconnect_delay_ms, retry_delay_ms, should_compact_cloud,
 };
 use js_sys::{Array, Function, Object, Promise, Uint8Array};
@@ -179,8 +179,7 @@ pub struct SyncCore {
     store: JsStore,
     stop: Arc<AtomicBool>,
     client_id: String,
-    ws_url: String,
-    ws_auth: String,
+    endpoint: Endpoint,
 }
 
 /// Nimmt den Client für einen Durchgang heraus.
@@ -235,16 +234,14 @@ impl SyncCore {
                 let _ = f.call3(&JsValue::NULL, &p.label.into(), &(p.current as f64).into(), &(p.total as f64).into());
             });
         }
-        let endpoint = client.endpoint();
-        let (ws_url, ws_auth) = (endpoint.ws_url(), endpoint.ws_auth_message());
+        let endpoint = client.endpoint().clone();
         Ok(SyncCore {
             stop: client.stop_flag(),
             client: Rc::new(RefCell::new(Some(client))),
             deferred: Rc::new(RefCell::new(Vec::new())),
             store,
             client_id,
-            ws_url,
-            ws_auth,
+            endpoint,
         })
     }
 
@@ -349,12 +346,13 @@ impl SyncCore {
 
     #[wasm_bindgen(getter, js_name = wsUrl)]
     pub fn ws_url(&self) -> String {
-        self.ws_url.clone()
+        self.endpoint.ws_url()
     }
 
-    #[wasm_bindgen(getter, js_name = wsAuthMessage)]
-    pub fn ws_auth_message(&self) -> String {
-        self.ws_auth.clone()
+    /// Erste Nachricht nach dem Verbinden; `label` ist der Begrüßungsname (Kontoname für den Server).
+    #[wasm_bindgen(js_name = wsAuthMessage)]
+    pub fn ws_auth_message(&self, label: String) -> String {
+        self.endpoint.ws_auth_message(&label)
     }
 }
 

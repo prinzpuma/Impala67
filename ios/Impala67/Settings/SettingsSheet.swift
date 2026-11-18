@@ -674,7 +674,7 @@ private struct AppearanceSettingsSections: View {
 
                 SettingsDivider()
 
-                SettingsInputRow(title: "Begrüßungsname", description: "Erscheint in der Begrüßung auf der Startseite") {
+                SettingsInputRow(title: "Begrüßungsname", description: "Erscheint in der Begrüßung auf der Startseite. Wird auch dem Betreiber des Sync-Servers angezeigt.") {
                     TextField("Optional", text: $homeName)
                         .settingsInputStyle()
                         .onSubmit(saveHome)

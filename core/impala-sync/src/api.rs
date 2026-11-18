@@ -99,12 +99,23 @@ impl Endpoint {
         format!("{scheme}//{host}/ws?user={}", encode_uri_component(&self.user_id))
     }
 
-    /// Erste Nachricht nach dem Öffnen des WebSockets.
-    pub fn ws_auth_message(&self) -> String {
+    /// Erste Nachricht nach dem Öffnen des WebSockets. `label` (der Begrüßungsname) liest der
+    /// Server im Klartext, damit der Betreiber Konten zuordnen kann; ältere Server ignorieren ihn.
+    pub fn ws_auth_message(&self, label: &str) -> String {
         impala_crypto::json::stringify(&json!({
             "type": "auth", "protocol": CLOUD_SYNC_PROTOCOL, "token": self.auth_token, "clientId": self.client_id,
+            "label": account_label(label),
         }))
     }
+}
+
+/// Höchstlänge des Kontonamens (Zeichen), gleich `MAX_LABEL_CHARS` im Worker.
+pub const MAX_LABEL_CHARS: usize = 40;
+
+/// Kontoname für den Server: ohne Steuerzeichen, getrimmt, gekürzt.
+pub fn account_label(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control()).collect();
+    clean.trim().chars().take(MAX_LABEL_CHARS).collect::<String>().trim_end().to_owned()
 }
 
 /// Alle 30 s, damit Proxys die Verbindung offen halten.
@@ -361,7 +372,11 @@ mod tests {
             names,
             ["Authorization", "X-User-Id", "X-Impala-Client-Id", "X-Impala-Sync-Protocol", "Content-Type"]
         );
-        assert_eq!(ep.ws_auth_message(), r#"{"type":"auth","protocol":4,"token":"tok","clientId":"c1"}"#);
+        assert_eq!(
+            ep.ws_auth_message("  Anna\n "),
+            r#"{"type":"auth","protocol":4,"token":"tok","clientId":"c1","label":"Anna"}"#
+        );
+        assert_eq!(account_label(&"x".repeat(50)).chars().count(), MAX_LABEL_CHARS);
         assert_eq!(
             parse_server_message(r#"{"type":"changed","maxSeq":9,"senderClientId":"c1"}"#, "c1").unwrap(),
             ServerMessage::Changed { max_seq: 9.0, blob: false, from_self: true }

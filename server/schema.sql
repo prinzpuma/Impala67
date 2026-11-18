@@ -22,5 +22,8 @@ CREATE TABLE IF NOT EXISTS user_storage (
     user_id TEXT PRIMARY KEY,
     auth_token_hash TEXT NOT NULL,
     total_bytes INTEGER NOT NULL DEFAULT 0,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    -- Begrüßungsname aus der App (Klartext, nur zur Zuordnung durch den Betreiber).
+    -- Bestehende Datenbanken: ALTER TABLE user_storage ADD COLUMN label TEXT;
+    label TEXT
 );

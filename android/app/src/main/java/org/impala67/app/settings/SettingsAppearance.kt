@@ -83,7 +83,7 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
             label = "Begrüßungsname",
             stored = s?.userName ?: "",
             placeholder = "Optional",
-            supporting = "Erscheint in der Begrüßung auf der Startseite",
+            supporting = "Erscheint in der Begrüßung auf der Startseite. Wird auch dem Betreiber des Sync-Servers angezeigt.",
             onCommit = { vm.saveUserName(it) },
         )
         SettingsSwitchRow(

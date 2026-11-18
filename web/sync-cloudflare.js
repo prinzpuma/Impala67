@@ -314,7 +314,7 @@ export const CLOUDFLARE_SYNC = (() => {
 		ws.addEventListener("open", () => {
 			if (socket !== ws) return;
 			reconnectAttempts = 0;
-			ws.send(core.wsAuthMessage);
+			ws.send(core.wsAuthMessage(String(S.settings?.homeUserName || "")));
 		});
 		ws.addEventListener("message", (event) => {
 			if (socket !== ws) return;

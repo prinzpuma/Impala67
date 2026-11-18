@@ -481,8 +481,7 @@ pub struct CloudSync {
     out: Arc<Published>,
     stop: Arc<AtomicBool>,
     client_id: String,
-    ws_url: String,
-    ws_auth: String,
+    endpoint: Endpoint,
 }
 
 impl CloudSync {
@@ -528,8 +527,7 @@ impl CloudSync {
             out,
             stop,
             client_id,
-            ws_url: endpoint.ws_url(),
-            ws_auth: endpoint.ws_auth_message(),
+            endpoint,
         })
     }
 
@@ -649,12 +647,13 @@ impl CloudSync {
 
     /// WebSocket-Adresse (`wss://…/ws?…`).
     pub fn ws_url(&self) -> String {
-        self.ws_url.clone()
+        self.endpoint.ws_url()
     }
 
-    /// Erste Nachricht nach dem Verbinden.
+    /// Erste Nachricht nach dem Verbinden; trägt den aktuellen Begrüßungsnamen als Kontonamen.
     pub fn ws_auth_message(&self) -> String {
-        self.ws_auth.clone()
+        let settings = serde_json::to_value(&crate::lock(&self.core).model.state().settings).unwrap_or_default();
+        self.endpoint.ws_auth_message(settings.get("homeUserName").and_then(|v| v.as_str()).unwrap_or(""))
     }
 }
 

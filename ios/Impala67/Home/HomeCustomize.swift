@@ -72,7 +72,7 @@ struct HomeSettingsSections: View {
             } header: {
                 Text("Begrüßungsname")
             } footer: {
-                Text("Erscheint in der Begrüßung auf der Startseite")
+                Text("Erscheint in der Begrüßung auf der Startseite. Wird auch dem Betreiber des Sync-Servers angezeigt.")
             }
             Section {
                 Toggle("Tagesartikel", isOn: $article)
