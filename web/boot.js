@@ -180,6 +180,9 @@ export async function initApp() {
 	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint
 	// einplanen. Der Scheduler wartet zusätzlich fünf Sekunden ohne Nutzereingabe.
 	STATE.scheduleCheckpoint();
+	// Entwickler-Bridge gleich nach der sichtbaren UI: Sie soll gerade dann erreichbar sein, wenn
+	// der weitere Start (Sync, Drive) hängt oder scheitert – genau das will man dann ansehen.
+	initMcpBridge();
 	if (typeof performance !== "undefined" && performance.mark) {
 		performance.mark("impala67:boot-ready");
 		try {
@@ -266,15 +269,18 @@ export async function initApp() {
 	// Ein kaputtes/unerreichbares Backend bleibt ein Sync-Fehler, kein Boot-Fehler.
 	try { CLOUDFLARE_SYNC.init(); }
 	catch (e) { console.warn("[boot] Cloudflare-Sync beim Start übersprungen:", e); }
-	await SETTINGS.startAutoDriveSync();
-	// Offene Sync-Konflikte (nach Drive-Sync / Reload) als Lösungs-Popup zeigen.
-	setTimeout(showPendingConflictsIfAny, 450);
+	// Drive-Abgleich im Hintergrund: Der erste Abgleich eines neuen Geräts lädt das ganze Backup
+	// (Minuten) – mit await standen so lange Bridge, Update-Prüfung und Badge still.
+	// Offene Sync-Konflikte (nach Drive-Sync / Reload) danach als Lösungs-Popup zeigen.
+	Promise.resolve()
+		.then(() => SETTINGS.startAutoDriveSync())
+		.catch((e) => console.warn("[boot] Drive-Abgleich beim Start fehlgeschlagen:", e))
+		.finally(() => setTimeout(showPendingConflictsIfAny, 450));
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
 	setInterval(pingAiStatusIfVisible, 60000);
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
 	if (LERNZEIT && LERNZEIT.startInterval) LERNZEIT.startInterval();
 	if (ANALYSE && ANALYSE.initDwellTimer) ANALYSE.initDwellTimer();
-	initMcpBridge();
 	startUpdateWatcher();
 	startAppBadge();
 	const scheduleIdle = typeof window.requestIdleCallback === "function"

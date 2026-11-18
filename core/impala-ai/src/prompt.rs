@@ -24,6 +24,8 @@ pub struct LocalTime {
 pub enum ToolMode {
     /// Volle Werkzeugliste.
     Full,
+    /// Volle Werkzeugliste in flacher Form (`search`, `read_pages`, `edit_page` …, siehe `flat.rs`).
+    Flat,
     /// Nur `request_tools` (Einstellung „Tools mitsenden“ aus).
     Meta,
     /// Keine Werkzeuge (Umformulieren, einfache Antworten).
@@ -35,6 +37,9 @@ pub fn system_prompt(mode: ToolMode, model_note: &str, custom_instructions: &str
     let tool_line = match mode {
         ToolMode::Full => {
             "Du kannst die App direkt bedienen. Nutze zuerst inspect zum Nachsehen und change für Änderungen. Bündele zusammengehörige Änderungen in einem change. Erfinde keine Namen. Bei echter Mehrdeutigkeit nutze ask_choice. Führe die Aufgabe direkt aus und fasse danach knapp zusammen, was passiert ist."
+        }
+        ToolMode::Flat => {
+            "Du kannst die App direkt bedienen. Lies erst nach (search, dann read_pages), dann ändere so klein wie möglich (edit_page mit edits, append oder props statt content). Erfinde keine Titel. Bei echter Mehrdeutigkeit nutze ask_choice. Führe die Aufgabe direkt aus und fasse danach knapp zusammen, was passiert ist."
         }
         ToolMode::Meta => {
             "Aktuell ist nur das Werkzeug request_tools verfügbar. Sobald die Anfrage Notizen, Karten, Hefte, Suche oder Aktionen im Workspace erfordern könnte, rufe ZUERST request_tools auf — danach stehen alle Werkzeuge in derselben Anfrage bereit. Sonst antworte direkt."

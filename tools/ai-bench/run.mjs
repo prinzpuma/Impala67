@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import { SCENARIOS } from "./scenarios.mjs";
 import { runMcpTurn } from "./mcp-agent.mjs";
+import { CONTENT_TOOLS, CONTENT_WRITE } from "../../mcp/content-tools.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (name, fallback) => {
@@ -33,6 +34,9 @@ const CTX = Number(arg("ctx", 32768));
 const WS_PORT = Number(process.env.IMPALA_WS_PORT || 8765);
 const TURN_LIMIT_MS = Number(arg("turn-timeout", 20 * 60000));
 const MODES = String(arg("modes", "app,mcp")).split(",");
+// Werkzeug-Variante der App-KI: classic = inspect/change (tool_defs.json), flat = search, read_pages,
+// edit_page … (tool_defs_flat.json). MCP nutzt immer die flachen Werkzeuge.
+const APP_TOOLS = String(arg("app-tools", "classic"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toLocaleTimeString("de-DE"), ...a);
 
@@ -98,10 +102,11 @@ function plain(text) {
 		.replace(/\\approx/g, "≈").replace(/\\cdot/g, "·").replace(/\\(?:left|right)\b/g, "")
 		.replace(/\\[,;:! ]/g, " ").replace(/\\%/g, "%").replace(/\\([a-zA-Z]+)/g, "$1").replace(/[{}$]/g, "").replace(/~/g, " ");
 }
+// App-Modus: flache Werkzeuge laufen im Agenten als inspect/change, daher reichen diese Namen.
 const GROUPS = {
 	heft: ["view_heft_page", "impala_heft_page_image"],
-	read: ["inspect", "impala_get_page", "impala_search", "impala_list_pages", "impala_list_flashcards", "view_heft_page", "impala_heft_page_image"],
-	write: ["change", "impala_create_page", "impala_update_page", "impala_create_flashcard"],
+	read: ["inspect", "view_heft_page", ...CONTENT_TOOLS.map((t) => t.name).filter((n) => !CONTENT_WRITE.has(n)), "impala_heft_page_image"],
+	write: ["change", ...CONTENT_WRITE],
 	calc: ["calculate"],
 };
 // Werkzeug-Aufrufe beider Modi vergleichbar machen: Gruppe und Heftseite (1-basiert).
@@ -207,7 +212,7 @@ async function main() {
 	for (const m of models) {
 		const loadMs = arg("no-load", false) !== true ? lmsLoad(m.id) : null;
 		for (const mode of MODES) {
-			const entry = { id: m.id, mode, type: m.type, arch: m.arch, quant: m.quantization, loadMs, scenarios: [] };
+			const entry = { id: m.id, mode, tools: mode === "app" ? APP_TOOLS : "flat", type: m.type, arch: m.arch, quant: m.quantization, loadMs, scenarios: [] };
 			results.runs.push(entry);
 			log(`== ${m.id} · ${mode}${loadMs ? ` (geladen in ${(loadMs / 1000).toFixed(1)} s)` : ""}`);
 			for (const s of scenarios) {
@@ -244,7 +249,7 @@ async function main() {
 		const prev = [];
 		for (const [i, t] of s.turns.entries()) {
 			const spec = { convId, model: entry.id, text: t.text, workspacePage: s.workspacePage || null, answers: t.answers || null,
-				thinking: arg("no-think", false) !== true, pdfFile: t.attachPdf ? pdfFile : null };
+				thinking: arg("no-think", false) !== true, pdfFile: t.attachPdf ? pdfFile : null, appTools: entry.tools };
 			const rec = normalize(entry.mode === "app" ? await runAppTurn(app, spec) : await runMcpTurn({ app, lms: LMS, model: entry.id, conv, spec, limitMs: TURN_LIMIT_MS }));
 			process.stdout.write("\r".padEnd(112) + "\r");
 			const checks = rec.state === "done" ? grade(t, rec, { prev }) : (t.checks || []).map((c) => ({ label: c.label, pass: false }));
@@ -265,6 +270,8 @@ async function main() {
 }
 
 // ---------- Bericht ----------
+// Spaltenname: Modus, bei der App mit Werkzeug-Variante (�ltere Ergebnisse: ohne).
+const label = (m) => (m.mode === "app" && m.tools && m.tools !== "classic" ? `app/${m.tools}` : m.mode);
 function report(res) {
 	const runs = res.runs || (res.models || []).map((m) => ({ ...m, mode: "app" })); // ältere Ergebnisdateien
 	const L = [];
@@ -278,11 +285,11 @@ function report(res) {
 	L.push("| Modell | Modus | Punkte | Zeit gesamt | Ø Decode tk/s | Ø Prefill tk/s | Ø TTFT | max. Prompt | Denk-Token | Tool-Aufrufe (Fehler) | Abbrüche |", "|---|---|---|---|---|---|---|---|---|---|---|");
 	for (const m of runs) {
 		const turns = m.scenarios.flatMap((s) => s.turns || []);
-		L.push(`| ${m.id} | ${m.mode} | ${pct(sum(turns, "passed"), sum(turns, "total"))} | ${fmt(sum(turns, "wallMs"))} | ${avg(turns, "decodeTps")?.toFixed(1) ?? "–"} | ${avg(turns, "prefillTps")?.toFixed(0) ?? "–"} | ${fmt(avg(turns, "ttftMs"))} | ${Math.max(0, ...turns.map((x) => x.maxPromptTokens))} | ${sum(turns, "reasoningTokens")} | ${sum(turns, "toolCalls")} (${sum(turns, "toolErrors")}) | ${turns.filter((x) => x.state !== "done" || /Abgebrochen/.test(x.answer || "")).length} |`);
+		L.push(`| ${m.id} | ${label(m)} | ${pct(sum(turns, "passed"), sum(turns, "total"))} | ${fmt(sum(turns, "wallMs"))} | ${avg(turns, "decodeTps")?.toFixed(1) ?? "–"} | ${avg(turns, "prefillTps")?.toFixed(0) ?? "–"} | ${fmt(avg(turns, "ttftMs"))} | ${Math.max(0, ...turns.map((x) => x.maxPromptTokens))} | ${sum(turns, "reasoningTokens")} | ${sum(turns, "toolCalls")} (${sum(turns, "toolErrors")}) | ${turns.filter((x) => x.state !== "done" || /Abgebrochen/.test(x.answer || "")).length} |`);
 	}
 	// Punkte je Szenario nebeneinander
 	const ids = [...new Set(runs.flatMap((m) => m.scenarios.map((s) => s.id)))];
-	L.push("", "| Szenario | " + runs.map((m) => `${m.id.replace("ternary-bonsai-2-", "")} ${m.mode}`).join(" | ") + " |", "|---|" + runs.map(() => "---").join("|") + "|");
+	L.push("", "| Szenario | " + runs.map((m) => `${m.id.replace("ternary-bonsai-2-", "")} ${label(m)}`).join(" | ") + " |", "|---|" + runs.map(() => "---").join("|") + "|");
 	for (const id of ids) {
 		const name = runs.flatMap((m) => m.scenarios).find((s) => s.id === id)?.name || id;
 		L.push(`| ${name} | ` + runs.map((m) => { const s = m.scenarios.find((x) => x.id === id); if (!s?.turns) return "–"; const t = s.turns; return `${sum(t, "passed")}/${sum(t, "total")} · ${fmt(sum(t, "wallMs"))}`; }).join(" | ") + " |");

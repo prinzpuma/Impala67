@@ -21,8 +21,8 @@ Einrichtung der Bridge: `node mcp/lan-setup.mjs` (Port 8766), Adresse in der App
 - Navigieren: `impala_run_ui_action` – `open_page`, `close_active_tab`, `search_ui`, `toggle_sidebar`,
   `trigger_sync`, `go_back`, `dismiss`.
 - Messen: `impala_get_performance_trace`, `impala_get_diagnostics`.
-- Daten: `impala_list_pages`, `impala_get_page`, `impala_create_page`, `impala_update_page`, `impala_search`,
-  `impala_list_flashcards`, `impala_create_flashcard`.
+- Daten: dieselben Werkzeuge wie die App-KI (`impala_search`, `impala_read_pages`, `impala_create_pages`,
+  `impala_edit_page`, `impala_list_cards`, `impala_create_cards` …, siehe `mcp/README.md`), im Kern ausgeführt.
 
 ## 1. Leistung
 

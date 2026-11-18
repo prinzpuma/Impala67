@@ -4070,6 +4070,14 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func reviewPreview(cardId: String) throws  -> [String]
     
     /**
+     * Inhalts-Werkzeug der MCP-Bridge (iPad, `DevBridge.swift`): dieselben flachen Werkzeuge wie
+     * die App-KI (`impala_ai::flat`, z. B. `read_pages`, `edit_page`), Name ohne `impala_`-Präfix,
+     * Argumente und Ergebnis als JSON. Ohne Rückfrage und ohne Änderungs-Karte im Chat;
+     * `dry_run: true` prüft Schreibwünsche nur. Unbekannter Name → `{ "error" }`.
+     */
+    func runMcpTool(name: String, argsJson: String, utcOffsetMinutes: Int32)  -> String
+    
+    /**
      * Chat anlegen oder ersetzen; liefert die ID (leere `id` = neuer Chat). `updated` setzt der Kern
      * auf jetzt; unveränderte Chats werden nicht erneut geschrieben.
      */
@@ -6084,6 +6092,22 @@ open func reviewPreview(cardId: String)throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_impala_ffi_fn_method_impalacore_review_preview(self.uniffiClonePointer(),
         FfiConverterString.lower(cardId),$0
+    )
+})
+}
+    
+    /**
+     * Inhalts-Werkzeug der MCP-Bridge (iPad, `DevBridge.swift`): dieselben flachen Werkzeuge wie
+     * die App-KI (`impala_ai::flat`, z. B. `read_pages`, `edit_page`), Name ohne `impala_`-Präfix,
+     * Argumente und Ergebnis als JSON. Ohne Rückfrage und ohne Änderungs-Karte im Chat;
+     * `dry_run: true` prüft Schreibwünsche nur. Unbekannter Name → `{ "error" }`.
+     */
+open func runMcpTool(name: String, argsJson: String, utcOffsetMinutes: Int32) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_run_mcp_tool(self.uniffiClonePointer(),
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(argsJson),
+        FfiConverterInt32.lower(utcOffsetMinutes),$0
     )
 })
 }
@@ -27453,6 +27477,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_review_preview() != 8984) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_run_mcp_tool() != 52190) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_save_chat() != 5723) {

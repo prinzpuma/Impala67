@@ -309,14 +309,26 @@ impl Tools<'_> {
             .take(20)
             .map(|h| {
                 let pg = pages.get(&h.id);
-                let mut o = json!({ "title": pg.map(|p| p.title()).unwrap_or(""), "snippet": h.snippet });
+                let mut o = json!({ "title": pg.map(|p| p.title()).unwrap_or("") });
+                if let Some(parent) = pg.and_then(|p| p.parent()).and_then(|id| pages.get(id)) {
+                    o["parent"] = Value::from(parent.title());
+                }
+                o["snippet"] = Value::from(h.snippet.clone());
+                if pg.is_some_and(|p| p.is_heft()) {
+                    o["heft"] = Value::Bool(true);
+                }
                 if pg.is_some_and(|p| p.is_archived()) {
                     o["archived"] = Value::Bool(true);
                 }
                 o
             })
             .collect();
-        let mut out = json!({ "results": results, "totalMatches": all.len() });
+        let next = if all.is_empty() {
+            "Andere Stichworte oder semantic=true versuchen."
+        } else {
+            "Passende Treffer mit read_pages (inspect kind=page) lesen."
+        };
+        let mut out = json!({ "results": results, "totalMatches": all.len(), "next": next });
         if all.len() > 20 {
             out["note"] = Value::from("Nur die 20 besten Treffer — bei Bedarf genauer suchen.");
         }
@@ -371,23 +383,73 @@ impl Tools<'_> {
         })
     }
 
-    fn read_page(&self, title: &str) -> Res {
-        let id = self.page_by_title(title)?;
+    /// Zusammenhang einer gelesenen Seite (wie `pageInfo` in `web/tools.js`): Ordner, Unterseiten;
+    /// als Verzeichnis-Eintrag Spalten + eigene Werte, als Verzeichnis Spalten + Einträge.
+    fn page_info(&self, pg: &impala_model::Page, out: &mut Map<String, Value>) {
+        let state = self.inner.model.state();
+        let parent = pg.parent().and_then(|id| state.pages.get(id));
+        if let Some(p) = parent {
+            out.insert("parent".into(), Value::from(p.title()));
+            if let Some(schema) = p.get("db").and_then(|d| d.get("schema").cloned()) {
+                let columns = impala_ai::edit::columns(&schema);
+                out.insert("verzeichnis".into(), json!({ "title": p.title(), "columns": columns }));
+                out.insert("props".into(), pg.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})));
+            }
+        }
+        let kids = state.children_of(Some(pg.id()), Some(pg.workspace()), None);
+        if let Some(schema) = pg.get("db").and_then(|d| d.get("schema").cloned()) {
+            out.insert("columns".into(), json!(impala_ai::edit::columns(&schema)));
+            let entries: Vec<Value> = kids
+                .iter()
+                .take(40)
+                .map(|r| json!({ "title": r.title(), "props": r.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})) }))
+                .collect();
+            out.insert("entries".into(), Value::Array(entries));
+            if kids.len() > 40 {
+                out.insert("entriesTotal".into(), Value::from(kids.len()));
+            }
+        } else if !kids.is_empty() {
+            out.insert("children".into(), json!(kids.iter().take(30).map(|r| r.title()).collect::<Vec<_>>()));
+            if kids.len() > 30 {
+                out.insert("childrenTotal".into(), Value::from(kids.len()));
+            }
+        }
+    }
+
+    fn read_page(&self, title: &str, max: usize) -> Res {
+        let id = self.page_by_title(title).map_err(|e| format!("{e}. Titel mit search oder list_pages nachschlagen."))?;
         let state = self.inner.model.state();
         let Some(pg) = state.pages.get(&id) else { return fail(format!("Seite nicht gefunden: {title}")) };
+        let clip = |s: &str| {
+            let n = len16(s);
+            if n > max {
+                format!("{}\n[… gekürzt, {} Zeichen fehlen — Seite einzeln lesen]", head16(s, max), n - max)
+            } else {
+                s.to_owned()
+            }
+        };
+        let mut out = Map::new();
+        out.insert("title".into(), Value::from(pg.title()));
         if pg.is_heft() {
             let meta = self.inner.model.heft_meta(&id);
-            return Ok(json!({
-                "title": pg.title(), "heft": true, "archived": pg.is_archived(),
-                "pages": meta.as_ref().map_or(1, |m| m.pages),
-                "content": head16(meta.as_ref().map_or("", |m| m.ocr_text.as_str()), 12000),
-                "note": "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft.",
-            }));
+            out.insert("id".into(), Value::from(pg.id()));
+            out.insert("heft".into(), Value::Bool(true));
+            out.insert("archived".into(), Value::Bool(pg.is_archived()));
+            self.page_info(pg, &mut out);
+            out.insert("pages".into(), json!(meta.as_ref().map_or(1, |m| m.pages)));
+            out.insert("content".into(), Value::from(clip(meta.as_ref().map_or("", |m| m.ocr_text.as_str()))));
+            out.insert("note".into(), Value::from("Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft."));
+            return Ok(Value::Object(out));
         }
-        Ok(json!({
-            "title": pg.title(), "archived": pg.is_archived(), "content": head16(pg.content(), 12000),
-            "hasPdf": pg.truthy("pdfId"),
-        }))
+        if pg.is_archived() {
+            out.insert("archived".into(), Value::Bool(true));
+        }
+        self.page_info(pg, &mut out);
+        out.insert("content".into(), Value::from(clip(pg.content())));
+        if pg.truthy("pdfId") {
+            out.insert("hasPdf".into(), Value::Bool(true));
+        }
+        Ok(Value::Object(out))
     }
 
     fn list_pages(&self, query: &str) -> Value {
@@ -403,7 +465,14 @@ impl Tools<'_> {
             .take(60)
             .map(|p| {
                 let parent = p.parent().and_then(|id| state.pages.get(id)).map(|x| x.title().to_owned());
-                json!({ "title": p.title(), "parent": parent, "hasPdf": p.truthy("pdfId") })
+                let mut o = json!({ "title": p.title(), "parent": parent, "hasPdf": p.truthy("pdfId") });
+                if p.is_heft() {
+                    o["heft"] = Value::Bool(true);
+                }
+                if p.truthy("db") {
+                    o["verzeichnis"] = Value::Bool(true);
+                }
+                o
             })
             .collect();
         let mut out = json!({ "pages": pages, "total": all.len() });
@@ -562,8 +631,10 @@ impl Tools<'_> {
                 if titles.is_empty() {
                     return fail("inspect: titles fehlt für kind=page.");
                 }
+                // Mehrere Seiten teilen sich das Ergebnis-Limit der Agent-Schleife (12 000 Zeichen).
+                let max = (11000 / titles.len()).max(3000);
                 let pages: Vec<Value> =
-                    titles.iter().map(|t| self.read_page(t).unwrap_or_else(|e| json!({ "error": e }))).collect();
+                    titles.iter().map(|t| self.read_page(t, max).unwrap_or_else(|e| json!({ "error": e }))).collect();
                 Ok(json!({ "pages": pages }))
             }
             "decks" => Ok(self.list_decks()),
@@ -606,9 +677,34 @@ impl Tools<'_> {
             .or(self.active_page)
             .and_then(|p| state.pages.get(p))
             .map_or_else(|| "default".to_owned(), |p| p.workspace().to_owned());
-        let parent_name = parent.as_deref().and_then(|p| state.pages.get(p)).map(|p| p.title().to_owned());
+        let parent_page = parent.as_deref().and_then(|p| state.pages.get(p));
+        let parent_name = parent_page.map(|p| p.title().to_owned());
+        let props = match a.get("props").filter(|v| !v.is_null()) {
+            Some(update) => Some(self.merge_props(parent_page, &Value::Null, update, &title)?),
+            None => None,
+        };
         self.ev("pageCreate", json!({ "id": id, "title": title, "parentId": parent, "content": arg(a, "content"), "workspaceId": workspace }))?;
+        if let Some(props) = props.filter(|p| !p.is_null()) {
+            self.ev("pageUpdate", json!({ "id": id, "patch": { "props": props } }))?;
+        }
         Ok(json!({ "ok": true, "id": id, "title": title, "parent": parent_name }))
+    }
+
+    /// Spaltenwerte gegen das Schema des Verzeichnisses (Kern: `impala_ai::edit::merge_props`).
+    fn merge_props(&self, parent: Option<&impala_model::Page>, current: &Value, update: &Value, title: &str) -> Res {
+        let schema = parent.and_then(|p| p.get("db")).and_then(|d| d.get("schema").cloned()).unwrap_or(Value::Null);
+        impala_ai::edit::merge_props(&schema, current, update, title, parent.map_or("", |p| p.title()))
+    }
+
+    fn set_page_props(&mut self, a: &Value) -> Res {
+        let id = self.page_by_title(&arg(a, "page_title"))?;
+        let state = self.inner.model.state();
+        let pg = state.pages.get(&id).cloned().unwrap_or_default();
+        let parent = pg.parent().and_then(|p| state.pages.get(p));
+        let current = pg.get("props").unwrap_or(Value::Null);
+        let props = self.merge_props(parent, &current, a.get("props").unwrap_or(&Value::Null), pg.title())?;
+        self.ev("pageUpdate", json!({ "id": id, "patch": { "props": props } }))?;
+        Ok(json!({ "ok": true, "title": pg.title(), "props": props }))
     }
 
     fn page_patch(&mut self, id: &str, content: String) -> Result<(), String> {
@@ -708,7 +804,13 @@ impl Tools<'_> {
                 "Heft-Inhalte (Striche/Bilder) können nicht ersetzt werden — write_to_heft fügt sichtbaren Text hinzu.",
             );
         }
-        self.page_patch(&id, arg(a, "content"))?;
+        let content = arg(a, "content");
+        if a.get("allow_deleting_content") != Some(&Value::Bool(true))
+            && let Some(guard) = impala_ai::edit::replace_guard(pg.content(), &content)
+        {
+            return fail(guard);
+        }
+        self.page_patch(&id, content)?;
         Ok(json!({ "ok": true, "title": pg.title() }))
     }
 
@@ -721,25 +823,14 @@ impl Tools<'_> {
             );
         }
         let search = a.get("search").filter(|v| !v.is_null()).map(str_of).unwrap_or_default();
-        if search.is_empty() {
-            return fail("patch_page: search fehlt.");
-        }
-        let content = pg.content();
-        let Some(first) = content.find(&search) else {
-            return fail(format!("Suchtext wurde in der Seite nicht gefunden: {search}"));
-        };
-        if content[first + search.len()..].contains(&search) {
-            return fail(format!(
-                "Suchtext kommt mehrfach in der Seite vor ({search}). Bitte Suchtext eindeutiger angeben."
-            ));
-        }
         let replace = ["replace", "content"]
             .iter()
             .filter_map(|k| a.get(*k))
             .find(|v| !v.is_null())
             .map(str_of)
             .unwrap_or_default();
-        let new = format!("{}{replace}{}", &content[..first], &content[first + search.len()..]);
+        // Wörtlich, sonst leerraum-tolerant; Fehler nennt die ähnlichste Zeile.
+        let new = impala_ai::edit::patch(pg.content(), &search, &replace)?;
         self.page_patch(&id, new)?;
         Ok(json!({ "ok": true, "title": pg.title() }))
     }
@@ -1066,6 +1157,7 @@ impl Tools<'_> {
             "write_to_heft" => self.write_to_heft(a),
             "replace_page_content" => self.replace_page_content(a),
             "patch_page" => self.patch_page(a),
+            "set_page_props" => self.set_page_props(a),
             "rename_page" => self.rename_page(a),
             "move_page" => self.move_page(a),
             "delete_page" => self.trash_page(a),
@@ -1087,6 +1179,131 @@ impl Tools<'_> {
     }
 
     // ---- change
+
+    /// Trockenlauf aller Seiten-Operationen gegen den aktuellen Stand (wie `dryRunCheck` in
+    /// `web/tools.js`); Seiten aus früheren Operationen nur gedacht. `Some(Fehlertext)` bei Problemen.
+    fn dry_check(&self, operations: &[Value]) -> Option<String> {
+        struct Virt {
+            title: String,
+            content: String,
+            parent: Option<impala_model::Page>,
+            props: Value,
+            heft: bool,
+            db: Option<Value>,
+        }
+        let state = self.inner.model.state();
+        let key = |t: &str| t.trim().to_lowercase();
+        let mut virt: Vec<(String, Virt)> = vec![];
+        let lookup = |virt: &mut Vec<(String, Virt)>, t: &str| -> Option<usize> {
+            if let Some(i) = virt.iter().position(|(k, _)| *k == key(t)) {
+                return Some(i);
+            }
+            let pg = state.find_page(t, true)?;
+            let parent = pg.parent().and_then(|p| state.pages.get(p)).cloned();
+            virt.push((
+                key(t),
+                Virt {
+                    title: pg.title().to_owned(),
+                    content: pg.content().to_owned(),
+                    parent,
+                    props: pg.get("props").unwrap_or(Value::Null),
+                    heft: pg.is_heft(),
+                    db: pg.get("db"),
+                },
+            ));
+            Some(virt.len() - 1)
+        };
+        // Ordner als Seite (für Spalten-Schema und Titel), auch gedachte aus früheren Operationen.
+        let folder = |virt: &Vec<(String, Virt)>, t: &str| -> Option<impala_model::Page> {
+            if let Some((_, v)) = virt.iter().find(|(k, _)| *k == key(t)) {
+                let mut p = json!({ "title": v.title });
+                if let Some(db) = &v.db {
+                    p["db"] = db.clone();
+                }
+                return serde_json::from_value(p).ok();
+            }
+            state.find_page(t, true).cloned()
+        };
+        for (i, op) in operations.iter().enumerate() {
+            let name = op.get("op").map(str_of).unwrap_or_default();
+            let fail = |m: String| Some(format!("Operation {} ({name}) fehlgeschlagen: {}. Keine Änderungen ausgeführt.", i + 1, m.trim_end_matches('.')));
+            let title = op.get("title").map(str_of).unwrap_or_default();
+            let text = first(op, &["content", "text"]);
+            if name == "page.create" {
+                let parent_t = op.get("parent").filter(|v| truthy(v)).map(str_of);
+                let parent = match &parent_t {
+                    Some(t) => match folder(&virt, t) {
+                        Some(p) => Some(p),
+                        None => return fail(format!("Elternseite nicht gefunden: {t}")),
+                    },
+                    None => None,
+                };
+                let mut props = Value::Null;
+                if let Some(update) = op.get("props").filter(|v| !v.is_null()) {
+                    match self.merge_props(parent.as_ref(), &Value::Null, update, &title) {
+                        Ok(p) => props = p,
+                        Err(e) => return fail(e),
+                    }
+                }
+                virt.push((key(&title), Virt { title: title.clone(), content: str_of(&text), parent, props, heft: false, db: None }));
+                continue;
+            }
+            if !name.starts_with("page.") && name != "heft.append" {
+                continue;
+            }
+            let Some(at) = lookup(&mut virt, &title) else { return fail(format!("Seite nicht gefunden: {title}")) };
+            match name.as_str() {
+                "page.patch" => {
+                    let v = &mut virt[at].1;
+                    if v.heft {
+                        return fail("Heft-Inhalte können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu".into());
+                    }
+                    let search = op.get("search").map(str_of).unwrap_or_default();
+                    let replace = str_of(&first(op, &["replace", "content"]));
+                    match impala_ai::edit::patch(&v.content, &search, &replace) {
+                        Ok(c) => v.content = c,
+                        Err(e) => return fail(e),
+                    }
+                }
+                "page.replace" => {
+                    let v = &mut virt[at].1;
+                    if v.heft {
+                        return fail("Heft-Inhalte können nicht ersetzt werden".into());
+                    }
+                    let new = str_of(&text);
+                    if op.get("allow_deleting_content") != Some(&Value::Bool(true))
+                        && let Some(g) = impala_ai::edit::replace_guard(&v.content, &new)
+                    {
+                        return fail(g);
+                    }
+                    v.content = new;
+                }
+                "page.append" => {
+                    let v = &mut virt[at].1;
+                    v.content = format!("{}\n\n{}", v.content, str_of(&text));
+                }
+                "page.props" => {
+                    let v = &virt[at].1;
+                    match self.merge_props(v.parent.as_ref(), &v.props, op.get("props").unwrap_or(&Value::Null), &v.title) {
+                        Ok(p) => virt[at].1.props = p,
+                        Err(e) => return fail(e),
+                    }
+                }
+                "page.move" => {
+                    let to = str_of(&first(op, &["parent", "to"]));
+                    if !to.is_empty() && folder(&virt, &to).is_none() {
+                        return fail(format!("Elternseite nicht gefunden: {to}"));
+                    }
+                }
+                "page.rename" => {
+                    let to = op.get("to").map(str_of).unwrap_or_default();
+                    virt[at].0 = key(&to);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
 
     fn change(&mut self, a: &Value) -> (Value, Option<Value>) {
         let operations: Vec<Value> = a
@@ -1120,6 +1337,23 @@ impl Tools<'_> {
                 problems.join("\n")
             );
             return (json!({ "error": msg }), None);
+        }
+        // Erst alles prüfen (Seiten, Suchtext, Löschschutz, Spalten), dann schreiben.
+        if let Some(e) = self.dry_check(&operations) {
+            return (json!({ "error": e }), None);
+        }
+        if a.get("dry_run") == Some(&Value::Bool(true)) {
+            let results: Vec<Value> = operations
+                .iter()
+                .map(|o| {
+                    let mut r = json!({ "op": o.get("op"), "ok": true });
+                    if let Some(t) = o.get("title").filter(|t| truthy(t)) {
+                        r["title"] = t.clone();
+                    }
+                    r
+                })
+                .collect();
+            return (json!({ "ok": true, "dryRun": true, "operations": operations.len(), "results": results }), None);
         }
         let before = Snapshot::take(&operations, self);
         let mut results = vec![];
@@ -1223,6 +1457,12 @@ fn validate_op(op: &Value) -> Option<&'static str> {
         "page.move" | "page.trash" | "page.archive" | "page.unarchive" => {
             return (!has_text(op, &["title"])).then_some("title fehlt");
         }
+        "page.props" => {
+            if has_text(op, &["title"]) && op.get("props").is_some_and(Value::is_object) {
+                return None;
+            }
+            "braucht title und props ({Spalte: Wert})"
+        }
         "heft.append" => {
             if has_text(op, &["title"]) && has_text(op, &["text", "content"]) {
                 return None;
@@ -1310,14 +1550,16 @@ fn op_to_tool(op: &Value) -> Option<(&'static str, Value)> {
     Some(match name {
         "page.create" => (
             "create_page",
-            json!({ "title": o["title"], "parent_title": o["parent"], "content": first(o, &["content", "text"]).as_str().unwrap_or("") }),
+            json!({ "title": o["title"], "parent_title": o["parent"], "content": first(o, &["content", "text"]).as_str().unwrap_or(""), "props": o["props"] }),
         ),
         "page.append" => {
             ("append_to_page", json!({ "page_title": o["title"], "content": first(o, &["content", "text"]) }))
         }
-        "page.replace" => {
-            ("replace_page_content", json!({ "page_title": o["title"], "content": first(o, &["content", "text"]) }))
-        }
+        "page.replace" => (
+            "replace_page_content",
+            json!({ "page_title": o["title"], "content": first(o, &["content", "text"]), "allow_deleting_content": o["allow_deleting_content"] }),
+        ),
+        "page.props" => ("set_page_props", json!({ "page_title": o["title"], "props": o["props"] })),
         "page.patch" => (
             "patch_page",
             json!({ "page_title": o["title"], "search": o["search"], "replace": first(o, &["replace", "content"]) }),
@@ -1409,8 +1651,8 @@ impl Snapshot {
             let kind = op.get("op").and_then(Value::as_str);
             match kind {
                 Some(
-                    "page.create" | "page.append" | "page.replace" | "page.patch" | "page.rename" | "page.move"
-                    | "page.trash" | "page.archive" | "page.unarchive" | "heft.append",
+                    "page.create" | "page.append" | "page.replace" | "page.patch" | "page.props" | "page.rename"
+                    | "page.move" | "page.trash" | "page.archive" | "page.unarchive" | "heft.append",
                 ) => need_pages = true,
                 Some(
                     "card.create" | "card.update" | "card.move" | "deck.create" | "deck.rename" | "deck.move"
@@ -1788,6 +2030,42 @@ impl ImpalaCore {
         inner.save_chat_raw(&chat_id, &title, &created, messages)
     }
 
+    /// Inhalts-Werkzeug der MCP-Bridge (iPad, `DevBridge.swift`): dieselben flachen Werkzeuge wie
+    /// die App-KI (`impala_ai::flat`, z. B. `read_pages`, `edit_page`), Name ohne `impala_`-Präfix,
+    /// Argumente und Ergebnis als JSON. Ohne Rückfrage und ohne Änderungs-Karte im Chat;
+    /// `dry_run: true` prüft Schreibwünsche nur. Unbekannter Name → `{ "error" }`.
+    pub fn run_mcp_tool(&self, name: String, args_json: String, utc_offset_minutes: i32) -> String {
+        let args: Value = serde_json::from_str(&args_json).unwrap_or_else(|_| json!({}));
+        let Some(call) = impala_ai::flat_call(&name, &args) else {
+            return json!({ "error": format!("Unbekanntes Werkzeug: impala_{name}") }).to_string();
+        };
+        let (tool, mut inner_args) = match call {
+            Ok(c) => c,
+            Err(e) => return json!({ "error": e }).to_string(),
+        };
+        if tool == "change" && args.get("dry_run") == Some(&Value::Bool(true)) {
+            inner_args["dry_run"] = Value::Bool(true);
+        }
+        let transcript = RefCell::new(vec![]);
+        let notify = |_: &Value| {};
+        let mut env = Env {
+            core: &self.inner,
+            search: None,
+            platform: None,
+            active_page: None,
+            heft_index: 0,
+            now: crate::ai::local_time(wall_ms(), utc_offset_minutes),
+            utc_offset: utc_offset_minutes,
+            transcript: &transcript,
+            notify: &notify,
+        };
+        let (mut out, _) = env.exec(tool, &inner_args);
+        if out.get("dryRun") == Some(&Value::Bool(true)) {
+            out["ops"] = inner_args["operations"].clone();
+        }
+        out.to_string()
+    }
+
     /// Änderungs-Satz (`undo` einer Änderungs-Karte, JSON) direkt zurückspielen.
     pub fn undo_ai_changes(&self, undo_json: String) -> Result<(), CoreError> {
         let set: Value = serde_json::from_str(&undo_json).map_err(|e| invalid(format!("Rückgängig-Daten: {e}")))?;
@@ -1863,7 +2141,13 @@ mod tests {
             ]}),
         );
         assert!(undo.is_none());
-        assert!(res["error"].as_str().unwrap().contains("Alle vorherigen Änderungen wurden zurückgenommen"), "{res}");
+        // Die Vorprüfung lehnt ab, bevor irgendetwas geschrieben wird.
+        let msg = res["error"].as_str().unwrap();
+        assert!(msg.contains("Operation 2 (page.patch)") && msg.contains("Keine Änderungen ausgeführt"), "{res}");
+        assert_eq!(core.children_of(None, None).len(), 1);
+        // Trockenlauf: geprüft, nichts geschrieben.
+        let (res, undo) = run(&mut e, "change", json!({ "dry_run": true, "operations": [{ "op": "page.create", "title": "Zwei" }] }));
+        assert_eq!((res["dryRun"].clone(), undo), (Value::Bool(true), None));
         assert_eq!(core.children_of(None, None).len(), 1);
         // Validierung vor der Ausführung.
         let (res, _) = run(&mut e, "change", json!({ "operations": [{ "op": "page.create" }] }));

@@ -1,35 +1,20 @@
 // MCP-Modus des KI-Benchmarks: Das lokale Modell arbeitet wie ein externer Assistent
 // (Antigravity, Claude Code) mit den Impala-MCP-Werkzeugen – eigene Agent-Schleife gegen
 // LM Studio (OpenAI-kompatibel), Werkzeuge über die Relay-Verbindung zur offenen App.
-// Lesende Werkzeuge laufen echt; schreibende (create_page, update_page, create_flashcard)
-// werden nur protokolliert und mit „ok“ beantwortet. impala_eval wird nie angeboten.
+// Werkzeuge = dieselben wie mcp/server.mjs (mcp/content-tools.mjs). Lesende laufen echt;
+// schreibende laufen als Trockenlauf (dry_run: echte Prüfung, nichts gespeichert).
+// impala_eval wird nie angeboten.
+import { CONTENT_TOOLS, CONTENT_WRITE } from "../../mcp/content-tools.mjs";
 
 const MAX_STEPS = 12;
 const RESULT_LIMIT = 12000;
 
-const READ = new Set(["impala_list_pages", "impala_get_page", "impala_search", "impala_heft_page_image", "impala_list_flashcards"]);
-const WRITE = new Set(["impala_create_page", "impala_update_page", "impala_create_flashcard"]);
-
-// Gleiche Beschreibungen wie mcp/server.mjs (gekürzt auf die angebotenen Werkzeuge).
-const PROPS = { type: "object", description: "Eigenschaften für die Datenbankansicht der Elternseite (z. B. Vorlesungen: Nr, Datum, Status, Themen …). Werden mit vorhandenen zusammengeführt; null löscht ein Feld." };
-const DEFS = [
-	["impala_list_pages", "Listet vorhandene Notizen in Impala67 auf (ID, Titel, Art: Notion vs Heft, Fach, Aktualisierungszeitpunkt).",
-		{ query: { type: "string", description: "Optionaler Suchbegriff zum Filtern nach Titel oder Inhalt" }, kind: { type: "string", enum: ["all", "notion", "heft"] }, limit: { type: "number" } }],
-	["impala_get_page", "Liest den Titel und den Markdown-/Text-Inhalt einer Notiz aus. Bei Handschrift-Heften wird der extrahierte Text/OCR geliefert.",
-		{ id: { type: "string", description: "ID der Notiz" }, title: { type: "string", description: "Titel der Notiz (falls ID nicht bekannt)" } }],
-	["impala_search", "Durchsucht Notizen (Titel, Fließtext, OCR) und Karteikarten nach Stichworten. Mit semantic=true nach Bedeutung (RAG-Index).",
-		{ query: { type: "string", description: "Suchbegriff oder Frage" }, semantic: { type: "boolean" }, limit: { type: "number" } }, ["query"]],
-	["impala_heft_page_image", "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, Raster alle 100 Einheiten) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
-		{ page_id: { type: "string", description: "ID der Impala-Seite (des Hefts)" }, page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" } }, ["page_id"]],
-	["impala_list_flashcards", "Listet Karteikarten auf (optional gefiltert nach Stapel oder Stichwort).",
-		{ deck: { type: "string" }, query: { type: "string" }, limit: { type: "number" } }],
-	["impala_create_page", "Erstellt eine neue Notiz in Impala67 (Titel, Markdown-Inhalt, optional Elternseite).",
-		{ title: { type: "string" }, content: { type: "string" }, parent_title: { type: "string" }, props: PROPS }, ["title"]],
-	["impala_update_page", "Aktualisiert oder ergänzt eine bestehende Notiz (content ersetzt den gesamten Inhalt, append_content hängt an, props setzt Datenbank-Spalten).",
-		{ id: { type: "string" }, title: { type: "string" }, new_title: { type: "string" }, content: { type: "string", description: "Ersetzt den gesamten Markdown-Inhalt" }, append_content: { type: "string", description: "Hängt Text am Ende an" }, props: PROPS }],
-	["impala_create_flashcard", "Erstellt eine neue Karteikarte mit Frage (Vorderseite) und Antwort (Rückseite). Unterstapel mit :: trennen.",
-		{ front: { type: "string" }, back: { type: "string" }, deck: { type: "string", description: "Ziel-Stapel (Standard: Standard)" }, page_title: { type: "string" } }, ["front", "back"]],
-].map(([name, description, properties, required]) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, ...(required ? { required } : {}) } } }));
+// Heftbild wie in mcp/server.mjs (dort nicht exportierbar, weil der Server beim Import startet).
+const HEFT_IMAGE = { name: "impala_heft_page_image", description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, Raster alle 100 Einheiten) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. pageCount nennt die Anzahl der Heftseiten.",
+	inputSchema: { type: "object", properties: { page_id: { type: "string", description: "ID oder Titel des Hefts" }, page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" } }, required: ["page_id"] } };
+const OFFERED = [...CONTENT_TOOLS, HEFT_IMAGE];
+const NAMES = new Set(OFFERED.map((t) => t.name));
+const DEFS = OFFERED.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.inputSchema } }));
 
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 function systemPrompt(workspacePage) {
@@ -90,22 +75,9 @@ async function chat(lms, body, rec, limitMs) {
 	return msg;
 }
 
-// Schreibwunsch → gleiche Form wie rec.changes im App-Modus (für dieselben Prüfungen).
-function asChange(name, a) {
-	if (name === "impala_create_flashcard") return { op: "card.create", front: a.front, back: a.back, deck: a.deck };
-	if (name === "impala_create_page") return { op: "page.create", title: a.title, content: a.content, parent: a.parent_title, props: a.props };
-	const title = a.title || a.id || "";
-	if (a.new_title) return { op: "page.rename", title, to: a.new_title };
-	if (a.archived) return { op: "page.archive", title };
-	if (a.content != null) return { op: "page.replace", title, content: a.content, props: a.props };
-	if (a.append_content != null) return { op: "page.append", title, content: a.append_content, props: a.props };
-	return { op: "page.props", title, props: a.props };
-}
-
 export async function runMcpTurn({ app, lms, model, conv, spec, limitMs = 900000 }) {
 	const rec = { t0: Date.now(), state: "done", requests: [], tools: [], changes: [], asks: [], items: [], text: "", error: null, rag: null, summary: null };
 	conv.messages ||= [{ role: "system", content: systemPrompt(spec.workspacePage) }];
-	conv.ids ||= new Map(); // Seiten-ID → Titel (aus Werkzeug-Ergebnissen), damit Schreibwünsche einen Titel haben
 	const attach = spec.pdfFile ? `\n\n[Angehängtes PDF: ${spec.pdfFile.name}]\n${spec.pdfFile.content}` : "";
 	conv.messages.push({ role: "user", content: spec.text + attach });
 	try {
@@ -127,18 +99,17 @@ export async function runMcpTurn({ app, lms, model, conv, spec, limitMs = 900000
 				let args = {}, out;
 				try { args = c.args ? JSON.parse(c.args) : {}; } catch { out = { error: `Die Argumente von ${c.name} sind kein gültiges JSON.` }; }
 				if (!out) {
-					if (WRITE.has(c.name)) {
-						const ch = asChange(c.name, args);
-						if (!args.title && args.id) ch.title = conv.ids.get(args.id) || args.id;
-						rec.changes.push(ch);
-						out = { ok: true, id: args.id || "neu-" + rec.changes.length };
-					} else if (READ.has(c.name)) {
-						out = await app.call(c.name, args, 60000);
+					if (NAMES.has(c.name)) {
+						const write = CONTENT_WRITE.has(c.name);
+						out = await app.call(c.name, write ? { ...args, dry_run: true } : args, 60000);
 						if (out == null) out = { error: "Keine App verbunden." };
+						if (write && out?.ok) {
+							rec.changes.push(...(out.ops || []));
+							const { ops, dryRun, ...shown } = out;
+							out = shown;
+						}
 					} else out = { error: `Unbekanntes Werkzeug „${c.name}“.` };
 				}
-				for (const m of JSON.stringify(out).matchAll(/"id":"([^"]+)","title":"([^"]+)"/g)) conv.ids.set(m[1], m[2]);
-				if (out?.id && out?.title) conv.ids.set(out.id, out.title);
 				const { image, ...rest } = out || {};
 				if (typeof image === "string" && image.startsWith("data:image")) images.push(image);
 				const json = JSON.stringify(rest);

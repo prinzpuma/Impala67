@@ -134,17 +134,103 @@ export const TOOLS = (() => {
 
 	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
 	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
+	const parentTitle = (pg) => (pg.parentId && S.pages[pg.parentId] ? S.pages[pg.parentId].title : null);
 	function keywordHits(query) {
 		const all = STATE.searchNotes(query, { includeArchived: true }) || [];
 		return {
 			results: all.slice(0, 20).map((r) => ({
 				title: r.page.title,
+				...(parentTitle(r.page) ? { parent: parentTitle(r.page) } : {}),
 				snippet: r.snippet,
+				...(r.page.kind === "heft" ? { heft: true } : {}),
 				...(r.page.archived ? { archived: true } : {}),
 			})),
 			totalMatches: all.length,
+			next: all.length ? "Passende Treffer mit read_pages (inspect kind=page) lesen." : "Andere Stichworte oder semantic=true versuchen.",
 			...(all.length > 20 ? { note: "Nur die 20 besten Treffer — bei Bedarf genauer suchen." } : {}),
 		};
+	}
+
+	// Spaltenwerte eines Verzeichnis-Eintrags gegen das Schema der Elternseite (Kern: edit.rs).
+	// Liefert { props } (null = leer) oder { error } mit Spaltenliste.
+	function propsFor(parent, current, update, title) {
+		return CORE.aiMergeProps(parent?.db?.schema ?? null, current ?? null, update, title || "", parent?.title || "");
+	}
+
+	// Zusammenhang einer gelesenen Seite wie Notion „fetch“: Ordner, Unterseiten; als
+	// Verzeichnis-Eintrag Spalten + eigene Werte, als Verzeichnis Spalten + Einträge.
+	function pageInfo(pg) {
+		const out = {};
+		const parent = pg.parentId ? S.pages[pg.parentId] : null;
+		if (parent) out.parent = parent.title;
+		if (parent?.db?.schema) {
+			out.verzeichnis = { title: parent.title, columns: CORE.aiColumns(parent.db.schema) };
+			out.props = pg.props || {};
+		}
+		const kids = STATE.childrenOf(pg.id, pg.workspaceId) || [];
+		if (pg.db?.schema) {
+			out.columns = CORE.aiColumns(pg.db.schema);
+			out.entries = kids.slice(0, 40).map((r) => ({ title: r.title, props: r.props || {} }));
+			if (kids.length > 40) out.entriesTotal = kids.length;
+		} else if (kids.length) {
+			out.children = kids.slice(0, 30).map((r) => r.title);
+			if (kids.length > 30) out.childrenTotal = kids.length;
+		}
+		return out;
+	}
+
+	// Trockenlauf von change (Benchmark, MCP dry_run): dieselben Prüfungen wie die echte
+	// Ausführung gegen den aktuellen Stand, Seiten aus früheren Operationen nur gedacht.
+	// Nichts wird gespeichert. Liefert null (alles in Ordnung) oder einen Fehlertext.
+	function dryRunCheck(operations) {
+		const virt = new Map(); // Titel (klein) → { title, content, parent, props, heft }
+		const key = (t) => String(t || "").trim().toLowerCase();
+		const get = (t) => {
+			if (virt.has(key(t))) return virt.get(key(t));
+			const pg = STATE.findPage(t);
+			if (!pg) return null;
+			const v = { title: pg.title, content: String(pg.content || ""), parent: pg.parentId ? S.pages[pg.parentId] : null, props: pg.props || null, heft: pg.kind === "heft", db: pg.db || null };
+			virt.set(key(t), v);
+			return v;
+		};
+		const folder = (t) => { const v = get(t); return v ? { title: v.title, db: v.db } : null; };
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i], name = op.op;
+			const fail = (msg) => `Operation ${i + 1} (${name}) fehlgeschlagen: ${String(msg).replace(/\.$/, "")}. Keine Änderungen ausgeführt.`;
+			if (name === "page.create") {
+				const parent = op.parent ? folder(op.parent) : null;
+				if (op.parent && !parent) return fail("Elternseite nicht gefunden: " + op.parent);
+				let props = null;
+				if (op.props) { const m = propsFor(parent, null, op.props, op.title); if (m.error) return fail(m.error); props = m.props; }
+				virt.set(key(op.title), { title: op.title, content: String(op.content ?? op.text ?? ""), parent, props, heft: false, db: null });
+				continue;
+			}
+			if (!name.startsWith("page.") && name !== "heft.append") continue;
+			const v = get(op.title);
+			if (!v) return fail("Seite nicht gefunden: " + op.title);
+			if (name === "page.patch") {
+				if (v.heft) return fail("Heft-Inhalte können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu");
+				const r = CORE.aiPatchText(v.content, String(op.search ?? ""), String(op.replace ?? op.content ?? ""));
+				if (r.error) return fail(r.error);
+				v.content = r.content;
+			} else if (name === "page.replace") {
+				if (v.heft) return fail("Heft-Inhalte können nicht ersetzt werden");
+				const guard = op.allow_deleting_content === true ? null : CORE.aiReplaceGuard(v.content, String(op.content ?? op.text ?? ""));
+				if (guard) return fail(guard);
+				v.content = String(op.content ?? op.text ?? "");
+			} else if (name === "page.append") {
+				v.content += "\n\n" + String(op.content ?? op.text ?? "");
+			} else if (name === "page.props") {
+				const m = propsFor(v.parent, v.props, op.props, v.title);
+				if (m.error) return fail(m.error);
+				v.props = m.props;
+			} else if (name === "page.move" && (op.parent ?? op.to) && !folder(op.parent ?? op.to)) {
+				return fail("Elternseite nicht gefunden: " + (op.parent ?? op.to));
+			} else if (name === "page.rename") {
+				virt.set(key(op.to), v);
+			}
+		}
+		return null;
 	}
 
 	// Kleine, aufgabenorientierte Oberfläche für das Modell (Definitionen im Rust-Kern,
@@ -283,6 +369,7 @@ export const TOOLS = (() => {
 			case "page.append":
 			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "braucht title und content";
 			case "page.patch": return hasText(op, "title") && hasText(op, "search") && (hasField(op, "replace") || hasField(op, "content")) ? "" : "braucht title, search (exakter Text, der schon in der Seite steht) und replace (neuer Text)";
+			case "page.props": return hasText(op, "title") && op.props && typeof op.props === "object" ? "" : "braucht title und props ({Spalte: Wert})";
 			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "braucht title und to (neuer Name)";
 			case "page.move": return hasText(op, "title") ? "" : "title fehlt";
 			case "page.trash": return hasText(op, "title") ? "" : "title fehlt";
@@ -316,9 +403,10 @@ export const TOOLS = (() => {
 	}
 
 	const OP_TO_TOOL = {
-		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content ?? o.text ?? "" }],
+		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content ?? o.text ?? "", props: o.props }],
 		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content ?? o.text }],
-		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text }],
+		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text, allow_deleting_content: o.allow_deleting_content }],
+		"page.props": (o) => ["set_page_props", { page_title: o.title, props: o.props }],
 		"page.patch": (o) => ["patch_page", { page_title: o.title, search: o.search, replace: o.replace ?? o.content }],
 		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
 		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent ?? o.to }],
@@ -352,8 +440,10 @@ export const TOOLS = (() => {
 						const rawTitles = a.titles || a.title || a.page_title || a.page || [];
 						const titles = (Array.isArray(rawTitles) ? rawTitles : [rawTitles]).filter(Boolean).map(String).slice(0, 12);
 						if (!titles.length) return { error: "inspect: titles fehlt für kind=page." };
+						// Mehrere Seiten teilen sich das Ergebnis-Limit der Agent-Schleife (12 000 Zeichen).
+						const max = Math.max(3000, Math.floor(11000 / titles.length));
 						const pages = [];
-						for (const title of titles) pages.push(await run("read_page", { page_title: title }));
+						for (const title of titles) pages.push(await run("read_page", { page_title: title, max }));
 						return { pages };
 					}
 					case "decks": return run("list_decks", {});
@@ -394,6 +484,13 @@ export const TOOLS = (() => {
 				if (validationErrors.length) {
 					return { error: `change: Validierungsfehler in ${validationErrors.length} Operation(en):\n${validationErrors.join("\n")}\nKeine Änderungen ausgeführt.` };
 				}
+				// Erst alles prüfen (Seiten, Suchtext, Löschschutz, Spalten), dann schreiben: ein
+				// Fehler in Operation 3 hinterlässt so keine halbe Aktion und kein Rückgängig.
+				const checkError = dryRunCheck(operations);
+				if (checkError) return { error: checkError };
+				if (a.dry_run === true) {
+					return { ok: true, dryRun: true, operations: operations.length, results: operations.map((o) => ({ op: o.op, ok: true, ...(o.title ? { title: o.title } : {}) })) };
+				}
 				const before = managedSnapshot(operations), results = [];
 				for (let i = 0; i < operations.length; i++) {
 					const op = operations[i] || {}, make = OP_TO_TOOL[op.op];
@@ -418,11 +515,14 @@ export const TOOLS = (() => {
 				// Tippfehler kommentarlos ganz oben, während move_page in derselben Lage meckert.
 				const parent = a.parent_title ? STATE.findPage(a.parent_title) : null;
 				if (a.parent_title && !parent) return { error: "Elternseite nicht gefunden: " + a.parent_title };
+				const merged = a.props ? propsFor(parent, null, a.props, title) : null;
+				if (merged?.error) return merged;
 				const id = U.uid();
 				await STATE.dispatch("pageCreate", {
 					id, title, parentId: parent ? parent.id : null, content: a.content || "",
-					workspaceId: S.currentWorkspaceId,
+					workspaceId: parent ? parent.workspaceId : S.currentWorkspaceId,
 				});
+				if (merged?.props) await STATE.dispatch("pageUpdate", { id, patch: { props: merged.props } });
 				// id MITGEBEN: ai.js baut daraus die Änderungs-Karte. Ohne sie wurde die Seite nur
 				// über den Titel gesucht — bei Namensgleichheit die falsche (Diff/Rückgängig kaputt).
 				return { ok: true, id, title, parent: parent ? parent.title : null };
@@ -455,23 +555,27 @@ export const TOOLS = (() => {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
 				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht ersetzt werden — write_to_heft fügt sichtbaren Text hinzu." };
+				const guard = a.allow_deleting_content === true ? null : CORE.aiReplaceGuard(String(pg.content || ""), String(a.content || ""));
+				if (guard) return { error: guard };
 				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: a.content || "" } });
 				return { ok: true, title: pg.title };
+			}
+			case "set_page_props": {
+				const pg = STATE.findPage(a.page_title);
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				const merged = propsFor(pg.parentId ? S.pages[pg.parentId] : null, pg.props, a.props, pg.title);
+				if (merged.error) return merged;
+				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { props: merged.props } });
+				return { ok: true, title: pg.title, props: merged.props };
 			}
 			case "patch_page": {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
 				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu." };
-				const search = a.search != null ? String(a.search) : "";
-				if (!search) return { error: "patch_page: search fehlt." };
-				const content = String(pg.content || "");
-				const firstIdx = content.indexOf(search);
-				if (firstIdx === -1) return { error: `Suchtext wurde in der Seite nicht gefunden: ${search}` };
-				const secondIdx = content.indexOf(search, firstIdx + search.length);
-				if (secondIdx !== -1) return { error: `Suchtext kommt mehrfach in der Seite vor (${search}). Bitte Suchtext eindeutiger angeben.` };
-				const replace = String(a.replace ?? a.content ?? "");
-				const newContent = content.slice(0, firstIdx) + replace + content.slice(firstIdx + search.length);
-				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: newContent } });
+				// Wörtlich, sonst leerraum-tolerant; Fehler nennt die ähnlichste Zeile (Kern: impala-ai/edit.rs).
+				const res = CORE.aiPatchText(String(pg.content || ""), String(a.search ?? ""), String(a.replace ?? a.content ?? ""));
+				if (res.error) return { error: res.error };
+				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: res.content } });
 				return { ok: true, title: pg.title };
 			}
 			case "rename_page": {
@@ -601,7 +705,7 @@ export const TOOLS = (() => {
 				} catch { /* Karten-Kontext optional */ }
 				return {
 					now: now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr",
-					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Rest per read_page]" : "") } : null,
+					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Seite ganz lesen (read_pages / inspect kind=page)]" : "") } : null,
 					currentCard,
 					recentPages: recent,
 					study,
@@ -610,24 +714,29 @@ export const TOOLS = (() => {
 			}
 			case "read_page": {
 				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
+				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title + ". Titel mit search oder list_pages nachschlagen." };
+				const max = Math.max(1000, Math.min(12000, Number(a.max) || 12000));
+				const clipText = (s) => (s.length > max ? s.slice(0, max) + `\n[… gekürzt, ${s.length - max} Zeichen fehlen — Seite einzeln lesen]` : s);
 				if (pg.kind === "heft") {
 					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
 					const meta = STATE.heftMeta(pg.id) || {};
 					return {
 						title: pg.title,
+						id: pg.id,
 						heft: true,
 						archived: !!pg.archived,
+						...pageInfo(pg),
 						pages: meta.pages || 1,
-						content: String(meta.ocrText || "").slice(0, 12000),
+						content: clipText(String(meta.ocrText || "")),
 						note: "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft.",
 					};
 				}
 				return {
 					title: pg.title,
-					archived: !!pg.archived,
-					content: (pg.content || "").slice(0, 12000),
-					hasPdf: !!pg.pdfId,
+					...(pg.archived ? { archived: true } : {}),
+					...pageInfo(pg),
+					content: clipText(pg.content || ""),
+					...(pg.pdfId ? { hasPdf: true } : {}),
 				};
 			}
 			case "list_pages": {
@@ -640,6 +749,8 @@ export const TOOLS = (() => {
 						title: pg.title,
 						parent: pg.parentId ? (S.pages[pg.parentId] || {}).title || null : null,
 						hasPdf: !!pg.pdfId,
+						...(pg.kind === "heft" ? { heft: true } : {}),
+						...(pg.db ? { verzeichnis: true } : {}),
 					})),
 					total: all.length,
 					...(all.length > 60 ? { note: "Nur die ersten 60 Treffer — für spezifischere Treffer query verfeinern oder search_notes nutzen." } : {}),
@@ -926,5 +1037,18 @@ export const TOOLS = (() => {
 		}
 	}
 
-	return { defs, run, undo, normalizeAskChoice };
+	// Flache Werkzeuge (search, read_pages, edit_page …; Kern: impala-ai/flat.rs) für Aufrufer
+	// ohne Rust-Agent (MCP-Bridge): übersetzen und als inspect/change ausführen.
+	const flatDefs = CORE.aiFlatToolDefs();
+	async function runFlat(name, a) {
+		const call = CORE.aiFlatCall(name, a || {});
+		if (!call) return run(name, a);
+		if (call.error) return { error: call.error };
+		if (call.tool !== "change" || a?.dry_run !== true) return run(call.tool, call.args);
+		// Trockenlauf (Benchmark): übersetzte Operationen mitliefern, damit sie ausgewertet werden können.
+		const res = await run("change", { ...call.args, dry_run: true });
+		return res?.ok ? { ...res, ops: call.args.operations } : res;
+	}
+
+	return { defs, flatDefs, run, runFlat, undo, normalizeAskChoice };
 })();

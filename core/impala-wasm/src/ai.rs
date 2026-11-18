@@ -364,6 +364,53 @@ pub fn ai_tool_defs() -> JsValue {
     to_js(&Value::Array(defs))
 }
 
+/// Flache Werkzeug-Definitionen (`search`, `read_pages`, `edit_page` …), gleiche Form wie [`ai_tool_defs`].
+#[wasm_bindgen(js_name = aiFlatToolDefs)]
+pub fn ai_flat_tool_defs() -> JsValue {
+    let defs: Vec<Value> = impala_ai::flat_tools().iter().map(|d| d.to_json(impala_ai::Family::Other)).collect();
+    to_js(&Value::Array(defs))
+}
+
+/// Flacher Aufruf → `{ tool: "inspect"|"change", args }`, `{ error }` oder `undefined` (kein flaches Werkzeug).
+#[wasm_bindgen(js_name = aiFlatCall)]
+pub fn ai_flat_call(name: &str, args: JsValue) -> JsValue {
+    match impala_ai::flat_call(name, &value(&args)) {
+        None => JsValue::UNDEFINED,
+        Some(Ok((tool, args))) => to_js(&json!({ "tool": tool, "args": args })),
+        Some(Err(e)) => to_js(&json!({ "error": e })),
+    }
+}
+
+/// Gezieltes Ersetzen: `{ content }` oder `{ error }` (Text fürs Modell).
+#[wasm_bindgen(js_name = aiPatchText)]
+pub fn ai_patch_text(content: &str, search: &str, replace: &str) -> JsValue {
+    match impala_ai::edit::patch(content, search, replace) {
+        Ok(c) => to_js(&json!({ "content": c })),
+        Err(e) => to_js(&json!({ "error": e })),
+    }
+}
+
+/// Fehlertext, wenn das Ersetzen des ganzen Inhalts Inhalt löschen würde, sonst `undefined`.
+#[wasm_bindgen(js_name = aiReplaceGuard)]
+pub fn ai_replace_guard(old: &str, new: &str) -> Option<String> {
+    impala_ai::edit::replace_guard(old, new)
+}
+
+/// Spaltenwerte gegen das Verzeichnis-Schema zusammenführen: `{ props }` (null = leer) oder `{ error }`.
+#[wasm_bindgen(js_name = aiMergeProps)]
+pub fn ai_merge_props(schema: JsValue, current: JsValue, update: JsValue, title: &str, folder: &str) -> JsValue {
+    match impala_ai::edit::merge_props(&value(&schema), &value(&current), &value(&update), title, folder) {
+        Ok(p) => to_js(&json!({ "props": p })),
+        Err(e) => to_js(&json!({ "error": e })),
+    }
+}
+
+/// Spalten eines Schemas als „Name (Typ)“.
+#[wasm_bindgen(js_name = aiColumns)]
+pub fn ai_columns(schema: JsValue) -> Vec<String> {
+    impala_ai::edit::columns(&value(&schema))
+}
+
 /// Dokumentierte Thinking-Stufen für Quelle und Modell (`settings` wie bei [`AiRun::agent`]).
 #[wasm_bindgen(js_name = aiThinkingCapabilities)]
 pub fn ai_thinking_capabilities(settings: JsValue) -> JsValue {

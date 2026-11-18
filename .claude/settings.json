@@ -24,9 +24,11 @@
       "PowerShell(git diff:*)",
       "PowerShell(git log:*)",
       "mcp__impala67__impala_list_pages",
-      "mcp__impala67__impala_get_page",
+      "mcp__impala67__impala_read_pages",
       "mcp__impala67__impala_search",
-      "mcp__impala67__impala_list_flashcards",
+      "mcp__impala67__impala_list_cards",
+      "mcp__impala67__impala_list_decks",
+      "mcp__impala67__impala_get_context",
       "mcp__impala67__impala_get_diagnostics",
       "mcp__impala67__impala_get_performance_trace",
       "mcp__impala67__impala_get_ai_trace"

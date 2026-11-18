@@ -13,6 +13,8 @@ const re = (label, pattern) => ({ label, re: pattern });
 const tool = (label, group) => ({ label, tool: group });
 const fn = (label, test) => ({ label, fn: test });
 const ops = (rec, op) => rec.changes.filter((o) => o?.op === op);
+// Einzelne Karten, egal ob je Operation eine Karte (front/back) oder mehrere (cards: […]) kamen.
+const cards = (rec) => ops(rec, "card.create").flatMap((o) => (Array.isArray(o.cards) ? o.cards.map((c) => ({ ...c, deck: o.deck })) : [o]));
 // „Kurz“ zählt nur, wenn die Antwort auch inhaltlich etwas getroffen hat (needsContent).
 const short = (max) => ({ ...fn(`kurz (≤ ${max} Zeichen)`, (r) => String(r.text || "").length <= max), needsContent: true });
 const FOUND_2I = /±\s*2\s*i|\+\-\s*2\s*i|2\s*i\b|imaginär|komplex/i;
@@ -107,10 +109,10 @@ export const SCENARIOS = [
 			},
 			{
 				text: "Mach mir 5 Karteikarten zur Vorbereitung von Lab 1 (Dioden) aus meiner Seite „Lab 1 · Dioden“, in den Stapel „Elektronik::Praktikum::Lab 1“. Kurze Frage vorne, präzise Antwort hinten.",
-				checks: [fn("genau 5 Karten", (r) => ops(r, "card.create").length === 5),
-					fn("Unterstapel Elektronik::Praktikum::Lab 1", (r) => ops(r, "card.create").length > 0 && ops(r, "card.create").every((o) => /elektronik\s*::\s*praktikum\s*::\s*lab\s*1/i.test(String(o.deck || "")))),
-					fn("Inhalt passt zu Dioden/Lab 1", (r) => ops(r, "card.create").filter((o) => /diod|V_?f|durchlass|LED|gleichricht|1N4148|BAT41|ZD3V9|brumm|r_?D|temperatur|quiz|report/i.test(`${o.front} ${o.back}`)).length >= 4),
-					fn("Vorder- und Rückseite gefüllt", (r) => ops(r, "card.create").length > 0 && ops(r, "card.create").every((o) => String(o.front || "").trim() && String(o.back || "").trim()))],
+				checks: [fn("genau 5 Karten", (r) => cards(r).length === 5),
+					fn("Unterstapel Elektronik::Praktikum::Lab 1", (r) => cards(r).length > 0 && cards(r).every((o) => /elektronik\s*::\s*praktikum\s*::\s*lab\s*1/i.test(String(o.deck || "")))),
+					fn("Inhalt passt zu Dioden/Lab 1", (r) => cards(r).filter((o) => /diod|V_?f|durchlass|LED|gleichricht|1N4148|BAT41|ZD3V9|brumm|r_?D|temperatur|quiz|report/i.test(`${o.front} ${o.back}`)).length >= 4),
+					fn("Vorder- und Rückseite gefüllt", (r) => cards(r).length > 0 && cards(r).every((o) => String(o.front || "").trim() && String(o.back || "").trim()))],
 			},
 		],
 	},

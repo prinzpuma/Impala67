@@ -7,8 +7,7 @@ Stand: 15.11.2026.
 
 - **iPad** (Wunschliste 12.11., Ziel: Heft so gut wie GoodNotes): Lasso (`Heft/HeftLasso.swift`; offen: Bilder/Textfelder
   mitnehmen, Drehen), Text-Werkzeug „T“, Laserpointer, Notiz-Cover, Mehrfachauswahl im Editor, Aktivitäts-Heatmap,
-  Kartenbrowser-Sortierung, Verlauf (Notizen und Hefte), neue Bridge-Tools (`impala_create_page`, `impala_update_page`,
-  `impala_list_flashcards`, `impala_create_flashcard`), „Verwandt“ über `NLEmbedding` (Schwelle 0,5 passend?).
+  Kartenbrowser-Sortierung, Verlauf (Notizen und Hefte), Bridge-Inhaltswerkzeuge über `ImpalaCore.runMcpTool` auf dem Gerät prüfen, „Verwandt“ über `NLEmbedding` (Schwelle 0,5 passend?).
 - **iPad-Leistung nachmessen**: Einstellungen „Darstellung“ (258 ms) und Kern-Sperre nach Sync (429 ms) seit `bf594f7`
   behoben; Kartenübersicht (193 ms) und Kaltstart (789 ms) messen;
   Hänger-Fixes vom 14.11. (Heft öffnen, Notiz speichern, ferne Heftseiten entladen) und Zwei-/Drei-Finger-Tipp

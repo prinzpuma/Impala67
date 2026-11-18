@@ -9,10 +9,9 @@ import { AI } from "./ai.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
 import { DRIVE } from "./drive.js";
 import { SEARCH } from "./search.js";
-import { RAG } from "./rag.js";
 import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
-import { FACH } from "./fach.js";
+import { TOOLS } from "./tools.js";
 import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
@@ -34,19 +33,6 @@ if (typeof document !== "undefined") {
 		if (on) initMcpBridge();
 		U.toast(on ? "MCP-Live-Bridge aktiviert." : "MCP-Live-Bridge wird beim nächsten Start nicht mehr verbunden.", "success");
 	}, true);
-}
-
-// Eigenschaften (Datenbankansicht der Elternseite) zusammenführen: null löscht ein Feld,
-// "Thema" (Titel-Spalte) folgt dem Seitentitel. Ergebnis null, wenn nichts übrig bleibt.
-export function mergeProps(current, update, title) {
-	if (!update || typeof update !== "object" || Array.isArray(update)) return current || null;
-	const out = { ...(current || {}) };
-	for (const [k, v] of Object.entries(update)) {
-		if (v === null || v === undefined) delete out[k];
-		else out[k] = Array.isArray(v) ? v.join(", ") : v;
-	}
-	if (title && ("Thema" in out || !current)) out.Thema = title;
-	return Object.keys(out).length ? out : null;
 }
 
 // Laufende/fertige impala_heft_add_pages-Aufrufe nach op_key (vom MCP-Server), damit eine
@@ -190,290 +176,6 @@ export function initMcpBridge() {
 				switch (tool) {
 					case "ping": {
 						result = { pong: true, time: Date.now() };
-						break;
-					}
-					case "impala_list_pages": {
-						let pool = Object.values(S.pages || {}).filter((p) => !p.trashed);
-						if (args.archived === true) {
-							pool = pool.filter((p) => p.archived);
-						} else if (!args.includeArchived) {
-							pool = pool.filter((p) => !p.archived);
-						}
-						if (args.kind && args.kind !== "all") {
-							pool = pool.filter((p) => (p.kind === "heft" ? "heft" : "notion") === args.kind);
-						}
-						// Erkanntes Fach (fach.js) statt nur des selten gesetzten Fachfelds
-						const subjectOf = (p) => FACH.page(p).name;
-						if (args.subject) {
-							const sQuery = FACH.clean(args.subject);
-							pool = pool.filter((p) => subjectOf(p) === sQuery);
-						}
-						if (args.query) {
-							const q = String(args.query).trim().toLowerCase();
-							pool = pool.filter((p) => {
-								const title = (p.title || "").toLowerCase();
-								const content = (p.content || "").toLowerCase();
-								const subj = subjectOf(p).toLowerCase();
-								return title.includes(q) || content.includes(q) || subj.includes(q);
-							});
-						}
-						pool.sort(U.byNewest);
-						const count = Math.max(1, Math.min(200, Number(args.limit) || 50));
-						const pages = pool.slice(0, count).map((p) => ({
-							id: p.id,
-							title: p.title || "Ohne Titel",
-							kind: p.kind || "notion",
-							subject: subjectOf(p),
-							parentId: p.parentId || null,
-							archived: !!p.archived,
-							updated: p.updated,
-							created: p.created,
-						}));
-						result = { total: pool.length, count: pages.length, pages };
-						break;
-					}
-					case "impala_get_page": {
-						let page = null;
-						if (args.id) page = S.pages[args.id];
-						if (!page && args.title) {
-							const q = String(args.title).trim().toLowerCase();
-							page = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === q);
-						}
-						if (!page) {
-							result = { error: `Notiz nicht gefunden: ${args.id || args.title}` };
-						} else {
-							let content = page.content || "";
-							let heftPages = null;
-							const heftDoc = page.kind === "heft" ? STATE.heftDoc(page.id) : null;
-							if (heftDoc) {
-								const doc = heftDoc;
-								heftPages = doc.pages?.length || 1;
-								const parts = [];
-								for (let i = 0; i < (doc.pages || []).length; i++) {
-									const pg = doc.pages[i];
-									const pageParts = [];
-									if (pg.ocrText) pageParts.push(String(pg.ocrText).trim());
-									if (Array.isArray(pg.texts)) {
-										for (const t of pg.texts) if (t.text) pageParts.push(String(t.text).trim());
-									}
-									if (pageParts.length) parts.push(`--- Seite ${i + 1} ---\n${pageParts.join("\n")}`);
-								}
-								if (parts.length) content = parts.join("\n\n");
-							}
-							result = {
-								id: page.id,
-								title: page.title || "Ohne Titel",
-								kind: page.kind || "notion",
-								subject: page.subject || null,
-								archived: !!page.archived,
-								content,
-								...(heftPages ? { heftPages, note: "Handschrift-Heft: content enthält extrahierten Text & OCR." } : {}),
-								created: page.created,
-								updated: page.updated,
-								tags: page.tags || [],
-							};
-						}
-						break;
-					}
-					case "impala_create_page": {
-						const id = U.uid();
-						const title = String(args.title || "Neue Notiz").trim();
-						const content = String(args.content || "");
-						const subject = args.subject ? String(args.subject).trim() : null;
-						const kind = args.kind === "heft" ? "heft" : "notion";
-						let parentId = args.parentId || null;
-						if (!parentId && args.parent_title) {
-							const pt = String(args.parent_title).trim().toLowerCase();
-							const parent = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === pt);
-							if (parent) parentId = parent.id;
-						}
-
-						await STATE.dispatch("pageCreate", {
-							id,
-							title,
-							content,
-							subject,
-							kind,
-							parentId,
-							workspaceId: "default",
-						});
-						const props = mergeProps(null, args.props, title);
-						if (props) await STATE.dispatch("pageUpdate", { id, patch: { props } });
-						RENDER.render();
-						if (TABS && TABS.openPage) TABS.openPage(id);
-
-						result = { ok: true, id, title, kind, subject, parentId, ...(props ? { props } : {}) };
-						break;
-					}
-					case "impala_update_page": {
-						let page = null;
-						if (args.id) page = S.pages[args.id];
-						if (!page && args.title) {
-							const q = String(args.title).trim().toLowerCase();
-							page = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === q);
-						}
-						if (!page) {
-							result = { error: `Notiz nicht gefunden: ${args.id || args.title}` };
-						} else {
-							const patch = {};
-							if (args.new_title) patch.title = String(args.new_title).trim();
-							if (args.subject !== undefined) patch.subject = args.subject ? String(args.subject).trim() : null;
-							if (args.props && typeof args.props === "object") patch.props = mergeProps(page.props, args.props, patch.title || page.title);
-							const newText = args.append_content || args.content;
-							if (page.kind === "heft") {
-								// Striche nie anfassen: Text kommt als neue Textbox auf die erste Heftseite
-								const firstPageId = STATE.heftPage(page.id, 0)?.id;
-								if (newText && String(newText).trim()) {
-									if (!firstPageId) { result = { error: "Heft hat keine Seite für die Textbox." }; break; }
-									await STATE.dispatch("heftOps", {
-										pageId: page.id,
-										ops: [{ t: "x+", p: firstPageId, o: { id: U.uid(), text: String(newText).trim(), x: 20, y: 50 } }],
-									});
-								}
-							} else if (args.append_content) {
-								patch.content = (page.content ? page.content + "\n\n" : "") + String(args.append_content).trim();
-							} else if (args.content !== undefined) {
-								patch.content = String(args.content);
-							}
-
-							if (Object.keys(patch).length > 0) {
-								await STATE.dispatch("pageUpdate", { id: page.id, patch });
-							}
-							if (args.archived !== undefined) {
-								if (args.archived && !page.archived) {
-									await STATE.dispatch("pageArchive", { id: page.id });
-								} else if (!args.archived && page.archived) {
-									await STATE.dispatch("pageUnarchive", { id: page.id });
-								}
-							}
-							RENDER.render();
-							const fresh = S.pages[page.id] || page;
-							result = { ok: true, id: fresh.id, title: fresh.title, kind: fresh.kind || "notion", subject: fresh.subject || null, archived: !!fresh.archived };
-						}
-						break;
-					}
-					case "impala_search": {
-						const q = String(args.query || "").trim().toLowerCase();
-						const max = Math.max(1, Math.min(100, Number(args.limit) || 20));
-						if (args.semantic && q) {
-							const hits = await RAG.search(String(args.query), max);
-							if (hits) {
-								const filtered = hits.filter((h) => args.archived === undefined || h.archived === !!args.archived);
-								result = { query: args.query, mode: "semantic", totalMatches: filtered.length, results: filtered.map(({ pageId, ...h }) => ({ type: "page", id: pageId, ...h })) };
-								break;
-							}
-						}
-						const results = [];
-						if (q) {
-							for (const p of Object.values(S.pages || {})) {
-								if (p.trashed) continue;
-								if (args.archived === true && !p.archived) continue;
-								if (args.archived === false && p.archived) continue;
-								const title = p.title || "";
-								let content = p.content || "";
-								const heftDoc = p.kind === "heft" ? STATE.heftDoc(p.id) : null;
-								if (heftDoc) {
-									const doc = heftDoc;
-									const parts = [];
-									for (const pg of doc.pages || []) {
-										if (pg.ocrText) parts.push(pg.ocrText);
-										if (Array.isArray(pg.texts)) for (const t of pg.texts) if (t.text) parts.push(t.text);
-									}
-									if (parts.length) content = parts.join(" ");
-								}
-								const subj = String(p.subject || "");
-								const titleMatch = title.toLowerCase().includes(q);
-								const contentMatch = content.toLowerCase().includes(q);
-								const subjMatch = subj.toLowerCase().includes(q);
-
-								if (titleMatch || contentMatch || subjMatch) {
-									let snippet = "";
-									if (contentMatch) {
-										const idx = content.toLowerCase().indexOf(q);
-										const start = Math.max(0, idx - 40);
-										const end = Math.min(content.length, idx + q.length + 60);
-										snippet = (start > 0 ? "…" : "") + content.slice(start, end).replace(/\s+/g, " ") + (end < content.length ? "…" : "");
-									} else {
-										snippet = content.slice(0, 100).replace(/\s+/g, " ");
-									}
-									results.push({
-										type: "page",
-										id: p.id,
-										title,
-										kind: p.kind || "notion",
-										subject: p.subject || null,
-										archived: !!p.archived,
-										snippet,
-									});
-								}
-							}
-							for (const c of Object.values(S.cards || {})) {
-								if (c.trashed) continue;
-								const front = c.front || "";
-								const back = c.back || "";
-								if (front.toLowerCase().includes(q) || back.toLowerCase().includes(q)) {
-									results.push({
-										type: "flashcard",
-										id: c.id,
-										deck: c.deck || "Standard",
-										front,
-										back,
-										snippet: `${front} → ${back}`,
-									});
-								}
-							}
-						}
-						result = {
-							query: args.query, mode: "keyword", totalMatches: results.length, results: results.slice(0, max),
-							...(args.semantic ? { note: "Keine Embeddings eingerichtet (Einstellungen → KI → Embedding-Modell) — Stichwortsuche verwendet." } : {}),
-						};
-						break;
-					}
-					case "impala_create_flashcard": {
-						const id = U.uid();
-						const front = String(args.front || "").trim();
-						const back = String(args.back || "").trim();
-						const deck = String(args.deck || "Standard").trim();
-						let pageId = null;
-						if (args.page_title) {
-							const pt = String(args.page_title).trim().toLowerCase();
-							const page = Object.values(S.pages || {}).find((p) => !p.trashed && (p.title || "").toLowerCase() === pt);
-							if (page) pageId = page.id;
-						}
-
-						await STATE.dispatch("cardCreate", {
-							id,
-							front,
-							back,
-							deck,
-							...(pageId ? { pageId } : {}),
-						});
-						RENDER.render();
-						result = { ok: true, id, front, back, deck, pageId };
-						break;
-					}
-					case "impala_list_flashcards": {
-						let pool = Object.values(S.cards || {}).filter((c) => !c.trashed);
-						if (args.deck) {
-							const deckLower = String(args.deck).trim().toLowerCase();
-							pool = pool.filter((c) => {
-								const d = (c.deck || "Standard").toLowerCase();
-								return d === deckLower || d.startsWith(deckLower + "::") || d.includes(deckLower);
-							});
-						}
-						if (args.query) {
-							const q = String(args.query).trim().toLowerCase();
-							pool = pool.filter((c) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q));
-						}
-						const max = Math.max(1, Math.min(200, Number(args.limit) || 50));
-						const cards = pool.slice(0, max).map((c) => ({
-							id: c.id,
-							front: c.front,
-							back: c.back,
-							deck: c.deck || "Standard",
-							created: c.created || null,
-						}));
-						result = { total: pool.length, count: cards.length, cards };
 						break;
 					}
 					case "impala_get_diagnostics": {
@@ -715,14 +417,23 @@ export function initMcpBridge() {
 						break;
 					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.
-					case "impala_heft_page_image":
-						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage(args);
+					case "impala_heft_page_image": {
+						// page_id darf auch der Hefttitel sein (Lese-Werkzeuge liefern Titel).
+						const heft = args.page_id && !S.pages?.[args.page_id] ? STATE.findPage(String(args.page_id)) : null;
+						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage(heft ? { ...args, page_id: heft.id } : args);
 						break;
+					}
 					case "impala_heft_label_lines":
 						result = await (await import("./heft-label.js")).HEFT_LABEL.labelLines(args);
 						break;
-					default:
-						result = { error: `Unbekanntes Werkzeug: ${tool}` };
+					default: {
+						// Inhalts-Werkzeuge = dieselben flachen Werkzeuge wie die App-KI (tools.js,
+						// Kern impala-ai/flat.rs): impala_search → search, impala_edit_page → edit_page …
+						const flat = tool.startsWith("impala_") ? tool.slice(7) : "";
+						if (!TOOLS.flatDefs.some((d) => d.function.name === flat)) { result = { error: `Unbekanntes Werkzeug: ${tool}` }; break; }
+						result = await TOOLS.runFlat(flat, args || {});
+						if (result && !result.error && !result.dryRun && /^(create_|edit_|organize_|write_)/.test(flat)) RENDER.render();
+					}
 				}
 
 				bridgeCallsCount++;

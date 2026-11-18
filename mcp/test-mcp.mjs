@@ -111,13 +111,9 @@ test("MCP-Server: Initialisierung, Werkzeuge und Lebenszyklus", async () => {
 		// 2. Werkzeuge auflisten
 		const toolsRes = await client.request("tools/list", {});
 		const toolNames = (toolsRes.tools || []).map((t) => t.name);
-		assert.ok(toolNames.includes("impala_list_pages"));
-		assert.ok(toolNames.includes("impala_get_page"));
-		assert.ok(toolNames.includes("impala_create_page"));
-		assert.ok(toolNames.includes("impala_update_page"));
-		assert.ok(toolNames.includes("impala_search"));
-		assert.ok(toolNames.includes("impala_list_flashcards"));
-		assert.ok(toolNames.includes("impala_create_flashcard"));
+		for (const name of ["impala_search", "impala_read_pages", "impala_list_pages", "impala_create_pages", "impala_edit_page", "impala_list_cards", "impala_create_cards"]) {
+			assert.ok(toolNames.includes(name), name);
+		}
 	} finally {
 		await client.close();
 	}

@@ -3093,6 +3093,25 @@ export function aiChatConfig(settings) {
 }
 
 /**
+ * Spalten eines Schemas als „Name (Typ)“.
+ * @param {any} schema
+ * @returns {string[]}
+ */
+export function aiColumns(schema) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.aiColumns(retptr, addHeapObject(schema));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v1 = getArrayJsValueFromWasm0(r0, r1);
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v1;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Vektoren über `POST /embeddings` einer Cloud-Quelle (`provider`: `{ id, base, key }`).
  * @param {any} http
  * @param {any} provider
@@ -3110,6 +3129,28 @@ export function aiEmbedRemote(http, provider, model, texts) {
 }
 
 /**
+ * Flacher Aufruf → `{ tool: "inspect"|"change", args }`, `{ error }` oder `undefined` (kein flaches Werkzeug).
+ * @param {string} name
+ * @param {any} args
+ * @returns {any}
+ */
+export function aiFlatCall(name, args) {
+    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.aiFlatCall(ptr0, len0, addHeapObject(args));
+    return takeObject(ret);
+}
+
+/**
+ * Flache Werkzeug-Definitionen (`search`, `read_pages`, `edit_page` …), gleiche Form wie [`ai_tool_defs`].
+ * @returns {any}
+ */
+export function aiFlatToolDefs() {
+    const ret = wasm.aiFlatToolDefs();
+    return takeObject(ret);
+}
+
+/**
  * Modelle aller Quellen: `[{ id, providerId }]`.
  * @param {any} http
  * @param {any} providers
@@ -3120,6 +3161,24 @@ export function aiListModels(http, providers, sync_url) {
     const ptr0 = passStringToWasm0(sync_url, wasm.__wbindgen_export, wasm.__wbindgen_export2);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.aiListModels(addHeapObject(http), addHeapObject(providers), ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * Spaltenwerte gegen das Verzeichnis-Schema zusammenführen: `{ props }` (null = leer) oder `{ error }`.
+ * @param {any} schema
+ * @param {any} current
+ * @param {any} update
+ * @param {string} title
+ * @param {string} folder
+ * @returns {any}
+ */
+export function aiMergeProps(schema, current, update, title, folder) {
+    const ptr0 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(folder, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.aiMergeProps(addHeapObject(schema), addHeapObject(current), addHeapObject(update), ptr0, len0, ptr1, len1);
     return takeObject(ret);
 }
 
@@ -3139,6 +3198,24 @@ export function aiModelPresets() {
  */
 export function aiNormalizeAskChoice(args) {
     const ret = wasm.aiNormalizeAskChoice(addHeapObject(args));
+    return takeObject(ret);
+}
+
+/**
+ * Gezieltes Ersetzen: `{ content }` oder `{ error }` (Text fürs Modell).
+ * @param {string} content
+ * @param {string} search
+ * @param {string} replace
+ * @returns {any}
+ */
+export function aiPatchText(content, search, replace) {
+    const ptr0 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(search, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replace, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.aiPatchText(ptr0, len0, ptr1, len1, ptr2, len2);
     return takeObject(ret);
 }
 
@@ -3176,6 +3253,33 @@ export function aiRagQuery(text) {
             wasm.__wbindgen_export5(r0, r1 * 1, 1);
         }
         return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Fehlertext, wenn das Ersetzen des ganzen Inhalts Inhalt löschen würde, sonst `undefined`.
+ * @param {string} old
+ * @param {string} _new
+ * @returns {string | undefined}
+ */
+export function aiReplaceGuard(old, _new) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(old, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(_new, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.aiReplaceGuard(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v3;
+        if (r0 !== 0) {
+            v3 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v3;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -6025,7 +6129,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4731(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4779(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6071,7 +6175,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4731(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_4779(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6164,7 +6268,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 203, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4674);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4722);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6191,14 +6295,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4731(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4731(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_4779(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_4779(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4674(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4722(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4674(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4722(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

@@ -26,12 +26,15 @@ Im Projekt ist der Server schon über `.mcp.json` eingetragen. Für andere Clien
 ## 3. Tools
 
 **Inhalte**
-- `impala_list_pages` — Notizen auflisten; Filter `query`, `kind`, `subject`, `archived`/`includeArchived`, `limit`.
-- `impala_get_page` — Inhalt per `id` oder `title`; bei Heften OCR- und Textbox-Text aller Seiten.
-- `impala_create_page` — neue Notiz (`title`, `content`, `subject`, `parentId`/`parent_title`, `kind`, `props` für die Datenbankansicht der Elternseite).
-- `impala_update_page` — Titel, Inhalt, Fach, Archiv, `props` (werden zusammengeführt, `null` löscht ein Feld). Bei Heften wird Text als neue Textbox auf Seite 1 gelegt, Striche bleiben unberührt.
-- `impala_search` — Stichwortsuche in Notizen und Karteikarten; mit `semantic: true` Bedeutungssuche über den RAG-Index der App (braucht eingerichtete Embeddings, sonst Rückfall auf Stichworte).
-- `impala_list_flashcards`, `impala_create_flashcard` — Karteikarten.
+Dieselben flachen Werkzeuge wie die App-KI (Definitionen: `core/impala-ai/src/tool_defs_flat.json`, eingelesen von `mcp/content-tools.mjs`). Ausgeführt werden sie in der App (`web/tools.js` → `TOOLS.runFlat`) bzw. auf dem iPad im Kern (`ImpalaCore.runMcpTool`), mit denselben Prüfungen wie im KI-Chat. Seiten gehen per Titel oder ID.
+- `impala_search` — Stichwortsuche (`semantic: true`: Bedeutungssuche); Treffer mit Ordner und Ausschnitt.
+- `impala_read_pages` — Seiten/Hefte lesen (`titles`): Inhalt, Ordner, Unterseiten; bei Verzeichnissen Spalten und Einträge, bei Einträgen ihre Spaltenwerte (`props`).
+- `impala_list_pages`, `impala_get_context` — Seitenliste mit Ordner bzw. Datum, offene und zuletzt bearbeitete Seiten.
+- `impala_create_pages` — mehrere Seiten in einem Aufruf (`pages: [{ title, content, parent, props }]`); `props` werden gegen die Spalten des Verzeichnisses geprüft.
+- `impala_edit_page` — kleinste Änderung: `edits: [{ search, replace }]` (leerraum-tolerant), `append`, `props`, `rename`, `move_to`; `content` ersetzt alles und braucht `allow_deleting_content`, wenn Abschnitte verloren gingen.
+- `impala_organize_pages` (trash/archive/unarchive), `impala_write_to_heft`.
+- `impala_list_cards`, `impala_list_decks`, `impala_create_cards` (Unterstapel mit `::`), `impala_edit_cards`, `impala_edit_deck`, `impala_search_chats`.
+- Jedes schreibende Werkzeug nimmt `dry_run: true`: alles prüfen, nichts speichern (Benchmark).
 
 **Diagnose & Testen**
 - `impala_get_diagnostics` — aktive Seite, Tabs, Zähler, Heap, Sync-Status, letzte Fehler.

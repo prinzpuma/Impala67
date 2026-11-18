@@ -1,11 +1,11 @@
 // Browser-Seite des KI-Benchmarks (tools/ai-bench/run.mjs schickt diese Datei per impala_eval).
 // Ruft den echten Agenten des Rust-Kerns (CORE.AiRun) mit den echten Werkzeugen der App auf –
 // aber an der App vorbei: kein Chat wird gespeichert, S.settings bleibt unverändert und
-// Schreib-Werkzeuge (change) werden nur protokolliert, nie ausgeführt. Lese-Werkzeuge
+// Schreib-Werkzeuge (change) laufen nur als Trockenlauf (echte Prüfung, nichts gespeichert). Lese-Werkzeuge
 // (inspect, calculate, view_heft_page, Notizsuche) laufen echt auf den Nutzerdaten.
 // Misst je Anfrage: Wartezeit bis zum ersten Token, Prompt-/Antwort-Token (usage von LM Studio),
 // Prefill- und Decode-Geschwindigkeit.
-const VERSION = 3;
+const VERSION = 4;
 if (globalThis.__aiBench?.version === VERSION) return { ready: true, version: VERSION };
 
 const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }] = await Promise.all([
@@ -16,9 +16,6 @@ const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }] = await Pr
 const enc = new TextEncoder(), dec = new TextDecoder();
 const now = () => performance.now();
 const clip = (s, n) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + `… [+${s.length - n}]` : s; };
-const KNOWN_OPS = new Set(["page.create", "page.append", "page.replace", "page.patch", "page.rename", "page.move", "page.trash",
-	"page.archive", "page.unarchive", "heft.append", "card.create", "card.update", "card.move", "card.trash", "card.suspend",
-	"card.reset", "deck.create", "deck.rename", "deck.move", "deck.trash"]);
 
 // ---------- HTTP mit Messung ----------
 function makeHttp(rec, limitMs) {
@@ -171,12 +168,10 @@ async function turn(spec, rec) {
 		async run(name, args) {
 			const t = now(); let out;
 			if (name === "change") {
-				const ops = Array.isArray(args?.operations) ? args.operations : [];
-				rec.changes.push(...ops);
-				const unknown = ops.filter((o) => !KNOWN_OPS.has(o?.op)).map((o) => o?.op || "(leer)");
-				out = !ops.length ? { error: "change: operations fehlt." }
-					: unknown.length ? { error: `change: unbekannte Operation(en): ${unknown.join(", ")}. Keine Änderungen ausgeführt.` }
-					: { ok: true, operations: ops.length, changedObjects: ops.length, results: ops.map((o) => ({ op: o.op, ok: true })) };
+				// Trockenlauf mit den echten Prüfungen (Seite da? Suchtext da? Löschschutz, Spalten);
+				// gespeichert wird nichts. Nur geprüfte Änderungen zählen als geschrieben.
+				try { out = await TOOLS.run("change", { ...(args || {}), dry_run: true }); } catch (error) { out = { error: String(error) }; }
+				if (out?.ok) rec.changes.push(...args.operations);
 			} else {
 				try { out = await TOOLS.run(name, args); } catch (error) { out = { error: String(error) }; }
 			}
@@ -206,7 +201,7 @@ async function turn(spec, rec) {
 		const out = await run.agent({
 			settings, options: { cloudflare: null, safetyId: "" }, customInstructions: String(S.settings.customInstructions || "").trim(), now: prompt(),
 			chat: conv.chat, workspace: ws, ragHits, activePage: page ? { id: page.id, title: page.title } : null,
-			tools: Array.isArray(extra) ? TOOLS.defs.concat(extra) : TOOLS.defs.slice(),
+			tools: (spec.appTools === "flat" ? TOOLS.flatDefs : TOOLS.defs).concat(Array.isArray(extra) ? extra : []),
 			alwaysSendTools: S.settings.alwaysSendTools !== false, embedModel: String(S.settings.embedModel || ""), session: conv.session,
 		}, executor, onEvent);
 		conv.session = out.session;

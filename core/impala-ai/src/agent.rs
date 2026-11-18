@@ -23,8 +23,9 @@ use crate::tools::{
 };
 
 pub const MAX_STEPS: usize = 12;
-/// Längere Werkzeug-Ergebnisse werden gekürzt (UTF-16-Einheiten wie in JS).
-const TOOL_RESULT_MAX: usize = 6000;
+/// Längere Werkzeug-Ergebnisse werden gekürzt (UTF-16-Einheiten wie in JS). So viel wie eine
+/// gelesene Seite (`read_page` kappt bei 12 000), sonst käme jede lange Seite verstümmelt an.
+const TOOL_RESULT_MAX: usize = 12000;
 const CHIP_MAX: usize = 80;
 
 /// Ergebnis eines Werkzeugs: JSON-Text fürs Modell (Schlüsselreihenfolge bleibt erhalten)
@@ -332,7 +333,12 @@ pub async fn run_agent(
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n");
-    let system = |mode| Message::system(system_prompt(mode, &note, req.custom_instructions, req.now));
+    // Flache Werkzeugliste (kein inspect): Arbeitsregel mit deren Namen.
+    let flat = req.tools.iter().any(|t| t.name == "read_pages");
+    let system = |mode| {
+        let mode = if flat && matches!(mode, ToolMode::Full) { ToolMode::Flat } else { mode };
+        Message::system(system_prompt(mode, &note, req.custom_instructions, req.now))
+    };
     let (context, page_context) = workspace_context(req.workspace, &rag, &summary, info.family);
     let mut messages = vec![system(if meta_only { ToolMode::Meta } else { ToolMode::Full })];
     let last = history.pop();
@@ -436,6 +442,16 @@ pub async fn run_agent(
                 run.finish_tool(call, Some("unbekanntes Werkzeug"), error_json(&msg));
                 continue;
             }
+            // Flache Werkzeuge (search, edit_page …) laufen als inspect/change: gleiche
+            // Bestätigung, gleiches Rückgängig, gleiche Prüfungen.
+            let (name, args) = match crate::flat::flat_call(name, &args) {
+                None => (name, args),
+                Some(Ok((tool, inner))) => (tool, inner),
+                Some(Err(msg)) => {
+                    run.finish_tool(call, Some("unvollständiger Aufruf"), error_json(&msg));
+                    continue;
+                }
+            };
             let call_key = format!("{name}:{args}");
             if failed_calls.contains(&call_key) {
                 let msg = format!(

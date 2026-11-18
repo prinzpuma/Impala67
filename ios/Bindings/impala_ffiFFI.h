@@ -1637,6 +1637,11 @@ void uniffi_impala_ffi_fn_method_impalacore_review_card(void*_Nonnull ptr, RustB
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_review_preview(void*_Nonnull ptr, RustBuffer card_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_RUN_MCP_TOOL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_RUN_MCP_TOOL
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_run_mcp_tool(void*_Nonnull ptr, RustBuffer name, RustBuffer args_json, int32_t utc_offset_minutes, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SAVE_CHAT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_SAVE_CHAT
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_save_chat(void*_Nonnull ptr, RustBuffer chat, RustCallStatus *_Nonnull out_status
@@ -4334,6 +4339,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_review_card(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_REVIEW_PREVIEW
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_REVIEW_PREVIEW
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_review_preview(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_RUN_MCP_TOOL
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_RUN_MCP_TOOL
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_run_mcp_tool(void
     
 );
 #endif

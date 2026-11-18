@@ -172,6 +172,10 @@ impl State {
         if title.is_empty() {
             return None;
         }
+        // Seiten-ID statt Titel (MCP-Werkzeuge liefern IDs mit): eindeutig, kein Raten.
+        if let Some(pg) = self.pages.get(title).filter(|p| !p.is_trashed() && (include_archived || !p.is_archived())) {
+            return Some(pg);
+        }
         let q = impala_search::text::lower(title);
         let mut partial = None;
         for pg in self.active_pages() {

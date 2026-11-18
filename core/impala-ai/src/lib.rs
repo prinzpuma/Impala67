@@ -12,7 +12,9 @@ mod pattern;
 pub mod agent;
 pub mod api;
 pub mod chat;
+pub mod edit;
 pub mod error;
+pub mod flat;
 pub mod message;
 pub mod prompt;
 pub mod provider;
@@ -40,4 +42,5 @@ pub use provider::{
 };
 pub use request::{CloudflareAuth, RequestOptions};
 pub use stream::{StreamParser, StreamUpdate};
+pub use flat::{flat_call, flat_tools};
 pub use tools::builtin_tools;

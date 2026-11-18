@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { createInterface } from "node:readline";
 import { WebSocket, WebSocketServer } from "ws";
+import { CONTENT_TOOLS, CONTENT_WRITE } from "./content-tools.mjs";
 
 const connectedSockets = new Set();
 let activeBrowserWs = null;
@@ -200,7 +201,7 @@ function getActiveBrowserWs() {
 }
 
 // Schreibende Tools: Nach einem Timeout kann die App die Aktion trotzdem abschließen.
-const WRITE_TOOLS = new Set(["impala_create_page", "impala_update_page", "impala_create_flashcard", "impala_heft_add_pages", "impala_heft_delete_pages", "impala_heft_label_lines", "impala_storage_cleanup", "impala_eval"]);
+const WRITE_TOOLS = new Set([...CONTENT_WRITE, "impala_heft_add_pages", "impala_heft_delete_pages", "impala_heft_label_lines", "impala_storage_cleanup", "impala_eval"]);
 
 function getToolTimeoutMs(tool, args = {}) {
 	if (args.timeoutMs && Number(args.timeoutMs) > 0) return Number(args.timeoutMs);
@@ -283,106 +284,7 @@ const PROTOCOL_VERSION = "2024-11-05";
 
 // Tool-Definitionen nach MCP Spezifikation
 const TOOLS = [
-	{
-		name: "impala_list_pages",
-		description: "Listet vorhandene Notizen in Impala67 auf (ID, Titel, Art: Notion vs Heft, Fach, Aktualisierungszeitpunkt).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				query: { type: "string", description: "Optionaler Suchbegriff zum Filtern nach Titel oder Inhalt" },
-				kind: { type: "string", enum: ["all", "notion", "heft"], description: "Filter nach Notiz-Art: Notion-Seite oder Handschrift-Heft (Standard: all)" },
-				subject: { type: "string", description: "Filter nach Schulfach (z.B. Mathematik, Biologie, Deutsch)" },
-				archived: { type: "boolean", description: "true = nur archivierte Notizen" },
-				includeArchived: { type: "boolean", description: "Archivierte Notizen mit auflisten (Standard: false)" },
-				limit: { type: "number", description: "Maximale Anzahl der Treffer (Standard: 50)" },
-			},
-		},
-	},
-	{
-		name: "impala_get_page",
-		description: "Liest den Titel und den Markdown-/Text-Inhalt einer Notiz aus. Bei Handschrift-Heften wird der extrahierte Text/OCR sicher geliefert, ohne Vektorstriche zu beschädigen.",
-		inputSchema: {
-			type: "object",
-			properties: {
-				id: { type: "string", description: "ID der Notiz" },
-				title: { type: "string", description: "Titel der Notiz (falls ID nicht bekannt)" },
-			},
-		},
-	},
-	{
-		name: "impala_create_page",
-		description: "Erstellt eine neue Notiz in Impala67 (Titel, Markdown-Inhalt, optional Fach und Ordner/Elternseite).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				title: { type: "string", description: "Titel der neuen Notiz" },
-				content: { type: "string", description: "Markdown-Inhalt der Notiz. Links auf andere Notizen: [Titel](#<Notiz-ID>)." },
-				subject: { type: "string", description: "Fach bzw. Kategorie (z.B. Informatik, Physik)" },
-				parentId: { type: "string", description: "ID einer optionalen übergeordneten Notiz" },
-				parent_title: { type: "string", description: "Titel einer optionalen übergeordneten Notiz (falls ID nicht bekannt)" },
-				kind: { type: "string", enum: ["notion", "heft"], description: "Art der Notiz: notion (Standard) oder heft" },
-				props: { type: "object", description: "Eigenschaften für die Datenbankansicht der Elternseite (z. B. Übungen: Nr, Datum, Abgabe, Status, Blatt …). Werden mit vorhandenen zusammengeführt; null löscht ein Feld." },
-			},
-			required: ["title"],
-		},
-	},
-	{
-		name: "impala_update_page",
-		description: "Aktualisiert oder ergänzt eine bestehende Notiz in Impala67 (Titel, Inhalt, Fach, Archiv, Datenbank-Eigenschaften). Bei Handschrift-Heften bleiben Striche unangetastet: Text (content oder append_content) kommt als neue Textbox auf die erste Heftseite.",
-		inputSchema: {
-			type: "object",
-			properties: {
-				id: { type: "string", description: "ID der Notiz" },
-				title: { type: "string", description: "Titel der Notiz" },
-				new_title: { type: "string", description: "Neuer Titel der Notiz" },
-				content: { type: "string", description: "Ersetzt den gesamten Markdown-Inhalt (bei Heften: neue Textbox, ersetzt nichts). Links auf andere Notizen: [Titel](#<Notiz-ID>)." },
-				append_content: { type: "string", description: "Hängt Text am Ende an (bei Heften: neue Textbox)" },
-				subject: { type: "string", description: "Neues Fach der Notiz" },
-				archived: { type: "boolean", description: "true = archivieren, false = aus dem Archiv holen" },
-				props: { type: "object", description: "Eigenschaften für die Datenbankansicht der Elternseite (z. B. Übungen: Nr, Datum, Abgabe, Status, Blatt …). Werden mit vorhandenen zusammengeführt; null löscht ein Feld." },
-			},
-		},
-	},
-	{
-		name: "impala_search",
-		description: "Durchsucht Notizen (Titel, Fließtext, OCR) und Karteikarten nach Stichworten. Mit semantic=true sucht sie stattdessen nach Bedeutung über den RAG-Index der App (findet auch Umschreibungen, nur Notizen).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				query: { type: "string", description: "Suchbegriff oder Frage" },
-				semantic: { type: "boolean", description: "Bedeutungssuche statt Stichwortsuche (Standard: false). Fällt auf Stichworte zurück, wenn in der App keine Embeddings eingerichtet sind." },
-				archived: { type: "boolean", description: "true = nur archivierte, false = nur nicht archivierte Notizen (Standard: alle)" },
-				limit: { type: "number", description: "Maximale Anzahl an Treffern (Standard: 20)" },
-			},
-			required: ["query"],
-		},
-	},
-	{
-		name: "impala_list_flashcards",
-		description: "Listet Karteikarten auf (optional gefiltert nach Stapel oder Stichwort).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				deck: { type: "string", description: "Name des Stapels (z.B. Standard, Mathe)" },
-				query: { type: "string", description: "Suchbegriff in Vorder- oder Rückseite" },
-				limit: { type: "number", description: "Maximale Anzahl an Karten (Standard: 50)" },
-			},
-		},
-	},
-	{
-		name: "impala_create_flashcard",
-		description: "Erstellt eine neue Karteikarte mit Frage (Vorderseite) und Antwort (Rückseite).",
-		inputSchema: {
-			type: "object",
-			properties: {
-				front: { type: "string", description: "Vorderseite / Frage" },
-				back: { type: "string", description: "Rückseite / Antwort" },
-				deck: { type: "string", description: "Ziel-Stapel (Standard: Standard)" },
-				page_title: { type: "string", description: "Zugehörige Notiz-Seite" },
-			},
-			required: ["front", "back"],
-		},
-	},
+	...CONTENT_TOOLS,
 	{
 		name: "impala_get_diagnostics",
 		description: "Liefert umfassende App-Diagnosedaten: aktive Seite, geöffnete Tabs, Anzahl Notizen/Karten, Performance-Status, JS-Heap-Speicher, Cloudflare/Drive-Sync-Status und letzte Laufzeitfehler.",

@@ -322,7 +322,7 @@ fn wall_ms() -> i64 {
 }
 
 /// Ortszeit aus UTC-Millisekunden und Versatz (bürgerlicher Kalender, Algorithmus von H. Hinnant).
-fn local_time(utc_ms: i64, offset_minutes: i32) -> LocalTime {
+pub(crate) fn local_time(utc_ms: i64, offset_minutes: i32) -> LocalTime {
     let secs = utc_ms.div_euclid(1000) + i64::from(offset_minutes) * 60;
     let (days, day_secs) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     let z = days + 719_468;
