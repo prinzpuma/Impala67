@@ -1,7 +1,7 @@
-//! Werkzeuge der KI gegen den Kern (Namen und Schemas wie `web/tools.js`, Definitionen in
-//! `impala-ai/src/tool_defs.json`): `inspect` zum Nachsehen und `change` für atomare, rückgängig
-//! machbare Änderungen an Seiten, Karten, Stapeln und Heften. Was nur die Plattform kann
-//! (`calculate`, Heftseite als Bild, Rückfragen), geht über [`AiPlatform`].
+//! Werkzeuge der KI gegen den Kern (Namen und Schemas wie `tool_defs_flat.json`):
+//! `inspect` zum Nachsehen und `change` für atomare, rückgängig machbare Änderungen an Seiten,
+//! Karten, Stapeln und Heften. Was nur die Plattform kann (`calculate`, Heftseite als Bild,
+//! Rückfragen), geht über [`AiPlatform`].
 //!
 //! Rückgängig: `change` liefert einen Änderungs-Satz `{ pages, cards, decks, heftDocs }` mit je
 //! `{ id, before, after }` im Format der PWA (`undoSet`); [`apply_undo`] spielt ihn zurück, wenn die
@@ -99,6 +99,31 @@ fn ser<T: serde::Serialize>(v: &T) -> Value {
 
 fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+fn is_descendant_of(state: &impala_model::State, pg: &impala_model::Page, root_id: &str) -> bool {
+    let mut cur = pg.parent();
+    for _ in 0..64 {
+        let Some(id) = cur else { break };
+        if id == root_id {
+            return true;
+        }
+        cur = state.pages.get(id).and_then(|p| p.parent());
+    }
+    false
+}
+
+fn full_page_path(state: &impala_model::State, pg: &impala_model::Page) -> String {
+    let mut parts = vec![pg.title()];
+    let mut cur = pg.parent();
+    for _ in 0..64 {
+        let Some(id) = cur else { break };
+        let Some(p) = state.pages.get(id) else { break };
+        parts.push(p.title());
+        cur = p.parent();
+    }
+    parts.reverse();
+    parts.join("/")
 }
 
 fn newest_first(a: &impala_model::Page, b: &impala_model::Page) -> std::cmp::Ordering {
@@ -453,13 +478,27 @@ impl Tools<'_> {
         Ok(Value::Object(out))
     }
 
-    fn list_pages(&self, query: &str) -> Value {
-        let q = lower(query.trim());
+    fn list_pages(&self, query: &str, parent: &str) -> Res {
         let state = self.inner.model.state();
         let mut all = state.active_pages();
         all.sort_by(|a, b| newest_first(a, b));
+        let parent_trim = parent.trim();
+        if !parent_trim.is_empty() {
+            let root_id = self.page_id(parent_trim).ok_or_else(|| format!("Ordner nicht gefunden: {parent_trim}"))?;
+            all.retain(|p| is_descendant_of(state, p, &root_id));
+        }
+        let q = lower(query.trim());
         if !q.is_empty() {
-            all.retain(|p| lower(p.title()).contains(&q));
+            let (mut direct, mut by_path) = (vec![], vec![]);
+            for p in all {
+                if lower(p.title()).contains(&q) {
+                    direct.push(p);
+                } else if lower(&full_page_path(state, p)).contains(&q) {
+                    by_path.push(p);
+                }
+            }
+            direct.extend(by_path);
+            all = direct;
         }
         let pages: Vec<Value> = all
             .iter()
@@ -478,11 +517,9 @@ impl Tools<'_> {
             .collect();
         let mut out = json!({ "pages": pages, "total": all.len() });
         if all.len() > 60 {
-            out["note"] = Value::from(
-                "Nur die ersten 60 Treffer — für spezifischere Treffer query verfeinern oder search_notes nutzen.",
-            );
+            out["note"] = Value::from("Nur die ersten 60 Treffer — mit parent/query eingrenzen oder search nutzen.");
         }
-        out
+        Ok(out)
     }
 
     fn list_flashcards(&self, a: &Value) -> Res {
@@ -616,7 +653,7 @@ impl Tools<'_> {
         let limit = (num(a, "limit").filter(|n| *n != 0.0).unwrap_or(30.0) as usize).clamp(1, 100);
         match a.get("kind").and_then(Value::as_str).unwrap_or("") {
             "context" => Ok(self.get_context()),
-            "pages" => Ok(self.list_pages(&arg(a, "query"))),
+            "pages" => self.list_pages(&arg(a, "query"), &arg(a, "parent")),
             "page" => {
                 let raw = ["titles", "title", "page_title", "page"]
                     .iter()
@@ -663,6 +700,32 @@ impl Tools<'_> {
 
     // ---- Ändern
 
+    fn duplicate_sibling_error(
+        &self,
+        title: &str,
+        parent: Option<&impala_model::Page>,
+        workspace: &str,
+        trashed: &BTreeSet<String>,
+    ) -> Option<String> {
+        let clean = title.trim();
+        let norm = lower(clean);
+        let parent_id = parent.map(|p| p.id());
+        let state = self.inner.model.state();
+        let exists = state.active_pages().into_iter().any(|p| {
+            !trashed.contains(p.id())
+                && p.parent() == parent_id
+                && (parent_id.is_some() || p.workspace() == workspace)
+                && lower(p.title().trim()) == norm
+        });
+        if !exists {
+            return None;
+        }
+        Some(match parent {
+            Some(p) => format!("Seite „{clean}“ existiert bereits in „{}“ — zum Bearbeiten edit_page nutzen.", state.page_label(p)),
+            None => format!("Seite „{clean}“ existiert bereits — zum Bearbeiten edit_page nutzen."),
+        })
+    }
+
     fn create_page(&mut self, a: &Value) -> Res {
         let title = targ(a, "title");
         if title.is_empty() {
@@ -682,6 +745,9 @@ impl Tools<'_> {
             .and_then(|p| state.pages.get(p))
             .map_or_else(|| "default".to_owned(), |p| p.workspace().to_owned());
         let parent_page = parent.as_deref().and_then(|p| state.pages.get(p));
+        if let Some(err) = self.duplicate_sibling_error(&title, parent_page, &workspace, &BTreeSet::new()) {
+            return fail(err);
+        }
         let parent_name = parent_page.map(|p| p.title().to_owned());
         let props = match a.get("props").filter(|v| !v.is_null()) {
             Some(update) => Some(self.merge_props(parent_page, &Value::Null, update, &title)?),
@@ -1188,16 +1254,25 @@ impl Tools<'_> {
     /// `web/tools.js`); Seiten aus früheren Operationen nur gedacht. `Some(Fehlertext)` bei Problemen.
     fn dry_check(&self, operations: &[Value]) -> Option<String> {
         struct Virt {
+            id: String,
+            is_new: bool,
             title: String,
             content: String,
             parent: Option<impala_model::Page>,
             props: Value,
             heft: bool,
             db: Option<Value>,
+            workspace: String,
         }
         let state = self.inner.model.state();
+        let default_ws = self
+            .active_page
+            .and_then(|p| state.pages.get(p))
+            .map_or_else(|| "default".to_owned(), |p| p.workspace().to_owned());
         let key = |t: &str| t.trim().to_lowercase();
         let mut virt: Vec<(String, Virt)> = vec![];
+        let mut created: BTreeSet<(String, String)> = BTreeSet::new();
+        let mut trashed: BTreeSet<String> = BTreeSet::new();
         let lookup = |virt: &mut Vec<(String, Virt)>, t: &str| -> Option<usize> {
             if let Some(i) = virt.iter().position(|(k, _)| *k == key(t)) {
                 return Some(i);
@@ -1207,26 +1282,34 @@ impl Tools<'_> {
             virt.push((
                 key(t),
                 Virt {
+                    id: pg.id().to_owned(),
+                    is_new: false,
                     title: pg.title().to_owned(),
                     content: pg.content().to_owned(),
                     parent,
                     props: pg.get("props").unwrap_or(Value::Null),
                     heft: pg.is_heft(),
                     db: pg.get("db"),
+                    workspace: pg.workspace().to_owned(),
                 },
             ));
             Some(virt.len() - 1)
         };
-        // Ordner als Seite (für Spalten-Schema und Titel), auch gedachte aus früheren Operationen.
-        let folder = |virt: &Vec<(String, Virt)>, t: &str| -> Option<impala_model::Page> {
+        // Ordner als (id, is_new, Seite, workspace) – auch gedachte aus früheren Operationen.
+        let folder = |virt: &Vec<(String, Virt)>, t: &str| -> Option<(String, bool, impala_model::Page, String)> {
             if let Some((_, v)) = virt.iter().find(|(k, _)| *k == key(t)) {
-                let mut p = json!({ "title": v.title });
+                if !v.is_new
+                    && let Some(pg) = state.pages.get(&v.id)
+                {
+                    return Some((v.id.clone(), false, pg.clone(), v.workspace.clone()));
+                }
+                let mut p = json!({ "title": v.title, "workspaceId": v.workspace });
                 if let Some(db) = &v.db {
                     p["db"] = db.clone();
                 }
-                return serde_json::from_value(p).ok();
+                return serde_json::from_value(p).ok().map(|pg| (v.id.clone(), v.is_new, pg, v.workspace.clone()));
             }
-            state.find_page(t, true).cloned()
+            state.find_page(t, true).map(|pg| (pg.id().to_owned(), false, pg.clone(), pg.workspace().to_owned()))
         };
         for (i, op) in operations.iter().enumerate() {
             let name = op.get("op").map(str_of).unwrap_or_default();
@@ -1235,13 +1318,31 @@ impl Tools<'_> {
             let text = first(op, &["content", "text"]);
             if name == "page.create" {
                 let parent_t = op.get("parent").filter(|v| truthy(v)).map(str_of);
-                let parent = match &parent_t {
+                let parent_info = match &parent_t {
                     Some(t) => match folder(&virt, t) {
-                        Some(p) => Some(p),
+                        Some(info) => Some(info),
                         None => return fail(format!("Elternseite nicht gefunden: {t}")),
                     },
                     None => None,
                 };
+                let (parent_id, parent_is_new, parent, ws) = match parent_info {
+                    Some((id, is_new, pg, ws)) => (Some(id), is_new, Some(pg), ws),
+                    None => (None, false, None, default_ws.clone()),
+                };
+                let slot = (parent_id.unwrap_or_else(|| format!("root:{ws}")), key(&title));
+                if !created.insert(slot) {
+                    return fail(match &parent {
+                        Some(p) => format!(
+                            "Seite „{}“ existiert bereits in „{}“ — zum Bearbeiten edit_page nutzen.",
+                            title.trim(),
+                            if parent_is_new { p.title().to_owned() } else { state.page_label(p) }
+                        ),
+                        None => format!("Seite „{}“ existiert bereits — zum Bearbeiten edit_page nutzen.", title.trim()),
+                    });
+                }
+                if !parent_is_new && let Some(dup) = self.duplicate_sibling_error(&title, parent.as_ref(), &ws, &trashed) {
+                    return fail(dup);
+                }
                 let mut props = Value::Null;
                 if let Some(update) = op.get("props").filter(|v| !v.is_null()) {
                     match self.merge_props(parent.as_ref(), &Value::Null, update, &title) {
@@ -1249,7 +1350,20 @@ impl Tools<'_> {
                         Err(e) => return fail(e),
                     }
                 }
-                virt.push((key(&title), Virt { title: title.clone(), content: str_of(&text), parent, props, heft: false, db: None }));
+                virt.push((
+                    key(&title),
+                    Virt {
+                        id: format!("__new_{i}"),
+                        is_new: true,
+                        title: title.trim().to_owned(),
+                        content: str_of(&text),
+                        parent,
+                        props,
+                        heft: false,
+                        db: None,
+                        workspace: ws,
+                    },
+                ));
                 continue;
             }
             if !name.starts_with("page.") && name != "heft.append" {
@@ -1302,6 +1416,12 @@ impl Tools<'_> {
                 "page.rename" => {
                     let to = op.get("to").map(str_of).unwrap_or_default();
                     virt[at].0 = key(&to);
+                }
+                "page.trash" => {
+                    let v = &virt[at].1;
+                    if !v.is_new {
+                        trashed.insert(v.id.clone());
+                    }
                 }
                 _ => {}
             }
@@ -2262,5 +2382,44 @@ mod tests {
         core.undo_ai_changes(undo.to_string()).unwrap();
         assert_eq!(core.cards_in_deck("Alt".into()).len(), 1);
         assert!(core.cards_in_deck("Neu".into()).is_empty());
+    }
+
+    #[test]
+    fn list_pages_ordner_pfad_und_duplikat_schutz() {
+        let core = ImpalaCore::open_in_memory().unwrap();
+        let km = core.create_page("Kontinuumsmechanik".into(), String::new(), None, None).unwrap();
+        let vl = core.create_page("Vorlesungen".into(), String::new(), Some(km.clone()), None).unwrap();
+        core.create_page("4 · Lager".into(), String::new(), Some(vl), None).unwrap();
+        let mathe = core.create_page("Mathe".into(), String::new(), None, None).unwrap();
+        core.create_page("Vorlesungen".into(), String::new(), Some(mathe), None).unwrap();
+        let (transcript, notify) = (RefCell::new(vec![]), |_: &Value| {});
+        let mut e = env(&core.inner, &transcript, &notify);
+
+        // Ordnerfilter liefert nur Nachkommen von Kontinuumsmechanik (inkl. Unterordner).
+        let (r, _) = run(&mut e, "inspect", json!({ "kind": "pages", "parent": "Kontinuumsmechanik" }));
+        let titles: Vec<&str> = r["pages"].as_array().unwrap().iter().map(|p| p["title"].as_str().unwrap()).collect();
+        assert_eq!(titles.len(), 2, "{titles:?}");
+        assert!(titles.contains(&"4 · Lager") && titles.contains(&"Kontinuumsmechanik/Vorlesungen"));
+
+        // Pfad-Query findet Nachkommen auch ohne parent.
+        let (r, _) = run(&mut e, "inspect", json!({ "kind": "pages", "query": "Kontinuumsmechanik/Vorlesungen/4" }));
+        assert_eq!(r["pages"].as_array().unwrap().len(), 1);
+
+        // Unbekannter Ordner liefert klaren Fehler.
+        let (r, _) = run(&mut e, "inspect", json!({ "kind": "pages", "parent": "GibtsNicht" }));
+        assert!(r["error"].as_str().unwrap().contains("Ordner nicht gefunden"));
+
+        // Duplikat im selben Ordner wird abgelehnt, im anderen Ordner erlaubt.
+        let (r, _) = run(&mut e, "change", json!({ "operations": [{ "op": "page.create", "title": "Vorlesungen", "parent": "Kontinuumsmechanik" }] }));
+        assert!(r["error"].as_str().unwrap().contains("existiert bereits"));
+        let (r, _) = run(&mut e, "change", json!({ "operations": [{ "op": "page.create", "title": "4 · Lager", "parent": "Mathe" }] }));
+        assert_eq!(r["ok"], true, "{r}");
+
+        // Nach Löschen (page.trash) darf im selben Batch neu angelegt werden.
+        let (r, _) = run(&mut e, "change", json!({ "operations": [
+            { "op": "page.trash", "title": "Mathe/4 · Lager" },
+            { "op": "page.create", "title": "4 · Lager", "parent": "Mathe" },
+        ]}));
+        assert_eq!(r["ok"], true, "{r}");
     }
 }

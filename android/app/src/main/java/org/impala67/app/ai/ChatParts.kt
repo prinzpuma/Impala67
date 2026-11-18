@@ -292,4 +292,8 @@ val TOOL_LABELS: Map<String, String> = mapOf(
     "reset_card_progress" to "Lernfortschritt zurückgesetzt", "get_context" to "Kontext geholt",
     "write_to_heft" to "Ins Heft geschrieben", "get_heft_page_image" to "Heftseite angesehen",
     "search_chat_history" to "Frühere Chats durchsucht", "calculate" to "Gerechnet", "request_tools" to "Werkzeuge freigeschaltet",
+    "search" to "Notizen durchsucht", "read_pages" to "Seiten gelesen", "create_pages" to "Seiten erstellt",
+    "edit_page" to "Seite bearbeitet", "organize_pages" to "Seiten organisiert", "list_cards" to "Karten durchgesehen",
+    "create_cards" to "Karteikarten erstellt", "edit_cards" to "Karten bearbeitet", "edit_deck" to "Stapel bearbeitet",
+    "search_chats" to "Frühere Chats durchsucht",
 )

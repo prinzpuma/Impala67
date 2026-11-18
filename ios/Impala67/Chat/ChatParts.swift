@@ -355,4 +355,8 @@ private let toolLabels: [String: String] = [
     "reset_card_progress": "Lernfortschritt zurückgesetzt", "get_context": "Kontext geholt",
     "write_to_heft": "Ins Heft geschrieben", "get_heft_page_image": "Heftseite angesehen",
     "search_chat_history": "Frühere Chats durchsucht", "calculate": "Gerechnet", "request_tools": "Werkzeuge freigeschaltet",
+    "search": "Notizen durchsucht", "read_pages": "Seiten gelesen", "create_pages": "Seiten erstellt",
+    "edit_page": "Seite bearbeitet", "organize_pages": "Seiten organisiert", "list_cards": "Karten durchgesehen",
+    "create_cards": "Karteikarten erstellt", "edit_cards": "Karten bearbeitet", "edit_deck": "Stapel bearbeitet",
+    "search_chats": "Frühere Chats durchsucht",
 ]

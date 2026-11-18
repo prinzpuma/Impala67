@@ -223,8 +223,9 @@ impl FuzzyIndex {
         }
     }
 
-    /// Jedes Suchwort (≥ 3 Zeichen nach dem Falten) muss auf der Seite vorkommen (UND).
-    /// `allow` filtert die Seiten (z. B. ohne Archiv).
+    /// Sucht Suchwörter (≥ 3 Zeichen nach dem Falten) auf erlaubten Seiten (`allow`, z. B. ohne
+    /// Archiv): zuerst streng als UND (alle Wörter müssen vorkommen); bleibt das bei mehreren
+    /// Suchwörtern leer, greift ein Teil-Treffer-Fallback nach Anzahl getroffener Wörter.
     pub fn search(&self, query: &str, allow: impl Fn(&str) -> bool) -> Vec<FuzzyHit> {
         let mut terms: Vec<Vec<u16>> = Vec::new();
         for (_, key) in words(query) {
@@ -275,25 +276,98 @@ impl FuzzyIndex {
                 }
             }
             if order.is_empty() {
-                return Vec::new();
+                hits = None;
+                break;
             }
             hits = Some((order, next));
         }
-        let (order, mut hits) = hits.expect("mindestens ein Suchwort");
-        order
-            .into_iter()
-            .map(|page| {
-                let h = hits.remove(&page).expect("in order");
-                let mut forms: Vec<String> = Vec::new();
-                for f in h.forms {
-                    if !forms.iter().any(|x| x == f) {
-                        forms.push(f.to_owned());
+        if let Some((order, mut hits)) = hits {
+            return order
+                .into_iter()
+                .map(|page| {
+                    let h = hits.remove(&page).expect("in order");
+                    FuzzyHit {
+                        id: self.page_ids[page as usize].clone(),
+                        score: h.score,
+                        forms: dedup_forms(h.forms),
                     }
-                }
-                FuzzyHit { id: self.page_ids[page as usize].clone(), score: h.score, forms }
-            })
-            .collect()
+                })
+                .collect();
+        }
+        if terms.len() >= 2 { self.search_partial(&terms, &allow) } else { Vec::new() }
     }
+
+    /// Teil-Treffer-Fallback bei Mehrfachbegriffen ohne Voll-UND: zählt getroffene Suchwörter
+    /// je Seite und verwirft 1-Wort-Rauschen, sobald mindestens eine Seite ≥ 2 Wörter trifft.
+    fn search_partial(&self, terms: &[Vec<u16>], allow: &impl Fn(&str) -> bool) -> Vec<FuzzyHit> {
+        struct Partial<'a> {
+            matched: u32,
+            quality: u32,
+            forms: Vec<&'a str>,
+        }
+        let mut order: Vec<u32> = Vec::new();
+        let mut acc: FxMap<u32, Partial> = FxMap::default();
+        for term in terms {
+            let mut term_order: Vec<u32> = Vec::new();
+            let mut term_hits: FxMap<u32, (Quality, Vec<&str>)> = FxMap::default();
+            for word in self.words.iter().flatten() {
+                let q = quality(term, &word.key);
+                if q == Quality::None {
+                    continue;
+                }
+                for &page in &word.pages {
+                    let known = term_hits.contains_key(&page) || acc.contains_key(&page);
+                    if !known && !allow(&self.page_ids[page as usize]) {
+                        continue;
+                    }
+                    let entry = term_hits.entry(page).or_insert_with(|| {
+                        term_order.push(page);
+                        (Quality::None, Vec::new())
+                    });
+                    entry.0 = entry.0.max(q);
+                    entry.1.extend(word.forms.iter().map(String::as_str));
+                }
+            }
+            for page in term_order {
+                let (q, forms) = term_hits.remove(&page).expect("in term_order");
+                let p = acc.entry(page).or_insert_with(|| {
+                    order.push(page);
+                    Partial { matched: 0, quality: 0, forms: Vec::new() }
+                });
+                p.matched += 1;
+                p.quality += q as u32;
+                p.forms.extend(forms);
+            }
+        }
+        if order.is_empty() {
+            return Vec::new();
+        }
+        let max_matched = acc.values().map(|p| p.matched).max().unwrap_or(0);
+        let min_matched = if max_matched >= 2 { 2 } else { 1 };
+        let mut out: Vec<FuzzyHit> = order
+            .into_iter()
+            .filter_map(|page| {
+                let p = acc.remove(&page).expect("in order");
+                (p.matched >= min_matched).then(|| FuzzyHit {
+                    id: self.page_ids[page as usize].clone(),
+                    score: p.matched * 20 + p.quality,
+                    forms: dedup_forms(p.forms),
+                })
+            })
+            .collect();
+        out.sort_by_key(|a| std::cmp::Reverse(a.score));
+        out
+    }
+}
+
+fn dedup_forms(raw: Vec<&str>) -> Vec<String> {
+    let mut forms = Vec::new();
+    for f in raw {
+        if !forms.iter().any(|x| x == f) {
+            forms.push(f.to_owned());
+        }
+    }
+    forms
 }
 
 #[cfg(test)]
@@ -335,5 +409,29 @@ mod tests {
         assert!(ix.search("fotosynthese", |id| id == "c").is_empty());
         ix.set_page("b", "leer");
         assert_eq!(ix.search("zellatmung", |_| true).len(), 1);
+    }
+
+    #[test]
+    fn partial_fallback_when_and_empty() {
+        let mut ix = FuzzyIndex::new();
+        ix.set_page("a", "Dioden Kennlinie");
+        ix.set_page("b", "Praktikum Dioden Abgabe");
+        ix.set_page("c", "Praktikum Schwingkreis");
+        ix.set_page("d", "Dioden Praktikum Kennlinie");
+
+        // Bestehende UND-Suche liefert nur Voll-UND ("b" hat nicht "Kennlinie", wird nicht ergänzt).
+        let exact = ix.search("dioden kennlinie", |_| true);
+        assert_eq!(exact.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), vec!["a", "d"]);
+
+        // 3-Wort-Suche ohne Voll-UND: nur ≥2-Wort-Treffer, keine 1-Wort-Treffer ("c" fehlt).
+        let partial = ix.search("praktikum dioden abgabe fehlen", |_| true);
+        let ids: Vec<&str> = partial.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids[0], "b");
+        assert!(!ids.contains(&"c"));
+        assert!(ids.contains(&"d"));
+
+        // 2-Wort-Suche mit max. 1 Treffer liefert die 1-Wort-Treffer.
+        let one = ix.search("schwingkreis unbekannt", |_| true);
+        assert_eq!(one.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), vec!["c"]);
     }
 }

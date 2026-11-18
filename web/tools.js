@@ -182,30 +182,66 @@ export const TOOLS = (() => {
 		return out;
 	}
 
+	function duplicateSiblingError(title, parent, workspaceId, ignoreIds = null) {
+		const clean = String(title || "").trim();
+		const norm = clean.toLowerCase();
+		const parentId = parent ? parent.id : null;
+		const exists = STATE.activePages().some((p) => (!ignoreIds || !ignoreIds.has(p.id))
+			&& (p.parentId || null) === parentId
+			&& (parentId ? true : p.workspaceId === workspaceId)
+			&& (p.title || "").trim().toLowerCase() === norm);
+		if (!exists) return null;
+		return parent
+			? `Seite „${clean}“ existiert bereits in „${label(parent)}“ — zum Bearbeiten edit_page nutzen.`
+			: `Seite „${clean}“ existiert bereits — zum Bearbeiten edit_page nutzen.`;
+	}
+
 	// Trockenlauf von change (Benchmark, MCP dry_run): dieselben Prüfungen wie die echte
 	// Ausführung gegen den aktuellen Stand, Seiten aus früheren Operationen nur gedacht.
 	// Nichts wird gespeichert. Liefert null (alles in Ordnung) oder einen Fehlertext.
 	function dryRunCheck(operations) {
-		const virt = new Map(); // Titel (klein) → { title, content, parent, props, heft }
+		const virt = new Map(); // Titel (klein) → { id, isNew, title, content, parent, props, heft, db, workspaceId }
+		const created = new Set();
+		const trashed = new Set();
 		const key = (t) => String(t || "").trim().toLowerCase();
 		const get = (t) => {
 			if (virt.has(key(t))) return virt.get(key(t));
 			const pg = STATE.findPage(t);
 			if (!pg) return null;
-			const v = { title: pg.title, content: String(pg.content || ""), parent: pg.parentId ? S.pages[pg.parentId] : null, props: pg.props || null, heft: pg.kind === "heft", db: pg.db || null };
+			const v = {
+				id: pg.id, isNew: false, title: pg.title, content: String(pg.content || ""),
+				parent: pg.parentId ? S.pages[pg.parentId] : null, props: pg.props || null,
+				heft: pg.kind === "heft", db: pg.db || null, workspaceId: pg.workspaceId || "default",
+			};
 			virt.set(key(t), v);
 			return v;
 		};
-		const folder = (t) => { const v = get(t); return v ? { title: v.title, db: v.db } : null; };
+		const folder = (t) => { const v = get(t); return v ? { id: v.id, title: v.title, db: v.db, workspaceId: v.workspaceId, isNew: v.isNew } : null; };
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i], name = op.op;
 			const fail = (msg) => `Operation ${i + 1} (${name}) fehlgeschlagen: ${String(msg).replace(/\.$/, "")}. Keine Änderungen ausgeführt.`;
 			if (name === "page.create") {
 				const parent = op.parent ? folder(op.parent) : null;
 				if (op.parent && !parent) return fail("Elternseite nicht gefunden: " + op.parent);
+				const wsId = parent ? parent.workspaceId : S.currentWorkspaceId;
+				const slot = (parent ? parent.id : "root:" + wsId) + "\0" + key(op.title);
+				if (created.has(slot)) {
+					const clean = String(op.title || "").trim();
+					return fail(parent
+						? `Seite „${clean}“ existiert bereits in „${parent.isNew ? parent.title : label(S.pages[parent.id])}“ — zum Bearbeiten edit_page nutzen.`
+						: `Seite „${clean}“ existiert bereits — zum Bearbeiten edit_page nutzen.`);
+				}
+				if (!parent?.isNew) {
+					const dup = duplicateSiblingError(op.title, parent ? S.pages[parent.id] : null, wsId, trashed);
+					if (dup) return fail(dup);
+				}
+				created.add(slot);
 				let props = null;
 				if (op.props) { const m = propsFor(parent, null, op.props, op.title); if (m.error) return fail(m.error); props = m.props; }
-				virt.set(key(op.title), { title: op.title, content: String(op.content ?? op.text ?? ""), parent, props, heft: false, db: null });
+				virt.set(key(op.title), {
+					id: `__new_${i}`, isNew: true, title: String(op.title || "").trim(),
+					content: String(op.content ?? op.text ?? ""), parent, props, heft: false, db: null, workspaceId: wsId,
+				});
 				continue;
 			}
 			if (!name.startsWith("page.") && name !== "heft.append") continue;
@@ -231,6 +267,8 @@ export const TOOLS = (() => {
 				return fail("Elternseite nicht gefunden: " + (op.parent ?? op.to));
 			} else if (name === "page.rename") {
 				virt.set(key(op.to), v);
+			} else if (name === "page.trash" && !v.isNew && v.id) {
+				trashed.add(v.id);
 			}
 		}
 		return null;
@@ -437,7 +475,7 @@ export const TOOLS = (() => {
 				switch (a.kind) {
 					case "context": return run("get_context", {});
 					case "pages": {
-						return run("list_pages", { query: a.query });
+						return run("list_pages", { query: a.query, parent: a.parent });
 					}
 					case "page": {
 						const rawTitles = a.titles || a.title || a.page_title || a.page || [];
@@ -519,12 +557,15 @@ export const TOOLS = (() => {
 				// Tippfehler kommentarlos ganz oben, während move_page in derselben Lage meckert.
 				const parent = a.parent_title ? STATE.findPage(a.parent_title) : null;
 				if (a.parent_title && !parent) return { error: "Elternseite nicht gefunden: " + a.parent_title };
+				const workspaceId = parent ? parent.workspaceId : S.currentWorkspaceId;
+				const dup = duplicateSiblingError(title, parent, workspaceId);
+				if (dup) return { error: dup };
 				const merged = a.props ? propsFor(parent, null, a.props, title) : null;
 				if (merged?.error) return merged;
 				const id = U.uid();
 				await STATE.dispatch("pageCreate", {
 					id, title, parentId: parent ? parent.id : null, content: a.content || "",
-					workspaceId: parent ? parent.workspaceId : S.currentWorkspaceId,
+					workspaceId,
 				});
 				if (merged?.props) await STATE.dispatch("pageUpdate", { id, patch: { props: merged.props } });
 				// id MITGEBEN: ai.js baut daraus die Änderungs-Karte. Ohne sie wurde die Seite nur
@@ -745,9 +786,35 @@ export const TOOLS = (() => {
 			}
 			case "list_pages": {
 				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.
-				const q = String(a.query || "").trim().toLowerCase();
+				const isDescendant = (pg, rootId) => {
+					for (let cur = pg.parentId, n = 0; cur && n < 64; cur = S.pages[cur]?.parentId, n++) {
+						if (cur === rootId) return true;
+					}
+					return false;
+				};
+				const fullPath = (pg) => {
+					const parts = [pg.title || ""];
+					for (let cur = pg.parentId, n = 0; cur && S.pages[cur] && n < 64; cur = S.pages[cur].parentId, n++) {
+						parts.push(S.pages[cur].title || "");
+					}
+					return parts.reverse().join("/");
+				};
 				let all = STATE.activePages().sort(U.byNewest);
-				if (q) all = all.filter((pg) => (pg.title || "").toLowerCase().includes(q));
+				const parentArg = String(a.parent || "").trim();
+				if (parentArg) {
+					const root = STATE.findPage(parentArg);
+					if (!root) return { error: "Ordner nicht gefunden: " + parentArg };
+					all = all.filter((pg) => isDescendant(pg, root.id));
+				}
+				const q = String(a.query || "").trim().toLowerCase();
+				if (q) {
+					const direct = [], byPath = [];
+					for (const pg of all) {
+						if ((pg.title || "").toLowerCase().includes(q)) direct.push(pg);
+						else if (fullPath(pg).toLowerCase().includes(q)) byPath.push(pg);
+					}
+					all = direct.concat(byPath);
+				}
 				return {
 					pages: all.slice(0, 60).map((pg) => ({
 						title: label(pg),
@@ -757,7 +824,7 @@ export const TOOLS = (() => {
 						...(pg.db ? { verzeichnis: true } : {}),
 					})),
 					total: all.length,
-					...(all.length > 60 ? { note: "Nur die ersten 60 Treffer — für spezifischere Treffer query verfeinern oder search_notes nutzen." } : {}),
+					...(all.length > 60 ? { note: "Nur die ersten 60 Treffer — mit parent/query eingrenzen oder search nutzen." } : {}),
 				};
 			}
 			case "search_notes":

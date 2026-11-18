@@ -120,7 +120,7 @@ pub fn tool_detail(name: &str, args: &Value, embed_model: &str) -> String {
         "change" => return format!("{} Operation(en)", operations(args).len()),
         "inspect" => {
             let kind = get("kind").map(js::string).unwrap_or_else(|| "undefined".into());
-            let query = js::first_truthy([get("query")]);
+            let query = js::first_truthy([get("query"), get("parent")]);
             return if query.is_empty() { kind } else { format!("{kind} · {query}") };
         }
         _ => {}

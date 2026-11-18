@@ -19,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use impala_ai::{
     AgentEvent, AgentItem, AgentRequest, AgentSession, AiError, AiSettings, AnkiCard, AnkiView, CancelToken,
     ChatConfig, ChatEntry, CloudflareAuth, DEFAULT_WORKER_URL, HttpProvider, LocalTime, PageContext, Provider, RagHit,
-    RequestOptions, ToolDef, Workspace, builtin_tools, default_providers, rag_query, run_agent,
+    RequestOptions, ToolDef, Workspace, default_providers, flat_tools, rag_query, run_agent,
 };
 use impala_crypto::SyncKey;
 use impala_net::{HttpClient, NetError, Request, Response, UreqClient, block_on};
@@ -380,7 +380,7 @@ fn user_message(req: &AiRunRequest, text: &str) -> Value {
 /// Werkzeuge, die dieser Lauf anbieten kann: Rückfragen und Heftbilder brauchen die Plattform.
 fn tool_defs(platform: Option<&Arc<dyn AiPlatform>>) -> Vec<ToolDef> {
     let extra = platform.map(|p| p.supported_tools()).unwrap_or_default();
-    builtin_tools()
+    flat_tools()
         .iter()
         .filter(|t| match t.name.as_str() {
             "ask_choice" | "view_heft_page" => platform.is_some(),
@@ -760,7 +760,7 @@ mod tests {
     use super::*;
     use crate::rag::{EmbedFailure, TextEmbedder};
 
-    /// Falscher Anbieter: erster Aufruf ruft `change` auf, danach kommt die Antwort.
+    /// Falscher Anbieter: erster Aufruf ruft `create_pages` auf, danach kommt die Antwort.
     #[derive(Clone, Default)]
     struct Provider {
         bodies: Arc<Mutex<Vec<Value>>>,
@@ -786,10 +786,10 @@ mod tests {
             self.bodies.lock().unwrap().push(serde_json::from_slice(&req.body).unwrap());
             Ok(match self.calls.fetch_add(1, Ordering::Relaxed) {
                 0 => {
-                    let args = json!({ "operations": [{ "op": "page.create", "title": "Zusammenfassung", "content": "Integral = Fläche" }] });
+                    let args = json!({ "pages": [{ "title": "Zusammenfassung", "content": "Integral = Fläche" }] });
                     sse(&[
                         json!({ "reasoning": "Ich lege die Seite an." }),
-                        json!({ "tool_calls": [{ "index": 0, "id": "call_1", "function": { "name": "change", "arguments": args.to_string() } }] }),
+                        json!({ "tool_calls": [{ "index": 0, "id": "call_1", "function": { "name": "create_pages", "arguments": args.to_string() } }] }),
                     ])
                 }
                 _ => sse(&[json!({ "content": "Seite " }), json!({ "content": "angelegt." })]),
@@ -885,7 +885,7 @@ mod tests {
         assert_eq!(bodies.len(), 2);
         let first = bodies[0].to_string();
         assert!(
-            first.contains("\"name\":\"change\"") && first.contains("[Analysis]") && !first.contains("[Haustiere]"),
+            first.contains("\"name\":\"create_pages\"") && first.contains("[Analysis]") && !first.contains("[Haustiere]"),
             "{first}"
         );
         assert!(!first.contains("geheim"));
@@ -898,7 +898,7 @@ mod tests {
         let roles: Vec<&str> = chat.messages.iter().map(|m| m.role.as_str()).collect();
         assert_eq!(roles, ["user", "thought", "tool", "assistant", "edit"], "{roles:?}");
         let log = events.log.lock().unwrap().clone();
-        assert!(log.contains(&"tool:change".to_string()) && log.iter().any(|l| l == "msg:edit"), "{log:?}");
+        assert!(log.contains(&"tool:create_pages".to_string()) && log.iter().any(|l| l == "msg:edit"), "{log:?}");
 
         // Rückgängig über die Karte.
         let edit = chat.messages.iter().find(|m| m.role == "edit").unwrap().clone();

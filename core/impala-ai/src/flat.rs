@@ -50,7 +50,7 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
             Ok(("inspect", json!({ "kind": "page", "titles": titles })))
         }
         "list_pages" if a.get("archived").and_then(Value::as_bool) == Some(true) => inspect("archived", &[]),
-        "list_pages" => inspect("pages", &["query"]),
+        "list_pages" => inspect("pages", &["query", "parent"]),
         "get_context" => inspect("context", &[]),
         "list_cards" if a.get("due").and_then(Value::as_bool) == Some(true) => inspect("due", &[]),
         "list_cards" => inspect("cards", &["deck", "query", "limit"]),
@@ -171,6 +171,8 @@ mod tests {
         assert!(flat_call("read_pages", &json!({ "titles": "A" })).unwrap().is_err());
         let (_, a) = flat_call("list_cards", &json!({ "due": true })).unwrap().unwrap();
         assert_eq!(a, json!({ "kind": "due" }));
+        let (_, a) = flat_call("list_pages", &json!({ "parent": "Mathe", "query": "V01" })).unwrap().unwrap();
+        assert_eq!(a, json!({ "kind": "pages", "parent": "Mathe", "query": "V01" }));
         assert!(flat_call("inspect", &json!({})).is_none());
     }
 
