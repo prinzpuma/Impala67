@@ -1,5 +1,6 @@
 "use strict";
 
+import "./sandbox.js"; // zuerst: erkennt die Benchmark-Spielwiese, bevor andere Module localStorage beschreiben
 import { U } from "./util.js";
 import { DB } from "./db.js";
 import { SRS } from "./srs.js";

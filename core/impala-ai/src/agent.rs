@@ -16,6 +16,7 @@ use crate::prompt::{
     heft_tool_text, history_messages, model_switch_note, page_context_image, rag_context, split_history,
     summary_request, system_prompt, workspace_context,
 };
+use crate::provider::Family;
 use crate::stream::StreamUpdate;
 use crate::tools::{
     CONFIRM_OPTIONS, REQUEST_TOOLS, cancelled_result, change_confirmation, normalize_ask_choice, request_tools_def,
@@ -135,6 +136,31 @@ pub struct AgentRequest<'a> {
 pub struct AgentSession {
     pub summary: Option<ChatSummary>,
     pub tools_unlocked: bool,
+    /// Werkzeug-Ergebnisse der letzten Antwort mit Werkzeugen (gekürzt). Der Chat-Verlauf
+    /// enthält nur Fragen und Antworten; ohne das müsste jede Rückfrage („und danach?“)
+    /// dieselbe Seite neu lesen – oder das Modell rät.
+    pub recent_tools: String,
+}
+
+/// Wie viel von den Werkzeug-Ergebnissen in die nächste Runde mitgeht (Zeichen).
+fn recent_budget(family: Family) -> usize {
+    if family == Family::Local { 6000 } else { 12000 }
+}
+
+/// Neueste Ergebnisse zuerst ins Budget, dann wieder in zeitlicher Reihenfolge.
+fn recent_digest(results: &[String], budget: usize) -> String {
+    let mut left = budget;
+    let mut kept = vec![];
+    for r in results.iter().rev() {
+        if left < 200 {
+            break;
+        }
+        let part = js::head16(r, left);
+        left = left.saturating_sub(js::len16(part));
+        kept.push(if part.len() < r.len() { format!("{part} …[gekürzt]") } else { part.to_owned() });
+    }
+    kept.reverse();
+    kept.join("\n")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,6 +224,8 @@ struct Run<'a, P: LlmProvider, E: ToolExecutor> {
     on_event: &'a mut dyn FnMut(AgentEvent<'_>),
     messages: Vec<Message>,
     edits: Vec<AgentItem>,
+    /// Erfolgreiche Werkzeug-Ergebnisse dieses Laufs („name args → ergebnis“).
+    results: Vec<String>,
 }
 
 impl<P: LlmProvider, E: ToolExecutor> Run<'_, P, E> {
@@ -246,9 +274,20 @@ impl<P: LlmProvider, E: ToolExecutor> Run<'_, P, E> {
     }
 
     async fn run_tool(&mut self, name: &str, args: &Value) -> (String, Option<Value>) {
-        match self.executor.run(name, args).await {
+        let (json, undo) = match self.executor.run(name, args).await {
             Ok(out) => (out.json, out.undo),
             Err(e) => (error_json(&e), None),
+        };
+        if !is_error(&json) {
+            self.results.push(format!("{name} {args} → {}", js::head16(&json, TOOL_RESULT_MAX)));
+        }
+        (json, undo)
+    }
+
+    /// Lauf zu Ende: Ergebnisse für die nächste Runde merken (ohne neue bleiben die alten).
+    fn remember(&self, session: &mut AgentSession, family: Family) {
+        if !self.results.is_empty() {
+            session.recent_tools = recent_digest(&self.results, recent_budget(family));
         }
     }
 
@@ -339,14 +378,15 @@ pub async fn run_agent(
         let mode = if flat && matches!(mode, ToolMode::Full) { ToolMode::Flat } else { mode };
         Message::system(system_prompt(mode, &note, req.custom_instructions, req.now))
     };
-    let (context, page_context) = workspace_context(req.workspace, &rag, &summary, info.family);
+    let (context, page_context) =
+        workspace_context(req.workspace, &rag, &summary, &session.recent_tools, req.now, info.family);
     let mut messages = vec![system(if meta_only { ToolMode::Meta } else { ToolMode::Full })];
     let last = history.pop();
     messages.extend(history);
     messages.push(context);
     messages.extend(last);
 
-    let mut run = Run { provider, executor, cancel, on_event, messages, edits: vec![] };
+    let mut run = Run { provider, executor, cancel, on_event, messages, edits: vec![], results: vec![] };
     let mut nudged = false;
     // Kleine Modelle wiederholen einen abgelehnten Aufruf sonst bis MAX_STEPS unverändert.
     let mut failed_calls: Vec<String> = vec![];
@@ -397,6 +437,7 @@ pub async fn run_agent(
             (run.on_event)(AgentEvent::Thinking(""));
             run.item(AgentItem::Assistant { content: text.clone(), model: info.model.clone() });
             run.flush_edits();
+            run.remember(session, info.family);
             return Ok(AgentOutcome { text, page_context });
         }
         if !reasoning.is_empty() {
@@ -516,6 +557,7 @@ pub async fn run_agent(
     (run.on_event)(AgentEvent::Thinking(""));
     run.item(AgentItem::Assistant { content: text.clone(), model: String::new() });
     run.flush_edits();
+    run.remember(session, info.family);
     Ok(AgentOutcome { text, page_context })
 }
 
@@ -543,4 +585,20 @@ pub async fn refine(
 ) -> Result<String, AiError> {
     let messages = refine_messages(history, instruction, custom_instructions, now);
     Ok(provider.chat(ChatTurn { messages: &messages, tools: &[], stream: true }, on_update).await?.content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recent_digest;
+
+    #[test]
+    fn werkzeug_ergebnisse_naechste_runde() {
+        let results = ["inspect alt → ".to_owned() + &"a".repeat(500), "inspect neu → kurz".to_owned()];
+        // Alles passt: zeitliche Reihenfolge bleibt.
+        assert_eq!(recent_digest(&results, 2000), format!("{}\n{}", results[0], results[1]));
+        // Knapp: das neueste Ergebnis zuerst, das ältere gekürzt.
+        let d = recent_digest(&results, 300);
+        assert!(d.ends_with("inspect neu → kurz") && d.contains("…[gekürzt]"), "{d}");
+        assert_eq!(recent_digest(&[], 300), "");
+    }
 }

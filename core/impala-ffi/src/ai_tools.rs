@@ -386,6 +386,12 @@ impl Tools<'_> {
     /// Zusammenhang einer gelesenen Seite (wie `pageInfo` in `web/tools.js`): Ordner, Unterseiten;
     /// als Verzeichnis-Eintrag Spalten + eigene Werte, als Verzeichnis Spalten + Einträge.
     fn page_info(&self, pg: &impala_model::Page, out: &mut Map<String, Value>) {
+        // Spaltenwerte ohne die Titelspalte: Sie steht schon als title da (spart Token je Eintrag).
+        let own_props = |p: &impala_model::Page| {
+            let mut props = p.get("props").and_then(|v| v.as_object().cloned()).unwrap_or_default();
+            props.retain(|_, v| v.as_str() != Some(p.title()));
+            Value::Object(props)
+        };
         let state = self.inner.model.state();
         let parent = pg.parent().and_then(|id| state.pages.get(id));
         if let Some(p) = parent {
@@ -393,7 +399,7 @@ impl Tools<'_> {
             if let Some(schema) = p.get("db").and_then(|d| d.get("schema").cloned()) {
                 let columns = impala_ai::edit::columns(&schema);
                 out.insert("verzeichnis".into(), json!({ "title": state.page_label(p), "columns": columns }));
-                out.insert("props".into(), pg.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})));
+                out.insert("props".into(), own_props(pg));
             }
         }
         let kids = state.children_of(Some(pg.id()), Some(pg.workspace()), None);
@@ -402,7 +408,7 @@ impl Tools<'_> {
             let entries: Vec<Value> = kids
                 .iter()
                 .take(40)
-                .map(|r| json!({ "title": state.page_label(r), "props": r.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})) }))
+                .map(|r| json!({ "title": state.page_label(r), "props": own_props(r) }))
                 .collect();
             out.insert("entries".into(), Value::Array(entries));
             if kids.len() > 40 {
@@ -653,7 +659,10 @@ impl Tools<'_> {
                     .collect();
                 Ok(json!({ "archived": list, "total": roots.len() }))
             }
-            _ => fail("inspect: unbekanntes kind."),
+            // Mit den erlaubten Werten: Kleine Modelle korrigieren sich dann im nächsten Schritt selbst.
+            other => fail(format!(
+                "inspect: unbekanntes kind „{other}“. Erlaubt: context, pages, page, decks, cards, due, search (Bedeutungssuche: search mit semantic=true), chats, archived."
+            )),
         }
     }
 

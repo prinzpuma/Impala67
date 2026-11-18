@@ -285,7 +285,9 @@ export const AI = (() => {
 	}
 	const fullToolDefs = () => {
 		const extra = BUS.call("exp:extra-tool-defs");
-		return Array.isArray(extra) ? TOOLS.defs.concat(extra) : TOOLS.defs.slice();
+		// Flache Werkzeuge (search, read_pages, edit_page …): im KI-Benchmark klar besser als inspect/change
+		// (9B: 21 statt 13 von 35 Punkten, weniger Token, schneller); der Kern führt sie als inspect/change aus.
+		return Array.isArray(extra) ? TOOLS.flatDefs.concat(extra) : TOOLS.flatDefs.slice();
 	};
 	// Was der Nutzer gerade sieht, für die Arbeitsunterlagen des Kerns.
 	async function workspaceOf() {

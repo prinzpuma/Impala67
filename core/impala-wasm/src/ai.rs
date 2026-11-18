@@ -259,6 +259,7 @@ impl AiRun {
                     text: text(&s["summary"], "text"),
                 }),
                 tools_unlocked: s["toolsUnlocked"].as_bool().unwrap_or(false),
+                recent_tools: text(s, "recentTools"),
             };
             let req = AgentRequest {
                 chat: &chat,
@@ -290,6 +291,7 @@ impl AiRun {
                 "session": {
                     "summary": session.summary.map(|s| json!({ "count": s.count, "text": s.text })),
                     "toolsUnlocked": session.tools_unlocked,
+                    "recentTools": session.recent_tools,
                 },
             })))
         })

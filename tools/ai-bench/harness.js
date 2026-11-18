@@ -1,17 +1,19 @@
 // Browser-Seite des KI-Benchmarks (tools/ai-bench/run.mjs schickt diese Datei per impala_eval).
-// Ruft den echten Agenten des Rust-Kerns (CORE.AiRun) mit den echten Werkzeugen der App auf –
-// aber an der App vorbei: kein Chat wird gespeichert, S.settings bleibt unverändert und
-// Schreib-Werkzeuge (change) laufen nur als Trockenlauf (echte Prüfung, nichts gespeichert). Lese-Werkzeuge
-// (inspect, calculate, view_heft_page, Notizsuche) laufen echt auf den Nutzerdaten.
-// Misst je Anfrage: Wartezeit bis zum ersten Token, Prompt-/Antwort-Token (usage von LM Studio),
-// Prefill- und Decode-Geschwindigkeit.
-const VERSION = 4;
-if (globalThis.__aiBench?.version === VERSION) return { ready: true, version: VERSION };
+// Läuft in der Spielwiese (web/sandbox.js: eigene Datenkopie, kein Sync, kein Drive) und ruft
+// den echten Agenten des Rust-Kerns (CORE.AiRun) mit den echten Werkzeugen der App auf. Schreiben
+// ist hier echt, damit spätere Schritte und Runden den neuen Stand sehen; reset() nimmt alle
+// Änderungen eines Szenarios per Rückgängig wieder zurück. Kein Chat wird gespeichert.
+// Profile: app = wie der KI-Chat (geöffnete Seite, Notizsuche, eigene Anweisungen);
+//          mcp = wie ein externer Assistent (nichts automatisch mitgeschickt, flache Werkzeuge).
+// Misst je Anfrage: Wartezeit bis zum ersten Token, Prompt-/Antwort-Token (usage), Prefill und Decode.
+const VERSION = 7;
+if (globalThis.__aiBench?.version === VERSION) return { ready: true, version: VERSION, sandbox: globalThis.__aiBench.sandbox };
 
-const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }] = await Promise.all([
+const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }, { SANDBOX }] = await Promise.all([
 	import("./state.js"), import("./tools.js"), import("./rust-core.js"),
-	import("./heft.js"), import("./rag.js"), import("./event-bus.js"),
+	import("./heft.js"), import("./rag.js"), import("./event-bus.js"), import("./sandbox.js"),
 ]);
+if (!SANDBOX.on) throw new Error("Benchmark nur in der Spielwiese (web/sandbox.js) – hier würde echt geschrieben.");
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const now = () => performance.now();
@@ -27,10 +29,11 @@ function makeHttp(rec, limitMs) {
 				const msgs = j.messages || [];
 				info = {
 					model: j.model, messages: msgs.length, tools: (j.tools || []).length, stream: !!j.stream,
-					promptChars: JSON.stringify(msgs).length,
+					promptChars: JSON.stringify(msgs).length, toolChars: JSON.stringify(j.tools || []).length,
 					images: msgs.reduce((n, m) => n + (Array.isArray(m.content) ? m.content.filter((p) => p.type === "image_url").length : 0), 0),
 				};
-				// Exakte Token-Zahlen: LM Studio schickt usage nur mit include_usage.
+				// Exakte Token-Zahlen: OpenAI-kompatible Server schicken usage im Strom nur mit include_usage.
+				// Sonst bleibt die Anfrage unverändert (Temperatur usw. wie in der App bzw. vom Modell vorgegeben).
 				if (j.stream && /\/chat\/completions/.test(req.url) && !j.stream_options) {
 					j.stream_options = { include_usage: true };
 					body = enc.encode(JSON.stringify(j));
@@ -145,36 +148,37 @@ async function heftPage(rec, title, pageNoArg) {
 
 // ---------- Ein Gesprächsschritt ----------
 const convs = new Map(), runs = new Map();
+let undos = []; // Rückgängig-Sätze aller Änderungen seit dem letzten reset()
+// Merkzeichen „Spielwiese weicht von der Kopie ab“ (abgebrochener Lauf) → run.mjs kopiert neu.
+const DIRTY = "impala67SandboxDirty";
 let seq = 0;
 function prompt() {
 	const d = new Date();
 	return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate(), weekday: d.getDay(), hour: d.getHours(), minute: d.getMinutes() };
 }
 async function turn(spec, rec) {
+	const mcp = spec.profile === "mcp";
 	const conv = convs.get(spec.convId) || { chat: [], session: { summary: null, toolsUnlocked: false } };
 	convs.set(spec.convId, conv);
 	const user = { mid: "bench-" + (++seq), role: "user", content: spec.text, image: null, textFile: null, pdfFile: spec.pdfFile || null };
 	conv.chat.push(user);
 	const t0 = now();
-	const ragQuery = CORE.aiRagQuery(String(spec.text || ""));
+	// mcp: ein externer Assistent bekommt nichts automatisch – keine Notizsuche, keine geöffnete Seite.
+	const ragQuery = mcp ? "" : CORE.aiRagQuery(String(spec.text || ""));
 	let ragHits = [];
 	if (ragQuery && RAG.enabled()) { try { ragHits = (await RAG.search(ragQuery, 4)) || []; } catch (e) { rec.ragError = String(e?.message || e); } }
 	rec.rag = { query: ragQuery || null, hits: ragHits.map((h) => h.title || h.pageTitle || "?"), ms: Math.round(now() - t0) };
-	const { ws, page } = await workspaceFor(spec.workspacePage);
+	const { ws, page } = mcp ? { ws: { kind: "empty" }, page: null } : await workspaceFor(spec.workspacePage);
 	const extra = BUS.call("exp:extra-tool-defs");
 	const settings = { providers: S.settings.aiProviders || [], activeProviderId: spec.providerId || "local", model: spec.model, thinkingEnabled: spec.thinking !== false };
-	rec.config = CORE.aiChatConfig(settings);
+	const { key, ...config } = CORE.aiChatConfig(settings) || {}; // Schlüssel nie ins Protokoll
+	rec.config = { ...config, hasKey: !!key };
 	const executor = {
 		async run(name, args) {
 			const t = now(); let out;
-			if (name === "change") {
-				// Trockenlauf mit den echten Prüfungen (Seite da? Suchtext da? Löschschutz, Spalten);
-				// gespeichert wird nichts. Nur geprüfte Änderungen zählen als geschrieben.
-				try { out = await TOOLS.run("change", { ...(args || {}), dry_run: true }); } catch (error) { out = { error: String(error) }; }
-				if (out?.ok) rec.changes.push(...args.operations);
-			} else {
-				try { out = await TOOLS.run(name, args); } catch (error) { out = { error: String(error) }; }
-			}
+			try { out = await TOOLS.run(name, args); } catch (error) { out = { error: String(error) }; }
+			if (out?._undo) { undos.push(out._undo); try { localStorage.setItem(DIRTY, "1"); } catch {} }
+			if (name === "change" && out?.ok) rec.changes.push(...args.operations);
 			const json = JSON.stringify(out ?? {});
 			rec.tools.push({ name, args: clip(JSON.stringify(args), 800), ms: Math.round(now() - t), error: !!out?.error, resultChars: json.length, detail: out?.error ? clip(out.error, 300) : undefined });
 			return { json };
@@ -197,12 +201,12 @@ async function turn(spec, rec) {
 	};
 	const run = new CORE.AiRun(makeHttp(rec, spec.requestLimitMs || 900000));
 	rec.cancel = () => { try { run.cancel(); } catch {} for (const c of rec.controllers) c.abort(); };
+	const tools = mcp || spec.appTools === "flat" ? TOOLS.flatDefs : TOOLS.defs.concat(Array.isArray(extra) ? extra : []);
 	try {
 		const out = await run.agent({
-			settings, options: { cloudflare: null, safetyId: "" }, customInstructions: String(S.settings.customInstructions || "").trim(), now: prompt(),
+			settings, options: { cloudflare: spec.cloudflare || null, safetyId: "" }, customInstructions: mcp ? "" : String(S.settings.customInstructions || "").trim(), now: prompt(),
 			chat: conv.chat, workspace: ws, ragHits, activePage: page ? { id: page.id, title: page.title } : null,
-			tools: (spec.appTools === "flat" ? TOOLS.flatDefs : TOOLS.defs).concat(Array.isArray(extra) ? extra : []),
-			alwaysSendTools: S.settings.alwaysSendTools !== false, embedModel: String(S.settings.embedModel || ""), session: conv.session,
+			tools, alwaysSendTools: true, embedModel: String(S.settings.embedModel || ""), session: conv.session,
 		}, executor, onEvent);
 		conv.session = out.session;
 		rec.text = out.text;
@@ -213,6 +217,7 @@ async function turn(spec, rec) {
 
 globalThis.__aiBench = {
 	version: VERSION,
+	sandbox: true,
 	start(spec) {
 		const id = "run-" + (++seq);
 		const rec = { id, state: "running", t0: now(), requests: [], tools: [], changes: [], asks: [], items: [], controllers: new Set(), text: "", error: null };
@@ -237,7 +242,17 @@ globalThis.__aiBench = {
 		return plain;
 	},
 	cancel(id) { runs.get(id)?.cancel?.(); return true; },
-	reset(convId) { if (convId) convs.delete(convId); else convs.clear(); return true; },
+	// Neues Szenario: Gespräch vergessen und alle Änderungen seit dem letzten reset zurücknehmen.
+	async reset(convId) {
+		if (convId) convs.delete(convId); else convs.clear();
+		let undone = 0, failed = 0;
+		for (const u of undos.reverse()) {
+			try { const r = await TOOLS.undo(u); if (r?.error) failed++; else undone++; } catch { failed++; }
+		}
+		undos = [];
+		if (!failed) try { localStorage.removeItem(DIRTY); } catch {}
+		return { undone, failed };
+	},
 	// Lesender Helfer: OCR-Text eines Heft-Seitenbereichs (für das PDF-Szenario).
 	heftText(title, from, to) {
 		const page = STATE.findPage(title);
@@ -251,4 +266,4 @@ globalThis.__aiBench = {
 		return parts.join("\n\n");
 	},
 };
-return { ready: true, version: VERSION, rag: RAG.enabled() };
+return { ready: true, version: VERSION, sandbox: true, rag: RAG.enabled() };

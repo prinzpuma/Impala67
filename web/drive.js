@@ -8,6 +8,7 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { DRIVE_AUTH_STATE, driveAuthState, driveStatusView, isCurrentDriveAuthRequest } from "./drive-status.js";
 import { CORE } from "./rust-core.js";
 import { DEFAULT_WORKER_URL } from "./sync-cloudflare.js";
+import { SANDBOX } from "./sandbox.js";
 // Google-Drive-Backup im privaten appDataFolder. Der Ablauf (Dateiindex über die Changes-API,
 // Snapshot + Änderungspakete, Dateien, Verdichten, Uhren-Drift, Wiederholungen) läuft im
 // Rust-Kern (core/impala-drive, über web/core/). Hier bleiben Anmeldung, Ein-/Ausgabe für den
@@ -325,6 +326,7 @@ export const DRIVE = (() => {
 		// Laufenden Sync zurückgeben statt Fehler werfen: Doppelklick auf den Sync-Knopf
 		// oder überlappende Auto-Syncs teilen sich EIN Ergebnis — kein Aufrufer muss den
 		// „läuft bereits“-Fehler behandeln (und keiner vergisst es).
+		if (SANDBOX.on) return Promise.reject(new Error("In der Benchmark-Spielwiese ist das Drive-Backup aus."));
 		if (syncInFlight) return syncInFlight;
 		const finishProfile = PERF_PROFILER.start("drive.sync", { restore }, 40);
 		syncInFlight = withSyncLock(() => syncRaw(onStatus, restore))
@@ -415,6 +417,7 @@ export const DRIVE = (() => {
 	}
 
 	function startAutoSync(onResult) {
+		if (SANDBOX.on) return;
 		if (typeof onResult === "function") autoResultHandler = onResult;
 		scheduleExpiryNotice();
 		refreshStatus();

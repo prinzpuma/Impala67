@@ -15,6 +15,7 @@ import { CLOUD_SYNC_PROTOCOL, CLOUD_SYNC_PROTOCOL_HEADER, heftBaselineOps } from
 import { sha256Hex } from "./sync-crypto.js";
 import { requestWithStallTimeout } from "./sync-transfer.js";
 import { CORE } from "./rust-core.js";
+import { SANDBOX } from "./sandbox.js";
 
 export const DEFAULT_WORKER_URL = "https://impala67-sync.joshuagayer1.workers.dev";
 
@@ -340,6 +341,7 @@ export const CLOUDFLARE_SYNC = (() => {
 
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
+		if (SANDBOX.on) { setStatus("disconnected", "Spielwiese", "In der Benchmark-Spielwiese ist der Sync aus."); return false; }
 		const generation = ++configureGeneration;
 		await stopCurrent();
 		if (generation !== configureGeneration) return false;
@@ -402,7 +404,7 @@ export const CLOUDFLARE_SYNC = (() => {
 	STATE.onAfterDispatch((ev) => { if (core?.noteLocalEvent(ev)) scheduleSync(ev); });
 
 	function init() {
-		if (initialized) return;
+		if (initialized || SANDBOX.on) return;
 		initialized = true;
 		if (typeof window !== "undefined") {
 			window.addEventListener("offline", () => { closeSocket(); clearTimeout(localTimer); clearTimeout(reconnectTimer); });

@@ -13,6 +13,7 @@ import { DB } from "./db.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
 import { TOOLS } from "./tools.js";
 import { mcpBridgeEnabled, setMcpBridgeEnabled } from "./mcp-bridge-flag.js";
+import { SANDBOX } from "./sandbox.js";
 
 // web/mcp-bridge.js - Live-Verbindung zwischen Impala67 im Browser und Antigravity MCP
 let bridgeStarted = false;
@@ -84,10 +85,10 @@ function runEvalCode(code, ctx) {
 }
 
 export function initMcpBridge() {
-	if (typeof window === "undefined" || bridgeStarted || !mcpBridgeEnabled()) return;
+	if (typeof window === "undefined" || bridgeStarted || !(SANDBOX.on || mcpBridgeEnabled())) return;
 	bridgeStarted = true;
 
-	const WS_URL = (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
+	const WS_URL = SANDBOX.bridgeUrl || (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
 	const recentErrors = [];
 	const MAX_ERRORS = 20;
 

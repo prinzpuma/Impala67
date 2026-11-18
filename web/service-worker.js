@@ -130,6 +130,7 @@ const APP_FILES = [
 	"./performance-profiler-settings.js",
 	"./perf-hint.js",
 	"./mcp-bridge-flag.js",
+	"./sandbox.js",
 	"./tabs.js",
 	"./nav-history.js",
 	"./search.js",

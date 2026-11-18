@@ -98,7 +98,11 @@ fn check_requests(name: &str, js: &Value, rust: &[Request]) {
         let body: Value = if r.body.is_empty() { Value::Null } else { serde_json::from_slice(&r.body).unwrap() };
         let (a, b) = (js_exception(&format!("{name}#{i}"), norm_ids(&j["body"])), norm_ids(&body));
         if a != b {
-            panic!("{name}#{i}: Körper\nJS:   {a}\nRust: {b}");
+            // Ab der ersten Abweichung zeigen – die Körper sind lang.
+            let (a, b) = (a.to_string(), b.to_string());
+            let at = a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
+            let tail = |t: &str| t.chars().skip(at.saturating_sub(80)).take(400).collect::<String>();
+            panic!("{name}#{i}: Körper ab Zeichen {at}\nJS:   …{}\nRust: …{}", tail(&a), tail(&b));
         }
         assert_eq!(r.method == Method::Get, r.body.is_empty());
     }
@@ -409,6 +413,9 @@ fn agent_schleife() {
         let mut session = AgentSession::default();
         for (n, run) in case["runs"].as_array().unwrap().iter().enumerate() {
             let label = format!("{name}/{n}");
+            // Die Goldens stammen aus der JS-Fassung, die Werkzeug-Ergebnisse nicht in die
+            // nächste Runde mitnahm (eigener Test: werkzeug_ergebnisse_naechste_runde).
+            session.recent_tools.clear();
             let fake = Fake::new(&run["responses"]);
             let p = provider(st, &fake, Arc::new(Mutex::new(vec![])));
             let mut chat: Vec<ChatEntry> = serde_json::from_value(run["chatBefore"].clone()).unwrap();
@@ -543,7 +550,8 @@ fn modelle_ping_embeddings() {
 #[test]
 fn system_prompt_meta_und_eigene_anweisungen() {
     let p = system_prompt(ToolMode::Meta, "Notiz", "  eigen  ", now());
-    assert!(p.contains("Heute: Di., 27.10.2026, 14:05 Uhr."));
+    assert!(p.contains("Heute: Di., 27.10.2026."));
+    assert!(!p.contains("14:05"), "Uhrzeit gehört in die Arbeitsunterlagen, nicht in den System-Prompt");
     assert!(p.ends_with("Notiz\nZusätzliche Anweisungen (aus den Einstellungen):\neigen"));
 }
 

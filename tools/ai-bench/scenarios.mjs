@@ -97,7 +97,7 @@ export const SCENARIOS = [
 	},
 	{
 		id: "schreiben",
-		name: "Tracker pflegen und Karteikarten mit Unterstapel (Schreiben nur simuliert)",
+		name: "Tracker pflegen und Karteikarten mit Unterstapel",
 		turns: [
 			{
 				text: "Ich war heute in der FKP-Übung und habe Blatt 02 erledigt. Trag das im Übungsblatt-Tracker auf der Seite „Festkörperphysik“ ein und erhöhe die Anwesenheit auf 2 von mind. 7. Sonst nichts ändern.",
@@ -118,7 +118,7 @@ export const SCENARIOS = [
 	},
 	{
 		id: "verzeichnis",
-		name: "Neue Drive-Datei (KM V04.pdf) ins Vorlesungsverzeichnis einbauen (Schreiben nur simuliert)",
+		name: "Neue Drive-Datei (KM V04.pdf) ins Vorlesungsverzeichnis einbauen",
 		// Text der echten Folien aus dem Drive (uni-sync); anlegen mit:
 		// python -I -c "import pypdf,sys; …" "G:/Meine Ablage/SSE/3_Semester/Kontinuumsmechanik/Vorlesung/V04.pdf" tools/ai-bench/results/km-v04.txt
 		pdf: { file: "results/km-v04.txt", name: "V04.pdf" },

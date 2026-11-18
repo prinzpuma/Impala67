@@ -161,18 +161,20 @@ export const TOOLS = (() => {
 
 	// Zusammenhang einer gelesenen Seite wie Notion „fetch“: Ordner, Unterseiten; als
 	// Verzeichnis-Eintrag Spalten + eigene Werte, als Verzeichnis Spalten + Einträge.
+	// Spaltenwerte ohne die Titelspalte: Sie steht schon als title da (spart Token je Eintrag).
+	const ownProps = (r) => Object.fromEntries(Object.entries(r.props || {}).filter(([, v]) => v !== r.title));
 	function pageInfo(pg) {
 		const out = {};
 		const parent = pg.parentId ? S.pages[pg.parentId] : null;
 		if (parent) out.parent = label(parent);
 		if (parent?.db?.schema) {
 			out.verzeichnis = { title: label(parent), columns: CORE.aiColumns(parent.db.schema) };
-			out.props = pg.props || {};
+			out.props = ownProps(pg);
 		}
 		const kids = STATE.childrenOf(pg.id, pg.workspaceId) || [];
 		if (pg.db?.schema) {
 			out.columns = CORE.aiColumns(pg.db.schema);
-			out.entries = kids.slice(0, 40).map((r) => ({ title: label(r), props: r.props || {} }));
+			out.entries = kids.slice(0, 40).map((r) => ({ title: label(r), props: ownProps(r) }));
 			if (kids.length > 40) out.entriesTotal = kids.length;
 		} else if (kids.length) {
 			out.children = kids.slice(0, 30).map((r) => label(r));
@@ -464,7 +466,8 @@ export const TOOLS = (() => {
 							total: roots.length,
 						};
 					}
-					default: return { error: "inspect: unbekanntes kind." };
+					// Mit den erlaubten Werten: Kleine Modelle korrigieren sich dann im nächsten Schritt selbst.
+					default: return { error: `inspect: unbekanntes kind „${a.kind ?? ""}“. Erlaubt: context, pages, page, decks, cards, due, search (Bedeutungssuche: search mit semantic=true), chats, archived.` };
 				}
 			}
 			case "change": {
