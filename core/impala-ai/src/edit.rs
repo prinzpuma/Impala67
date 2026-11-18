@@ -34,15 +34,16 @@ fn short(s: &str) -> String {
     if js::len16(t) > 80 { format!("{}…", js::head16(t, 80)) } else { t.to_owned() }
 }
 
-/// Zeichen, das beim toleranten Abgleich zusammengefasst wird: Leerraum (→ ' ') und Reihen
-/// gleicher Symbole (`☐☐☐`, `---`, `**`) – Modelle verzählen sich bei solchen Reihen leicht.
+/// Leerraum beim toleranten Abgleich auf ein einzelnes `' '` normalisieren.
 fn squash(prev: Option<char>, c: char) -> Option<char> {
-    let c = if js::is_ws(c) { ' ' } else { c };
-    let symbol = c == ' ' || !c.is_alphanumeric();
-    if symbol && prev == Some(c) { None } else { Some(c) }
+    if js::is_ws(c) {
+        if prev == Some(' ') { None } else { Some(' ') }
+    } else {
+        Some(c)
+    }
 }
 
-/// Fundstelle mit zusammengefasstem Leerraum und Symbolreihen: `Ok(None)` = keine, `Err` = mehrdeutig.
+/// Fundstelle mit zusammengefasstem Leerraum: `Ok(None)` = keine, `Err` = mehrdeutig.
 fn loose_find(content: &str, search: &str) -> Result<Option<(usize, usize)>, String> {
     // Normalisierte Zeichen mit ihrem Byte-Bereich im Original.
     let mut norm: Vec<(char, usize, usize)> = Vec::with_capacity(content.len());
@@ -120,7 +121,7 @@ pub fn replace_guard(old: &str, new: &str) -> Option<String> {
         format!("Abschnitte fehlen: {}", lost.join(" | "))
     };
     Some(format!(
-        "Ersetzen würde Inhalt löschen ({what}). Für kleine Änderungen gezielt ersetzen (edits / page.patch) oder anhängen; nur wenn das Löschen gewollt ist, allow_deleting_content=true setzen."
+        "Ersetzen würde Inhalt löschen ({what}). Für kleine Änderungen edit_page mit edits oder append nutzen; nur wenn das Löschen gewollt ist, allow_deleting_content=true setzen."
     ))
 }
 
@@ -216,11 +217,8 @@ mod tests {
         assert_eq!(patch("a [ ] Blatt 02\nb", "[ ] Blatt 02", "[x] Blatt 02").unwrap(), "a [x] Blatt 02\nb");
         // Leerraum egal, Original außerhalb bleibt unberührt
         assert_eq!(patch("x  Anwesenheit:\n 1 von 7\ny", "Anwesenheit: 1 von 7", "Anwesenheit: 2 von 7").unwrap(), "x  Anwesenheit: 2 von 7\ny");
-        // Verzählte Symbolreihen (Anwesenheits-Kästchen) treffen trotzdem genau die eine Zeile.
-        assert_eq!(
-            patch("- Anwesenheit: ☑☐☐☐☐ (1 von 7)\nx", "Anwesenheit: ☑☐☐☐☐☐☐☐☐ (1 von 7)", "Anwesenheit: ☑☑☐☐☐ (2 von 7)").unwrap(),
-            "- Anwesenheit: ☑☑☐☐☐ (2 von 7)\nx"
-        );
+        // Wiederholte Symbole (z. B. == vs. =) werden nicht zusammengeworfen.
+        assert!(patch("a == b\n", "a = b", "a := b").is_err());
         assert!(patch("ab ab", "ab", "c").unwrap_err().contains("2-mal"));
         let e = patch("## Organisation\nAnwesenheit 1 von 7", "Anwesenheit: 3", "x").unwrap_err();
         assert!(e.contains("Ähnlichste Zeile: „Anwesenheit 1 von 7“"), "{e}");

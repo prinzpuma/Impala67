@@ -177,7 +177,7 @@ impl State {
             return Some(pg);
         }
         let q = impala_search::text::lower(title);
-        // Pfad „Ordner/Seite“ (Reihenfolge der Teile egal), wenn es keine Seite genau so heißt:
+        // Pfad „Ordner/Seite“ (von oben nach unten), wenn keine Seite genau so heißt:
         // Titel wie „📖 Vorlesungen“ gibt es je Fach einmal, die KI nennt dann den Ordner mit.
         if title.contains('/')
             && !self.pages.values().any(|p| !p.is_trashed() && impala_search::text::lower(p.title()) == q)
@@ -225,22 +225,29 @@ impl State {
         out
     }
 
-    /// Seite zu einem Pfad: ihr Titel ist einer der Teile, alle anderen Teile sind Vorfahren;
-    /// bei mehreren Treffern die am tiefsten liegende.
+    /// Seite zu einem Pfad „Ordner/…/Seite“ (von oben nach unten): der letzte Teil ist der
+    /// Seitentitel, die vorherigen Teile sind Vorfahren in dieser Reihenfolge; bei mehreren
+    /// Treffern die am tiefsten liegende.
     fn find_by_path(&self, path: &str, include_archived: bool) -> Option<&Page> {
         let parts: Vec<String> =
             path.split('/').map(|s| impala_search::text::lower(s.trim())).filter(|s| !s.is_empty()).collect();
-        if parts.len() < 2 {
+        let (target, parents) = parts.split_last()?;
+        if parents.is_empty() {
             return None;
         }
         let mut best: Option<(&Page, usize)> = None;
         for p in self.pages.values().filter(|p| !p.is_trashed() && (include_archived || !p.is_archived())) {
-            let t = impala_search::text::lower(p.title());
-            let Some(i) = parts.iter().position(|s| *s == t) else { continue };
+            if impala_search::text::lower(p.title()) != *target {
+                continue;
+            }
             let anc = self.ancestor_titles(p);
-            if parts.iter().enumerate().all(|(k, s)| k == i || anc.contains(s))
-                && best.is_none_or(|(_, d)| anc.len() > d)
-            {
+            let mut pos = 0;
+            let matches = parents.iter().rev().all(|need| {
+                let Some(rel) = anc[pos..].iter().position(|a| a == need) else { return false };
+                pos += rel + 1;
+                true
+            });
+            if matches && best.is_none_or(|(_, d)| anc.len() > d) {
                 best = Some((p, anc.len()));
             }
         }

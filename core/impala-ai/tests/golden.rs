@@ -413,9 +413,6 @@ fn agent_schleife() {
         let mut session = AgentSession::default();
         for (n, run) in case["runs"].as_array().unwrap().iter().enumerate() {
             let label = format!("{name}/{n}");
-            // Die Goldens stammen aus der JS-Fassung, die Werkzeug-Ergebnisse nicht in die
-            // nächste Runde mitnahm (eigener Test: werkzeug_ergebnisse_naechste_runde).
-            session.recent_tools.clear();
             let fake = Fake::new(&run["responses"]);
             let p = provider(st, &fake, Arc::new(Mutex::new(vec![])));
             let mut chat: Vec<ChatEntry> = serde_json::from_value(run["chatBefore"].clone()).unwrap();

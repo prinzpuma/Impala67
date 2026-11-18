@@ -323,12 +323,7 @@ impl Tools<'_> {
                 o
             })
             .collect();
-        let next = if all.is_empty() {
-            "Andere Stichworte oder semantic=true versuchen."
-        } else {
-            "Passende Treffer mit read_pages (inspect kind=page) lesen."
-        };
-        let mut out = json!({ "results": results, "totalMatches": all.len(), "next": next });
+        let mut out = json!({ "results": results, "totalMatches": all.len() });
         if all.len() > 20 {
             out["note"] = Value::from("Nur die 20 besten Treffer — bei Bedarf genauer suchen.");
         }
@@ -371,7 +366,7 @@ impl Tools<'_> {
         let current = cur.map(|p| {
             let body = p.content();
             let cut = len16(body) > 4000;
-            json!({ "title": p.title(), "content": format!("{}{}", head16(body, 4000), if cut { "\n[… gekürzt — Rest per read_page]" } else { "" }) })
+            json!({ "title": p.title(), "content": format!("{}{}", head16(body, 4000), if cut { "\n[… gekürzt — Rest per read_pages]" } else { "" }) })
         });
         json!({
             "now": now,

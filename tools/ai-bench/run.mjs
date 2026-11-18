@@ -19,7 +19,7 @@
 // Ergebnis: tools/ai-bench/results/<Zeit>.json (Protokolle) und .md (Bericht) – nicht im Git,
 // weil sie Auszüge aus den eigenen Notizen enthalten.
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,8 +39,8 @@ const BRIDGE_PORT = Number(arg("bridge-port", 8767));
 const SANDBOX_URL = `http://localhost:${SANDBOX_PORT}/?sandbox=${BRIDGE_PORT}`;
 const TURN_LIMIT_MS = Number(arg("turn-timeout", 20 * 60000));
 const MODES = String(arg("modes", "app,mcp")).split(",");
-// Werkzeuge im app-Profil: classic = inspect/change (wie der KI-Chat heute), flat = search, read_pages …
-const APP_TOOLS = String(arg("app-tools", "classic"));
+// Werkzeuge im app-Profil: flat = search, read_pages … (wie der KI-Chat heute), classic = inspect/change
+const APP_TOOLS = String(arg("app-tools", "flat"));
 const LOCAL_MAX_B =arg("final", false) === true ? Infinity : 10;
 const CLOUD_DEFAULT = ["impala-ai:cloudflare", "gemini-3.5-flash-lite:google", "gemma-4-31b-it:google"];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -134,6 +134,33 @@ async function serveSandbox() {
 function openBrowser(url) {
 	const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
 	try { spawn(cmd, args, { stdio: "ignore", detached: true }).unref(); } catch {}
+}
+function findChrome() {
+	const list = process.platform === "win32"
+		? [
+			"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+			"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+			join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe"),
+			"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+			"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+		]
+		: process.platform === "darwin"
+			? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium"]
+			: ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
+	return list.find((p) => p && existsSync(p)) || null;
+}
+function launchHeadless(url) {
+	const bin = findChrome();
+	if (!bin) return null;
+	const profile = join(here, "results", `.chrome-${SANDBOX_PORT}`);
+	mkdirSync(profile, { recursive: true });
+	const child = spawn(bin, [
+		"--headless=new", `--user-data-dir=${profile}`,
+		"--no-first-run", "--no-default-browser-check", "--disable-gpu",
+		"--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+		url,
+	], { stdio: "ignore" });
+	return child;
 }
 
 // Kopie der echten Daten in die Spielwiese. Geräte-Zugänge (Sync-Schlüssel, Drive) bleiben draußen,
@@ -277,8 +304,15 @@ async function runTurn(sb, spec) {
 async function main() {
 	const server = await serveSandbox();
 	const sb = startSandboxBridge();
-	if (arg("no-open", false) !== true) openBrowser(SANDBOX_URL);
-	log("Spielwiese:", SANDBOX_URL, "– warte auf Verbindung …");
+	let browser = null;
+	const cleanup = () => { try { browser?.kill(); } catch {} try { server?.kill(); } catch {} };
+	process.on("exit", cleanup);
+	process.on("SIGINT", () => { cleanup(); process.exit(130); });
+	if (arg("no-open", false) !== true) {
+		browser = arg("visible", false) === true ? null : launchHeadless(SANDBOX_URL);
+		if (!browser) openBrowser(SANDBOX_URL);
+	}
+	log("Spielwiese:", SANDBOX_URL, browser ? "(headless)" : "", "– warte auf Verbindung …");
 	await sb.ready(120000);
 	const state = await evalIn(sb, `const { SANDBOX } = await import("./sandbox.js"); return { sandbox: SANDBOX.on, copiedAt: localStorage.getItem("impala67SandboxCopy"), dirty: !!localStorage.getItem("impala67SandboxDirty") };`);
 	if (!state.sandbox) throw new Error("Die Seite auf Port " + SANDBOX_PORT + " ist keine Spielwiese (Ursprung schon benutzt?).");
@@ -286,14 +320,22 @@ async function main() {
 	const cloud = arg("cloud", false);
 	const cloudList = cloud === false ? [] : (cloud === true ? CLOUD_DEFAULT : String(cloud).split(","))
 		.map((s) => { const [model, provider] = s.split(":"); return { id: model, provider: provider || (/^impala/.test(model) ? "cloudflare" : "google") }; });
-	let real = null, cloudflare = null;
+	let real = null, cloudflare = null, cloudProviders = null;
 	const fresh = !state.copiedAt || state.dirty || arg("fresh", false) === true;
 	if (state.dirty) log("Spielwiese enthält Änderungen eines abgebrochenen Laufs – kopiere neu.");
 	else if (!fresh) log("Spielwiese enthält die Kopie vom", state.copiedAt, "(neu kopieren: --fresh)");
-	if (fresh || cloudList.some((c) => c.provider === "cloudflare")) {
+	if (fresh || cloudList.length > 0) {
 		real = await connectReal();
 		if (fresh) await fillSandbox(real, sb); // lädt die Spielwiese danach neu
-		// Zugang zu „Impala AI“ (Cloudflare-Worker) aus dem Sync-Schlüssel der echten App – nur im Speicher.
+		// Cloud-Zugänge aus der echten App nur im Speicher halten (DB.exportAll entfernt API-Schlüssel).
+		if (cloudList.length > 0) {
+			cloudProviders = await evalIn(real, `return (S.settings.aiProviders || []).map((p) => ({ ...p }));`);
+			const envGoogle = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+			if (envGoogle && Array.isArray(cloudProviders)) {
+				const gp = cloudProviders.find((p) => p.id === "google");
+				if (gp && !gp.key) gp.key = envGoogle;
+			}
+		}
 		if (cloudList.some((c) => c.provider === "cloudflare")) {
 			cloudflare = await evalIn(real, `const { CORE } = await import("./rust-core.js"); const st = CLOUDFLARE_SYNC.status(); if (!st.syncKey) return null; const { userId, authToken } = CORE.syncAuth(st.syncKey); return { userId, authToken, fallbackBase: st.url };`);
 			if (!cloudflare) log("Impala AI übersprungen: Die echte App hat keinen Sync-Schlüssel.");
@@ -316,8 +358,15 @@ async function main() {
 	const local = arg("no-local", false) === true ? [] : (await lmsModels()).filter((m) => m.type === "llm" || m.type === "vlm")
 		.filter((m) => (wanted ? String(wanted).split(",").includes(m.id) : (m.capabilities || []).includes("tool_use") && sizeB(m.id) <= LOCAL_MAX_B))
 		.sort((a, b) => sizeB(a.id) - sizeB(b.id));
+	const hasCloudAuth = (c) => {
+		if (c.provider === "cloudflare") return !!cloudflare;
+		const p = (cloudProviders || []).find((x) => x.id === c.provider);
+		if (p?.key && String(p.key).trim()) return true;
+		log(`${c.id} (${c.provider}) übersprungen: kein API-Schlüssel in der echten App (oder GEMINI_API_KEY).`);
+		return false;
+	};
 	const models = [...local.map((m) => ({ ...m, provider: "local" })),
-		...cloudList.filter((c) => c.provider !== "cloudflare" || cloudflare).map((c) => ({ id: c.id, provider: c.provider, type: "cloud", arch: c.provider, quantization: "–" }))];
+		...cloudList.filter(hasCloudAuth).map((c) => ({ id: c.id, provider: c.provider, type: "cloud", arch: c.provider, quantization: "–" }))];
 	const scen = arg("scenarios", null);
 	const scenarios = SCENARIOS.filter((s) => !scen || String(scen).split(",").includes(s.id));
 	if (!models.length) throw new Error("Keine Modelle (LM Studio offen? --cloud?).");
@@ -375,7 +424,9 @@ async function main() {
 		log(`-- ${s.id}: ${s.name}`);
 		const prev = [];
 		for (const [i, t] of s.turns.entries()) {
-			const spec = { convId, profile: entry.mode, model: entry.id, providerId: entry.provider, cloudflare: entry.provider === "cloudflare" ? cloudflare : null,
+			const spec = { convId, profile: entry.mode, model: entry.id, providerId: entry.provider,
+				providers: entry.provider !== "local" ? cloudProviders : null,
+				cloudflare: entry.provider === "cloudflare" ? cloudflare : null,
 				text: t.text, workspacePage: s.workspacePage || null, answers: t.answers || null,
 				thinking: arg("no-think", false) !== true, pdfFile: t.attachPdf ? pdfFile : null, appTools: entry.tools };
 			const rec = normalize(await runTurn(sb, spec));
@@ -395,12 +446,12 @@ async function main() {
 	save();
 	try { execFileSync("lms", ["unload", "--all"], { stdio: "ignore" }); } catch {}
 	sb.close();
-	server?.kill();
+	cleanup();
 	log("Bericht:", join(outDir, stamp + ".md"));
 }
 
 // ---------- Bericht ----------
-const label = (m) => (m.mode === "app" && m.tools && m.tools !== "classic" ? `app/${m.tools}` : m.mode);
+const label = (m) => (m.mode === "app" && m.tools && m.tools !== "flat" ? `app/${m.tools}` : m.mode);
 const kTok = (n) => (n >= 10000 ? Math.round(n / 1000) + " k" : n >= 1000 ? (n / 1000).toFixed(1) + " k" : String(n));
 function report(res) {
 	const runs = res.runs || (res.models || []).map((m) => ({ ...m, mode: "app" })); // ältere Ergebnisdateien

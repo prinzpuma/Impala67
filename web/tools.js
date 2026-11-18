@@ -148,7 +148,6 @@ export const TOOLS = (() => {
 				...(r.page.archived ? { archived: true } : {}),
 			})),
 			totalMatches: all.length,
-			next: all.length ? "Passende Treffer mit read_pages (inspect kind=page) lesen." : "Andere Stichworte oder semantic=true versuchen.",
 			...(all.length > 20 ? { note: "Nur die 20 besten Treffer — bei Bedarf genauer suchen." } : {}),
 		};
 	}
@@ -710,7 +709,7 @@ export const TOOLS = (() => {
 				} catch { /* Karten-Kontext optional */ }
 				return {
 					now: now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr",
-					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Seite ganz lesen (read_pages / inspect kind=page)]" : "") } : null,
+					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Rest per read_pages]" : "") } : null,
 					currentCard,
 					recentPages: recent,
 					study,

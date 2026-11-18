@@ -5,7 +5,6 @@ use serde::Deserialize;
 
 use crate::js;
 use crate::message::{Content, Message, Part, Role};
-use crate::provider::Family;
 
 /// Ortszeit des Geräts (für „Heute: …“ im System-Prompt).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,9 +159,7 @@ pub fn workspace_context(
     workspace: &Workspace,
     rag: &str,
     summary: &str,
-    recent_tools: &str,
     now: LocalTime,
-    family: Family,
 ) -> (Message, Option<PageContextInfo>) {
     let mut lines = vec![
         format!("Uhrzeit: {:02}:{:02} Uhr.", now.hour, now.minute),
@@ -190,13 +187,13 @@ pub fn workspace_context(
                     lines.push(line);
                 }
                 Some(PageContext::Text { content }) => {
-                    let max = if family == Family::Local { 2500 } else { 12000 };
+                    const MAX: usize = 12000;
                     let total = js::len16(content);
-                    info = Some(PageContextInfo { sent: total.min(max), total });
-                    let body = js::head16(content, max);
+                    info = Some(PageContextInfo { sent: total.min(MAX), total });
+                    let body = js::head16(content, MAX);
                     lines.push(format!(
                         "Inhalt der geöffneten Seite{}:\n{}",
-                        if total > max { " (Anfang — Rest per read_page)" } else { "" },
+                        if total > MAX { " (Anfang — Rest per read_pages)" } else { "" },
                         if body.is_empty() { "(Leere Seite)" } else { body }
                     ));
                 }
@@ -209,11 +206,6 @@ pub fn workspace_context(
     if !summary.is_empty() {
         lines.push(format!(
             "Zusammenfassung des bisherigen Gesprächs (ältere Nachrichten, nicht mehr im Verlauf):\n{summary}"
-        ));
-    }
-    if !recent_tools.is_empty() {
-        lines.push(format!(
-            "Ergebnisse deiner Werkzeuge aus der vorigen Antwort (Stand damals; für andere Seiten oder Themen neu nachlesen):\n{recent_tools}"
         ));
     }
     lines.push("</workspace_data>".into());
@@ -297,12 +289,12 @@ const ATTACHMENT_SINGLE: usize = 12000;
 const ATTACHMENT_TOTAL: usize = 24000;
 
 /// Teilt in ältere Nachrichten (für die Zusammenfassung) und die neuesten, die ins Budget passen.
-pub fn split_history(items: &[ChatEntry], family: Family) -> (&[ChatEntry], &[ChatEntry]) {
-    let max = if family == Family::Local { 16 } else { 48 };
-    let budget = max * 1500;
+pub fn split_history(items: &[ChatEntry]) -> (&[ChatEntry], &[ChatEntry]) {
+    const MAX: usize = 24;
+    let budget = 24_000;
     let (mut used, mut keep) = (0, 0);
     for m in items.iter().rev() {
-        if keep >= max {
+        if keep >= MAX {
             break;
         }
         used += js::len16(&m.content) + if m.image.is_some() { 4000 } else { 0 };
@@ -345,7 +337,7 @@ pub fn history_messages(recent: &[ChatEntry]) -> Vec<Message> {
     let mut attachment = |i: usize, label: &str, file: &Attachment| {
         if !full.contains(&i) || budget <= 0 {
             return format!(
-                "[{label}: {} — Inhalt aus Platzgründen nicht erneut mitgeschickt; bei Bedarf search_chat_history nutzen]",
+                "[{label}: {} — Inhalt aus Platzgründen nicht erneut mitgeschickt; bei Bedarf search_chats nutzen]",
                 file.name
             );
         }
@@ -483,8 +475,8 @@ mod tests {
     #[test]
     fn verlauf_budget() {
         let items: Vec<ChatEntry> = (0..60).map(|i| ChatEntry::new("user", &format!("n{i}"))).collect();
-        let (old, recent) = split_history(&items, Family::Local);
-        assert_eq!((old.len(), recent.len()), (44, 16));
+        let (old, recent) = split_history(&items);
+        assert_eq!((old.len(), recent.len()), (36, 24));
     }
 
     #[test]

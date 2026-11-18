@@ -1,6 +1,5 @@
-//! Flache Werkzeuge (`tool_defs_flat.json`): ein Werkzeug je Aufgabe mit flachen Feldern,
-//! wie es kleine Modelle zuverlässiger bedienen als `inspect(kind)`/`change(operations[])`.
-//! Ausgeführt werden sie als `inspect`/`change` – so gelten Bestätigung, Rückgängig und
+//! Flache Werkzeuge (`tool_defs_flat.json`): ein Werkzeug je Aufgabe mit flachen Feldern.
+//! Ausgeführt werden sie intern als `inspect`/`change` – so gelten Bestätigung, Rückgängig und
 //! Prüfungen unverändert, und App-KI und MCP teilen dieselbe Ausführung.
 
 use std::sync::LazyLock;
@@ -42,11 +41,12 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
     Some(match name {
         "search" => inspect("search", &["query", "semantic"]),
         "read_pages" => {
-            let titles = match s("titles").or_else(|| s("title")) {
-                Some(Value::String(t)) => json!([t]),
-                Some(v) => v,
-                None => return Some(Err("read_pages: titles fehlt (Liste exakter Titel).".into())),
+            let Some(Value::Array(titles)) = s("titles") else {
+                return Some(Err("read_pages: titles muss eine Liste exakter Titel sein.".into()));
             };
+            if titles.is_empty() {
+                return Some(Err("read_pages: titles darf nicht leer sein.".into()));
+            }
             Ok(("inspect", json!({ "kind": "page", "titles": titles })))
         }
         "list_pages" if a.get("archived").and_then(Value::as_bool) == Some(true) => inspect("archived", &[]),
@@ -57,12 +57,8 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
         "list_decks" => inspect("decks", &[]),
         "search_chats" => inspect("chats", &["query", "limit"]),
         "create_pages" => {
-            let pages = match s("pages") {
-                Some(Value::Array(p)) => p,
-                // Ein einzelnes Objekt oder Felder direkt im Aufruf: trotzdem anlegen.
-                Some(Value::Object(o)) => vec![Value::Object(o)],
-                _ if a.get("title").is_some() => vec![a.clone()],
-                _ => vec![],
+            let Some(Value::Array(pages)) = s("pages") else {
+                return Some(Err("create_pages: pages muss eine Liste von Seiten-Objekten sein.".into()));
             };
             let ops = pages
                 .into_iter()
@@ -117,10 +113,8 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
             if !matches!(action, "trash" | "archive" | "unarchive") {
                 return Some(Err("organize_pages: action muss trash, archive oder unarchive sein.".into()));
             }
-            let titles = match s("titles").or_else(|| s("title")) {
-                Some(Value::Array(t)) => t,
-                Some(t) => vec![t],
-                None => vec![],
+            let Some(Value::Array(titles)) = s("titles") else {
+                return Some(Err("organize_pages: titles muss eine Liste von Titeln sein.".into()));
             };
             let kind = format!("page.{action}");
             change(titles.into_iter().map(|t| op(&kind, Map::from_iter([("title".into(), t)]))).collect())
@@ -172,8 +166,9 @@ mod tests {
 
     #[test]
     fn lesen_wird_inspect() {
-        let (t, a) = flat_call("read_pages", &json!({ "titles": "A" })).unwrap().unwrap();
+        let (t, a) = flat_call("read_pages", &json!({ "titles": ["A"] })).unwrap().unwrap();
         assert_eq!((t, a), ("inspect", json!({ "kind": "page", "titles": ["A"] })));
+        assert!(flat_call("read_pages", &json!({ "titles": "A" })).unwrap().is_err());
         let (_, a) = flat_call("list_cards", &json!({ "due": true })).unwrap().unwrap();
         assert_eq!(a, json!({ "kind": "due" }));
         assert!(flat_call("inspect", &json!({})).is_none());

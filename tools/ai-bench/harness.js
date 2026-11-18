@@ -6,7 +6,7 @@
 // Profile: app = wie der KI-Chat (geöffnete Seite, Notizsuche, eigene Anweisungen);
 //          mcp = wie ein externer Assistent (nichts automatisch mitgeschickt, flache Werkzeuge).
 // Misst je Anfrage: Wartezeit bis zum ersten Token, Prompt-/Antwort-Token (usage), Prefill und Decode.
-const VERSION = 7;
+const VERSION = 8;
 if (globalThis.__aiBench?.version === VERSION) return { ready: true, version: VERSION, sandbox: globalThis.__aiBench.sandbox };
 
 const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }, { SANDBOX }] = await Promise.all([
@@ -170,7 +170,7 @@ async function turn(spec, rec) {
 	rec.rag = { query: ragQuery || null, hits: ragHits.map((h) => h.title || h.pageTitle || "?"), ms: Math.round(now() - t0) };
 	const { ws, page } = mcp ? { ws: { kind: "empty" }, page: null } : await workspaceFor(spec.workspacePage);
 	const extra = BUS.call("exp:extra-tool-defs");
-	const settings = { providers: S.settings.aiProviders || [], activeProviderId: spec.providerId || "local", model: spec.model, thinkingEnabled: spec.thinking !== false };
+	const settings = { providers: spec.providers || S.settings.aiProviders || [], activeProviderId: spec.providerId || "local", model: spec.model, thinkingEnabled: spec.thinking !== false };
 	const { key, ...config } = CORE.aiChatConfig(settings) || {}; // Schlüssel nie ins Protokoll
 	rec.config = { ...config, hasKey: !!key };
 	const executor = {
