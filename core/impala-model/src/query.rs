@@ -177,6 +177,14 @@ impl State {
             return Some(pg);
         }
         let q = impala_search::text::lower(title);
+        // Pfad „Ordner/Seite“ (Reihenfolge der Teile egal), wenn es keine Seite genau so heißt:
+        // Titel wie „📖 Vorlesungen“ gibt es je Fach einmal, die KI nennt dann den Ordner mit.
+        if title.contains('/')
+            && !self.pages.values().any(|p| !p.is_trashed() && impala_search::text::lower(p.title()) == q)
+            && let Some(pg) = self.find_by_path(title, include_archived)
+        {
+            return Some(pg);
+        }
         let mut partial = None;
         for pg in self.active_pages() {
             let t = impala_search::text::lower(pg.title());
@@ -200,6 +208,65 @@ impl State {
             }
         }
         partial
+    }
+
+    /// Titel der Vorfahren (nächster zuerst), klein geschrieben.
+    fn ancestor_titles(&self, pg: &Page) -> Vec<String> {
+        let mut out = vec![];
+        let mut cur = pg.parent();
+        while let Some(id) = cur {
+            let Some(p) = self.pages.get(id) else { break };
+            out.push(impala_search::text::lower(p.title()));
+            cur = p.parent();
+            if out.len() > 32 {
+                break;
+            }
+        }
+        out
+    }
+
+    /// Seite zu einem Pfad: ihr Titel ist einer der Teile, alle anderen Teile sind Vorfahren;
+    /// bei mehreren Treffern die am tiefsten liegende.
+    fn find_by_path(&self, path: &str, include_archived: bool) -> Option<&Page> {
+        let parts: Vec<String> =
+            path.split('/').map(|s| impala_search::text::lower(s.trim())).filter(|s| !s.is_empty()).collect();
+        if parts.len() < 2 {
+            return None;
+        }
+        let mut best: Option<(&Page, usize)> = None;
+        for p in self.pages.values().filter(|p| !p.is_trashed() && (include_archived || !p.is_archived())) {
+            let t = impala_search::text::lower(p.title());
+            let Some(i) = parts.iter().position(|s| *s == t) else { continue };
+            let anc = self.ancestor_titles(p);
+            if parts.iter().enumerate().all(|(k, s)| k == i || anc.contains(s))
+                && best.is_none_or(|(_, d)| anc.len() > d)
+            {
+                best = Some((p, anc.len()));
+            }
+        }
+        best.map(|(p, _)| p)
+    }
+
+    /// Anzeigename für die KI: der Titel, bei mehrfach vorhandenem Titel als Pfad
+    /// („Kontinuumsmechanik/📖 Vorlesungen“), den [`State::find_page`] wieder auflöst.
+    pub fn page_label(&self, pg: &Page) -> String {
+        let t = impala_search::text::lower(pg.title());
+        let twins = self.active_pages().iter().filter(|p| impala_search::text::lower(p.title()) == t).count();
+        if twins < 2 {
+            return pg.title().to_owned();
+        }
+        let mut names = vec![pg.title().to_owned()];
+        let mut cur = pg.parent();
+        while let Some(id) = cur {
+            let Some(p) = self.pages.get(id) else { break };
+            names.push(p.title().to_owned());
+            cur = p.parent();
+            if names.len() > 32 {
+                break;
+            }
+        }
+        names.reverse();
+        names.join("/")
     }
 
     /// Aktive Karten: weder gelöscht noch selbst/über den Stapel archiviert.

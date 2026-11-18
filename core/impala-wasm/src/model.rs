@@ -853,6 +853,13 @@ impl ModelCore {
         self.m.state().find_page(title, include_archived).map(|p| p.id().to_owned())
     }
 
+    /// Anzeigename für die KI: Titel, bei mehrfach vorhandenem Titel als Pfad „Ordner/Titel“.
+    #[wasm_bindgen(js_name = pageLabel)]
+    pub fn page_label(&self, id: &str) -> String {
+        let state = self.m.state();
+        state.pages.get(id).map(|p| state.page_label(p)).unwrap_or_default()
+    }
+
     #[wasm_bindgen(js_name = backlinksOf)]
     pub fn backlinks_of(&mut self, id: &str) -> String {
         text(&self.search.backlinks(&self.m, id))

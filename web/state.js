@@ -603,6 +603,9 @@ export const STATE = (() => {
 		const id = M.findPage(String(title), options.includeArchived !== false);
 		return (id && page(id)) || null;
 	}
+	// Name einer Seite für die KI: Titel, bei mehrfach vorhandenem Titel als Pfad „Ordner/Titel“
+	// (findPage löst den Pfad wieder auf).
+	const pageLabel = (pg) => (pg ? M.pageLabel(String(pg.id)) || pg.title || "" : "");
 	const backlinksOf = (pageId) => pagesOf(pageMemo("backlinks|" + pageId, () => ids(M.backlinksOf(String(pageId)))));
 
 	// Seitensuche (impala-search im Kern): exakte Treffer (Titel +10, je Fundstelle +1), aufgefüllt
@@ -715,7 +718,7 @@ export const STATE = (() => {
 		scheduleCheckpoint, checkpointNow: persistCheckpoint, loadedSeq: () => M.loadedSeq(), loadedTime: () => M.loadedTime(), cardRevision: () => _cardRev, pageRevision: () => _pageRev,
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
 		isDeckArchived, isCardArchived, isPageArchived, sortKeyOf, trashedPages, activePages, favoritePages, archivedPages, archivedPageRoots, activeCards,
-		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, searchNotes,
+		archivedDeckRoots, orphanArchivedCards, trashedDeckRoots, orphanTrashedCards, pageTitles, pagesByTitle, findPage, pageLabel, searchNotes,
 		pageTexts: () => M.pageTexts(),
 		dueCards, studySnapshot, learningStats, thinkMedian, retentionStats, deckConfOf, backlinksOf, pageHistory,
 		homeAnalysis, computeGoal, patternData, activeDeckNames, deckTree, deckLabel, deckParent,

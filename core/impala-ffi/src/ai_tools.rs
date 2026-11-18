@@ -309,9 +309,9 @@ impl Tools<'_> {
             .take(20)
             .map(|h| {
                 let pg = pages.get(&h.id);
-                let mut o = json!({ "title": pg.map(|p| p.title()).unwrap_or("") });
+                let mut o = json!({ "title": pg.map(|p| model.state().page_label(p)).unwrap_or_default() });
                 if let Some(parent) = pg.and_then(|p| p.parent()).and_then(|id| pages.get(id)) {
-                    o["parent"] = Value::from(parent.title());
+                    o["parent"] = Value::from(model.state().page_label(parent));
                 }
                 o["snippet"] = Value::from(h.snippet.clone());
                 if pg.is_some_and(|p| p.is_heft()) {
@@ -389,10 +389,10 @@ impl Tools<'_> {
         let state = self.inner.model.state();
         let parent = pg.parent().and_then(|id| state.pages.get(id));
         if let Some(p) = parent {
-            out.insert("parent".into(), Value::from(p.title()));
+            out.insert("parent".into(), Value::from(state.page_label(p)));
             if let Some(schema) = p.get("db").and_then(|d| d.get("schema").cloned()) {
                 let columns = impala_ai::edit::columns(&schema);
-                out.insert("verzeichnis".into(), json!({ "title": p.title(), "columns": columns }));
+                out.insert("verzeichnis".into(), json!({ "title": state.page_label(p), "columns": columns }));
                 out.insert("props".into(), pg.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})));
             }
         }
@@ -402,14 +402,14 @@ impl Tools<'_> {
             let entries: Vec<Value> = kids
                 .iter()
                 .take(40)
-                .map(|r| json!({ "title": r.title(), "props": r.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})) }))
+                .map(|r| json!({ "title": state.page_label(r), "props": r.get("props").filter(Value::is_object).unwrap_or_else(|| json!({})) }))
                 .collect();
             out.insert("entries".into(), Value::Array(entries));
             if kids.len() > 40 {
                 out.insert("entriesTotal".into(), Value::from(kids.len()));
             }
         } else if !kids.is_empty() {
-            out.insert("children".into(), json!(kids.iter().take(30).map(|r| r.title()).collect::<Vec<_>>()));
+            out.insert("children".into(), json!(kids.iter().take(30).map(|r| state.page_label(r)).collect::<Vec<_>>()));
             if kids.len() > 30 {
                 out.insert("childrenTotal".into(), Value::from(kids.len()));
             }
@@ -429,7 +429,7 @@ impl Tools<'_> {
             }
         };
         let mut out = Map::new();
-        out.insert("title".into(), Value::from(pg.title()));
+        out.insert("title".into(), Value::from(state.page_label(pg)));
         if pg.is_heft() {
             let meta = self.inner.model.heft_meta(&id);
             out.insert("id".into(), Value::from(pg.id()));
@@ -464,8 +464,8 @@ impl Tools<'_> {
             .iter()
             .take(60)
             .map(|p| {
-                let parent = p.parent().and_then(|id| state.pages.get(id)).map(|x| x.title().to_owned());
-                let mut o = json!({ "title": p.title(), "parent": parent, "hasPdf": p.truthy("pdfId") });
+                let parent = p.parent().and_then(|id| state.pages.get(id)).map(|x| state.page_label(x));
+                let mut o = json!({ "title": state.page_label(p), "parent": parent, "hasPdf": p.truthy("pdfId") });
                 if p.is_heft() {
                     o["heft"] = Value::Bool(true);
                 }

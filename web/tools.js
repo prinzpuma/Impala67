@@ -134,12 +134,14 @@ export const TOOLS = (() => {
 
 	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
 	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
-	const parentTitle = (pg) => (pg.parentId && S.pages[pg.parentId] ? S.pages[pg.parentId].title : null);
+	// Namen für die KI: bei mehrfach vorhandenem Titel ein Pfad, den findPage wieder auflöst.
+	const label = (pg) => STATE.pageLabel(pg);
+	const parentTitle = (pg) => (pg.parentId && S.pages[pg.parentId] ? label(S.pages[pg.parentId]) : null);
 	function keywordHits(query) {
 		const all = STATE.searchNotes(query, { includeArchived: true }) || [];
 		return {
 			results: all.slice(0, 20).map((r) => ({
-				title: r.page.title,
+				title: label(r.page),
 				...(parentTitle(r.page) ? { parent: parentTitle(r.page) } : {}),
 				snippet: r.snippet,
 				...(r.page.kind === "heft" ? { heft: true } : {}),
@@ -162,18 +164,18 @@ export const TOOLS = (() => {
 	function pageInfo(pg) {
 		const out = {};
 		const parent = pg.parentId ? S.pages[pg.parentId] : null;
-		if (parent) out.parent = parent.title;
+		if (parent) out.parent = label(parent);
 		if (parent?.db?.schema) {
-			out.verzeichnis = { title: parent.title, columns: CORE.aiColumns(parent.db.schema) };
+			out.verzeichnis = { title: label(parent), columns: CORE.aiColumns(parent.db.schema) };
 			out.props = pg.props || {};
 		}
 		const kids = STATE.childrenOf(pg.id, pg.workspaceId) || [];
 		if (pg.db?.schema) {
 			out.columns = CORE.aiColumns(pg.db.schema);
-			out.entries = kids.slice(0, 40).map((r) => ({ title: r.title, props: r.props || {} }));
+			out.entries = kids.slice(0, 40).map((r) => ({ title: label(r), props: r.props || {} }));
 			if (kids.length > 40) out.entriesTotal = kids.length;
 		} else if (kids.length) {
-			out.children = kids.slice(0, 30).map((r) => r.title);
+			out.children = kids.slice(0, 30).map((r) => label(r));
 			if (kids.length > 30) out.childrenTotal = kids.length;
 		}
 		return out;
@@ -721,7 +723,7 @@ export const TOOLS = (() => {
 					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
 					const meta = STATE.heftMeta(pg.id) || {};
 					return {
-						title: pg.title,
+						title: label(pg),
 						id: pg.id,
 						heft: true,
 						archived: !!pg.archived,
@@ -732,7 +734,7 @@ export const TOOLS = (() => {
 					};
 				}
 				return {
-					title: pg.title,
+					title: label(pg),
 					...(pg.archived ? { archived: true } : {}),
 					...pageInfo(pg),
 					content: clipText(pg.content || ""),
@@ -746,8 +748,8 @@ export const TOOLS = (() => {
 				if (q) all = all.filter((pg) => (pg.title || "").toLowerCase().includes(q));
 				return {
 					pages: all.slice(0, 60).map((pg) => ({
-						title: pg.title,
-						parent: pg.parentId ? (S.pages[pg.parentId] || {}).title || null : null,
+						title: label(pg),
+						parent: parentTitle(pg),
 						hasPdf: !!pg.pdfId,
 						...(pg.kind === "heft" ? { heft: true } : {}),
 						...(pg.db ? { verzeichnis: true } : {}),
