@@ -13,8 +13,9 @@ CREATE TABLE IF NOT EXISTS sync_events (
     PRIMARY KEY (user_id, seq)
 );
 
--- Eindeutige Indizes für schnelle Abfragen und strenge Deduplizierung
-CREATE INDEX IF NOT EXISTS idx_sync_events_user_seq ON sync_events(user_id, seq);
+-- Eindeutiger Index für strenge Deduplizierung. Abfragen nach (user_id, seq) nutzen den
+-- Primärschlüssel; ein zusätzlicher Index darauf kostete nur geschriebene D1-Zeilen.
+DROP INDEX IF EXISTS idx_sync_events_user_seq;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_events_user_event_unique ON sync_events(user_id, event_id);
 
 CREATE TABLE IF NOT EXISTS user_storage (

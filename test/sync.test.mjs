@@ -109,7 +109,7 @@ class MemoryD1 {
 
 class MemoryStorage {
 	constructor() { this.map = new Map(); }
-	async get(k) { return this.map.get(k); }
+	async get(k) { return Array.isArray(k) ? new Map(k.filter((x) => this.map.has(x)).map((x) => [x, this.map.get(x)])) : this.map.get(k); }
 	async put(k, v) { this.map.set(k, v); }
 }
 

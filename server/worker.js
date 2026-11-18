@@ -219,6 +219,10 @@ export class SyncRoom {
 		this.userId = null; this.authHash = null; this.initialized = false; this.accountExists = false;
 		this.maxSeq = 0; this.totalBytes = 0; this.generation = 1; this.protocolVersion = 0;
 		this.writeChain = Promise.resolve();
+		// Pings beantwortet Cloudflare selbst, ohne das Objekt aufzuwecken (gilt für alle Sockets).
+		if (typeof WebSocketRequestResponsePair !== "undefined" && typeof ctx?.setWebSocketAutoResponse === "function") {
+			ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
+		}
 	}
 
 	queue(fn) {
@@ -231,11 +235,12 @@ export class SyncRoom {
 		if (this.initialized && this.userId === userId) return;
 		this.userId = userId;
 		if (this.ctx?.storage) {
-			const storedUser = await this.ctx.storage.get("userId");
-			if (!storedUser) await this.ctx.storage.put("userId", userId);
-			this.authHash = await this.ctx.storage.get("authTokenHash") || null;
-			this.generation = Number(await this.ctx.storage.get("generation")) || 1;
-			this.protocolVersion = Number(await this.ctx.storage.get("protocolVersion")) || 0;
+			// Ein Speicherzugriff statt vier: get([...]) liefert eine Map.
+			const stored = await this.ctx.storage.get(["userId", "authTokenHash", "generation", "protocolVersion"]);
+			if (!stored.get("userId")) await this.ctx.storage.put("userId", userId);
+			this.authHash = stored.get("authTokenHash") || null;
+			this.generation = Number(stored.get("generation")) || 1;
+			this.protocolVersion = Number(stored.get("protocolVersion")) || 0;
 		}
 		const [eventState, account] = await Promise.all([
 			this.env.DB.prepare("SELECT COALESCE(MAX(seq),0) max_seq FROM sync_events WHERE user_id = ?").bind(userId).first(),
@@ -509,9 +514,6 @@ export class SyncRoom {
 			if (typeof WebSocketPair !== "undefined") { const pair = new WebSocketPair(), values = Object.values(pair); [client, server] = values; }
 			else if (request._mockServer) server = request._mockServer;
 			if (this.ctx?.acceptWebSocket) {
-				if (typeof WebSocketRequestResponsePair !== "undefined" && typeof this.ctx?.setWebSocketAutoResponse === "function") {
-					this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
-				}
 				this.ctx.acceptWebSocket(server);
 				server.serializeAttachment?.({ userId, authenticated: false });
 				setTimeout(() => {
