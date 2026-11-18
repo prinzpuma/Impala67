@@ -79,6 +79,35 @@ test("AI Tools: Kompakte Funktionsdefinitionen", () => {
 	assert.ok(JSON.stringify(TOOLS.defs).length < 5000, "Tool-Definitionen bleiben schlank");
 });
 
+// Werkzeug-Qualität ohne Modell: was der KI-Benchmark sonst nur langsam und verrauscht misst.
+test("AI Tools: Suche mit Teil-Treffern, Ordnerfilter und Duplikat-Schutz", async () => {
+	resetState();
+	const made = await TOOLS.run("change", {
+		operations: [
+			{ op: "page.create", title: "Werkstoffkunde", content: "Fach" },
+			{ op: "page.create", title: "Kursübersicht", parent: "Werkstoffkunde", content: "Gitterfehler und Versetzungen im Kristall" },
+			{ op: "page.create", title: "Kursübersicht", content: "Allgemeine Liste ohne Fachbezug" },
+		],
+	});
+	assert.ok(made.ok, JSON.stringify(made));
+
+	// Mehrwortsuche, bei der ein Wort nirgends vorkommt: Teil-Treffer statt null Ergebnisse.
+	const hits = await TOOLS.run("inspect", { kind: "search", query: "Versetzungen Kristall Prüfungsamt" });
+	assert.ok(hits.results.length > 0, "Teil-Treffer erwartet: " + JSON.stringify(hits));
+	assert.match(hits.results[0].snippet + hits.results[0].title, /Versetzung|Kursübersicht/);
+
+	// Ordnerfilter: nur Seiten unterhalb von „Werkstoffkunde“, nicht die gleichnamige Seite oben.
+	const listed = await TOOLS.run("inspect", { kind: "pages", parent: "Werkstoffkunde" });
+	assert.equal(listed.pages.length, 1, JSON.stringify(listed));
+	assert.equal(listed.pages[0].parent, "Werkstoffkunde");
+
+	// Gleicher Titel im selben Ordner wird abgelehnt (zum Bearbeiten edit_page).
+	const dup = await TOOLS.run("change", { operations: [{ op: "page.create", title: "Kursübersicht", parent: "Werkstoffkunde", content: "nochmal" }] });
+	assert.ok(dup.error && /existiert bereits/.test(dup.error), JSON.stringify(dup));
+
+	if (made._undo) await TOOLS.undo(made._undo);
+});
+
 test("AI Tools: Atomare Notizen- und Kartenerstellung mit vollständigem Undo", async () => {
 	resetState();
 

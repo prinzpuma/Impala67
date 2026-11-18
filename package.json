@@ -15,6 +15,7 @@
     "check:version": "node .github/scripts/check-version-sync.mjs",
     "check:paritaet": "node tools/paritaet.mjs",
     "bench:ai": "node tools/ai-bench/run.mjs",
+    "bench:ai:quick": "node tools/ai-bench/run.mjs --quick",
     "verify": "npm test && npm run check:syntax && npm run check:pwa && npm run check:version && npm run check:core && npm run check:paritaet",
     "deploy": "wrangler deploy --config server/wrangler.toml",
     "dry-run": "wrangler deploy --config server/wrangler.toml --dry-run",

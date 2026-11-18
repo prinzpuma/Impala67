@@ -6,7 +6,7 @@
 // Profile: app = wie der KI-Chat (geöffnete Seite, Notizsuche, eigene Anweisungen);
 //          mcp = wie ein externer Assistent (nichts automatisch mitgeschickt, flache Werkzeuge).
 // Misst je Anfrage: Wartezeit bis zum ersten Token, Prompt-/Antwort-Token (usage), Prefill und Decode.
-const VERSION = 8;
+const VERSION = 9;
 if (globalThis.__aiBench?.version === VERSION) return { ready: true, version: VERSION, sandbox: globalThis.__aiBench.sandbox };
 
 const [{ S, STATE }, { TOOLS }, { CORE }, { HEFT }, { RAG }, { BUS }, { SANDBOX }] = await Promise.all([
@@ -152,8 +152,9 @@ let undos = []; // Rückgängig-Sätze aller Änderungen seit dem letzten reset(
 // Merkzeichen „Spielwiese weicht von der Kopie ab“ (abgebrochener Lauf) → run.mjs kopiert neu.
 const DIRTY = "impala67SandboxDirty";
 let seq = 0;
-function prompt() {
-	const d = new Date();
+// Feste Uhrzeit aus run.mjs (--now): Die Szenarien fragen nach „heute“ und „diese Woche“.
+function prompt(at) {
+	const d = at ? new Date(at) : new Date();
 	return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate(), weekday: d.getDay(), hour: d.getHours(), minute: d.getMinutes() };
 }
 async function turn(spec, rec) {
@@ -180,7 +181,10 @@ async function turn(spec, rec) {
 			if (out?._undo) { undos.push(out._undo); try { localStorage.setItem(DIRTY, "1"); } catch {} }
 			if (name === "change" && out?.ok) rec.changes.push(...args.operations);
 			const json = JSON.stringify(out ?? {});
-			rec.tools.push({ name, args: clip(JSON.stringify(args), 800), ms: Math.round(now() - t), error: !!out?.error, resultChars: json.length, detail: out?.error ? clip(out.error, 300) : undefined });
+			// Leeres Ergebnis (alle Listen leer) – für die Fehlerarten im Bericht.
+			const lists = out && typeof out === "object" ? Object.values(out).filter(Array.isArray) : [];
+			const empty = !out?.error && lists.length > 0 && lists.every((l) => l.length === 0);
+			rec.tools.push({ name, args: clip(JSON.stringify(args), 800), ms: Math.round(now() - t), error: !!out?.error, empty, resultChars: json.length, detail: out?.error ? clip(out.error, 300) : undefined });
 			return { json };
 		},
 		async ask(question, options) {
@@ -204,7 +208,7 @@ async function turn(spec, rec) {
 	const tools = mcp || spec.appTools === "flat" ? TOOLS.flatDefs : TOOLS.defs.concat(Array.isArray(extra) ? extra : []);
 	try {
 		const out = await run.agent({
-			settings, options: { cloudflare: spec.cloudflare || null, safetyId: "" }, customInstructions: mcp ? "" : String(S.settings.customInstructions || "").trim(), now: prompt(),
+			settings, options: { cloudflare: spec.cloudflare || null, safetyId: "" }, customInstructions: mcp ? "" : String(S.settings.customInstructions || "").trim(), now: prompt(spec.now),
 			chat: conv.chat, workspace: ws, ragHits, activePage: page ? { id: page.id, title: page.title } : null,
 			tools, alwaysSendTools: true, embedModel: String(S.settings.embedModel || ""), session: conv.session,
 		}, executor, onEvent);
