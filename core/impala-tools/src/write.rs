@@ -65,11 +65,20 @@ impl Tools<'_> {
             Some(update) => Some(self.merge_props(parent_page, &Value::Null, update, &title)?),
             None => None,
         };
-        self.ev("pageCreate", json!({ "id": id, "title": title, "parentId": parent, "content": arg(a, "content"), "workspaceId": workspace }))?;
+        let heft = a.get("heft").and_then(Value::as_bool) == Some(true);
+        let mut create = json!({ "id": id, "title": title, "parentId": parent, "content": if heft { String::new() } else { arg(a, "content") }, "workspaceId": workspace });
+        if heft {
+            create["kind"] = Value::from("heft");
+        }
+        self.ev("pageCreate", create)?;
         if let Some(props) = props.filter(|p| !p.is_null()) {
             self.ev("pageUpdate", json!({ "id": id, "patch": { "props": props } }))?;
         }
-        Ok(json!({ "ok": true, "id": id, "title": title, "parent": parent_name }))
+        let mut out = json!({ "ok": true, "id": id, "title": title, "parent": parent_name });
+        if heft {
+            out["heft"] = Value::Bool(true);
+        }
+        Ok(out)
     }
 
     /// Spaltenwerte gegen das Schema des Verzeichnisses (Kern: `impala_ai::edit::merge_props`).

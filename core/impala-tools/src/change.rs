@@ -126,7 +126,7 @@ impl Tools<'_> {
                         content: str_of(&text),
                         parent,
                         props,
-                        heft: false,
+                        heft: op.get("heft").is_some_and(truthy),
                         db: None,
                         workspace: ws,
                     },
@@ -449,7 +449,7 @@ fn op_to_tool(op: &Value) -> Option<(&'static str, Value)> {
     Some(match name {
         "page.create" => (
             "create_page",
-            json!({ "title": o["title"], "parent_title": o["parent"], "content": first(o, &["content", "text"]).as_str().unwrap_or(""), "props": o["props"] }),
+            json!({ "title": o["title"], "parent_title": o["parent"], "content": first(o, &["content", "text"]).as_str().unwrap_or(""), "props": o["props"], "heft": o["heft"] }),
         ),
         "page.append" => {
             ("append_to_page", json!({ "page_title": o["title"], "content": first(o, &["content", "text"]) }))

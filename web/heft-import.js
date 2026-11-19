@@ -159,7 +159,9 @@ export async function importPdf(f, at, targetDoc, {
 			const cx = c.getContext("2d");
 			cx.fillStyle = "#fff";
 			cx.fillRect(0, 0, c.width, c.height);
-			await p.render({ canvasContext: cx, viewport: vp }).promise;
+			// intent "print": ohne requestAnimationFrame rendern, sonst hängt der Import in einem
+			// Hintergrund-Tab (MCP, zweites Fenster) – dort feuert rAF nicht.
+			await p.render({ canvasContext: cx, viewport: vp, intent: "print" }).promise;
 
 			// Eingebetteten Text direkt übernehmen: die Seite braucht dann keine Texterkennung (Tesseract).
 			const text = cleanOcrText((await p.getTextContent()).items.map((it) => it.str + (it.hasEOL ? "\n" : " ")).join(""));
@@ -178,6 +180,8 @@ export async function importPdf(f, at, targetDoc, {
 	}
 	return at;
 }
+
+const isBlankPage = (pg) => !pg.bg && !(pg.strokes || []).length && !(pg.texts || []).length && !(pg.images || []).length;
 
 export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 	getActiveDoc = () => null,
@@ -205,6 +209,8 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 	let at = Number.isInteger(position)
 		? Math.max(0, Math.min(position, targetDoc.pages.length))
 		: insertAt(position, current, targetDoc.pages.length);
+	// Neues Heft (nur eine leere Seite): die Vorlagen ersetzen diese Seite statt sie stehen zu lassen.
+	const blank = targetDoc.pages.length === 1 && isBlankPage(targetDoc.pages[0]) ? targetDoc.pages[0] : null;
 	for (const f of files) {
 		if (onStatus) onStatus("Importiere " + f.name + " …");
 		const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
@@ -216,6 +222,11 @@ export async function importFilesIntoHeft(targetId, files, position, onStatus, {
 			targetDoc.pages.splice(at, 0, pg);
 			at++;
 		}
+	}
+	const blankIdx = blank && targetDoc.pages.length > 1 ? targetDoc.pages.indexOf(blank) : -1;
+	if (blankIdx >= 0) {
+		targetDoc.pages.splice(blankIdx, 1);
+		if (blankIdx < at) at--;
 	}
 	if (persistDoc) await persistDoc(targetId, targetDoc);
 	if (targetId === activePid && activeDoc === targetDoc) {

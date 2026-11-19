@@ -221,9 +221,21 @@ pub fn merge_props(schema: &Value, current: &Value, update: &Value, title: &str,
     let title_col = cols.iter().find(|(_, t)| *t == "title").map(|(n, _)| *n);
     let mut out: Map<String, Value> = current.as_object().cloned().unwrap_or_default();
     let mut unknown = vec![];
+    // Groß-/Kleinschreibung, Leerraum und Strich-Varianten (‑ – — von Modellen) gelten gleich.
+    let norm = |s: &str| -> String {
+        js::trim(s)
+            .chars()
+            .map(|c| match c {
+                '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
+                c if c.is_whitespace() => ' ',
+                c => c,
+            })
+            .collect::<String>()
+            .to_lowercase()
+    };
     for (key, v) in update {
-        let k = js::trim(key).to_lowercase();
-        let Some((name, _)) = cols.iter().find(|(n, _)| n.to_lowercase() == k) else {
+        let k = norm(key);
+        let Some((name, _)) = cols.iter().find(|(n, _)| norm(n) == k) else {
             unknown.push(key.as_str());
             continue;
         };
@@ -309,6 +321,8 @@ mod tests {
     fn spalten_gegen_schema() {
         let schema = json!([{"name":"Thema","type":"title"},{"name":"Nr","type":"number"},{"name":"Themen","type":"multi_select"}]);
         let p = merge_props(&schema, &Value::Null, &json!({"nr": 4, "Themen": ["Lager", "Gelenke"]}), "4 · Lager", "VL").unwrap();
+        let ab = json!([{"name": "Abgabe-Aufgaben", "type": "text"}]);
+        assert_eq!(merge_props(&ab, &Value::Null, &json!({"Abgabe\u{2011}Aufgaben": "A1"}), "t", "VL").unwrap()["Abgabe-Aufgaben"], "A1");
         assert_eq!(p, json!({"Nr": 4, "Themen": "Lager, Gelenke", "Thema": "4 · Lager"}));
         let p = merge_props(&schema, &json!({"Nr": 1, "Themen": "a"}), &json!({"Themen": null}), "t", "VL").unwrap();
         assert_eq!(p, json!({"Nr": 1}));

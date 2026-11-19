@@ -7,11 +7,16 @@ const FLAT = JSON.parse(readFileSync(new URL("../core/impala-ai/src/tool_defs_fl
 // Nur im App-Chat sinnvoll (Rückfrage-Knöpfe, Rechner, Heftbild mit eigenem MCP-Werkzeug).
 const APP_ONLY = new Set(["ask_choice", "calculate", "view_heft_page"]);
 
+const isWrite = (name) => /^(create_|edit_|organize_|write_)/.test(name);
+// dry_run steht nicht im Schema der App-KI, muss hier aber stehen: MCP-Clients verwerfen
+// Argumente außerhalb des Schemas (dann würde ein Probelauf wirklich schreiben).
+const DRY_RUN = { type: "boolean", description: "Nur prüfen, nichts ändern" };
+
 export const CONTENT_TOOLS = FLAT.map((d) => d.function).filter((f) => !APP_ONLY.has(f.name)).map((f) => ({
 	name: "impala_" + f.name,
 	description: f.description,
-	inputSchema: f.parameters,
+	inputSchema: isWrite(f.name) ? { ...f.parameters, properties: { ...f.parameters.properties, dry_run: DRY_RUN } } : f.parameters,
 }));
 
 // Schreibende Inhalts-Werkzeuge (Timeout-Hinweis im Server, Simulation im Benchmark).
-export const CONTENT_WRITE = new Set(CONTENT_TOOLS.map((t) => t.name).filter((n) => /^impala_(create_|edit_|organize_|write_)/.test(n)));
+export const CONTENT_WRITE = new Set(CONTENT_TOOLS.map((t) => t.name).filter((n) => isWrite(n.slice(7))));

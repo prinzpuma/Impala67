@@ -50,14 +50,16 @@ async function addHeftPages(args) {
 	const type = String(args.mime || (/\.pdf$/i.test(name) ? "application/pdf" : "image/png"));
 	const { HEFT } = await import("./heft.js");
 	// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
-	const count = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? 0;
-	const before = count();
+	const pagesNow = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages || [];
+	const before = pagesNow().map((p) => p.id);
 	const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
 	const end = await HEFT.importFiles(args.page_id, [new File([bytes], name, { type })], pos);
-	const pageCount = count();
-	const added = pageCount - before;
+	const pageCount = pagesNow().length;
+	// Ein neues Heft verliert beim Import seine leere Startseite (heft-import.js).
+	const replacedBlank = before.length === 1 && !pagesNow().some((p) => p.id === before[0]);
+	const added = pageCount - before.length + (replacedBlank ? 1 : 0);
 	if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
-	return { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount };
+	return { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount, ...(replacedBlank ? { replacedEmptyFirstPage: true } : {}) };
 }
 
 // impala_eval ohne 'unsafe-eval' (CSP): Der Code läuft als Inline-Skript ('unsafe-inline'

@@ -101,6 +101,13 @@ fn ordnerfilter_pfade_und_duplikat_schutz() {
         run_flat(&mut h, &c, "create_pages", &json!({ "pages": [{ "title": "4 · Lager", "parent": "Mathe" }] }))
             .unwrap();
     assert_eq!(r["ok"], true, "{r}");
+    // Heft anlegen: kind heft, ID in der Antwort und in list_pages
+    let (r, _) = run_flat(&mut h, &c, "create_pages", &json!({ "pages": [{ "title": "Blatt 5", "heft": true }] })).unwrap();
+    assert_eq!(r["ok"], true, "{r}");
+    let heft = h.m.state().find_page("Blatt 5", true).map(|p| (p.is_heft(), p.id().to_owned())).unwrap();
+    assert!(heft.0);
+    let (r, _) = run_flat(&mut h, &c, "list_pages", &json!({ "query": "Blatt 5" })).unwrap();
+    assert_eq!(r["pages"][0]["id"], heft.1, "{r}");
     // Teil-Treffer in der Suche
     h.dispatch("pageUpdate", json!({ "id": mathe, "patch": { "content": "Eigenwerte und Eigenvektoren" } })).unwrap();
     let (r, _) = run_flat(&mut h, &c, "search", &json!({ "query": "eigenwert" })).unwrap();

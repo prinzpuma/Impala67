@@ -356,7 +356,9 @@ impl Tools<'_> {
                 let parent = p.parent().and_then(|id| state.pages.get(id)).map(|x| state.page_label(x));
                 let mut o = json!({ "title": state.page_label(p), "parent": parent, "hasPdf": p.truthy("pdfId") });
                 if p.is_heft() {
+                    // ID für die Heft-Werkzeuge (Vorlagen einfügen, Seitenbild), die mit IDs arbeiten.
                     o["heft"] = Value::Bool(true);
+                    o["id"] = Value::from(p.id());
                 }
                 if p.truthy("db") {
                     o["verzeichnis"] = Value::Bool(true);

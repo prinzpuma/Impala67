@@ -67,7 +67,7 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
                 .into_iter()
                 .filter_map(|p| p.as_object().cloned())
                 .map(|p| {
-                    let keep: Map<String, Value> = ["title", "content", "parent", "props"]
+                    let keep: Map<String, Value> = ["title", "content", "parent", "props", "heft"]
                         .iter()
                         .filter_map(|k| p.get(*k).filter(|v| !v.is_null()).map(|v| ((*k).to_owned(), v.clone())))
                         .collect();
