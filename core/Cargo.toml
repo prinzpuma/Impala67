@@ -22,6 +22,7 @@ members = [
     "impala-srs",
     "impala-storage",
     "impala-sync",
+    "impala-tools",
     "impala-wasm",
 ]
 

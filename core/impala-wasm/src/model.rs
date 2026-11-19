@@ -235,7 +235,7 @@ struct HeftMetaJs {
 #[wasm_bindgen]
 pub struct ModelCore {
     pub(crate) m: Model,
-    search: NoteSearch,
+    pub(crate) search: NoteSearch,
     load: Option<Prefetched>,
 }
 

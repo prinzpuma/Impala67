@@ -14,8 +14,11 @@ const { S, STATE } = await import("../web/state.js");
 const { AI } = await import("../web/ai.js");
 const { EMBEDDINGS } = await import("../web/embedding.js");
 const { TOOLS } = await import("../web/tools.js");
+const { DB } = await import("../web/db.js");
 
-// Ohne IndexedDB: Events gehen direkt in den Kern (frisch und leer bei jedem Testlauf).
+// Ohne IndexedDB: Events gehen direkt in den Kern (frisch und leer bei jedem Testlauf);
+// Kern-Werkzeuge (STATE.commitCoreEvents) wenden ihre Events selbst an, Speichern entfällt.
+DB.addEvent = async () => {};
 STATE.dispatch = async (type, payload) => {
 	const ev = { id: crypto.randomUUID(), t: new Date().toISOString(), type, payload: structuredClone(payload) };
 	STATE.applyRemoteEvents([ev]);

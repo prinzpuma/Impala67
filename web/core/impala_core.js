@@ -716,6 +716,63 @@ export class ModelCore {
         }
     }
     /**
+     * Werkzeug ausführen (`inspect`, `change` oder flach wie `read_pages`): JSON
+     * `{ result, undo, events: [{ ev, touched }] }`; `result: null` = kein Kern-Werkzeug.
+     * @param {string} name
+     * @param {string} args
+     * @param {string} ctx
+     * @param {Function} stamp
+     * @returns {string}
+     */
+    aiTool(name, args, ctx, stamp) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(args, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(ctx, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.modelcore_aiTool(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, addBorrowedObject(stamp));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred4_0 = r0;
+            deferred4_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            heap[stack_pointer++] = undefined;
+            wasm.__wbindgen_export5(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
+     * Änderungs-Satz einer KI-Aktion zurückspielen: `{ error?, events }`.
+     * @param {string} set
+     * @param {Function} stamp
+     * @returns {string}
+     */
+    aiUndo(set, stamp) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(set, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.modelcore_aiUndo(retptr, this.__wbg_ptr, ptr0, len0, addBorrowedObject(stamp));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred2_0 = r0;
+            deferred2_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            heap[stack_pointer++] = undefined;
+            wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * @returns {string}
      */
     allGrades() {
@@ -3116,16 +3173,6 @@ export function aiChatConfig(settings) {
 }
 
 /**
- * Spalten eines Schemas als `{Name: Typ}`.
- * @param {any} schema
- * @returns {any}
- */
-export function aiColumns(schema) {
-    const ret = wasm.aiColumns(addHeapObject(schema));
-    return takeObject(ret);
-}
-
-/**
  * Vektoren über `POST /embeddings` einer Cloud-Quelle (`provider`: `{ id, base, key }`).
  * @param {any} http
  * @param {any} provider
@@ -3139,19 +3186,6 @@ export function aiEmbedRemote(http, provider, model, texts) {
     const ptr1 = passArrayJsValueToWasm0(texts, wasm.__wbindgen_export);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.aiEmbedRemote(addHeapObject(http), addHeapObject(provider), ptr0, len0, ptr1, len1);
-    return takeObject(ret);
-}
-
-/**
- * Flacher Aufruf → `{ tool: "inspect"|"change", args }`, `{ error }` oder `undefined` (kein flaches Werkzeug).
- * @param {string} name
- * @param {any} args
- * @returns {any}
- */
-export function aiFlatCall(name, args) {
-    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.aiFlatCall(ptr0, len0, addHeapObject(args));
     return takeObject(ret);
 }
 
@@ -3179,24 +3213,6 @@ export function aiListModels(http, providers, sync_url) {
 }
 
 /**
- * Spaltenwerte gegen das Verzeichnis-Schema zusammenführen: `{ props }` (null = leer) oder `{ error }`.
- * @param {any} schema
- * @param {any} current
- * @param {any} update
- * @param {string} title
- * @param {string} folder
- * @returns {any}
- */
-export function aiMergeProps(schema, current, update, title, folder) {
-    const ptr0 = passStringToWasm0(title, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(folder, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.aiMergeProps(addHeapObject(schema), addHeapObject(current), addHeapObject(update), ptr0, len0, ptr1, len1);
-    return takeObject(ret);
-}
-
-/**
  * Modell-Vorschläge der Einstellungen: `[{ value, label, provider }]`.
  * @returns {any}
  */
@@ -3212,24 +3228,6 @@ export function aiModelPresets() {
  */
 export function aiNormalizeAskChoice(args) {
     const ret = wasm.aiNormalizeAskChoice(addHeapObject(args));
-    return takeObject(ret);
-}
-
-/**
- * Gezieltes Ersetzen: `{ content }` oder `{ error }` (Text fürs Modell).
- * @param {string} content
- * @param {string} search
- * @param {string} replace
- * @returns {any}
- */
-export function aiPatchText(content, search, replace) {
-    const ptr0 = passStringToWasm0(content, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(search, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(replace, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.aiPatchText(ptr0, len0, ptr1, len1, ptr2, len2);
     return takeObject(ret);
 }
 
@@ -3267,62 +3265,6 @@ export function aiRagQuery(text) {
             wasm.__wbindgen_export5(r0, r1 * 1, 1);
         }
         return v2;
-    } finally {
-        wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-}
-
-/**
- * Ausschnitt eines langen Textes (`read_pages` mit `offset`/`find`), mit Hinweis aufs Weiterlesen.
- * @param {string} text
- * @param {number} max
- * @param {number | null} [offset]
- * @param {string | null} [find]
- * @returns {string}
- */
-export function aiReadWindow(text, max, offset, find) {
-    let deferred3_0;
-    let deferred3_1;
-    try {
-        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(find) ? 0 : passStringToWasm0(find, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        var len1 = WASM_VECTOR_LEN;
-        wasm.aiReadWindow(retptr, ptr0, len0, max, isLikeNone(offset) ? Number.MAX_SAFE_INTEGER : (offset) >>> 0, ptr1, len1);
-        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-        deferred3_0 = r0;
-        deferred3_1 = r1;
-        return getStringFromWasm0(r0, r1);
-    } finally {
-        wasm.__wbindgen_add_to_stack_pointer(16);
-        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
-    }
-}
-
-/**
- * Fehlertext, wenn das Ersetzen des ganzen Inhalts Inhalt löschen würde, sonst `undefined`.
- * @param {string} old
- * @param {string} _new
- * @returns {string | undefined}
- */
-export function aiReplaceGuard(old, _new) {
-    try {
-        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        const ptr0 = passStringToWasm0(old, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        const ptr1 = passStringToWasm0(_new, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len1 = WASM_VECTOR_LEN;
-        wasm.aiReplaceGuard(retptr, ptr0, len0, ptr1, len1);
-        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-        let v3;
-        if (r0 !== 0) {
-            v3 = getStringFromWasm0(r0, r1);
-            wasm.__wbindgen_export5(r0, r1 * 1, 1);
-        }
-        return v3;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -5997,6 +5939,13 @@ function __wbg_get_imports() {
             const ret = Error(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
+        __wbg___wbindgen_debug_string_4687d8d8c2017d52: function(arg0, arg1) {
+            const ret = debugString(getObject(arg1));
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
         __wbg___wbindgen_is_falsy_16bd49b68658263e: function(arg0) {
             const ret = !getObject(arg0);
             return ret;
@@ -6172,7 +6121,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4820(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5040(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6218,7 +6167,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_4820(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5040(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6310,8 +6259,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 204, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4763);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 209, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_4983);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6338,14 +6287,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_4820(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_4820(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5040(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5040(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_4763(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_4983(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_4763(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_4983(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -6414,6 +6363,71 @@ function addBorrowedObject(obj) {
 const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(state => wasm.__wbindgen_export4(state.a, state.b));
+
+function debugString(val) {
+    // primitive types
+    const type = typeof val;
+    if (type == 'number' || type == 'boolean' || val == null) {
+        return  `${val}`;
+    }
+    if (type == 'string') {
+        return `"${val}"`;
+    }
+    if (type == 'symbol') {
+        const description = val.description;
+        if (description == null) {
+            return 'Symbol';
+        } else {
+            return `Symbol(${description})`;
+        }
+    }
+    if (type == 'function') {
+        const name = val.name;
+        if (typeof name == 'string' && name.length > 0) {
+            return `Function(${name})`;
+        } else {
+            return 'Function';
+        }
+    }
+    // objects
+    if (Array.isArray(val)) {
+        const length = val.length;
+        let debug = '[';
+        if (length > 0) {
+            debug += debugString(val[0]);
+        }
+        for(let i = 1; i < length; i++) {
+            debug += ', ' + debugString(val[i]);
+        }
+        debug += ']';
+        return debug;
+    }
+    // Test for built-in
+    const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
+    let className;
+    if (builtInMatches && builtInMatches.length > 1) {
+        className = builtInMatches[1];
+    } else {
+        // Failed to match the standard '[object ClassName]'
+        return toString.call(val);
+    }
+    if (className == 'Object') {
+        // we're a user defined class or Object
+        // JSON.stringify avoids problems with cycles, and is generally much
+        // easier than looping through ownProperties of `val`.
+        try {
+            return 'Object(' + JSON.stringify(val) + ')';
+        } catch (_) {
+            return 'Object';
+        }
+    }
+    // errors
+    if (val instanceof Error) {
+        return `${val.name}: ${val.message}\n${val.stack}`;
+    }
+    // TODO we could test for more things here, like `Set`s and `Map`s.
+    return className;
+}
 
 function dropObject(idx) {
     if (idx < 1028) return;

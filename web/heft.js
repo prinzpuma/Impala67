@@ -433,35 +433,6 @@ export const HEFT = (() => {
 		(pg.texts || []).forEach((t) => { if (t.y + (t.h || 60) > y) y = t.y + (t.h || 60); });
 		return y;
 	}
-	async function addText(p, text, opts = {}) {
-		const body = String(text || "").trim();
-		if (!p || !body) return { ok: false, error: "Kein Text" };
-		const d = await load(p);
-		let pi = opts.pageIndex != null ? Math.max(0, Math.min(d.pages.length - 1, Number(opts.pageIndex) || 0)) : d.pages.length - 1;
-		let pg = d.pages[pi], addedPage = false;
-		const size = Math.max(16, Math.min(60, Number(opts.size) || 30));
-		const w = Math.max(240, Math.min(PAGE_W - 120, Number(opts.w) || PAGE_W - 160));
-
-		const probe = document.createElement("canvas").getContext("2d");
-		const t = { id: U.uid(), text: body, x: 80, y: 0, w, h: 60, size, color: String(opts.color || "#1c1c1e") };
-		t.h = Math.round(wrapTextLines(probe, t).length * size * TEXT_LH + TEXT_PAD * 2);
-		let y = contentBottom(pg) + 30;
-		if (opts.pageIndex == null && y > 80 && y + Math.min(t.h, 220) > pageHeight(pg) - 50) {
-			pg = newPage(pg.paper); d.pages.push(pg); pi = d.pages.length - 1; addedPage = true; y = 60;
-		}
-		t.y = Math.min(y, pageHeight(pg) - 80);
-		textsOf(pg).push(t);
-		if (pid === p && doc === d) {
-
-			pushUndo({ kind: "txtAdd", txt: t, pageIdx: pi });
-			if (addedPage) rebuildScroll(); else redrawPage(pi);
-			renderThumb(pi); updateChrome();
-			scheduleSave();
-		} else {
-			await persistDoc(p, d);
-		}
-		return { ok: true, pageIndex: pi, addedPage };
-	}
 	// Seitenzahl: offenes Heft aus der Arbeitskopie (auch Ungespeichertes), sonst aus dem Kern.
 	const pagesOf = (p) => (p === pid && doc ? doc.pages.length : STATE.heftMeta(p)?.pages) || 1;
 
@@ -1825,7 +1796,7 @@ export const HEFT = (() => {
 	return {
 		// Arbeitskopie des geöffneten Hefts (sonst null): zeigt auch noch nicht Gespeichertes.
 		openDoc: (p) => (p && p === pid && doc ? doc : null),
-		mount, unmount, saveNow, addText, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, pageAsDataUrl, pdfBlob, exportPdf, openImportDialog,
+		mount, unmount, saveNow, restoreDoc, pagesOf, lastPage, thumbnail, hydrateEmbeds, pageAsDataUrl, pdfBlob, exportPdf, openImportDialog,
 		// Dateien (Bild/PDF) als Seitenvorlagen einfügen, ohne Dialog (MCP): position "start"|"before"|"after"|"end" oder Index.
 		importFiles: (targetId, files, position) => importFilesIntoHeft(targetId, files, position),
 		// Nur für test/heft.test.mjs nach außen gereicht:

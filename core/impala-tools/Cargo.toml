@@ -1,0 +1,19 @@
+[package]
+name = "impala-tools"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Ausführung der KI-Werkzeuge (inspect/change, Rückgängig) auf dem Datenmodell – für PWA und native Apps"
+
+[lints]
+workspace = true
+
+[dependencies]
+impala-ai = { path = "../impala-ai", default-features = false }
+impala-heft = { path = "../impala-heft" }
+impala-model = { path = "../impala-model" }
+impala-sort = { path = "../impala-sort" }
+impala-srs = { path = "../impala-srs" }
+serde = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }

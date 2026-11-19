@@ -304,6 +304,36 @@ export const STATE = (() => {
 		_dispatchChain = run.then(() => undefined, () => undefined);
 		return run;
 	}
+	// Kern-Aufrufe, die selbst Events anwenden (KI-Werkzeuge, impala-tools): run(M, stamp) liefert JSON
+	// mit events: [{ ev, touched }] – spätere Operationen eines Aufrufs sehen so die früheren. Danach
+	// speichern und melden wie dispatch(). Scheitert das Speichern, lädt der Zustand neu aus dem Log
+	// (die nicht gespeicherten Events verschwinden wieder).
+	const stamp = () => [U.uid(), U.now()];
+	function commitCoreEvents(run) {
+		const job = _dispatchChain.then(async () => {
+			const out = JSON.parse(run(M, stamp));
+			const events = Array.isArray(out.events) ? out.events : [];
+			try {
+				for (const { ev } of events) await DB.addEvent(ev);
+			} catch (e) {
+				U.toast("Speichern fehlgeschlagen: " + (e && e.message ? e.message : e), "error");
+				await load();
+				throw e;
+			}
+			for (const { ev, touched } of events) {
+				afterApply(ev, touched, undefined);
+				countForCheckpoint(1);
+				if (typeof STATE.onChange === "function") STATE.onChange(ev.type, ev);
+				for (const fn of _dispatchHooks.after) {
+					try { fn(ev); } catch (err) { console.warn("dispatch-Hook (after):", err); }
+				}
+				BUS.emit("state:event-dispatched", ev);
+			}
+			return out;
+		});
+		_dispatchChain = job.then(() => undefined, () => undefined);
+		return job;
+	}
 
 	// ---- Start ------------------------------------------------------------------------------
 	const LOAD_CHUNK = 2000;
@@ -713,7 +743,7 @@ export const STATE = (() => {
 	}
 
 	return {
-		onChange: null, dispatch, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
+		onChange: null, dispatch, commitCoreEvents, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
 		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftAdoptBackgroundOps, heftMeta, heftPreview,
 		scheduleCheckpoint, checkpointNow: persistCheckpoint, loadedSeq: () => M.loadedSeq(), loadedTime: () => M.loadedTime(), cardRevision: () => _cardRev, pageRevision: () => _pageRev,
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,

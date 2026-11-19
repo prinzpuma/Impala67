@@ -25,6 +25,7 @@ impala-heft = { path = "../impala-heft" }
 impala-model = { path = "../impala-model" }
 impala-storage = { path = "../impala-storage", default-features = false }
 impala-ai = { path = "../impala-ai", default-features = false }
+impala-tools = { path = "../impala-tools" }
 serde = "1"
 serde_json = "1"
 js-sys = "0.3"

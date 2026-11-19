@@ -18,7 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use impala_ai::{
     AgentEvent, AgentItem, AgentRequest, AgentSession, AiError, AiSettings, AnkiCard, AnkiView, CancelToken,
-    ChatConfig, ChatEntry, CloudflareAuth, DEFAULT_WORKER_URL, HttpProvider, LocalTime, PageContext, Provider, RagHit,
+    ChatConfig, ChatEntry, CloudflareAuth, DEFAULT_WORKER_URL, HttpProvider, PageContext, Provider, RagHit,
     RequestOptions, ToolDef, Workspace, default_providers, flat_tools, rag_query, run_agent,
 };
 use impala_crypto::SyncKey;
@@ -321,27 +321,8 @@ fn wall_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
-/// Ortszeit aus UTC-Millisekunden und Versatz (bürgerlicher Kalender, Algorithmus von H. Hinnant).
-pub(crate) fn local_time(utc_ms: i64, offset_minutes: i32) -> LocalTime {
-    let secs = utc_ms.div_euclid(1000) + i64::from(offset_minutes) * 60;
-    let (days, day_secs) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
-    let z = days + 719_468;
-    let (era, doe) = (z.div_euclid(146_097), z.rem_euclid(146_097));
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u8;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u8;
-    let year = (yoe + era * 400 + i64::from(month <= 2)) as i32;
-    LocalTime {
-        year,
-        month,
-        day,
-        weekday: (days + 4).rem_euclid(7) as u8,
-        hour: (day_secs / 3600) as u8,
-        minute: (day_secs % 3600 / 60) as u8,
-    }
-}
+/// Ortszeit aus UTC-Millisekunden und Versatz (im Kern-Crate der Werkzeuge).
+pub(crate) use impala_tools::local_time;
 
 /// Chat-Eintrag zu einem Ereignis der Agent-Schleife (wie `onEvent` in `web/ai.js`).
 fn item_message(item: &AgentItem) -> Value {
@@ -885,7 +866,9 @@ mod tests {
         assert_eq!(bodies.len(), 2);
         let first = bodies[0].to_string();
         assert!(
-            first.contains("\"name\":\"create_pages\"") && first.contains("[Analysis]") && !first.contains("[Haustiere]"),
+            first.contains("\"name\":\"create_pages\"")
+                && first.contains("[Analysis]")
+                && !first.contains("[Haustiere]"),
             "{first}"
         );
         assert!(!first.contains("geheim"));

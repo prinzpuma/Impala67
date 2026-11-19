@@ -2,284 +2,82 @@
 import { S, STATE } from "./state.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
 import { U } from "./util.js";
-import { SRS } from "./srs.js";
 import { RAG } from "./rag.js";
-import { HEFT } from "./heft.js";
 import { CHATS } from "./chats.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 import { CORE } from "./rust-core.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
-// Darüber kann die KI Seiten lesen/anlegen/ändern und Karteikarten erstellen.
-// Beschreibungs-Diät (31. Juli): Die Liste geht bei JEDER Anfrage und in JEDEM Agent-Schritt
-// vollständig mit. Erzähltext, Wiederholungen und Bestätigungs-Prosa (die App erzwingt die
-// Bestätigung ohnehin im Code) sind raus — nur noch, was das Modell zur Wahl des Werkzeugs braucht.
+// Ausgeführt werden Lesen (inspect), Ändern (change, atomar mit Rückgängig) und die flachen
+// Werkzeuge im Rust-Kern (core/impala-tools) – dieselbe Implementierung wie in den nativen Apps.
+// Hier bleibt nur, was der Browser liefert: Bedeutungssuche (RAG), Rechnen (math.js), Rückfragen,
+// die Lage der Oberfläche (geöffnete Seite, Lernkarte) und die lokalen Chats.
 export const TOOLS = (() => {
 	// ask_choice: Argumente säubern/validieren (leere/doppelte Optionen raus, 2–5 Optionen, Frage Pflicht).
 	const normalizeAskChoice = (a) => CORE.aiNormalizeAskChoice(a || {});
 
-	// Karte anhand des Vorderseiten-Texts finden (analog zu STATE.findPage) — exakter
-	// Treffer zuerst, sonst "beginnt mit", sonst "enthält". Optional auf einen Stapel
-	// (inkl. Unterstapel) eingegrenzt.
-	// EINE Teilbaum-Regel und EIN Textfilter statt je vier bzw. zwei Kopien (findCard,
-	// selectCards, cardsOfDeck, list_flashcards) — die Kopien drifteten sonst auseinander.
-	const inDeck = (c, deck) => STATE.deckInTree(c.deck || "Standard", deck);
-	const textHit = (c, q) => (c.front || "").toLowerCase().includes(q) || (c.back || "").toLowerCase().includes(q);
-
-	function findCard(front, deck) {
-		if (!front) return null;
-		const q = String(front).trim().toLowerCase();
-		if (!q) return null;
-		const pool = deck ? STATE.activeCards().filter((c) => inDeck(c, deck)) : STATE.activeCards();
-		let starts = null, partial = null;
-		for (const c of pool) {
-			const t = (c.front || "").toLowerCase();
-			if (t === q) return c;
-			if (!starts && t.startsWith(q)) starts = c;
-			if (!partial && t.includes(q)) partial = c;
-		}
-		return starts || partial;
-	}
-
-	// Stapelnamen case-insensitive auflösen. deckMatches() liefert ALLE Kandidaten
-	// (exakter Treffer schlägt Teiltreffer) und ignoriert Papierkorb-Stapel.
-	function deckMatches(name) {
-		const q = String(name || "").trim().toLowerCase();
-		if (!q) return [];
-		const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed && !STATE.isDeckArchived(n));
-		const exact = names.find((n) => n.toLowerCase() === q);
-		return exact ? [exact] : names.filter((n) => n.toLowerCase().includes(q));
-	}
-	// TOT: resolveDeckName entfernt — kein Aufrufer (weder hier noch in ai.js/render/app);
-	// alles mit Folgen läuft über resolveDeckStrict, alles andere direkt über deckMatches.
-	// Für alles mit Folgen (löschen, umbenennen, verschieben, zurücksetzen) NIE raten:
-	// „Mathe“ traf bisher stillschweigend „Mathematik 2“. Bei mehreren Kandidaten
-	// bricht der Aufruf mit einer klaren Rückfrage ab.
-	function resolveDeckStrict(name) {
-		const hits = deckMatches(name);
-		if (!hits.length) return { error: "Stapel nicht gefunden: " + String(name || "").trim() };
-		if (hits.length > 1) return { error: "Mehrdeutiger Stapelname „" + String(name).trim() + "“ — gemeint ist einer von: " + hits.slice(0, 5).join(" | ") + ". Bitte mit ask_choice nachfragen und den vollständigen Namen verwenden." };
-		return { deck: hits[0] };
-	}
-
-	// Karten-Auswahl für die Verwaltungs-Tools (verschieben, pausieren, zurücksetzen):
-	// entweder konkrete Karten (front/fronts) oder ein Filter aus Stapel + Suchtext.
-	// Liefert { cards } oder { error } — nie eine stille Teilauswahl bei Tippfehlern.
-	// opts.allowAll: nur das Auflisten darf ohne Filter alles zeigen — alles mit Folgen
-	// (löschen, verschieben, pausieren, zurücksetzen) braucht weiter eine echte Auswahl.
-	function selectCards(a, opts) {
-		const { max = 200, allowAll = false } = opts || {};
-		const wanted = (Array.isArray(a.fronts) ? a.fronts : []).concat(a.front ? [a.front] : []).filter(Boolean);
-		const seen = new Set();
-		const out = [];
-		const add = (c) => { if (c && !seen.has(c.id)) { seen.add(c.id); out.push(c); } };
-		const deckArg = a.deck || a.from_deck;
-		let deckName = null;
-		if (deckArg) {
-			const hit = resolveDeckStrict(deckArg);
-			if (hit.error) return hit;
-			deckName = hit.deck;
-		}
-		if (wanted.length) {
-			const missing = [];
-			for (const f of wanted) {
-				const c = findCard(f, deckName);
-				if (c) add(c); else missing.push(String(f));
-			}
-			if (missing.length) return { error: "Karte(n) nicht gefunden: " + missing.join(" | ") };
-		} else {
-			if (!deckName && !a.query && !allowAll) return { error: "Auswahl fehlt — bitte front/fronts, deck bzw. from_deck und/oder query angeben." };
-			let pool = STATE.activeCards();
-			if (deckName) pool = pool.filter((c) => inDeck(c, deckName));
-			if (a.query) {
-				const q = String(a.query).trim().toLowerCase();
-				if (q) pool = pool.filter((c) => textHit(c, q));
-			}
-			pool.forEach(add);
-		}
-		const limit = Math.max(1, Math.min(max, Number(a.limit) || max));
-		// Wird die Auswahl gekappt, MUSS das sichtbar sein — sonst meldet ein Massen-Werkzeug
-		// „fertig“, während der Rest unbemerkt liegen bleibt.
-		const cards = out.slice(0, limit);
-		return { cards, total: out.length, truncated: out.length > cards.length, limit, deck: deckName };
-	}
-
-	// Zielstapel sicherstellen: Eintrag anlegen bzw. aus dem Papierkorb zurückholen.
-	// Bewusst EXAKTER Namensvergleich (nicht das unscharfe resolveDeckName) — sonst
-	// landet ein neuer Stapel „Mathe 2“ stillschweigend im bestehenden „Mathe“.
-	async function ensureDeck(name) {
-		const clean = String(name || "").trim().replace(/^:+|:+$/g, "").trim();
-		if (!clean) return null;
-		const exact = Object.keys(S.decks).find((n) => n.toLowerCase() === clean.toLowerCase());
-		if (exact) {
-			if (S.decks[exact].trashed) await STATE.dispatch("deckRestore", { name: exact });
-			return exact;
-		}
-		await STATE.dispatch("deckCreate", { name: clean });
-		return clean;
-	}
-
-	// Zielnamen freimachen: Ein Stapel gleichen Namens im PAPIERKORB blockierte bisher
-	// mit „gibt es bereits“ — oder schlimmer: Karten wären in einen gelöschten Stapel
-	// gewandert und aus der Ansicht verschwunden. Liefert eine Fehlermeldung oder "".
-	async function freeDeckSlot(name) {
-		const existing = S.decks[name];
-		if (!existing) return "";
-		if (!existing.trashed) return "Es gibt bereits einen Stapel „" + name + "“ — bitte anderen Namen wählen.";
-		await STATE.dispatch("deckRestore", { name });
-		return "";
-	}
-
-	// Karten eines Stapel-Teilbaums (aktiv, ohne Papierkorb).
-	const cardsOfDeck = (deck) => STATE.activeCards().filter((c) => inDeck(c, deck));
-
-	// Volltext-Treffer gedeckelt: ai.js kappt Tool-Ergebnisse hart bei 6000 Zeichen — eine
-	// unbegrenzte Trefferliste kam beim Modell als abgeschnittenes, unlesbares JSON an.
-	// Namen für die KI: bei mehrfach vorhandenem Titel ein Pfad, den findPage wieder auflöst.
-	const label = (pg) => STATE.pageLabel(pg);
-	const parentTitle = (pg) => (pg.parentId && S.pages[pg.parentId] ? label(S.pages[pg.parentId]) : null);
-	function keywordHits(query) {
-		const all = STATE.searchNotes(query, { includeArchived: true }) || [];
-		return {
-			results: all.slice(0, 20).map((r) => ({
-				title: label(r.page),
-				...(parentTitle(r.page) ? { parent: parentTitle(r.page) } : {}),
-				snippet: r.snippet,
-				...(r.page.kind === "heft" ? { heft: true } : {}),
-				...(r.page.archived ? { archived: true } : {}),
-			})),
-			totalMatches: all.length,
-			...(all.length > 20 ? { note: "Nur die 20 besten Treffer — bei Bedarf genauer suchen." } : {}),
-		};
-	}
-
-	// Spaltenwerte eines Verzeichnis-Eintrags gegen das Schema der Elternseite (Kern: edit.rs).
-	// Liefert { props } (null = leer) oder { error } mit Spaltenliste.
-	function propsFor(parent, current, update, title) {
-		return CORE.aiMergeProps(parent?.db?.schema ?? null, current ?? null, update, title || "", parent?.title || "");
-	}
-
-	// Zusammenhang einer gelesenen Seite wie Notion „fetch“: Ordner, Unterseiten; als
-	// Verzeichnis-Eintrag Spalten + eigene Werte, als Verzeichnis Spalten + Einträge.
-	// Spaltenwerte ohne die Titelspalte: Sie steht schon als title da (spart Token je Eintrag).
-	const ownProps = (r) => Object.fromEntries(Object.entries(r.props || {}).filter(([, v]) => v !== r.title));
-	function pageInfo(pg) {
-		const out = {};
-		const parent = pg.parentId ? S.pages[pg.parentId] : null;
-		if (parent) out.parent = label(parent);
-		if (parent?.db?.schema) {
-			out.verzeichnis = { title: label(parent), columns: CORE.aiColumns(parent.db.schema) };
-			out.props = ownProps(pg);
-		}
-		const kids = STATE.childrenOf(pg.id, pg.workspaceId) || [];
-		if (pg.db?.schema) {
-			out.columns = CORE.aiColumns(pg.db.schema);
-			out.entries = kids.slice(0, 40).map((r) => ({ title: label(r), props: ownProps(r) }));
-			if (kids.length > 40) out.entriesTotal = kids.length;
-		} else if (kids.length) {
-			out.children = kids.slice(0, 30).map((r) => label(r));
-			if (kids.length > 30) out.childrenTotal = kids.length;
-		}
-		return out;
-	}
-
-	function duplicateSiblingError(title, parent, workspaceId, ignoreIds = null) {
-		const clean = String(title || "").trim();
-		const norm = clean.toLowerCase();
-		const parentId = parent ? parent.id : null;
-		const exists = STATE.activePages().some((p) => (!ignoreIds || !ignoreIds.has(p.id))
-			&& (p.parentId || null) === parentId
-			&& (parentId ? true : p.workspaceId === workspaceId)
-			&& (p.title || "").trim().toLowerCase() === norm);
-		if (!exists) return null;
-		return parent
-			? `Seite „${clean}“ existiert bereits in „${label(parent)}“ — zum Bearbeiten edit_page nutzen.`
-			: `Seite „${clean}“ existiert bereits — zum Bearbeiten edit_page nutzen.`;
-	}
-
-	// Trockenlauf von change (Benchmark, MCP dry_run): dieselben Prüfungen wie die echte
-	// Ausführung gegen den aktuellen Stand, Seiten aus früheren Operationen nur gedacht.
-	// Nichts wird gespeichert. Liefert null (alles in Ordnung) oder einen Fehlertext.
-	function dryRunCheck(operations) {
-		const virt = new Map(); // Titel (klein) → { id, isNew, title, content, parent, props, heft, db, workspaceId }
-		const created = new Set();
-		const trashed = new Set();
-		const key = (t) => String(t || "").trim().toLowerCase();
-		const get = (t) => {
-			if (virt.has(key(t))) return virt.get(key(t));
-			const pg = STATE.findPage(t);
-			if (!pg) return null;
-			const v = {
-				id: pg.id, isNew: false, title: pg.title, content: String(pg.content || ""),
-				parent: pg.parentId ? S.pages[pg.parentId] : null, props: pg.props || null,
-				heft: pg.kind === "heft", db: pg.db || null, workspaceId: pg.workspaceId || "default",
-			};
-			virt.set(key(t), v);
-			return v;
-		};
-		const folder = (t) => { const v = get(t); return v ? { id: v.id, title: v.title, db: v.db, workspaceId: v.workspaceId, isNew: v.isNew } : null; };
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i], name = op.op;
-			const fail = (msg) => `Operation ${i + 1} (${name}) fehlgeschlagen: ${String(msg).replace(/\.$/, "")}. Keine Änderungen ausgeführt.`;
-			if (name === "page.create") {
-				const parent = op.parent ? folder(op.parent) : null;
-				if (op.parent && !parent) return fail("Elternseite nicht gefunden: " + op.parent);
-				const wsId = parent ? parent.workspaceId : S.currentWorkspaceId;
-				const slot = (parent ? parent.id : "root:" + wsId) + "\0" + key(op.title);
-				if (created.has(slot)) {
-					const clean = String(op.title || "").trim();
-					return fail(parent
-						? `Seite „${clean}“ existiert bereits in „${parent.isNew ? parent.title : label(S.pages[parent.id])}“ — zum Bearbeiten edit_page nutzen.`
-						: `Seite „${clean}“ existiert bereits — zum Bearbeiten edit_page nutzen.`);
-				}
-				if (!parent?.isNew) {
-					const dup = duplicateSiblingError(op.title, parent ? S.pages[parent.id] : null, wsId, trashed);
-					if (dup) return fail(dup);
-				}
-				created.add(slot);
-				let props = null;
-				if (op.props) { const m = propsFor(parent, null, op.props, op.title); if (m.error) return fail(m.error); props = m.props; }
-				virt.set(key(op.title), {
-					id: `__new_${i}`, isNew: true, title: String(op.title || "").trim(),
-					content: String(op.content ?? op.text ?? ""), parent, props, heft: false, db: null, workspaceId: wsId,
-				});
-				continue;
-			}
-			if (!name.startsWith("page.") && name !== "heft.append") continue;
-			const v = get(op.title);
-			if (!v) return fail("Seite nicht gefunden: " + op.title);
-			if (name === "page.patch") {
-				if (v.heft) return fail("Heft-Inhalte können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu");
-				const r = CORE.aiPatchText(v.content, String(op.search ?? ""), String(op.replace ?? op.content ?? ""));
-				if (r.error) return fail(r.error);
-				v.content = r.content;
-			} else if (name === "page.replace") {
-				if (v.heft) return fail("Heft-Inhalte können nicht ersetzt werden");
-				const guard = op.allow_deleting_content === true ? null : CORE.aiReplaceGuard(v.content, String(op.content ?? op.text ?? ""));
-				if (guard) return fail(guard);
-				v.content = String(op.content ?? op.text ?? "");
-			} else if (name === "page.append") {
-				v.content += "\n\n" + String(op.content ?? op.text ?? "");
-			} else if (name === "page.props") {
-				const m = propsFor(v.parent, v.props, op.props, v.title);
-				if (m.error) return fail(m.error);
-				v.props = m.props;
-			} else if (name === "page.move" && (op.parent ?? op.to) && !folder(op.parent ?? op.to)) {
-				return fail("Elternseite nicht gefunden: " + (op.parent ?? op.to));
-			} else if (name === "page.rename") {
-				virt.set(key(op.to), v);
-			} else if (name === "page.trash" && !v.isNew && v.id) {
-				trashed.add(v.id);
-			}
-		}
-		return null;
-	}
-
-	// Kleine, aufgabenorientierte Oberfläche für das Modell (Definitionen im Rust-Kern,
-	// core/impala-ai/src/tool_defs.json). Die historisch gewachsenen Einzel-Handler bleiben intern
-	// erhalten; dadurch bleiben Datenformat und Sync kompatibel.
+	// Definitionen im Rust-Kern (core/impala-ai/src/tool_defs.json bzw. tool_defs_flat.json).
 	const defs = CORE.aiToolDefs();
+	const flatDefs = CORE.aiFlatToolDefs();
 
-	const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+	// Gerade gelernte Karte (Lern-Ansicht, render-anki.js): nach dem Aufdecken die festgepinnte
+	// (S.reviewCardId), sonst die vorderste der aktuellen Queue.
+	function currentCard() {
+		try {
+			if (S.view !== "anki" || (S.ankiTab || "decks") !== "study") return null;
+			const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || STATE.studySnapshot(S.ankiDeck).dueNow[0] || null;
+			if (!c) return null;
+			return {
+				front: c.front, back: c.back, deck: c.deck || "Standard", state: c.srs.state,
+				reps: c.srs.reps || 0, lapses: c.srs.lapses || 0, revealed: !!S.reviewShowBack,
+				note: S.reviewShowBack
+					? "Die Rückseite ist bereits aufgedeckt."
+					: "Die Rückseite ist noch NICHT aufgedeckt — die Antwort nicht verraten, außer der Nutzer bittet ausdrücklich darum.",
+			};
+		} catch { return null; }
+	}
+	// Umgebung des Aufrufs für den Kern; Chats nur, wenn danach gesucht wird (sie liegen lokal).
+	function context(wantsChats) {
+		const now = Date.now();
+		return {
+			activePage: S.currentPageId || null,
+			workspace: S.currentWorkspaceId || null,
+			nowMs: now,
+			utcOffset: -new Date(now).getTimezoneOffset(),
+			currentCard: currentCard(),
+			...(wantsChats ? { chats: CHATS.load() } : {}),
+		};
+	}
+	const wantsChats = (name, a) => name === "search_chats" || (name === "inspect" && a?.kind === "chats");
+
+	// Kern-Werkzeug ausführen; seine Events speichert und meldet STATE wie jedes dispatch.
+	// null = kein Kern-Werkzeug.
+	async function core(name, a) {
+		const ctx = JSON.stringify(context(wantsChats(name, a)));
+		const out = await STATE.commitCoreEvents((M, stamp) => M.aiTool(name, JSON.stringify(a || {}), ctx, stamp));
+		if (out.result == null) return null;
+		return out.undo ? attachUndo(out.result, out.undo) : out.result;
+	}
+	function attachUndo(result, undo) {
+		Object.defineProperty(result, "_undo", { value: undo, enumerable: false });
+		return result;
+	}
+
+	// Änderungs-Satz einer KI-Aktion zurücknehmen (Kern: impala-tools/undo.rs).
+	async function undo(changeSet) {
+		if (!changeSet) throw new Error("Undo-Daten fehlen.");
+		const out = await STATE.commitCoreEvents((M, stamp) => M.aiUndo(JSON.stringify(changeSet), stamp));
+		if (out.error) throw new Error(out.error);
+		return { ok: true };
+	}
+
+	// Bedeutungssuche (RAG im Browser); ohne Embedding-Modell die Stichwortsuche des Kerns.
+	async function semantic(query) {
+		const hits = await RAG.search(query);
+		if (hits !== null) return { results: hits };
+		const keyword = await core("inspect", { kind: "search", query });
+		return { info: "Kein Embedding-Modell konfiguriert — Stichwortsuche verwendet.", ...keyword };
+	}
+
 	function splitTopLevelArgs(source) {
 		const args = []; let start = 0, depth = 0, quote = "", escaped = false;
 		for (let i = 0; i < source.length; i++) {
@@ -296,833 +94,59 @@ export const TOOLS = (() => {
 		args.push(source.slice(start).trim());
 		return args;
 	}
-	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-	function managedSnapshot(operations) {
-		// Heft-Dokumente können zehntausende Stiftpunkte und Bilder enthalten. Nur das
-		// tatsächlich beschriebene Heft kopieren; Seiten/Karten/Stapel bleiben kompakt.
-		const heftDocs = {}, heftTargets = new Set();
-		for (const op of operations || []) {
-			if (op?.op !== "heft.append") continue;
-			const page = STATE.findPage(op.title);
-			if (!page) continue;
-			heftTargets.add(page.id);
-			const doc = STATE.heftDoc(page.id);
-			if (doc) heftDocs[page.id] = doc;
-		}
-		return { pages: clone(S.pages), cards: clone(S.cards), decks: clone(S.decks), heftDocs, heftTargets };
-	}
-	function changedRecords(before, after) {
-		const out = [];
-		for (const id of new Set([...Object.keys(before || {}), ...Object.keys(after || {})])) {
-			if (!same(before?.[id], after?.[id])) out.push({ id, before: clone(before?.[id] ?? null), after: clone(after?.[id] ?? null) });
-		}
-		return out;
-	}
-	function undoSet(before) {
-		const heftAfter = {};
-		for (const id of before.heftTargets) { const doc = STATE.heftDoc(id); if (doc) heftAfter[id] = doc; }
-		return {
-			pages: changedRecords(before.pages, S.pages), cards: changedRecords(before.cards, S.cards),
-			decks: changedRecords(before.decks, S.decks), heftDocs: changedRecords(before.heftDocs, heftAfter),
-		};
-	}
-	function attachUndo(result, undo) {
-		Object.defineProperty(result, "_undo", { value: undo, enumerable: false });
-		return result;
-	}
-	// Vergleich vor dem Rückgängigmachen ohne Felder, die jedes Rückgängig selbst neu setzt
-	// (`updated` einer Seite, `rev`/`v` eines Hefts) — sonst ließe sich nach dem Rückgängig der
-	// letzten KI-Aktion eine frühere an derselben Seite nie mehr zurücknehmen.
-	const VOLATILE = { pages: ["updated"], heftDocs: ["rev", "v"] };
-	function sameForUndo(key, a, b) {
-		const skip = VOLATILE[key];
-		if (!skip || !a || !b || typeof a !== "object" || typeof b !== "object") return same(a, b);
-		const strip = (o) => { const c = { ...o }; for (const k of skip) delete c[k]; return c; };
-		return same(strip(a), strip(b));
-	}
-	async function undo(changeSet) {
-		if (!changeSet) throw new Error("Undo-Daten fehlen.");
-		for (const key of ["pages", "cards", "decks", "heftDocs"]) {
-			for (const x of changeSet[key] || []) {
-				const now = key === "heftDocs" ? STATE.heftDoc(x.id) : S[key]?.[x.id];
-				if (!sameForUndo(key, now ?? null, x.after ?? null)) throw new Error("Die betroffenen Daten wurden nach der KI-Aktion erneut geändert. Mache zuerst spätere Änderungen rückgängig.");
+	async function calculate(a) {
+		if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") {
+			try {
+				await PERF_PROFILER.run("math.load", () => U.loadScript(OPTIONAL_MODULE_URLS.math, "math"), {}, 0);
+			} catch {
+				return { error: "Mathe-Modul (math.js) konnte nicht geladen werden. Internetverbindung für den Erstabruf erforderlich." };
 			}
 		}
-		// Alte Stapel zuerst zurückbringen, damit Karten nie auf nicht vorhandene Ziele zeigen.
-		for (const x of changeSet.decks || []) if (x.before && !S.decks[x.id]) await STATE.dispatch("deckCreate", { name: x.id });
-		for (const x of changeSet.pages || []) {
-			if (!x.before) continue;
-			if (!S.pages[x.id]) await STATE.dispatch("pageCreate", clone(x.before));
-			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.updated;
-			await STATE.dispatch("pageUpdate", { id: x.id, patch });
-			// Nur bei echtem Papierkorb-Wechsel: pageRestore holt den GANZEN Unterbaum zurück —
-			// pauschal aufgerufen kamen nach einem Inhalts-Undo gelöschte Unterseiten wieder.
-			if (Boolean(x.before.trashed) !== Boolean(x.after?.trashed)) {
-				await STATE.dispatch(x.before.trashed ? "pageTrash" : "pageRestore", { id: x.id });
+		if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") return { error: "Mathe-Modul (math.js) nicht geladen — evtl. noch offline/kein Netz beim ersten Start." };
+		const expr = String(a.expression || "").trim();
+		if (!expr) return { error: "calculate: expression fehlt." };
+		try {
+			// Sonderform integrate("f(x)", "x", a, b) — math.js kann das nicht nativ,
+			// daher hier per Simpson-Regel selbst numerisch lösen.
+			const intBody = expr.match(/^integrate\(([\s\S]*)\)$/);
+			const intArgs = intBody ? splitTopLevelArgs(intBody[1]) : [];
+			if (intArgs.length === 4 && /^(['"])[\s\S]*\1$/.test(intArgs[0]) && /^(['"])[\s\S]*\1$/.test(intArgs[1])) {
+				const fnExpr = intArgs[0].slice(1, -1), varName = intArgs[1].slice(1, -1), loStr = intArgs[2], hiStr = intArgs[3];
+				const lo = Number(window.math.evaluate(loStr));
+				const hi = Number(window.math.evaluate(hiStr));
+				if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { error: "integrate: Grenzen konnten nicht ausgewertet werden." };
+				const compiled = window.math.compile(fnExpr);
+				const N = 500; // gerade Anzahl für Simpson-Regel
+				const h = (hi - lo) / N;
+				let sum = compiled.evaluate({ [varName]: lo }) + compiled.evaluate({ [varName]: hi });
+				for (let i = 1; i < N; i++) sum += compiled.evaluate({ [varName]: lo + i * h }) * (i % 2 === 0 ? 2 : 4);
+				const value = (h / 3) * sum;
+				return { ok: true, expression: expr, result: window.math.format(value, { precision: 10 }), note: "Numerisch berechnet (Simpson-Regel) — kein symbolisches Ergebnis." };
 			}
-			if (x.before.archived !== x.after?.archived) {
-				await STATE.dispatch(x.before.archived ? "pageArchive" : "pageUnarchive", { id: x.id });
-			}
-		}
-		for (const x of changeSet.cards || []) {
-			if (!x.before) continue;
-			if (!S.cards[x.id]) await STATE.dispatch("cardCreate", clone(x.before));
-			const patch = clone(x.before); delete patch.id; delete patch.created; delete patch.trashed; delete patch.trashedAt;
-			await STATE.dispatch("cardUpdate", { id: x.id, patch });
-			// cardRestore holt auch einen gelöschten Stapel zurück — daher nur bei echtem Wechsel.
-			if (Boolean(x.before.trashed) !== Boolean(S.cards[x.id]?.trashed)) {
-				await STATE.dispatch(x.before.trashed ? "cardTrash" : "cardRestore", { id: x.id });
-			}
-		}
-		for (const x of changeSet.cards || []) if (!x.before && S.cards[x.id]) await STATE.dispatch("cardDelete", { id: x.id });
-		for (const x of changeSet.pages || []) if (!x.before && S.pages[x.id]) await STATE.dispatch("pageDelete", { id: x.id });
-		for (const x of changeSet.decks || []) if (!x.before && S.decks[x.id]) await STATE.dispatch("deckDelete", { name: x.id });
-		for (const x of changeSet.decks || []) {
-			if (!x.before) continue;
-			if (typeof x.before.order === "number") await STATE.dispatch("deckReorder", { name: x.id, order: x.before.order });
-			await STATE.dispatch(x.before.trashed ? "deckTrash" : "deckRestore", { name: x.id });
-		}
-		for (const x of changeSet.heftDocs || []) {
-			if (typeof HEFT.restoreDoc !== "function") throw new Error("Heft-Wiederherstellung ist nicht verfügbar.");
-			await HEFT.restoreDoc(x.id, { pages: clone(x.before?.pages || []) });
-		}
-		return { ok: true };
-	}
-
-	const hasField = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key) && value[key] !== null && value[key] !== undefined;
-	const hasText = (value, ...keys) => keys.some((key) => hasField(value, key) && String(value[key]).trim());
-	function normalizeChangeOperation(raw) {
-		const op = raw && typeof raw === "object" ? { ...raw } : {};
-		const nestedCard = op.card && typeof op.card === "object" && !Array.isArray(op.card) ? op.card : null;
-		if (nestedCard) {
-			if (!hasField(op, "op") && hasField(nestedCard, "op")) op.op = nestedCard.op;
-			for (const key of ["front", "back", "new_front", "new_back", "deck", "to", "new_deck", "fronts", "query", "suspended", "limit"]) {
-				if (!hasField(op, key) && hasField(nestedCard, key)) op[key] = nestedCard[key];
-			}
-		}
-		return op;
-	}
-	function validateChangeOperation(op) {
-		const name = op?.op;
-		if (!name) return "op fehlt";
-		switch (name) {
-			case "page.create": return hasText(op, "title") ? "" : "title fehlt";
-			case "page.append":
-			case "page.replace": return hasText(op, "title") && (hasField(op, "content") || hasField(op, "text")) ? "" : "braucht title und content";
-			case "page.patch": return hasText(op, "title") && hasText(op, "search") && (hasField(op, "replace") || hasField(op, "content")) ? "" : "braucht title, search (exakter Text, der schon in der Seite steht) und replace (neuer Text)";
-			case "page.props": return hasText(op, "title") && op.props && typeof op.props === "object" ? "" : "braucht title und props ({Spalte: Wert})";
-			case "page.rename": return hasText(op, "title") && hasText(op, "to") ? "" : "braucht title und to (neuer Name)";
-			case "page.move": return hasText(op, "title") ? "" : "title fehlt";
-			case "page.trash": return hasText(op, "title") ? "" : "title fehlt";
-			case "page.archive":
-			case "page.unarchive": return hasText(op, "title") ? "" : "title fehlt";
-			case "heft.append": return hasText(op, "title") && hasText(op, "text", "content") ? "" : "Hefttitel oder Text fehlt";
-			case "card.create": {
-				if (!Array.isArray(op.cards)) {
-					if (!hasText(op, "front")) return 'cards fehlt – die Karten selbst gehören in den Aufruf: "cards": [{"front": "Frage", "back": "Antwort"}, …] (limit gibt es bei card.create nicht)';
-					if (!hasField(op, "back")) return "back fehlt";
-				} else if (!op.cards.length) {
-					return 'cards ist leer – mindestens eine Karte {"front": …, "back": …} angeben';
-				} else if (!op.cards.every((card) => hasText(card, "front") && hasField(card, "back"))) {
-					return "jede Karte in cards braucht front und back";
-				}
-				return hasText(op, "deck") ? "" : "deck fehlt (Stapelname, z. B. der Name aus deck.create)";
-			}
-			case "card.update": return hasText(op, "front", "query") && (hasField(op, "new_front") || hasField(op, "new_back") || hasField(op, "back") || hasField(op, "to")) ? "" : "braucht front (bisherige Vorderseite) und new_front, new_back oder to";
-			case "card.move":
-				if (!hasText(op, "to")) return "Zielstapel fehlt";
-				return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
-			case "card.trash":
-			case "card.suspend": return hasText(op, "front", "fronts", "deck", "query") ? "" : "Karten-Auswahl fehlt";
-			case "card.reset": return hasText(op, "front") ? "" : "front fehlt";
-			case "deck.create": return hasText(op, "deck", "title") ? "" : "braucht deck (Stapelname)";
-			case "deck.rename": return hasText(op, "deck") && hasText(op, "to") ? "" : "Stapel oder neuer Name fehlt";
-			case "deck.move": return hasText(op, "deck") && hasField(op, "to") ? "" : "Stapel oder Ziel fehlt";
-			case "deck.trash": return hasText(op, "deck") ? "" : "Stapel fehlt";
-			default: return "";
+			const result = window.math.evaluate(expr);
+			return { ok: true, expression: expr, result: window.math.format(result, { precision: 12 }) };
+		} catch (e) {
+			return { error: "Rechenfehler: " + String((e && e.message) || e) };
 		}
 	}
-
-	const OP_TO_TOOL = {
-		"page.create": (o) => ["create_page", { title: o.title, parent_title: o.parent, content: o.content ?? o.text ?? "", props: o.props }],
-		"page.append": (o) => ["append_to_page", { page_title: o.title, content: o.content ?? o.text }],
-		"page.replace": (o) => ["replace_page_content", { page_title: o.title, content: o.content ?? o.text, allow_deleting_content: o.allow_deleting_content }],
-		"page.props": (o) => ["set_page_props", { page_title: o.title, props: o.props }],
-		"page.patch": (o) => ["patch_page", { page_title: o.title, search: o.search, replace: o.replace ?? o.content }],
-		"page.rename": (o) => ["rename_page", { page_title: o.title, new_title: o.to }],
-		"page.move": (o) => ["move_page", { page_title: o.title, new_parent_title: o.parent ?? o.to }],
-		"page.trash": (o) => ["delete_page", { page_title: o.title }],
-		"page.archive": (o) => ["archive_page", { page_title: o.title }],
-		"page.unarchive": (o) => ["unarchive_page", { page_title: o.title }],
-		"heft.append": (o) => ["write_to_heft", { page_title: o.title, text: o.text ?? o.content, heft_page: o.page }],
-		"card.create": (o) => [o.cards ? "create_flashcards" : "create_flashcard", o.cards ? { cards: o.cards, deck: o.deck, page_title: o.title } : { front: o.front, back: o.back, deck: o.deck, page_title: o.title }],
-		"card.update": (o) => ["update_flashcard", { front: o.front || o.query, deck: o.deck, new_front: o.new_front, new_back: o.new_back ?? o.back, new_deck: o.to }],
-		"card.move": (o) => ["move_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), from_deck: o.deck, query: o.query, to_deck: o.to, limit: o.limit }],
-		"card.trash": (o) => ["delete_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, limit: o.limit }],
-		"card.suspend": (o) => ["suspend_flashcards", { fronts: o.fronts || (o.front ? [o.front] : undefined), deck: o.deck, query: o.query, suspended: o.suspended, limit: o.limit }],
-		"card.reset": (o) => ["reset_card_progress", { front: o.front, deck: o.deck }],
-		"deck.create": (o) => ["create_deck", { name: o.deck || o.title }],
-		"deck.rename": (o) => ["rename_deck", { deck: o.deck, new_name: o.to }],
-		"deck.move": (o) => ["move_deck", { deck: o.deck, new_parent: o.to }],
-		"deck.trash": (o) => ["delete_deck", { deck: o.deck }],
-	};
 
 	async function run(name, a) {
 		a = a || {};
-		switch (name) {
-			case "inspect": {
-				const limit = Math.max(1, Math.min(100, Number(a.limit) || 30));
-				switch (a.kind) {
-					case "context": return run("get_context", {});
-					case "pages": {
-						return run("list_pages", { query: a.query, parent: a.parent });
-					}
-					case "page": {
-						const rawTitles = a.titles || a.title || a.page_title || a.page || [];
-						const titles = (Array.isArray(rawTitles) ? rawTitles : [rawTitles]).filter(Boolean).map(String).slice(0, 12);
-						if (!titles.length) return { error: "inspect: titles fehlt für kind=page." };
-						// Mehrere Seiten teilen sich das Ergebnis-Limit der Agent-Schleife (12 000 Zeichen).
-						const max = Math.max(3000, Math.floor(11000 / titles.length));
-						const pages = [];
-						for (const title of titles) pages.push(await run("read_page", { page_title: title, max, offset: a.offset, find: a.find }));
-						return { pages };
-					}
-					case "decks": return run("list_decks", {});
-					case "cards": return run("list_flashcards", { deck: a.deck, query: a.query, limit });
-					case "due": return run("list_due_cards", {});
-					case "search": return run(a.semantic ? "semantic_search" : "search_notes", { query: a.query });
-					case "chats": return run("search_chat_history", { query: a.query, limit });
-					case "archived": {
-						const roots = (STATE.archivedPageRoots && STATE.archivedPageRoots()) || [];
-						return {
-							archived: roots.map((p) => ({
-								title: p.title,
-								kind: p.kind === "heft" ? "heft" : "page",
-								archivedAt: p.archivedAt || p.updated,
-							})),
-							total: roots.length,
-						};
-					}
-					// Mit den erlaubten Werten: Kleine Modelle korrigieren sich dann im nächsten Schritt selbst.
-					default: return { error: `inspect: unbekanntes kind „${a.kind ?? ""}“. Erlaubt: context, pages, page, decks, cards, due, search (Bedeutungssuche: search mit semantic=true), chats, archived.` };
-				}
-			}
-			case "change": {
-				const operations = Array.isArray(a.operations) ? a.operations.map(normalizeChangeOperation) : [];
-				if (!operations.length) return { error: "change: operations fehlt." };
-				if (operations.length > 100) return { error: "change: maximal 100 Operationen pro Aktion." };
-				const validationErrors = [];
-				for (let i = 0; i < operations.length; i++) {
-					const op = operations[i] || {};
-					if (!OP_TO_TOOL[op.op]) {
-						validationErrors.push(`Operation ${i + 1}: unbekannte Operation „${op.op || "(leer)"}“`);
-					} else {
-						const validation = validateChangeOperation(op);
-						if (validation) {
-							validationErrors.push(`Operation ${i + 1} (${op.op}): ${validation}`);
-						}
-					}
-				}
-				if (validationErrors.length) {
-					return { error: `change: Validierungsfehler in ${validationErrors.length} Operation(en):\n${validationErrors.join("\n")}\nKeine Änderungen ausgeführt.` };
-				}
-				// Erst alles prüfen (Seiten, Suchtext, Löschschutz, Spalten), dann schreiben: ein
-				// Fehler in Operation 3 hinterlässt so keine halbe Aktion und kein Rückgängig.
-				const checkError = dryRunCheck(operations);
-				if (checkError) return { error: checkError };
-				if (a.dry_run === true) {
-					return { ok: true, dryRun: true, operations: operations.length, results: operations.map((o) => ({ op: o.op, ok: true, ...(o.title ? { title: o.title } : {}) })) };
-				}
-				const before = managedSnapshot(operations), results = [];
-				for (let i = 0; i < operations.length; i++) {
-					const op = operations[i] || {}, make = OP_TO_TOOL[op.op];
-					const [tool, args] = make(op);
-					let result;
-					try { result = await run(tool, args); }
-					catch (error) { result = { error: String(error?.message || error) }; }
-					if (result?.error) {
-						await undo(undoSet(before));
-						return { error: `Operation ${i + 1} (${op.op}) fehlgeschlagen: ${result.error}. Alle vorherigen Änderungen wurden zurückgenommen.` };
-					}
-					results.push({ op: op.op, ...result });
-				}
-				const changes = undoSet(before);
-				const count = changes.pages.length + changes.cards.length + changes.decks.length + changes.heftDocs.length;
-				return attachUndo({ ok: true, operations: results.length, changedObjects: count, results }, changes);
-			}
-			case "create_page": {
-				const title = String(a.title || "").trim();
-				if (!title) return { error: "create_page: title fehlt." };
-				// Eine angegebene Elternseite MUSS es geben — vorher landete die Seite bei einem
-				// Tippfehler kommentarlos ganz oben, während move_page in derselben Lage meckert.
-				const parent = a.parent_title ? STATE.findPage(a.parent_title) : null;
-				if (a.parent_title && !parent) return { error: "Elternseite nicht gefunden: " + a.parent_title };
-				const workspaceId = parent ? parent.workspaceId : S.currentWorkspaceId;
-				const dup = duplicateSiblingError(title, parent, workspaceId);
-				if (dup) return { error: dup };
-				const merged = a.props ? propsFor(parent, null, a.props, title) : null;
-				if (merged?.error) return merged;
-				const id = U.uid();
-				await STATE.dispatch("pageCreate", {
-					id, title, parentId: parent ? parent.id : null, content: a.content || "",
-					workspaceId,
-				});
-				if (merged?.props) await STATE.dispatch("pageUpdate", { id, patch: { props: merged.props } });
-				// id MITGEBEN: ai.js baut daraus die Änderungs-Karte. Ohne sie wurde die Seite nur
-				// über den Titel gesucht — bei Namensgleichheit die falsche (Diff/Rückgängig kaputt).
-				return { ok: true, id, title, parent: parent ? parent.title : null };
-			}
-			case "append_to_page": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				const content = String(a.content ?? "").trim();
-				if (!content) return { error: "append_to_page: content fehlt." };
-				// BUGFIX (15. Juli): Hefte rendern nur den Blob (Striche/Bilder/Texte) —
-				// Markdown in pg.content wäre unsichtbar. Deshalb auf sichtbare Text-Box umleiten.
-				if (pg.kind === "heft") return await run("write_to_heft", { page_title: a.page_title, text: content });
-				await STATE.dispatch("pageUpdate", {
-					id: pg.id, patch: { content: (pg.content ? pg.content + "\n\n" : "") + content },
-				});
-				return { ok: true, title: pg.title };
-			}
-			case "write_to_heft": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				if (pg.kind !== "heft") return { error: "\"" + pg.title + "\" ist kein Handschrift-Heft — nutze append_to_page." };
-				if (typeof HEFT.addText !== "function") return { error: "Heft-Modul ohne addText — heft.js aktualisieren." };
-				const opts = {};
-				if (a.heft_page != null) opts.pageIndex = Math.max(0, (Number(a.heft_page) || 1) - 1);
-				const res = await HEFT.addText(pg.id, a.text, opts);
-				if (!res || !res.ok) return { error: "Ins Heft schreiben fehlgeschlagen: " + ((res && res.error) || "unbekannt") };
-				return { ok: true, title: pg.title, heftPage: res.pageIndex + 1, addedPage: !!res.addedPage, note: "Sichtbar als Text-Box auf Heftseite " + (res.pageIndex + 1) + " eingefügt." };
-			}
-			case "replace_page_content": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht ersetzt werden — write_to_heft fügt sichtbaren Text hinzu." };
-				const guard = a.allow_deleting_content === true ? null : CORE.aiReplaceGuard(String(pg.content || ""), String(a.content || ""));
-				if (guard) return { error: guard };
-				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: a.content || "" } });
-				return { ok: true, title: pg.title };
-			}
-			case "set_page_props": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				const merged = propsFor(pg.parentId ? S.pages[pg.parentId] : null, pg.props, a.props, pg.title);
-				if (merged.error) return merged;
-				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { props: merged.props } });
-				return { ok: true, title: pg.title, props: merged.props };
-			}
-			case "patch_page": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				if (pg.kind === "heft") return { error: "Heft-Inhalte (Striche/Bilder) können nicht gepatcht werden — write_to_heft fügt sichtbaren Text hinzu." };
-				// Wörtlich, sonst leerraum-tolerant; Fehler nennt die ähnlichste Zeile (Kern: impala-ai/edit.rs).
-				const res = CORE.aiPatchText(String(pg.content || ""), String(a.search ?? ""), String(a.replace ?? a.content ?? ""));
-				if (res.error) return { error: res.error };
-				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { content: res.content } });
-				return { ok: true, title: pg.title };
-			}
-			case "rename_page": {
-				const pg = STATE.findPage(a.page_title), title = String(a.new_title || "").trim();
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				if (!title) return { error: "rename_page: new_title fehlt." };
-				await STATE.dispatch("pageUpdate", { id: pg.id, patch: { title } });
-				return { ok: true, from: a.page_title, title };
-			}
-			case "move_page": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				const parent = a.new_parent_title ? STATE.findPage(a.new_parent_title) : null;
-				if (a.new_parent_title && !parent) return { error: "Elternseite nicht gefunden: " + a.new_parent_title };
-				for (let anc = parent; anc; anc = anc.parentId ? S.pages[anc.parentId] : null) {
-					if (anc.id === pg.id) return { error: "Zyklus: Die Zielseite liegt innerhalb der zu verschiebenden Seite." };
-				}
-				await STATE.dispatch("pageMove", { id: pg.id, parentId: parent ? parent.id : null });
-				return { ok: true, title: pg.title, parent: parent ? parent.title : null };
-			}
-			case "delete_page": {
-				// Soft-Delete wie in der UI: pageTrash (Unterbaum mit). Bestätigung
-				// erzwingt ai.js vor dem Aufruf von run() — hier nur die Aktion selbst.
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				// EIN Baum-Durchlauf für Zählung UND Tab-Schließen (pageTrash markiert den ganzen Baum).
-				const trashIds = STATE.pageSubtreeIds(pg.id);
-				const subtreeExtra = trashIds.size - 1;
-				await STATE.dispatch("pageTrash", { id: pg.id });
-				return {
-					ok: true,
-					title: pg.title,
-					trashed: true,
-					subpages: subtreeExtra,
-					note: "Im Papierkorb — wiederherstellbar. Endgültiges Löschen nur manuell im Papierkorb.",
-				};
-			}
-			case "archive_page": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title };
-				const subtree = STATE.pageSubtreeIds(pg.id);
-				await STATE.dispatch("pageArchive", { id: pg.id });
-				return {
-					ok: true,
-					title: pg.title,
-					archived: true,
-					kind: pg.kind === "heft" ? "heft" : "page",
-					subpages: subtree.size - 1,
-					note: "Archiviert — in der Bibliothek (Archiv-Reiter) wiederherstellbar.",
-				};
-			}
-			case "unarchive_page": {
-				let pg = STATE.findPage(a.page_title);
-				if (!pg) {
-					const all = Object.values(S.pages).filter((p) => p && !p.trashed && p.archived);
-					pg = all.find((p) => (p.title || "").toLowerCase() === String(a.page_title || "").toLowerCase().trim())
-						|| all.find((p) => (p.title || "").toLowerCase().includes(String(a.page_title || "").toLowerCase().trim()));
-				}
-				if (!pg) return { error: "Archivierte Seite nicht gefunden: " + a.page_title };
-				await STATE.dispatch("pageUnarchive", { id: pg.id });
-				return {
-					ok: true,
-					title: pg.title,
-					archived: false,
-					kind: pg.kind === "heft" ? "heft" : "page",
-					note: "Aus dem Archiv wiederhergestellt.",
-				};
-			}
-			case "delete_flashcards": {
-				// Bestätigung erzwingt ai.js für die ganze change-Aktion.
-				const sel = selectCards(a);
-				if (sel.error) return sel;
-				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
-				const cards = sel.cards, leftOver = sel.total - sel.cards.length;
-				for (const c of cards) await STATE.dispatch("cardTrash", { id: c.id });
-				return {
-					ok: true, trashed: cards.length,
-					decks: [...new Set(cards.map((c) => c.deck || "Standard"))],
-					examples: cards.slice(0, 5).map((c) => String(c.front || "").replace(/\s+/g, " ").slice(0, 60)),
-					// Ehrlich bleiben, wenn die Sicherheitsgrenze zugeschlagen hat.
-					...(leftOver > 0 ? { notDeleted: leftOver, hinweis: "Sicherheitsgrenze erreicht — " + leftOver + " weitere Treffer wurden NICHT gelöscht. Für den Rest erneut aufrufen." } : {}),
-					note: "Im Papierkorb — wiederherstellbar.",
-				};
-			}
-			case "delete_deck": {
-				const hit = resolveDeckStrict(a.deck);
-				if (hit.error) return hit;
-				const match = hit.deck;
-				const n = cardsOfDeck(match).length; // gleiche Teilbaum-Regel wie überall sonst
-				await STATE.dispatch("deckTrash", { name: match });
-				return { ok: true, deck: match, trashed: true, cards: n, note: "Im Papierkorb — wiederherstellbar." };
-			}
-			case "get_context": {
-				// Ersetzt die früheren Kontext-Listen im System-Prompt (Prompt-Diät,
-				// 15. Juli): die KI ruft diese Daten nur ab, wenn sie sie braucht.
-				const now = new Date();
-				const cur = S.currentPageId ? S.pages[S.currentPageId] : null;
-				const body = cur ? String(cur.content || "") : "";
-				const recent = STATE.activePages().sort(U.byNewest).slice(0, 8)
-					.map((pg) => ({ title: pg.title, updated: String(pg.updated || "").slice(0, 10) }));
-				let study = null;
-				try {
-					const snap = STATE.studySnapshot(null);
-					study = { neu: snap.counts.neu, review: snap.counts.review, learn: snap.counts.learn };
-				} catch { /* Lernstatus optional */ }
-				// Bug-Fix („kommt noch“, 23. Juli): automatischer Kontext für die Karte, die
-				// gerade auf dem Bildschirm offen ist. Gleiche Karten-Logik wie die Lern-
-				// Ansicht (render-anki.js): nach dem Aufdecken zählt die festgepinnte Karte
-				// (S.reviewCardId), sonst die vorderste Karte der aktuellen Queue.
-				let currentCard = null;
-				try {
-					if (S.view === "anki" && (S.ankiTab || "decks") === "study") {
-						const c = (S.reviewShowBack && S.cards[S.reviewCardId]) || STATE.studySnapshot(S.ankiDeck).dueNow[0] || null;
-						if (c) currentCard = {
-							front: c.front,
-							back: c.back,
-							deck: c.deck || "Standard",
-							state: c.srs.state,
-							reps: c.srs.reps || 0,
-							lapses: c.srs.lapses || 0,
-							revealed: !!S.reviewShowBack,
-							note: S.reviewShowBack
-								? "Die Rückseite ist bereits aufgedeckt."
-								: "Die Rückseite ist noch NICHT aufgedeckt — die Antwort nicht verraten, außer der Nutzer bittet ausdrücklich darum.",
-						};
-					}
-				} catch { /* Karten-Kontext optional */ }
-				return {
-					now: now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + ", " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr",
-					currentPage: cur ? { title: cur.title, content: body.slice(0, 4000) + (body.length > 4000 ? "\n[… gekürzt — Rest per read_pages]" : "") } : null,
-					currentCard,
-					recentPages: recent,
-					study,
-					pageCount: STATE.activePages().length,
-				};
-			}
-			case "read_page": {
-				const pg = STATE.findPage(a.page_title);
-				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title + ". Titel mit search oder list_pages nachschlagen." };
-				const max = Math.max(1000, Math.min(12000, Number(a.max) || 12000));
-				// Lange Inhalte: Ausschnitt ab offset bzw. Textstelle find, mit Hinweis aufs Weiterlesen (Kern: edit.rs).
-				const offset = Number(a.offset) > 0 ? Math.floor(Number(a.offset)) : undefined;
-				const find = typeof a.find === "string" && a.find.trim() ? a.find : undefined;
-				const clipText = (s) => CORE.aiReadWindow(s, max, offset, find);
-				if (pg.kind === "heft") {
-					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
-					const meta = STATE.heftMeta(pg.id) || {};
-					return {
-						title: label(pg),
-						id: pg.id,
-						heft: true,
-						archived: !!pg.archived,
-						...pageInfo(pg),
-						pages: meta.pages || 1,
-						content: clipText(String(meta.ocrText || "")),
-						note: "Handschrift-Heft: content = erkannte Handschrift + getippte Text-Boxen. Sichtbar schreiben nur mit write_to_heft.",
-					};
-				}
-				return {
-					title: label(pg),
-					...(pg.archived ? { archived: true } : {}),
-					...pageInfo(pg),
-					content: clipText(pg.content || ""),
-					...(pg.pdfId ? { hasPdf: true } : {}),
-				};
-			}
-			case "list_pages": {
-				// Nur aktive Seiten — Papierkorb-Inhalte sind für die KI unsichtbar.
-				const isDescendant = (pg, rootId) => {
-					for (let cur = pg.parentId, n = 0; cur && n < 64; cur = S.pages[cur]?.parentId, n++) {
-						if (cur === rootId) return true;
-					}
-					return false;
-				};
-				const fullPath = (pg) => {
-					const parts = [pg.title || ""];
-					for (let cur = pg.parentId, n = 0; cur && S.pages[cur] && n < 64; cur = S.pages[cur].parentId, n++) {
-						parts.push(S.pages[cur].title || "");
-					}
-					return parts.reverse().join("/");
-				};
-				let all = STATE.activePages().sort(U.byNewest);
-				const parentArg = String(a.parent || "").trim();
-				if (parentArg) {
-					const root = STATE.findPage(parentArg);
-					if (!root) return { error: "Ordner nicht gefunden: " + parentArg };
-					all = all.filter((pg) => isDescendant(pg, root.id));
-				}
-				const q = String(a.query || "").trim().toLowerCase();
-				if (q) {
-					const direct = [], byPath = [];
-					for (const pg of all) {
-						if ((pg.title || "").toLowerCase().includes(q)) direct.push(pg);
-						else if (fullPath(pg).toLowerCase().includes(q)) byPath.push(pg);
-					}
-					all = direct.concat(byPath);
-				}
-				return {
-					pages: all.slice(0, 60).map((pg) => ({
-						title: label(pg),
-						parent: parentTitle(pg),
-						hasPdf: !!pg.pdfId,
-						...(pg.kind === "heft" ? { heft: true } : {}),
-						...(pg.db ? { verzeichnis: true } : {}),
-					})),
-					total: all.length,
-					...(all.length > 60 ? { note: "Nur die ersten 60 Treffer — mit parent/query eingrenzen oder search nutzen." } : {}),
-				};
-			}
-			case "search_notes":
-				return keywordHits(a.query);
-			case "semantic_search": {
-				const hits = await RAG.search(a.query);
-				// Gleiche gedeckelte Trefferform wie search_notes statt einer zweiten Kopie.
-				if (hits === null) return { info: "Kein Embedding-Modell konfiguriert — Stichwortsuche verwendet.", ...keywordHits(a.query) };
-				return { results: hits };
-			}
-			case "create_flashcard": {
-				// FIX: leere Vorder-/Rückseite legte eine unbrauchbare Karte an — create_flashcards
-				// filtert solche Einträge längst, hier fehlte dieselbe Prüfung.
-				if (!String(a.front || "").trim() || !String(a.back || "").trim()) return { error: "create_flashcard: front und back dürfen nicht leer sein." };
-				const pg = a.page_title
-					? STATE.findPage(a.page_title)
-					: (S.currentPageId ? S.pages[S.currentPageId] : null);
-				const id = U.uid();
-				await STATE.dispatch("cardCreate", {
-					id, front: a.front, back: a.back, pageId: pg ? pg.id : null,
-					deck: a.deck || undefined,
-				});
-				return { ok: true, front: a.front, deck: a.deck || "Standard" };
-			}
-			case "create_flashcards": {
-				const list = Array.isArray(a.cards) ? a.cards.filter((c) => c && c.front && c.back) : [];
-				if (!list.length) return { error: "create_flashcards: cards-Liste ist leer oder unvollständig (front + back nötig)." };
-				const pg = a.page_title
-					? STATE.findPage(a.page_title)
-					: (S.currentPageId ? S.pages[S.currentPageId] : null);
-				// Sequentiell dispatchen — dispatch() ist ohnehin serialisiert (state.js)
-				for (const c of list) {
-					await STATE.dispatch("cardCreate", {
-						id: U.uid(), front: String(c.front), back: String(c.back),
-						pageId: pg ? pg.id : null, deck: a.deck || undefined,
-					});
-				}
-				return { ok: true, cards: list.length, deck: a.deck || "Standard" };
-			}
-			case "list_due_cards": {
-				// Ohne Stapel und Gesamtzahl konnte das Modell nicht sagen, WO die Karten liegen,
-				// und hielt die gekappten 20 für alles.
-				const due = STATE.dueCards();
-				return {
-					due: due.slice(0, 20).map((c) => ({ front: c.front, deck: c.deck || "Standard", due: c.srs.due })),
-					totalDue: due.length,
-				};
-			}
-			case "list_flashcards": {
-				// EINE Auswahl-Logik (selectCards) statt einer zweiten Kopie aus Stapel-Auflösung,
-				// Textfilter und Limit — die beiden Kopien drifteten sonst auseinander.
-				const sel = selectCards({ deck: a.deck, query: a.query, limit: Number(a.limit) || 30 }, { max: 100, allowAll: true });
-				if (sel.error) return sel;
-				return {
-					cards: sel.cards.map((c) => ({
-						front: c.front, back: c.back, deck: c.deck || "Standard",
-						state: (c.srs && c.srs.state) || "new", due: (c.srs && c.srs.due) || null, suspended: !!c.suspended,
-					})),
-					totalMatches: sel.total,
-					// Gekappte Liste ehrlich melden, sonst hält das Modell die Auswahl für vollständig.
-					...(sel.truncated ? { note: "Nur " + sel.cards.length + " von " + sel.total + " Treffern — mit deck/query eingrenzen oder limit erhöhen (max. 100)." } : {}),
-				};
-			}
-			case "list_decks": {
-				const names = Object.keys(S.decks).filter((n) => S.decks[n] && !S.decks[n].trashed && !STATE.isDeckArchived(n)).sort((x, y) => x.localeCompare(y));
-				// EIN Durchlauf über die Karten statt drei Filterläufe JE Stapel; der Teilbaum
-				// ergibt sich direkt aus dem Namenspfad („Eltern::Kind“).
-				const direct = new Map(), tree = new Map(), paused = new Map();
-				const bump = (map, key) => map.set(key, (map.get(key) || 0) + 1);
-				for (const c of STATE.activeCards()) {
-					const d = c.deck || "Standard";
-					bump(direct, d);
-					const parts = d.split("::");
-					for (let i = 1; i <= parts.length; i++) {
-						const n = parts.slice(0, i).join("::");
-						bump(tree, n);
-						if (c.suspended) bump(paused, n);
-					}
-				}
-				// Der Tages-Lernstand ist pro Stapel eine eigene Berechnung — bei sehr vielen
-				// Stapeln war genau das der teuerste Aufruf im ganzen Werkzeugkasten.
-				const withToday = names.length <= 25;
-				return {
-					decks: names.map((n) => {
-						let today = null;
-						if (withToday) {
-							try {
-								const cnt = STATE.studySnapshot(n).counts;
-								today = { neu: cnt.neu, lernen: cnt.learn, wiederholen: cnt.review };
-							} catch { /* Lernstand optional */ }
-						}
-						return {
-							name: n,
-							cards: direct.get(n) || 0,
-							cardsInclSubdecks: tree.get(n) || 0,
-							suspended: paused.get(n) || 0,
-							today,
-						};
-					}),
-					...(withToday ? {} : { note: "Tages-Lernstand bei sehr vielen Stapeln ausgelassen — bei Bedarf get_context oder list_due_cards nutzen." }),
-				};
-			}
-			case "create_deck": {
-				const name = String(a.name || "").trim();
-				if (!name) return { error: "create_deck: name fehlt." };
-				const existed = Object.keys(S.decks).some((n) => n.toLowerCase() === name.toLowerCase() && !S.decks[n].trashed);
-				const deck = await ensureDeck(name);
-				return { ok: true, deck, note: existed ? "Stapel gab es bereits — unverändert." : "Neu angelegt." };
-			}
-			case "rename_deck": {
-				const src = resolveDeckStrict(a.deck);
-				if (src.error) return src;
-				const from = src.deck;
-				const to = String(a.new_name || "").trim().replace(/^:+|:+$/g, "").trim();
-				if (!to) return { error: "rename_deck: new_name fehlt." };
-				if (to === from) return { ok: true, deck: from, note: "Name unverändert." };
-				// Zyklus: der neue Pfad darf nicht innerhalb des Stapels selbst liegen.
-				if (STATE.deckInTree(to, from)) return { error: "Der neue Name liegt innerhalb des Stapels selbst — das ergäbe einen Zyklus." };
-				const clash = await freeDeckSlot(to);
-				if (clash) return { error: clash };
-				const n = cardsOfDeck(from).length;
-				await STATE.dispatch("deckRename", { from, to });
-				return { ok: true, from, to, cards: n, note: "Unterstapel und Karten sind mitgewandert." };
-			}
-			case "move_deck": {
-				const src = resolveDeckStrict(a.deck);
-				if (src.error) return src;
-				const from = src.deck;
-				let target = "";
-				if (String(a.new_parent || "").trim()) {
-					const dst = resolveDeckStrict(a.new_parent);
-					if (dst.error) return { error: "Ziel-" + dst.error.charAt(0).toLowerCase() + dst.error.slice(1) };
-					target = dst.deck;
-					if (STATE.deckInTree(target, from)) return { error: "Ein Stapel kann nicht in sich selbst oder einen eigenen Unterstapel wandern." };
-				}
-				const to = (target ? target + "::" : "") + from.split("::").pop();
-				if (to === from) return { ok: true, deck: from, note: "Der Stapel liegt bereits dort." };
-				const clash = await freeDeckSlot(to);
-				if (clash) return { error: "Am Zielort: " + clash };
-				await STATE.dispatch("deckMove", { from, target });
-				return { ok: true, from, to };
-			}
-			case "move_flashcards": {
-				if (!String(a.to_deck || "").trim()) return { error: "move_flashcards: to_deck fehlt." };
-				const sel = selectCards(a);
-				if (sel.error) return sel;
-				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
-				const deck = await ensureDeck(a.to_deck);
-				if (!deck) return { error: "move_flashcards: to_deck ist leer." };
-				let moved = 0;
-				for (const c of sel.cards) {
-					if ((c.deck || "Standard") === deck) continue;
-					await STATE.dispatch("cardUpdate", { id: c.id, patch: { deck } });
-					moved++;
-				}
-				return {
-					ok: true, deck, moved, alreadyThere: sel.cards.length - moved,
-					examples: sel.cards.slice(0, 5).map((c) => String(c.front || "").slice(0, 60)),
-					note: "Lernfortschritt der Karten bleibt erhalten.",
-				};
-			}
-			case "update_flashcard": {
-				const c = findCard(a.front, a.deck);
-				if (!c) return { error: "Karte nicht gefunden: " + a.front };
-				const patch = {};
-				if (String(a.new_front || "").trim()) patch.front = String(a.new_front);
-				if (String(a.new_back || "").trim()) patch.back = String(a.new_back);
-				if (String(a.new_deck || "").trim()) patch.deck = await ensureDeck(a.new_deck);
-				if (!Object.keys(patch).length) return { error: "update_flashcard: nichts zu ändern — new_front, new_back oder new_deck angeben." };
-				await STATE.dispatch("cardUpdate", { id: c.id, patch });
-				return {
-					ok: true, changed: Object.keys(patch),
-					front: patch.front || c.front, back: patch.back || c.back, deck: patch.deck || c.deck || "Standard",
-					note: "Lernfortschritt bleibt erhalten.",
-				};
-			}
-			case "suspend_flashcards": {
-				if (typeof a.suspended !== "boolean") return { error: "suspend_flashcards: suspended (true/false) fehlt." };
-				const sel = selectCards(a);
-				if (sel.error) return sel;
-				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
-				let changed = 0;
-				for (const c of sel.cards) {
-					if (!!c.suspended === a.suspended) continue;
-					await STATE.dispatch("cardUpdate", { id: c.id, patch: { suspended: a.suspended } });
-					changed++;
-				}
-				return { ok: true, suspended: a.suspended, changed, unchanged: sel.cards.length - changed };
-			}
-			case "reset_card_progress": {
-				// Bestätigung erzwingt ai.js (wie bei den Lösch-Tools) — hier nur die Aktion selbst.
-				const sel = selectCards(a);
-				if (sel.error) return sel;
-				if (!sel.cards.length) return { error: "Keine passenden Karten gefunden." };
-				const now = U.now();
-				for (const c of sel.cards) {
-					await STATE.dispatch("cardUpdate", { id: c.id, patch: { srs: SRS.newCard(now), leech: false, suspended: false } });
-				}
-				return { ok: true, reset: sel.cards.length, note: "Die Karten stehen wieder als „neu“ in der Warteschlange. Das Wiederholungs-Protokoll (Statistik/Heatmap) bleibt erhalten." };
-			}
-			case "ask_choice": {
-				// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und
-				// macht klar, dass ein direkter Aufruf nicht die interaktive Karte öffnet.
-				const norm = normalizeAskChoice(a);
-				if (norm.error) return norm;
-				return {
-					error: "ask_choice muss interaktiv im Chat beantwortet werden (Agent-Loop).",
-					question: norm.question,
-					options: norm.options,
-				};
-			}
-			case "calculate": {
-				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") {
-					try {
-						await PERF_PROFILER.run("math.load", () => U.loadScript(OPTIONAL_MODULE_URLS.math, "math"), {}, 0);
-					} catch {
-						return { error: "Mathe-Modul (math.js) konnte nicht geladen werden. Internetverbindung für den Erstabruf erforderlich." };
-					}
-				}
-				if (typeof window.math === "undefined" || typeof window.math.evaluate !== "function") return { error: "Mathe-Modul (math.js) nicht geladen — evtl. noch offline/kein Netz beim ersten Start." };
-				const expr = String(a.expression || "").trim();
-				if (!expr) return { error: "calculate: expression fehlt." };
-				try {
-					// Sonderform integrate("f(x)", "x", a, b) — math.js kann das nicht nativ,
-					// daher hier per Simpson-Regel selbst numerisch lösen.
-					const intBody = expr.match(/^integrate\(([\s\S]*)\)$/);
-					const intArgs = intBody ? splitTopLevelArgs(intBody[1]) : [];
-					if (intArgs.length === 4 && /^(['"])[\s\S]*\1$/.test(intArgs[0]) && /^(['"])[\s\S]*\1$/.test(intArgs[1])) {
-						const fnExpr = intArgs[0].slice(1, -1), varName = intArgs[1].slice(1, -1), loStr = intArgs[2], hiStr = intArgs[3];
-						const lo = Number(window.math.evaluate(loStr));
-						const hi = Number(window.math.evaluate(hiStr));
-						if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { error: "integrate: Grenzen konnten nicht ausgewertet werden." };
-						const compiled = window.math.compile(fnExpr);
-						const N = 500; // gerade Anzahl für Simpson-Regel
-						const h = (hi - lo) / N;
-						let sum = compiled.evaluate({ [varName]: lo }) + compiled.evaluate({ [varName]: hi });
-						for (let i = 1; i < N; i++) sum += compiled.evaluate({ [varName]: lo + i * h }) * (i % 2 === 0 ? 2 : 4);
-						const value = (h / 3) * sum;
-						return { ok: true, expression: expr, result: window.math.format(value, { precision: 10 }), note: "Numerisch berechnet (Simpson-Regel) — kein symbolisches Ergebnis." };
-					}
-					const result = window.math.evaluate(expr);
-					return { ok: true, expression: expr, result: window.math.format(result, { precision: 12 }) };
-				} catch (e) {
-					return { error: "Rechenfehler: " + String((e && e.message) || e) };
-				}
-			}
-			case "search_chat_history": {
-				const q = String(a.query || "").trim().toLowerCase();
-				if (!q) return { error: "search_chat_history: query fehlt." };
-				const limit = Math.max(1, Math.min(30, Number(a.limit) || 15));
-				// PERF-WURZEL: Vorher wurde je Nachricht ein Gesamttext aus Datei- UND PDF-Volltexten
-				// zusammengebaut und komplett kleingeschrieben — pro Suche viele Megabyte Kopien,
-				// währenddessen stand die Oberfläche. Zudem sammelte die Suche ALLE Treffer und
-				// sortierte sie, um dann 15 zu behalten (bei einem Häufigkeitswort zehntausende).
-				// Jetzt Teil für Teil prüfen, Treffer nur bis zum Deckel sammeln — CHATS.load() liefert
-				// die Sitzungen bereits absteigend nach Änderung, die Sortierung entfällt damit.
-				const hits = [];
-				let totalMatches = 0;
-				for (const session of CHATS.load()) {
-					for (const m of session.messages || []) {
-						if (m.role !== "user" && m.role !== "assistant") continue;
-						const parts = [];
-						if (typeof m.content === "string" && m.content) parts.push(m.content);
-						if (m.textFile) parts.push("[Datei: " + m.textFile.name + "]\n" + String(m.textFile.content || ""));
-						if (m.pdfFile) parts.push("[PDF: " + m.pdfFile.name + "]\n" + String(m.pdfFile.content || ""));
-						if (m.image) parts.push("[Bild-Anhang]");
-						let idx = -1;
-						const text = parts.find((p) => (idx = p.toLowerCase().indexOf(q)) !== -1);
-						if (!text) continue;
-						totalMatches++;
-						if (hits.length >= limit) continue;
-						const from = Math.max(0, idx - 60), to = Math.min(text.length, idx + q.length + 60);
-						const snippet = (from > 0 ? "…" : "") + text.slice(from, to).replace(/\s+/g, " ").trim() + (to < text.length ? "…" : "");
-						hits.push({ chatId: session.id, chatTitle: session.title || "(ohne Titel)", updated: String(session.updated || "").slice(0, 16).replace("T", " "), role: m.role, snippet });
-					}
-				}
-				return { results: hits, totalMatches };
-			}
-			default:
-				return { error: "Unbekanntes Tool: " + name };
+		if (name === "calculate") return calculate(a);
+		if (name === "ask_choice") {
+			// Die echte UI/Pause lebt im Agent-Loop (ai.js). run() validiert nur und
+			// macht klar, dass ein direkter Aufruf nicht die interaktive Karte öffnet.
+			const norm = normalizeAskChoice(a);
+			if (norm.error) return norm;
+			return { error: "ask_choice muss interaktiv im Chat beantwortet werden (Agent-Loop).", question: norm.question, options: norm.options };
 		}
+		if ((name === "inspect" && a.kind === "search" && a.semantic) || (name === "search" && a.semantic)) return semantic(String(a.query || ""));
+		return (await core(name, a)) ?? { error: "Unbekanntes Tool: " + name };
 	}
 
-	// Flache Werkzeuge (search, read_pages, edit_page …; Kern: impala-ai/flat.rs) für Aufrufer
-	// ohne Rust-Agent (MCP-Bridge): übersetzen und als inspect/change ausführen.
-	const flatDefs = CORE.aiFlatToolDefs();
-	async function runFlat(name, a) {
-		const call = CORE.aiFlatCall(name, a || {});
-		if (!call) return run(name, a);
-		if (call.error) return { error: call.error };
-		if (call.tool !== "change" || a?.dry_run !== true) return run(call.tool, call.args);
-		// Trockenlauf (Benchmark): übersetzte Operationen mitliefern, damit sie ausgewertet werden können.
-		const res = await run("change", { ...call.args, dry_run: true });
-		return res?.ok ? { ...res, ops: call.args.operations } : res;
-	}
+	// Flache Werkzeuge (search, read_pages, edit_page …) für Aufrufer ohne Rust-Agent (MCP-Bridge);
+	// dry_run: true prüft Schreibwünsche nur und liefert die übersetzten Operationen als ops mit.
+	const runFlat = run;
 
 	return { defs, flatDefs, run, runFlat, undo, normalizeAskChoice };
 })();
