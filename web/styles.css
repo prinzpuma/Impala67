@@ -66,22 +66,24 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 /* == Hauptbereich == */
 #mainWrap { display: flex; flex-direction: column; overflow: hidden }
 #main { flex: 1; display: flex; flex-direction: column; overflow: hidden }
-#tabbar { display: flex; align-items: center; gap: 2px; padding: var(--space-1-5) var(--space-2) 0; box-shadow: inset 0 -1px 0 var(--edge-soft); flex-shrink: 0; overflow-x: auto; background: var(--bg1) }
+#tabbar { display: flex; align-items: center; gap: 2px; padding: var(--tab-bar-pad) var(--space-2); border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto; background: var(--panel-solid) }
 .navbtn { min-height: 26px; padding: 2px var(--space-2); background: transparent; color: var(--text2); font-size: 16px }
 .navbtn:disabled { opacity: .3; cursor: default }
 .navbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
-.tabstrip { display: flex; gap: 2px; overflow-x: auto; align-self: stretch; align-items: flex-end }
-/* Tabs: Reiter mit derselben Ecke wie die Seitenliste; der aktive Tab geht nahtlos in die Seite über */
-.tabchip { display: flex; align-items: center; gap: var(--space-1-5); padding: 7px var(--space-1-5) 7px 12px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; cursor: pointer; font-size: var(--text-sm); color: var(--text2); white-space: nowrap; flex: 0 1 170px; min-width: 96px; max-width: 170px; border: none; background: transparent; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
+.tabstrip { display: flex; align-items: center; gap: var(--tab-gap); overflow-x: auto }
+/* Tabs: wie Zeilen der Seitenliste (Ecke, Hover, aktive Tönung); Größe je Dichte-Modus */
+body { --tab-h: 34px; --tab-pad-x: 12px; --tab-gap: 4px; --tab-bar-pad: var(--space-2); --tab-font: var(--text-base) }
+body.density-compact { --tab-h: 28px; --tab-pad-x: 10px; --tab-gap: 2px; --tab-bar-pad: var(--space-1); --tab-font: var(--text-sm) }
+.tabchip { display: flex; align-items: center; gap: var(--space-1-5); height: var(--tab-h); padding: 0 var(--space-1) 0 var(--tab-pad-x); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--tab-font); color: var(--text2); white-space: nowrap; flex: 0 1 180px; min-width: 96px; max-width: 180px; border: none; background: transparent; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
 .tabchip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .tabchip:hover { background: var(--b-tint); color: var(--text) }
-.tabchip.active, .tabchip.active:hover { background: var(--panel-solid); color: var(--text); font-weight: 600; box-shadow: inset 1px 0 0 var(--edge-soft), inset -1px 0 0 var(--edge-soft), inset 0 1px 0 var(--edge-soft) }
-.tabchip-x { flex-shrink: 0; width: 18px; height: 18px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text2); font-size: var(--text-2xs); border-radius: var(--radius-pill); opacity: 0; transition: opacity var(--motion-fast), background var(--motion-fast) }
+.tabchip.active, .tabchip.active:hover { background: var(--b-tint-2); color: var(--text) }
+.tabchip-x { flex-shrink: 0; width: 20px; height: 20px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text2); font-size: var(--text-2xs); border-radius: var(--radius-xs); opacity: 0; transition: opacity var(--motion-fast), background var(--motion-fast) }
 .tabchip:hover .tabchip-x, .tabchip.active .tabchip-x, .tabchip-x:focus-visible { opacity: 1 }
 @media (hover: none) { .tabchip-x { opacity: 1 } }
-.tabchip-x:hover { color: var(--text); background: var(--surface-hover-strong) }
+.tabchip-x:hover { color: var(--text); background: var(--b-tint-2) }
 /* Neuer-Tab-„+“: runder Knopf hinter dem letzten Tab */
-.tabchip-new { flex: 0 0 auto; align-self: center; width: 28px; min-width: 28px; max-width: 28px; min-height: 28px; justify-content: center; padding: 0; font-size: 17px; line-height: 1; color: var(--text2); background: transparent; border: none; border-radius: var(--radius-pill) }
+.tabchip-new { flex: 0 0 auto; width: var(--tab-h); min-width: var(--tab-h); max-width: var(--tab-h); min-height: 0; justify-content: center; padding: 0; font-size: 17px; line-height: 1; color: var(--text2); background: transparent; border: none; border-radius: var(--radius-sm) }
 .tabchip-new:hover { background: var(--b-tint); color: var(--text) }
 
 /* Vertikale Tabs in der Seitenleiste — 1:1 identisch mit Seitenbaum-Design */
@@ -1221,6 +1223,7 @@ body.light #mainWrap { background: var(--panel-solid) }
 body.light #panel { background: var(--surface-subtle) }
 body.light .hist-list { background: var(--surface-hover) }
 /* Unterschiedliche, funktionale Flächen machen Orientierung leicht. */
+body.light #tabbar { background: var(--surface-subtle) }
 body.light .tabchip-x:hover, body.light button:hover { background: var(--surface-hover) }
 body.light .row.active { box-shadow: none }
 body.light .think-box { background: var(--surface-subtle); border-color: var(--edge-soft) }
