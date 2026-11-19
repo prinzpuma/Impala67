@@ -429,7 +429,7 @@ const TOOLS = [
 	},
 	{
 		name: "impala_heft_add_pages",
-		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index) oder position (start, before, after, end; Standard end). Heft-IDs liefert impala_list_pages (Feld id bei heft: true); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt.",
+		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index) oder position (start, before, after, end; Standard end). Heft-IDs liefert impala_list_pages (Feld id bei heft: true); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt. Anzeigen per impala_run_ui_action open_page mit der id.",
 		inputSchema: {
 			type: "object",
 			properties: {

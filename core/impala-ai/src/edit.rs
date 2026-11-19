@@ -221,9 +221,12 @@ pub fn merge_props(schema: &Value, current: &Value, update: &Value, title: &str,
     let title_col = cols.iter().find(|(_, t)| *t == "title").map(|(n, _)| *n);
     let mut out: Map<String, Value> = current.as_object().cloned().unwrap_or_default();
     let mut unknown = vec![];
-    // Groß-/Kleinschreibung, Leerraum und Strich-Varianten (‑ – — von Modellen) gelten gleich.
+    // Groß-/Kleinschreibung, Leerraum, Strich-Varianten (‑ – —) und mitkopierte Anführungszeichen
+    // (z. B. "Abgabe-Aufgaben" samt Quotes: Modelle setzen Namen mit Bindestrich gern in Anführungszeichen) gelten gleich.
     let norm = |s: &str| -> String {
         js::trim(s)
+            .trim_matches(|c| matches!(c, '"' | '\'' | '`' | '„' | '“' | '”' | '‚' | '‘' | '’'))
+            .trim()
             .chars()
             .map(|c| match c {
                 '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
@@ -323,6 +326,7 @@ mod tests {
         let p = merge_props(&schema, &Value::Null, &json!({"nr": 4, "Themen": ["Lager", "Gelenke"]}), "4 · Lager", "VL").unwrap();
         let ab = json!([{"name": "Abgabe-Aufgaben", "type": "text"}]);
         assert_eq!(merge_props(&ab, &Value::Null, &json!({"Abgabe\u{2011}Aufgaben": "A1"}), "t", "VL").unwrap()["Abgabe-Aufgaben"], "A1");
+        assert_eq!(merge_props(&ab, &Value::Null, &json!({"\"Abgabe-Aufgaben\"": "A1"}), "t", "VL").unwrap()["Abgabe-Aufgaben"], "A1");
         assert_eq!(p, json!({"Nr": 4, "Themen": "Lager, Gelenke", "Thema": "4 · Lager"}));
         let p = merge_props(&schema, &json!({"Nr": 1, "Themen": "a"}), &json!({"Themen": null}), "t", "VL").unwrap();
         assert_eq!(p, json!({"Nr": 1}));
