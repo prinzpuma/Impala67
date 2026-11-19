@@ -47,7 +47,10 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
             if titles.is_empty() {
                 return Some(Err("read_pages: titles darf nicht leer sein.".into()));
             }
-            Ok(("inspect", json!({ "kind": "page", "titles": titles })))
+            let mut m = pick(&["offset", "find"]);
+            m.insert("kind".into(), Value::from("page"));
+            m.insert("titles".into(), Value::Array(titles));
+            Ok(("inspect", Value::Object(m)))
         }
         "list_pages" if a.get("archived").and_then(Value::as_bool) == Some(true) => inspect("archived", &[]),
         "list_pages" => inspect("pages", &["query", "parent"]),
@@ -169,6 +172,8 @@ mod tests {
         let (t, a) = flat_call("read_pages", &json!({ "titles": ["A"] })).unwrap().unwrap();
         assert_eq!((t, a), ("inspect", json!({ "kind": "page", "titles": ["A"] })));
         assert!(flat_call("read_pages", &json!({ "titles": "A" })).unwrap().is_err());
+        let (_, a) = flat_call("read_pages", &json!({ "titles": ["A"], "find": "Early", "offset": 9 })).unwrap().unwrap();
+        assert_eq!(a, json!({ "kind": "page", "titles": ["A"], "find": "Early", "offset": 9 }));
         let (_, a) = flat_call("list_cards", &json!({ "due": true })).unwrap().unwrap();
         assert_eq!(a, json!({ "kind": "due" }));
         let (_, a) = flat_call("list_pages", &json!({ "parent": "Mathe", "query": "V01" })).unwrap().unwrap();

@@ -125,20 +125,72 @@ pub fn replace_guard(old: &str, new: &str) -> Option<String> {
     ))
 }
 
-/// Spalten eines Verzeichnisses als „Name (Typ)“-Liste für Meldungen und Leseergebnisse.
-pub fn columns(schema: &Value) -> Vec<String> {
-    schema
+/// Ausschnitt eines langen Textes zum Lesen (`read_pages`): höchstens `max` Zeichen ab `offset`
+/// bzw. kurz vor der ersten Stelle von `find` (Groß-/Kleinschreibung egal). Ein Hinweis am Ende
+/// nennt das nächste `offset` und weitere Fundstellen, damit sich auch sehr lange Seiten und
+/// Hefte gezielt lesen lassen statt nur ihr Anfang. Zeichen = Unicode-Zeichen.
+pub fn read_window(text: &str, max: usize, offset: Option<usize>, find: Option<&str>) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    let find = find.map(str::trim).filter(|f| !f.is_empty());
+    let hits: Vec<usize> = find.map_or_else(Vec::new, |f| {
+        let lower: Vec<char> = chars.iter().map(|c| c.to_lowercase().next().unwrap_or(*c)).collect();
+        let needle: Vec<char> = f.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect();
+        (0..lower.len().saturating_sub(needle.len() - 1)).filter(|&i| lower[i..].starts_with(&needle)).collect()
+    });
+    let mut notes = vec![];
+    let from = offset.unwrap_or(0).min(n);
+    // Mit find und offset: erste Fundstelle ab offset.
+    let start = match (find, hits.iter().find(|&&h| h >= from)) {
+        (Some(_), Some(&hit)) => {
+            // Ab Zeilenanfang, bis zu 300 Zeichen vor der Fundstelle.
+            let floor = hit.saturating_sub(300).max(from);
+            (floor..hit).rev().find(|&i| chars[i] == '\n').map_or(floor, |i| i + 1)
+        }
+        (Some(f), None) => {
+            notes.push(format!("„{f}“ kommt {} nicht vor.", if from > 0 { "ab dort" } else { "im Text" }));
+            from
+        }
+        (None, _) => from,
+    };
+    let end = (start + max).min(n);
+    let mut out = String::new();
+    if start > 0 {
+        out.push_str(&format!("[… Zeichen 0–{start} ausgelassen]\n"));
+    }
+    out.extend(&chars[start..end]);
+    if end < n {
+        notes.push(format!("gekürzt: Zeichen {start}–{end} von {n} gezeigt, weiter mit offset={end}"));
+    }
+    if let Some(f) = find {
+        let later: Vec<String> = hits.iter().filter(|&&h| h >= end).take(5).map(usize::to_string).collect();
+        if !later.is_empty() {
+            notes.push(format!("„{f}“ auch bei Zeichen {} (find mit offset ab dort)", later.join(", ")));
+        }
+    }
+    if !notes.is_empty() {
+        out.push_str(&format!("\n[… {}]", notes.join("; ")));
+    }
+    out
+}
+
+/// Spalten eines Verzeichnisses als `{Name: Typ}` für Meldungen und Leseergebnisse – dieselbe
+/// Form wie `props` (`{Spalte: Wert}`), die Schlüssel lassen sich also direkt übernehmen.
+/// (Früher „Name (Typ)“: Modelle schrieben dann „Thema (title)“ als Spaltennamen.)
+pub fn columns(schema: &Value) -> Value {
+    let map: Map<String, Value> = schema
         .as_array()
         .map(|cols| {
             cols.iter()
                 .filter_map(|c| {
                     let name = c.get("name").and_then(Value::as_str)?;
                     let ty = c.get("type").and_then(Value::as_str).unwrap_or("text");
-                    Some(format!("{name} ({ty})"))
+                    Some((name.to_owned(), Value::from(ty)))
                 })
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    Value::Object(map)
 }
 
 /// Spaltenwerte zusammenführen: `null` löscht, Listen werden „a, b“, die Titelspalte folgt
@@ -192,10 +244,11 @@ pub fn merge_props(schema: &Value, current: &Value, update: &Value, title: &str,
         }
     }
     if !unknown.is_empty() {
+        let title_hint = title_col.map(|t| format!(" „{t}“ ist der Seitentitel.")).unwrap_or_default();
         return Err(format!(
-            "Unbekannte Spalte(n): {}. Spalten von „{folder}“: {}.",
+            "Unbekannte Spalte(n): {}. Spalten von „{folder}“ ({{Name: Typ}}): {}.{title_hint}",
             unknown.join(", "),
-            columns(schema).join(", ")
+            columns(schema)
         ));
     }
     if let Some(tc) = title_col
@@ -235,6 +288,24 @@ mod tests {
     }
 
     #[test]
+    fn lange_texte_gezielt_lesen() {
+        let text = format!("{}\nEarly-Effekt: r_o = V_A / I_C\n{}\nEarly nochmal", "a".repeat(2000), "b".repeat(3000));
+        // Ohne Angaben: Anfang + nächstes offset.
+        let w = read_window(&text, 1000, None, None);
+        assert!(w.starts_with("aaa") && w.contains("weiter mit offset=1000"), "{w}");
+        // find: ab der Zeile der Fundstelle, weitere Fundstelle genannt.
+        let w = read_window(&text, 1000, None, Some("early-effekt"));
+        assert!(w.starts_with("[… Zeichen 0–2001 ausgelassen]\nEarly-Effekt: r_o"), "{w}");
+        let w = read_window(&text, 1000, None, Some("Early"));
+        assert!(w.contains("„Early“ auch bei Zeichen"), "{w}");
+        // offset: weiterlesen; Ende ohne Hinweis.
+        let n = text.chars().count();
+        assert!(!read_window(&text, 10_000, Some(n - 5), None).contains("weiter mit"));
+        assert!(read_window(&text, 100, None, Some("gibtsnicht")).contains("kommt im Text nicht vor"));
+        assert_eq!(read_window("kurz", 100, None, None), "kurz");
+    }
+
+    #[test]
     fn spalten_gegen_schema() {
         let schema = json!([{"name":"Thema","type":"title"},{"name":"Nr","type":"number"},{"name":"Themen","type":"multi_select"}]);
         let p = merge_props(&schema, &Value::Null, &json!({"nr": 4, "Themen": ["Lager", "Gelenke"]}), "4 · Lager", "VL").unwrap();
@@ -242,7 +313,8 @@ mod tests {
         let p = merge_props(&schema, &json!({"Nr": 1, "Themen": "a"}), &json!({"Themen": null}), "t", "VL").unwrap();
         assert_eq!(p, json!({"Nr": 1}));
         let e = merge_props(&schema, &Value::Null, &json!({"Status": "x"}), "t", "VL").unwrap_err();
-        assert!(e.contains("Status") && e.contains("Nr (number)"), "{e}");
+        assert!(e.contains("Status") && e.contains(r#""Nr":"number""#) && e.contains("„Thema“ ist der Seitentitel"), "{e}");
+        assert_eq!(columns(&schema), json!({"Thema": "title", "Nr": "number", "Themen": "multi_select"}));
         assert!(merge_props(&Value::Null, &Value::Null, &json!({"a": 1}), "t", "Ordner").unwrap_err().contains("kein Verzeichnis"));
     }
 }

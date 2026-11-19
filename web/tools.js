@@ -484,7 +484,7 @@ export const TOOLS = (() => {
 						// Mehrere Seiten teilen sich das Ergebnis-Limit der Agent-Schleife (12 000 Zeichen).
 						const max = Math.max(3000, Math.floor(11000 / titles.length));
 						const pages = [];
-						for (const title of titles) pages.push(await run("read_page", { page_title: title, max }));
+						for (const title of titles) pages.push(await run("read_page", { page_title: title, max, offset: a.offset, find: a.find }));
 						return { pages };
 					}
 					case "decks": return run("list_decks", {});
@@ -761,7 +761,10 @@ export const TOOLS = (() => {
 				const pg = STATE.findPage(a.page_title);
 				if (!pg) return { error: "Seite nicht gefunden: " + a.page_title + ". Titel mit search oder list_pages nachschlagen." };
 				const max = Math.max(1000, Math.min(12000, Number(a.max) || 12000));
-				const clipText = (s) => (s.length > max ? s.slice(0, max) + `\n[… gekürzt, ${s.length - max} Zeichen fehlen — Seite einzeln lesen]` : s);
+				// Lange Inhalte: Ausschnitt ab offset bzw. Textstelle find, mit Hinweis aufs Weiterlesen (Kern: edit.rs).
+				const offset = Number(a.offset) > 0 ? Math.floor(Number(a.offset)) : undefined;
+				const find = typeof a.find === "string" && a.find.trim() ? a.find : undefined;
+				const clipText = (s) => CORE.aiReadWindow(s, max, offset, find);
 				if (pg.kind === "heft") {
 					// Hefte: pg.content ist leer — lesbar sind erkannte Handschrift + Text-Boxen.
 					const meta = STATE.heftMeta(pg.id) || {};

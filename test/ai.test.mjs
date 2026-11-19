@@ -105,6 +105,14 @@ test("AI Tools: Suche mit Teil-Treffern, Ordnerfilter und Duplikat-Schutz", asyn
 	const dup = await TOOLS.run("change", { operations: [{ op: "page.create", title: "Kursübersicht", parent: "Werkstoffkunde", content: "nochmal" }] });
 	assert.ok(dup.error && /existiert bereits/.test(dup.error), JSON.stringify(dup));
 
+	// Lange Seite gezielt lesen: ab Textstelle (find) und weiter ab offset.
+	const long = await TOOLS.run("change", { operations: [{ op: "page.create", title: "Skriptauszug", content: "x".repeat(20000) + "\nEarly-Effekt: r_o = V_A / I_C\n" + "y".repeat(5000) }] });
+	const first = await TOOLS.run("inspect", { kind: "page", titles: ["Skriptauszug"] });
+	assert.match(first.pages[0].content, /weiter mit offset=\d+/);
+	const atFind = await TOOLS.run("inspect", { kind: "page", titles: ["Skriptauszug"], find: "early-effekt" });
+	assert.match(atFind.pages[0].content, /ausgelassen\]\nEarly-Effekt: r_o = V_A \/ I_C/);
+
+	if (long._undo) await TOOLS.undo(long._undo);
 	if (made._undo) await TOOLS.undo(made._undo);
 });
 

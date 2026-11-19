@@ -11,6 +11,7 @@ mod pattern;
 
 pub mod agent;
 pub mod api;
+pub mod calc;
 pub mod chat;
 pub mod edit;
 pub mod error;

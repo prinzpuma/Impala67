@@ -442,18 +442,12 @@ impl Tools<'_> {
         }
     }
 
-    fn read_page(&self, title: &str, max: usize) -> Res {
+    fn read_page(&self, title: &str, max: usize, offset: Option<usize>, find: Option<&str>) -> Res {
         let id = self.page_by_title(title).map_err(|e| format!("{e}. Titel mit search oder list_pages nachschlagen."))?;
         let state = self.inner.model.state();
         let Some(pg) = state.pages.get(&id) else { return fail(format!("Seite nicht gefunden: {title}")) };
-        let clip = |s: &str| {
-            let n = len16(s);
-            if n > max {
-                format!("{}\n[… gekürzt, {} Zeichen fehlen — Seite einzeln lesen]", head16(s, max), n - max)
-            } else {
-                s.to_owned()
-            }
-        };
+        // Lange Inhalte: Ausschnitt ab offset bzw. Textstelle find (gleich wie in der PWA).
+        let clip = |s: &str| impala_ai::edit::read_window(s, max, offset, find);
         let mut out = Map::new();
         out.insert("title".into(), Value::from(state.page_label(pg)));
         if pg.is_heft() {
@@ -671,8 +665,12 @@ impl Tools<'_> {
                 }
                 // Mehrere Seiten teilen sich das Ergebnis-Limit der Agent-Schleife (12 000 Zeichen).
                 let max = (11000 / titles.len()).max(3000);
-                let pages: Vec<Value> =
-                    titles.iter().map(|t| self.read_page(t, max).unwrap_or_else(|e| json!({ "error": e }))).collect();
+                let offset = num(a, "offset").filter(|o| *o > 0.0).map(|o| o as usize);
+                let find = a.get("find").and_then(Value::as_str);
+                let pages: Vec<Value> = titles
+                    .iter()
+                    .map(|t| self.read_page(t, max, offset, find).unwrap_or_else(|e| json!({ "error": e })))
+                    .collect();
                 Ok(json!({ "pages": pages }))
             }
             "decks" => Ok(self.list_decks()),

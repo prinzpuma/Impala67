@@ -191,6 +191,10 @@ fn is_error(json: &str) -> bool {
     field(&serde_json::from_str(json).ok(), "error").is_some_and(js::truthy)
 }
 
+fn error_text(json: &str) -> String {
+    field(&serde_json::from_str(json).ok(), "error").map(js::string).unwrap_or_default()
+}
+
 struct Run<'a, P: LlmProvider, E: ToolExecutor> {
     provider: &'a P,
     executor: &'a mut E,
@@ -498,9 +502,31 @@ pub async fn run_agent(
                 }
                 continue;
             }
-            let (json, _) = run.run_tool(name, &args).await;
+            // calculate: Programmier-Schreibweise (let, //, Math.) einheitlich in math.js – für
+            // alle Plattformen hier statt in jeder Auswertung.
+            let args = if name == "calculate" {
+                let expr = args.get("expression").and_then(Value::as_str).unwrap_or_default();
+                match crate::calc::normalize_expression(expr) {
+                    Ok(e) => {
+                        let mut a = args.clone();
+                        a["expression"] = Value::from(e);
+                        a
+                    }
+                    Err(msg) => {
+                        failed_calls.push(call_key);
+                        run.finish_tool(call, Some("ungültiger Ausdruck"), error_json(&msg));
+                        continue;
+                    }
+                }
+            } else {
+                args
+            };
+            let (mut json, _) = run.run_tool(name, &args).await;
             if is_error(&json) {
                 failed_calls.push(call_key);
+                if name == "calculate" {
+                    json = error_json(&format!("{} {}", error_text(&json), crate::calc::syntax_hint()));
+                }
             }
             run.finish_tool(call, Some(&tool_detail(name, &args, req.embed_model)), json);
         }

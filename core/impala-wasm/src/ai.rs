@@ -405,10 +405,16 @@ pub fn ai_merge_props(schema: JsValue, current: JsValue, update: JsValue, title:
     }
 }
 
-/// Spalten eines Schemas als „Name (Typ)“.
+/// Ausschnitt eines langen Textes (`read_pages` mit `offset`/`find`), mit Hinweis aufs Weiterlesen.
+#[wasm_bindgen(js_name = aiReadWindow)]
+pub fn ai_read_window(text: &str, max: u32, offset: Option<u32>, find: Option<String>) -> String {
+    impala_ai::edit::read_window(text, max as usize, offset.map(|o| o as usize), find.as_deref())
+}
+
+/// Spalten eines Schemas als `{Name: Typ}`.
 #[wasm_bindgen(js_name = aiColumns)]
-pub fn ai_columns(schema: JsValue) -> Vec<String> {
-    impala_ai::edit::columns(&value(&schema))
+pub fn ai_columns(schema: JsValue) -> JsValue {
+    to_js(&impala_ai::edit::columns(&value(&schema)))
 }
 
 /// Dokumentierte Thinking-Stufen für Quelle und Modell (`settings` wie bei [`AiRun::agent`]).

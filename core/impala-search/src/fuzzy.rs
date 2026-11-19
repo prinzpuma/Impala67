@@ -9,6 +9,9 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::text::{FxMap, FxSet, is_word_char, lower};
 
+/// Unter so vielen UND-Treffern ergänzt die Suche Teil-Treffer (siehe [`FuzzyIndex::search`]).
+pub const FEW_FULL_HITS: usize = 5;
+
 /// Schreibweisen angleichen (Suchwort und Seitentext laufen beide hier durch).
 pub fn fold(s: &str) -> String {
     let mut s = if s.is_ascii() {
@@ -224,8 +227,8 @@ impl FuzzyIndex {
     }
 
     /// Sucht Suchwörter (≥ 3 Zeichen nach dem Falten) auf erlaubten Seiten (`allow`, z. B. ohne
-    /// Archiv): zuerst streng als UND (alle Wörter müssen vorkommen); bleibt das bei mehreren
-    /// Suchwörtern leer, greift ein Teil-Treffer-Fallback nach Anzahl getroffener Wörter.
+    /// Archiv): zuerst streng als UND (alle Wörter müssen vorkommen); bleiben das bei mehreren
+    /// Suchwörtern weniger als [`FEW_FULL_HITS`], folgen Teil-Treffer nach Anzahl getroffener Wörter.
     pub fn search(&self, query: &str, allow: impl Fn(&str) -> bool) -> Vec<FuzzyHit> {
         let mut terms: Vec<Vec<u16>> = Vec::new();
         for (_, key) in words(query) {
@@ -281,25 +284,37 @@ impl FuzzyIndex {
             }
             hits = Some((order, next));
         }
-        if let Some((order, mut hits)) = hits {
-            return order
+        let full: Vec<FuzzyHit> = hits.map_or_else(Vec::new, |(order, mut hits)| {
+            order
                 .into_iter()
                 .map(|page| {
                     let h = hits.remove(&page).expect("in order");
-                    FuzzyHit {
-                        id: self.page_ids[page as usize].clone(),
-                        score: h.score,
-                        forms: dedup_forms(h.forms),
-                    }
+                    FuzzyHit { id: self.page_ids[page as usize].clone(), score: h.score, forms: dedup_forms(h.forms) }
                 })
-                .collect();
+                .collect()
+        });
+        if terms.len() < 2 || full.len() >= FEW_FULL_HITS {
+            return full;
         }
-        if terms.len() >= 2 { self.search_partial(&terms, &allow) } else { Vec::new() }
+        // Keine oder wenige Voll-Treffer (etwa nur eine alte Seite, die zufällig alle Wörter
+        // enthält): Teil-Treffer dahinter. Gleiche Wertung wie dort (getroffene Wörter × 20 +
+        // Güte), damit Voll-Treffer vorn bleiben. Neben Voll-Treffern zählen nur Seiten mit
+        // ≥ 2 Suchwörtern (1-Wort-Treffer sind dann Rauschen).
+        let n = terms.len() as u32;
+        let ids: FxSet<&str> = full.iter().map(|h| h.id.as_str()).collect();
+        let floor = if full.is_empty() { 1 } else { 2 };
+        let partial = self.search_partial(&terms, &|id: &str| allow(id) && !ids.contains(id), floor);
+        if partial.is_empty() {
+            return full;
+        }
+        let mut out: Vec<FuzzyHit> = full.into_iter().map(|h| FuzzyHit { score: h.score + n * 20, ..h }).collect();
+        out.extend(partial);
+        out
     }
 
-    /// Teil-Treffer-Fallback bei Mehrfachbegriffen ohne Voll-UND: zählt getroffene Suchwörter
-    /// je Seite und verwirft 1-Wort-Rauschen, sobald mindestens eine Seite ≥ 2 Wörter trifft.
-    fn search_partial(&self, terms: &[Vec<u16>], allow: &impl Fn(&str) -> bool) -> Vec<FuzzyHit> {
+    /// Teil-Treffer bei Mehrfachbegriffen: zählt getroffene Suchwörter je Seite (mindestens
+    /// `floor`) und verwirft 1-Wort-Rauschen, sobald mindestens eine Seite ≥ 2 Wörter trifft.
+    fn search_partial(&self, terms: &[Vec<u16>], allow: &impl Fn(&str) -> bool, floor: u32) -> Vec<FuzzyHit> {
         struct Partial<'a> {
             matched: u32,
             quality: u32,
@@ -343,7 +358,7 @@ impl FuzzyIndex {
             return Vec::new();
         }
         let max_matched = acc.values().map(|p| p.matched).max().unwrap_or(0);
-        let min_matched = if max_matched >= 2 { 2 } else { 1 };
+        let min_matched = if max_matched >= 2 { 2 } else { 1 }.max(floor);
         let mut out: Vec<FuzzyHit> = order
             .into_iter()
             .filter_map(|page| {
@@ -419,9 +434,22 @@ mod tests {
         ix.set_page("c", "Praktikum Schwingkreis");
         ix.set_page("d", "Dioden Praktikum Kennlinie");
 
-        // Bestehende UND-Suche liefert nur Voll-UND ("b" hat nicht "Kennlinie", wird nicht ergänzt).
+        // Wenige UND-Treffer: Voll-Treffer vorn, Teil-Treffer mit ≥ 2 Wörtern dahinter, 1-Wort-Treffer nicht.
         let exact = ix.search("dioden kennlinie", |_| true);
         assert_eq!(exact.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), vec!["a", "d"]);
+        let few = ix.search("dioden kennlinie praktikum", |_| true);
+        let ids: Vec<&str> = few.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids[0], "d");
+        assert!(ids.contains(&"a") && ids.contains(&"b") && !ids.contains(&"c"), "{few:?}");
+        assert!(few[0].score > few[1].score, "{few:?}");
+
+        // Genug UND-Treffer: keine Teil-Treffer.
+        let mut many = FuzzyIndex::new();
+        for i in 0..FEW_FULL_HITS {
+            many.set_page(&format!("v{i}"), "Dioden Kennlinie");
+        }
+        many.set_page("x", "Dioden");
+        assert_eq!(many.search("dioden kennlinie", |_| true).len(), FEW_FULL_HITS);
 
         // 3-Wort-Suche ohne Voll-UND: nur ≥2-Wort-Treffer, keine 1-Wort-Treffer ("c" fehlt).
         let partial = ix.search("praktikum dioden abgabe fehlen", |_| true);
