@@ -1674,6 +1674,8 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2246,6 +2248,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_restore_page(
 fun uniffi_impala_ffi_checksum_method_impalacore_review_card(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_review_preview(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_run_mcp_tool(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_save_chat(
 ): Short
@@ -2878,6 +2882,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_restore_page(`ptr`: Pointer,`id`: Rus
 fun uniffi_impala_ffi_fn_method_impalacore_review_card(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,`grade`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_impala_ffi_fn_method_impalacore_review_preview(`ptr`: Pointer,`cardId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_run_mcp_tool(`ptr`: Pointer,`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,`utcOffsetMinutes`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_save_chat(`ptr`: Pointer,`chat`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -4134,6 +4140,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_review_preview() != 8984.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_run_mcp_tool() != 52190.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_save_chat() != 5723.toShort()) {
@@ -9472,6 +9481,14 @@ public interface ImpalaCoreInterface {
     fun `reviewPreview`(`cardId`: kotlin.String): List<kotlin.String>
     
     /**
+     * Inhalts-Werkzeug der MCP-Bridge (iPad, `DevBridge.swift`): dieselben flachen Werkzeuge wie
+     * die App-KI (`impala_ai::flat`, z. B. `read_pages`, `edit_page`), Name ohne `impala_`-Präfix,
+     * Argumente und Ergebnis als JSON. Ohne Rückfrage und ohne Änderungs-Karte im Chat;
+     * `dry_run: true` prüft Schreibwünsche nur. Unbekannter Name → `{ "error" }`.
+     */
+    fun `runMcpTool`(`name`: kotlin.String, `argsJson`: kotlin.String, `utcOffsetMinutes`: kotlin.Int): kotlin.String
+    
+    /**
      * Chat anlegen oder ersetzen; liefert die ID (leere `id` = neuer Chat). `updated` setzt der Kern
      * auf jetzt; unveränderte Chats werden nicht erneut geschrieben.
      */
@@ -12052,6 +12069,24 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_review_preview(
         it, FfiConverterString.lower(`cardId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Inhalts-Werkzeug der MCP-Bridge (iPad, `DevBridge.swift`): dieselben flachen Werkzeuge wie
+     * die App-KI (`impala_ai::flat`, z. B. `read_pages`, `edit_page`), Name ohne `impala_`-Präfix,
+     * Argumente und Ergebnis als JSON. Ohne Rückfrage und ohne Änderungs-Karte im Chat;
+     * `dry_run: true` prüft Schreibwünsche nur. Unbekannter Name → `{ "error" }`.
+     */override fun `runMcpTool`(`name`: kotlin.String, `argsJson`: kotlin.String, `utcOffsetMinutes`: kotlin.Int): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_run_mcp_tool(
+        it, FfiConverterString.lower(`name`),FfiConverterString.lower(`argsJson`),FfiConverterInt.lower(`utcOffsetMinutes`),_status)
 }
     }
     )
