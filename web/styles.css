@@ -66,21 +66,23 @@ body.sidebar-collapsed #sidebarResizer { display: none }
 /* == Hauptbereich == */
 #mainWrap { display: flex; flex-direction: column; overflow: hidden }
 #main { flex: 1; display: flex; flex-direction: column; overflow: hidden }
-#tabbar { display: flex; align-items: center; gap: 2px; padding: var(--space-1-5) var(--space-2); border-bottom: 1px solid var(--edge-soft); flex-shrink: 0; overflow-x: auto; background: var(--panel-solid) }
+#tabbar { display: flex; align-items: center; gap: 2px; padding: var(--space-1-5) var(--space-2) 0; box-shadow: inset 0 -1px 0 var(--edge-soft); flex-shrink: 0; overflow-x: auto; background: var(--bg1) }
 .navbtn { min-height: 26px; padding: 2px var(--space-2); background: transparent; color: var(--text2); font-size: 16px }
 .navbtn:disabled { opacity: .3; cursor: default }
 .navbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text) }
-.tabstrip { display: flex; gap: 2px; overflow-x: auto }
-/* UI-Fix v7: Tabs flexibel statt starr 170px — wenige Tabs dürfen wachsen */
-.tabchip { display: flex; align-items: center; gap: var(--space-1-5); padding: 5px var(--space-1-5) 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); color: var(--text2); white-space: nowrap; flex: 0 1 170px; min-width: 96px; max-width: 170px; border: none; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
+.tabstrip { display: flex; gap: 2px; overflow-x: auto; align-self: stretch; align-items: flex-end }
+/* Tabs: Reiter mit derselben Ecke wie die Seitenliste; der aktive Tab geht nahtlos in die Seite über */
+.tabchip { display: flex; align-items: center; gap: var(--space-1-5); padding: 7px var(--space-1-5) 7px 12px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; cursor: pointer; font-size: var(--text-sm); color: var(--text2); white-space: nowrap; flex: 0 1 170px; min-width: 96px; max-width: 170px; border: none; background: transparent; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
 .tabchip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.tabchip:hover { background: var(--edge-soft) }
-.tabchip.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
-.tabchip-x { min-height: 0; padding: 0 var(--space-1); background: transparent; color: var(--text2); font-size: var(--text-2xs); border-radius: var(--radius-xs) }
+.tabchip:hover { background: var(--b-tint); color: var(--text) }
+.tabchip.active, .tabchip.active:hover { background: var(--panel-solid); color: var(--text); font-weight: 600; box-shadow: inset 1px 0 0 var(--edge-soft), inset -1px 0 0 var(--edge-soft), inset 0 1px 0 var(--edge-soft) }
+.tabchip-x { flex-shrink: 0; width: 18px; height: 18px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text2); font-size: var(--text-2xs); border-radius: var(--radius-pill); opacity: 0; transition: opacity var(--motion-fast), background var(--motion-fast) }
+.tabchip:hover .tabchip-x, .tabchip.active .tabchip-x, .tabchip-x:focus-visible { opacity: 1 }
+@media (hover: none) { .tabchip-x { opacity: 1 } }
 .tabchip-x:hover { color: var(--text); background: var(--surface-hover-strong) }
-/* Neuer-Tab-„+“: kleiner quadratischer Knopf hinter letztem Tab (Browser-Standard) */
-.tabchip-new { flex: 0 0 auto; width: 28px; min-width: 28px; max-width: 28px; min-height: 26px; justify-content: center; padding: 0; font-size: 17px; line-height: 1; color: var(--text2); background: transparent; border: none; border-radius: var(--radius-sm) }
-.tabchip-new:hover { background: var(--edge-soft); color: var(--text) }
+/* Neuer-Tab-„+“: runder Knopf hinter dem letzten Tab */
+.tabchip-new { flex: 0 0 auto; align-self: center; width: 28px; min-width: 28px; max-width: 28px; min-height: 28px; justify-content: center; padding: 0; font-size: 17px; line-height: 1; color: var(--text2); background: transparent; border: none; border-radius: var(--radius-pill) }
+.tabchip-new:hover { background: var(--b-tint); color: var(--text) }
 
 /* Vertikale Tabs in der Seitenleiste — 1:1 identisch mit Seitenbaum-Design */
 .sidebar-tabs { margin: 2px 0 var(--space-2); display: flex; flex-direction: column; gap: 1px }
@@ -1219,8 +1221,6 @@ body.light #mainWrap { background: var(--panel-solid) }
 body.light #panel { background: var(--surface-subtle) }
 body.light .hist-list { background: var(--surface-hover) }
 /* Unterschiedliche, funktionale Flächen machen Orientierung leicht. */
-body.light #tabbar { background: var(--surface-subtle) }
-body.light .tabchip.active { background: var(--accent-soft); color: var(--text); border: none; box-shadow: none }
 body.light .tabchip-x:hover, body.light button:hover { background: var(--surface-hover) }
 body.light .row.active { box-shadow: none }
 body.light .think-box { background: var(--surface-subtle); border-color: var(--edge-soft) }
@@ -1916,12 +1916,12 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 .side-foot button { border-radius: var(--radius-sm) }
 .side-foot button:hover { background: var(--b-tint) }
 .ws-head { letter-spacing: 0; text-transform: none; font-size: var(--text-sm) }
-:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip) { position: relative; isolation: isolate; border-radius: var(--radius-sm) }
+:is(#tree .row, #sidebar .topbar .tab) { position: relative; isolation: isolate; border-radius: var(--radius-sm) }
 #tree .row:has(> .page-menu) { z-index: 5 }
-:is(#sidebar .topbar .tab, .tabstrip .tabchip, .tabchip-new, .navbtn, .topbar-btn) { border-radius: var(--radius-pill) }
-:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip):hover { background: var(--b-tint) }
-:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip).active { background: transparent; color: var(--text) }
-:is(#tree .row, #sidebar .topbar .tab, .tabstrip .tabchip).active::before {
+:is(#sidebar .topbar .tab, .navbtn, .topbar-btn) { border-radius: var(--radius-pill) }
+:is(#tree .row, #sidebar .topbar .tab):hover { background: var(--b-tint) }
+:is(#tree .row, #sidebar .topbar .tab).active { background: transparent; color: var(--text) }
+:is(#tree .row, #sidebar .topbar .tab).active::before {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -1929,7 +1929,7 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 	border-radius: inherit;
 	background: var(--b-tint-2);
 }
-:is(.navbtn, .topbar-btn, .tabchip-new, .tabchip-x):hover:not(:disabled) { background: var(--b-tint) }
+:is(.navbtn, .topbar-btn):hover:not(:disabled) { background: var(--b-tint) }
 .tab.active { background: var(--b-tint-2); color: var(--text) }
 .crumb { padding: 1px 8px; border-radius: var(--radius-pill) }
 .crumb:not(.current):hover { background: var(--b-tint); color: var(--text) }
