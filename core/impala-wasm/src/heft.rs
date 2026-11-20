@@ -511,3 +511,11 @@ pub fn heft_insert_at(position: &str, current: usize, len: usize) -> usize {
 pub fn heft_can_delete_pages(total: usize, selected: usize) -> bool {
     impala_heft::pages::can_delete_pages(total, selected)
 }
+
+/// Arbeitsblatt-Bausteine in DIN-A4-SVG-Seiten (`1000 × 1414`) und Klartext (`ocrText`) umsetzen.
+#[wasm_bindgen(js_name = heftRenderWorksheet)]
+pub fn heft_render_worksheet(spec: &JsValue) -> Result<JsValue, JsError> {
+    let input = value(spec)?;
+    let rendered = impala_heft::worksheet::render_worksheet(&input).map_err(|e| JsError::new(&e))?;
+    Ok(to_js(&rendered.to_json()))
+}

@@ -99,6 +99,7 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 | Import-Dialog mit Ziel und Position; PDF-Text übernehmen | 🟡 | 🟡 |
 | Zuletzt angesehene Seite merken | 🟡 nur Sitzung | prüfen |
 | „Heft-Seite als Bild an KI anhängen“ | prüfen | prüfen |
+| KI-Arbeitsblätter aus Vorlagen direkt als Heftseiten erzeugen (`create_worksheet`) | ❌ | ❌ |
 
 ## 4. KI-Chat & Karteikarten
 

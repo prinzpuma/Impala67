@@ -6,6 +6,7 @@ import { RAG } from "./rag.js";
 import { CHATS } from "./chats.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 import { CORE } from "./rust-core.js";
+import { createWorksheet } from "./worksheet.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Ausgeführt werden Lesen (inspect), Ändern (change, atomar mit Rückgängig) und die flachen
 // Werkzeuge im Rust-Kern (core/impala-tools) – dieselbe Implementierung wie in den nativen Apps.
@@ -141,6 +142,7 @@ export const TOOLS = (() => {
 			return { error: "ask_choice muss interaktiv im Chat beantwortet werden (Agent-Loop).", question: norm.question, options: norm.options };
 		}
 		if ((name === "inspect" && a.kind === "search" && a.semantic) || (name === "search" && a.semantic)) return semantic(String(a.query || ""));
+		if (name === "create_worksheet") return createWorksheet(a, { runTool: run, undoTool: undo });
 		return (await core(name, a)) ?? { error: "Unbekanntes Tool: " + name };
 	}
 

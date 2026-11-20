@@ -139,3 +139,52 @@ test("AI Tools: Atomare Notizen- und Kartenerstellung mit vollständigem Undo", 
 	assert.equal(Object.keys(S.pages).length, 0);
 	assert.equal(Object.keys(S.cards).length, 0);
 });
+
+test("AI Tools: create_worksheet als flaches Tool und Heft-Erstellung", async () => {
+	resetState();
+	assert.ok(TOOLS.flatDefs.some((d) => d.function?.name === "create_worksheet"), "create_worksheet muss in flatDefs sein");
+
+	const { createWorksheet } = await import("../web/worksheet.js");
+	const spec = {
+		title: "Arbeitsblatt DGL",
+		subject: "Mathe",
+		include_solutions: true,
+		blocks: [
+			{ type: "merksatz", text: "Trennung: $\\frac{dy}{g(y)} = f(x)\\,dx$" },
+			{ type: "rechenbox", prompt: "Löse $y' = 2x$", solution: "$y = x^2 + C$" },
+			{ type: "lueckentext", text: "Bei $y' = 0$ ist $y$ {{konstant}}." },
+		],
+	};
+
+	const dry = await TOOLS.runFlat("create_worksheet", { ...spec, dry_run: true });
+	assert.equal(dry.dryRun, true);
+	assert.equal(dry.pageCount, 2);
+	assert.equal(Object.keys(S.pages).length, 0);
+
+	let rasterizedSvgs = [];
+	const res = await createWorksheet(spec, {
+		runTool: TOOLS.run,
+		undoTool: TOOLS.undo,
+		rasterize: async (svg, w, h) => {
+			rasterizedSvgs.push(svg);
+			return { src: "data:image/png;base64,TEST_" + rasterizedSvgs.length, w, h };
+		},
+		loadHeft: async () => ({ HEFT: null }),
+		renderUi: () => {},
+	});
+
+	assert.equal(res.ok, true, JSON.stringify(res));
+	assert.equal(res.heft, true);
+	assert.equal(res.pagesAdded, 2);
+	assert.equal(res.pageCount, 2);
+	assert.equal(rasterizedSvgs.length, 2);
+	assert.ok(rasterizedSvgs[0].includes("dy/g(y)"));
+
+	const doc = STATE.heftDoc(res.id);
+	assert.equal(doc.pages.length, 2);
+	assert.ok(doc.pages[0].bg?.ref, "Erste Seite braucht Hintergrundbild");
+	assert.match(doc.pages[0].ocrText, /Trennung/);
+	assert.match(doc.pages[1].ocrText, /konstant/);
+
+	if (res._undo) await TOOLS.undo(res._undo);
+});

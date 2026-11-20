@@ -16,6 +16,7 @@ pub mod lasso;
 pub mod ocr;
 pub mod ops;
 pub mod pages;
+pub mod worksheet;
 
 pub use diff::{Shadow, diff_document};
 pub use doc::{

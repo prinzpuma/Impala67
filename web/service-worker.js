@@ -154,6 +154,7 @@ const APP_FILES = [
 	"./render-anki.js",
 	"./extras.js",
 	"./heft.js",
+	"./worksheet.js",
 	"./heft-viewport.js",
 	"./heft-stroke-draw.js",
 	"./heft-ink-render.js",

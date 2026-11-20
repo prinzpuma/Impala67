@@ -4645,6 +4645,28 @@ export function heftPointInPolygon(x, y, poly) {
 }
 
 /**
+ * Arbeitsblatt-Bausteine in DIN-A4-SVG-Seiten (`1000 × 1414`) und Klartext (`ocrText`) umsetzen.
+ * @param {any} spec
+ * @returns {any}
+ */
+export function heftRenderWorksheet(spec) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftRenderWorksheet(retptr, addBorrowedObject(spec));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Indizes der vom Lasso (`poly` flach) umschlossenen Striche (Binärformat, [`unpack`]).
  * @param {Float64Array} coords
  * @param {Uint32Array} counts
@@ -6121,7 +6143,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5111(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5092(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6167,7 +6189,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5111(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5092(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6259,8 +6281,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 208, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5055);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 210, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5035);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6287,14 +6309,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5111(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5111(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5092(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5092(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5055(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5035(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5055(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5035(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

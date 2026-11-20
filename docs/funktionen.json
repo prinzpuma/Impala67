@@ -62,6 +62,7 @@
 		{ "id": "heft.import-dialog", "bereich": "heft", "titel": "Import-Dialog mit Ziel und Position; PDF-Text übernehmen", "pwa": ["heft-import.js"], "android": "🟡", "ios": "🟡" },
 		{ "id": "heft.letzte-seite", "bereich": "heft", "titel": "Zuletzt angesehene Seite merken", "android": "🟡 nur Sitzung", "ios": "prüfen" },
 		{ "id": "heft.seite-an-ki", "bereich": "heft", "titel": "„Heft-Seite als Bild an KI anhängen“", "android": "prüfen", "ios": "prüfen" },
+		{ "id": "heft.arbeitsblatt", "bereich": "heft", "titel": "KI-Arbeitsblätter aus Vorlagen direkt als Heftseiten erzeugen (`create_worksheet`)", "pwa": ["worksheet.js"], "android": "❌", "ios": "❌" },
 
 		{ "id": "lernen.aenderungskarte", "bereich": "lernen", "titel": "Änderungskarte „Änderungen anzeigen“ / Seiten-Diff", "pwa": ["diffTableHtml"], "android": "🟡", "ios": "❌" },
 		{ "id": "lernen.leerer-chat", "bereich": "lernen", "titel": "Leerer Chat: Leucht-Kugel, Eingabe mittig", "pwa": ["chat-start.js"], "ios": "❌" },
