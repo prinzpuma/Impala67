@@ -25,17 +25,8 @@ if hasattr(sys.stdout, "reconfigure"):
 from chat_format import RESPONSE_PART, load_jsonl, load_tools, render
 
 ROOT = Path(__file__).resolve().parent
-MAX_SEQ_LENGTH = 4096
-FILES = [ROOT / "data" / "impala_tools_train.jsonl", ROOT / "data" / "impala_tools_val.jsonl"]
-
-TOOL_NAMES = {"inspect", "change", "view_heft_page", "ask_choice", "calculate"}
-REQUIRED = {  # vereinfachte Pflichtfelder je Operation
-    "page.create": ["title"], "page.append": ["title"], "page.replace": ["title"],
-    "page.patch": ["title", "search", "replace"], "page.rename": ["title", "to"],
-    "page.move": ["title"], "page.trash": ["title"], "page.archive": ["title"],
-    "heft.append": ["title", "text"], "card.create": ["cards"], "deck.create": ["deck"],
-    "deck.rename": ["deck", "to"], "card.move": ["to"],
-}
+MAX_SEQ_LENGTH = 8192
+DEFAULT_FILES = [ROOT / "data" / "impala_flat_train.jsonl", ROOT / "data" / "impala_flat_val.jsonl"]
 
 
 def has_none(value):
@@ -48,71 +39,96 @@ def has_none(value):
     return False
 
 
-def check_sample(i, sample, text, n_tokens, valid_ops):
+def tool_schemas(tools):
+    out = {}
+    for t in tools:
+        fn = t["function"]
+        params = fn.get("parameters") or {}
+        out[fn["name"]] = {
+            "required": list(params.get("required") or []),
+            "props": set((params.get("properties") or {}).keys()),
+        }
+    return out
+
+
+def check_sample(i, sample, text, n_tokens, schemas, max_len):
     errs = []
     msgs = sample["messages"]
     if "<tools>" not in text and "# Tools" not in text:
         errs.append("Tools fehlen im gerenderten Prompt")
-    if n_tokens > MAX_SEQ_LENGTH:
-        errs.append(f"zu lang: {n_tokens} Tokens")
+    if n_tokens > max_len:
+        errs.append(f"zu lang: {n_tokens} > {max_len} Tokens")
     for m in msgs:
         if m["role"] != "assistant":
             continue
-        if m.get("tool_calls") and m.get("content"):
+        if m.get("tool_calls") and (m.get("content") or "").strip():
             errs.append("assistant hat content UND tool_calls (doppelter Aufruf)")
-        if not m.get("reasoning_content"):
+        if not (m.get("reasoning_content") or "").strip():
             errs.append("assistant ohne reasoning_content")
         for tc in m.get("tool_calls") or []:
             fn = tc["function"]
-            if fn["name"] not in TOOL_NAMES:
-                errs.append(f"unbekanntes Tool {fn['name']}")
-            args = json.loads(fn["arguments"])
+            name = fn["name"]
+            if name not in schemas:
+                errs.append(f"unbekanntes Tool {name}")
+                continue
+            raw_args = fn["arguments"]
+            args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+            if not isinstance(args, dict):
+                errs.append(f"Argumente von {name} sind kein Objekt")
+                continue
             if has_none(args):
-                errs.append(f"null in Argumenten von {fn['name']}")
-            if fn["name"] == "change":
-                for op in args.get("operations", []):
-                    if op.get("op") not in valid_ops:
-                        errs.append(f"unbekannte Operation {op.get('op')}")
-                    for key in REQUIRED.get(op.get("op"), []):
-                        if not op.get(key):
-                            errs.append(f"{op.get('op')} ohne {key}")
+                errs.append(f"null in Argumenten von {name}")
+            unknown = set(args.keys()) - schemas[name]["props"]
+            if unknown:
+                errs.append(f"{name}: unbekannte Felder {sorted(unknown)}")
+            for req in schemas[name]["required"]:
+                val = args.get(req)
+                if val is None or val == "" or val == []:
+                    errs.append(f"{name} ohne Pflichtfeld {req}")
     n_asst = sum(1 for m in msgs if m["role"] == "assistant")
     n_tc = sum(len(m.get("tool_calls") or []) for m in msgs if m["role"] == "assistant")
+    # Qwen-3.5-Template rendert <think> nur ab dem letzten User-Turn (frühere Runden werden ohne <think> gerendert).
+    last_user_idx = max((idx for idx, m in enumerate(msgs) if m["role"] == "user"), default=0)
+    n_last_asst = sum(1 for m in msgs[last_user_idx:] if m["role"] == "assistant")
     # Nur den Gesprächsteil zählen: der Systemteil enthält Format-Beispiele mit <tool_call>.
     convo = text.split("<|im_start|>user\n", 1)[-1]
     if convo.count(RESPONSE_PART) != n_asst:
         errs.append(f"{convo.count(RESPONSE_PART)} Assistenten-Marker statt {n_asst}")
-    if convo.count("<think>") != n_asst:
-        errs.append(f"{convo.count('<think>')} <think>-Blöcke statt {n_asst}")
+    if convo.count("<think>") != n_last_asst:
+        errs.append(f"{convo.count('<think>')} <think>-Blöcke statt {n_last_asst}")
     if convo.count("<tool_call>") != n_tc:
         errs.append(f"{convo.count('<tool_call>')} <tool_call> statt {n_tc}")
-    if re.search(r">\nnull\n<|\":\s*null\b", convo):
-        errs.append("null-Wert im gerenderten Gesprächsteil")
+    if re.search(r">\nnull\n<", convo):
+        errs.append("null-Parameterwert im gerenderten Gesprächsteil")
     return [f"#{i}: {e}" for e in errs]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="unsloth/Qwen3.5-4B")
+    ap.add_argument("--model", default="Qwen/Qwen3.5-4B")
     ap.add_argument("--show", type=int, default=1, help="Anzahl vollständig ausgegebener Beispiele")
+    ap.add_argument("--max-len", type=int, default=MAX_SEQ_LENGTH)
+    ap.add_argument("--files", nargs="*", help="JSONL-Dateien (Standard: impala_flat_train/val.jsonl)")
     args = ap.parse_args()
 
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(args.model)
     tools = load_tools()
-    change = next(t["function"] for t in tools if t["function"]["name"] == "change")
-    valid_ops = set(change["parameters"]["properties"]["operations"]["items"]["properties"]["op"]["enum"])
+    schemas = tool_schemas(tools)
+    files = [Path(f) for f in args.files] if args.files else [p for p in DEFAULT_FILES if p.exists()]
+    if not files:
+        raise SystemExit("Keine Datensatz-Dateien gefunden (zuerst generate_trajectories.mjs ausführen).")
 
     all_errs, lengths, shown = [], [], 0
-    for path in FILES:
+    for path in files:
         for i, sample in enumerate(load_jsonl(path)):
             text = render(tok, sample["messages"], tools)
             n = len(tok(text, add_special_tokens=False)["input_ids"])
             lengths.append(n)
-            all_errs += check_sample(f"{path.stem}:{i}", sample, text, n, valid_ops)
+            all_errs += check_sample(f"{path.stem}:{i}", sample, text, n, schemas, args.max_len)
             if shown < args.show:
                 print("=" * 30, f"{path.name} #{i} ({n} Tokens)", "=" * 30)
-                print(text)
+                print(text[:4000] + ("\n...[gekürzt]..." if len(text) > 4000 else ""))
                 shown += 1
 
     print("=" * 80)

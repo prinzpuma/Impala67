@@ -15,9 +15,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 TOOL_DEFS_CANDIDATES = [
-    ROOT.parent / "core" / "impala-ai" / "src" / "tool_defs.json",  # im Repo
-    ROOT / "tool_defs.json",                                         # neben dem Skript (Colab-Upload)
-    Path("tool_defs.json"),                                          # aktuelles Verzeichnis
+    ROOT.parent / "core" / "impala-ai" / "src" / "tool_defs_flat.json",  # im Repo (aktuelle flache Werkzeuge)
+    ROOT / "tool_defs_flat.json",                                         # neben dem Skript (Colab-Upload)
+    Path("tool_defs_flat.json"),                                          # aktuelles Verzeichnis
+    ROOT.parent / "core" / "impala-ai" / "src" / "tool_defs.json",       # Fallback (alt)
 ]
 
 # Qwen (ChatML-basiert): Nutzer- und Tool-Antworten beginnen mit "<|im_start|>user\n",
@@ -43,6 +44,8 @@ def prepare_messages(messages):
     """Kopie der Nachrichten mit arguments als Dict (für das Qwen-Template)."""
     out = copy.deepcopy(messages)
     for m in out:
+        if m.get("content") is None:
+            m["content"] = ""
         for tc in m.get("tool_calls") or []:
             fn = tc["function"]
             if isinstance(fn.get("arguments"), str):

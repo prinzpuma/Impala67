@@ -61,3 +61,5 @@ training/data/*.jsonl
 training/data/fixtures/
 training/*.gguf
 training/.venv/
+training/data/.bridge/
+training/colab_upload/*.zip
