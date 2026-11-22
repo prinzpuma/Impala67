@@ -3,6 +3,9 @@
    Klassen für KI-Themes: .zs-world, .zs-head, .zs-canvas, .zs-node(.is-mastered|.is-next|.is-later),
    .zs-era, .zs-edge, .zs-lesson, .zs-body, .zs-sec, .zs-quiz, .zs-ws. Variable --zs-accent. */
 
+/* Opt-in: .tab setzt display:flex und würde das hidden-Attribut der Pille sonst überstimmen. */
+#btnZeitstrahl[hidden] { display: none !important; }
+
 .zs-world {
 	--zs-accent: var(--accent);
 	--zs-card: var(--surface, var(--panel-solid));
