@@ -54,6 +54,7 @@ export async function seedIfEmpty() {
 // Papierkorb automatisch leeren: Seiten, Stapel und Karten, die länger als 30 Tage
 // im Papierkorb liegen, werden beim Start endgültig gelöscht (wie in Notion).
 export async function purgeOldTrash() {
+	if (CLOUDFLARE_SYNC.status?.().status === "syncing") return;
 	const cutoff = Date.now() - 30 * 864e5;
 	// DRY: dieselbe Alters-Prüfung stand 3× wörtlich da (Seiten, Stapel, Karten).
 	const isOld = (x) => !!(x && x.trashedAt && new Date(x.trashedAt).getTime() < cutoff);
@@ -272,10 +273,37 @@ export async function initApp() {
 	// Drive-Abgleich im Hintergrund: Der erste Abgleich eines neuen Geräts lädt das ganze Backup
 	// (Minuten) – mit await standen so lange Bridge, Update-Prüfung und Badge still.
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) danach als Lösungs-Popup zeigen.
+	let trashPurged = false;
+	const runTrashPurgeOnce = () => {
+		if (trashPurged) return;
+		trashPurged = true;
+		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
+	};
+	const scheduleTrashPurgeAfterSync = () => {
+		const cf = CLOUDFLARE_SYNC.status?.() || {};
+		if (!(S.settings.cfSyncKey || cf.syncKey)) {
+			runTrashPurgeOnce();
+			return;
+		}
+		if (cf.status === "connected") {
+			runTrashPurgeOnce();
+			return;
+		}
+		const onCf = (ev) => {
+			if (ev?.detail?.status !== "connected") return;
+			window.removeEventListener("impala67:cloudflare-sync-status", onCf);
+			runTrashPurgeOnce();
+		};
+		window.addEventListener("impala67:cloudflare-sync-status", onCf);
+	};
+
 	Promise.resolve()
 		.then(() => SETTINGS.startAutoDriveSync())
 		.catch((e) => console.warn("[boot] Drive-Abgleich beim Start fehlgeschlagen:", e))
-		.finally(() => setTimeout(showPendingConflictsIfAny, 450));
+		.finally(() => {
+			setTimeout(showPendingConflictsIfAny, 450);
+			scheduleTrashPurgeAfterSync();
+		});
 	// Ping nur bei sichtbarem Tab (spart Akku); beim Zurückkehren sofort prüfen.
 	setInterval(pingAiStatusIfVisible, 60000);
 	document.addEventListener("visibilitychange", pingAiStatusIfVisible);
@@ -288,8 +316,8 @@ export async function initApp() {
 		: (fn) => setTimeout(fn, 600);
 	scheduleIdle(() => {
 		RAG.reindexStale();
-		// PERF: purgeOldTrash & purgeOrphanBlobs laufen im Leerlauf nach dem ersten Rendern
-		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
+		// PERF: purgeOrphanBlobs läuft im Leerlauf nach dem ersten Rendern;
+		// purgeOldTrash wartet auf den Abschluss des initialen Syncs (vermeidet falsche Löschkonflikte).
 		purgeOrphanBlobs();
 		try { HEFT_INDEXER.startBackgroundScan(); } catch (e) { console.warn("Heft-Indexer Start übersprungen:", e); }
 		// Google-Login (nur für die Drive-Anmeldung per Klick) erst nach dem Start laden.

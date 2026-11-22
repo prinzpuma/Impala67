@@ -164,11 +164,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		try {
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Gleiche Änderungen ab…");
+			DB.beginImportBatch?.();
 			STATE.beginRemoteBatch?.();
 			let report;
 			try {
 				report = await core.sync(!!forceAll);
 			} finally {
+				DB.endImportBatch?.();
 				await STATE.endRemoteBatch?.();
 			}
 			refreshState();

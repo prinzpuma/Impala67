@@ -145,7 +145,15 @@ export const DB = (() => {
 			await yieldToMain();
 		}
 	}
-	const forgetKnownEventIds = () => { _knownEventIds = null; _knownMaxSeq = 0; };
+	const forgetKnownEventIds = () => {
+		_knownEventIds = null; _knownMaxSeq = 0;
+		if (_importBatch) { _importBatch.unsyncedLocal = null; _importBatch.localJson = null; _importBatch.fullLog = null; }
+	};
+	let _importBatch = null;
+	function beginImportBatch() {
+		_importBatch = { after: null, unsyncedLocal: null, localJson: null, fullLog: null };
+	}
+	function endImportBatch() { _importBatch = null; }
 	// Welche dieser Event-ids liegen schon im Log? (Drive-Backup prüft vor dem Verdichten.)
 	async function knownIds(list) {
 		const ids = await ensureKnownEventIds();
@@ -160,6 +168,13 @@ export const DB = (() => {
 		list.forEach(validateEvent);
 		const result = await rw("events", (s) => list.forEach((ev) => s.add(ev)));
 		if (_knownEventIds) list.forEach((ev) => { if (ev?.id) _knownEventIds.add(ev.id); });
+		if (_importBatch) {
+			if (list.some((ev) => !ev?._remote && !ev?._derived)) {
+				_importBatch.unsyncedLocal = null;
+				_importBatch.localJson = null;
+			}
+			_importBatch.fullLog = null;
+		}
 		return result;
 	}
 	const addEvent = (ev) => addEvents([ev]);
@@ -637,8 +652,13 @@ export const DB = (() => {
 		const added = new Set();
 		const seenIds = { has: (id) => added.has(id) || !!knownEventIds?.has(id), add: (id) => { added.add(id); } };
 		local.forEach((e) => seenIds.add(e.id));
-		let fullLog = useKnownIds ? null : local;
-		const history = async () => (fullLog ??= await allEvents());
+		let fullLog = useKnownIds ? (_importBatch?.fullLog || null) : local;
+		const history = async () => {
+			if (fullLog) return fullLog;
+			fullLog = await allEvents();
+			if (_importBatch && useKnownIds) _importBatch.fullLog = fullLog;
+			return fullLog;
+		};
 		const floor = compactFloor();
 		// [A4] EIN kaputtes Event legte bisher den ganzen Sync still: der Filter prüfte nur id,
 		// validateEvent verlangt aber auch t und type und WIRFT — damit flog die komplette
@@ -695,11 +715,22 @@ export const DB = (() => {
 			// Der Kern braucht nur die lokalen Events nach dem Wasserstand; das ganze Log nur bei einem
 			// Kandidaten (dann meldet er needHistory).
 			const after = opts.unsyncedAfterSeq;
-			const delta = partialLocal ? opts.localEvents : await eventsAfterSeqAll(after);
-			const unsyncedLocal = delta.filter((ev) => !ev?._remote && !ev?._derived && (Number(ev?.seq) || 0) > after);
+			let unsyncedLocal, localJson;
+			if (!partialLocal && _importBatch && _importBatch.after === after && _importBatch.localJson !== null) {
+				unsyncedLocal = _importBatch.unsyncedLocal;
+				localJson = _importBatch.localJson;
+			} else {
+				const delta = partialLocal ? opts.localEvents : await eventsAfterSeqAll(after);
+				unsyncedLocal = delta.filter((ev) => !ev?._remote && !ev?._derived && (Number(ev?.seq) || 0) > after);
+				localJson = unsyncedLocal.length ? JSON.stringify(unsyncedLocal) : "";
+				if (!partialLocal && _importBatch) {
+					_importBatch.after = after;
+					_importBatch.unsyncedLocal = unsyncedLocal;
+					_importBatch.localJson = localJson;
+				}
+			}
 			if (unsyncedLocal.length) {
 				const freshJson = JSON.stringify(fresh);
-				const localJson = JSON.stringify(unsyncedLocal);
 				const known = (id) => seenIds.has(id);
 				const now = () => U.now();
 				let res = JSON.parse(opts.conflictCheck(freshJson, localJson, after, undefined, known, now));
@@ -716,7 +747,16 @@ export const DB = (() => {
 				ev._remoteSource = opts.remoteSource || "drive";
 			}
 		}); // neue lokale Seq
-		if (fresh.length) await addEvents(fresh);
+		if (fresh.length) {
+			const cachedBatch = _importBatch;
+			const savedLog = cachedBatch?.fullLog;
+			await addEvents(fresh);
+			// addEvents leert fullLog wegen externer Schreibzugriffe; für fresh können wir ihn fortschreiben.
+			if (cachedBatch && savedLog) {
+				savedLog.push(...fresh);
+				cachedBatch.fullLog = savedLog;
+			}
+		}
 		const blobEntries = data.blobs && typeof data.blobs === "object" ? Object.entries(data.blobs) : [];
 		// PERF: Sync-Pakete (Cloudflare) bringen nie Blobs mit — dann auch nicht bei jedem Paket alle
 		// Blob-Schlüssel aus IndexedDB lesen. Fehlende Blobs in EINER Transaktion statt einer je Blob.
@@ -756,5 +796,5 @@ export const DB = (() => {
 		return done(t);
 	}
 
-	return { open, isOpen: () => Boolean(db), addEvent, allEvents, knownIds, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, setHeftBlobPolicy, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, pointCheckpointBlobs, heftBlobSeqs, dedupeCheckpointBlobs, storageCheck, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, clearPages };
+	return { open, isOpen: () => Boolean(db), addEvent, allEvents, knownIds, eventAtSeq, eventLogInfo, eventsAfterSeqAll, filterEventsForSync, compactEvents, compactLocalIfDue, setHeftBlobPolicy, isLocalOnly, replaceHeftHistory, stateCheckpointPartHashes, pointCheckpointBlobs, heftBlobSeqs, dedupeCheckpointBlobs, storageCheck, maxSeq, putBlob, getBlob, delBlob, allBlobKeys, getStateCheckpoint, getStateCheckpointPayload, getStateCheckpointHeft, putStateCheckpoint, clearStateCheckpoint, isStateCheckpointKey, blobUrl, putVec, getVec, delVec, allVecs, exportAll, importAll, beginImportBatch, endImportBatch, clearPages };
 })();
