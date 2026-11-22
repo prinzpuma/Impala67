@@ -273,26 +273,27 @@ export async function initApp() {
 	// Drive-Abgleich im Hintergrund: Der erste Abgleich eines neuen Geräts lädt das ganze Backup
 	// (Minuten) – mit await standen so lange Bridge, Update-Prüfung und Badge still.
 	// Offene Sync-Konflikte (nach Drive-Sync / Reload) danach als Lösungs-Popup zeigen.
-	let trashPurged = false;
-	const runTrashPurgeOnce = () => {
-		if (trashPurged) return;
-		trashPurged = true;
+	let postSyncCleanupDone = false;
+	const runPostSyncCleanupOnce = () => {
+		if (postSyncCleanupDone) return;
+		postSyncCleanupDone = true;
 		purgeOldTrash().catch((e) => console.warn("Papierkorb-GC übersprungen:", e));
+		purgeOrphanBlobs();
 	};
 	const scheduleTrashPurgeAfterSync = () => {
 		const cf = CLOUDFLARE_SYNC.status?.() || {};
 		if (!(S.settings.cfSyncKey || cf.syncKey)) {
-			runTrashPurgeOnce();
+			runPostSyncCleanupOnce();
 			return;
 		}
 		if (cf.status === "connected") {
-			runTrashPurgeOnce();
+			runPostSyncCleanupOnce();
 			return;
 		}
 		const onCf = (ev) => {
 			if (ev?.detail?.status !== "connected") return;
 			window.removeEventListener("impala67:cloudflare-sync-status", onCf);
-			runTrashPurgeOnce();
+			runPostSyncCleanupOnce();
 		};
 		window.addEventListener("impala67:cloudflare-sync-status", onCf);
 	};
@@ -316,9 +317,6 @@ export async function initApp() {
 		: (fn) => setTimeout(fn, 600);
 	scheduleIdle(() => {
 		RAG.reindexStale();
-		// PERF: purgeOrphanBlobs läuft im Leerlauf nach dem ersten Rendern;
-		// purgeOldTrash wartet auf den Abschluss des initialen Syncs (vermeidet falsche Löschkonflikte).
-		purgeOrphanBlobs();
 		try { HEFT_INDEXER.startBackgroundScan(); } catch (e) { console.warn("Heft-Indexer Start übersprungen:", e); }
 		// Google-Login (nur für die Drive-Anmeldung per Klick) erst nach dem Start laden.
 		const gsi = document.createElement("script");

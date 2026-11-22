@@ -285,7 +285,15 @@ export const DRIVE = (() => {
 
 	async function syncRaw(onStatus, restore = false) {
 		const hasCloudflare = !!String(S.settings.cfSyncKey || "").trim();
-		const report = await withCore((core) => core.sync(allowSecrets(), mode(), restore, (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }, hasCloudflare));
+		DB.beginImportBatch?.();
+		STATE.beginRemoteBatch?.();
+		let report;
+		try {
+			report = await withCore((core) => core.sync(allowSecrets(), mode(), restore, (label) => { emitSyncStatus("syncing", label); onStatus?.(label); }, hasCloudflare));
+		} finally {
+			DB.endImportBatch?.();
+			await STATE.endRemoteBatch?.();
+		}
 		if (report.cloudflare?.key) {
 			await adoptCloudflare(report.cloudflare);
 			emitSyncStatus("ok", "Cloudflare-Sync übernommen", "Notizen werden über Cloudflare geladen.");
