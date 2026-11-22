@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use impala_crypto::{CounterRandom, base64_encode, gunzip, gzip};
 use impala_drive::format::{BLOB_PREFIX, DELTA_PREFIX, SNAPSHOT_NAME};
-use impala_drive::{Clock, DriveBackup, DriveError, DriveStore, StorageStore, TokenSource};
+use impala_drive::policy::DriveMode;
+use impala_drive::{Clock, DriveBackup, DriveError, DriveOptions, DriveStore, StorageStore, TokenSource};
 use impala_net::{HttpClient, Method, NetError, Request, Response, block_on};
 use impala_storage::{Blob, MemoryStorage, Storage, Write};
 use serde_json::{Value, json};
@@ -423,4 +424,41 @@ fn storage_state_lives_in_meta_like_local_storage() {
     let info = block_on(a.storage_info()).unwrap().unwrap();
     assert!(info.app_bytes > 0.0);
     assert_eq!((info.used_bytes, info.limit_bytes), (100.0, 1000.0));
+}
+
+#[test]
+fn existing_backup_device_finds_cloudflare_key() {
+    let drive = Arc::new(Mutex::new(Drive::new()));
+    let mut a = device(&drive, 1);
+    add_event(&mut a, "a1", "pageCreate", json!({"id": "p1"}));
+    sync(&mut a);
+
+    // Gerät B im Backup-Modus: erster Abgleich holt a1 (damit ist first == false).
+    let mut b = device(&drive, 10);
+    b.set_options(DriveOptions { allow_secrets: true, mode: DriveMode::Backup, has_cloudflare: false });
+    assert_eq!(sync(&mut b).imported, 1);
+
+    // Gerät A lädt eine normale Notiz hoch (kein cfSyncKey): B darf nichts importieren und
+    // lädt die Datei beim nächsten Durchgang nicht erneut.
+    add_event(&mut a, "a2", "pageCreate", json!({"id": "p2"}));
+    sync(&mut a);
+    let before = drive.lock().unwrap().log.len();
+    let r = sync(&mut b);
+    assert_eq!((r.imported, r.cloudflare.as_ref().map(|c| c.key.as_str())), (0, None));
+    let dl1 = drive.lock().unwrap().log[before..].iter().filter(|l| l.contains("/files/f")).count();
+    assert_eq!(dl1, 1);
+
+    let before = drive.lock().unwrap().log.len();
+    let r = sync(&mut b);
+    assert_eq!((r.imported, r.cloudflare.as_ref().map(|c| c.key.as_str())), (0, None));
+    let dl2 = drive.lock().unwrap().log[before..].iter().filter(|l| l.contains("/files/f")).count();
+    assert_eq!(dl2, 0, "bereits geprüfte Datei nicht erneut laden");
+
+    // Gerät A richtet Cloudflare-Sync ein: B (bestehendes Backup-Gerät) findet den Schlüssel.
+    add_event(&mut a, "a3", "settingsSet", json!({"cfUrl": "https://cf.test", "cfSyncKey": "impala-k"}));
+    sync(&mut a);
+    let r = sync(&mut b);
+    assert_eq!(r.imported, 0);
+    let cf = r.cloudflare.expect("Cloudflare-Zugang muss gefunden werden");
+    assert_eq!((cf.url.as_str(), cf.key.as_str()), ("https://cf.test", "impala-k"));
 }

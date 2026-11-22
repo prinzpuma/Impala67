@@ -19,6 +19,7 @@ pub const KEY_UPLOAD_HASHES: &str = "impala67_drive_upload_hashes";
 pub const KEY_SECRET_SCRUB: &str = "impala67_drive_secret_scrub";
 pub const KEY_SYNCED_SEQ: &str = "impala67_drive_synced_seq";
 pub const KEY_LAST_OK: &str = "impala67_drive_last_ok";
+pub const KEY_CF_PROBED: &str = "impala67_drive_cf_probed";
 /// Altlast (vor [G2]); wird beim Speichern entfernt.
 pub const KEY_KNOWN_BLOBS: &str = "impala67_drive_known_blobs";
 
@@ -73,6 +74,8 @@ pub struct DriveState {
     pub synced_seq: Option<u64>,
     /// ISO-Zeit des letzten erfolgreichen Syncs.
     pub last_ok: Option<String>,
+    /// Im Backup-Modus ohne Cloudflare-Schlüssel schon nach `cfSyncKey` durchsuchte Stempel/IDs.
+    pub cf_probed: Vec<String>,
 }
 
 impl DriveState {
@@ -83,6 +86,16 @@ impl DriveState {
     pub fn add_known_delta(&mut self, id: &str) {
         if !self.knows_delta(id) {
             self.known_deltas.push(id.to_owned());
+        }
+    }
+
+    pub fn has_probed_cf(&self, key: &str) -> bool {
+        self.cf_probed.iter().any(|k| k == key)
+    }
+
+    pub fn add_cf_probed(&mut self, key: &str) {
+        if !self.has_probed_cf(key) {
+            self.cf_probed.push(key.to_owned());
         }
     }
 
@@ -102,6 +115,9 @@ impl DriveState {
             secret_scrub: get(KEY_SECRET_SCRUB).as_deref() == Some("1"),
             synced_seq: seq(get(KEY_SYNCED_SEQ)),
             last_ok: get(KEY_LAST_OK),
+            cf_probed: json(get(KEY_CF_PROBED))
+                .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()))
+                .unwrap_or_default(),
         }
     }
 
@@ -125,6 +141,11 @@ impl DriveState {
             (KEY_SECRET_SCRUB, self.secret_scrub.then(|| "1".to_owned())),
             (KEY_SYNCED_SEQ, self.synced_seq.map(|s| s.to_string())),
             (KEY_LAST_OK, self.last_ok.clone()),
+            (
+                KEY_CF_PROBED,
+                (!self.cf_probed.is_empty())
+                    .then(|| stringify(&json!(bounded_known_ids(&self.cf_probed, KNOWN_IDS_MAX)))),
+            ),
             (KEY_KNOWN_BLOBS, None),
         ]
     }

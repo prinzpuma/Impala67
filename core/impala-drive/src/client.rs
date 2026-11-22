@@ -283,6 +283,9 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             // Alles neu lesen: auch Snapshot und Deltas, die als gelesen gelten.
             st.snapshot_stamp = None;
             st.known_deltas.clear();
+            st.cf_probed.clear();
+        } else if self.options.has_cloudflare && !st.cf_probed.is_empty() {
+            st.cf_probed.clear();
         }
 
         if pull {
@@ -292,6 +295,13 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
                 return Ok(report);
             }
             report.pulled = true;
+        } else if !self.options.has_cloudflare {
+            // Bestehendes Gerät im Backup-Modus ohne Cloudflare-Schlüssel: neue Drive-Dateien
+            // nach einem Schlüssel durchsuchen, ohne Notizen/Blobs zu importieren.
+            if let Some(login) = self.probe_cloudflare(&mut st, &files, on_phase).await? {
+                report.cloudflare = Some(login);
+                return Ok(report);
+            }
         }
         self.sync_blobs(&mut st, &files, pull, &mut report, on_phase).await?;
 
@@ -426,6 +436,43 @@ impl<H: HttpClient, T: TokenSource, S: DriveStore, C: Clock> DriveBackup<H, T, S
             st.snapshot_stamp = stamp;
         }
         deltas.iter().for_each(|f| st.add_known_delta(&f.id));
+        self.store.save_state(st).await?;
+        Ok(None)
+    }
+
+    /// Durchsucht noch nicht geprüfte Drive-Dateien (neuerer Snapshot / ungesehene Deltas) nach
+    /// einem Cloudflare-Zugang, ohne Events zu importieren oder `snapshot_stamp`/`known_deltas`
+    /// zu verändern.
+    async fn probe_cloudflare(
+        &mut self,
+        st: &mut DriveState,
+        files: &[DriveFile],
+        on_phase: &mut dyn FnMut(Phase),
+    ) -> Result<Option<CloudflareLogin>, DriveError> {
+        let remote: Vec<RemoteFile> = files.iter().map(DriveFile::remote).collect();
+        let snapshot = newest_file(&remote, &SNAPSHOT_NAMES)
+            .and_then(|r| remote.iter().position(|x| std::ptr::eq(x, r)))
+            .map(|i| &files[i]);
+        let stamp = snapshot.map(DriveFile::stamp);
+        let need_snapshot = stamp.as_ref().is_some_and(|s| st.snapshot_stamp.as_ref() != Some(s) && !st.has_probed_cf(s));
+        let deltas: Vec<DriveFile> = unseen_deltas(files, st).into_iter().filter(|f| !st.has_probed_cf(&f.id)).collect();
+        let wanted: Vec<&DriveFile> = snapshot.filter(|_| need_snapshot).into_iter().chain(deltas.iter()).collect();
+        if wanted.is_empty() {
+            return Ok(None);
+        }
+        let mut finder = Finder::default();
+        for (i, file) in wanted.iter().enumerate() {
+            on_phase(Phase::Fetch { done: i, total: wanted.len() });
+            let body = self.call(|t| api::download(t, &file.id)).await?.body;
+            finder.scan(&body, file.encoding())?;
+        }
+        if let Some(login) = finder.login() {
+            return Ok(Some(login));
+        }
+        if let Some(s) = stamp.filter(|_| need_snapshot) {
+            st.add_cf_probed(&s);
+        }
+        deltas.iter().for_each(|f| st.add_cf_probed(&f.id));
         self.store.save_state(st).await?;
         Ok(None)
     }
