@@ -164,7 +164,13 @@ export const CLOUDFLARE_SYNC = (() => {
 		try {
 			state.progress = null;
 			setStatus("syncing", "Synchronisiere…", "Gleiche Änderungen ab…");
-			const report = await core.sync(!!forceAll);
+			STATE.beginRemoteBatch?.();
+			let report;
+			try {
+				report = await core.sync(!!forceAll);
+			} finally {
+				await STATE.endRemoteBatch?.();
+			}
 			refreshState();
 			reportOversized(report.blobs?.oversized);
 			if (report.compactionSkipped) console.warn("[cf-sync] Kompaktierung übersprungen, ganzes Log hochgeladen:", report.compactionSkipped);

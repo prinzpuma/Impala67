@@ -236,17 +236,36 @@ export const STATE = (() => {
 			countForCheckpoint(ordered.length);
 			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: ordered.length } });
 			emitRemoteApplied(new Set(ordered.map((ev) => ev?.type).filter((t) => typeof t === "string")), ordered);
-			if (!M.replayOrdered()) reloadSorted(ordered);
+			if (!M.replayOrdered()) {
+				if (_remoteBatchDepth > 0) {
+					if (!_deferredReorder) _deferredReorder = [];
+					_deferredReorder.push(...ordered);
+				} else {
+					reloadSorted(ordered);
+				}
+			}
 			return ordered;
 		}, { eventCount: list.length }, 16);
 	}
 	// Ein verspätetes Fremd-Event (z.B. eine ältere Änderung eines anderen Geräts an einer Seite, die hier
 	// schon neuer bearbeitet war) überschrieb den neueren Stand bis zum nächsten Start. Dann einmal sortiert
 	// aus dem Log neu laden – in der dispatch-Kette, damit keine eigene Änderung dazwischen geschrieben wird.
-	let _reorder = null;
+	// Während eines laufenden Sync-Durchgangs (beginRemoteBatch/endRemoteBatch) wird das Neuladen bis
+	// zum Ende gesammelt, statt bei jedem 10er-Paket das gesamte Event-Log neu einzulesen.
+	let _reorder = null, _remoteBatchDepth = 0, _deferredReorder = null;
+	function beginRemoteBatch() { _remoteBatchDepth++; }
+	async function endRemoteBatch() {
+		if (_remoteBatchDepth > 0) _remoteBatchDepth--;
+		if (_remoteBatchDepth === 0 && _deferredReorder) {
+			const events = _deferredReorder;
+			_deferredReorder = null;
+			await reloadSorted(events);
+		}
+	}
 	function reloadSorted(events) {
-		if (_reorder) { _reorder.events.push(...events); return; }
-		_reorder = { events: [...events] };
+		if (_reorder) { _reorder.events.push(...events); return _reorder.promise; }
+		const entry = { events: [...events], promise: null };
+		_reorder = entry;
 		const run = _dispatchChain.then(async () => {
 			const { events: changed } = _reorder;
 			_reorder = null;
@@ -254,8 +273,9 @@ export const STATE = (() => {
 			if (typeof STATE.onChange === "function") STATE.onChange("syncImport", { payload: { count: changed.length, reordered: true } });
 			emitRemoteApplied(new Set(changed.map((ev) => ev?.type).filter((t) => typeof t === "string")), changed);
 		});
+		entry.promise = run.catch((err) => { _reorder = null; console.warn("[state] Sortiertes Neuladen fehlgeschlagen:", err); });
 		_dispatchChain = run.then(() => undefined, () => undefined);
-		run.catch((err) => { _reorder = null; console.warn("[state] Sortiertes Neuladen fehlgeschlagen:", err); });
+		return entry.promise;
 	}
 	const applyRemoteEvents = (events) => applyRemoteNow(events);
 	// Früher spielte JS Event für Event mit Pausen ab; der Kern wendet auch große Pakete am Stück an.
@@ -743,7 +763,7 @@ export const STATE = (() => {
 	}
 
 	return {
-		onChange: null, dispatch, commitCoreEvents, applyRemoteEvents, applyRemoteEventsCooperative, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
+		onChange: null, dispatch, commitCoreEvents, applyRemoteEvents, applyRemoteEventsCooperative, beginRemoteBatch, endRemoteBatch, onBeforeDispatch, onAfterDispatch, onRemoteApplied,
 		load, hydrateHeftBlobs, hasHeftBlob, heftBlob, releaseHeftBlobs, heftDoc, heftShadow, heftPage, heftPageById, heftPageIds, heftIds, heftImageRefs, heftIndexSummary, heftAdoptBackgroundOps, heftMeta, heftPreview,
 		scheduleCheckpoint, checkpointNow: persistCheckpoint, loadedSeq: () => M.loadedSeq(), loadedTime: () => M.loadedTime(), cardRevision: () => _cardRev, pageRevision: () => _pageRev,
 		migrateLegacySecretsToSync, importConflicts, conflictLegacyItems, conflictWithTexts, conflictResolve, childPagesOf, childrenOf, pageSubtreeIds, pageInTree, deckInTree,
