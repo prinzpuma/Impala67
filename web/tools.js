@@ -7,6 +7,7 @@ import { CHATS } from "./chats.js";
 import { OPTIONAL_MODULE_URLS } from "./optional-modules.js";
 import { CORE } from "./rust-core.js";
 import { createWorksheet } from "./worksheet.js";
+import { ZS_TOOL_DEFS, ZS_TOOL_NAMES, runZeitstrahlTool } from "./zeitstrahl-tools.js";
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Ausgeführt werden Lesen (inspect), Ändern (change, atomar mit Rückgängig) und die flachen
 // Werkzeuge im Rust-Kern (core/impala-tools) – dieselbe Implementierung wie in den nativen Apps.
@@ -143,6 +144,7 @@ export const TOOLS = (() => {
 		}
 		if ((name === "inspect" && a.kind === "search" && a.semantic) || (name === "search" && a.semantic)) return semantic(String(a.query || ""));
 		if (name === "create_worksheet") return createWorksheet(a, { runTool: run, undoTool: undo });
+		if (ZS_TOOL_NAMES.has(name)) return runZeitstrahlTool(name, a);
 		return (await core(name, a)) ?? { error: "Unbekanntes Tool: " + name };
 	}
 
@@ -150,5 +152,9 @@ export const TOOLS = (() => {
 	// dry_run: true prüft Schreibwünsche nur und liefert die übersetzten Operationen als ops mit.
 	const runFlat = run;
 
-	return { defs, flatDefs, run, runFlat, undo, normalizeAskChoice };
+	// KI-Zeitstrahl (core/impala-lehrer/src/tool_defs.json): eigene Lehrer-Datenbank; ai.js schickt sie
+	// nur bei eingeschaltetem Modus mit, die MCP-Bridge immer.
+	const lehrerDefs = ZS_TOOL_DEFS;
+
+	return { defs, flatDefs, lehrerDefs, run, runFlat, undo, normalizeAskChoice };
 })();

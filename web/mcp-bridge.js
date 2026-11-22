@@ -433,9 +433,10 @@ export function initMcpBridge() {
 						// Inhalts-Werkzeuge = dieselben flachen Werkzeuge wie die App-KI (tools.js,
 						// Kern impala-ai/flat.rs): impala_search → search, impala_edit_page → edit_page …
 						const flat = tool.startsWith("impala_") ? tool.slice(7) : "";
-						if (!TOOLS.flatDefs.some((d) => d.function.name === flat)) { result = { error: `Unbekanntes Werkzeug: ${tool}` }; break; }
+						const known = (d) => d.function.name === flat;
+						if (!TOOLS.flatDefs.some(known) && !TOOLS.lehrerDefs.some(known)) { result = { error: `Unbekanntes Werkzeug: ${tool}` }; break; }
 						result = await TOOLS.runFlat(flat, args || {});
-						if (result && !result.error && !result.dryRun && /^(create_|edit_|organize_|write_)/.test(flat)) RENDER.render();
+						if (result && !result.error && !result.dryRun && /^(create_|edit_|organize_|write_|check_)/.test(flat)) RENDER.render();
 					}
 				}
 

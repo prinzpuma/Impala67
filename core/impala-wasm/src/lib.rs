@@ -11,6 +11,7 @@ mod heft;
 mod ink;
 mod js;
 mod learning_time;
+mod lehrer;
 mod markdown;
 mod model;
 mod search;

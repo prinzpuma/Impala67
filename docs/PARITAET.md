@@ -105,6 +105,7 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 
 | PWA-Funktion | Android | iPad |
 |---|---|---|
+| KI-Zeitstrahl: verzweigte Lernwelt mit Lektionen, Quiz und Arbeitsblatt-Prüfung (Opt-in, eigene Lehrer-Datenbank) | ❌ | ❌ |
 | Änderungskarte „Änderungen anzeigen“ / Seiten-Diff | 🟡 | ❌ |
 | Leerer Chat: Leucht-Kugel, Eingabe mittig | ✅ | ❌ |
 | Vollbild-Kopf „✦ Titel“ mit Status | 🟡 | 🟡 |

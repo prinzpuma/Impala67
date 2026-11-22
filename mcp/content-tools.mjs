@@ -3,11 +3,13 @@
 // → TOOLS.runFlat), mit denselben Prüfungen wie im KI-Chat. Name mit Präfix impala_.
 import { readFileSync } from "node:fs";
 
-const FLAT = JSON.parse(readFileSync(new URL("../core/impala-ai/src/tool_defs_flat.json", import.meta.url), "utf8"));
+const readDefs = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8"));
+// Dazu die Werkzeuge des KI-Zeitstrahls (eigene Lehrer-Datenbank, core/impala-lehrer).
+const FLAT = readDefs("../core/impala-ai/src/tool_defs_flat.json").concat(readDefs("../core/impala-lehrer/src/tool_defs.json"));
 // Nur im App-Chat sinnvoll (Rückfrage-Knöpfe, Rechner, Heftbild mit eigenem MCP-Werkzeug).
 const APP_ONLY = new Set(["ask_choice", "calculate", "view_heft_page"]);
 
-const isWrite = (name) => /^(create_|edit_|organize_|write_)/.test(name);
+const isWrite = (name) => /^(create_|edit_|organize_|write_|check_)/.test(name);
 // dry_run steht nicht im Schema der App-KI, muss hier aber stehen: MCP-Clients verwerfen
 // Argumente außerhalb des Schemas (dann würde ein Probelauf wirklich schreiben).
 const DRY_RUN = { type: "boolean", description: "Nur prüfen, nichts ändern" };

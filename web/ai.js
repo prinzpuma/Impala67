@@ -287,7 +287,8 @@ export const AI = (() => {
 		const extra = BUS.call("exp:extra-tool-defs");
 		// Flache Werkzeuge (search, read_pages, edit_page …): im KI-Benchmark klar besser als inspect/change
 		// (9B: 21 statt 13 von 35 Punkten, weniger Token, schneller); der Kern führt sie als inspect/change aus.
-		return Array.isArray(extra) ? TOOLS.flatDefs.concat(extra) : TOOLS.flatDefs.slice();
+		const base = S.settings.experiments?.zeitstrahl ? TOOLS.flatDefs.concat(TOOLS.lehrerDefs) : TOOLS.flatDefs;
+		return Array.isArray(extra) ? base.concat(extra) : base.slice();
 	};
 	// Was der Nutzer gerade sieht, für die Arbeitsunterlagen des Kerns.
 	async function workspaceOf() {
@@ -299,6 +300,11 @@ export const AI = (() => {
 				tab: S.ankiTab || "", deck: S.ankiDeck || "", new: counts.neu, learn: counts.learn, review: counts.review,
 				card: card ? { front: String(card.front || ""), back: S.reviewShowBack ? String(card.back || "") : null } : null,
 			} };
+		}
+		// KI-Zeitstrahl: aktuelle Lektion bzw. Überblick als Textkontext (Lehrer-Datenbank, zeitstrahl.js).
+		if (view === "zeitstrahl") {
+			const ctx = BUS.call("zs:workspace");
+			if (ctx) return { kind: "page", title: ctx.title, context: { kind: "text", content: ctx.content } };
 		}
 		if (!page) return { kind: "empty" };
 		if (S.sideContextOff === page.id) return { kind: "page", title: page.title, context: null };

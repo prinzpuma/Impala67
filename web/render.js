@@ -28,6 +28,7 @@ import { icon, lead, pageIcon } from "./icons.js";
 import { chatStartHtml, chatSuggestsHtml } from "./chat-start.js";
 import { relatedSlotHtml, hydrateRelated } from "./related-pages.js";
 import { dbViewHtml } from "./db-view.js";
+import { ZS } from "./zeitstrahl.js";
 
 const esc = (s) => U.esc(s);
 const $ = (id) => U.el(id);
@@ -149,11 +150,15 @@ function onStateChange(type, ev) {
 
 function renderTopbar() {
 	// Genau EINE Pille aktiv; expliziter Chat-Modus hat Vorrang vor Anki
-	const mode = S.sidebarMode === "chats" ? "chats" : S.view === "anki" ? "anki" : "files";
+	const mode = S.sidebarMode === "chats" ? "chats" : S.view === "anki" ? "anki" : S.view === "zeitstrahl" ? "zeitstrahl" : "files";
 	const set = (id, on) => { const b = $(id); if (b) b.classList.toggle("active", on); };
 	set("btnHome", mode === "files");
 	set("btnChatTab", mode === "chats");
 	set("btnAnki", mode === "anki");
+	set("btnZeitstrahl", mode === "zeitstrahl");
+	// KI-Zeitstrahl ist Opt-in: Pille nur bei eingeschaltetem Modus (oder solange er offen ist).
+	const zs = $("btnZeitstrahl");
+	if (zs) zs.hidden = !ZS.enabled() && S.view !== "zeitstrahl";
 	set("btnLibrary", S.view === "library");
 }
 
@@ -333,13 +338,22 @@ function setHtmlIfChanged(el, html, key = "_lastHtml") {
 
 const cssEsc = (s) => (typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&"));
 
+// Was die Seitenleiste zeigt: Chatverlauf, Stapel, Zeitstrahlen (Lehrer-Datenbank) oder Seiten.
+function sidebarModeOf(isPhone) {
+	if (isPhone) return "files";
+	if (S.sidebarMode === "chats") return "chats";
+	if (S.view === "anki") return "anki";
+	if (S.view === "zeitstrahl") return "zeitstrahl";
+	return "files";
+}
+
 // Schnelle O(1)-Abstimmung für aktive Zeile im Seitenbaum/Chatverlauf — vermeidet
 // Voll-Rebuild und DOM-Morphing über den gesamten Bestand beim reinen Tabwechsel.
 function syncActiveSidebarRow(tree) {
 	if (!tree || !tree.firstElementChild) return false;
 	const currentMode = tree.dataset.sbmode || "";
 	const isPhone = document.body.classList.contains("mobile-ui");
-	const targetMode = !isPhone && S.sidebarMode === "chats" ? "chats" : (!isPhone && S.view === "anki" ? "anki" : "files");
+	const targetMode = sidebarModeOf(isPhone);
 	if (currentMode !== targetMode) return false;
 
 	if (targetMode === "chats") {
@@ -472,7 +486,13 @@ function renderSidebar() {
 	}
 
 	const isPhone = document.body.classList.contains("mobile-ui");
-	const mode = !isPhone && S.sidebarMode === "chats" ? "chats" : (!isPhone && S.view === "anki" ? "anki" : "files");
+	const mode = sidebarModeOf(isPhone);
+	if (mode === "zeitstrahl") {
+		setHtmlIfChanged(tree, ZS.treeHtml());
+		tree.dataset.sbmode = mode;
+		tree.dataset.renderKey = sidebarKey;
+		return;
+	}
 	if (!isPhone && S.sidebarMode === "chats") {
 		setHtmlIfChanged(tree, chatListHtml());
 		tree.dataset.sbmode = mode;
@@ -637,6 +657,7 @@ function renderMain() {
 	document.body.classList.toggle("page-open", S.view === "page" && pg?.kind !== "heft");
 	document.body.classList.toggle("anki-view-open", S.view === "anki");
 	document.body.classList.toggle("anki-study-open", S.view === "anki" && S.ankiTab === "study");
+	document.body.classList.toggle("zs-view-open", S.view === "zeitstrahl");
 	// Die Lernzeiterfassung reagiert sofort auf Ansichtswechsel. So verschwindet
 	// die Idle-Frage beim Verlassen eines Lernkontexts ohne den nächsten Tick abzuwarten.
 	if (LERNZEIT.contextChanged) LERNZEIT.contextChanged();
@@ -645,7 +666,8 @@ function renderMain() {
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
-	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat };
+	if (S.view !== "zeitstrahl") delete main.dataset.zsKey;
+	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, zeitstrahl: (m) => ZS.render(m), noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat };
 	if (views[S.view]) {
 		// Fremde Renderer verwalten #main selbst. Ihr DOM darf nie mit einem alten
 		// Seitenshell-Cache verwechselt werden, wenn man später zur Seite zurückkehrt.

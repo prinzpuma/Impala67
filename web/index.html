@@ -78,6 +78,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="stylesheet" href="mobile.css?build=15">
 <link rel="stylesheet" href="mobile-content.css?build=2">
 <link rel="stylesheet" href="css/library.css">
+<link rel="stylesheet" href="css/zeitstrahl.css">
 <link rel="stylesheet" href="css/shelf.css">
 <!-- PWA: installierbar + Offline-Cache (Service-Worker wird unten registriert) -->
 <link rel="manifest" href="manifest.json">
@@ -174,6 +175,11 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 			<button id="btnAnki" class="tab" title="Karteikarten">
 				<svg class="i" width="16" height="16" aria-hidden="true"><use href="icons.svg#cards"/></svg>
 				<span class="tab-label">Karten</span>
+			</button>
+			<!-- KI-Zeitstrahl (Opt-in: Einstellungen → Lernen → Beta-Lernfunktionen; render.js blendet ein) -->
+			<button id="btnZeitstrahl" class="tab" title="KI-Zeitstrahl" hidden>
+				<svg class="i" width="16" height="16" aria-hidden="true"><use href="icons.svg#timeline"/></svg>
+				<span class="tab-label">Zeitstrahl</span>
 			</button>
 			<button id="btnSearchToggle" class="tab" title="Suchen">
 				<svg class="i" width="16" height="16" aria-hidden="true"><use href="icons.svg#search"/></svg>

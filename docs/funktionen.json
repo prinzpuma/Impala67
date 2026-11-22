@@ -64,6 +64,7 @@
 		{ "id": "heft.seite-an-ki", "bereich": "heft", "titel": "„Heft-Seite als Bild an KI anhängen“", "android": "prüfen", "ios": "prüfen" },
 		{ "id": "heft.arbeitsblatt", "bereich": "heft", "titel": "KI-Arbeitsblätter aus Vorlagen direkt als Heftseiten erzeugen (`create_worksheet`)", "pwa": ["worksheet.js"], "android": "❌", "ios": "❌" },
 
+		{ "id": "lernen.zeitstrahl", "bereich": "lernen", "titel": "KI-Zeitstrahl: verzweigte Lernwelt mit Lektionen, Quiz und Arbeitsblatt-Prüfung (Opt-in, eigene Lehrer-Datenbank)", "pwa": ["zeitstrahl.js"], "android": "❌", "ios": "❌" },
 		{ "id": "lernen.aenderungskarte", "bereich": "lernen", "titel": "Änderungskarte „Änderungen anzeigen“ / Seiten-Diff", "pwa": ["diffTableHtml"], "android": "🟡", "ios": "❌" },
 		{ "id": "lernen.leerer-chat", "bereich": "lernen", "titel": "Leerer Chat: Leucht-Kugel, Eingabe mittig", "pwa": ["chat-start.js"], "ios": "❌" },
 		{ "id": "lernen.vollbild-kopf", "bereich": "lernen", "titel": "Vollbild-Kopf „✦ Titel“ mit Status", "pwa": ["chat-fullscreen.js"], "android": "🟡", "ios": "🟡" },

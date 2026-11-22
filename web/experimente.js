@@ -39,6 +39,7 @@ export const EXP = (() => {
 		["mc", "Distraktor-Quiz", "Karte als Multiple-Choice mit plausiblen Falschantworten. Auflösung + Erklärung kommen sofort (Pflicht — sonst prägen sich Distraktoren ein).", "target"],
 		["fehler", "Fehler-Detektor", "Die KI schreibt eine kurze Erklärung mit eingebauten Fehlern, du suchst sie. Die Auflösung wird immer angezeigt. Start unten per Button.", "bug"],
 		["pretest", "Pre-Testing bei PDFs", "Nach dem PDF-Import stellt die KI dir Vorab-Fragen, BEVOR du liest. Falsch raten ist erwünscht — es primt das Gehirn (Pre-Testing-Effekt).", "book-open"],
+		["zeitstrahl", "KI-Zeitstrahl", "Eigene Lernwelt: Die KI baut aus Skripten, Notizen und Wikipedia einen verzweigten Zeitstrahl mit Lektionen, Bildern, Quiz und Arbeitsblättern (eigene Datenbank, nur auf diesem Gerät). Zeigt die Pille „Zeitstrahl“ oben links.", "timeline"],
 		["wissensluecken", "Wissenslücken-Detektor", "Neues Chat-Werkzeug: „Prüfe meine Notiz zu X auf Lücken“ — findet Fachbegriffe, die benutzt, aber nie erklärt werden (Fluch des Wissens).", "search"],
 	];
 

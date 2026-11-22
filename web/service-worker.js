@@ -27,6 +27,7 @@ const APP_FILES = [
 	"./css/heft.css",
 	"./css/chat-start.css",
 	"./css/library.css",
+	"./css/zeitstrahl.css",
 	"./css/shelf.css",
 	"./manifest.json",
 	// Der Update-Check fragt version.json mit no-store an. Der Fetch-Handler nimmt
@@ -155,6 +156,9 @@ const APP_FILES = [
 	"./extras.js",
 	"./heft.js",
 	"./worksheet.js",
+	"./zeitstrahl.js",
+	"./zeitstrahl-store.js",
+	"./zeitstrahl-tools.js",
 	"./heft-viewport.js",
 	"./heft-stroke-draw.js",
 	"./heft-ink-render.js",

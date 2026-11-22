@@ -40,7 +40,7 @@ export async function handleButtonClick(t) {
 		case "btnHome":
 			S.sidebarMode = "files";
 			// Aus Anki/Bibliothek/Papierkorb führt Home auch inhaltlich zurück
-			if (S.view === "anki" || S.view === "library" || S.view === "trash") {
+			if (S.view === "anki" || S.view === "library" || S.view === "trash" || S.view === "zeitstrahl") {
 				S.view = S.currentPageId ? "page" : "home";
 			}
 			render();
@@ -48,6 +48,13 @@ export async function handleButtonClick(t) {
 		// Chat-Taste: zeigt den Chat-Verlauf in der Sidebar
 		case "btnChatTab":
 			S.sidebarMode = "chats";
+			render();
+			break;
+		case "btnZeitstrahl":
+			// KI-Zeitstrahl: eigene Ansicht ohne Tab, Seitenleiste zeigt die Lehrer-Datenbank.
+			S.view = "zeitstrahl";
+			S.sidebarMode = "files";
+			blurActive();
 			render();
 			break;
 		case "btnLibrary":
