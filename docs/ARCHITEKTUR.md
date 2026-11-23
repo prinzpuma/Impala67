@@ -92,13 +92,12 @@ Jedes Modul exportiert ein großes Objekt (`export const HEFT = (() => { … ret
 | `boot.js` | Startablauf |
 | `app.js` | Event-Verkabelung (`wireEvents`), Dialoge, Teilen-Empfang, Karten-Bewertung |
 | `app-click-chat.js`, `app-click-anki.js`, `app-click-pages.js`, `app-click-buttons.js` | zentrale Klick-Handler je Bereich |
-| `app-sidebar-events.js`, `app-dialogs.js`, `app-ui.js`, `platform.js` | Sidebar-Drag/Umbenennen, Dialoge/Seiten-Flows, UI-Helfer, Handy-Erkennung |
+| `app-sidebar-events.js`, `app-dialogs.js`, `app-ui.js`, `platform.js` | Sidebar-Drag/Umbenennen, Dialoge/Seiten-Flows, UI-Helfer, Touch-Erkennung |
 | `render.js` | Sidebar, Tabs, Home, Chat-Ansicht, Modals |
 | `conflict-ui.js` | Konflikt-Dialog (aus `render.js`) |
 | `render-anki.js` | Karteikarten-Oberfläche |
 | `tabs.js` | Tabs, Vor/Zurück |
 | `popovers.js`, `collapse.js`, `shortcuts.js`, `search.js` | Popover, Baum-Klappzustand, Tastenkürzel, Strg+K |
-| `mobile.js`, `mobile-view.js` | Smartphone-Navigation |
 | `library.js` | Bibliothek (Kacheln/Tabelle) |
 | `controller.js` | Gamepad-Steuerung |
 

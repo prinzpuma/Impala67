@@ -339,8 +339,7 @@ function setHtmlIfChanged(el, html, key = "_lastHtml") {
 const cssEsc = (s) => (typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&"));
 
 // Was die Seitenleiste zeigt: Chatverlauf, Stapel, Zeitstrahlen (Lehrer-Datenbank) oder Seiten.
-function sidebarModeOf(isPhone) {
-	if (isPhone) return "files";
+function sidebarModeOf() {
 	if (S.sidebarMode === "chats") return "chats";
 	if (S.view === "anki") return "anki";
 	if (S.view === "zeitstrahl") return "zeitstrahl";
@@ -352,8 +351,7 @@ function sidebarModeOf(isPhone) {
 function syncActiveSidebarRow(tree) {
 	if (!tree || !tree.firstElementChild) return false;
 	const currentMode = tree.dataset.sbmode || "";
-	const isPhone = document.body.classList.contains("mobile-ui");
-	const targetMode = sidebarModeOf(isPhone);
+	const targetMode = sidebarModeOf();
 	if (currentMode !== targetMode) return false;
 
 	if (targetMode === "chats") {
@@ -485,21 +483,20 @@ function renderSidebar() {
 		return;
 	}
 
-	const isPhone = document.body.classList.contains("mobile-ui");
-	const mode = sidebarModeOf(isPhone);
+	const mode = sidebarModeOf();
 	if (mode === "zeitstrahl") {
 		setHtmlIfChanged(tree, ZS.treeHtml());
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;
 		return;
 	}
-	if (!isPhone && S.sidebarMode === "chats") {
+	if (S.sidebarMode === "chats") {
 		setHtmlIfChanged(tree, chatListHtml());
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;
 		return;
 	}
-	if (!isPhone && S.view === "anki") {
+	if (S.view === "anki") {
 		setHtmlIfChanged(tree, deckTreeHtml());
 		tree.dataset.sbmode = mode;
 		tree.dataset.renderKey = sidebarKey;

@@ -71,15 +71,10 @@ function activateTab(pageId, { newTab = false } = {}) {
 // ---------- Verlauf: App-Verlauf und Browser-Verlauf laufen im Gleichschritt ----------
 const hasHistory = () => typeof window !== "undefined" && Boolean(window.history);
 
-// Browser-Eintrag für den aktuellen Index. Liegt oben noch ein Ebenen-Eintrag der
-// Handy-UI (Notizen-Navigator, KI-Panel …), wird er ersetzt statt überbaut — sonst
-// bliebe er als toter Eintrag unter der Seite liegen.
+// Browser-Eintrag für den aktuellen Index.
 function writeEntry() {
 	if (!hasHistory()) return;
-	try {
-		if (window.history.state?.mLayer) window.history.replaceState(navState(), "");
-		else window.history.pushState(navState(), "");
-	} catch { /* ignore */ }
+	try { window.history.pushState(navState(), ""); } catch { /* ignore */ }
 }
 
 function pushNav(id) {
@@ -112,12 +107,6 @@ function jumpTo(i) {
 
 function onPopState(e) {
 	const target = navIndexOf(e.state);
-	// Handy-UI: offene Ebenen (Panel, Blatt, Dialog) schließen zuerst. Ist der
-	// Browser dabei über einen Seiteneintrag gesprungen, wird er wiederhergestellt.
-	if (layerHandler && layerHandler()) {
-		if (target !== S.navIndex) writeEntry();
-		return;
-	}
 	if (target === S.navIndex) return;
 	// Aus einer Ansicht ohne eigenen Eintrag (Bibliothek, Papierkorb …) führt Zurück
 	// erst zur Seite, von der man kam — genau wie der Zurück-Pfeil.
@@ -138,10 +127,6 @@ function onPopState(e) {
 	showEntry(id);
 }
 
-let layerHandler = null;
-// Die Handy-UI meldet hier, ob ein Zurück eine ihrer Ebenen geschlossen hat.
-export function setLayerHandler(fn) { layerHandler = fn; }
-
 if (typeof window !== "undefined") window.addEventListener("popstate", onPopState);
 
 // ---------- Zentrale Navigation: Notion-artig ----------
@@ -150,7 +135,6 @@ if (typeof window !== "undefined") window.addEventListener("popstate", onPopStat
 // Ist die Zielseite bereits in einem anderen Tab offen → dorthin wechseln (kein Doppel-Tab).
 export function openPage(pageId, opts) {
 	opts = opts || {};
-	document.body.classList.remove("mnav-open"); // Mobile Shell v2: Navigator-Sheet schließen
 	if (S.highlightedPageId && S.highlightedPageId !== pageId) {
 		S.highlightedPageId = null;
 		S.highlightedDiff = null;
@@ -325,7 +309,6 @@ export const TABS = {
 	navForward,
 	canGoBack,
 	canGoForward,
-	setLayerHandler,
 	openHomeOverview,
 	restoreSession
 };

@@ -81,17 +81,6 @@ function renderOverview(vm) {
 	return UI.page("Übersicht", "Alles Wichtige auf einen Blick – ohne technische Details.", UI.group("Status", overviewTiles(vm), { id: "overview-status" }));
 }
 
-// Mobile: Bereichsliste als Einstieg, darunter dieselben Status-Kacheln wie am Desktop.
-function renderMobileOverview(vm) {
-	const rows = SETTINGS_SECTIONS.filter((sec) => sec.id !== "overview").map((sec) =>
-		'<button type="button" class="settings-mobile-row" data-settings-go="' + e(sec.id) + '">' +
-			'<span class="settings-nav-icon">' + UI.icon(sec.icon) + '</span>' +
-			'<span class="settings-row-copy"><b>' + e(sec.label) + '</b><small>' + e(sec.description) + '</small></span>' +
-			UI.icon("chevron") +
-		'</button>').join("");
-	return '<div class="settings-mobile-hub"><div class="settings-group-card">' + rows + '</div>' + UI.group("Status", overviewTiles(vm), { id: "overview-status" }) + '</div>';
-}
-
 // ---------- Darstellung ----------
 function renderAppearance(vm) {
 	const theme = vm.followSystemTheme ? "system" : vm.theme;
@@ -452,30 +441,11 @@ const PAGES = { appearance: renderAppearance, ai: renderAi, learning: renderLear
 
 export function renderSettingsPage(section, vm) {
 	if (PAGES[section]) return PAGES[section](vm);
-	return document.body.classList.contains("mobile-ui") ? renderMobileOverview(vm) : renderOverview(vm);
+	return renderOverview(vm);
 }
 
 
 export function renderSettingsShell(section, body, query = "") {
-	const isMobile = document.body.classList.contains("mobile-ui");
-	if (isMobile) {
-		const isOverview = !section || section === "overview";
-		const secMeta = SETTINGS_SECTIONS.find(s => s.id === section) || { label: "Einstellungen" };
-		const head = isOverview
-			? '<header class="settings-mobile-head"><h1>Einstellungen</h1><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button></header>'
-			: '<header class="settings-mobile-head"><button type="button" class="settings-mobile-back" data-settings-go="overview">‹ Zurück</button><h2>' + e(secMeta.label) + '</h2><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button></header>';
-
-		const searchBar = isOverview
-			? '<label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Einstellungen suchen…" value="' + e(query) + '" aria-label="Einstellungen durchsuchen"></label><div id="settingsSearchResults" class="settings-search-results" hidden></div>'
-			: '';
-
-		return '<div class="modal settings-modal-v2 is-mobile" data-sec="' + e(section) + '">' +
-			head +
-			'<main class="settings-main" tabindex="-1">' +
-			searchBar +
-			body +
-			'</main></div>';
-	}
 	const nav = SETTINGS_SECTIONS.map((entry) => '<button type="button" class="settings-nav-item' + (entry.id === section ? " active" : "") + '" data-settings-go="' + entry.id + '" aria-current="' + (entry.id === section ? "page" : "false") + '"><span class="settings-nav-icon">' + UI.icon(entry.icon) + '</span><span>' + e(entry.label) + "</span></button>").join("");
 	return '<div class="modal settings-modal-v2" data-sec="' + e(section) + '"><button class="modal-x" id="btnCloseSettings" title="Einstellungen schließen" aria-label="Einstellungen schließen">×</button><aside class="settings-sidebar"><div class="settings-sidebar-title">Einstellungen</div><label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Suchen" value="' + e(query) + '" aria-label="Einstellungen durchsuchen"><kbd>⌘ K</kbd></label><div id="settingsSearchResults" class="settings-search-results" hidden></div><nav aria-label="Einstellungsbereiche">' + nav + '</nav></aside><main class="settings-main" tabindex="-1">' + body + "</main></div>";
 }

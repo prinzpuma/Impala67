@@ -15,7 +15,6 @@ import { SETTINGS_LAST_SECTION_KEY, SETTINGS_SECTIONS, resolveSettingsSection, v
 import { renderSettingsPage, renderSettingsShell, renderSearchResults, hydrateStorageUsage, hydrateDriveStorage, refreshDriveStatusUi, refreshCloudflareStatusUi, renderSettingsModelList, localEmbeddingStatusView } from "./settings-renderer.js";
 import { backupActionState, updateActionState } from "./settings-action-state.js";
 import { CLOUDFLARE_SYNC } from "./sync-cloudflare.js";
-import * as UI from "./settings-ui.js";
 import { EMBEDDINGS, LOCAL_EMBED_MODEL_ID } from "./embedding.js";
 import { HEFT_INDEX_PROGRESS } from "./heft-index-progress.js";
 import { STORAGE_TOOLS } from "./storage-tools.js";
@@ -209,11 +208,9 @@ export function openSettings(section, anchor) {
 	localStorage.setItem(SETTINGS_LAST_SECTION_KEY, resolved);
 	const overlay = U.el("overlay");
 	if (!overlay) return;
-	const isMobile = document.body.classList.contains("mobile-ui");
 	const existingModal = !overlay.hidden ? overlay.querySelector(".settings-modal-v2") : null;
-	const isExistingMobile = existingModal ? existingModal.classList.contains("is-mobile") : false;
 
-	if (existingModal && isExistingMobile === isMobile) {
+	if (existingModal) {
 		const previousMain = existingModal.querySelector(".settings-main");
 		const keepScroll = previousMain ? previousMain.scrollTop : 0;
 		// Aufgeklappte Abschnitte bleiben beim Neuzeichnen desselben Bereichs offen.
@@ -227,31 +224,13 @@ export function openSettings(section, anchor) {
 		};
 		existingModal.setAttribute("data-sec", resolved);
 
-		if (isMobile) {
-			const isOverview = !resolved || resolved === "overview";
-			const secMeta = SETTINGS_SECTIONS.find(s => s.id === resolved) || { label: "Einstellungen" };
-			const head = existingModal.querySelector(".settings-mobile-head");
-			if (head) {
-				head.innerHTML = isOverview
-					? '<h1>Einstellungen</h1><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button>'
-					: '<button type="button" class="settings-mobile-back" data-settings-go="overview">‹ Zurück</button><h2>' + U.esc(secMeta.label) + '</h2><button type="button" class="settings-mobile-done" id="btnCloseSettings">Fertig</button>';
-			}
-			const main = existingModal.querySelector(".settings-main");
-			if (main) {
-				const searchBar = isOverview
-					? '<label class="settings-search">' + UI.icon("search") + '<input id="settingsSearch" type="search" autocomplete="off" placeholder="Einstellungen suchen…" value="' + U.esc(settingsSearchQuery) + '" aria-label="Einstellungen durchsuchen"></label><div id="settingsSearchResults" class="settings-search-results" hidden></div>'
-					: '';
-				fillMain(main, searchBar + renderSettingsPage(resolved, settingsViewModel()));
-			}
-		} else {
-			existingModal.querySelectorAll(".settings-nav-item").forEach((btn) => {
-				const active = btn.dataset.settingsGo === resolved;
-				btn.classList.toggle("active", active);
-				btn.setAttribute("aria-current", active ? "page" : "false");
-			});
-			const main = existingModal.querySelector(".settings-main");
-			if (main) fillMain(main, renderSettingsPage(resolved, settingsViewModel()));
-		}
+		existingModal.querySelectorAll(".settings-nav-item").forEach((btn) => {
+			const active = btn.dataset.settingsGo === resolved;
+			btn.classList.toggle("active", active);
+			btn.setAttribute("aria-current", active ? "page" : "false");
+		});
+		const main = existingModal.querySelector(".settings-main");
+		if (main) fillMain(main, renderSettingsPage(resolved, settingsViewModel()));
 	} else {
 		overlay.hidden = false;
 		overlay.innerHTML = renderSettingsShell(resolved, renderSettingsPage(resolved, settingsViewModel()), settingsSearchQuery);

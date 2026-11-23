@@ -91,7 +91,7 @@
 		{ "id": "telefon.seitenoptionen", "bereich": "telefon", "titel": "Seitenoptionen (⋯) im Editor-Kopf mit allen Einträgen des Desk-Menüs", "android": "❌" },
 		{ "id": "telefon.kopf-faellig", "bereich": "telefon", "titel": "Kopf-Untertitel „N fällig“, Badge-Kappung „99+“", "pwa": ["app-badge.js"], "android": "❌" },
 		{ "id": "telefon.dock-plus", "bereich": "telefon", "titel": "„+“ im Dock legt im Kontext eine Unterseite an", "android": "🟡" },
-		{ "id": "telefon.notiz-menue", "bereich": "telefon", "titel": "Notiz-Menü: Duplizieren, Verschieben; Menüs als Bottom-Sheet", "pwa": ["mobile-sheet.js"], "android": "🟡" },
+		{ "id": "telefon.notiz-menue", "bereich": "telefon", "titel": "Notiz-Menü: Duplizieren, Verschieben; Menüs als Bottom-Sheet", "android": "🟡" },
 		{ "id": "telefon.langdruck", "bereich": "telefon", "titel": "Langdruck auf Stapel, Bibliotheks-Karten, Blöcke", "android": "❌" },
 		{ "id": "telefon.dock-ausblenden", "bereich": "telefon", "titel": "Dock bei Tastatur/Lernmodus ausblenden", "android": "🟡" },
 		{ "id": "telefon.uebergaenge", "bereich": "telefon", "titel": "Übergänge: Morph, Hochzählen, Puls am Sync-Punkt; System-„Reduzierte Bewegung“", "pwa": ["motion.js"], "android": "🟡" }

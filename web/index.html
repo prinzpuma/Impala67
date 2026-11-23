@@ -49,7 +49,6 @@ window.onunhandledrejection = function (event) {
 // frischen App-Start. Ohne Reset kann eine alte Navigator-/Overlay-Schicht sichtbar
 // unsichtbar über der Oberfläche liegen und sämtliche Klicks abfangen.
 function resetTransientUiLayers() {
-	document.body.classList.remove("mnav-open");
 	["overlay", "palette", "attachMenu", "modelMenu"].forEach((id) => {
 		const el = document.getElementById(id);
 		if (el) el.hidden = true;
@@ -75,8 +74,6 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <link rel="stylesheet" href="home.css?build=3">
 <link rel="stylesheet" href="design.css?build=3">
 <link rel="stylesheet" href="beta-ui.css?build=12">
-<link rel="stylesheet" href="mobile.css?build=15">
-<link rel="stylesheet" href="mobile-content.css?build=2">
 <link rel="stylesheet" href="css/library.css">
 <link rel="stylesheet" href="css/zeitstrahl.css">
 <link rel="stylesheet" href="css/shelf.css">
@@ -96,6 +93,13 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 <script src="https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.umd.js" integrity="sha384-rATToyt6602Jnq8c7w8HZwmyOUgPL7mzxX01FBWoV48ns/EgkakGozpES+PnaYOI" crossorigin="anonymous" defer></script>
 </head>
 <body class="panel-collapsed">
+<!-- Handy im Hochformat: Die PWA hat keine eigene Handy-Oberfläche (dafür gibt es die Android-App).
+     Nur CSS (styles.css, #rotateHint) – sichtbar, solange das Handy hochkant gehalten wird. -->
+<div id="rotateHint" role="alert" aria-live="polite">
+	<svg class="i" width="48" height="48" aria-hidden="true" focusable="false"><use href="icons.svg#phone"/></svg>
+	<b>Bitte quer halten</b>
+	<p>Am Handy läuft Impala67 im Querformat. Für das Hochformat gibt es die Android-App.</p>
+</div>
 <script>
 // Darstellung vor dem ersten sichtbaren Frame wiederherstellen. applyAppearance() bleibt
 // die Laufzeit-Quelle der Wahrheit; dieser kleine Vorlauf verhindert nur den hell/dunkel-,

@@ -13,7 +13,6 @@ import { CORE } from "./rust-core.js";
 // • Review-Undo, Stapel-Optionen (Tageslimits, Leech), CSV/.apkg-Import & -Export
 // • Seiten-PDF-Export (HTML-Knöpfe kommen aus render.js, Verhalten von hier)
 // • Multi-Tab-Schutz: Events werden per BroadcastChannel live abgeglichen
-// (Das frühere Mobile-Panel-Overlay-CSS lebt jetzt regulär in styles.css — „Mobile Shell v2".)
 // Alle neuen Knöpfe laufen über eine EIGENE Event-Delegation (data-*-Attribute),
 // damit bestehende Handler in app.js unangetastet bleiben.
 const render = (...args) => BUS.emit("ui:render", args[0]);

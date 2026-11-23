@@ -28,7 +28,6 @@ import { BOOT } from "./boot.js";
 import { POPOVERS } from "./popovers.js";
 import { HEFT } from "./heft.js";
 import { VOICE } from "./voice.js";
-import { MOBILE } from "./mobile.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { SCHULNOTEN } from "./schulnoten.js";
 import { EXP } from "./experimente.js";
@@ -47,7 +46,7 @@ import "./motion.js";
 // Neue Module sollen direkt importieren statt weitere Einträge hier anzulegen.
 Object.assign(window, {
 	U, DB, SRS, S, STATE, TOOLS, AI, RAG, DRIVE, PDFS, EDITOR, RENDER,
-	RENDER_ANKI, APP, EXTRAS, COLLAPSE, CHATS, MOBILE, SETTINGS, LIBRARY,
+	RENDER_ANKI, APP, EXTRAS, COLLAPSE, CHATS, SETTINGS, LIBRARY,
 	TABS, SEARCH, SHORTCUTS, CHAT_FULLSCREEN, BOOT, POPOVERS, HEFT, VOICE,
 	LERNZEIT, SCHULNOTEN, EXP, GRAPH, ANALYSE, CONTROLLER, CLOUDFLARE_SYNC,
 	SYNC_MAINTENANCE, PERF_PROFILER,

@@ -1,7 +1,6 @@
 /* Startseite PC & Tablet — Markup: home-view.js (Seite) und lernanalyse.js (Analyse).
    Ruhig und fast einfarbig: Farbe trägt nur, was jetzt zu tun ist (fällige Karten).
-   Abstände auf einem 8-px-Raster. Mobil hat eigene Styles (mobile.css);
-   .home-insight/.home-analysis nutzt nur noch das Mobil-Home. */
+   Abstände auf einem 8-px-Raster. */
 
 /* ---------- Mobil-Home: Lernanalyse-Kopf ---------- */
 .home-analysis { margin-top: var(--space-5) }

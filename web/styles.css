@@ -358,19 +358,24 @@ body.tabs-in-sidebar.page-open .topbar-sb-toggle { display: inline-flex }
 /* 🐛 Fix (28. Juli): Im Lernmodus und im Karteikarten-Vollbild lag der feste KI-Kreis genau
    auf „⚙️ Optionen“ unten rechts. Gleiche Logik wie beim Heft: Bühne sichtbar → Kreis weg. */
 body:not(.panel-collapsed) #btnAiFab, body.heft-open #btnAiFab { display: none }
-/* Dieselbe Handy-Definition wie app.js/mobile.js: iPads ab 701px behalten den
-   KI-Zugriff auch im Hochformat (bei exakt 768px war er zuvor unsichtbar). */
-body.is-phone #btnAiFab { display: none }
-/* 701px schließt die Lücke zwischen Phone-UI (bis 700px) und Tablet/Desktop.
-   Besonders das klassische iPad meldet im Hochformat exakt 768 CSS-Pixel. */
-@media (min-width: 701px) {
-	#btnSidebarToggle { display: inline-flex }
-	body.sidebar-collapsed #sidebar { display: none }
-	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 340px }
-	body.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
-	body.density-compact.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 320px }
-	body.density-compact.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
+/* Handy im Hochformat: statt eigener Handy-UI nur der Hinweis „Bitte quer halten“ (index.html). */
+#rotateHint { display: none }
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 700px) {
+	#rotateHint { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-6); text-align: center; background: var(--panel-solid); color: var(--text) }
+	#rotateHint svg { animation: rotate-hint 2.4s ease-in-out infinite }
+	#rotateHint b { font-size: var(--text-lg) }
+	#rotateHint p { margin: 0; max-width: 28ch; color: var(--text2); line-height: 1.5 }
+	body:has(#rotateHint) { overflow: hidden }
 }
+@keyframes rotate-hint { 0%, 30% { transform: rotate(0) } 50%, 80% { transform: rotate(-90deg) } 100% { transform: rotate(0) } }
+@media (prefers-reduced-motion: reduce) { #rotateHint svg { animation: none } }
+/* Seitenleiste ein-/ausklappbar auf allen Breiten (keine eigene Handy-UI mehr). */
+#btnSidebarToggle { display: inline-flex }
+body.sidebar-collapsed #sidebar { display: none }
+body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 340px }
+body.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
+body.density-compact.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) 320px }
+body.density-compact.sidebar-collapsed.panel-collapsed #app { grid-template-columns: minmax(0, 1fr) }
 /* DRY (Feinschliff v11b): Panel- und Vollbild-Composer teilen EINE Attach-Knopf-Definition — können nicht mehr auseinanderdriften */
 #chatForm #btnAttach, .chat-form-full #btnAttachFull { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 17px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: transparent }
 #chatForm #btnAttach:hover, .chat-form-full #btnAttachFull:hover { background: var(--surface-hover-strong) }
@@ -754,7 +759,6 @@ mark { background: rgb(var(--c-yellow) / .33); color: inherit; border-radius: va
 @keyframes pop {
 	50% { transform: scale(1.3) }
 }
-/* == Mobile: eigenständige App-Schale in mobile.js + mobile.css == */
 /* == Befehls-Menü (Strg+K) — Suche + Aktionen in einem Overlay == */
 #palette { position: fixed; inset: 0; z-index: var(--z-palette); background: var(--overlay-bg); display: flex; align-items: flex-start; justify-content: center; padding-top: 12dvh }
 #palette[hidden] { display: none }
@@ -1036,8 +1040,7 @@ body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-ri
 @media (max-width: 600px) {
 	.lib-docsheet { height: 168px }
 }
-/* == Mobile UI v4 (23. Juli 2026) — eigene App-Schale in mobile.js + mobile.css == */
-/* Hier bleiben nur inhaltsbezogene Handy-Anpassungen (Einstellungen, Touch-Ziele). */
+/* == Schmale Fenster: größere Touch-Ziele == */
 @media (max-width: 768px) {
 	/* Einstellungen auf dem Handy: Bereichs-Navigation als Zeile oben statt Spalte links */
 	/* Touch-Ziele im Sheet + Palette über der Tastatur */
@@ -1693,7 +1696,6 @@ pre:hover .code-copy, .code-copy:focus-visible { opacity: 1 }
 .study-meta-deck { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left }
 .study-meta-bar .study-keys { flex-shrink: 0; margin-left: 0; font-weight: 500 }
 .study-meta-bar .study-zen { flex-shrink: 0; margin: 0 }
-body.mobile-ui .study-meta-bar .study-zen { display: none }
 .study-meta-state { flex-shrink: 0; padding: 2px var(--space-2); border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent) }
 /* FRAGE/ANTWORT-Labels: sofort klar, was gerade abgerufen werden soll */
 .study-side-label { font-size: var(--text-3xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text2); text-align: center; margin-top: 2px }
@@ -1813,7 +1815,7 @@ body.anki-zen.anki-view-open.density-compact.panel-collapsed #app { grid-templat
    Werkzeugleiste und Kennzahlen sind auf jedem großen Schirm gleich dicht — das steht
    einmal hier. Danach folgt nur noch, was sich zwischen Finger und Maus unterscheidet. */
 /* Touch ab Tablet-Breite: größere Bühne, weil Finger mehr Fläche brauchen. */
-@media (pointer: coarse) and (min-width: 701px) {
+@media (pointer: coarse) {
 	.library.anki { padding: 14px var(--space-4) 88px }
 	.anki-study-mode .study-card { --stage-top: 10px; --stage-min-h: min(80dvh, calc(100dvh - 210px), 900px); --stage-pad: clamp(16px, 2vw, 32px) }
 }
@@ -1991,12 +1993,12 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
 
 /* 14. Touch: Menüs, Chips, Sidebar-Aktionen, Auswahlschutz */
 @media (pointer: coarse) {
-	body:not(.mobile-ui) :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }
-	body:not(.mobile-ui) .menu-chip { min-height: 40px; padding-inline: var(--space-3) }
-	body:not(.mobile-ui) .row-add { position: relative; min-width: 36px }
-	body:not(.mobile-ui) .row-add::after { content: ""; position: absolute; inset: -8px 0 }
-	body:not(.mobile-ui) :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
-	body:not(.mobile-ui) :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
+	body :is(.menu-item, .page-menu button, .attach-menu button, .refine-menu button, .blk-mi) { min-height: 44px }
+	body .menu-chip { min-height: 40px; padding-inline: var(--space-3) }
+	body .row-add { position: relative; min-width: 36px }
+	body .row-add::after { content: ""; position: absolute; inset: -8px 0 }
+	body :is(button, .menu-item, .page-menu, .attach-menu, .model-menu, .blk-menu, .menu-chips, .lib-card, .home-list-row, .home-pill, .home-continue, .tabstrip, .side-foot, .ws-head, .deck-row, .cal-day) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+	body :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text }
 }
 
 /* == Lernansicht: Höhe bis unten nutzen ==
@@ -2005,7 +2007,7 @@ body.light { --sidebar-bg: color-mix(in srgb, var(--panel-solid) 97%, #000) }
    Karte, der Kreis liegt also daneben. Nur wenn die Fläche so schmal ist, dass die Fußleiste
    bis an den Rand reicht, hält ihr padding-right (76px, siehe .study-footer) ihn frei.
    Steht am Dateiende, damit es alle .library.anki-Varianten (Touch, Maus, Kompakt) schlägt. */
-body:not(.mobile-ui) .library.anki.anki-study-mode { padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); container-type: inline-size }
+body .library.anki.anki-study-mode { padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); container-type: inline-size }
 @container (min-width: 1200px) {
 	body.panel-collapsed.anki-study-open .anki-study-mode .study-footer { padding-right: 0 }
 }

@@ -10,7 +10,7 @@ Impala67 ist Local-First und wird in **drei Versionen** gepflegt, die sich einen
 | **Android-App** | `android/` | Kotlin/Compose, Material 3 Expressive; Kern über UniFFI (`core/impala-ffi`) | Smartphone: schnelles Lesen, Kurznotizen; Tablet | `android/PORTING.md`, `docs/PARITAET.md` |
 | **iPad-App** | `ios/` | SwiftUI/PencilKit (iPadOS 27); Kern über UniFFI (`core/impala-ffi`) | Handschrift und Zeichnen mit dem Stift (Heft) | `ios/README.md`, `docs/PARITAET.md` |
 
-- **Die PWA ist die Vorlage**: Aussehen, Verhalten und Texte der nativen Apps richten sich nach der PWA (mit Plattform-Feinschliff). Die nativen Apps nutzen `web/` nicht und übernehmen nichts aus der alten Capacitor-App.
+- **Die PWA ist die Vorlage**: Aussehen, Verhalten und Texte der nativen Apps richten sich nach der PWA (mit Plattform-Feinschliff). Ausnahme Telefon-Hochformat: Die PWA hat dafür keine eigene Oberfläche mehr (nur „Bitte quer halten“), dort ist die Android-App selbst die Vorlage. Die nativen Apps nutzen `web/` nicht und übernehmen nichts aus der alten Capacitor-App.
 - **Logik gehört in den Kern**: Was keine Oberfläche ist, steht in Rust (`core/`, Plan: `docs/NATIV-PLAN.md`, Regeln: `core/AGENT-REGELN.md`) und gilt damit automatisch für alle drei. Umgestellte Teile laufen nur noch in Rust (kein JS-Rückfall). Fehlt einer App eine Funktion, die FFI-Hülle erweitern – nicht in Kotlin/Swift nachbauen.
 - **Kostenlos**: Ohne laufende Serverkosten betreibbar (Cloudflare Free Tier, GitHub Pages).
 - **Plattformübergreifende Entwicklung**: Entwickler-Tools, npm-Skripte und Tests müssen unter Windows, Linux und macOS funktionieren (`node`-Skripte statt `.bat`/`.sh`).
@@ -39,7 +39,7 @@ Vor jeder Änderung klären, wo sie landen muss:
 - **Einstieg & Shell**: `web/index.html`, `web/main.js`, `web/boot.js`, `web/app.js`
 - **Editor & Notizen**: `web/editor.js`, `web/render.js`
 - **Handschrift & Zeichnen (Heft)**: `web/heft.js`
-- **Mobile & Touch**: `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`
+- **Touch & Handy**: `web/platform.js` (Touch-Erkennung); keine eigene Handy-Oberfläche – am Handy im Hochformat nur der Hinweis „Bitte quer halten“ (`#rotateHint`), Handy-Nutzung über die Android-App
 - **Daten & Sync**: `web/db.js`, `web/state.js` (Ein-/Ausgabe und Abfragen für das Rust-Datenmodell `ModelCore`), `web/state-views.js` (nur lesbare Ansichten in `S`), `web/sync-cloudflare.js` (Ein-/Ausgabe für den Rust-Sync), `web/drive.js` (Anmeldung, Timer und Ein-/Ausgabe für das Rust-Drive-Backup), `server/`
 - **Rust-Kern**: `core/` (ein Crate je Fachgebiet; Datenmodell: `core/impala-model`, Sync: `core/impala-sync`, E2EE: `core/impala-crypto`, Drive-Backup: `core/impala-drive`, Fächer: `core/impala-fach`, KI-Werkzeuge (inspect/change/Rückgängig für PWA und native Apps): `core/impala-tools`), WASM-Hülle `core/impala-wasm`, Ausgabe `web/core/`; UniFFI-Hülle für native Apps `core/impala-ffi` (ändert den WASM-Stempel nicht)
 - **KI & Suche (RAG)**: `web/ai.js`, `web/embedding.js`, `web/embedding-worker.js`, `web/rag.js`

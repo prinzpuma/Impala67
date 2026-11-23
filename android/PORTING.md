@@ -11,7 +11,8 @@ Lücken zur PWA: `docs/PARITAET.md`. Frühere Status-Tabellen: Git-Historie dies
 ## 1. Regeln (für Menschen und Subagents)
 
 1. **Aussehen und Verhalten übernehmen – nicht die Web-Struktur.** Vor dem Schreiben das Web-Modul,
-   sein CSS und die laufende PWA ansehen (Dev-Server `impala67-node`, Port 8011; mobil 375 px und breit).
+   sein CSS und die laufende PWA ansehen (Dev-Server `impala67-node`, Port 8011, breit). Die PWA hat keine eigene Handy-Oberfläche mehr;
+   für die Telefon-Ansicht ist die Android-App selbst maßgeblich (die alte PWA-Handy-UI `web/mobile*.js` steht nur noch in der Git-Historie).
    Kein `render()`-Nachbau, keine Klick-Delegation über `data-*`, keine HTML-Strings, kein globales `S`.
 2. **Native Bausteine statt Eigenbau.** Erst in Material 3 (1.5, Expressive), Navigation 3, androidx und
    ML Kit suchen (siehe Tabelle unten). Eigene Composables nur für das, was es dort nicht gibt.
@@ -84,7 +85,7 @@ Standard-Komponenten von selbst passen.
 
 ## 5. Plattformanpassungen (bewusst anders als die PWA)
 
-- **Telefon hochkant** (< 840 dp): Top-App-Bar mit Titel, Suche und KI; Navigationsleiste unten (wie das Mobil-Dock
+- **Telefon hochkant** (< 840 dp): Top-App-Bar mit Titel, Suche und KI; Navigationsleiste unten (wie das frühere Mobil-Dock
   der PWA), „+“ als mittlerer Leisteneintrag (Sheet).
 - **Tablet** (≥ 840 dp, Telefon quer ab 600 dp; `ui/desk/`): Layout der PWA am Desktop/iPad – links Seitenleiste (Pillen Home ·
   Chat · Karten · Suche, Seitenbaum mit Favoriten und Arbeitsbereichen, unten Wissensgraph,

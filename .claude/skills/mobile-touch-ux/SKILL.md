@@ -5,16 +5,15 @@ description: Guidelines and testing procedures for mobile UI, touch interactions
 
 # Mobile & Touch UX Skill
 
-Use this skill when modifying mobile layouts, touch navigation, gestures, responsive CSS, or iPad/phone behaviors in `web/mobile.js`, `web/mobile-view.js`, `web/mobile.css`, and `web/app.js`.
+Use this skill when modifying mobile layouts, touch navigation, gestures, responsive CSS, or iPad/phone behaviors in `web/platform.js`, `web/styles.css`, `web/css/layout.css`, and `web/app.js`.
 
 ---
 
 ## 1. Core Principles & Platform Differentiation
 
 * **Phone vs. iPad Distinction**:
-  * Phone UI is strictly for phones: narrow viewports (`<= 700px`) or landscape touch devices with phone height (`<= 500px`).
-  * iPads (portrait from 744px width, landscape from 744px height) use the **Desktop/iPad view**, not the phone shell.
-  * Always use `APP.PLATFORM.phoneQuery` in JavaScript and avoid ad-hoc coarse pointer media queries that accidentally catch iPads.
+  * The PWA has **no phone UI** anymore (phones use the Android app). A phone in portrait (`pointer: coarse`, `orientation: portrait`, `max-width: 700px`) only sees the "Bitte quer halten" hint (`#rotateHint`, pure CSS); in landscape it gets the normal desktop/tablet layout.
+  * The desktop layout must stay usable down to ~640px width (collapsible sidebar, tablet breakpoint `max-width: 1024px`).
 * **iOS Safari & Touch Quirks**:
   * Avoid scroll bouncing / rubber-banding on full-screen containers (`overscroll-behavior: contain`).
   * Respect Safe Area Insets (`env(safe-area-inset-bottom)`, `env(safe-area-inset-top)`).
@@ -28,8 +27,7 @@ Use this skill when modifying mobile layouts, touch navigation, gestures, respon
 
 * **Syntax check**:
   ```bash
-  node --check web/mobile.js
-  node --check web/mobile-view.js
+  node --check web/platform.js
   ```
 * **Verify PWA cache**:
   ```bash

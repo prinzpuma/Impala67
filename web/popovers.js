@@ -11,7 +11,6 @@ import { U } from "./util.js";
 // Positioniert `menu` (fixed) relativ zu `anchor`, bleibt innerhalb des Viewports.
 export function position(anchor, menu, opts = {}) {
 	if (!anchor || !menu) return;
-	const isMobile = document.body.classList.contains("mobile-ui");
 	const gap = opts.gap == null ? 4 : opts.gap;
 	const r = anchor.getBoundingClientRect();
 	menu.style.position = "fixed";
@@ -22,8 +21,8 @@ export function position(anchor, menu, opts = {}) {
 	const height = menu.offsetHeight || 0;
 	let left = opts.align === "end" ? r.right - width : r.left;
 	left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-	const safeTop = isMobile ? 56 : 8;
-	const safeBottom = isMobile ? 74 : 8;
+	const safeTop = 8;
+	const safeBottom = 8;
 	const spaceBelow = window.innerHeight - safeBottom - r.bottom - gap;
 	const spaceAbove = r.top - safeTop - gap;
 	let top;

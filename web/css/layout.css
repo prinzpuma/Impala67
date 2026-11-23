@@ -23,8 +23,8 @@ body.density-compact.panel-collapsed #app { grid-template-columns: var(--sidebar
 body.density-compact #mainWrap, body.density-compact #panel { border: 0; border-radius: 0 }
 body.density-compact #panel { border-left: 1px solid var(--edge); background: var(--panel-solid) }
 body.density-compact .panel-head { border-bottom-color: var(--edge) }
-body.density-compact:not(.mobile-ui) #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) var(--space-2) max(10px, env(safe-area-inset-bottom)); gap: var(--space-1-5) }
-body.density-compact:not(.mobile-ui) #tabbar { padding-top: max(var(--space-1-5), calc(var(--space-1-5) + env(safe-area-inset-top, 0px))) }
+body.density-compact #sidebar { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: max(10px, env(safe-area-inset-top)) var(--space-2) max(10px, env(safe-area-inset-bottom)); gap: var(--space-1-5) }
+body.density-compact #tabbar { padding-top: max(var(--space-1-5), calc(var(--space-1-5) + env(safe-area-inset-top, 0px))) }
 body.density-compact #panel > #chatForm { margin-bottom: env(safe-area-inset-bottom, 0px) }
 body.density-compact .row { padding-top: var(--space-1); padding-bottom: var(--space-1) }
 body.density-compact .side-foot button { min-height: 29px; padding-top: var(--space-1); padding-bottom: var(--space-1) }
@@ -47,17 +47,17 @@ body.panel-collapsed #app { grid-template-columns: var(--sidebar-w) minmax(0, 1f
 }
 
 /* Tablet (iPad Portrait & schmale Fenster): das Desktop-3-Spalte… */
-@media (min-width: 701px) and (max-width: 1024px) {
+@media (max-width: 1024px) {
 	#app { grid-template-columns: 220px minmax(0, 1fr) }
 	#panel { position: fixed; z-index: 25; top: max(var(--space-1-5), env(safe-area-inset-top)); right: max(var(--space-1-5), env(safe-area-inset-right)); bottom: max(var(--space-1-5), env(safe-area-inset-bottom)); width: min(400px, 46vw); box-shadow: -12px 0 40px var(--overlay-bg) }
 	body.sidebar-collapsed #app { grid-template-columns: minmax(0, 1fr) }
 }
 /* Heft-Fokus am Tablet: Ist die Seitenleiste in der Heft-Ansicht… */
-@media (pointer: coarse) and (min-width: 701px) {
+@media (pointer: coarse) {
 	body.heft-open #app { transition: padding .5s cubic-bezier(.22, 1, .36, 1), gap .5s cubic-bezier(.22, 1, .36, 1) }
 	body.heft-open #mainWrap { transition: border-radius .5s cubic-bezier(.22, 1, .36, 1), border-color .5s cubic-bezier(.22, 1, .36, 1) }
 }
-@media (pointer: coarse) and (min-width: 701px) and (max-width: 1024px) {
+@media (pointer: coarse) and (max-width: 1024px) {
 	/* Hier ist das KI-Panel ohnehin ein Overlay — Vollbild sobald di… */
 	body.heft-open.sidebar-collapsed #app { padding: 0; gap: 0 }
 	body.heft-open.sidebar-collapsed #mainWrap { border-radius: 0; border-color: transparent }

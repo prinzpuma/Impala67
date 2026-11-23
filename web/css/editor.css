@@ -280,11 +280,11 @@ h3.blk-h { font-size: 1.12em }
 	.blk-gutter { opacity: .55 }
 	.blk-plus, .blk-handle { width: 28px; height: 30px; font-size: 16px }
 	.blk-tablewrap .blk-tbtn { opacity: .6 }
-	body:not(.mobile-ui) .blk-gutter { opacity: 0; pointer-events: none }
-	body:not(.mobile-ui) :is(.blk:focus-within, .blk:hover) > .blk-gutter { opacity: 1; pointer-events: auto }
-	body:not(.mobile-ui) :is(.blk-plus, .blk-handle) { position: relative; width: 20px; height: 22px; font-size: var(--text-base) }
-	body:not(.mobile-ui) .blk-handle { font-size: var(--text-xs) }
-	body:not(.mobile-ui) :is(.blk-plus, .blk-handle)::after { content: ""; position: absolute; inset: -10px 0 }
+	body .blk-gutter { opacity: 0; pointer-events: none }
+	body :is(.blk:focus-within, .blk:hover) > .blk-gutter { opacity: 1; pointer-events: auto }
+	body :is(.blk-plus, .blk-handle) { position: relative; width: 20px; height: 22px; font-size: var(--text-base) }
+	body .blk-handle { font-size: var(--text-xs) }
+	body :is(.blk-plus, .blk-handle)::after { content: ""; position: absolute; inset: -10px 0 }
 }
 
 @media (max-width: 600px) {
@@ -327,4 +327,3 @@ body.light .db-pill { color: color-mix(in srgb, rgb(var(--tone)) 70%, #000) }
 .db-add-row { display: flex; align-items: center; gap: var(--space-1-5); width: 100%; min-height: 38px; margin-top: var(--space-1-5); padding: 0 var(--space-3); background: none; border: 1px dashed var(--edge-soft); border-radius: var(--radius-lg); color: var(--text2); font-size: var(--text-sm); text-align: left; cursor: pointer; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease }
 .db-add-row:hover { background: var(--surface-hover); color: var(--text) }
 @media (max-width: 600px) { .db-view { padding: 0 var(--space-4) } .db-props { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)) } }
-body.mobile-ui .db-view { width: 100%; padding: 0 var(--m-gutter, var(--space-4)) }

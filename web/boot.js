@@ -9,7 +9,6 @@ import { RENDER } from "./render.js";
 import { APP } from "./app.js";
 import { TABS } from "./tabs.js";
 import { CHATS } from "./chats.js";
-import { MOBILE } from "./mobile.js";
 import { DRIVE } from "./drive.js";
 import { LERNZEIT } from "./lernzeit.js";
 import { ANALYSE } from "./lernmuster.js";
@@ -170,14 +169,12 @@ export async function initApp() {
 	await yieldForPaint();
 	render();
 	// Ab hier ist die UI sichtbar und bedienbar — Boot-Splash SOFORT entfernen,
-	// bevor schwere Nacharbeiten (Mobile-Init, Heft-Bilder) den Kreis einfrieren.
+	// bevor schwere Nacharbeiten (Heft-Bilder) den Kreis einfrieren.
 	const splash = document.getElementById("bootSplash");
 	if (splash) splash.remove();
 	// Gemini-Notebook-Anbindung entfernt: ihren alten lokalen Dateispeicher verwerfen (no-op, wenn leer).
 	try { indexedDB.deleteDatabase("impala67-nlm"); localStorage.removeItem("impala67.nlmSources"); } catch {}
 	// Heft-Bilder lädt HEFT.mount (heft.js load) selbst — nur die des geöffneten Hefts.
-	// 📱 Mobile UI v4 nach dem ersten Render aktivieren.
-	MOBILE.init();
 	// Erst nach sichtbarer, bedienbarer UI einen validierten Start-Checkpoint
 	// einplanen. Der Scheduler wartet zusätzlich fünf Sekunden ohne Nutzereingabe.
 	STATE.scheduleCheckpoint();

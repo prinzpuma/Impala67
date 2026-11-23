@@ -1,4 +1,4 @@
-// Startseite für PC und Tablet (die Mobil-Ansicht hat ihr eigenes Home in mobile-view.js).
+// Startseite für PC und Tablet.
 // Idee: Der Begrüßungssatz ist selbst die Bedienung, darunter Weitermachen + zwei Kennzahlen,
 // darunter der Tagesartikel (home-article.js), unten die Lernanalyse (lernanalyse.js). Reines Markup aus fertigen Daten; render.js sammelt.
 // Klicks laufen über die data-*-Handler in app.js. Styles: home.css.

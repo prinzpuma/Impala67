@@ -48,7 +48,6 @@ export function toolbarHtml({
 	pens,
 	penSlot,
 	popKind,
-	phone,
 	canBack,
 	canForward,
 	trayPos,
@@ -119,8 +118,6 @@ export function toolbarHtml({
 			'<button type="button" class="heft-corner heft-corner-l' + (popKind === "pages" ? " active" : "") +
 				'" data-hepagesmenu="1" title="Seiten">' + svgPages +
 				'<span class="heft-pageno-inline"></span></button>' +
-			(phone ? '<button type="button" data-heundo="1" class="heft-corner" title="Rückgängig">' + svgUndo + '</button>' +
-				'<button type="button" data-heredo="1" class="heft-corner" title="Wiederholen">' + svgRedo + '</button>' : "") +
 		'</div>' +
 		'<div class="heft-float" role="toolbar" aria-label="Werkzeuge">' +
 			'<div class="heft-pill">' +
@@ -131,16 +128,16 @@ export function toolbarHtml({
 				'<span class="heft-sep" aria-hidden="true"></span>' +
 				'<button type="button" data-hetool="lasso" class="heft-main' + (tool === "lasso" ? " active" : "") +
 					'" title="Lasso — Striche auswählen">' + svgLasso + '</button>' +
-				(phone ? "" : '<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
-					'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>') +
+				'<button type="button" data-hetool="laser" class="heft-main heft-laser' + (tool === "laser" ? " active" : "") +
+					'" title="Laserpointer — nicht speichern">' + svgLaser + '</button>' +
 				'<span class="heft-sep" aria-hidden="true"></span>' +
 				'<button type="button" data-heimgmenu="1" class="heft-main' +
 					(popKind === "img" ? " active" : "") + '" title="Bilder einfügen oder bearbeiten">' + svgImage + '</button>' +
-				(phone ? "" : '<span class="heft-sep" aria-hidden="true"></span>' +
+				'<span class="heft-sep" aria-hidden="true"></span>' +
 				'<button type="button" data-heundo="1" class="heft-main" title="Rückgängig">' + svgUndo + '</button>' +
 				'<button type="button" data-heredo="1" class="heft-main" title="Wiederholen">' + svgRedo + '</button>' +
 				'<span class="heft-sep" aria-hidden="true"></span>' +
-				'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>') +
+				'<button type="button" data-hecollapse="1" class="heft-main heft-min-btn" title="Leiste einklappen — mehr Platz zum Schreiben">' + svgChevDown + '</button>' +
 			'</div>' +
 		'</div>' +
 		tray +
