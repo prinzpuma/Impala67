@@ -307,9 +307,13 @@ impl Tools<'_> {
         out.insert("title".into(), Value::from(state.page_label(pg)));
         if pg.is_heft() {
             let meta = self.host.model().heft_meta(&id);
+            let has_bg = state.hefte.get(&id).is_some_and(|d| d.pages.iter().any(|hp| hp.background.is_some()));
             out.insert("id".into(), Value::from(pg.id()));
             out.insert("heft".into(), Value::Bool(true));
             out.insert("archived".into(), Value::Bool(pg.is_archived()));
+            if has_bg {
+                out.insert("hasPdf".into(), Value::Bool(true));
+            }
             self.page_info(pg, &mut out);
             out.insert("pages".into(), json!(meta.as_ref().map_or(1, |m| m.pages)));
             out.insert("content".into(), Value::from(clip(meta.as_ref().map_or("", |m| m.ocr_text.as_str()))));
@@ -354,11 +358,17 @@ impl Tools<'_> {
             .take(60)
             .map(|p| {
                 let parent = p.parent().and_then(|id| state.pages.get(id)).map(|x| state.page_label(x));
-                let mut o = json!({ "title": state.page_label(p), "parent": parent, "hasPdf": p.truthy("pdfId") });
+                let heft_doc = p.is_heft().then(|| state.hefte.get(p.id())).flatten();
+                let has_bg = heft_doc.is_some_and(|d| d.pages.iter().any(|hp| hp.background.is_some()));
+                let mut o = json!({
+                    "id": p.id(),
+                    "title": state.page_label(p),
+                    "parent": parent,
+                    "hasPdf": p.truthy("pdfId") || has_bg,
+                });
                 if p.is_heft() {
-                    // ID für die Heft-Werkzeuge (Vorlagen einfügen, Seitenbild), die mit IDs arbeiten.
                     o["heft"] = Value::Bool(true);
-                    o["id"] = Value::from(p.id());
+                    o["pageCount"] = Value::from(heft_doc.map_or(1, |d| d.pages.len()));
                 }
                 if p.truthy("db") {
                     o["verzeichnis"] = Value::Bool(true);

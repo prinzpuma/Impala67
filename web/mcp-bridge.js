@@ -40,9 +40,15 @@ if (typeof document !== "undefined") {
 // Wiederholung nach einem Timeout nicht dieselbe Vorlage nochmal einfügt.
 const addPagesOps = new Map();
 
+function resolveHeftPage(idOrTitle) {
+	const key = String(idOrTitle || "").trim();
+	const pg = (key && S.pages?.[key]) || (key ? STATE.findPage(key) : null);
+	if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft gefunden: ${idOrTitle}`);
+	return pg;
+}
+
 async function addHeftPages(args) {
-	const pg = S.pages?.[args.page_id];
-	if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft mit ID ${args.page_id}`);
+	const pageId = resolveHeftPage(args.page_id).id;
 	const b64 = String(args.data_base64 || "").replace(/^data:[^,]*,/, "");
 	if (!b64) throw new Error("data_base64 fehlt");
 	const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -50,15 +56,16 @@ async function addHeftPages(args) {
 	const type = String(args.mime || (/\.pdf$/i.test(name) ? "application/pdf" : "image/png"));
 	const { HEFT } = await import("./heft.js");
 	// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
-	const pagesNow = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages || [];
+	const pagesNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages || [];
 	const before = pagesNow().map((p) => p.id);
 	const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
-	const end = await HEFT.importFiles(args.page_id, [new File([bytes], name, { type })], pos);
+	const end = await HEFT.importFiles(pageId, [new File([bytes], name, { type })], pos);
 	const pageCount = pagesNow().length;
 	// Ein neues Heft verliert beim Import seine leere Startseite (heft-import.js).
 	const replacedBlank = before.length === 1 && !pagesNow().some((p) => p.id === before[0]);
 	const added = pageCount - before.length + (replacedBlank ? 1 : 0);
 	if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
+	RENDER.render();
 	return { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount, ...(replacedBlank ? { replacedEmptyFirstPage: true } : {}) };
 }
 
@@ -394,10 +401,9 @@ export function initMcpBridge() {
 						break;
 					}
 					case "impala_heft_delete_pages": {
-						const pg = S.pages?.[args.page_id];
-						if (!pg || pg.trashed || pg.kind !== "heft") throw new Error(`Kein Heft mit ID ${args.page_id}`);
+						const pageId = resolveHeftPage(args.page_id).id;
 						const { HEFT } = await import("./heft.js");
-						const doc = HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id);
+						const doc = HEFT.openDoc(pageId) || STATE.heftDoc(pageId);
 						const pages = doc?.pages || [];
 						const want = [...new Set((Array.isArray(args.pages) ? args.pages : [args.pages]).map(Number))].filter((i) => Number.isInteger(i)).sort((a, b) => a - b);
 						if (!want.length) throw new Error("pages fehlt: z. B. [1, 2]");
@@ -409,26 +415,28 @@ export function initMcpBridge() {
 						if (blocked.length && !args.allow_content) {
 							throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true löschen.`);
 						}
-						if (HEFT.openDoc(args.page_id)) await HEFT.saveNow();
+						if (HEFT.openDoc(pageId)) await HEFT.saveNow();
 						const ids = want.map((i) => pages[i].id);
-						await STATE.dispatch("heftOps", { pageId: args.page_id, ops: ids.map((p) => ({ t: "pg-", p })) });
+						await STATE.dispatch("heftOps", { pageId, ops: ids.map((p) => ({ t: "pg-", p })) });
 						// Ein geöffnetes Heft übernimmt die Änderung asynchron: kurz warten, bis sie angekommen ist.
 						const expected = pages.length - want.length;
-						const countNow = () => (HEFT.openDoc(args.page_id) || STATE.heftDoc(args.page_id))?.pages?.length ?? null;
+						const countNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? null;
 						for (let i = 0; i < 20 && countNow() !== expected; i++) await new Promise((r) => setTimeout(r, 100));
+						RENDER.render();
 						result = { ok: true, deleted: want, pageCount: countNow() ?? expected };
 						break;
 					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.
 					case "impala_heft_page_image": {
-						// page_id darf auch der Hefttitel sein (Lese-Werkzeuge liefern Titel).
-						const heft = args.page_id && !S.pages?.[args.page_id] ? STATE.findPage(String(args.page_id)) : null;
-						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage(heft ? { ...args, page_id: heft.id } : args);
+						const pageId = resolveHeftPage(args.page_id).id;
+						result = await (await import("./heft-label.js")).HEFT_LABEL.pageImage({ ...args, page_id: pageId });
 						break;
 					}
-					case "impala_heft_label_lines":
-						result = await (await import("./heft-label.js")).HEFT_LABEL.labelLines(args);
+					case "impala_heft_label_lines": {
+						const pageId = resolveHeftPage(args.page_id).id;
+						result = await (await import("./heft-label.js")).HEFT_LABEL.labelLines({ ...args, page_id: pageId });
 						break;
+					}
 					default: {
 						// Inhalts-Werkzeuge = dieselben flachen Werkzeuge wie die App-KI (tools.js,
 						// Kern impala-ai/flat.rs): impala_search → search, impala_edit_page → edit_page …
@@ -436,7 +444,10 @@ export function initMcpBridge() {
 						const known = (d) => d.function.name === flat;
 						if (!TOOLS.flatDefs.some(known) && !TOOLS.lehrerDefs.some(known)) { result = { error: `Unbekanntes Werkzeug: ${tool}` }; break; }
 						result = await TOOLS.runFlat(flat, args || {});
-						if (result && !result.error && !result.dryRun && /^(create_|edit_|organize_|write_|check_)/.test(flat)) RENDER.render();
+						if (result && !result.error && !result.dryRun && /^(create_|edit_|organize_|write_|check_)/.test(flat)) {
+							if (S.currentPageId && S.pages?.[S.currentPageId]?.trashed) TABS.closeTab?.(S.currentPageId);
+							RENDER.render();
+						}
 					}
 				}
 

@@ -108,6 +108,21 @@ fn ordnerfilter_pfade_und_duplikat_schutz() {
     assert!(heft.0);
     let (r, _) = run_flat(&mut h, &c, "list_pages", &json!({ "query": "Blatt 5" })).unwrap();
     assert_eq!(r["pages"][0]["id"], heft.1, "{r}");
+    assert_eq!(r["pages"][0]["pageCount"], 1, "{r}");
+    assert_eq!(r["pages"][0]["hasPdf"], false, "{r}");
+    h.dispatch(
+        "heftOps",
+        json!({ "pageId": heft.1, "ops": [
+            { "t": "pg+", "page": { "id": "pg1" } },
+            { "t": "pgb", "p": "pg1", "bg": { "id": "bg1", "ref": "blob1", "x": 0, "y": 0, "w": 1000, "h": 1414 } }
+        ] }),
+    )
+    .unwrap();
+    let (r, _) = run_flat(&mut h, &c, "list_pages", &json!({ "query": "Blatt 5" })).unwrap();
+    assert_eq!(r["pages"][0]["hasPdf"], true, "{r}");
+    assert_eq!(r["pages"][0]["pageCount"], 1, "{r}");
+    let (r, _) = run_flat(&mut h, &c, "read_pages", &json!({ "ids": [heft.1] })).unwrap();
+    assert_eq!(r["pages"][0]["hasPdf"], true, "{r}");
     // Teil-Treffer in der Suche
     h.dispatch("pageUpdate", json!({ "id": mathe, "patch": { "content": "Eigenwerte und Eigenvektoren" } })).unwrap();
     let (r, _) = run_flat(&mut h, &c, "search", &json!({ "query": "eigenwert" })).unwrap();

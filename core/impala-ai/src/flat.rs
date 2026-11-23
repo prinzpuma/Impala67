@@ -38,15 +38,28 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
         m.insert("op".into(), Value::from(kind));
         Value::Object(m)
     };
+    let titles_or_ids = |tool: &str| -> Result<Vec<Value>, String> {
+        let mut items = vec![];
+        for key in ["titles", "ids"] {
+            if let Some(v) = s(key) {
+                let Some(arr) = v.as_array() else {
+                    return Err(format!("{tool}: {key} muss eine Liste sein."));
+                };
+                items.extend(arr.iter().cloned());
+            }
+        }
+        if items.is_empty() {
+            return Err(format!("{tool}: titles oder ids muss eine nicht-leere Liste sein."));
+        }
+        Ok(items)
+    };
     Some(match name {
         "search" => inspect("search", &["query", "semantic"]),
         "read_pages" => {
-            let Some(Value::Array(titles)) = s("titles") else {
-                return Some(Err("read_pages: titles muss eine Liste exakter Titel sein.".into()));
+            let titles = match titles_or_ids("read_pages") {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
             };
-            if titles.is_empty() {
-                return Some(Err("read_pages: titles darf nicht leer sein.".into()));
-            }
             let mut m = pick(&["offset", "find"]);
             m.insert("kind".into(), Value::from("page"));
             m.insert("titles".into(), Value::Array(titles));
@@ -77,7 +90,9 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
             change(ops)
         }
         "edit_page" => {
-            let Some(title) = s("title") else { return Some(Err("edit_page: title fehlt.".into())) };
+            let Some(title) = s("title").or_else(|| s("id")) else {
+                return Some(Err("edit_page: title oder id fehlt.".into()));
+            };
             let with = |extra: &[(&str, Value)]| {
                 let mut m = Map::new();
                 m.insert("title".into(), title.clone());
@@ -116,13 +131,22 @@ pub fn flat_call(name: &str, a: &Value) -> Option<Result<(&'static str, Value), 
             if !matches!(action, "trash" | "archive" | "unarchive") {
                 return Some(Err("organize_pages: action muss trash, archive oder unarchive sein.".into()));
             }
-            let Some(Value::Array(titles)) = s("titles") else {
-                return Some(Err("organize_pages: titles muss eine Liste von Titeln sein.".into()));
+            let titles = match titles_or_ids("organize_pages") {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
             };
             let kind = format!("page.{action}");
             change(titles.into_iter().map(|t| op(&kind, Map::from_iter([("title".into(), t)]))).collect())
         }
-        "write_to_heft" => change(vec![op("heft.append", pick(&["title", "text", "page"]))]),
+        "write_to_heft" => {
+            let mut m = pick(&["title", "text", "page"]);
+            if !m.contains_key("title")
+                && let Some(id) = s("id")
+            {
+                m.insert("title".into(), id);
+            }
+            change(vec![op("heft.append", m)])
+        }
         "create_cards" => {
             let mut m = pick(&["deck", "cards"]);
             if let Some(p) = s("page") {
@@ -209,5 +233,13 @@ mod tests {
             .unwrap();
         assert_eq!(a["operations"].as_array().unwrap().len(), 2);
         assert_eq!(a["operations"][0]["props"]["Nr"], 4);
+        let (t, a) = flat_call("read_pages", &json!({ "ids": ["p1"] })).unwrap().unwrap();
+        assert_eq!((t, a), ("inspect", json!({ "kind": "page", "titles": ["p1"] })));
+        let (_, a) = flat_call("organize_pages", &json!({ "action": "trash", "ids": ["p1"] })).unwrap().unwrap();
+        assert_eq!(a["operations"][0], json!({ "op": "page.trash", "title": "p1" }));
+        let (_, a) = flat_call("edit_page", &json!({ "id": "p1", "append": "hi" })).unwrap().unwrap();
+        assert_eq!(a["operations"][0], json!({ "op": "page.append", "title": "p1", "content": "hi" }));
+        let (_, a) = flat_call("write_to_heft", &json!({ "id": "h1", "text": "ok" })).unwrap().unwrap();
+        assert_eq!(a["operations"][0], json!({ "op": "heft.append", "title": "h1", "text": "ok" }));
     }
 }
