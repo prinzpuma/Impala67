@@ -47,6 +47,45 @@ function resolveHeftPage(idOrTitle) {
 	return pg;
 }
 
+function heftPageHasContent(p) {
+	return (p?.strokes || []).length > 0 || (p?.texts || []).length > 0 || (p?.images || []).length > 0;
+}
+
+function parsePageIndices(raw) {
+	const items = Array.isArray(raw) ? raw : [raw];
+	const out = new Set();
+	for (const item of items) {
+		if (typeof item === "number") {
+			if (Number.isInteger(item)) out.add(item);
+			continue;
+		}
+		for (const part of String(item ?? "").split(",")) {
+			const s = part.trim();
+			if (!s) continue;
+			const range = s.match(/^(\d+)\s*-\s*(\d+)$/);
+			if (range) {
+				const a = Number(range[1]);
+				const b = Number(range[2]);
+				if (a <= b) for (let i = a; i <= b; i++) out.add(i);
+			} else if (/^-?\d+$/.test(s)) {
+				out.add(Number(s));
+			}
+		}
+	}
+	return [...out].sort((a, b) => a - b);
+}
+
+async function deleteHeftPageIds(HEFT, pageId, ids) {
+	if (!ids.length) return;
+	if (HEFT.openDoc(pageId)) await HEFT.saveNow();
+	const beforeCount = (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? 0;
+	await STATE.dispatch("heftOps", { pageId, ops: ids.map((p) => ({ t: "pg-", p })) });
+	// Ein geöffnetes Heft übernimmt die Änderung asynchron: kurz warten, bis sie angekommen ist.
+	const expected = Math.max(1, beforeCount - ids.length);
+	const countNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? null;
+	for (let i = 0; i < 20 && countNow() !== expected; i++) await new Promise((r) => setTimeout(r, 100));
+}
+
 async function addHeftPages(args) {
 	const pageId = resolveHeftPage(args.page_id).id;
 	const b64 = String(args.data_base64 || "").replace(/^data:[^,]*,/, "");
@@ -57,16 +96,38 @@ async function addHeftPages(args) {
 	const { HEFT } = await import("./heft.js");
 	// Offenes Heft: Arbeitskopie zählen (kann Ungespeichertes enthalten).
 	const pagesNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages || [];
-	const before = pagesNow().map((p) => p.id);
-	const pos = Number.isInteger(args.at) ? args.at : (args.position || "end");
+	const oldPages = pagesNow();
+	if (args.replace) {
+		const blocked = oldPages.map((p, i) => (heftPageHasContent(p) ? i : -1)).filter((i) => i >= 0);
+		if (blocked.length && !args.allow_content) {
+			throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true ersetzen.`);
+		}
+	}
+	const before = oldPages.map((p) => p.id);
+	const pos = args.replace ? 0 : (Number.isInteger(args.at) ? args.at : (args.position || "end"));
 	const end = await HEFT.importFiles(pageId, [new File([bytes], name, { type })], pos);
-	const pageCount = pagesNow().length;
+	let pageCount = pagesNow().length;
 	// Ein neues Heft verliert beim Import seine leere Startseite (heft-import.js).
 	const replacedBlank = before.length === 1 && !pagesNow().some((p) => p.id === before[0]);
 	const added = pageCount - before.length + (replacedBlank ? 1 : 0);
 	if (added <= 0) throw new Error("Datei ließ sich nicht als Seite einfügen (Bild oder PDF?)");
+	let replacedPages = replacedBlank ? 1 : 0;
+	if (args.replace) {
+		const toDelete = before.filter((id) => pagesNow().some((p) => p.id === id));
+		if (toDelete.length) {
+			await deleteHeftPageIds(HEFT, pageId, toDelete);
+			replacedPages += toDelete.length;
+			pageCount = pagesNow().length;
+		}
+	}
 	RENDER.render();
-	return { ok: true, inserted: { from: end - added, to: end - 1 }, pageCount, ...(replacedBlank ? { replacedEmptyFirstPage: true } : {}) };
+	return {
+		ok: true,
+		inserted: { from: end - added, to: end - 1 },
+		pageCount,
+		...(replacedBlank && !args.replace ? { replacedEmptyFirstPage: true } : {}),
+		...(args.replace ? { replacedPages } : {}),
+	};
 }
 
 // impala_eval ohne 'unsafe-eval' (CSP): Der Code läuft als Inline-Skript ('unsafe-inline'
@@ -417,25 +478,20 @@ export function initMcpBridge() {
 						const { HEFT } = await import("./heft.js");
 						const doc = HEFT.openDoc(pageId) || STATE.heftDoc(pageId);
 						const pages = doc?.pages || [];
-						const want = [...new Set((Array.isArray(args.pages) ? args.pages : [args.pages]).map(Number))].filter((i) => Number.isInteger(i)).sort((a, b) => a - b);
-						if (!want.length) throw new Error("pages fehlt: z. B. [1, 2]");
+						const want = parsePageIndices(args.pages);
+						if (!want.length) throw new Error("pages fehlt: z. B. [1, 2] oder '3-16'");
 						const bad = want.filter((i) => i < 0 || i >= pages.length);
 						if (bad.length) throw new Error(`Seite(n) ${bad.join(", ")} gibt es nicht (Heft hat ${pages.length} Seiten, 0-basiert)`);
 						if (want.length >= pages.length) throw new Error("Ein Heft braucht mindestens eine Seite.");
-						const hasContent = (p) => (p.strokes || []).length > 0 || (p.texts || []).length > 0 || (p.images || []).length > 0;
-						const blocked = want.filter((i) => hasContent(pages[i]));
+						const blocked = want.filter((i) => heftPageHasContent(pages[i]));
 						if (blocked.length && !args.allow_content) {
 							throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true löschen.`);
 						}
-						if (HEFT.openDoc(pageId)) await HEFT.saveNow();
 						const ids = want.map((i) => pages[i].id);
-						await STATE.dispatch("heftOps", { pageId, ops: ids.map((p) => ({ t: "pg-", p })) });
-						// Ein geöffnetes Heft übernimmt die Änderung asynchron: kurz warten, bis sie angekommen ist.
-						const expected = pages.length - want.length;
-						const countNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? null;
-						for (let i = 0; i < 20 && countNow() !== expected; i++) await new Promise((r) => setTimeout(r, 100));
+						await deleteHeftPageIds(HEFT, pageId, ids);
+						const countNow = (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? null;
 						RENDER.render();
-						result = { ok: true, deleted: want, pageCount: countNow() ?? expected };
+						result = { ok: true, deleted: want, pageCount: countNow ?? (pages.length - want.length) };
 						break;
 					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.

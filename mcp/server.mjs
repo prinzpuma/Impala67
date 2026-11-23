@@ -12,6 +12,7 @@ const socketMeta = new Map();
 let targetSeq = 1;
 let activeBrowserWs = null;
 let pinnedTargetId = null;
+let lastReportedTarget = null;
 const pendingBrowserCalls = new Map();
 let browserCallSeq = 1;
 const serverStats = {
@@ -300,6 +301,12 @@ function acceptApp(ws, label, origin = "") {
 }
 startWsServer();
 
+function formatTarget(ws) {
+	const m = ws && socketMeta.get(ws);
+	if (!m) return null;
+	return m.origin ? `${m.origin} (${m.id})` : `${m.label} (${m.id})`;
+}
+
 function getActiveBrowserWs() {
 	if (activeBrowserWs && activeBrowserWs.readyState === 1) return activeBrowserWs;
 	activeBrowserWs = pickFallbackSocket();
@@ -371,6 +378,19 @@ async function callLiveBrowser(tool, args = {}) {
 				serverStats.totalCalls++;
 				serverStats.lastDurationMs = durationMs;
 				serverStats.lastTool = tool;
+				const currTarget = formatTarget(ws);
+				const prevTarget = lastReportedTarget;
+				const changed = !!(prevTarget && currTarget && prevTarget !== currTarget);
+				if (currTarget) lastReportedTarget = currTarget;
+				if (res && typeof res === "object" && currTarget) {
+					if (res.error) {
+						res.error = `${res.error} [Ziel: ${currTarget}${changed ? `, gewechselt von ${prevTarget}` : ""}]`;
+					} else if (changed && tool !== "impala_targets" && tool !== "impala_get_diagnostics") {
+						res._targetChanged = `${prevTarget} -> ${currTarget}`;
+					} else if (tool === "impala_list_pages" && Array.isArray(res.pages) && res.pages.length === 0) {
+						res._target = currTarget;
+					}
+				}
 				resolve(res);
 			},
 		});
@@ -547,7 +567,7 @@ const TOOLS = [
 	},
 	{
 		name: "impala_heft_add_pages",
-		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index) oder position (start, before, after, end; Standard end). Heft-IDs liefert impala_list_pages (Feld id, pageCount, hasPdf); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt. Anzeigen per impala_run_ui_action open_page mit der id.",
+		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index), position (start, before, after, end; Standard end) oder replace=true (ersetzt alle bisherigen Heftseiten). Heft-IDs liefert impala_list_pages (Feld id, pageCount, hasPdf); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt. Anzeigen per impala_run_ui_action open_page mit der id.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -557,18 +577,20 @@ const TOOLS = [
 				filename: { type: "string", description: "Dateiname bei data_base64 (Endung bestimmt den Typ, z. B. blatt.pdf)" },
 				at: { type: "number", description: "Einfügeindex, 0-basiert (0 = vor der ersten Seite)" },
 				position: { type: "string", enum: ["start", "before", "after", "end"], description: "Relativ zur aktuellen Seite, wenn at fehlt (Standard end)" },
+				replace: { type: "boolean", description: "Alle bisherigen Heftseiten durch die neue Vorlage ersetzen (Standard false)" },
+				allow_content: { type: "boolean", description: "Bei replace=true auch Seiten mit Handschrift/Textboxen ersetzen (Standard false)" },
 			},
 			required: ["page_id"],
 		},
 	},
 	{
 		name: "impala_heft_delete_pages",
-		description: "Löscht Seiten aus einem Handschrift-Heft (0-basierte Indizes, z. B. doppelt eingefügte Vorlagen). Seiten mit Handschrift oder Textboxen werden nur mit allow_content=true gelöscht. Antwort: gelöschte Indizes und neue Seitenzahl. Über den Heft-Verlauf wiederherstellbar.",
+		description: "Löscht Seiten aus einem Handschrift-Heft (0-basierte Indizes oder Bereiche wie '3-16', z. B. doppelt eingefügte Vorlagen). Seiten mit Handschrift oder Textboxen werden nur mit allow_content=true gelöscht. Antwort: gelöschte Indizes und neue Seitenzahl. Über den Heft-Verlauf wiederherstellbar.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				page_id: { type: "string", description: "ID oder Titel des Hefts" },
-				pages: { type: "array", items: { type: "number" }, description: "Heftseiten, 0-basiert" },
+				pages: { description: "Heftseiten, 0-basiert: Indizes oder Bereiche (z. B. [1, 2], ['3-16'] oder '3-16')" },
 				allow_content: { type: "boolean", description: "Auch Seiten mit Handschrift/Textboxen löschen (Standard false)" },
 			},
 			required: ["page_id", "pages"],
@@ -635,7 +657,7 @@ export async function startServer() {
 		// Gleicher Aufruf (gleiches Heft, gleiche Datei, gleiche Stelle) wird in der App nur einmal
 		// ausgeführt — auch wenn er nach einem Timeout wiederholt wird.
 		if (name === "impala_heft_add_pages" && args.data_base64 && !args.op_key) {
-			args = { ...args, op_key: createHash("sha1").update(`${args.page_id}|${args.at ?? ""}|${args.position ?? ""}|`).update(String(args.data_base64)).digest("hex") };
+			args = { ...args, op_key: createHash("sha1").update(`${args.page_id}|${args.at ?? ""}|${args.position ?? ""}|${args.replace ? 1 : 0}|`).update(String(args.data_base64)).digest("hex") };
 		}
 		const result = await callLiveBrowser(name, args);
 		if (result === null) {

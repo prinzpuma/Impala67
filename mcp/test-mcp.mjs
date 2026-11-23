@@ -111,9 +111,12 @@ test("MCP-Server: Initialisierung, Werkzeuge und Lebenszyklus", async () => {
 		// 2. Werkzeuge auflisten
 		const toolsRes = await client.request("tools/list", {});
 		const toolNames = (toolsRes.tools || []).map((t) => t.name);
-		for (const name of ["impala_search", "impala_read_pages", "impala_list_pages", "impala_create_pages", "impala_edit_page", "impala_list_cards", "impala_create_cards"]) {
+		for (const name of ["impala_search", "impala_read_pages", "impala_list_pages", "impala_create_pages", "impala_edit_page", "impala_list_cards", "impala_create_cards", "impala_targets"]) {
 			assert.ok(toolNames.includes(name), name);
 		}
+		const addPagesTool = toolsRes.tools.find((t) => t.name === "impala_heft_add_pages");
+		assert.ok(addPagesTool?.inputSchema?.properties?.replace, "impala_heft_add_pages braucht replace");
+		assert.ok(addPagesTool?.inputSchema?.properties?.allow_content, "impala_heft_add_pages braucht allow_content");
 	} finally {
 		await client.close();
 	}
@@ -220,7 +223,11 @@ test("MCP-Bridge: Produktiv-Tab wird nicht von localhost-Testtab verdrängt & im
 		wsProd.send(JSON.stringify({ hello: true, meta: { origin: "https://prinzpuma.github.io", url: "https://prinzpuma.github.io/Impala67/?mcpBridge=1", kind: "pwa", pageCount: 42 } }));
 		wsProd.on("message", (raw) => {
 			const data = JSON.parse(raw);
-			if (data.callId) wsProd.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Echte Notiz" } } }));
+			if (data.callId && data.tool === "impala_get_diagnostics") {
+				wsProd.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Echte Notiz" } } }));
+			} else if (data.callId) {
+				wsProd.send(JSON.stringify({ callId: data.callId, result: { pages: [{ id: "p1", title: "Echte Notiz" }] } }));
+			}
 		});
 
 		wsLocal = new WebSocket(`ws://127.0.0.1:${testPort}`, { headers: { origin: "http://localhost:8000" } });
@@ -228,7 +235,13 @@ test("MCP-Bridge: Produktiv-Tab wird nicht von localhost-Testtab verdrängt & im
 		wsLocal.send(JSON.stringify({ claim: true, meta: { origin: "http://localhost:8000", url: "http://localhost:8000/", kind: "pwa", pageCount: 5 } }));
 		wsLocal.on("message", (raw) => {
 			const data = JSON.parse(raw);
-			if (data.callId) wsLocal.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Test-Tab" } } }));
+			if (data.callId && data.tool === "impala_get_diagnostics") {
+				wsLocal.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Test-Tab" } } }));
+			} else if (data.callId && data.tool === "impala_list_pages") {
+				wsLocal.send(JSON.stringify({ callId: data.callId, result: { pages: [] } }));
+			} else if (data.callId) {
+				wsLocal.send(JSON.stringify({ callId: data.callId, result: { error: "Kein Heft gefunden" } }));
+			}
 		});
 		await new Promise((r) => setTimeout(r, 80));
 
@@ -241,8 +254,15 @@ test("MCP-Bridge: Produktiv-Tab wird nicht von localhost-Testtab verdrängt & im
 		assert.equal(targetsRes.data.targets.length, 2);
 		const selLocal = await client.callTool("impala_targets", { select: "localhost" });
 		assert.equal(selLocal.isError, false);
-		const diag2 = await client.callTool("impala_get_diagnostics", {});
-		assert.equal(diag2.data.app?.activePageTitle, "Test-Tab");
+		// Erster Aufruf nach Zielwechsel meldet _targetChanged; Fehler nennen aktives Ziel
+		const listLocal = await client.callTool("impala_list_pages", {});
+		assert.match(listLocal.data._targetChanged || "", /prinzpuma\.github\.io.*->.*localhost:8000/);
+		const listLocal2 = await client.callTool("impala_list_pages", {});
+		assert.equal(listLocal2.data._targetChanged, undefined);
+		assert.match(listLocal2.data._target || "", /localhost:8000/);
+		const errLocal = await client.callTool("impala_heft_add_pages", { page_id: "x", data_base64: "AA==" });
+		assert.equal(errLocal.isError, true);
+		assert.match(errLocal.content, /Ziel: http:\/\/localhost:8000/);
 
 		// Zurück auf Produktiv-Tab
 		await client.callTool("impala_targets", { select: "prinzpuma.github.io" });
