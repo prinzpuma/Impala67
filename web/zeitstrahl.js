@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { icon, lead } from "./icons.js";
 import { ZS_STORE, ZS_CORE } from "./zeitstrahl-store.js";
-import { graphHtml, attachGraph, focusNext, fmtYear, examInfo, progressRing, strandColor, STATE_LABEL } from "./zeitstrahl-graph.js";
+import { graphHtml, attachGraph, focusNext, fmtYear, examInfo, STATE_LABEL } from "./zeitstrahl-graph.js";
 import { openTimelineDialog, openNodeDialog, sendAi, skeletonPrompt, fillPrompt } from "./zeitstrahl-dialogs.js";
 
 // zeitstrahl.js — KI-Zeitstrahl: Übersicht der Lernwelten, Graph (zeitstrahl-graph.js) und
@@ -19,11 +19,12 @@ const enabled = () => !!S.settings?.experiments?.zeitstrahl;
 const UI_KEY = "impala67Zeitstrahl";
 const ui = (() => {
 	const base = { tl: null, node: null, zoom: 1 };
-	try { return { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; } catch { return base; }
+	try { const u = { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; return { ...u, zoom: Math.min(5, Math.max(1, Number(u.zoom) || 1)) }; } catch { return base; }
 })();
 function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tl: ui.tl, node: ui.node, zoom: ui.zoom })); } catch {} }
 
 const rerender = () => BUS.emit("ui:render");
+let graphWidth = 900;
 
 /** Offener Zeitstrahl; ohne Auswahl die Übersicht (null). */
 function currentTimeline() {
@@ -52,7 +53,6 @@ function examChip(exam) {
 function cardHtml(tl) {
 	const e = ZS_CORE.listEntry(tl);
 	const v = ZS_CORE.view(tl);
-	const pct = e.total ? Math.round((e.mastered / e.total) * 100) : 0;
 	const [kIcon, kLabel] = KIND_LABEL[e.kind] || KIND_LABEL.history;
 	const dots = v.nodes.slice().sort((a, b) => a.col - b.col || a.lane - b.lane).slice(0, 14)
 		.map((n) => `<i class="is-${esc(n.state)}${n.draft ? " is-draft" : ""}"></i>`).join("");
@@ -62,7 +62,7 @@ function cardHtml(tl) {
 		`<span class="zs-eyebrow">${icon(kIcon)}${esc([kLabel, e.subject].filter(Boolean).join(" · "))}</span>` +
 		`<span class="zs-card-title">${esc(e.title)}</span>` +
 		(e.description ? `<span class="zs-card-desc">${esc(e.description)}</span>` : "") +
-		`<span class="zs-card-foot">${progressRing(pct, 34)}<span class="zs-card-count"><b>${e.mastered}</b>/${e.total} gemeistert</span>` +
+		`<span class="zs-card-foot"><span class="zs-card-count"><b>${e.mastered}</b>/${e.total} geschafft</span>` +
 		`<span class="zs-card-chips">${e.drafts ? `<span class="zs-chip">${icon("pen-tool")}${e.drafts} Entwürfe</span>` : ""}${examChip(e.exam)}</span></span></button>`;
 }
 
@@ -83,21 +83,19 @@ function homeHtml() {
 // ---------- Graph-Ansicht ----------
 function heroHtml(tl, v) {
 	const next = v.nodes.filter((n) => n.state === "next").sort((a, b) => a.col - b.col)[0];
-	const pct = v.stats.total ? Math.round((v.stats.mastered / v.stats.total) * 100) : 0;
-	const [kIcon, kLabel] = KIND_LABEL[v.kind] || KIND_LABEL.history;
+	const [, kLabel] = KIND_LABEL[v.kind] || KIND_LABEL.history;
+	const ex = examInfo(tl.exam);
+	const meta = [tl.subject || kLabel, `${v.stats.mastered} von ${v.stats.total} geschafft`, ex ? `Klausur ${ex.rel}` : ""].filter(Boolean).join(" · ");
 	return `<header class="zs-hero">` +
 		`<button type="button" class="zs-iconbtn" data-zshome="1" aria-label="Alle Zeitstrahlen" title="Alle Zeitstrahlen">${icon("chevron-left")}</button>` +
-		`<div class="zs-hero-copy"><div class="zs-eyebrow">${icon(kIcon)}${esc([kLabel, tl.subject].filter(Boolean).join(" · "))}</div>` +
-		`<h1 class="zs-title">${esc(tl.title)}</h1>${tl.description ? `<p class="zs-sub">${esc(tl.description)}</p>` : ""}</div>` +
-		`<div class="zs-hero-stats">${progressRing(pct, 46)}<div><b>${v.stats.mastered}<small>/${v.stats.total}</small></b><span>gemeistert</span></div>${examChip(tl.exam)}</div>` +
+		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p></div>` +
 		`<div class="zs-hero-actions">` +
 		`<button type="button" class="zs-iconbtn" data-zsadd="1" aria-label="Lektion hinzufügen" title="Lektion hinzufügen">${icon("plus")}</button>` +
 		`<button type="button" class="zs-iconbtn" data-zsedit="tl" aria-label="Zeitstrahl bearbeiten" title="Zeitstrahl bearbeiten">${icon("gear")}</button>` +
-		(next ? `<button type="button" class="zs-btn primary" data-zsnode="${esc(next.id)}">${lead("play")}<span class="zs-btn-txt">${esc(next.title)}</span></button>` : "") +
+		(next ? `<button type="button" class="zs-btn primary" data-zsnode="${esc(next.id)}">${lead("play")}Weiterlernen</button>` : "") +
 		`</div></header>` +
 		(v.stats.drafts
-			? `<div class="zs-banner">${icon("pen-tool")}<span><b>Gerüst prüfen:</b> ${v.stats.drafts} von ${v.stats.total} Lektionen sind Entwürfe. Passe Titel, Jahre und Verbindungen an (Lektion anklicken → Bearbeiten), dann lass sie ausarbeiten.</span>` +
-				`<button type="button" class="zs-btn" data-zsask="fill">${lead("sparkles")}Nächste ausarbeiten</button></div>`
+			? `<p class="zs-note">${v.stats.drafts} von ${v.stats.total} Lektionen sind noch Entwürfe – prüfen, dann <button type="button" class="zs-link" data-zsask="fill">ausarbeiten lassen</button>.</p>`
 			: "");
 }
 
@@ -107,7 +105,7 @@ function graphViewHtml(tl, v) {
 			`<div class="zs-actions center"><button type="button" class="zs-btn primary" data-zsask="build">${lead("sparkles")}Gerüst bauen lassen</button>` +
 			`<button type="button" class="zs-btn" data-zsadd="1">${lead("plus")}Lektion anlegen</button></div></div>`;
 	}
-	return heroHtml(tl, v) + graphHtml(v, ui.zoom);
+	return heroHtml(tl, v) + graphHtml(v, { width: graphWidth, zoom: ui.zoom });
 }
 
 // ---------- Lektion ----------
@@ -223,7 +221,6 @@ function nextCards(kids) {
 function lessonHtml(tl, node, entry, v) {
 	const kids = v.edges.filter((e) => e.from === node.id).map((e) => v.nodes.find((n) => n.id === e.to)).filter(Boolean);
 	const parents = (node.parents || []).map((id) => v.nodes.find((n) => n.id === id)).filter(Boolean);
-	const strandIdx = (v.strands || []).findIndex((s) => entry && entry.lane >= s.lane && entry.lane < s.lane + s.lanes);
 	const imgs = (node.images || []).map((img) => ({ ...img, src: imageSrc(img) })).filter((img) => img.src);
 	const svg = typeof node.svg === "string" && node.svg.trim().startsWith("<svg") ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(node.svg)}` : "";
 	const gallery = imgs.length || svg
@@ -240,7 +237,7 @@ function lessonHtml(tl, node, entry, v) {
 	return `<header class="zs-lesson-top"><button type="button" class="zs-btn quiet" data-zsback="1">${lead("chevron-left")}${esc(tl.title)}</button>` +
 		`<span class="zs-chip ${entry?.state === "mastered" ? "ok" : entry?.state === "next" ? "next" : ""}">${esc(STATE_LABEL[entry?.state] || "")}</span>` +
 		`<button type="button" class="zs-iconbtn" data-zsedit="node" aria-label="Lektion bearbeiten" title="Lektion bearbeiten">${icon("pen")}</button></header>` +
-		`<article class="zs-lesson" style="--zs-strand:${strandColor(strandIdx)}">` +
+		`<article class="zs-lesson">` +
 		`<div class="zs-lesson-hero">${meta ? `<div class="zs-node-meta big">${meta}</div>` : ""}` +
 		`<h1 class="zs-lesson-title">${esc(node.title)}</h1>` +
 		(node.summary ? `<p class="zs-lead">${esc(node.summary)}</p>` : "") + prev + `</div>` +
@@ -271,7 +268,8 @@ function render(main) {
 	const node = tl && ui.node ? nodeOf(tl, ui.node) : null;
 	if (ui.node && !node) ui.node = null;
 	// Nur bei echten Änderungen neu aufbauen – sonst gingen Eingaben im Quiz bei jedem App-Render verloren.
-	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}|${ui.zoom}` : `home|${ZS_STORE.all().map((t) => t.id + t.updated).join(",")}`;
+	graphWidth = Math.max(320, (main.clientWidth || 900) - 56);
+	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}|${ui.zoom}|${node ? "" : Math.round(graphWidth / 24)}` : `home|${ZS_STORE.all().map((t) => t.id + t.updated).join(",")}`;
 	if (main.dataset.zsKey === key && main.querySelector(".zs-world")) return;
 	// Scrollstand des Graphen über Neuaufbauten hinweg halten (bei Zoom mitskaliert).
 	const prevScroll = main.querySelector("[data-zsscroll]");
@@ -300,7 +298,7 @@ function render(main) {
 	attachGraph(main, zoomBy);
 	const scroll = main.querySelector("[data-zsscroll]");
 	if (scroll && scrollPos) { scroll.scrollLeft = scrollPos.l; scroll.scrollTop = scrollPos.t; }
-	else requestAnimationFrame(() => focusNext(main, ui.zoom));
+	else requestAnimationFrame(() => focusNext(main));
 }
 
 // Eingaben im Quiz je Feld (Name + Lücke bzw. Wert) – überleben so einen Neuaufbau der Lektion.
@@ -324,8 +322,9 @@ function restoreInputs(root, saved) {
 	}
 }
 
+// Zoom = Streckung der Linie (1 = passt in die Ansicht).
 function zoomBy(d) {
-	const z = Math.round(Math.min(1.4, Math.max(0.5, ui.zoom + d)) * 10) / 10;
+	const z = Math.round(Math.min(5, Math.max(1, ui.zoom + d)) * 4) / 4;
 	if (z === ui.zoom) return;
 	ui.zoom = z;
 	saveUi();
@@ -446,7 +445,7 @@ function edit(what) {
 }
 
 // Klicks: eigene Delegation (wie library.js), nur für data-zs*-Ziele.
-const TARGETS = "[data-zsnode],[data-zstl],[data-zshome],[data-zsnew],[data-zsedit],[data-zsadd],[data-zsback],[data-zsquiz],[data-zsdone],[data-zsask],[data-zsopen],[data-zszoom],[data-zsfocus]";
+const TARGETS = "[data-zsnode],[data-zstl],[data-zshome],[data-zsnew],[data-zsedit],[data-zsadd],[data-zsback],[data-zsquiz],[data-zsdone],[data-zsask],[data-zsopen],[data-zszoom]";
 if (typeof document !== "undefined") {
 	document.addEventListener("click", (e) => {
 		const t = e.target?.closest?.(TARGETS);
@@ -465,13 +464,15 @@ if (typeof document !== "undefined") {
 		if (d.zsback) return open(undefined, null);
 		if (d.zsedit) return edit(d.zsedit);
 		if (d.zsadd) return edit("new");
-		if (d.zszoom) return zoomBy(d.zszoom === "+" ? 0.1 : -0.1);
-		if (d.zsfocus) return focusNext(document.getElementById("main"), ui.zoom);
+		if (d.zszoom) return zoomBy(d.zszoom === "+" ? 0.5 : -0.5);
 		if (d.zsquiz) return void submitQuiz(t.closest(".zs-world"));
 		if (d.zsdone) return void markDone(d.zsdone === "1");
 		if (d.zsask) return void ask(d.zsask);
 	});
 }
+
+// Breite der Ansicht ändert den Maßstab der Linie.
+if (typeof window !== "undefined") window.addEventListener("resize", U.debounce(() => { if (S.view === "zeitstrahl" && !ui.node) rerender(); }, 150));
 
 BUS.on("zs:changed", () => { if (S.view === "zeitstrahl" || S.sidebarMode === "files") rerender(); });
 BUS.provide("zs:workspace", workspace);

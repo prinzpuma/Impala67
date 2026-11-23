@@ -26,7 +26,7 @@ async function editTimeline(a) {
 	const before = ZS_STORE.getSync(edit.title);
 	const out = ZS_CORE.applyEdit(before, edit);
 	if (out.error) return out;
-	const summary = { ok: true, timeline: out.timeline.title, id: out.timeline.id, created: !before, added: out.added, updated: out.updated, removed: out.removed, nodes: out.timeline.nodes.length };
+	const summary = { ok: true, timeline: out.timeline.title, id: out.timeline.id, created: !before, added: out.added, updated: out.updated, removed: out.removed, nodes: out.timeline.nodes.length, ...(out.warnings?.length ? { warnings: out.warnings } : {}) };
 	if (dryRun) return { ...summary, dryRun: true };
 	await ZS_STORE.put(out.timeline);
 	return summary;

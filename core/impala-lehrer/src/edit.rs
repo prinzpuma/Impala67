@@ -17,6 +17,8 @@ pub struct EditOut {
     pub added: Vec<String>,
     pub updated: Vec<String>,
     pub removed: Vec<String>,
+    /// Hinweise ohne Abbruch, z. B. Lektion früher datiert als ihre Voraussetzung.
+    pub warnings: Vec<String>,
 }
 
 /// Gesendete Felder eines Knotens; `None` = nicht gesendet, `Some(None)` = ausdrücklich geleert.
@@ -340,7 +342,28 @@ pub fn apply_edit(tl: Option<Value>, edit: &Value, now: &str) -> Result<EditOut,
         ));
     }
     t.updated = now.to_string();
-    Ok(EditOut { timeline: t.to_value(), added, updated, removed })
+    let warnings = year_warnings(&t);
+    Ok(EditOut { timeline: t.to_value(), added, updated, removed, warnings })
+}
+
+/// Lektionen, die früher datiert sind als eine ihrer Voraussetzungen (die Linie zeigt Jahre exakt).
+fn year_warnings(t: &Timeline) -> Vec<String> {
+    if t.is_path() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for n in &t.nodes {
+        let Some(y) = n.year else { continue };
+        for p in n.parents.iter().filter_map(|id| t.nodes.iter().find(|x| &x.id == id)) {
+            if let Some(py) = p.year.filter(|&py| py > y) {
+                out.push(format!(
+                    "„{}“ ({}) liegt vor seiner Voraussetzung „{}“ ({}) – echtes Jahr prüfen oder Voraussetzung entfernen.",
+                    n.title, y, p.title, py
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// Überschreibt nur die gesendeten Felder. Den Fortschritt liefert nie die Eingabe: Er bleibt,

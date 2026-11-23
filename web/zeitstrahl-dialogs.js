@@ -95,7 +95,10 @@ export function skeletonPrompt(tl, { pages = [], wiki = true, focus = "" } = {})
 		history && wiki ? "Nutze Wikipedia (wikipedia) für die historische Reihenfolge der Entdeckungen." : "",
 		focus ? `Mein Schwerpunkt: ${focus}` : "",
 		tl.exam ? `Klausur am ${tl.exam}: alle Wege sollen auf den Klausurstoff zulaufen.` : "",
-		`Lege mit edit_timeline (title „${tl.title}“) 8–20 Lektionen an, NUR als Gerüst: title, ${history ? "year (Jahreszahl), era (Epoche), " : ""}strand (2–4 Themenstränge), summary (ein Satz) und parents (Voraussetzungen; Abzweigungen und Zusammenführungen erlaubt).`,
+		history
+			? "Der Zeitstrahl ist eine Linie mit exakten Jahreszahlen: Jede Lektion ist ein echtes historisches Ereignis (Entdeckung, Erfindung, Veröffentlichung – mit Person im Titel, z. B. „1947: Bardeen, Brattain und Shockley bauen den Transistor“), das Jahr belegst du mit wikipedia. Keine erfundenen Jahre, nicht einfach die Kapitel des Skripts durchnummerieren; den Klausurstoff ordnest du dem passenden Ereignis zu."
+			: "",
+		`Lege mit edit_timeline (title „${tl.title}“) 8–20 Lektionen an, NUR als Gerüst: title, ${history ? "year (echtes Jahr), era (Epoche), " : ""}summary (ein Satz: welcher Klausurstoff hier gelernt wird) und parents (nur echte fachliche Voraussetzungen${history ? ", nie mit späterem Jahr" : ""}).`,
 		"Noch KEINE body, quiz, images oder worksheet – ich prüfe das Gerüst zuerst und lasse die Lektionen dann ausarbeiten. Fasse am Ende kurz zusammen, wie der Zeitstrahl aufgebaut ist.",
 	].filter(Boolean).join("\n\n");
 }
@@ -224,6 +227,7 @@ export function openNodeDialog(tl, node, { onSaved, view } = {}) {
 		if (out.error) { U.toast?.(out.error.replace(/^edit_timeline: /, ""), "error"); return; }
 		await ZS_STORE.put(out.timeline);
 		close();
+		if (out.warnings?.length) U.toast?.(out.warnings[0]);
 		onSaved?.(act === "delete" ? null : (out.added[0] || node?.id));
 	});
 }

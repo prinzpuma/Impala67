@@ -76,10 +76,6 @@ pub struct Layout {
     pub lanes: usize,
     /// (Spalte, Spur) je Knoten.
     pub pos: Vec<(usize, usize)>,
-    /// Je Spalte: Jahre von/bis und häufigste Epoche (für die Zeitachse).
-    pub columns: Vec<Value>,
-    /// Stränge als Spurbänder `{name, lane, lanes}` (leer, wenn kein Knoten einen Strang hat).
-    pub strands: Vec<Value>,
 }
 
 /// Spalte = längster Pfad von einer Wurzel; Zyklen (die `apply_edit` verhindert) zählen als Wurzel.
@@ -196,47 +192,17 @@ pub fn layout(tl: &Timeline, parents: &[Vec<usize>]) -> Layout {
     let groups = names.len().max(1);
     let mut lane = vec![0usize; n];
     let mut offset = 0usize;
-    let mut strands = Vec::new();
     for g in 0..groups {
         let members: Vec<usize> = order.iter().copied().filter(|&i| group[i] == g || !has_strands).collect();
         let count = lanes_in(&members, &cols_of, parents, &group, &mut lane);
         for &i in &members {
             lane[i] += offset;
         }
-        if let Some(name) = names.get(g).filter(|_| count > 0) {
-            strands.push(json!({ "name": name, "lane": offset, "lanes": count }));
-        }
         offset += count;
     }
 
     let cols = cols_of.iter().max().map_or(0, |m| m + 1);
-    let columns = (0..cols)
-        .map(|c| {
-            let inside: Vec<&Node> = (0..n).filter(|&i| cols_of[i] == c).map(|i| &tl.nodes[i]).collect();
-            let years: Vec<f64> = inside.iter().filter_map(|x| x.year).collect();
-            let mut eras: Vec<(&str, usize)> = Vec::new();
-            for x in &inside {
-                let e = x.era.trim();
-                if e.is_empty() {
-                    continue;
-                }
-                match eras.iter_mut().find(|(k, _)| *k == e) {
-                    Some(hit) => hit.1 += 1,
-                    None => eras.push((e, 1)),
-                }
-            }
-            let era = eras.iter().fold(None::<(&str, usize)>, |best, &(k, c)| match best {
-                Some((_, bc)) if bc >= c => best,
-                _ => Some((k, c)),
-            });
-            json!({
-                "from": years.iter().copied().reduce(f64::min),
-                "to": years.iter().copied().reduce(f64::max),
-                "era": era.map(|e| e.0).unwrap_or(""),
-            })
-        })
-        .collect();
-    Layout { cols, lanes: offset, pos: (0..n).map(|i| (cols_of[i], lane[i])).collect(), columns, strands }
+    Layout { cols, lanes: offset, pos: (0..n).map(|i| (cols_of[i], lane[i])).collect() }
 }
 
 /// Gerüst-Knoten: noch ohne Inhalt (Story, Quiz, Arbeitsblatt, Bilder) – die KI arbeitet ihn später aus.
@@ -284,8 +250,6 @@ pub fn view_of(tl: &Timeline) -> Value {
         "lanes": lay.lanes,
         "kind": if tl.is_path() { "path" } else { "history" },
         "exam": tl.exam,
-        "columns": lay.columns,
-        "strands": lay.strands,
         "nodes": nodes,
         "edges": edges,
         "stats": counts(tl, &st),
@@ -305,7 +269,7 @@ pub fn view(tl: &Value) -> Value {
     match Timeline::parse(tl) {
         Ok(t) => view_of(&t),
         Err(_) => {
-            json!({ "cols": 0, "lanes": 0, "kind": "history", "exam": "", "columns": [], "strands": [], "nodes": [], "edges": [], "stats": { "total": 0, "mastered": 0, "next": 0, "drafts": 0 } })
+            json!({ "cols": 0, "lanes": 0, "kind": "history", "exam": "", "nodes": [], "edges": [], "stats": { "total": 0, "mastered": 0, "next": 0, "drafts": 0 } })
         }
     }
 }

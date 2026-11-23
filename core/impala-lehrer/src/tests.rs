@@ -386,11 +386,12 @@ fn zeitachse_jahre_straenge_und_klausur() {
     assert_eq!(pos(&v, "volta").0, 2);
     assert_eq!(pos(&v, "ohm").0, 3);
     assert_eq!(pos(&v, "rest").0, 4);
-    assert_eq!(v["columns"][2]["from"], 1800.0);
-    // Stränge als Bänder: Strom zuerst (früher), dann Statik, dann der Rest ohne Strang.
-    let names: Vec<&str> = v["strands"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Strom", "Statik", ""]);
+    // Spuren nach Strang: Strom zuerst (früher), dann Statik.
     assert_eq!(pos(&v, "coulomb").1, 1);
+    // Rückwärts datiert: Hinweis, kein Fehler.
+    let back = edit(Some(tl.clone()), json!({ "title": "Z", "nodes": [{ "id": "ohm", "year": 1790 }] }));
+    assert_eq!(back.warnings.len(), 1);
+    assert!(back.warnings[0].contains("Volta"));
     assert_eq!(v["exam"], "2027-02-14");
     assert_eq!(v["stats"]["drafts"], 5);
     // Lernpfad: Jahre egal, Spalte = Pfadlänge.
