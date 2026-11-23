@@ -213,7 +213,7 @@ private struct TreePageRow<MenuContent: View>: View {
     @ViewBuilder let menu: () -> MenuContent
     let onAddChild: (NewPageChoice) -> Void
 
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         HStack(spacing: Space.s1) {

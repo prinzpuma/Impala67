@@ -20,7 +20,7 @@ fun AppearanceSettings(vm: SettingsViewModel, prefs: DevicePrefs) {
     val values by vm.values.collectAsStateWithLifecycle()
     val theme by prefs.themeMode.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
     val accent by prefs.accent.collectAsStateWithLifecycle(AccentColor.WALLPAPER)
-    val density by prefs.density.collectAsStateWithLifecycle(Density.COMPACT)
+    val density by prefs.density.collectAsStateWithLifecycle(Density.DEFAULT)
     val fontScale by prefs.fontScale.collectAsStateWithLifecycle(FontScale.NORMAL)
     val reduceMotion by prefs.reduceMotion.collectAsStateWithLifecycle(false)
     val haptics by prefs.nativeHaptics.collectAsStateWithLifecycle(true)

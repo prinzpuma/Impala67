@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
                     if (hideBars) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
                 }
             }
-            val density by app.prefs.density.collectAsState(Density.COMPACT)
+            val density by app.prefs.density.collectAsState(Density.DEFAULT)
             val fontScale by app.prefs.fontScale.collectAsState(FontScale.NORMAL)
             val reduceMotion by app.prefs.reduceMotion.collectAsState(false)
             val haptics by app.prefs.nativeHaptics.collectAsState(true)

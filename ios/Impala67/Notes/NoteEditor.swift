@@ -60,7 +60,7 @@ private struct NoteBody: View {
     /// Cover der Seite (`cover` bzw. eigenes Bild `coverImg`), mit den Metadaten neu gelesen.
     @State private var cover: (name: String, img: String?) = ("", nil)
     @State private var isDbPage = false
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         let editing = model.activeId != nil

@@ -83,7 +83,7 @@ private struct DeckTreeRow<MenuContent: View>: View {
     let onToggle: () -> Void
     @ViewBuilder let menu: () -> MenuContent
 
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         HStack(spacing: Space.s1) {

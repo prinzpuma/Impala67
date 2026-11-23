@@ -115,7 +115,7 @@ window.addEventListener("pageshow", resetTransientUiLayers);
 		var theme = followSystem && window.matchMedia
 			? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
 			: (localStorage.getItem("impala67Theme") || localStorage.getItem("notionTheme") || "dark");
-		var density = localStorage.getItem("impala67Density") || "compact";
+		var density = localStorage.getItem("impala67Density") || "comfortable"; // = DEFAULT_DENSITY in settings.js
 		var motion = localStorage.getItem("impala67Motion") || "full";
 		var fontSize = localStorage.getItem("impala67FontSize") || "m";
 		var tabsPos = localStorage.getItem("impala67TabsPosition") || "top";

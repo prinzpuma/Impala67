@@ -577,7 +577,7 @@ private struct AppearanceSettingsSections: View {
     @Environment(ImpalaStore.self) private var store
     @AppStorage(AppTheme.key) private var theme = AppTheme.system.rawValue
     @AppStorage(AppAccent.key) private var accent = AppAccent.blue.rawValue
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
     @AppStorage(AppFontSize.key) private var fontSize = AppFontSize.medium.rawValue
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppHaptics.key) private var haptics = true

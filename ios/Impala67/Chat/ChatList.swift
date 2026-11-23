@@ -11,7 +11,7 @@ struct ChatList: View {
     @State private var title = ""
     @State private var deleting: ChatInfo?
     @State private var list: [ChatInfo] = []
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         let chat = shell.chat

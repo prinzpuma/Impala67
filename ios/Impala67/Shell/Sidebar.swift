@@ -8,7 +8,7 @@ struct Sidebar: View {
     @Environment(SyncController.self) private var sync
     @Environment(\.shellNamespace) private var zoom
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
     @Namespace private var pills
     @State private var controlsInset: CGFloat = 0
 
@@ -188,7 +188,7 @@ private struct Pill: View {
 
 /// Knopf der sekundären Navigation (`.side-foot button`).
 private struct FootButton: View {
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
     let icon: String
     let label: String
     /// Sync-Zustand als Punkt (nur am Einstellungen-Knopf, wenn gekoppelt).
@@ -228,7 +228,7 @@ extension View {
 private struct SidebarTabs: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         let _ = store.pageMetaRevision

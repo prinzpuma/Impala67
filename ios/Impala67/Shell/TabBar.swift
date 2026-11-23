@@ -6,7 +6,7 @@ struct TabBar: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
     @Namespace private var highlight
 
     var body: some View {
@@ -127,7 +127,7 @@ private struct TabChip: View {
     let onOpen: () -> Void
     let onClose: () -> Void
 
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
         let isCompact = density == AppDensity.compact.rawValue

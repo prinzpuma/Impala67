@@ -7,7 +7,7 @@ struct RootView: View {
     @State private var shell: ShellModel?
     @Namespace private var namespace
     @AppStorage(AppAccent.key) private var accent = AppAccent.blue.rawValue
-    @AppStorage(AppDensity.key) private var density = AppDensity.compact.rawValue
+    @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     @AppStorage(AppStatusBar.hiddenKey) private var statusBarHidden = false

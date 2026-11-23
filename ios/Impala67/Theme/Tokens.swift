@@ -91,6 +91,8 @@ enum AppDensity: String, CaseIterable, Identifiable {
     case compact, comfortable
 
     static let key = "impala67Density"
+    /// Standard, solange nichts gewählt ist (PWA `DEFAULT_DENSITY`).
+    static let standard = AppDensity.comfortable
 
     var id: String { rawValue }
 

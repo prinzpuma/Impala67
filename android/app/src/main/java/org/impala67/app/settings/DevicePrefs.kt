@@ -29,7 +29,7 @@ enum class AccentColor(val dark: Long, val light: Long) {
 }
 
 /** Darstellungsdichte (`impala67Density`). */
-enum class Density { COMPACT, COMFORTABLE }
+enum class Density { COMPACT, COMFORTABLE; companion object { val DEFAULT = COMFORTABLE } }
 
 /** Schriftgröße (`impala67FontSize`: s / m / l → `--font-base` 15 / 16 / 18 px). */
 enum class FontScale(val factor: Float) { SMALL(15f / 16f), NORMAL(1f), LARGE(18f / 16f) }
@@ -44,7 +44,7 @@ class DevicePrefs(private val context: Context) {
 
     val themeMode: Flow<ThemeMode> = enumFlow(THEME, ThemeMode.SYSTEM)
     val accent: Flow<AccentColor> = enumFlow(ACCENT, AccentColor.WALLPAPER)
-    val density: Flow<Density> = enumFlow(DENSITY, Density.COMPACT)
+    val density: Flow<Density> = enumFlow(DENSITY, Density.DEFAULT)
     val fontScale: Flow<FontScale> = enumFlow(FONT_SCALE, FontScale.NORMAL)
     /** Performance-Modus: ohne Animationen (PWA `impala67Motion` = reduced). */
     val reduceMotion: Flow<Boolean> = boolFlow(REDUCE_MOTION, false)

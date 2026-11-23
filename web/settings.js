@@ -79,10 +79,13 @@ function installSystemThemeListener() {
 	systemThemeListenerInstalled = true;
 }
 
+// Standard-Darstellungsdichte (auch inline in index.html, Android `Density.DEFAULT`, iPad `AppDensity.standard`).
+export const DEFAULT_DENSITY = "comfortable";
+
 export function applyAppearance() {
 	installSystemThemeListener();
 	const theme = resolvedTheme();
-	const density = localStorage.getItem("impala67Density") || "compact";
+	const density = localStorage.getItem("impala67Density") || DEFAULT_DENSITY;
 	const motion = localStorage.getItem("impala67Motion") || "full";
 	const accentName = localStorage.getItem("impala67Accent") || "blue";
 	const accent = ACCENT_THEMES[accentName] || ACCENT_THEMES.blue;
@@ -178,7 +181,7 @@ function settingsViewModel() {
 		followSystemTheme: followsSystemTheme(),
 		theme: resolvedTheme(),
 		accent: localStorage.getItem("impala67Accent") || "blue",
-		density: localStorage.getItem("impala67Density") || "compact",
+		density: localStorage.getItem("impala67Density") || DEFAULT_DENSITY,
 		motion: localStorage.getItem("impala67Motion") || "full",
 		fontSize: localStorage.getItem("impala67FontSize") || "m",
 		tabsPosition: localStorage.getItem("impala67TabsPosition") || "top",
