@@ -23,6 +23,7 @@ pub mod request;
 pub mod stream;
 pub mod think;
 pub mod tools;
+pub mod wiki;
 
 pub use agent::{
     AgentEvent, AgentItem, AgentOutcome, AgentRequest, AgentSession, CancelToken, HeftPage, HeftPageContent, MAX_STEPS,

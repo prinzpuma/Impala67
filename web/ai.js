@@ -502,7 +502,7 @@ export const AI = (() => {
 	EMBEDDINGS.setAdapter({ embed });
 
 	return {
-		complete, agent, undo: undoAi, abortActive, resolveChoice, refine,
+		complete, agent, undo: undoAi, abortActive, resolveChoice, refine, http,
 		ping, pingProvider, embed, listModels,
 		LOCAL_EMBEDDING_MODELS,
 		detectThinkingCapabilities, debugReport, debugClear, MODEL_PRESETS,

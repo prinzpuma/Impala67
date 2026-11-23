@@ -275,7 +275,7 @@ pub trait AiPlatform: Send + Sync {
 
 type Boxed<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
-trait DynHttp: Send + Sync {
+pub(crate) trait DynHttp: Send + Sync {
     fn send<'a>(&'a self, req: &'a Request) -> Boxed<'a, Result<Response, NetError>>;
     fn send_streaming<'a>(
         &'a self,
@@ -298,7 +298,7 @@ impl<H: HttpClient + Send + Sync> DynHttp for H {
     }
 }
 
-struct HttpHandle(Arc<dyn DynHttp>);
+pub(crate) struct HttpHandle(pub(crate) Arc<dyn DynHttp>);
 
 impl HttpClient for HttpHandle {
     async fn send(&self, req: &Request) -> Result<Response, NetError> {
@@ -533,6 +533,7 @@ impl AiAssistant {
                 utc_offset: req.utc_offset_minutes,
                 transcript: &transcript,
                 notify: &notify,
+                http: Some(HttpHandle(self.http.clone())),
             };
             let agent_req = AgentRequest {
                 chat: &chat,

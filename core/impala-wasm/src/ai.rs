@@ -371,6 +371,14 @@ pub fn ai_flat_tool_defs() -> JsValue {
     to_js(&Value::Array(defs))
 }
 
+/// Werkzeug `wikipedia` (`impala_ai::wiki`): Artikel mit Einleitung, Link und Bild oder `{ error }`.
+/// `http` wie bei [`AiRun`] (`send(req)`).
+#[wasm_bindgen(js_name = aiWikipedia)]
+pub fn ai_wikipedia(http: JsValue, args: JsValue) -> Promise {
+    let args = value(&args);
+    future_to_promise(async move { Ok(to_js(&impala_ai::wiki::run(&JsHttp(http), &args).await)) })
+}
+
 /// Dokumentierte Thinking-Stufen für Quelle und Modell (`settings` wie bei [`AiRun::agent`]).
 #[wasm_bindgen(js_name = aiThinkingCapabilities)]
 pub fn ai_thinking_capabilities(settings: JsValue) -> JsValue {

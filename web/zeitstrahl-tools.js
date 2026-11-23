@@ -44,33 +44,7 @@ async function checkLesson(a) {
 	return { ok: true, node: out.node };
 }
 
-// Wikipedia: Suche (api.php, CORS über origin=*) und Zusammenfassung mit Bild (REST).
-async function wikipedia(a) {
-	const lang = /^[a-z]{2,3}$/.test(String(a.lang || "")) ? a.lang : "de";
-	const q = String(a.query || "").trim();
-	if (!q) return { error: "wikipedia: query fehlt." };
-	const base = `https://${lang}.wikipedia.org`;
-	try {
-		const sr = await fetch(`${base}/w/api.php?action=query&list=search&format=json&origin=*&srlimit=5&srsearch=${encodeURIComponent(q)}`).then((r) => r.json());
-		const hits = (sr?.query?.search || []).map((h) => h.title);
-		if (!hits.length) return { error: `Kein Wikipedia-Artikel zu „${q}“.` };
-		const title = hits.find((t) => t.toLowerCase() === q.toLowerCase()) || hits[0];
-		const sum = await fetch(`${base}/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`).then((r) => r.json());
-		return {
-			title: sum.title || title,
-			description: sum.description || "",
-			extract: String(sum.extract || "").slice(0, 2500),
-			url: sum.content_urls?.desktop?.page || `${base}/wiki/${encodeURIComponent(title)}`,
-			image: sum.originalimage?.source || sum.thumbnail?.source || null,
-			other_results: hits.filter((t) => t !== title),
-			hint: "Als Quelle: {kind:\"wiki\", ref:url, title}. Bild: images [{src:image, credit:\"Wikimedia Commons\"}].",
-		};
-	} catch (err) {
-		return { error: "Wikipedia nicht erreichbar: " + String(err?.message || err) };
-	}
-}
-
-const RUN = { read_timeline: readTimeline, edit_timeline: editTimeline, check_lesson: checkLesson, wikipedia };
+const RUN = { read_timeline: readTimeline, edit_timeline: editTimeline, check_lesson: checkLesson };
 
 export async function runZeitstrahlTool(name, args) {
 	const fn = RUN[name];

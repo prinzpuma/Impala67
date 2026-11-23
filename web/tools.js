@@ -11,7 +11,7 @@ import { ZS_TOOL_DEFS, ZS_TOOL_NAMES, runZeitstrahlTool } from "./zeitstrahl-too
 // tools.js — Die Werkzeuge der KI (OpenAI-Function-Calling-Format).
 // Ausgeführt werden Lesen (inspect), Ändern (change, atomar mit Rückgängig) und die flachen
 // Werkzeuge im Rust-Kern (core/impala-tools) – dieselbe Implementierung wie in den nativen Apps.
-// Hier bleibt nur, was der Browser liefert: Bedeutungssuche (RAG), Rechnen (math.js), Rückfragen,
+// Hier bleibt nur, was der Browser liefert: Bedeutungssuche (RAG), Rechnen (math.js), Netz, Rückfragen,
 // die Lage der Oberfläche (geöffnete Seite, Lernkarte) und die lokalen Chats.
 export const TOOLS = (() => {
 	// ask_choice: Argumente säubern/validieren (leere/doppelte Optionen raus, 2–5 Optionen, Frage Pflicht).
@@ -144,6 +144,8 @@ export const TOOLS = (() => {
 		}
 		if ((name === "inspect" && a.kind === "search" && a.semantic) || (name === "search" && a.semantic)) return semantic(String(a.query || ""));
 		if (name === "create_worksheet") return createWorksheet(a, { runTool: run, undoTool: undo });
+		// Wikipedia läuft im Kern (impala_ai::wiki); der Browser liefert nur das Netz (fetch).
+		if (name === "wikipedia") { const { AI } = await import("./ai.js"); return CORE.aiWikipedia(AI.http, a); }
 		if (ZS_TOOL_NAMES.has(name)) return runZeitstrahlTool(name, a);
 		return (await core(name, a)) ?? { error: "Unbekanntes Tool: " + name };
 	}

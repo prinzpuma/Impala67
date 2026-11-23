@@ -13,7 +13,7 @@ use impala_model::search::NoteSearch;
 use impala_tools::{Context, Host};
 use serde_json::{Value, json};
 
-use crate::ai::AiPlatform;
+use crate::ai::{AiPlatform, HttpHandle};
 use crate::rag::SemanticSearch;
 use crate::{CoreError, ImpalaCore, Inner, Shared, invalid, lock};
 
@@ -69,6 +69,8 @@ pub(crate) struct Env<'a> {
     pub transcript: &'a RefCell<Vec<Value>>,
     /// Neue Nachricht im Chat.
     pub notify: &'a dyn Fn(&Value),
+    /// Netz für Werkzeuge mit Abruf (`wikipedia`); `None` = eigener Standard-Client.
+    pub http: Option<HttpHandle>,
 }
 
 fn error_value(e: &str) -> Value {
@@ -184,6 +186,13 @@ impl Env<'_> {
 
 impl ToolExecutor for Env<'_> {
     async fn run(&mut self, name: &str, args: &Value) -> Result<ToolOutput, String> {
+        if name == "wikipedia" {
+            let value = match &self.http {
+                Some(h) => impala_ai::wiki::run(h, args).await,
+                None => impala_ai::wiki::run(&impala_net::UreqClient::default(), args).await,
+            };
+            return Ok(ToolOutput { json: value.to_string(), undo: None });
+        }
         let (value, undo) = self.exec(name, args);
         Ok(ToolOutput { json: value.to_string(), undo })
     }
@@ -257,7 +266,11 @@ impl ImpalaCore {
             utc_offset: utc_offset_minutes,
             transcript: &transcript,
             notify: &notify,
+            http: None,
         };
+        if name == "wikipedia" {
+            return impala_net::block_on(impala_ai::wiki::run(&impala_net::UreqClient::default(), &args)).to_string();
+        }
         if name == "search" && truthy_at(&args, "semantic") {
             return env.semantic(&query_of(&args)).to_string();
         }
@@ -293,6 +306,7 @@ mod tests {
             utc_offset: 60,
             transcript,
             notify,
+            http: None,
         }
     }
 
