@@ -97,7 +97,18 @@ export function initMcpBridge() {
 	if (typeof window === "undefined" || bridgeStarted || !(SANDBOX.on || mcpBridgeEnabled())) return;
 	bridgeStarted = true;
 
-	const WS_URL = SANDBOX.bridgeUrl || (typeof window !== "undefined" && window.__IMPALA_WS_URL) || "ws://127.0.0.1:8765";
+	let portFromParam = "";
+	try {
+		const p = new URLSearchParams(location.search).get("mcpPort");
+		if (p && /^\d+$/.test(p)) {
+			sessionStorage.setItem("impalaMcpPort", p);
+			portFromParam = p;
+		} else {
+			portFromParam = sessionStorage.getItem("impalaMcpPort") || "";
+		}
+	} catch { /* ignore */ }
+	const defaultWsUrl = portFromParam ? `ws://127.0.0.1:${portFromParam}` : "ws://127.0.0.1:8765";
+	const WS_URL = SANDBOX.bridgeUrl || (typeof window !== "undefined" && window.__IMPALA_WS_URL) || defaultWsUrl;
 	const recentErrors = [];
 	const MAX_ERRORS = 20;
 
@@ -170,6 +181,7 @@ export function initMcpBridge() {
 			reconnectAttempts = 0;
 			bridgeConnectedAt = new Date().toISOString();
 			console.info("[MCP-Bridge] Verbunden mit Antigravity MCP-Server");
+			ws.send(JSON.stringify({ hello: true, meta: bridgeMeta() }));
 			if (!document.hidden) claim();
 		};
 
@@ -478,9 +490,18 @@ export function initMcpBridge() {
 		reconnectTimer = setTimeout(connect, delay);
 	}
 
+	function bridgeMeta() {
+		return {
+			origin: typeof location !== "undefined" ? location.origin : "",
+			url: typeof location !== "undefined" ? location.href : "",
+			kind: "pwa",
+			pageCount: Object.keys(S.pages || {}).length,
+		};
+	}
+
 	// Sind mehrere App-Fenster verbunden, bekommt das zuletzt genutzte die Aufrufe.
 	function claim() {
-		if (ws && ws.readyState === 1) ws.send(JSON.stringify({ claim: true }));
+		if (ws && ws.readyState === 1) ws.send(JSON.stringify({ claim: true, meta: bridgeMeta() }));
 	}
 
 	if (typeof document !== "undefined") {

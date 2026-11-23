@@ -205,4 +205,54 @@ test("MCP-Bridge: Live WebSocket Verbindung, konfigurierbare Timeouts und Multi-
 	}
 });
 
+test("MCP-Bridge: Produktiv-Tab wird nicht von localhost-Testtab verdrängt & impala_targets schaltet gezielt um", async () => {
+	const testPort = 8800;
+	const client = createMcpClient({ IMPALA_WS_PORT: String(testPort) });
+	let wsProd = null;
+	let wsLocal = null;
+
+	try {
+		await client.request("initialize", { protocolVersion: "2024-11-05", capabilities: {} });
+		client.notify("notifications/initialized", {});
+
+		wsProd = new WebSocket(`ws://127.0.0.1:${testPort}`, { headers: { origin: "https://prinzpuma.github.io" } });
+		await new Promise((resolve, reject) => { wsProd.on("open", resolve); wsProd.on("error", reject); });
+		wsProd.send(JSON.stringify({ hello: true, meta: { origin: "https://prinzpuma.github.io", url: "https://prinzpuma.github.io/Impala67/?mcpBridge=1", kind: "pwa", pageCount: 42 } }));
+		wsProd.on("message", (raw) => {
+			const data = JSON.parse(raw);
+			if (data.callId) wsProd.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Echte Notiz" } } }));
+		});
+
+		wsLocal = new WebSocket(`ws://127.0.0.1:${testPort}`, { headers: { origin: "http://localhost:8000" } });
+		await new Promise((resolve, reject) => { wsLocal.on("open", resolve); wsLocal.on("error", reject); });
+		wsLocal.send(JSON.stringify({ claim: true, meta: { origin: "http://localhost:8000", url: "http://localhost:8000/", kind: "pwa", pageCount: 5 } }));
+		wsLocal.on("message", (raw) => {
+			const data = JSON.parse(raw);
+			if (data.callId) wsLocal.send(JSON.stringify({ callId: data.callId, result: { app: { activePageTitle: "Test-Tab" } } }));
+		});
+		await new Promise((r) => setTimeout(r, 80));
+
+		// localhost-claim darf prinzpuma.github.io nicht verdrängen
+		const diag1 = await client.callTool("impala_get_diagnostics", {});
+		assert.equal(diag1.data.app?.activePageTitle, "Echte Notiz");
+
+		// impala_targets listet beide und kann gezielt pinnen
+		const targetsRes = await client.callTool("impala_targets", {});
+		assert.equal(targetsRes.data.targets.length, 2);
+		const selLocal = await client.callTool("impala_targets", { select: "localhost" });
+		assert.equal(selLocal.isError, false);
+		const diag2 = await client.callTool("impala_get_diagnostics", {});
+		assert.equal(diag2.data.app?.activePageTitle, "Test-Tab");
+
+		// Zurück auf Produktiv-Tab
+		await client.callTool("impala_targets", { select: "prinzpuma.github.io" });
+		const diag3 = await client.callTool("impala_get_diagnostics", {});
+		assert.equal(diag3.data.app?.activePageTitle, "Echte Notiz");
+	} finally {
+		if (wsProd) try { wsProd.close(); } catch {}
+		if (wsLocal) try { wsLocal.close(); } catch {}
+		await client.close();
+	}
+});
+
 

@@ -8,7 +8,10 @@ import { WebSocket, WebSocketServer } from "ws";
 import { CONTENT_TOOLS, CONTENT_WRITE } from "./content-tools.mjs";
 
 const connectedSockets = new Set();
+const socketMeta = new Map();
+let targetSeq = 1;
 let activeBrowserWs = null;
+let pinnedTargetId = null;
 const pendingBrowserCalls = new Map();
 let browserCallSeq = 1;
 const serverStats = {
@@ -133,7 +136,7 @@ function startWsServer() {
 	const wss = new WebSocketServer({ host: "127.0.0.1", port: wsPort, verifyClient: (info) => isAllowedOrigin(info.origin) });
 	wss.on("connection", (ws, req) => {
 		if (req.url === RELAY_PATH) { serveRelay(ws); return; }
-		acceptApp(ws, "Browser-App");
+		acceptApp(ws, "Browser-App", req.headers?.origin || "");
 	});
 	wss.on("listening", () => {
 		console.error(`[impala-mcp] Primärserver auf Port ${wsPort}.`);
@@ -145,21 +148,127 @@ function startWsServer() {
 	});
 }
 
+function isLocalOrigin(origin) {
+	if (!origin) return false;
+	try {
+		const { hostname } = new URL(origin);
+		return hostname === "localhost" || hostname === "127.0.0.1";
+	} catch {
+		return false;
+	}
+}
+
+function isProtectedTarget(ws) {
+	const m = ws && socketMeta.get(ws);
+	if (!m) return false;
+	return (!!m.origin && !isLocalOrigin(m.origin)) || m.kind === "ipad";
+}
+
+function canAutoClaim(ws) {
+	if (pinnedTargetId) return false;
+	if (!activeBrowserWs || activeBrowserWs.readyState !== 1) return true;
+	if (activeBrowserWs === ws) return true;
+	const m = socketMeta.get(ws);
+	// Produktiv-Tab (z. B. prinzpuma.github.io) oder iPad nicht automatisch durch lokalen Test-Tab verdrängen.
+	if (isProtectedTarget(activeBrowserWs) && isLocalOrigin(m?.origin)) return false;
+	return true;
+}
+
+function pickFallbackSocket() {
+	let firstOpen = null;
+	for (const ws of connectedSockets) {
+		if (ws.readyState !== 1) continue;
+		if (isProtectedTarget(ws)) return ws;
+		if (!firstOpen) firstOpen = ws;
+	}
+	return firstOpen;
+}
+
+function listTargets() {
+	const activeId = socketMeta.get(activeBrowserWs)?.id || null;
+	const out = [];
+	for (const ws of connectedSockets) {
+		if (ws.readyState !== 1) continue;
+		const m = socketMeta.get(ws);
+		if (!m) continue;
+		out.push({
+			id: m.id,
+			active: m.id === activeId,
+			pinned: m.id === pinnedTargetId,
+			label: m.label,
+			kind: m.kind,
+			origin: m.origin || null,
+			url: m.url || null,
+			pageCount: m.pageCount,
+			connectedAt: m.connectedAt,
+		});
+	}
+	return out;
+}
+
+function handleTargetsTool(args = {}) {
+	if (args.unpin) pinnedTargetId = null;
+	if (args.select) {
+		const q = String(args.select).trim();
+		const qLow = q.toLowerCase();
+		let matchWs = null;
+		for (const ws of connectedSockets) {
+			if (ws.readyState !== 1) continue;
+			const m = socketMeta.get(ws);
+			if (!m) continue;
+			if (m.id === q || (m.origin && m.origin.toLowerCase().includes(qLow)) || (m.url && m.url.toLowerCase().includes(qLow)) || m.label.toLowerCase().includes(qLow)) {
+				matchWs = ws;
+				break;
+			}
+		}
+		if (!matchWs) {
+			return { error: `Kein verbundenes Ziel passend zu '${q}' gefunden.`, targets: listTargets() };
+		}
+		activeBrowserWs = matchWs;
+		pinnedTargetId = socketMeta.get(matchWs)?.id || null;
+	}
+	return {
+		targets: listTargets(),
+		activeTargetId: socketMeta.get(activeBrowserWs)?.id || null,
+		pinnedTargetId,
+	};
+}
+
 /** Eine App-Verbindung (Browser-Tab oder iPad) nimmt Werkzeug-Aufrufe entgegen. */
-function acceptApp(ws, label) {
-		console.error(`[impala-mcp] ⚡ ${label} live verbunden!`);
+function acceptApp(ws, label, origin = "") {
+		const id = `t-${targetSeq++}`;
+		const meta = {
+			id,
+			label,
+			origin,
+			url: "",
+			kind: label.includes("iPad") ? "ipad" : "pwa",
+			pageCount: null,
+			connectedAt: new Date().toISOString(),
+		};
+		socketMeta.set(ws, meta);
+		console.error(`[impala-mcp] ⚡ ${label} (${id}${origin ? `, ${origin}` : ""}) live verbunden!`);
 		connectedSockets.add(ws);
-		// Eine neue Verbindung übernimmt nur, wenn noch keine aktiv ist. Sonst lenkte
-		// jeder frisch geöffnete (z. B. Test-)Tab alle Aufrufe von der genutzten App weg.
-		// Das Fenster, das der Nutzer gerade sieht, meldet sich per { claim: true }.
-		if (!activeBrowserWs || activeBrowserWs.readyState !== 1) activeBrowserWs = ws;
+		// Neue Verbindung übernimmt nur, wenn noch keine aktiv ist oder ein Produktiv-Tab einen Test-Tab ablöst.
+		if (!activeBrowserWs || activeBrowserWs.readyState !== 1 || (!pinnedTargetId && isProtectedTarget(ws) && !isProtectedTarget(activeBrowserWs))) {
+			activeBrowserWs = ws;
+		}
 
 		ws.on("message", (raw) => {
 			try {
 				const data = JSON.parse(raw);
-				if (data?.claim) { activeBrowserWs = ws; return; }
+				if (data?.meta && typeof data.meta === "object") {
+					if (typeof data.meta.origin === "string") meta.origin = data.meta.origin;
+					if (typeof data.meta.url === "string") meta.url = data.meta.url;
+					if (typeof data.meta.kind === "string") meta.kind = data.meta.kind;
+					if (typeof data.meta.pageCount === "number") meta.pageCount = data.meta.pageCount;
+				}
+				if (data?.hello) return;
+				if (data?.claim) {
+					if (canAutoClaim(ws)) activeBrowserWs = ws;
+					return;
+				}
 				if (data && data.callId && pendingBrowserCalls.has(data.callId)) {
-					activeBrowserWs = ws;
 					const { resolve } = pendingBrowserCalls.get(data.callId);
 					pendingBrowserCalls.delete(data.callId);
 					resolve(data.result);
@@ -171,12 +280,14 @@ function acceptApp(ws, label) {
 
 		ws.on("close", () => {
 			connectedSockets.delete(ws);
+			socketMeta.delete(ws);
+			if (pinnedTargetId === id) pinnedTargetId = null;
 			if (activeBrowserWs === ws) {
-				activeBrowserWs = connectedSockets.size > 0 ? connectedSockets.values().next().value : null;
+				activeBrowserWs = pickFallbackSocket();
 			}
-			for (const [id, entry] of pendingBrowserCalls.entries()) {
+			for (const [callId, entry] of pendingBrowserCalls.entries()) {
 				if (entry.ws === ws) {
-					pendingBrowserCalls.delete(id);
+					pendingBrowserCalls.delete(callId);
 					entry.resolve({ error: `Verbindung zur Browser-App wurde während '${entry.tool}' getrennt.`, disconnected: true });
 				}
 			}
@@ -191,13 +302,8 @@ startWsServer();
 
 function getActiveBrowserWs() {
 	if (activeBrowserWs && activeBrowserWs.readyState === 1) return activeBrowserWs;
-	for (const ws of connectedSockets) {
-		if (ws.readyState === 1) {
-			activeBrowserWs = ws;
-			return ws;
-		}
-	}
-	return null;
+	activeBrowserWs = pickFallbackSocket();
+	return activeBrowserWs;
 }
 
 // Schreibende Tools: Nach einem Timeout kann die App die Aktion trotzdem abschließen.
@@ -227,6 +333,7 @@ function getToolTimeoutMs(tool, args = {}) {
 
 async function callLiveBrowser(tool, args = {}) {
 	if (relayWs && relayWs.readyState === 1) return callViaRelay(tool, args);
+	if (tool === "impala_targets") return handleTargetsTool(args);
 	let ws = getActiveBrowserWs();
 	// Warte bis zu 3,5 Sekunden, falls die Browser-App gerade im Reconnect-Zyklus ist
 	if (!ws) {
@@ -291,6 +398,17 @@ const TOOLS = [
 		inputSchema: {
 			type: "object",
 			properties: {},
+		},
+	},
+	{
+		name: "impala_targets",
+		description: "Listet alle verbundenen App-Tabs/Geräte (ID, Origin, URL, Seitenzahl, aktiv/angepinnt) und wählt optional ein Ziel per select (ID, Origin oder Teilstring wie 'prinzpuma.github.io' oder 'localhost') fest aus (Pinning verhindert automatisches Umschalten bei Fokuswechsel). unpin=true hebt die Fixierung auf.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				select: { type: "string", description: "Ziel-ID (z. B. t-1) oder Origin/URL-Teilstring (z. B. prinzpuma.github.io)" },
+				unpin: { type: "boolean", description: "Fixierung aufheben" },
+			},
 		},
 	},
 	{
@@ -528,6 +646,9 @@ export async function startServer() {
 				name: SERVER_NAME,
 				version: SERVER_VERSION,
 				connectedClients: connectedSockets.size,
+				activeTargetId: socketMeta.get(activeBrowserWs)?.id || null,
+				pinnedTargetId,
+				viaRelay: !!(relayWs && relayWs.readyState === 1),
 				lastLatencyMs: serverStats.lastDurationMs,
 				totalCallsProcessed: serverStats.totalCalls,
 				uptimeSeconds: Math.round((Date.now() - serverStats.startTime) / 1000),
