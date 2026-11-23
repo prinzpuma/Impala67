@@ -462,7 +462,7 @@ const TOOLS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				page_id: { type: "string", description: "ID der Impala-Seite (des Hefts)" },
+				page_id: { type: "string", description: "ID oder Titel der Impala-Seite (des Hefts)" },
 				page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" },
 				lines: {
 					type: "array",
