@@ -894,6 +894,7 @@ struct HeftCanvas: UIViewRepresentable {
         /// Ein neuer Strich hebt die Auswahl auf (wie ein Stiftstrich in der PWA).
         func canvasViewDidBeginUsingTool(_ canvas: PKCanvasView) {
             clearSelection()
+            LearningTracker.shared.poke() // Stiftstriche sind Eingabe (kein SwiftUI-Tap)
         }
 
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {

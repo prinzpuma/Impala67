@@ -95,7 +95,8 @@ struct LearnContext: Equatable {
 }
 
 /// Lernzeit-Erfassung wie lernzeit.js und `LearningTracker.kt`: Sitzungen aus aktiven Abschnitten. Nach
-/// 60 s ohne Eingabe pausiert sie („Lernst du noch?“); nach 15 min Pause beginnt eine neue Sitzung.
+/// 60 s ohne Eingabe (Notizen: 3 min) pausiert sie rückwirkend ab der letzten Eingabe und zeigt (außer in
+/// Notizen) das Leerlauf-Tier; jede Eingabe setzt fort. Nach 15 min Pause beginnt eine neue Sitzung.
 /// Gespeichert wird über den Kern (`saveLearningSession`, Event `learningSessionUpsert`).
 @MainActor @Observable
 final class LearningTracker {
@@ -103,6 +104,8 @@ final class LearningTracker {
 
     static let sessionGap: TimeInterval = 15 * 60
     static let idleAfter: TimeInterval = 60
+    /// Notizen liest man oft länger ohne Eingabe.
+    static let notesIdleAfter: TimeInterval = 3 * 60
 
     private struct Session {
         let id = UUID().uuidString
@@ -113,8 +116,13 @@ final class LearningTracker {
         var pausedAt: Date?
     }
 
-    /// Pausiert wegen fehlender Eingaben (zeigt „Lernst du noch?“).
+    /// Pausiert wegen fehlender Eingaben.
     private(set) var idle = false
+    /// Leerlauf-Tier sichtbar (nicht in Notizen) und seine Pose, bei jeder Pause die nächste.
+    private(set) var showsAnimal = false
+    private(set) var pose = IdlePose.allCases.randomElement() ?? .peek
+    /// Der KI-Knopf unten rechts ist sichtbar (setzt `AiOrbButton`): Tier weicht aus, Plakette zieht hinein.
+    var orbShown = false
     @ObservationIgnored private var current: Session?
     @ObservationIgnored private var lastActivity = Date()
     @ObservationIgnored private weak var core: ImpalaCore?
@@ -124,6 +132,7 @@ final class LearningTracker {
         self.core = core
         lastActivity = Date()
         idle = false
+        showsAnimal = false
         if var s = current, s.ctx == ctx {
             if s.activeStart != nil { return }
             if let p = s.pausedAt, Date().timeIntervalSince(p) <= Self.sessionGap {
@@ -140,25 +149,32 @@ final class LearningTracker {
     }
 
     /// Abschnitt schließen und die Sitzung speichern (`pauseSegment` + `persistCurrent`).
-    func pause() {
+    /// `at`: Ende des Abschnitts – beim Leerlauf rückwirkend die letzte Eingabe.
+    func pause(at: Date = Date()) {
         guard var s = current, let start = s.activeStart else { return }
-        s.segments.append(TimeSegment(startedAt: ISODate.string(start), endedAt: ISODate.string()))
+        let end = max(at, start)
+        s.segments.append(TimeSegment(startedAt: ISODate.string(start), endedAt: ISODate.string(end)))
         s.activeStart = nil
-        s.pausedAt = Date()
+        s.pausedAt = end
         current = s
         persist(s)
     }
 
-    /// Eingabe: hält die Sitzung wach und setzt sie nach „Lernst du noch?“ fort.
+    /// Eingabe: hält die Sitzung wach und setzt sie nach einer Leerlauf-Pause fort.
     func poke() {
         lastActivity = Date()
         if idle, let ctx = current?.ctx, let core { open(ctx, core: core) }
     }
 
-    /// Takt (alle 5 s): nach 60 s ohne Eingabe pausieren.
+    /// Takt (alle 5 s): nach 60 s (Notizen: 3 min) ohne Eingabe rückwirkend pausieren.
     func tick() {
-        guard current?.activeStart != nil, Date().timeIntervalSince(lastActivity) > Self.idleAfter else { return }
-        pause()
+        guard let s = current, s.activeStart != nil else { return }
+        let limit = s.ctx.category == "notes" ? Self.notesIdleAfter : Self.idleAfter
+        guard Date().timeIntervalSince(lastActivity) > limit else { return }
+        pause(at: lastActivity)
+        let all = IdlePose.allCases
+        pose = all[((all.firstIndex(of: pose) ?? 0) + 1) % all.count]
+        showsAnimal = s.ctx.category != "notes"
         idle = true
     }
 
@@ -166,6 +182,7 @@ final class LearningTracker {
     func leave() {
         pause()
         idle = false
+        showsAnimal = false
     }
 
     private func persist(_ s: Session) {
@@ -195,11 +212,10 @@ private struct LearningTimeModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .simultaneousGesture(TapGesture().onEnded { tracker.poke() })
-            .overlay(alignment: .bottom) {
-                if tracker.idle {
-                    IdlePill { tracker.poke() }
-                        .padding(.bottom, 96)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+            .onContinuousHover { _ in tracker.poke() }
+            .overlay(alignment: .bottomTrailing) {
+                if tracker.showsAnimal && !(tracker.pose == .badge && tracker.orbShown) {
+                    IdleAnimal(pose: tracker.pose, avoidOrb: tracker.orbShown)
                 }
             }
             .animation(.spring(duration: 0.4, bounce: 0.2), value: tracker.idle)
@@ -217,26 +233,5 @@ private struct LearningTimeModifier: ViewModifier {
                     tracker.tick()
                 }
             }
-    }
-}
-
-/// „Lernst du noch?“ (`#lzAnimal`) als schwebende Glas-Pille: Antippen setzt die Lernzeit fort.
-private struct IdlePill: View {
-    let onResume: () -> Void
-
-    var body: some View {
-        Button(action: onResume) {
-            HStack(spacing: Space.s3) {
-                Icon("hand", size: 20).foregroundStyle(Impala.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Lernst du noch?").font(.system(size: TextSize.base, weight: .semibold)).foregroundStyle(Impala.text)
-                    Text("Berühre mich, um die Lernzeit fortzusetzen.").font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
-                }
-            }
-            .padding(.horizontal, Space.s4)
-            .padding(.vertical, Space.s3)
-            .impalaGlass(in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous), interactive: true)
-        }
-        .buttonStyle(.plain)
     }
 }

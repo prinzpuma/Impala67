@@ -73,16 +73,25 @@ struct ChatScreen: View {
 struct AiOrbButton: View {
     @Environment(ShellModel.self) private var shell
     @State private var spin = 0
+    private var tier: LearningTracker { .shared }
 
     var body: some View {
         Button {
             spin += 1
             shell.setAiPanel(true)
         } label: {
-            Icon("sparkles", size: 22)
-                .foregroundStyle(Impala.accent)
-                .phaseAnimator([1.0, 1.18, 1.0], trigger: spin) { v, k in v.scaleEffect(k).rotationEffect(.degrees((k - 1) * 60)) }
-                .frame(width: 56, height: 56)
+            ZStack {
+                // Leerlauf-Plakette der Lernzeit (`IdleAnimal`, Pose „badge“): Impala statt Funken im Knopf.
+                if tier.showsAnimal && tier.pose == .badge {
+                    TierBadge(size: 56, glass: false).transition(.scale(scale: 0.2).combined(with: .opacity))
+                } else {
+                    Icon("sparkles", size: 22)
+                        .foregroundStyle(Impala.accent)
+                        .phaseAnimator([1.0, 1.18, 1.0], trigger: spin) { v, k in v.scaleEffect(k).rotationEffect(.degrees((k - 1) * 60)) }
+                }
+            }
+            .frame(width: 56, height: 56)
+            .animation(.spring(duration: 0.4, bounce: 0.3), value: tier.showsAnimal)
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: Circle())
@@ -90,6 +99,8 @@ struct AiOrbButton: View {
         .keyboardShortcut("j", modifiers: .command)
         .accessibilityLabel("KI-Coach öffnen")
         .sensoryFeedback(.impact(weight: .medium), trigger: spin)
+        .onAppear { tier.orbShown = true }
+        .onDisappear { tier.orbShown = false }
     }
 }
 

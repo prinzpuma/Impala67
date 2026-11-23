@@ -177,10 +177,9 @@ function poll() {
 	for (const id of cur) {
 		if (prev.has(id)) continue; // Kantenerkennung: nur false → true zählt
 		// Lernzeit-Erfassung über jeden Tastendruck informieren: ein Gamepad löst keine
-		// Maus-/Tastatur-Ereignisse aus, sonst erscheint mitten im Abfragen „Lernst du noch?“.
-		const woke = LERNZEIT.poke();
+		// Maus-/Tastatur-Ereignisse aus, sonst hielte sie das Abfragen für Leerlauf.
+		LERNZEIT.poke();
 		if (learn) { learnBind(id); break; }
-		if (woke) break; // dieser Druck hat nur das „Lernst du noch?“-Tierchen weggeklickt
 		if (now < lock) break; // 250-ms-Sperre nach einer Bewertung (Prellen)
 		const done = fire(id);
 		if (done) { if (done !== "hud") lock = now + 250; break; }

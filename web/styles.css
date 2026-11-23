@@ -807,9 +807,32 @@ body.perf-mode *:not(.boot-spinner):not(#bootSplash *), body.perf-mode *::before
 /* 🧭 FIX 18.7 v2: Home scrollt volle Breite, Scrollbar am rechten Rand (vorher war 720px-Spalte selbst der Scroller) */
 /* 🏠 FIX 18.7 v3: Home erzwingt echte 1-Spalten-Anordnung; Kacheln/Heute-Pillen nie neben Hero/Bereichen */
 /* == ⏱ Lernzeit: Idle-Tierchen, Pausen- und Timer-Dialog (lernzeit.js) == */
-#lzAnimal { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:var(--z-toast); display:grid; justify-items:center; gap:var(--space-1); width:min(340px,calc(100vw - 32px)); padding:var(--space-4); border:1px solid var(--accent-border); border-radius: var(--radius-xl); background:var(--panel-solid); color:var(--text); box-shadow: var(--elev-3); cursor:pointer }
-#lzAnimal span { font-size:42px }
-#lzAnimal small { color:var(--text2); font-size: var(--text-xs) }
+/* Leerlauf-Tier (lernzeit.js, Zeichnung: lernzeit-tier.js): vier Posen im Wechsel, fängt keine Eingaben ab.
+   Unten rechts sitzt der KI-Knopf (#btnAiFab, 22px + 42px): .lz-tier--fab weicht ihm aus, „badge“ zieht hinein. */
+.lz-tier { position:fixed; z-index:var(--z-toast); pointer-events:none }
+.lz-tier-art, .lz-tier-art svg { display:block; width:100% }
+.lz-tier--peek, .lz-tier--sleep { right:28px; bottom:0; width:72px; height:54px; overflow:hidden; animation: lz-peek .7s var(--b-spring) both }
+.lz-tier--sleep { overflow:visible; clip-path: inset(-40px -40px 0 -40px); animation-duration: .9s }
+.lz-tier--side { right:-14px; bottom:44px; width:72px; transform-origin:50% 75%; transform: rotate(-62deg); animation: lz-side .7s var(--b-spring) both }
+.lz-tier--badge { right:22px; bottom:22px; width:42px; height:42px; border:1px solid var(--edge); border-radius:50%; background:var(--menu-bg); box-shadow:var(--elev-2); animation: lz-pop .45s var(--b-spring) both }
+.lz-tier--fab.lz-tier--peek, .lz-tier--fab.lz-tier--sleep { right:84px }
+.lz-tier--fab.lz-tier--side { bottom:104px }
+.lz-tier-pause { position:absolute; top:-6px; left:-6px; display:grid; place-items:center; width:18px; height:18px; border:1px solid var(--edge); border-radius:50%; background:var(--menu-bg); color:var(--text2) }
+.lz-tier-pause .i { width:9px; height:9px }
+.lz-tier--sleep .lz-z { position:absolute; right:-4px; bottom:40px; font-size:13px; font-weight:600; font-style:normal; line-height:1; color:var(--text2); animation: lz-z 2.4s infinite both }
+.lz-tier--sleep .lz-z + .lz-z { right:-14px; bottom:50px; font-size:11px; animation-delay:1.2s }
+#btnAiFab.lz-idle > svg.i { display:none }
+.lz-tier--infab { position:absolute; inset:0; overflow:visible; animation: lz-pop .45s var(--b-spring) both }
+:is(.lz-tier--infab, .lz-tier--badge) .lz-tier-art { position:absolute; inset:0; overflow:hidden; border-radius:50% }
+:is(.lz-tier--infab, .lz-tier--badge) .lz-tier-art svg { width:50px; margin:5px 0 0 -5px }
+.lz-eye { transform-box:fill-box; transform-origin:center; animation: lz-blink 4s infinite }
+@keyframes lz-peek { 0% { transform: translateY(100%) } 60% { transform: translateY(-4%) } 100% { transform: none } }
+@keyframes lz-side { from { transform: translateX(110%) rotate(-62deg) } }
+@keyframes lz-pop { 0% { transform: scale(0) } 70% { transform: scale(1.1) } 100% { transform: none } }
+@keyframes lz-blink { 0%, 92%, 100% { transform: none } 95% { transform: scaleY(.1) } }
+@keyframes lz-z { 0% { opacity:0; transform: none } 30% { opacity:1 } 100% { opacity:0; transform: translate(10px,-20px) } }
+body.perf-mode :is(.lz-tier, .lz-eye, .lz-z) { animation:none }
+@media (prefers-reduced-motion: reduce) { :is(.lz-tier, .lz-eye, .lz-z) { animation:none } }
 .lz-done { text-align:center }
 .lz-done p { margin:10px 0 18px }
 .lz-break-modal { text-align:center; max-width:380px; padding:var(--space-6) }

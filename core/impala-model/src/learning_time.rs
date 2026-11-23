@@ -422,7 +422,10 @@ impl SessionTracker {
             return None;
         }
         let started_at = s.active_started_at.take()?;
-        s.segments.push(TimeSegment { started_at, ended_at: now_iso.to_owned() });
+        // Rückwirkende Pause (Leerlauf ab der letzten Eingabe): liegt dieser Zeitpunkt vor dem
+        // Abschnittsbeginn, bleibt ein leerer Abschnitt statt einer negativen Dauer.
+        let ended_at = if now_ms < s.active_started_ms { started_at.clone() } else { now_iso.to_owned() };
+        s.segments.push(TimeSegment { started_at, ended_at });
         s.active_started_ms = 0;
         s.paused_at_ms = now_ms;
         Self::make_persist(s, now_iso)

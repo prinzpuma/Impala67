@@ -5,6 +5,7 @@ import { U } from "./util.js";
 import { TELE } from "./telemetrie.js";
 import { FACH } from "./fach.js";
 import { idlePromptContextKind } from "./lernzeit-context.js";
+import { TIER_SVG, TIER_SCHLAF_SVG } from "./lernzeit-tier.js";
 import { icon, lead } from "./icons.js";
 import { CORE } from "./rust-core.js";
 
@@ -14,6 +15,7 @@ import { CORE } from "./rust-core.js";
 
 export const LERNZEIT = (() => {
 	const IDLE_MS = 60000;
+	const NOTES_IDLE_MS = 3 * 60000; // Notizen liest man oft länger ohne Eingabe
 	const SESSION_GAP_MS = 15 * 60000;
 	const TICK_MS = 5000;
 	const TIMER_KEY = "impala67_lernzeit_timer_end";
@@ -23,7 +25,8 @@ export const LERNZEIT = (() => {
 
 	let lastActivityAt = Date.now();
 	let tracker = new CORE.LzSessionTracker();
-	let animal = null;
+	let idle = false; // Leerlauf-Pause: endet mit der nächsten Eingabe
+	let animal = null; // dezentes Tier am Rand, solange idle (nicht in Notizen)
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
 
 	let activeStretchMs = 0;
@@ -75,7 +78,7 @@ export const LERNZEIT = (() => {
 	}
 
 	async function openSegment(meta = categoryNow()) {
-		if (!meta || document.hidden || animal) return;
+		if (!meta || away() || idle) return;
 		const toPersist = tracker.openSegment(
 			Date.now(),
 			iso(),
@@ -87,8 +90,14 @@ export const LERNZEIT = (() => {
 		);
 		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
-	async function pauseSegment() {
-		const toPersist = tracker.pauseSegment(Date.now(), iso());
+	// Lernzeit zählt nur, solange das Fenster sichtbar UND im Vordergrund ist (eine nebenbei
+	// offene Notiz hinter einem anderen Fenster ist kein Lernen). hasFocus() gilt auch für iframes.
+	function away() {
+		return document.hidden || (typeof document.hasFocus === "function" && !document.hasFocus());
+	}
+	// atMs: Ende des Abschnitts — beim Leerlauf rückwirkend die letzte Eingabe.
+	async function pauseSegment(atMs = Date.now()) {
+		const toPersist = tracker.pauseSegment(atMs, new Date(atMs).toISOString());
 		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
 	async function finishSession() {
@@ -109,31 +118,49 @@ export const LERNZEIT = (() => {
 		if (toPersist) await STATE.dispatch("learningSessionUpsert", toPersist);
 	}
 
-	// Aktivität melden — EINE Stelle für alle Eingabewege. 🐛 Fix (27. Juli): Ein Gamepad
-	// erzeugt KEINE pointer-/keydown-Ereignisse. Die Erfassung hielt das Abfragen mit dem
-	// 🎮 Controller deshalb für Leerlauf, schob „Lernst du noch?“ mitten ins Bild — und
-	// weggeklickt bekam man es mit dem Pad auch nicht, weil das Tierchen nur auf
-	// pointerenter/click hört. Rückgabe: true, wenn das Tierchen dadurch verschwunden ist
-	// (dann war die Eingabe nur ein Aufwecken und soll nichts weiter auslösen).
+	// Aktivität melden — EINE Stelle für alle Eingabewege (Maus, Stift, Tastatur und das
+	// 🎮 Gamepad aus controller.js, das keine pointer-/keydown-Ereignisse erzeugt). Jede
+	// Eingabe beendet eine Leerlauf-Pause: Tier weg, Lernzeit läuft weiter, die Eingabe
+	// selbst wirkt ganz normal.
 	function poke() {
 		lastActivityAt = Date.now();
-		if (!animal) return false;
-		animal.remove();
-		animal = null;
+		if (!idle) return;
+		idle = false;
+		hideAnimal();
 		openSegment(categoryNow());
-		return true;
 	}
 
+	function hideAnimal() {
+		if (!animal) return;
+		animal.closest("#btnAiFab")?.classList.remove("lz-idle");
+		animal.remove();
+		animal = null;
+	}
+	// Dezent statt Kasten: ein kleines Impala, bei jeder Pause in einer anderen Pose (abwechselnd).
+	// Es fängt keine Eingaben ab und weicht dem KI-Knopf unten rechts aus; die Plakette („badge“)
+	// zieht bei sichtbarem KI-Knopf direkt in den Knopf ein.
+	const POSES = ["peek", "sleep", "side", "badge"];
+	let poseIdx = Math.floor(Math.random() * POSES.length);
 	function showAnimal() {
-		if (animal || !categoryNow() || !idlePromptContextKind(S, settingsAreOpen())) return;
-		pauseSegment();
-		animal = document.createElement("button");
-		animal.type = "button";
+		if (animal || !idlePromptContextKind(S, settingsAreOpen())) return;
+		const pose = POSES[poseIdx++ % POSES.length];
+		const fab = document.getElementById("btnAiFab");
+		const fabShown = !!fab && getComputedStyle(fab).display !== "none";
+		const pause = '<span class="lz-tier-pause">' + icon("pause") + "</span>";
+		const art = '<span class="lz-tier-art">' + (pose === "sleep" ? TIER_SCHLAF_SVG : TIER_SVG) + "</span>";
+		animal = document.createElement("span");
+		animal.setAttribute("role", "status");
+		animal.setAttribute("aria-label", "Lernzeit pausiert – jede Eingabe setzt sie fort");
+		if (pose === "badge" && fabShown) {
+			animal.className = "lz-tier lz-tier--infab";
+			animal.innerHTML = art + pause;
+			fab.classList.add("lz-idle");
+			fab.appendChild(animal);
+			return;
+		}
 		animal.id = "lzAnimal";
-		animal.innerHTML = '<span>' + icon("hand") + '</span><b>Lernst du noch?</b><small>Berühre mich oder fahre darüber, um die Lernzeit fortzusetzen.</small>';
-		const resume = () => poke();
-		animal.addEventListener("pointerenter", resume, { once: true });
-		animal.addEventListener("click", resume, { once: true });
+		animal.className = "lz-tier lz-tier--" + pose + (fabShown ? " lz-tier--fab" : "");
+		animal.innerHTML = art + (pose === "badge" ? pause : "") + (pose === "sleep" ? '<i class="lz-z">z</i><i class="lz-z">z</i>' : "");
 		document.body.appendChild(animal);
 	}
 
@@ -164,15 +191,21 @@ export const LERNZEIT = (() => {
 		localStorage.setItem(TIMER_KEY, String(timerEndsAt));
 		localStorage.setItem(TIMER_MIN_KEY, String(min));
 		localStorage.removeItem(TIMER_PAUSE_KEY);
-		lastActivityAt = Date.now();
+		poke();
 		openSegment(categoryNow());
 		TELE.log("timerStart", { minutes: min });
 	}
 
 	function tick() {
 		const meta = categoryNow();
-		if (document.hidden) {
+		if (away()) {
+			// Hintergrund oder anderes Fenster vorn: nichts zählen; zurück im Fenster beginnt
+			// die Leerlauf-Frist neu.
 			lastActiveTickAt = 0;
+			lastActivityAt = Date.now();
+			idle = false;
+			hideAnimal();
+			if (tracker.isActive) pauseSegment();
 			return;
 		}
 		if (timerEndsAt && Date.now() >= timerEndsAt) {
@@ -186,7 +219,8 @@ export const LERNZEIT = (() => {
 		}
 		if (!meta) {
 			lastActiveTickAt = 0;
-			if (animal) { animal.remove(); animal = null; }
+			idle = false;
+			hideAnimal();
 			if (tracker.isActive) pauseSegment();
 			else if (tracker.hasCurrent && Date.now() - tracker.pausedAtMs > SESSION_GAP_MS) {
 				finishSession();
@@ -197,17 +231,17 @@ export const LERNZEIT = (() => {
 		}
 		// Beim Wechsel aus Heft/Chat/Kartenlernen darf ein bereits sichtbares Tier
 		// nicht in eine normale Notiz oder Verwaltungsansicht mitwandern.
-		if (animal && !idlePromptContextKind(S, settingsAreOpen())) {
-			animal.remove();
-			animal = null;
-			lastActivityAt = Date.now();
-		}
-		if (animal) {
+		if (animal && !idlePromptContextKind(S, settingsAreOpen())) hideAnimal();
+		if (idle) {
 			lastActiveTickAt = 0;
 			return;
 		}
-		if (Date.now() - lastActivityAt >= IDLE_MS) {
+		const idleLimit = meta.category === "notes" ? NOTES_IDLE_MS : IDLE_MS;
+		if (Date.now() - lastActivityAt >= idleLimit) {
+			// Rückwirkend ab der letzten Eingabe pausieren: Leerlauf zählt nie als Lernzeit.
 			lastActiveTickAt = 0;
+			idle = true;
+			pauseSegment(lastActivityAt);
 			showAnimal();
 			return;
 		}
@@ -295,7 +329,8 @@ export const LERNZEIT = (() => {
 	}
 
 
-	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, () => { if (!animal) lastActivityAt = Date.now(); }, { passive: true }));
+	["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((type) => window.addEventListener(type, poke, { passive: true }));
+	window.addEventListener("focus", () => { lastActivityAt = Date.now(); });
 	// Das Settings-Overlay ändert S.view nicht. Auf seine DOM-Änderung reagieren wir
 	// deshalb sofort, statt erst bis zum nächsten Fünf-Sekunden-Tick zu warten.
 	const overlay = document.getElementById("overlay");
@@ -304,7 +339,8 @@ export const LERNZEIT = (() => {
 	}
 	document.addEventListener("visibilitychange", () => {
 		if (document.hidden) {
-			if (animal) { animal.remove(); animal = null; }
+			idle = false;
+			hideAnimal();
 			pauseSegment();
 		} else {
 			lastActivityAt = Date.now();

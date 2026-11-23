@@ -97,6 +97,7 @@ const APP_FILES = [
 	"./pdfpaste.js",
 	"./lernzeit.js",
 	"./lernzeit-context.js",
+	"./lernzeit-tier.js",
 	"./telemetrie.js",
 	"./fach.js",
 	"./schulnoten.js",
