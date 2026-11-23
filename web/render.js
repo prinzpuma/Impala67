@@ -663,7 +663,7 @@ function renderMain() {
 	parkFullChat(main, S.view === "chat" ? String(S.currentChatId || "") : null);
 	// Offenes Heft schließen, sobald die Ansicht es nicht mehr zeigt (speichert implizit)
 	if (HEFT.activeId && (S.view !== "page" || S.currentPageId !== HEFT.activeId)) HEFT.unmount();
-	if (S.view !== "zeitstrahl") delete main.dataset.zsKey;
+	if (S.view !== "zeitstrahl") { delete main.dataset.zsKey; delete main.dataset.zsNode; }
 	const views = { library: (m) => LIBRARY.renderLibrary(m), anki: renderAnki, zeitstrahl: (m) => ZS.render(m), noten: (m) => SCHULNOTEN.render(m), trash: renderTrash, chat: renderFullChat };
 	if (views[S.view]) {
 		// Fremde Renderer verwalten #main selbst. Ihr DOM darf nie mit einem alten

@@ -41,6 +41,26 @@ fn opt_text<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error>
     })
 }
 
+/// Jahreszahl aus Zahl oder Text („1827“, „-350“); alles andere = keins.
+fn opt_year<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f64>, D::Error> {
+    Ok(year_of(&Value::deserialize(d)?))
+}
+
+pub fn year_of(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => parse_number(s),
+        _ => None,
+    }
+    .filter(|y| y.is_finite() && y.abs() < 1e7)
+}
+
+impl Timeline {
+    pub fn is_path(&self) -> bool {
+        self.kind == "path"
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Theme {
@@ -63,6 +83,12 @@ pub struct Timeline {
     #[serde(deserialize_with = "text")]
     pub description: String,
     pub theme: Theme,
+    /// `history` (Zeitachse mit Jahren, Standard) oder `path` (Lernpfad ohne Jahre).
+    #[serde(deserialize_with = "text")]
+    pub kind: String,
+    /// Klausurdatum `JJJJ-MM-TT` (leer = keins): Ziel am rechten Ende.
+    #[serde(deserialize_with = "text")]
+    pub exam: String,
     #[serde(deserialize_with = "text")]
     pub created: String,
     #[serde(deserialize_with = "text")]
@@ -80,6 +106,8 @@ impl Default for Timeline {
             subject: String::new(),
             description: String::new(),
             theme: Theme::default(),
+            kind: String::new(),
+            exam: String::new(),
             created: String::new(),
             updated: String::new(),
             nodes: Vec::new(),
@@ -152,6 +180,12 @@ pub struct Node {
     pub title: String,
     #[serde(deserialize_with = "text")]
     pub era: String,
+    /// Jahr für die Zeitachse (negativ = v. Chr.), nur bei `history`.
+    #[serde(deserialize_with = "opt_year", skip_serializing_if = "Option::is_none")]
+    pub year: Option<f64>,
+    /// Strang (Themenbahn), z. B. „Magnetismus“: Knoten eines Strangs liegen übereinander gruppiert.
+    #[serde(deserialize_with = "text")]
+    pub strand: String,
     #[serde(deserialize_with = "text")]
     pub summary: String,
     #[serde(deserialize_with = "text")]

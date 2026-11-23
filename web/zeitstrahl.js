@@ -5,75 +5,109 @@ import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { icon, lead } from "./icons.js";
 import { ZS_STORE, ZS_CORE } from "./zeitstrahl-store.js";
+import { graphHtml, attachGraph, focusNext, fmtYear, examInfo, progressRing, strandColor, STATE_LABEL } from "./zeitstrahl-graph.js";
+import { openTimelineDialog, openNodeDialog, sendAi, skeletonPrompt, fillPrompt } from "./zeitstrahl-dialogs.js";
 
-// zeitstrahl.js — KI-Zeitstrahl: Lernwelt aus Lektions-Knoten (Konzept: docs/KI-LEHRERMODUS-PLAN.md §6).
-// Horizontal: wenige Ursprünge links, nach rechts verzweigend, Stränge übereinander.
+// zeitstrahl.js — KI-Zeitstrahl: Übersicht der Lernwelten, Graph (zeitstrahl-graph.js) und
+// Lektionsansicht. Konzept: docs/KI-LEHRERMODUS-PLAN.md §6.
 // Opt-in über Einstellungen → Lernen → Beta-Lernfunktionen (S.settings.experiments.zeitstrahl).
 // Daten: eigene Lehrer-Datenbank (zeitstrahl-store.js), Logik im Kern (core/impala-lehrer).
 
 const esc = (s) => U.esc(String(s ?? ""));
 const enabled = () => !!S.settings?.experiments?.zeitstrahl;
 
-// Raster des Graphen (px)
-const COL = 290, LANE = 138, NODE_W = 228, NODE_H = 106, PAD = 36;
-
 const UI_KEY = "impala67Zeitstrahl";
 const ui = (() => {
-	try { return { tl: null, node: null, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; } catch { return { tl: null, node: null }; }
+	const base = { tl: null, node: null, zoom: 1 };
+	try { return { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; } catch { return base; }
 })();
-function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tl: ui.tl, node: ui.node })); } catch {} }
+function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tl: ui.tl, node: ui.node, zoom: ui.zoom })); } catch {} }
 
 const rerender = () => BUS.emit("ui:render");
 
+/** Offener Zeitstrahl; ohne Auswahl die Übersicht (null). */
 function currentTimeline() {
-	const tl = (ui.tl && ZS_STORE.getSync(ui.tl)) || ZS_STORE.all()[0] || null;
-	if (tl && ui.tl !== tl.id) { ui.tl = tl.id; ui.node = null; }
+	const tl = ui.tl ? ZS_STORE.getSync(ui.tl) : null;
+	if (ui.tl && !tl) { ui.tl = null; ui.node = null; }
 	return tl;
 }
 const nodeOf = (tl, id) => (tl?.nodes || []).find((n) => n.id === id) || null;
-
-const STATE_LABEL = { mastered: "Gemeistert", next: "Als Nächstes", later: "Später" };
 const WS_LABEL = { open: "offen", submitted: "eingereicht", passed: "bestanden", failed: "nochmal" };
+const KIND_LABEL = { history: ["timeline", "Geschichte"], path: ["trending-up", "Lernpfad"] };
 
-// ---------- Graph ----------
-function edgePath(a, b) {
-	const x1 = PAD + a.col * COL + NODE_W, y1 = PAD + a.lane * LANE + NODE_H / 2;
-	const x2 = PAD + b.col * COL, y2 = PAD + b.lane * LANE + NODE_H / 2;
-	const c = Math.max(24, (x2 - x1) / 2);
-	return `M${x1} ${y1} C${x1 + c} ${y1}, ${x2 - c} ${y2}, ${x2} ${y2}`;
+// Schrift auf der Akzentfarbe der KI: hell oder dunkel je nach Helligkeit.
+function onAccent(hex) {
+	let h = String(hex).slice(1);
+	if (h.length <= 4) h = [...h].slice(0, 3).map((c) => c + c).join("");
+	const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? "#141414" : "#ffffff";
 }
 
-function nodeCard(n) {
-	const quiz = n.quiz?.total ? `<span class="zs-badge${n.quiz.passed ? " ok" : ""}" title="Quiz">${icon("help")}${n.quiz.passed ? "✓" : n.quiz.total}</span>` : "";
-	const ws = n.worksheet ? `<span class="zs-badge${n.worksheet === "passed" ? " ok" : ""}" title="Arbeitsblatt: ${esc(WS_LABEL[n.worksheet] || n.worksheet)}">${icon("pen")}${n.worksheet === "passed" ? "✓" : ""}</span>` : "";
-	return `<button type="button" class="zs-node is-${esc(n.state)}" data-zsnode="${esc(n.id)}" style="left:${PAD + n.col * COL}px;top:${PAD + n.lane * LANE}px;width:${NODE_W}px;height:${NODE_H}px" title="${esc(STATE_LABEL[n.state] || "")}">` +
-		(n.era ? `<span class="zs-era">${esc(n.era)}</span>` : "") +
-		`<span class="zs-node-title">${esc(n.title)}</span>` +
-		(n.summary ? `<span class="zs-node-sum">${esc(n.summary)}</span>` : "") +
-		`<span class="zs-node-foot">${quiz}${ws}${n.state === "mastered" ? `<span class="zs-done">${icon("check-circle")}</span>` : ""}</span></button>`;
+function examChip(exam) {
+	const ex = examInfo(exam);
+	return ex ? `<span class="zs-chip ${ex.days < 0 ? "" : ex.days <= 14 ? "warn" : "next"}">${icon("target")}Klausur ${esc(ex.rel)}</span>` : "";
 }
 
-function graphHtml(tl, v) {
-	const pos = new Map(v.nodes.map((n) => [n.id, n]));
-	const w = PAD * 2 + Math.max(1, v.cols) * COL - (COL - NODE_W);
-	const h = PAD * 2 + Math.max(1, v.lanes) * LANE - (LANE - NODE_H);
-	const edges = v.edges.map((e) => {
-		const a = pos.get(e.from), b = pos.get(e.to);
-		return a && b ? `<path class="zs-edge is-${esc(b.state)}${a.state === "mastered" ? " from-done" : ""}" d="${edgePath(a, b)}"/>` : "";
-	}).join("");
-	const next = v.nodes.find((n) => n.state === "next");
+// ---------- Übersicht ----------
+function cardHtml(tl) {
+	const e = ZS_CORE.listEntry(tl);
+	const v = ZS_CORE.view(tl);
+	const pct = e.total ? Math.round((e.mastered / e.total) * 100) : 0;
+	const [kIcon, kLabel] = KIND_LABEL[e.kind] || KIND_LABEL.history;
+	const dots = v.nodes.slice().sort((a, b) => a.col - b.col || a.lane - b.lane).slice(0, 14)
+		.map((n) => `<i class="is-${esc(n.state)}${n.draft ? " is-draft" : ""}"></i>`).join("");
+	const accent = /^#[0-9a-f]{3,8}$/i.test(e.accent || "") ? ` style="--zs-accent:${e.accent}"` : "";
+	return `<button type="button" class="zs-card" data-zstl="${esc(tl.id)}"${accent}>` +
+		`<span class="zs-card-strip" aria-hidden="true">${dots || "<i></i><i></i><i></i>"}</span>` +
+		`<span class="zs-eyebrow">${icon(kIcon)}${esc([kLabel, e.subject].filter(Boolean).join(" · "))}</span>` +
+		`<span class="zs-card-title">${esc(e.title)}</span>` +
+		(e.description ? `<span class="zs-card-desc">${esc(e.description)}</span>` : "") +
+		`<span class="zs-card-foot">${progressRing(pct, 34)}<span class="zs-card-count"><b>${e.mastered}</b>/${e.total} gemeistert</span>` +
+		`<span class="zs-card-chips">${e.drafts ? `<span class="zs-chip">${icon("pen-tool")}${e.drafts} Entwürfe</span>` : ""}${examChip(e.exam)}</span></span></button>`;
+}
+
+function homeHtml() {
+	const list = ZS_STORE.all();
+	if (!list.length) {
+		return `<div class="zs-welcome"><div class="zs-welcome-art" aria-hidden="true"><i class="is-mastered"></i><i class="is-mastered"></i><i class="is-next"></i><i></i><i></i><b>${icon("target", "", 22)}</b></div>` +
+			`<h1>Lern dein Fach als Geschichte</h1>` +
+			`<p>Die KI baut aus deinen Skripten, Notizen und Altklausuren einen Zeitstrahl: erst ein Gerüst, das du prüfst, dann Lektionen mit Story, Bildern, Kontrollfragen und Arbeitsblättern – bis zur Klausur.</p>` +
+			`<button type="button" class="zs-btn primary big" data-zsnew="1">${lead("plus")}Ersten Zeitstrahl anlegen</button></div>`;
+	}
+	return `<div class="zs-home"><header class="zs-home-head"><div><div class="zs-eyebrow">${icon("timeline")}KI-Zeitstrahl</div><h1>Deine Lernwelten</h1></div>` +
+		`<button type="button" class="zs-btn primary" data-zsnew="1">${lead("plus")}Neuer Zeitstrahl</button></header>` +
+		`<div class="zs-cards">${list.map(cardHtml).join("")}` +
+		`<button type="button" class="zs-card zs-card-new" data-zsnew="1">${icon("plus", "", 26)}<span>Neuer Zeitstrahl</span><small>Geschichte oder Lernpfad</small></button></div></div>`;
+}
+
+// ---------- Graph-Ansicht ----------
+function heroHtml(tl, v) {
+	const next = v.nodes.filter((n) => n.state === "next").sort((a, b) => a.col - b.col)[0];
 	const pct = v.stats.total ? Math.round((v.stats.mastered / v.stats.total) * 100) : 0;
-	return `<header class="zs-head">` +
-		`<div class="zs-head-copy"><h1 class="zs-title">${esc(tl.title)}</h1>` +
-		`<p class="zs-sub">${esc([tl.subject, tl.description].filter(Boolean).join(" · "))}</p></div>` +
-		`<div class="zs-progress" title="${v.stats.mastered} von ${v.stats.total} gemeistert"><span class="zs-progress-bar"><span style="width:${pct}%"></span></span><span class="zs-progress-txt">${v.stats.mastered}/${v.stats.total}</span></div>` +
-		(next ? `<button type="button" class="zs-btn primary" data-zsnode="${esc(next.id)}">${lead("play")}Nächste Lektion</button>` : "") +
-		`</header>` +
-		(v.nodes.length
-			? `<div class="zs-scroll" data-zsscroll="1"><div class="zs-canvas" style="width:${w}px;height:${h}px">` +
-				`<svg class="zs-edges" width="${w}" height="${h}" aria-hidden="true">${edges}</svg>` +
-				v.nodes.map(nodeCard).join("") + `</div></div>`
-			: `<div class="zs-empty"><p>Dieser Zeitstrahl hat noch keine Lektionen.</p>${askButton("build", "Lektionen von der KI bauen lassen")}</div>`);
+	const [kIcon, kLabel] = KIND_LABEL[v.kind] || KIND_LABEL.history;
+	return `<header class="zs-hero">` +
+		`<button type="button" class="zs-iconbtn" data-zshome="1" aria-label="Alle Zeitstrahlen" title="Alle Zeitstrahlen">${icon("chevron-left")}</button>` +
+		`<div class="zs-hero-copy"><div class="zs-eyebrow">${icon(kIcon)}${esc([kLabel, tl.subject].filter(Boolean).join(" · "))}</div>` +
+		`<h1 class="zs-title">${esc(tl.title)}</h1>${tl.description ? `<p class="zs-sub">${esc(tl.description)}</p>` : ""}</div>` +
+		`<div class="zs-hero-stats">${progressRing(pct, 46)}<div><b>${v.stats.mastered}<small>/${v.stats.total}</small></b><span>gemeistert</span></div>${examChip(tl.exam)}</div>` +
+		`<div class="zs-hero-actions">` +
+		`<button type="button" class="zs-iconbtn" data-zsadd="1" aria-label="Lektion hinzufügen" title="Lektion hinzufügen">${icon("plus")}</button>` +
+		`<button type="button" class="zs-iconbtn" data-zsedit="tl" aria-label="Zeitstrahl bearbeiten" title="Zeitstrahl bearbeiten">${icon("gear")}</button>` +
+		(next ? `<button type="button" class="zs-btn primary" data-zsnode="${esc(next.id)}">${lead("play")}<span class="zs-btn-txt">${esc(next.title)}</span></button>` : "") +
+		`</div></header>` +
+		(v.stats.drafts
+			? `<div class="zs-banner">${icon("pen-tool")}<span><b>Gerüst prüfen:</b> ${v.stats.drafts} von ${v.stats.total} Lektionen sind Entwürfe. Passe Titel, Jahre und Verbindungen an (Lektion anklicken → Bearbeiten), dann lass sie ausarbeiten.</span>` +
+				`<button type="button" class="zs-btn" data-zsask="fill">${lead("sparkles")}Nächste ausarbeiten</button></div>`
+			: "");
+}
+
+function graphViewHtml(tl, v) {
+	if (!v.nodes.length) {
+		return heroHtml(tl, v) + `<div class="zs-empty">${icon("sprout", "", 36)}<h2>Noch keine Lektionen</h2><p>Lass die KI ein Gerüst bauen oder lege die erste Lektion selbst an.</p>` +
+			`<div class="zs-actions center"><button type="button" class="zs-btn primary" data-zsask="build">${lead("sparkles")}Gerüst bauen lassen</button>` +
+			`<button type="button" class="zs-btn" data-zsadd="1">${lead("plus")}Lektion anlegen</button></div></div>`;
+	}
+	return heroHtml(tl, v) + graphHtml(v, ui.zoom);
 }
 
 // ---------- Lektion ----------
@@ -127,7 +161,7 @@ function questionHtml(q, i, answer, result, attempt) {
 	const expected = solved && result.correct !== true && result.expected ? `<div class="zs-expected">Lösung: <span class="md">${U.md(String(result.expected))}</span></div>` : "";
 	const feedback = result?.feedback ? `<div class="zs-feedback">${esc(result.feedback)}</div>` : "";
 	const explain = solved && q.explain ? `<div class="zs-explain md">${U.md(q.explain)}</div>` : "";
-	return `<li class="zs-q${result ? " has-res" : ""}" data-zsq="${i}" data-type="${esc(q.type)}">` +
+	return `<li class="zs-q${solved ? ` has-res is-${result.correct === true ? "ok" : result.correct === false ? "bad" : "wait"}` : ""}" data-zsq="${i}" data-type="${esc(q.type)}">` +
 		`<div class="zs-q-head"><span class="zs-q-no">${i + 1}</span>${resultMark(solved ? result : null)}</div>${prompt}${input}${expected}${feedback}${explain}</li>`;
 }
 
@@ -162,38 +196,59 @@ function worksheetHtml(node) {
 		`</div></section>`;
 }
 
+// Lektion ohne Quiz und Arbeitsblatt: gemeistert nur per „erledigt“ (Kern: is_mastered) – das darf der Nutzer selbst.
+function doneHtml(node) {
+	if ((node.quiz || []).length || node.worksheet) return "";
+	const done = !!node.progress?.done;
+	return `<section class="zs-sec"><div class="zs-actions">` +
+		(done
+			? `<span class="zs-chip ok">${icon("check")}erledigt</span><button type="button" class="zs-btn quiet" data-zsdone="0">Wieder öffnen</button>`
+			: `<button type="button" class="zs-btn primary" data-zsdone="1">${lead("check")}Gelesen – als erledigt markieren</button>`) +
+		`</div></section>`;
+}
+
 function askButton(kind, label) {
 	return `<button type="button" class="zs-btn quiet" data-zsask="${esc(kind)}">${lead("sparkles")}${esc(label)}</button>`;
+}
+
+function nextCards(kids) {
+	if (!kids.length) return "";
+	return `<section class="zs-sec zs-next"><h3>${lead("arrow-down")}Wie es weitergeht</h3><div class="zs-next-grid">${kids.map((n) =>
+		`<button type="button" class="zs-next-card is-${esc(n.state)}" data-zsnode="${esc(n.id)}">` +
+		`<span class="zs-node-meta">${n.year != null ? `<b>${esc(fmtYear(n.year))}</b>` : ""}${n.era ? `<span>${esc(n.era)}</span>` : ""}</span>` +
+		`<span class="zs-next-title">${esc(n.title)}</span>${n.summary ? `<span class="zs-next-sum">${esc(n.summary)}</span>` : ""}` +
+		`<span class="zs-next-go">${esc(STATE_LABEL[n.state] || "")}${icon("chevron-right")}</span></button>`).join("")}</div></section>`;
 }
 
 function lessonHtml(tl, node, entry, v) {
 	const kids = v.edges.filter((e) => e.from === node.id).map((e) => v.nodes.find((n) => n.id === e.to)).filter(Boolean);
 	const parents = (node.parents || []).map((id) => v.nodes.find((n) => n.id === id)).filter(Boolean);
+	const strandIdx = (v.strands || []).findIndex((s) => entry && entry.lane >= s.lane && entry.lane < s.lane + s.lanes);
 	const imgs = (node.images || []).map((img) => ({ ...img, src: imageSrc(img) })).filter((img) => img.src);
 	const svg = typeof node.svg === "string" && node.svg.trim().startsWith("<svg") ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(node.svg)}` : "";
 	const gallery = imgs.length || svg
-		? `<div class="zs-gallery">${svg ? `<figure class="zs-fig"><img src="${svg}" alt=""></figure>` : ""}${imgs.map((img) =>
+		? `<div class="zs-gallery${imgs.length + (svg ? 1 : 0) === 1 ? " single" : ""}">${svg ? `<figure class="zs-fig"><img src="${svg}" alt=""></figure>` : ""}${imgs.map((img) =>
 			`<figure class="zs-fig"><img src="${esc(img.src)}" alt="${esc(img.caption || "")}" loading="lazy" referrerpolicy="no-referrer">${img.caption || img.credit ? `<figcaption>${esc(img.caption || "")}${img.credit ? ` <span class="hint">${esc(img.credit)}</span>` : ""}</figcaption>` : ""}</figure>`).join("")}</div>`
 		: "";
-	const navList = (list, label) => list.length ? `<div class="zs-nav-list"><span class="hint">${label}</span>${list.map((n) => `<button type="button" class="zs-pill is-${esc(n.state)}" data-zsnode="${esc(n.id)}">${esc(n.title)}</button>`).join("")}</div>` : "";
+	const meta = [node.year != null ? `<b>${esc(fmtYear(node.year))}</b>` : "", node.era ? `<span>${esc(node.era)}</span>` : "",
+		node.strand ? `<span class="zs-strand-chip">${esc(node.strand)}</span>` : ""].filter(Boolean).join("");
+	const draft = entry?.draft
+		? `<div class="zs-draft-box">${icon("pen-tool", "", 22)}<div><b>Diese Lektion ist noch ein Entwurf.</b><p>Prüfe Titel, Jahr und Verbindungen – dann schreibt die KI Story, Bilder und Kontrollfragen.</p>` +
+			`<div class="zs-actions"><button type="button" class="zs-btn primary" data-zsask="fill-one">${lead("sparkles")}Ausarbeiten lassen</button><button type="button" class="zs-btn" data-zsedit="node">${lead("pen")}Bearbeiten</button></div></div></div>`
+		: "";
+	const prev = parents.length ? `<div class="zs-prev"><span class="hint">Baut auf auf</span>${parents.map((n) => `<button type="button" class="zs-pill is-${esc(n.state)}" data-zsnode="${esc(n.id)}">${esc(n.title)}</button>`).join("")}</div>` : "";
 	return `<header class="zs-lesson-top"><button type="button" class="zs-btn quiet" data-zsback="1">${lead("chevron-left")}${esc(tl.title)}</button>` +
-		`<span class="zs-chip ${entry?.state === "mastered" ? "ok" : entry?.state === "next" ? "next" : ""}">${esc(STATE_LABEL[entry?.state] || "")}</span></header>` +
-		`<article class="zs-lesson">` +
-		(node.era ? `<div class="zs-era big">${esc(node.era)}</div>` : "") +
+		`<span class="zs-chip ${entry?.state === "mastered" ? "ok" : entry?.state === "next" ? "next" : ""}">${esc(STATE_LABEL[entry?.state] || "")}</span>` +
+		`<button type="button" class="zs-iconbtn" data-zsedit="node" aria-label="Lektion bearbeiten" title="Lektion bearbeiten">${icon("pen")}</button></header>` +
+		`<article class="zs-lesson" style="--zs-strand:${strandColor(strandIdx)}">` +
+		`<div class="zs-lesson-hero">${meta ? `<div class="zs-node-meta big">${meta}</div>` : ""}` +
 		`<h1 class="zs-lesson-title">${esc(node.title)}</h1>` +
-		(node.summary ? `<p class="zs-lead">${esc(node.summary)}</p>` : "") +
-		gallery +
+		(node.summary ? `<p class="zs-lead">${esc(node.summary)}</p>` : "") + prev + `</div>` +
+		draft + gallery +
 		(node.body ? `<div class="zs-body md">${U.md(node.body)}</div>` : "") +
 		(node.progress?.feedback ? `<div class="zs-teacher">${lead("graduation")}<span>${esc(node.progress.feedback)}</span></div>` : "") +
-		quizHtml(node) + worksheetHtml(node) + sourcesHtml(node.sources) +
-		`<footer class="zs-lesson-foot">${navList(parents, "Vorher")}${navList(kids, "Weiter")}</footer>` +
+		(entry?.draft ? "" : quizHtml(node) + worksheetHtml(node) + doneHtml(node)) + sourcesHtml(node.sources) + nextCards(kids) +
 		`</article>`;
-}
-
-function emptyHtml() {
-	return `<div class="zs-empty zs-welcome"><div class="zs-welcome-icon">${icon("timeline", "", 40)}</div><h1>KI-Zeitstrahl</h1>` +
-		`<p>Die KI baut aus deinen Skripten, Notizen, Altklausuren und Wikipedia eine Lernwelt: Lektionen als Zeitstrahl mit Geschichte, Bildern, Kontrollfragen und Arbeitsblättern – zielgerichtet auf deine Klausur.</p>` +
-		`${askButton("build", "Zeitstrahl mit der KI bauen")}</div>`;
 }
 
 // Eigenes Theme der KI: per CSS-Nesting auf diesen Zeitstrahl begrenzt (der Kern hat es entschärft).
@@ -216,28 +271,73 @@ function render(main) {
 	const node = tl && ui.node ? nodeOf(tl, ui.node) : null;
 	if (ui.node && !node) ui.node = null;
 	// Nur bei echten Änderungen neu aufbauen – sonst gingen Eingaben im Quiz bei jedem App-Render verloren.
-	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}` : "empty";
+	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}|${ui.zoom}` : `home|${ZS_STORE.all().map((t) => t.id + t.updated).join(",")}`;
 	if (main.dataset.zsKey === key && main.querySelector(".zs-world")) return;
-	// Scrollstand des Graphen über Neuaufbauten hinweg halten.
+	// Scrollstand des Graphen über Neuaufbauten hinweg halten (bei Zoom mitskaliert).
 	const prevScroll = main.querySelector("[data-zsscroll]");
-	const scrollPos = prevScroll ? { l: prevScroll.scrollLeft, t: prevScroll.scrollTop } : null;
+	const sameGraph = !!tl && !node && main.dataset.zsTl === tl.id && !!prevScroll;
+	const ratio = ui.zoom / (Number(main.dataset.zsZoom) || ui.zoom);
+	const scrollPos = sameGraph ? { l: prevScroll.scrollLeft * ratio, t: prevScroll.scrollTop * ratio } : null;
+	// Gleiche Lektion neu aufgebaut (Quiz geprüft, KI hat bewertet): Lesestelle und Eingaben behalten.
+	const sameLesson = !!node && main.dataset.zsNode === node.id && !!main.querySelector(".zs-lesson");
+	const keep = sameLesson ? { top: main.scrollTop, inputs: snapshotInputs(main) } : null;
 	main.dataset.zsKey = key;
-	if (!tl) { main.innerHTML = `<div class="zs-world" data-key="zs">${emptyHtml()}</div>`; return; }
+	main.dataset.zsNode = node?.id || "";
+	main.dataset.zsTl = tl?.id || "";
+	main.dataset.zsZoom = String(ui.zoom);
+	if (!tl) { main.innerHTML = `<div class="zs-world is-home" data-key="zs">${homeHtml()}</div>`; main.scrollTop = 0; return; }
 	const v = ZS_CORE.view(tl);
-	const accent = /^#[0-9a-f]{3,8}$/i.test(String(tl.theme?.accent || "")) ? `--zs-accent:${tl.theme.accent};` : "";
-	main.innerHTML = `<div class="zs-world${node ? " is-lesson" : ""}" data-key="zs" data-zs="${esc(String(tl.id).replace(/[^a-z0-9_-]/gi, ""))}" style="${accent}">` +
-		themeStyle(tl) + (node ? lessonHtml(tl, node, v.nodes.find((n) => n.id === node.id), v) : graphHtml(tl, v)) + `</div>`;
+	const acc = String(tl.theme?.accent || "");
+	const accent = /^#[0-9a-f]{3,8}$/i.test(acc) ? `--zs-accent:${acc};--zs-on-accent:${onAccent(acc)};` : "";
+	main.innerHTML = `<div class="zs-world${node ? " is-lesson" : " is-graph"}" data-key="zs" data-zs="${esc(String(tl.id).replace(/[^a-z0-9_-]/gi, ""))}" style="${accent}">` +
+		themeStyle(tl) + (node ? lessonHtml(tl, node, v.nodes.find((n) => n.id === node.id), v) : graphViewHtml(tl, v)) + `</div>`;
+	if (node) {
+		U.renderMath?.(main.querySelector(".zs-lesson"));
+		if (keep) { restoreInputs(main, keep.inputs); main.scrollTop = keep.top; } else main.scrollTop = 0;
+		return;
+	}
+	main.scrollTop = 0;
+	attachGraph(main, zoomBy);
 	const scroll = main.querySelector("[data-zsscroll]");
-	if (scroll && scrollPos && !node) { scroll.scrollLeft = scrollPos.l; scroll.scrollTop = scrollPos.t; }
-	if (node) { main.scrollTop = 0; U.renderMath?.(main.querySelector(".zs-lesson")); }
+	if (scroll && scrollPos) { scroll.scrollLeft = scrollPos.l; scroll.scrollTop = scrollPos.t; }
+	else requestAnimationFrame(() => focusNext(main, ui.zoom));
+}
+
+// Eingaben im Quiz je Feld (Name + Lücke bzw. Wert) – überleben so einen Neuaufbau der Lektion.
+function snapshotInputs(root) {
+	const out = new Map();
+	for (const el of root.querySelectorAll(".zs-qs input, .zs-qs textarea")) {
+		if (el.type === "radio" || el.type === "checkbox") out.set(`${el.name}|v${el.value}`, el.checked);
+		else out.set(`${el.name}|g${el.dataset.gap || ""}`, el.value);
+	}
+	return out;
+}
+function restoreInputs(root, saved) {
+	for (const el of root.querySelectorAll(".zs-qs input, .zs-qs textarea")) {
+		if (el.type === "radio" || el.type === "checkbox") {
+			const v = saved.get(`${el.name}|v${el.value}`);
+			if (v !== undefined) el.checked = v;
+		} else {
+			const v = saved.get(`${el.name}|g${el.dataset.gap || ""}`);
+			if (v !== undefined) el.value = v;
+		}
+	}
+}
+
+function zoomBy(d) {
+	const z = Math.round(Math.min(1.4, Math.max(0.5, ui.zoom + d)) * 10) / 10;
+	if (z === ui.zoom) return;
+	ui.zoom = z;
+	saveUi();
+	rerender();
 }
 
 function treeHtml() {
 	if (!ZS_STORE.ready()) { ZS_STORE.load().then(rerender); return `<div class="empty small">Lädt …</div>`; }
 	const list = ZS_STORE.all();
 	const cur = currentTimeline();
-	let html = `<div class="ws-head"><span class="ws-name">${lead("timeline")}KI-Zeitstrahl</span></div>`;
-	if (!list.length) return html + `<div class="empty small">Noch kein Zeitstrahl</div>`;
+	let html = `<div class="ws-head"><span class="ws-name">${lead("timeline")}KI-Zeitstrahl</span></div>` +
+		`<div class="row zs-row${!cur ? " active" : ""}" data-zshome="1"><span class="row-title">${lead("grid")}Alle Zeitstrahlen</span></div>`;
 	for (const tl of list) {
 		const e = ZS_CORE.listEntry(tl);
 		const active = cur && tl.id === cur.id;
@@ -245,15 +345,18 @@ function treeHtml() {
 		if (!active) continue;
 		const v = ZS_CORE.view(tl);
 		const nodes = v.nodes.slice().sort((a, b) => a.col - b.col || a.lane - b.lane);
-		html += nodes.map((n) => `<div class="row zs-row zs-sub is-${esc(n.state)}${ui.node === n.id ? " active" : ""}" data-zsnode="${esc(n.id)}" style="--depth:1"><span class="zs-dot"></span><span class="row-title">${esc(n.title)}</span></div>`).join("");
+		html += nodes.map((n) => `<div class="row zs-row zs-sub is-${esc(n.state)}${n.draft ? " is-draft" : ""}${ui.node === n.id ? " active" : ""}" data-zsnode="${esc(n.id)}" style="--depth:1"><span class="zs-dot"></span><span class="row-title">${esc(n.title)}</span></div>`).join("");
 	}
-	return html;
+	return html + `<div class="row zs-row zs-new-row" data-zsnew="1"><span class="row-title">${lead("plus")}Neuer Zeitstrahl</span></div>`;
 }
 
 // ---------- KI-Kontext & Aufträge ----------
 function workspace() {
 	const tl = ZS_STORE.ready() ? currentTimeline() : null;
-	if (!tl) return { title: "KI-Zeitstrahl (leer)", content: "Der Nutzer ist im KI-Zeitstrahl-Modus, es gibt noch keinen Zeitstrahl. Werkzeuge: edit_timeline, read_timeline, check_lesson, wikipedia, create_worksheet." };
+	if (!tl) {
+		const list = ZS_STORE.ready() ? ZS_STORE.all().map((t) => t.title) : [];
+		return { title: "KI-Zeitstrahl (Übersicht)", content: `Der Nutzer ist in der Übersicht des KI-Zeitstrahls. Zeitstrahlen: ${list.length ? list.join(", ") : "noch keine"}. Werkzeuge: edit_timeline, read_timeline, check_lesson, wikipedia, create_worksheet.` };
+	}
 	const node = ui.node ? nodeOf(tl, ui.node) : null;
 	const d = ZS_CORE.describe(tl, node?.id);
 	return {
@@ -268,9 +371,14 @@ function askPrompt(kind, tl, node) {
 		case "quiz": return `Bewerte bitte meine Freitext-Antworten im Quiz der Lektion „${node.title}“ ${where}: lies sie mit read_timeline (node) und trage das Ergebnis mit check_lesson ein, mit kurzem Feedback.`;
 		case "worksheet": return `Ich bin mit dem Arbeitsblatt „${node.worksheet}“ zur Lektion „${node.title}“ ${where} fertig. Sieh dir bitte die Heftseiten mit view_heft_page an, prüfe meine Lösungen und trage das Ergebnis mit check_lesson ein (worksheet passed oder failed, kurzes Feedback).`;
 		case "make-worksheet": return `Erstelle bitte mit create_worksheet ein Arbeitsblatt zur Lektion „${node.title}“ ${where} (passend zu Story und Klausurstoff) und verknüpfe es danach mit edit_timeline (worksheet = Hefttitel).`;
-		case "build": return tl
-			? `Baue bitte die Lektionen für den Zeitstrahl „${tl.title}“ aus: lies meine Skripte/Notizen (search, read_pages) und passende Wikipedia-Artikel und lege die Knoten mit edit_timeline an (Story, Bilder, Quellen, Quiz, Verzweigungen).`
-			: `Baue mir einen KI-Zeitstrahl für das Fach `;
+		case "build": return skeletonPrompt(tl, { focus: tl.description });
+		case "fill-one": return fillPrompt(tl, [node]);
+		case "fill": {
+			const v = ZS_CORE.view(tl);
+			const order = { next: 0, later: 1, mastered: 2 };
+			const drafts = v.nodes.filter((n) => n.draft).sort((a, b) => order[a.state] - order[b.state] || a.col - b.col);
+			return drafts.length ? fillPrompt(tl, drafts) : "";
+		}
 		default: return "";
 	}
 }
@@ -278,27 +386,14 @@ function askPrompt(kind, tl, node) {
 async function ask(kind) {
 	const tl = ZS_STORE.ready() ? currentTimeline() : null;
 	const node = tl && ui.node ? nodeOf(tl, ui.node) : null;
+	if (!tl || (["quiz", "worksheet", "make-worksheet", "fill-one"].includes(kind) && !node)) return;
 	const text = askPrompt(kind, tl, node);
-	if (!text) return;
-	document.body.classList.remove("panel-collapsed");
-	// Offener Auftrag (Fach fehlt): nur vorbefüllen, der Nutzer ergänzt und schickt ab.
-	if (kind === "build" && !tl) {
-		const inp = document.getElementById("chatInput");
-		if (inp) {
-			inp.value = text + "…: lies dazu meine Skripte (search, read_pages) und Wikipedia und lege ihn mit edit_timeline an.";
-			inp.focus();
-			inp.setSelectionRange(text.length, text.length + 1);
-			inp.dispatchEvent(new Event("input", { bubbles: true }));
-		}
-		return;
-	}
-	if (S.aiBusy) { U.toast?.("Eine KI-Antwort läuft bereits.", "error"); return; }
-	if (kind === "worksheet" && node && node.progress?.worksheet?.status !== "submitted") {
+	if (!text || S.aiBusy) { if (S.aiBusy) U.toast?.("Eine KI-Antwort läuft bereits.", "error"); return; }
+	if (kind === "worksheet" && node.progress?.worksheet?.status !== "submitted") {
 		const out = ZS_CORE.applyCheck(tl, { timeline: tl.id, node: node.id, worksheet: "submitted" });
 		if (!out.error) await ZS_STORE.put(out.timeline);
 	}
-	const { CHAT_FULLSCREEN } = await import("./chat-fullscreen.js");
-	await CHAT_FULLSCREEN.sendChatMessage(text, "side");
+	await sendAi(text);
 }
 
 function collectAnswers(root, node) {
@@ -320,9 +415,19 @@ async function submitQuiz(root) {
 	if (out.error) { U.toast?.(out.error, "error"); return; }
 	await ZS_STORE.put(out.timeline);
 	const g = out.grade;
-	U.toast?.(g.passed ? "Quiz bestanden!" : g.pending_ai?.length ? `${g.auto_correct}/${g.auto_total} automatisch richtig – Freitext prüft die KI.` : `${g.auto_correct}/${g.auto_total} richtig – noch nicht bestanden.`);
+	U.toast?.(g.passed ? "Quiz bestanden!" : g.pending_ai?.length ? `${g.auto_correct}/${g.auto_total} automatisch richtig – Freitext prüft die KI.` : `${g.auto_correct}/${g.auto_total} richtig – noch nicht bestanden.`, g.passed ? "success" : undefined);
 }
 
+async function markDone(done) {
+	const tl = currentTimeline();
+	const node = tl && nodeOf(tl, ui.node);
+	if (!node) return;
+	const out = ZS_CORE.applyCheck(tl, { timeline: tl.id, node: node.id, done });
+	if (out.error) { U.toast?.(out.error, "error"); return; }
+	await ZS_STORE.put(out.timeline);
+}
+
+/** Öffnet einen Zeitstrahl (null = Übersicht; undefined = aktuellen behalten) und optional eine Lektion. */
 function open(tlId, nodeId) {
 	if (tlId !== undefined) ui.tl = tlId;
 	ui.node = nodeId || null;
@@ -331,11 +436,21 @@ function open(tlId, nodeId) {
 	rerender();
 }
 
+function edit(what) {
+	const tl = currentTimeline();
+	if (!tl) return;
+	if (what === "tl") return openTimelineDialog(tl, { onOpen: (id) => open(id, null) });
+	const node = what === "node" ? nodeOf(tl, ui.node) : null;
+	if (what === "node" && !node) return;
+	openNodeDialog(tl, node, { view: ZS_CORE.view(tl), onSaved: (id) => { if (what === "node" && !id) open(undefined, null); } });
+}
+
 // Klicks: eigene Delegation (wie library.js), nur für data-zs*-Ziele.
+const TARGETS = "[data-zsnode],[data-zstl],[data-zshome],[data-zsnew],[data-zsedit],[data-zsadd],[data-zsback],[data-zsquiz],[data-zsdone],[data-zsask],[data-zsopen],[data-zszoom],[data-zsfocus]";
 if (typeof document !== "undefined") {
 	document.addEventListener("click", (e) => {
-		const t = e.target?.closest?.("[data-zsnode],[data-zstl],[data-zsback],[data-zsquiz],[data-zsask],[data-zsopen]");
-		if (!t) return;
+		const t = e.target?.closest?.(TARGETS);
+		if (!t || t.closest("#overlay")) return;
 		const d = t.dataset;
 		if (d.zsopen) {
 			e.preventDefault();
@@ -344,9 +459,16 @@ if (typeof document !== "undefined") {
 		}
 		e.preventDefault();
 		if (d.zstl) return open(d.zstl, null);
+		if (d.zshome) return open(null, null);
+		if (d.zsnew) return openTimelineDialog(null, { onOpen: (id) => open(id, null) });
 		if (d.zsnode) return open(undefined, d.zsnode);
 		if (d.zsback) return open(undefined, null);
+		if (d.zsedit) return edit(d.zsedit);
+		if (d.zsadd) return edit("new");
+		if (d.zszoom) return zoomBy(d.zszoom === "+" ? 0.1 : -0.1);
+		if (d.zsfocus) return focusNext(document.getElementById("main"), ui.zoom);
 		if (d.zsquiz) return void submitQuiz(t.closest(".zs-world"));
+		if (d.zsdone) return void markDone(d.zsdone === "1");
 		if (d.zsask) return void ask(d.zsask);
 	});
 }

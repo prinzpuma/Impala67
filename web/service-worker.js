@@ -151,6 +151,8 @@ const APP_FILES = [
 	"./heft.js",
 	"./worksheet.js",
 	"./zeitstrahl.js",
+	"./zeitstrahl-dialogs.js",
+	"./zeitstrahl-graph.js",
 	"./zeitstrahl-store.js",
 	"./zeitstrahl-tools.js",
 	"./heft-viewport.js",

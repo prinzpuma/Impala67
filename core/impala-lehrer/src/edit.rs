@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 use crate::css::sanitize_css;
 use crate::model::{
     Image, MAX_BODY, MAX_NODES, MAX_SVG, Node, Question, Source, Timeline, WorksheetProgress, find_in, find_title,
+    year_of,
 };
 use crate::text::slug;
 
@@ -24,6 +25,8 @@ struct Patch {
     id: Option<String>,
     title: Option<String>,
     era: Option<String>,
+    year: Option<Option<f64>>,
+    strand: Option<String>,
     summary: Option<String>,
     body: Option<String>,
     images: Option<Vec<Image>>,
@@ -77,6 +80,7 @@ fn parse_patch(v: &Value, k: usize) -> Result<Patch, String> {
         id: text_field(o, "id", &ctx)?.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         title: text_field(o, "title", &ctx)?.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         era: text_field(o, "era", &ctx)?,
+        strand: text_field(o, "strand", &ctx)?.map(|s| s.trim().to_string()),
         summary: text_field(o, "summary", &ctx)?,
         body: text_field(o, "body", &ctx)?,
         ..Patch::default()
@@ -89,6 +93,15 @@ fn parse_patch(v: &Value, k: usize) -> Result<Patch, String> {
             ));
         }
     }
+    p.year = match o.get("year") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => match year_of(v) {
+            Some(y) => Some(Some(y)),
+            None if v.as_str().is_some_and(|s| s.trim().is_empty()) => Some(None),
+            None => return Err(format!("edit_timeline: {ctx}„year“ muss eine Jahreszahl sein (z. B. 1827, -350 für v. Chr.).")),
+        },
+    };
     p.svg = clearable(o, "svg", &ctx)?;
     if let Some(Some(svg)) = &p.svg {
         if !svg.to_ascii_lowercase().starts_with("<svg") {
@@ -167,6 +180,16 @@ fn push_unique(v: &mut Vec<String>, id: &str) {
     }
 }
 
+fn valid_date(d: &str) -> bool {
+    let b = d.as_bytes();
+    b.len() == 10
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && d.chars().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+        && matches!(d[5..7].parse::<u8>(), Ok(1..=12))
+        && matches!(d[8..10].parse::<u8>(), Ok(1..=31))
+}
+
 fn valid_accent(a: &str) -> bool {
     let h = a.strip_prefix('#').unwrap_or("");
     matches!(h.len(), 3 | 4 | 6 | 8) && h.chars().all(|c| c.is_ascii_hexdigit())
@@ -209,6 +232,20 @@ pub fn apply_edit(tl: Option<Value>, edit: &Value, now: &str) -> Result<EditOut,
     }
     if let Some(css) = text_field(o, "theme_css", "")? {
         t.theme.css = sanitize_css(&css);
+    }
+    if let Some(k) = text_field(o, "kind", "")? {
+        t.kind = match k.trim() {
+            "path" => "path".into(),
+            "history" | "" => String::new(),
+            other => return Err(format!("edit_timeline: „kind“ „{other}“ unbekannt (history oder path).")),
+        };
+    }
+    if let Some(d) = text_field(o, "exam", "")? {
+        let d = d.trim();
+        if !d.is_empty() && !valid_date(d) {
+            return Err("edit_timeline: „exam“ muss ein Datum JJJJ-MM-TT sein (leer = kein Klausurtermin).".into());
+        }
+        t.exam = d.to_string();
     }
     if let Some(a) = text_field(o, "accent", "")?.map(|s| s.trim().to_string()).filter(|a| valid_accent(a)) {
         t.theme.accent = a;
@@ -314,6 +351,12 @@ fn apply_patch(n: &mut Node, p: Patch) {
     }
     if let Some(v) = p.era {
         n.era = v;
+    }
+    if let Some(v) = p.year {
+        n.year = v;
+    }
+    if let Some(v) = p.strand {
+        n.strand = v;
     }
     if let Some(v) = p.summary {
         n.summary = v;

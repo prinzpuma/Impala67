@@ -365,3 +365,42 @@ fn tolerantes_lesen() {
     assert_eq!(v["nodes"][0]["quiz"]["total"], 1);
     assert_eq!(v["nodes"][0]["state"], "next");
 }
+
+#[test]
+fn zeitachse_jahre_straenge_und_klausur() {
+    let tl = edit(
+        None,
+        json!({ "title": "Z", "exam": "2027-02-14", "nodes": [
+            { "id": "galvani", "title": "Galvani", "year": 1780, "strand": "Strom" },
+            { "id": "coulomb", "title": "Coulomb", "year": "1785", "strand": "Statik" },
+            { "id": "volta", "title": "Volta", "year": 1800, "strand": "Strom", "parents": ["galvani"] },
+            { "id": "ohm", "title": "Ohm", "year": 1827, "strand": "Strom", "parents": ["volta"] },
+            { "id": "rest", "title": "Ohne Jahr", "parents": ["ohm"] }
+        ] }),
+    )
+    .timeline;
+    let v = view(&tl);
+    // Jahre ordnen die Spalten: 1780 < 1785 < 1800 < 1827, ohne Jahr hinter dem Vorgänger.
+    assert_eq!(pos(&v, "galvani").0, 0);
+    assert_eq!(pos(&v, "coulomb").0, 1);
+    assert_eq!(pos(&v, "volta").0, 2);
+    assert_eq!(pos(&v, "ohm").0, 3);
+    assert_eq!(pos(&v, "rest").0, 4);
+    assert_eq!(v["columns"][2]["from"], 1800.0);
+    // Stränge als Bänder: Strom zuerst (früher), dann Statik, dann der Rest ohne Strang.
+    let names: Vec<&str> = v["strands"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Strom", "Statik", ""]);
+    assert_eq!(pos(&v, "coulomb").1, 1);
+    assert_eq!(v["exam"], "2027-02-14");
+    assert_eq!(v["stats"]["drafts"], 5);
+    // Lernpfad: Jahre egal, Spalte = Pfadlänge.
+    let p = edit(Some(tl), json!({ "title": "Z", "kind": "path" })).timeline;
+    let v = view(&p);
+    assert_eq!(v["kind"], "path");
+    assert_eq!(pos(&v, "coulomb").0, 0);
+    // Ungültige Eingaben werden erklärt; leeres Jahr löscht.
+    assert!(apply_edit(Some(p.clone()), &json!({ "title": "Z", "exam": "14.2.2027" }), T0).is_err());
+    assert!(apply_edit(Some(p.clone()), &json!({ "title": "Z", "kind": "bunt" }), T0).is_err());
+    let cleared = edit(Some(p), json!({ "title": "Z", "nodes": [{ "id": "ohm", "year": null }] })).timeline;
+    assert!(node(&cleared, "ohm").get("year").is_none());
+}
