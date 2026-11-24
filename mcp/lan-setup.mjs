@@ -20,8 +20,11 @@ const addresses = Object.values(networkInterfaces()).flat()
 	.filter((a) => a && a.family === "IPv4" && !a.internal)
 	.map((a) => a.address);
 
-console.log("\nIn der iPad-App eintragen:");
-for (const ip of addresses) console.log(`  ws://${ip}:${port}/?token=${token}`);
-if (!addresses.length) console.log("  (keine WLAN-Adresse gefunden)");
-console.log("\nDanach den MCP-Server neu starten (z. B. Claude-Sitzung neu öffnen).");
-console.log("Windows fragt beim ersten Start nach der Firewall: „Private Netzwerke“ erlauben.");
+console.log("\nIn der iPad-App unter Einstellungen → App & Speicher → Für Entwickler eintragen:");
+console.log(`  Kopplungs-Code (findet den PC automatisch per Bonjour):\n    ${token}`);
+if (addresses.length) {
+	console.log("\nOder direkt mit Adresse (Fallback ohne Bonjour):");
+	for (const ip of addresses) console.log(`    ws://${ip}:${port}/?token=${token}`);
+}
+console.log("\nDer laufende MCP-Server übernimmt den Code innerhalb weniger Sekunden automatisch.");
+console.log("Windows/Linux-Firewall: Port " + port + " (TCP) im lokalen WLAN erlauben.");

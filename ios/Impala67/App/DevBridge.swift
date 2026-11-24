@@ -2,10 +2,11 @@ import Foundation
 import Observation
 import UIKit
 
-/// Live-Verbindung zum MCP-Server im WLAN wie `web/mcp-bridge.js` der PWA: Die App verbindet sich mit
-/// `ws://<PC>:8766/?token=…` (Adresse aus `node mcp/lan-setup.mjs`, eingetragen unter Einstellungen →
-/// App & Speicher → Für Entwickler), nimmt `{ callId, tool, args }` entgegen und antwortet mit
-/// `{ callId, result }`. Leer = aus. Nur im Vordergrund verbunden.
+/// Live-Verbindung zum MCP-Server im WLAN wie `web/mcp-bridge.js` der PWA: Die App nimmt den
+/// Kopplungs-Code (findet den PC automatisch per Bonjour `_impala-dev._tcp`) oder eine volle Adresse
+/// `ws://<PC>:8766/?token=…` aus `node mcp/lan-setup.mjs` (Einstellungen → App & Speicher → Für
+/// Entwickler), empfängt `{ callId, tool, args }` und antwortet mit `{ callId, result }`. Leer = aus.
+/// Nur im Vordergrund verbunden.
 @MainActor @Observable
 final class DevBridge {
     static let shared = DevBridge()
@@ -13,6 +14,7 @@ final class DevBridge {
 
     enum State: String { case off, connecting, connected }
     private(set) var state = State.off
+    private(set) var connectedHost: String?
 
     /// Shell der offenen Oberfläche für UI-Aktionen (setzt `ShellModel`).
     @ObservationIgnored weak var shell: ShellModel?
@@ -22,11 +24,20 @@ final class DevBridge {
     @ObservationIgnored private var connectedAt: Date?
     @ObservationIgnored private var calls = 0
     @ObservationIgnored private var foreground = false
+    @ObservationIgnored private let discovery = DevBridgeDiscovery()
+    @ObservationIgnored private var discoveredEndpoint: (host: String, port: UInt16)?
+
+    private init() {
+        discovery.onFound = { [weak self] host, port in
+            self?.handleDiscovered(host: host, port: port)
+        }
+    }
 
     var url: String {
         get { UserDefaults.standard.string(forKey: Self.urlKey) ?? "" }
         set {
             UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Self.urlKey)
+            discoveredEndpoint = nil
             disconnect()
             if foreground { connect() }
         }
@@ -44,8 +55,63 @@ final class DevBridge {
 
     // MARK: Verbindung
 
+    /// Liest aus dem Eingabefeld eine direkte `ws://`-URL und/oder den reinen Kopplungs-Code.
+    private func parsedConfig() -> (explicitURL: URL?, token: String?) {
+        let raw = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return (nil, nil) }
+        if let u = URL(string: raw), u.scheme == "ws" || u.scheme == "wss" {
+            let token = URLComponents(url: u, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "token" })?.value
+            return (u, token?.isEmpty == false ? token : nil)
+        }
+        if !raw.contains("://"), raw.count >= 16, raw.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+            return (nil, raw)
+        }
+        return (nil, nil)
+    }
+
+    private func buildURL(host: String, port: UInt16, token: String) -> URL? {
+        var c = URLComponents()
+        c.scheme = "ws"
+        c.host = host
+        c.port = Int(port)
+        c.path = "/"
+        c.queryItems = [URLQueryItem(name: "token", value: token)]
+        return c.url
+    }
+
+    private func handleDiscovered(host: String, port: UInt16) {
+        discoveredEndpoint = (host, port)
+        guard foreground, state != .connected else { return }
+        guard let token = parsedConfig().token, let u = buildURL(host: host, port: port, token: token) else { return }
+        // Falls gerade noch ein alter IP-Versuch oder Backoff läuft, sofort auf den gefundenen PC wechseln.
+        retry?.cancel()
+        retry = nil
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
+        openSocket(u)
+    }
+
     private func connect() {
-        guard let u = URL(string: url), u.scheme == "ws" || u.scheme == "wss" else { state = .off; return }
+        let cfg = parsedConfig()
+        guard cfg.explicitURL != nil || cfg.token != nil else {
+            discovery.stop()
+            state = .off
+            return
+        }
+        if cfg.token != nil { discovery.start() }
+        if let ep = discoveredEndpoint, let token = cfg.token,
+           let u = buildURL(host: ep.host, port: ep.port, token: token) {
+            openSocket(u)
+        } else if let u = cfg.explicitURL {
+            openSocket(u)
+        } else {
+            // Reiner Kopplungs-Code: auf Bonjour-Treffer warten.
+            state = .connecting
+        }
+    }
+
+    private func openSocket(_ u: URL) {
         let t = URLSession.shared.webSocketTask(with: u)
         task = t
         state = .connecting
@@ -54,28 +120,32 @@ final class DevBridge {
         send(["claim": true], on: t)
         t.sendPing { [weak self] error in
             guard error == nil else { return }
-            Task { @MainActor in self?.markConnected(t) }
+            Task { @MainActor in self?.markConnected(t, url: u) }
         }
-        Task { await receiveLoop(t) }
+        Task { await receiveLoop(t, url: u) }
     }
 
-    private func markConnected(_ t: URLSessionWebSocketTask) {
+    private func markConnected(_ t: URLSessionWebSocketTask, url: URL) {
         guard t === task, state != .connected else { return }
         state = .connected
+        connectedHost = url.host.map { h in url.port.map { "\(h):\($0)" } ?? h }
         connectedAt = Date()
         attempts = 0
+        discovery.stop()
     }
 
     private func disconnect() {
+        discovery.stop()
         retry?.cancel()
         retry = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        connectedHost = nil
         connectedAt = nil
         state = .off
     }
 
-    private func receiveLoop(_ t: URLSessionWebSocketTask) async {
+    private func receiveLoop(_ t: URLSessionWebSocketTask, url: URL) async {
         while true {
             let message: URLSessionWebSocketTask.Message
             do {
@@ -83,11 +153,13 @@ final class DevBridge {
             } catch {
                 guard t === task else { return }
                 task = nil
+                connectedHost = nil
                 connectedAt = nil
+                discoveredEndpoint = nil
                 scheduleReconnect()
                 return
             }
-            markConnected(t)
+            markConnected(t, url: url)
             let data: Data? = switch message {
             case .string(let s): Data(s.utf8)
             case .data(let d): d
@@ -110,6 +182,10 @@ final class DevBridge {
     private func scheduleReconnect() {
         guard foreground else { state = .off; return }
         state = .connecting
+        if parsedConfig().token != nil {
+            discovery.stop()
+            discovery.start()
+        }
         attempts += 1
         let delay = min(1.0 * pow(1.5, Double(min(attempts, 8))), 15)
         retry?.cancel()

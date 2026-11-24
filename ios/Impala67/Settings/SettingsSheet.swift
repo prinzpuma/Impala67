@@ -1169,14 +1169,14 @@ private struct ProfilerSection: View {
     }
 }
 
-/// Adresse des MCP-Servers im WLAN (`node mcp/lan-setup.mjs`) mit Verbindungsstand; leer = aus.
+/// Kopplungs-Code (Bonjour) oder Adresse des MCP-Servers im WLAN (`node mcp/lan-setup.mjs`); leer = aus.
 private struct DevBridgeRow: View {
     @State private var url = DevBridge.shared.url
 
     var body: some View {
         let bridge = DevBridge.shared
-        SettingsInputRow(title: "MCP-Bridge (WLAN)", description: status(bridge.state)) {
-            TextField("ws://192.168.…:8766/?token=…", text: $url)
+        SettingsInputRow(title: "MCP-Bridge (WLAN)", description: status(bridge)) {
+            TextField("Kopplungs-Code oder ws://…", text: $url)
                 .settingsInputStyle()
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
@@ -1186,11 +1186,11 @@ private struct DevBridgeRow: View {
         }
     }
 
-    private func status(_ s: DevBridge.State) -> String {
-        switch s {
-        case .off: "Aus – Adresse vom PC eintragen"
-        case .connecting: "Verbinde …"
-        case .connected: "Verbunden"
+    private func status(_ bridge: DevBridge) -> String {
+        switch bridge.state {
+        case .off: "Aus – Code vom PC eintragen"
+        case .connecting: "Suche PC im WLAN …"
+        case .connected: bridge.connectedHost.map { "Verbunden (\($0))" } ?? "Verbunden"
         }
     }
 }

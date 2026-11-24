@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // mcp/server.mjs - Model Context Protocol (MCP) Stdio JSON-RPC Server für Impala67
+import { spawn } from "node:child_process";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -113,21 +114,57 @@ function readLanToken() {
 	if (process.env.IMPALA_LAN_TOKEN) return process.env.IMPALA_LAN_TOKEN.trim();
 	try { return readFileSync(new URL("./.lan-token", import.meta.url), "utf8").trim(); } catch { return ""; }
 }
-const lanToken = readLanToken();
 function hasLanToken(url) {
+	const token = readLanToken();
+	if (!token || token.length < 16) return false;
 	let given = "";
 	try { given = new URL(url || "/", "ws://lan").searchParams.get("token") || ""; } catch { return false; }
 	const a = Buffer.from(given);
-	const b = Buffer.from(lanToken);
+	const b = Buffer.from(token);
 	return a.length === b.length && timingSafeEqual(a, b);
 }
 let lanStarted = false;
+let lanWatcher = null;
+let mdnsProc = null;
+function advertiseLanService(port) {
+	if (mdnsProc) return;
+	const isLinux = process.platform === "linux";
+	const cmd = isLinux ? "avahi-publish" : "dns-sd";
+	const args = isLinux
+		? ["-s", "Impala67", "_impala-dev._tcp", String(port)]
+		: ["-R", "Impala67", "_impala-dev._tcp", "local", String(port)];
+	try {
+		const p = spawn(cmd, args, { stdio: "ignore" });
+		p.on("error", () => { if (mdnsProc === p) mdnsProc = null; });
+		p.on("exit", () => { if (mdnsProc === p) mdnsProc = null; });
+		mdnsProc = p;
+	} catch {}
+}
+function stopLanAdvertisement() {
+	try { mdnsProc?.kill(); } catch {}
+	mdnsProc = null;
+}
+process.on("exit", stopLanAdvertisement);
+process.on("SIGTERM", () => { stopLanAdvertisement(); process.exit(0); });
+process.on("SIGINT", () => { stopLanAdvertisement(); process.exit(0); });
 function startLanServer() {
-	if (!lanToken || lanToken.length < 16 || lanStarted) return;
+	if (lanStarted) return;
+	const token = readLanToken();
+	if (!token || token.length < 16) {
+		if (!lanWatcher) {
+			lanWatcher = setInterval(startLanServer, 5000);
+			lanWatcher.unref();
+		}
+		return;
+	}
 	lanStarted = true;
+	if (lanWatcher) { clearInterval(lanWatcher); lanWatcher = null; }
 	const lan = new WebSocketServer({ host: "0.0.0.0", port: lanPort, verifyClient: (info) => hasLanToken(info.req.url) });
 	lan.on("connection", (ws) => acceptApp(ws, "iPad-App (WLAN)"));
-	lan.on("listening", () => console.error(`[impala-mcp] WLAN-Zugang auf Port ${lanPort}.`));
+	lan.on("listening", () => {
+		console.error(`[impala-mcp] WLAN-Zugang auf Port ${lanPort}.`);
+		advertiseLanService(lanPort);
+	});
 	lan.on("error", (err) => { lanStarted = false; console.error(`[impala-mcp] WLAN-Port ${lanPort}:`, err.message); });
 }
 
