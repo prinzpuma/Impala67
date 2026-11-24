@@ -3,24 +3,25 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Chatverlauf mit Eingabe (`ChatView.kt`, `web/chat-*.js`): im KI-Panel rechts und als Tab `chat:<id>`.
-/// `activePageId`: geöffnete Seite als Kontext (im Tab keiner).
+/// `chat`: Chat des Panels bzw. des Tabs; `activePageId`: geöffnete Seite als Kontext (im Tab keiner).
 struct ChatView: View {
+    let chat: ChatModel
     let activePageId: String?
     var wide = false
-    @Environment(ShellModel.self) private var shell
     @FocusState private var focused: Bool
 
     var body: some View {
-        let chat = shell.chat
         let input = Binding(get: { chat.inputDraft }, set: { chat.inputDraft = $0 })
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Space.s3) {
+                // VStack statt LazyVStack: Mit dem Anker unten sprang die Liste beim Streamen und Nachladen,
+                // weil die geschätzten Höhen der noch nicht gebauten Zeilen ständig korrigiert wurden.
+                VStack(alignment: .leading, spacing: Space.s3) {
                     if chat.messages.isEmpty && !chat.running {
                         EmptyChat { prompt in chat.inputDraft = prompt; focused = true }
                     }
-                    ForEach(Array(chat.messages.enumerated()), id: \.offset) { _, m in
-                        ChatMessageRow(message: m) { text in chat.inputDraft = text; focused = true }
+                    ForEach(ChatRow.rows(chat.messages)) { row in
+                        ChatMessageRow(message: row.message) { text in chat.inputDraft = text; focused = true }
                             .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
                     }
                     if chat.running { LiveBlock(thinking: chat.thinking, draft: chat.draft, tool: chat.tool).transition(.opacity) }
@@ -34,9 +35,12 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.3), value: chat.messages.count)
                 .animation(.smooth(duration: 0.3), value: chat.running)
             }
+            // Ein Chat öffnet beim neuesten Eintrag und bleibt beim Streamen unten.
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: chat.messages.count) { withAnimation(.smooth) { proxy.scrollTo("end", anchor: .bottom) } }
+            .onChange(of: chat.chatId) { proxy.scrollTo("end", anchor: .bottom) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Composer(input: input, focused: $focused, activePageId: activePageId)
@@ -56,7 +60,28 @@ struct ChatView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.bouncy(duration: 0.35), value: chat.notice)    }
+        .animation(.bouncy(duration: 0.35), value: chat.notice)
+        .environment(chat)
+    }
+}
+
+/// Zeile des Verlaufs mit fester Identität (Nachrichten-ID), damit beim Nachladen aus dem Kern oder beim
+/// Kürzen („Bearbeiten“) keine Zeile den Zustand einer anderen erbt.
+private struct ChatRow: Identifiable {
+    let id: String
+    let message: ChatMessage
+
+    static func rows(_ messages: [ChatMessage]) -> [ChatRow] {
+        var seen = Set<String>()
+        var rows: [ChatRow] = []
+        rows.reserveCapacity(messages.count)
+        for (i, m) in messages.enumerated() {
+            var id = m.mid.map { "\($0)|\(m.role)" } ?? "#\(i)"
+            if !seen.insert(id).inserted { id += "#\(i)" }
+            rows.append(ChatRow(id: id, message: m))
+        }
+        return rows
+    }
 }
 
 /// Leerer Chat: Begrüßung und Vorschläge (`ChatView.kt` `EmptyChat`).
@@ -117,7 +142,7 @@ private struct Composer: View {
     var focused: FocusState<Bool>.Binding
     let activePageId: String?
     @Environment(ImpalaStore.self) private var store
-    @Environment(ShellModel.self) private var shell
+    @Environment(ChatModel.self) private var chat
     @Namespace private var glass
     @State private var dictation = Dictation()
     @State private var photo: PhotosPickerItem?
@@ -133,7 +158,6 @@ private struct Composer: View {
     }
 
     var body: some View {
-        let chat = shell.chat
         let canSend = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // Beim Seitenwechsel nie die Zusammenfassung der alten Seite zeigen.
         let page = contextPage.flatMap { $0.id == activePageId ? $0 : nil }
@@ -251,7 +275,7 @@ private struct Composer: View {
                 let tail = String(newRest.reversed()).commonPrefix(with: String(oldRest.reversed())).count
                 let inserted = String(newRest.dropLast(tail))
                 if inserted.count > 600 || inserted.split(separator: "\n", omittingEmptySubsequences: false).count > 15 {
-                    shell.chat.attachment = ChatAttachment.pastedText(inserted)
+                    chat.attachment = ChatAttachment.pastedText(inserted)
                     return
                 }
             }
@@ -260,17 +284,16 @@ private struct Composer: View {
     }
 
     private func takeDictationRequest() {
-        guard shell.chat.dictationRequest else { return }
-        shell.chat.dictationRequest = false
+        guard chat.dictationRequest else { return }
+        chat.dictationRequest = false
         dictation.toggle()
     }
 
     private func attach(_ att: ChatAttachment?, fail: String) {
-        if let att { shell.chat.attachment = att } else { attachError = fail }
+        if let att { chat.attachment = att } else { attachError = fail }
     }
 
     private func submit() {
-        let chat = shell.chat
         if dictation.listening { dictation.stop() }
         guard !chat.running, !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         chat.send(input, activePageId: activePageId)
@@ -326,10 +349,9 @@ private struct RoundButton: View {
 /// Seitenkontext-Chip: Inhalt der offenen Seite geht mit; ✕ schaltet ihn für diese Seite ab.
 private struct ContextChip: View {
     let page: PageSummary
-    @Environment(ShellModel.self) private var shell
+    @Environment(ChatModel.self) private var chat
 
     var body: some View {
-        let chat = shell.chat
         let off = chat.contextOff.contains(page.id)
         let sent = chat.contextSent.flatMap { $0.pageId == page.id ? $0 : nil }
         Button {

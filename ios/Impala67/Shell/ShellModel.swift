@@ -33,8 +33,13 @@ final class ShellModel {
     }
     /// Karteikarten: Ansicht des Tabs `anki:main`, Stapel-Dialoge, Karten-Editor.
     let cards = CardsModel()
-    /// KI-Chat (KI-Panel rechts, Tabs `chat:<id>`, Chat-Liste der Seitenleiste).
+    /// Chat des KI-Panels rechts; hält auch die Modell-Liste (Status-Chip, Modellmenü, Einstellungen).
     let chat: ChatModel
+    /// KI-Panel rechts aufgeklappt (Sparkles-Knopf unten rechts, `body.panel-collapsed` der PWA).
+    private(set) var aiPanelOpen = false
+    /// Eigener Chat je Tab `chat:<id>` (wie `viewModel {}` je Ziel in Android): Laufen, Entwurf und Eingabe
+    /// bleiben beim Tabwechsel erhalten und kommen dem Panel-Chat nicht in die Quere.
+    @ObservationIgnored private var tabChats: [String: ChatModel] = [:]
     /// Seitenleiste ein-/ausgeklappt (☰ wie `#btnSidebarToggle`).
     var columns: NavigationSplitViewVisibility = .all
 
@@ -232,8 +237,63 @@ final class ShellModel {
 
     /// KI-Panel rechts ein-/ausklappen (bleibt über Neustarts gemerkt, nur dieses Gerät).
     func setAiPanel(_ open: Bool) {
-        withAnimation(.spring(duration: 0.4, bounce: 0.15)) { chat.panelOpen = open }
+        withAnimation(.spring(duration: 0.4, bounce: 0.15)) { aiPanelOpen = open }
         UserDefaults.standard.set(open, forKey: "aiPanelOpen")
+    }
+
+    // MARK: Chats
+
+    /// Chat des Tabs `chat:<id>`; eine neue ID ergibt einen leeren Chat, der mit der ersten Antwort entsteht.
+    func tabChat(_ chatId: String) -> ChatModel {
+        if let m = tabChats[chatId] { return m }
+        // Chats geschlossener Tabs fallen weg, sobald sie nicht mehr antworten.
+        tabChats = tabChats.filter { tabs.contains("chat:" + $0.key) || $0.value.running }
+        let m = ChatModel(core: store.core)
+        m.open(chatId)
+        tabChats[chatId] = m
+        return m
+    }
+
+    /// Chat der sichtbaren Eingabe: der vorne liegende Chat-Tab, sonst das KI-Panel.
+    var activeChat: ChatModel {
+        guard let a = active, a.hasPrefix("chat:") else { return chat }
+        return tabChat(String(a.dropFirst(5)))
+    }
+
+    /// Neuer Chat als Tab (`startNewChat` der PWA): Sidebar „Neuer Chat“, Befehls-Menü.
+    func openNewChat() {
+        open("chat:" + UUID().uuidString.lowercased())
+    }
+
+    /// „Chat in eigenem Tab öffnen“ (`btnChatExpand`): der Panel-Chat zieht samt Eingabe in einen Tab,
+    /// das Panel beginnt leer und klappt ein.
+    func movePanelChatToTab() {
+        guard !chat.running else { return }
+        let id = chat.chatId.isEmpty ? UUID().uuidString.lowercased() : chat.chatId
+        let target = tabChat(id)
+        if target.inputDraft.isEmpty { target.inputDraft = chat.inputDraft }
+        if target.attachment == nil { target.attachment = chat.attachment }
+        chat.inputDraft = ""
+        chat.attachment = nil
+        chat.newChat()
+        setAiPanel(false)
+        openNewTab("chat:" + id)
+    }
+
+    /// Fremde Änderung an Chats (Sync, Umbenennen): alle Chats ohne laufende Antwort nachladen.
+    func chatsChanged() {
+        chat.reloadIfIdle()
+        for m in tabChats.values { m.reloadIfIdle() }
+    }
+
+    /// Chats löschen (nicht während ihrer Antwort) und ihre Tabs schließen.
+    func deleteChats(_ ids: Set<String>) {
+        let gone = ids.filter { tabChats[$0]?.running != true }
+        chat.delete(gone)
+        for id in gone {
+            tabChats[id] = nil
+            close("chat:" + id)
+        }
     }
 
     struct TabItem: Equatable {
@@ -279,7 +339,7 @@ final class ShellModel {
     init(store: ImpalaStore) {
         self.store = store
         chat = ChatModel(core: store.core)
-        chat.panelOpen = UserDefaults.standard.bool(forKey: "aiPanelOpen")
+        aiPanelOpen = UserDefaults.standard.bool(forKey: "aiPanelOpen")
         reload()
         if UserDefaults.standard.bool(forKey: "impala67StartLibrary") {
             UserDefaults.standard.set(LibraryMode.hefte.rawValue, forKey: "impala67LibMode")

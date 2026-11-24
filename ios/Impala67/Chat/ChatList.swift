@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Chat-Liste der Seitenleiste (Pille „Chat“, `ChatList.kt` bzw. `renderChatList` der PWA): neuer Chat,
-/// gespeicherte Chats (zuletzt geänderte zuerst). Antippen öffnet im KI-Panel, Halten: eigener Tab,
-/// Umbenennen, Löschen.
+/// gespeicherte Chats (zuletzt geänderte zuerst). Antippen öffnet den Chat als Tab wie die PWA
+/// (`data-chat` → `openPage("chat:…")`), Halten: neuer Tab, Umbenennen, Löschen.
 struct ChatList: View {
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
@@ -14,24 +14,22 @@ struct ChatList: View {
     @AppStorage(AppDensity.key) private var density = AppDensity.standard.rawValue
 
     var body: some View {
-        let chat = shell.chat
+        let openChat = shell.active.flatMap { $0.hasPrefix("chat:") ? String($0.dropFirst(5)) : nil }
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {
                 Button {
-                    withAnimation(.smooth) { chat.newChat() }
-                    if shell.active?.hasPrefix("chat:") == true { shell.goHome() }
+                    withAnimation(.smooth) { shell.openNewChat() }
                 } label: {
                     HStack(spacing: Space.s2) {
                         Icon("plus", size: 14)
                         Text("Neuer Chat").font(.system(size: TextSize.sm))
                         Spacer(minLength: 0)
                     }
-                    .foregroundStyle(chat.running ? Impala.text2.opacity(0.5) : Impala.text2)
+                    .foregroundStyle(Impala.text2)
                     .padding(.horizontal, Space.s2)
                     .frame(minHeight: 34)
                 }
                 .pressable()
-                .disabled(chat.running)
                 if list.isEmpty {
                     Text("Noch keine gespeicherten Chats.")
                         .font(.system(size: TextSize.sm))
@@ -39,7 +37,7 @@ struct ChatList: View {
                         .padding(Space.s2)
                 }
                 ForEach(list, id: \.id) { info in
-                    row(info, active: chat.chatId == info.id)
+                    row(info, active: openChat == info.id)
                 }
             }
             .animation(.smooth(duration: 0.25), value: list.map(\.id))
@@ -52,15 +50,12 @@ struct ChatList: View {
         }
         .alert("Chat umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Titel", text: $title)
-            Button("Speichern") { if let r = renaming { chat.rename(r.id, title) } }
+            Button("Speichern") { if let r = renaming { shell.chat.rename(r.id, title) } }
             Button("Abbrechen", role: .cancel) {}
         }
         .confirmationDialog("Chat löschen", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Löschen", role: .destructive) {
-                if let d = deleting {
-                    chat.delete([d.id])
-                    shell.close("chat:" + d.id)
-                }
+                if let d = deleting { shell.deleteChats([d.id]) }
             }
             Button("Abbrechen", role: .cancel) {}
         } message: {
@@ -70,10 +65,7 @@ struct ChatList: View {
 
     private func row(_ info: ChatInfo, active: Bool) -> some View {
         Button {
-            withAnimation(.smooth) {
-                if shell.active?.hasPrefix("chat:") == true { shell.open("chat:" + info.id) }
-                shell.chat.open(info.id)
-            }
+            withAnimation(.smooth) { shell.open("chat:" + info.id) }
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 Text(info.title.isEmpty ? "Chat" : info.title)
@@ -98,9 +90,8 @@ struct ChatList: View {
         }
         .pressable()
         .hoverEffect(.highlight)
-        .disabled(shell.chat.running && !active)
         .contextMenu {
-            Button { shell.chat.open(info.id, reveal: false); shell.openNewTab("chat:" + info.id) } label: {
+            Button { shell.openNewTab("chat:" + info.id) } label: {
                 Label { Text("In eigenem Tab öffnen") } icon: { Icon("external") }
             }
             Button { title = info.title; renaming = info } label: {

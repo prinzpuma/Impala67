@@ -47,7 +47,7 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 | PWA-Funktion | Android | iPad |
 |---|---|---|
 | Boot-Splash mit 12-s-Hinweis „Neu laden“ | ✅ | 🟡 nur Spinner |
-| Tablet 701–1024 px: KI-Panel als Overlay, Seitenleiste 220 px | 🟡 andere Schwellen | 🟡 Panel fest |
+| Tablet 701–1024 px: KI-Panel als Overlay, Seitenleiste 220 px | 🟡 andere Schwellen | 🟡 Seitenleiste 260 px |
 | Dialoge als Sheet ≤ 600 px | 🟡 Mitten-Dialoge | ⚪ System |
 | Umbenennen direkt in der Zeile | ✅ Desk, 🟡 Telefon (Dialog) | 🟡 Alert |
 | „Aus Archiv holen“ im Seitenmenü | 🟡 nur Archiv-Ansicht | 🟡 nur Bibliothek |

@@ -4,11 +4,9 @@ import SwiftUI
 struct ChatMessageRow: View {
     let message: ChatMessage
     let onEdit: (String) -> Void
-    @Environment(ImpalaStore.self) private var store
-    @Environment(ShellModel.self) private var shell
+    @Environment(ChatModel.self) private var chat
 
     var body: some View {
-        let chat = shell.chat
         switch message.role {
         case "user":
             UserBubble(message: message, enabled: !chat.running) {
@@ -102,7 +100,7 @@ private struct UserBubble: View {
 private struct AssistantMessage: View {
     let message: ChatMessage
     @Environment(ImpalaStore.self) private var store
-    @Environment(ShellModel.self) private var shell
+    @Environment(ChatModel.self) private var chat
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.s1) {
@@ -110,18 +108,18 @@ private struct AssistantMessage: View {
             HStack(spacing: Space.s1) {
                 SmallAction(icon: "copy", label: "Kopieren") {
                     UIPasteboard.general.string = message.content ?? ""
-                    shell.chat.show("Antwort kopiert.")
+                    chat.show("Antwort kopiert.")
                 }
                 Menu {
                     ForEach(Refine.allCases) { r in
-                        Button(r.rawValue) { if let mid = message.mid { shell.chat.refine(mid, r) } }
+                        Button(r.rawValue) { if let mid = message.mid { chat.refine(mid, r) } }
                     }
                 } label: {
                     SmallActionLabel(icon: "sparkles", label: "Anpassen")
                 }
-                .disabled(shell.chat.running || message.mid == nil)
+                .disabled(chat.running || message.mid == nil)
             }
-            .sensoryFeedback(.success, trigger: shell.chat.notice) { _, n in n == "Antwort kopiert." }
+            .sensoryFeedback(.success, trigger: chat.notice) { _, n in n == "Antwort kopiert." }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

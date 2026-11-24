@@ -7,6 +7,7 @@ let aiPanelWidth: CGFloat = 340
 /// In eigenem Tab öffnen und Einklappen; darunter der Chat mit der offenen Seite als Kontext.
 struct AiPanel: View {
     let activePageId: String?
+    var width: CGFloat = aiPanelWidth
     @Environment(ImpalaStore.self) private var store
     @Environment(ShellModel.self) private var shell
     @State private var recentChats: [ChatInfo] = []
@@ -30,19 +31,17 @@ struct AiPanel: View {
                 .accessibilityLabel("Alte Chats öffnen (Verlauf)")
                 HeadButton(icon: "plus", label: "Neuen Chat starten") { withAnimation(.smooth) { chat.newChat() } }
                     .disabled(chat.running)
-                HeadButton(icon: "expand", label: "Chat in eigenem Tab öffnen") {
-                    shell.openNewTab("chat:" + chat.chatId)
-                }
-                .disabled(chat.running || chat.chatId.isEmpty)
+                HeadButton(icon: "expand", label: "Chat in eigenem Tab öffnen") { shell.movePanelChatToTab() }
+                    .disabled(chat.running)
                 HeadButton(icon: "x", label: "KI einklappen") { shell.setAiPanel(false) }
             }
             .padding(.leading, Space.s3)
             .padding(.trailing, Space.s2)
             .padding(.vertical, Space.s2)
             Divider().overlay(Impala.edge)
-            ChatView(activePageId: activePageId)
+            ChatView(chat: chat, activePageId: activePageId)
         }
-        .frame(width: aiPanelWidth)
+        .frame(width: width)
         .frame(maxHeight: .infinity)
         .background(Impala.panel)
         .task(id: store.chatsRevision) {
@@ -54,16 +53,14 @@ struct AiPanel: View {
     }
 }
 
-/// Chat als eigener Tab `chat:<id>` (breit, ohne Seitenkontext).
+/// Chat als eigener Tab `chat:<id>` (breit, ohne Seitenkontext) mit eigenem `ChatModel` je Tab.
 struct ChatScreen: View {
     let chatId: String
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        ChatView(activePageId: nil, wide: true)
+        ChatView(chat: shell.tabChat(chatId), activePageId: nil, wide: true)
             .background(Impala.panel)
-            .onAppear { shell.chat.open(chatId, reveal: false) }
-            .onChange(of: chatId) { shell.chat.open(chatId, reveal: false) }
             // Lernzeit „ai“ nur im Chat-Tab wie lernzeit.js (`S.view === "chat"`), nicht im Seitenpanel.
             .learningTime(LearnContext(category: "ai", sourceId: chatId.isEmpty ? nil : chatId))
     }

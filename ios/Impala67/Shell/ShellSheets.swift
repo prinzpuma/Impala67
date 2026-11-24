@@ -120,7 +120,6 @@ private struct SearchSheet: View {
                     ForEach(chats, id: \.id) { c in
                         Button {
                             dismiss()
-                            shell.chat.open(c.id, reveal: false)
                             shell.open("chat:" + c.id)
                         } label: {
                             HStack(spacing: Space.s2) {

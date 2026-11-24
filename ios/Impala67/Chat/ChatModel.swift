@@ -37,7 +37,8 @@ enum HeftLastPage {
     static var open: String?
 }
 
-/// KI-Chat (wie `AiChatViewModel.kt`). Der Rust-Assistent (`AiAssistant.runAsync`) fährt die
+/// KI-Chat (wie `AiChatViewModel.kt`): eins fürs KI-Panel (`ShellModel.chat`), eins je Chat-Tab
+/// (`ShellModel.tabChat`), damit Panel und Tabs sich nicht gegenseitig den Verlauf überschreiben. Der Rust-Assistent (`AiAssistant.runAsync`) fährt die
 /// Agent-Schleife mit Werkzeugen und speichert den Chat; hier landen nur seine Rückrufe im Zustand
 /// (Entwurf, Gedankengang, Werkzeug, neue Einträge). Ein Lauf zur Zeit.
 @MainActor @Observable
@@ -60,8 +61,6 @@ final class ChatModel {
     var contextOff: Set<String> = []
     /// Kurzer Hinweis („Antwort kopiert.“), verschwindet von selbst.
     var notice: String?
-    /// Rechtes KI-Panel aufgeklappt (Sparkles-Knopf unten rechts).
-    var panelOpen = false
     /// Anhang der nächsten Nachricht (Bild, Datei, PDF, Heftseite).
     var attachment: ChatAttachment?
     /// Entwurf der Benutzereingabe (bleibt beim Tabwechsel erhalten).
@@ -205,21 +204,19 @@ final class ChatModel {
     // MARK: Chats
 
     /// Vorhandenen Chat öffnen (nicht während eines Laufs).
-    func open(_ id: String, reveal: Bool = true) {
+    func open(_ id: String) {
         guard !running else { return }
         if id != chatId { messages = core.chat(id: id)?.messages ?? [] }
         chatId = id
         error = nil
-        if reveal { panelOpenIfNeeded() }
     }
 
     /// Leeren Chat beginnen (nicht während eines Laufs).
-    func newChat(reveal: Bool = true) {
+    func newChat() {
         guard !running else { return }
         chatId = ""
         messages = []
         error = nil
-        if reveal { panelOpenIfNeeded() }
     }
 
     /// Chats löschen; den laufenden Chat nicht während seiner Antwort.
@@ -347,8 +344,6 @@ final class ChatModel {
     }
 
     // MARK: Intern
-
-    private func panelOpenIfNeeded() { panelOpen = true }
 
     private func resetLive() {
         clearDraft()

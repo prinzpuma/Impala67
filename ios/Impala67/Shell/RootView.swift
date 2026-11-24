@@ -11,6 +11,10 @@ struct RootView: View {
     @AppStorage(AppMotion.key) private var motion = AppMotion.full.rawValue
     @AppStorage(AppTabsPosition.key) private var tabsPosition = AppTabsPosition.top.rawValue
     @AppStorage(AppStatusBar.hiddenKey) private var statusBarHidden = false
+    /// Fensterbreite: im Hochformat (< 1100 pt) schwebt das KI-Panel über dem Inhalt wie die PWA ≤ 1024 px.
+    @State private var windowWidth: CGFloat = 1366
+    /// Bildschirmtastatur offen: Der KI-Knopf tritt zur Seite, statt über Blockleiste und Text zu liegen.
+    @State private var keyboardUp = false
 
     var body: some View {
         if let shell {
@@ -42,7 +46,7 @@ struct RootView: View {
                         }
                     }
 
-                    if showsAiPanel(shell) {
+                    if showsAiPanel(shell) && !aiOverlay {
                         AiPanel(activePageId: activePage(shell))
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                             .background(Impala.panel)
@@ -62,14 +66,38 @@ struct RootView: View {
                 // Bis an die Unterkante: Sonst blieb unter den Panels der Streifen der Home-Leiste als
                 // dunkler Balken stehen (Komfortabel). Die Tastatur weicht weiterhin aus (nur `.container`).
                 .ignoresSafeArea(.container, edges: .bottom)
+                // Hochformat: schwebendes Panel rechts (`#panel` mit `position: fixed` ≤ 1024 px), der Inhalt
+                // behält seine volle Breite statt auf einen schmalen Streifen zu schrumpfen.
+                .overlay(alignment: .trailing) {
+                    if showsAiPanel(shell) && aiOverlay {
+                        AiPanel(activePageId: activePage(shell), width: min(400, windowWidth * 0.46))
+                            .background(Impala.panel)
+                            .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1)
+                            }
+                            .shadow(color: .black.opacity(0.28), radius: 20, x: -6)
+                            .padding(6)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
                 .overlay(alignment: .bottomTrailing) {
-                    if !showsAiPanel(shell) && !isChatTab(shell) {
+                    if !showsAiPanel(shell) && !isChatTab(shell) && !keyboardUp {
                         AiOrbButton()
-                            .padding(Space.s4)
+                            .padding(.trailing, Space.s4)
+                            // Über der Home-Leiste: Ganz unten fing die Systemgeste Tipps auf den Knopf ab.
+                            .padding(.bottom, Space.s6)
                             .transition(.scale(scale: 0.4).combined(with: .opacity))
                     }
                 }
                 .animation(.spring(duration: 0.4, bounce: 0.15), value: showsAiPanel(shell))
+                .animation(.snappy, value: keyboardUp)
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+                    // Hardware-Tastatur: nur die schmale Kürzelleiste erscheint – dann bleibt der Knopf.
+                    let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
+                    keyboardUp = frame.height > 120
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
                 .background(isCompact ? Impala.panel : Impala.bg0)
                 .toolbar(.hidden, for: .navigationBar)
                 .modifier(DeckDialogsModifier(cards: cards, core: store.core))
@@ -78,6 +106,7 @@ struct RootView: View {
                 }
             }
             .navigationSplitViewStyle(.balanced)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
             .statusBarHidden(statusBarHidden)
             .tint(AppAccent(rawValue: accent)?.color ?? Impala.accent)
             .environment(shell)
@@ -93,7 +122,7 @@ struct RootView: View {
             .task(id: store.cardsRevision) { await shell.cards.refresh(core: store.core) }
             // Semantischer Index („Verwandt“): nach Seitenänderungen entprellt im Hintergrund nachführen.
             .task(id: [store.pagesRevision, store.settingsRevision]) { await SemanticStatus.shared.pagesChanged(core: store.core) }
-            .onChange(of: store.chatsRevision) { shell.chat.reloadIfIdle() }
+            .onChange(of: store.chatsRevision) { shell.chatsChanged() }
             .task(id: [store.pageMetaRevision, store.chatsRevision]) { shell.refreshTabInfos() }
         } else {
             Color.clear.onAppear { shell = ShellModel(store: store) }
@@ -105,7 +134,11 @@ extension RootView {
     private func isChatTab(_ shell: ShellModel) -> Bool { shell.active?.hasPrefix("chat:") == true }
 
     /// Das KI-Panel steht rechts, solange es aufgeklappt ist und kein Chat-Tab vorne liegt.
-    private func showsAiPanel(_ shell: ShellModel) -> Bool { shell.chat.panelOpen && !isChatTab(shell) }
+    private func showsAiPanel(_ shell: ShellModel) -> Bool { shell.aiPanelOpen && !isChatTab(shell) }
+
+    /// Hochformat: KI-Panel schwebt über dem Inhalt (PWA ≤ 1024 px). Alle iPads sind hochkant schmaler
+    /// als 1100 pt und quer breiter.
+    private var aiOverlay: Bool { windowWidth < 1100 }
 
     /// Geöffnete Notiz bzw. Heft als Kontext für die KI.
     private func activePage(_ shell: ShellModel) -> String? {
@@ -165,7 +198,7 @@ private struct MainContent: View {
             if let kind = item.kind {
                 PageScreen(pageId: tab, kind: kind).id(tab)
             } else if tab.hasPrefix("chat:") {
-                ChatScreen(chatId: String(tab.dropFirst(5)))
+                ChatScreen(chatId: String(tab.dropFirst(5))).id(tab)
             } else if tab == ShellModel.cardsTab {
                 CardsScreen()
             } else {
@@ -220,8 +253,8 @@ private struct ShellShortcuts: ViewModifier {
                 .hidden()
             // ⌥Leertaste: Diktat im KI-Panel (web/shortcuts.js → `VOICE.toggle("side")`).
             Button("") {
-                shell.setAiPanel(true)
-                shell.chat.dictationRequest = true
+                if shell.active?.hasPrefix("chat:") != true { shell.setAiPanel(true) }
+                shell.activeChat.dictationRequest = true
             }
             .keyboardShortcut(.space, modifiers: .option)
             .hidden()

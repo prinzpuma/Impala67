@@ -11,7 +11,7 @@
 	"funktionen": [
 		{ "id": "shell.boot-splash", "bereich": "shell", "titel": "Boot-Splash mit 12-s-Hinweis „Neu laden“", "pwa": ["bootSplash"], "ios": "🟡 nur Spinner" },
 		{ "id": "shell.kaltstart", "bereich": "shell", "titel": "Kaltstart bis zur bedienbaren Oberfläche", "leistung": { "ms": 1000, "pwa": "state.load", "ios": "boot.core-open" } },
-		{ "id": "shell.tablet-layout", "bereich": "shell", "titel": "Tablet 701–1024 px: KI-Panel als Overlay, Seitenleiste 220 px", "android": "🟡 andere Schwellen", "ios": "🟡 Panel fest" },
+		{ "id": "shell.tablet-layout", "bereich": "shell", "titel": "Tablet 701–1024 px: KI-Panel als Overlay, Seitenleiste 220 px", "android": "🟡 andere Schwellen", "ios": "🟡 Seitenleiste 260 px" },
 		{ "id": "shell.dialog-sheet", "bereich": "shell", "titel": "Dialoge als Sheet ≤ 600 px", "android": "🟡 Mitten-Dialoge", "ios": "⚪ System" },
 		{ "id": "shell.umbenennen-inline", "bereich": "shell", "titel": "Umbenennen direkt in der Zeile", "pwa": ["commitRename"], "android": "✅ Desk, 🟡 Telefon (Dialog)", "ios": "🟡 Alert" },
 		{ "id": "shell.archiv-holen", "bereich": "shell", "titel": "„Aus Archiv holen“ im Seitenmenü", "android": "🟡 nur Archiv-Ansicht", "ios": "🟡 nur Bibliothek" },
