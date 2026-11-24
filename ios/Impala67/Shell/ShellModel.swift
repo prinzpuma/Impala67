@@ -53,17 +53,19 @@ final class ShellModel {
     // "home" ist die feste Basis (Index 0). Gelöschte/ungültige Seiten werden übersprungen.
     private var history: [String] = []
     private var historyIndex = -1
+    private(set) var hasBackHistory = false
+    private(set) var hasForwardHistory = false
 
     var canGoBack: Bool {
         if sheet != nil { return true }
         if libraryOpen { return true }
         if active == Self.cardsTab && cards.view != .decks { return true }
-        return prevValidIndex() >= 0
+        return hasBackHistory
     }
 
     var canGoForward: Bool {
         if sheet != nil || libraryOpen { return false }
-        return nextValidIndex() != -1
+        return hasForwardHistory
     }
 
     func goBack() {
@@ -108,26 +110,53 @@ final class ShellModel {
         }
     }
 
-    private func isValidEntry(_ id: String) -> Bool {
+    private func validEntrySet(for entries: [String]) -> (pages: [String: PageSummary], chatTitles: [String: String]) {
+        let pageIds = Array(Set(entries.filter { $0 != "home" && $0 != Self.cardsTab && !$0.hasPrefix("chat:") }))
+        let summaries = pageIds.isEmpty ? [] : store.core.pageSummaries(ids: pageIds)
+        let pages = Dictionary(summaries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let chatTitles: [String: String] = entries.contains { $0.hasPrefix("chat:") }
+            ? Dictionary(store.core.chats().map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a }) : [:]
+        return (pages, chatTitles)
+    }
+
+    private func isValidEntry(_ id: String, pages: [String: PageSummary], chatTitles: [String: String]) -> Bool {
         if id == "home" || id == Self.cardsTab { return true }
-        if id.hasPrefix("chat:") {
-            let chatId = String(id.dropFirst(5))
-            return store.core.chat(id: chatId) != nil
-        }
-        guard let p = store.core.page(id: id) else { return false }
-        return !p.trashed
+        if id.hasPrefix("chat:") { return chatTitles[String(id.dropFirst(5))] != nil }
+        return pages[id] != nil
     }
 
     private func prevValidIndex() -> Int {
+        guard historyIndex > 0 else { return -1 }
+        let (pages, chats) = validEntrySet(for: Array(history[0..<historyIndex]))
         var i = historyIndex - 1
-        while i >= 0 && !isValidEntry(history[i]) { i -= 1 }
+        while i >= 0 && !isValidEntry(history[i], pages: pages, chatTitles: chats) { i -= 1 }
         return i
     }
 
     private func nextValidIndex() -> Int {
+        guard historyIndex + 1 < history.count else { return -1 }
+        let (pages, chats) = validEntrySet(for: Array(history[(historyIndex + 1)...]))
         var i = historyIndex + 1
-        while i < history.count && !isValidEntry(history[i]) { i += 1 }
+        while i < history.count && !isValidEntry(history[i], pages: pages, chatTitles: chats) { i += 1 }
         return i < history.count ? i : -1
+    }
+
+    private func refreshHistoryValidity() {
+        let (pages, chats) = validEntrySet(for: history)
+        var back = false
+        var i = historyIndex - 1
+        while i >= 0 {
+            if isValidEntry(history[i], pages: pages, chatTitles: chats) { back = true; break }
+            i -= 1
+        }
+        var fwd = false
+        var j = historyIndex + 1
+        while j < history.count {
+            if isValidEntry(history[j], pages: pages, chatTitles: chats) { fwd = true; break }
+            j += 1
+        }
+        hasBackHistory = back
+        hasForwardHistory = fwd
     }
 
     private func pushHistory(_ target: String) {
@@ -166,11 +195,13 @@ final class ShellModel {
     }
 
     func backHistoryItems() -> [HistoryItem] {
+        guard historyIndex > 0 else { return [] }
+        let (pages, chats) = validEntrySet(for: Array(history[0..<historyIndex]))
         var items: [HistoryItem] = []
         var i = historyIndex - 1
         while i >= 0 && items.count < 8 {
-            if isValidEntry(history[i]) {
-                items.append(historyItem(at: i))
+            if isValidEntry(history[i], pages: pages, chatTitles: chats) {
+                items.append(historyItem(at: i, pages: pages, chatTitles: chats))
             }
             i -= 1
         }
@@ -178,18 +209,20 @@ final class ShellModel {
     }
 
     func forwardHistoryItems() -> [HistoryItem] {
+        guard historyIndex + 1 < history.count else { return [] }
+        let (pages, chats) = validEntrySet(for: Array(history[(historyIndex + 1)...]))
         var items: [HistoryItem] = []
         var i = historyIndex + 1
         while i < history.count && items.count < 8 {
-            if isValidEntry(history[i]) {
-                items.append(historyItem(at: i))
+            if isValidEntry(history[i], pages: pages, chatTitles: chats) {
+                items.append(historyItem(at: i, pages: pages, chatTitles: chats))
             }
             i += 1
         }
         return items
     }
 
-    private func historyItem(at i: Int) -> HistoryItem {
+    private func historyItem(at i: Int, pages: [String: PageSummary], chatTitles: [String: String]) -> HistoryItem {
         let target = history[i]
         if target == "home" {
             return HistoryItem(id: i, index: i, title: "Startseite", icon: "home")
@@ -199,10 +232,10 @@ final class ShellModel {
         }
         if target.hasPrefix("chat:") {
             let chatId = String(target.dropFirst(5))
-            let chatTitle = store.core.chat(id: chatId)?.title ?? ""
+            let chatTitle = chatTitles[chatId] ?? ""
             return HistoryItem(id: i, index: i, title: chatTitle.isEmpty ? "Chat" : chatTitle, icon: "sparkles")
         }
-        guard let p = store.core.page(id: target)?.summary else {
+        guard let p = pages[target] else {
             return HistoryItem(id: i, index: i, title: target, icon: "note")
         }
         return HistoryItem(id: i, index: i, title: PageStyle.title(p), icon: PageStyle.iconName(p))
@@ -346,6 +379,7 @@ final class ShellModel {
         var list = tabs
         if let active, !list.contains(active) { list.append(active) }
         tabInfoMap = computeTabInfos(list)
+        refreshHistoryValidity()
     }
 
     init(store: ImpalaStore) {

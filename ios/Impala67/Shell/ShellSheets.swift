@@ -26,7 +26,7 @@ struct ShellSheetView: View {
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { CloseButton() } }
         }
-        .presentationDetents(sheet == .search || sheet == .conflicts || sheet == .graph ? [.large] : [.medium, .large])
+        .presentationDetents(sheet == .search || sheet == .conflicts || sheet == .graph || sheet == .trash ? [.large] : [.medium, .large])
     }
 }
 
@@ -186,10 +186,16 @@ private struct TrashSheet: View {
         var id: String { rawValue }
     }
 
-    /// Endgültig zu löschender Stapel oder Karte (Rückfrage wie `data-deckpurge`/`data-cardpurge` der PWA).
+    /// Endgültig zu löschendes Element (Rückfrage wie `data-deckpurge`/`data-cardpurge` der PWA).
     private enum Purge: Identifiable {
-        case deck(DeckInfo), card(CardInfo)
-        var id: String { switch self { case .deck(let d): "d:" + d.name; case .card(let c): "c:" + c.id } }
+        case page(PageSummary), deck(DeckInfo), card(CardInfo)
+        var id: String {
+            switch self {
+            case .page(let p): "p:" + p.id
+            case .deck(let d): "d:" + d.name
+            case .card(let c): "c:" + c.id
+            }
+        }
     }
 
     @Environment(ImpalaStore.self) private var store
@@ -201,86 +207,88 @@ private struct TrashSheet: View {
     @State private var cards: [CardInfo] = []
 
     var body: some View {
-
+        let total = pages.count + decks.count + cards.count
         let showPages = (filter == .all || filter == .pages) && !pages.isEmpty
         let showDecks = (filter == .all || filter == .decks) && !decks.isEmpty
         let showCards = (filter == .all || filter == .cards) && !cards.isEmpty
         let isEmpty = !showPages && !showDecks && !showCards
-        let hasAnyTrash = !pages.isEmpty || !decks.isEmpty || !cards.isEmpty
+        let hasAnyTrash = total > 0
 
-        VStack(spacing: Space.s2) {
-            Picker("Filter", selection: $filter) {
-                ForEach(TrashFilter.allCases) { f in
-                    Text(f.rawValue).tag(f)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.s4) {
+                Text("Seiten, Stapel und Karten — wiederherstellbar, bis du sie endgültig löschst.")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
 
-            List {
-                if showPages {
-                    Section("Seiten") {
-                        ForEach(pages) { p in
-                            HStack(spacing: Space.s2) {
-                                PageIcon(page: p).foregroundStyle(Impala.text2)
-                                Text(PageStyle.title(p)).foregroundStyle(Impala.text)
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button("Löschen", role: .destructive) { attempt("deletePageForever", { try store.core.deletePageForever(id: p.id) }) }
-                                Button("Wiederherstellen") { attempt("restorePage", { try store.core.restorePage(id: p.id) }) }.tint(Impala.accent)
-                            }
+                if hasAnyTrash {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Space.s2) {
+                            filterChip(.all, count: total)
+                            if !pages.isEmpty { filterChip(.pages, count: pages.count) }
+                            if !decks.isEmpty { filterChip(.decks, count: decks.count) }
+                            if !cards.isEmpty { filterChip(.cards, count: cards.count) }
                         }
                     }
                 }
-                if showDecks {
-                    Section("Stapel") {
-                        ForEach(decks, id: \.name) { d in
-                            HStack(spacing: Space.s2) {
-                                Icon("cards").foregroundStyle(Impala.text2)
-                                Text(Deck.label(d.name)).foregroundStyle(Impala.text)
-                                if d.cards > 0 {
-                                    Spacer()
-                                    Text(Deck.cardsText(Int(d.cards)))
-                                        .font(.system(size: TextSize.sm))
-                                        .foregroundStyle(Impala.text2)
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button("Löschen", role: .destructive) { purge = .deck(d) }
-                                Button("Wiederherstellen") { attempt("restoreDeck", { try store.core.restoreDeck(name: d.name) }) }.tint(Impala.accent)
+
+                if isEmpty {
+                    Placeholder(
+                        icon: "trash",
+                        title: hasAnyTrash ? "Keine Einträge in diesem Filter." : "Der Papierkorb ist leer.",
+                        text: hasAnyTrash ? "Wähle oben einen anderen Filter." : "Gelöschte Seiten, Stapel und Karten landen hier."
+                    )
+                    .padding(.vertical, Space.s6)
+                } else {
+                    if showPages {
+                        trashSection("Seiten") {
+                            ForEach(Array(pages.enumerated()), id: \.element.id) { idx, p in
+                                if idx > 0 { Divider().overlay(Impala.edgeSoft) }
+                                trashRow(
+                                    title: PageStyle.title(p),
+                                    subtitle: p.kind == .heft ? "Heft" : (p.pdfId != nil ? "PDF" : "Notiz"),
+                                    icon: { PageIcon(page: p, size: 16).foregroundStyle(Impala.text2) },
+                                    onRestore: { attempt("restorePage", { try store.core.restorePage(id: p.id) }) },
+                                    onDelete: { purge = .page(p) }
+                                )
                             }
                         }
                     }
-                }
-                if showCards {
-                    Section("Karten") {
-                        ForEach(cards, id: \.id) { c in
-                            HStack(spacing: Space.s2) {
-                                Icon("cards").foregroundStyle(Impala.text2)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    let preview = markdownPlainText(markdown: c.front).trimmingCharacters(in: .whitespacesAndNewlines)
-                                    Text(preview.isEmpty ? "(leer)" : preview)
-                                        .font(.system(size: TextSize.md))
-                                        .foregroundStyle(Impala.text)
-                                        .lineLimit(2)
-                                    Text(Deck.label(c.deck))
-                                        .font(.system(size: TextSize.sm))
-                                        .foregroundStyle(Impala.text2)
-                                        .lineLimit(1)
-                                }
+
+                    if showDecks {
+                        trashSection("Stapel") {
+                            ForEach(Array(decks.enumerated()), id: \.element.name) { idx, d in
+                                if idx > 0 { Divider().overlay(Impala.edgeSoft) }
+                                trashRow(
+                                    title: Deck.label(d.name),
+                                    subtitle: d.cards > 0 ? Deck.cardsText(Int(d.cards)) : "Stapel",
+                                    icon: { Icon("cards", size: 16).foregroundStyle(Impala.text2) },
+                                    onRestore: { attempt("restoreDeck", { try store.core.restoreDeck(name: d.name) }) },
+                                    onDelete: { purge = .deck(d) }
+                                )
                             }
-                            .swipeActions(edge: .trailing) {
-                                Button("Löschen", role: .destructive) { purge = .card(c) }
-                                Button("Wiederherstellen") { attempt("restoreCard", { try store.core.restoreCard(id: c.id) }) }.tint(Impala.accent)
+                        }
+                    }
+
+                    if showCards {
+                        trashSection("Karten") {
+                            ForEach(Array(cards.enumerated()), id: \.element.id) { idx, c in
+                                if idx > 0 { Divider().overlay(Impala.edgeSoft) }
+                                let preview = markdownPlainText(markdown: c.front).trimmingCharacters(in: .whitespacesAndNewlines)
+                                trashRow(
+                                    title: preview.isEmpty ? "(leer)" : preview,
+                                    subtitle: Deck.label(c.deck),
+                                    icon: { Icon("cards", size: 16).foregroundStyle(Impala.text2) },
+                                    onRestore: { attempt("restoreCard", { try store.core.restoreCard(id: c.id) }) },
+                                    onDelete: { purge = .card(c) }
+                                )
                             }
                         }
                     }
                 }
             }
-            .overlay {
-                if isEmpty { Placeholder(icon: "trash", title: "Der Papierkorb ist leer.", text: "Gelöschte Seiten, Stapel und Karten landen hier.") }
-            }
+            .padding(Space.s5)
         }
+        .background(Impala.panel)
         .navigationTitle("Papierkorb")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -300,12 +308,15 @@ private struct TrashSheet: View {
                             titleVisibility: .visible, presenting: purge) { p in
             Button("Löschen", role: .destructive) {
                 switch p {
+                case .page(let pg): attempt("deletePageForever", { try store.core.deletePageForever(id: pg.id) })
                 case .deck(let d): attempt("deleteDeck", { try store.core.deleteDeck(name: d.name) })
                 case .card(let c): attempt("deleteCard", { try store.core.deleteCard(id: c.id) })
                 }
             }
         } message: { p in
             switch p {
+            case .page(let pg):
+                Text("Seite „\(PageStyle.title(pg))“ wird unwiderruflich entfernt.")
             case .deck(let d):
                 Text("Stapel „\(Deck.label(d.name))“" + (d.cards > 0 ? " samt \(Deck.cardsText(Int(d.cards)))" : "") + " wird unwiderruflich entfernt.")
             case .card:
@@ -328,5 +339,79 @@ private struct TrashSheet: View {
                 cards = loaded.2
             }
         }
+    }
+
+    private func filterChip(_ item: TrashFilter, count: Int) -> some View {
+        let active = filter == item
+        return Button { withAnimation(.snappy) { filter = item } } label: {
+            Text("\(item.rawValue) (\(count))")
+                .font(.system(size: TextSize.xs, weight: active ? .semibold : .medium))
+                .foregroundStyle(active ? Impala.accent : Impala.text2)
+                .padding(.horizontal, Space.s3)
+                .frame(minHeight: 32)
+                .background(active ? Impala.activeTint : Impala.surface, in: Capsule())
+                .overlay(Capsule().stroke(active ? Impala.accentBorder : Impala.edgeSoft, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func trashSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Space.s2) {
+            Text(title)
+                .font(.system(size: TextSize.xs, weight: .semibold))
+                .foregroundStyle(Impala.text2)
+                .padding(.horizontal, Space.s1)
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
+        }
+    }
+
+    private func trashRow<IconView: View>(
+        title: String,
+        subtitle: String,
+        @ViewBuilder icon: () -> IconView,
+        onRestore: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: Space.s3) {
+            icon()
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: TextSize.md, weight: .medium))
+                    .foregroundStyle(Impala.text)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.system(size: TextSize.xs))
+                    .foregroundStyle(Impala.text2)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: Space.s2)
+            Button(action: onRestore) {
+                Text("Wiederherstellen")
+                    .font(.system(size: TextSize.xs, weight: .semibold))
+                    .foregroundStyle(Impala.accent)
+                    .padding(.horizontal, Space.s3)
+                    .frame(minHeight: 30)
+                    .background(Impala.activeTint, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onDelete) {
+                Icon("trash", size: 14)
+                    .foregroundStyle(Impala.danger)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Endgültig löschen")
+        }
+        .padding(.horizontal, Space.s4)
+        .padding(.vertical, Space.s3)
     }
 }

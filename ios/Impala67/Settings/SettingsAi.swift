@@ -251,6 +251,7 @@ private struct AiModelSection: View {
                     .font(.system(size: 15))
                     .foregroundStyle(isFav(m) ? Impala.warn : Impala.text2)
                     .frame(width: 30, height: 34)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }

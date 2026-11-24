@@ -93,23 +93,21 @@ struct HeftPagesSheet: View {
                         Button("Auswählen") { withAnimation(.snappy) { picking = true } }
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     if picking {
                         Button("Fertig") { endPicking() }
                     } else {
-                        HStack(spacing: Space.s3) {
-                            Menu {
-                                Button { exporting = ExportRequest(only: nil) } label: {
-                                    Label { Text("Exportieren …") } icon: { Icon("upload") }
-                                }
-                                Button { UIPasteboard.general.string = "#" + pageId } label: {
-                                    Label { Text("Internen Link kopieren") } icon: { Icon("link") }
-                                }
-                            } label: { Icon("share", size: 16) }
-                            .accessibilityLabel("Teilen")
-                            Button { dismiss() } label: { Icon("x", size: 15) }
-                                .accessibilityLabel("Schließen")
-                        }
+                        Menu {
+                            Button { exporting = ExportRequest(only: nil) } label: {
+                                Label { Text("Exportieren …") } icon: { Icon("upload") }
+                            }
+                            Button { UIPasteboard.general.string = "#" + pageId } label: {
+                                Label { Text("Internen Link kopieren") } icon: { Icon("link") }
+                            }
+                        } label: { Icon("share", size: 16) }
+                        .accessibilityLabel("Teilen")
+                        Button { dismiss() } label: { Icon("x", size: 15) }
+                            .accessibilityLabel("Schließen")
                     }
                 }
                 if picking {
@@ -261,10 +259,8 @@ struct HeftPagesSheet: View {
 
     /// `.heft-pop-add`: getönte Fläche im Seitenformat, „+“ im Kreis, darunter „Neue Seite“.
     private var addTile: some View {
-        Menu {
-            ForEach(HeftPaperKind.allCases) { kind in
-                Button { add(kind) } label: { Label(kind.label, systemImage: kind.symbol) }
-            }
+        Button {
+            add(nil)
         } label: {
             VStack(spacing: 6) {
                 VStack(spacing: Space.s2) {
@@ -280,12 +276,18 @@ struct HeftPagesSheet: View {
                 .aspectRatio(1000.0 / 1414.0, contentMode: .fit)
                 .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.xs))
                 .padding(4)
-                Text(" ").font(.system(size: TextSize.xs))
+                Text(" ")
+                    .font(.system(size: TextSize.xs))
+                    .padding(.vertical, 1)
             }
-        } primaryAction: {
-            add(nil)
+            .contentShape(RoundedRectangle(cornerRadius: Radius.xs))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            ForEach(HeftPaperKind.allCases) { kind in
+                Button { add(kind) } label: { Label(kind.label, systemImage: kind.symbol) }
+            }
+        }
         .accessibilityLabel("Neue Seite")
     }
 

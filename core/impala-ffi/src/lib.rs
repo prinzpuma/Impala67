@@ -524,10 +524,26 @@ impl ImpalaCore {
     /// Alle Seiten auÃŸerhalb von Papierkorb und Archiv, zuletzt geÃ¤nderte zuerst.
     pub fn recent_pages(&self, limit: u32) -> Vec<PageSummary> {
         let inner = self.lock();
-        let mut pages = inner.model.state().active_pages();
-        pages.sort_by(|a, b| b.updated().cmp(a.updated()));
+        let mut pages: Vec<&Page> = inner
+            .model
+            .state()
+            .active_pages()
+            .into_iter()
+            .filter(|p| !p.id().starts_with("conflictpg-") && !p.truthy("isConflict"))
+            .collect();
+        pages.sort_by(|a, b| inner.model.page_updated(b).cmp(inner.model.page_updated(a)));
         pages.truncate(limit as usize);
-        summaries(pages)
+        pages
+            .into_iter()
+            .map(|p| {
+                let mut s = summary(p);
+                let upd = inner.model.page_updated(p);
+                if upd > s.updated.as_str() {
+                    s.updated = upd.to_owned();
+                }
+                s
+            })
+            .collect()
     }
 
     /// Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.

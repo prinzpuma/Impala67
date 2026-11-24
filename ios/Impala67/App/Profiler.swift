@@ -28,12 +28,14 @@ final class Profiler: @unchecked Sendable {
         var avgDurationMs: Double { count > 0 ? totalDurationMs / Double(count) : 0 }
     }
 
+    static let didChangeNotification = Notification.Name("ImpalaProfilerDidChange")
     static let enabledKey = "impala67PerformanceProfiler"
     private static let maxRecords = 180
 
     private let lock = NSLock()
     private var records: [Record] = []
     private var saveScheduled = false
+    private var notifyScheduled = false
     private var loaded = false
     private let queue = DispatchQueue(label: "org.impala67.profiler", qos: .utility)
     private var watchdog: HangWatchdog?
@@ -166,6 +168,7 @@ final class Profiler: @unchecked Sendable {
                 if records.count > Self.maxRecords { records.removeFirst(records.count - Self.maxRecords) }
             }
             scheduleSave()
+            scheduleNotify()
         }
     }
 
@@ -183,6 +186,9 @@ final class Profiler: @unchecked Sendable {
         lock.withLock {
             records.removeAll()
             scheduleSave()
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
         }
     }
 
@@ -253,6 +259,19 @@ final class Profiler: @unchecked Sendable {
             }
             guard let url = Self.fileURL, let data = try? JSONEncoder().encode(copy) else { return }
             try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    /// Nur unter `lock` aufrufen; benachrichtigt die Oberfläche gedrosselt auf dem Hauptthread.
+    private func scheduleNotify() {
+        guard !notifyScheduled else { return }
+        notifyScheduled = true
+        queue.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self else { return }
+            self.lock.withLock { self.notifyScheduled = false }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+            }
         }
     }
 

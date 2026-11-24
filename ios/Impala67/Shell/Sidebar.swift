@@ -41,7 +41,7 @@ struct Sidebar: View {
                 Divider().overlay(Impala.edgeSoft)
             }
 
-            if tabsPosition == AppTabsPosition.sidebar.rawValue && shell.sidebarMode == .files {
+            if tabsPosition == AppTabsPosition.sidebar.rawValue {
                 SidebarTabs()
             }
 
@@ -233,77 +233,74 @@ private struct SidebarTabs: View {
     var body: some View {
         let _ = store.pageMetaRevision
         let isCompact = density == AppDensity.compact.rawValue
-        if !shell.tabs.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text("Offene Tabs")
-                        .font(.system(size: TextSize.xs, weight: .semibold))
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text("Offene Tabs")
+                    .font(.system(size: TextSize.xs, weight: .semibold))
+                    .foregroundStyle(Impala.text2)
+                Spacer()
+                Menu {
+                    MenuItem("Neuer Chat", icon: "sparkles") {
+                        shell.openNewTab("chat:\(UUID().uuidString)")
+                    }
+                    MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
+                    MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
+                    TemplateMenuSection(create: newPage)
+                    MenuItem("In neuem Tab öffnen…", icon: "search") { shell.sheet = .search }
+                } label: {
+                    Icon("plus", size: 13)
                         .foregroundStyle(Impala.text2)
-                    Spacer()
-                    Menu {
-                        MenuItem("Neuer Chat", icon: "sparkles") {
-                            shell.openNewTab("chat:\(UUID().uuidString)")
-                        }
-                        MenuItem("Neue Notiz", icon: "note") { newPage(.note) }
-                        MenuItem("Neues Heft", icon: "notebook") { newPage(.heft) }
-                        TemplateMenuSection(create: newPage)
-                        MenuItem("In neuem Tab öffnen…", icon: "search") { shell.sheet = .search }
-                    } label: {
-                        Icon("plus", size: 13)
-                            .foregroundStyle(Impala.text2)
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .hoverEffect(.highlight)
-                    .accessibilityLabel("Neuen Tab öffnen")
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, Space.s1)
-
-                VStack(spacing: 2) {
-                    ForEach(shell.tabs, id: \.self) { tab in
-                        let active = !shell.libraryOpen && tab == shell.active
-                        let inf = info(tab)
-                        HStack(spacing: 6) {
-                            Button {
-                                shell.openTab(tab)
-                            } label: {
-                                HStack(spacing: 6) {
-                                    if let emoji = inf.emoji { Text(emoji).font(.system(size: TextSize.xs)) }
-                                    else { Icon(inf.icon, size: 14) }
-                                    Text(inf.title)
-                                        .font(.system(size: TextSize.sm, weight: active ? .medium : .regular))
-                                        .lineLimit(1)
-                                    Spacer(minLength: 0)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                shell.close(tab)
-                            } label: {
-                                Icon("x", size: 12)
-                                    .foregroundStyle(Impala.text2)
-                                    .frame(width: 22, height: 22)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .hoverEffect(.highlight)
-                            .accessibilityLabel("Tab schließen")
-                        }
-                        .foregroundStyle(active ? Impala.text : Impala.text2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, isCompact ? 3 : 6)
-                        .frame(minHeight: isCompact ? 30 : 38)
-                        .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                        .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                        .hoverEffect(.highlight)
-                    }
-                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Neuen Tab öffnen")
             }
-            .padding(.bottom, 6)
+            .padding(.horizontal, Space.s1)
+
+            if !shell.tabs.isEmpty {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(shell.tabs, id: \.self) { tab in
+                            let active = !shell.libraryOpen && tab == shell.active
+                            let inf = info(tab)
+                            HStack(spacing: 6) {
+                                if let emoji = inf.emoji { Text(emoji).font(.system(size: TextSize.xs)) }
+                                else { Icon(inf.icon, size: 14) }
+                                Text(inf.title)
+                                    .font(.system(size: TextSize.sm, weight: active ? .medium : .regular))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+
+                                Button {
+                                    shell.close(tab)
+                                } label: {
+                                    Icon("x", size: 12)
+                                        .foregroundStyle(Impala.text2)
+                                        .frame(width: 24, height: 24)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .hoverEffect(.highlight)
+                                .accessibilityLabel("Tab schließen")
+                            }
+                            .foregroundStyle(active ? Impala.text : Impala.text2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, isCompact ? 3 : 6)
+                            .frame(minHeight: isCompact ? 30 : 38)
+                            .background(active ? Impala.activeTint : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                            .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                            .onTapGesture { shell.openTab(tab) }
+                            .hoverEffect(.highlight)
+                        }
+                    }
+                }
+                .frame(maxHeight: min(CGFloat(shell.tabs.count) * (isCompact ? 34 : 42), 230))
+                .scrollIndicators(.hidden)
+            }
         }
+        .padding(.bottom, 6)
     }
 
     private func info(_ tab: String) -> (title: String, icon: String, emoji: String?) {

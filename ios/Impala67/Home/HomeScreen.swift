@@ -19,7 +19,7 @@ struct HomeScreen: View {
     private var writer: HomeArticleWriter { .shared }
 
     private enum HomeSheet: String, Identifiable {
-        case customize, history
+        case customize, history, learningTime
         var id: String { rawValue }
     }
 
@@ -125,9 +125,22 @@ struct HomeScreen: View {
                 .riseIn(1)
                 let main = VStack(alignment: .leading, spacing: Space.s6) {
                     if let last {
-                        Button { shell.open(last.id) } label: { ContinueCard(page: last) }
-                            .pressable()
-                            .riseIn(2)
+                        Button { shell.open(last.id) } label: {
+                            ContinueCard(
+                                page: last,
+                                excerpt: data.continueExcerpt,
+                                heftPageIds: data.continueHeftPageIds,
+                                wide: sizeClass == .regular
+                            )
+                        }
+                        .pressable()
+                        .riseIn(2)
+                    } else {
+                        Button { create(.note) } label: {
+                            EmptyContinueCard(wide: sizeClass == .regular)
+                        }
+                        .pressable()
+                        .riseIn(2)
                     }
                     if !pins.isEmpty {
                         FlowRow(pins: Array(pins)) { shell.open($0) }
@@ -142,7 +155,12 @@ struct HomeScreen: View {
                 }
                 let stats = VStack(spacing: Space.s4) {
                     dueCard(open: open, hasCards: hasCards, estMin: estMin)
-                    WeekStat(week: week, goalMin: goal, streak: streak) { storedGoal = WeekGoal.next(after: goal) }
+                    WeekStat(
+                        week: week,
+                        goalMin: goal,
+                        streak: streak,
+                        onOpenDetail: { sheet = .learningTime }
+                    ) { storedGoal = WeekGoal.next(after: goal) }
                 }
                 .riseIn(3)
                 // `.hv-grid`: breit zwei Spalten (Kennzahlen rechts), schmal untereinander.
@@ -175,6 +193,17 @@ struct HomeScreen: View {
             switch s {
             case .customize: HomeCustomizeSheet().environment(store)
             case .history: ArticleHistorySheet().environment(store).environment(shell)
+            case .learningTime:
+                LearningTimeSheet(
+                    sessions: data.sessions,
+                    time: data.time,
+                    goalMin: goal,
+                    onSetGoal: { storedGoal = $0 },
+                    onOpenStats: {
+                        sheet = nil
+                        shell.openCards(.stats)
+                    }
+                )
             }
         }
         .task {
@@ -265,10 +294,13 @@ struct HomeScreen: View {
 /// Was die Startseite aus dem Kern liest (ein Hintergrund-Aufruf statt sechs im `body`).
 struct HomeData {
     let settings: HomeSettings
+    let sessions: [LearningSessionInfo]
     let time: LearningTime
     let articles: [HomeArticleInfo]
     let conflicts: Int
     let recent: [PageSummary]
+    let continueExcerpt: [String]
+    let continueHeftPageIds: [String]
     /// Heute offene Karten (neu + lernen + wiederholen).
     let open: Int
     let hasCards: Bool
@@ -276,12 +308,27 @@ struct HomeData {
     static func load(_ core: ImpalaCore) -> HomeData {
         let settings = HomeSettings.read(core)
         let study = core.studyQueue(deck: nil, utcOffsetMinutes: Deck.utcOffset, mix: false)
+        let sessions = core.learningSessions()
+        let recent = core.recentPages(limit: 40)
+        var continueExcerpt: [String] = []
+        var continueHeftPageIds: [String] = []
+        if let first = recent.first {
+            if first.kind == .heft {
+                continueHeftPageIds = core.heftPageIds(pageId: first.id)
+            } else if first.pdfId == nil {
+                let content = core.page(id: first.id)?.content ?? ""
+                continueExcerpt = markdownExcerpt(title: first.title, content: content)
+            }
+        }
         return HomeData(
             settings: settings,
-            time: LearningTime(core.learningSessions()),
+            sessions: sessions,
+            time: LearningTime(sessions),
             articles: settings.article ? core.homeArticles(limit: 30) : [],
             conflicts: Int(core.conflictCount()),
-            recent: core.recentPages(limit: 40),
+            recent: recent,
+            continueExcerpt: continueExcerpt,
+            continueHeftPageIds: continueHeftPageIds,
             open: Int(study.new + study.learn + study.review),
             hasCards: core.cardTotals().cards > 0
         )

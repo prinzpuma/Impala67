@@ -50,7 +50,7 @@ final class ImpalaStore {
         let done = Profiler.shared.begin("store.changes")
         defer { done() }
         revision += 1
-        if c.everything || c.pagesAll || !c.pages.isEmpty || c.workspaces { pagesRevision += 1 }
+        if c.everything || c.pagesAll || !c.pages.isEmpty || !c.hefte.isEmpty || c.workspaces { pagesRevision += 1 }
         if c.everything || c.pagesAll || c.pagesMeta || c.workspaces { pageMetaRevision += 1 }
         if c.everything || c.ui { uiRevision += 1 }
         if c.everything || c.cardsAll || !c.cards.isEmpty || c.decks || c.reviews || c.settings { cardsRevision += 1 }

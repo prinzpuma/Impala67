@@ -17,7 +17,7 @@ use crate::event::LogEvent;
 use crate::js::{self, Object};
 use crate::order::{self, OrderTimes};
 use crate::reduce::{Effects, Live};
-use crate::types::{CoreOnly, State};
+use crate::types::{CoreOnly, Page, State};
 
 /// Events je Lesezugriff, wenn [`Model::save_checkpoint`] die neuen IDs prüft.
 const CHECKPOINT_SCAN: usize = 2000;
@@ -667,6 +667,15 @@ impl Model {
             self.payload_loaded = true;
         }
         Ok(true)
+    }
+
+    /// Effektiver Änderungszeitpunkt einer Seite: bei Heften das Maximum aus Seiten-`updated` und `heft_updated`.
+    pub fn page_updated<'a>(&'a self, page: &'a Page) -> &'a str {
+        let p = page.updated();
+        match self.heft_updated.get(page.id()) {
+            Some(h) if h.as_str() > p => h.as_str(),
+            _ => p,
+        }
     }
 
     /// Kennzahlen eines Hefts (`S.heftMeta[pageId]`).

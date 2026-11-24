@@ -136,28 +136,30 @@ struct RecallCard: View {
 /// Vorschau für Notizen: Auszug der ersten Zeilen (`mdExcerpt`).
 private struct NoteExcerptPreview: View {
     let lines: [String]
+    let wide: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: wide ? 5 : 3) {
             if lines.isEmpty {
                 Spacer()
                 Text("Leere Seite")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: wide ? 12 : 10, weight: .regular))
                     .foregroundStyle(Impala.text2.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             } else {
-                ForEach(lines.prefix(3).indices, id: \.self) { i in
-                    Text(lines[i])
-                        .font(.system(size: 9, weight: .regular))
+                ForEach(Array(lines.prefix(wide ? 7 : 3).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: wide ? 12 : 9, weight: .regular))
                         .foregroundStyle(Impala.text2)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
         }
-        .padding(8)
-        .frame(width: 110, height: 74, alignment: .topLeading)
+        .padding(wide ? 14 : 8)
+        .frame(maxWidth: wide ? .infinity : 110, alignment: .topLeading)
+        .frame(width: wide ? nil : 110, height: wide ? 185 : 74, alignment: .topLeading)
         .background(Impala.surface)
         .mask(
             LinearGradient(
@@ -178,10 +180,12 @@ private struct NoteExcerptPreview: View {
     }
 }
 
-/// Vorschau für Hefte: Miniatur-Vorschau der letzten Seite.
+/// Vorschau für Hefte: Miniatur-Vorschau der zuletzt geöffneten Seite.
 private struct HeftThumbnailPreview: View {
     let core: ImpalaCore
     let page: PageSummary
+    let heftPageId: String?
+    let wide: Bool
     @Environment(\.displayScale) private var displayScale
     @State private var thumbnail: UIImage?
 
@@ -193,22 +197,27 @@ private struct HeftThumbnailPreview: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                PageIcon(page: page, size: 22)
+                PageIcon(page: page, size: wide ? 30 : 22)
                     .foregroundStyle(Impala.accent.opacity(0.4))
             }
         }
-        .frame(width: 110, height: 74)
+        .frame(maxWidth: wide ? .infinity : 110)
+        .frame(width: wide ? nil : 110, height: wide ? 185 : 74)
         .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                 .stroke(Impala.edgeSoft, lineWidth: 1)
         )
-        .task(id: "\(page.id)|\(page.updated)") {
+        .task(id: "\(page.id)|\(heftPageId ?? "")|\(page.updated)|\(wide)") {
+            guard let targetId = heftPageId else {
+                thumbnail = nil
+                return
+            }
             // Volle Seiten zu rendern dauert Sekunden – nie auf dem Hauptthread.
             let core = core, pageId = page.id, scale = displayScale
+            let renderWidth: CGFloat = wide ? 440 : 220
             let image = await Task.detached(priority: .utility) { () -> UIImage? in
-                guard let last = core.heftPageIds(pageId: pageId).last else { return nil }
-                return HeftExport.renderPage(core: core, pageId: pageId, heftPageId: last, width: 220, scale: scale, imagePixels: 512)
+                HeftExport.renderPage(core: core, pageId: pageId, heftPageId: targetId, width: renderWidth, scale: scale, imagePixels: 512)
             }.value
             guard !Task.isCancelled else { return }
             thumbnail = image
@@ -218,17 +227,20 @@ private struct HeftThumbnailPreview: View {
 
 /// Vorschau für PDF-Dokumente.
 private struct PdfPreview: View {
+    let wide: Bool
+
     var body: some View {
         ZStack {
             Impala.surface
             Text("PDF")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: wide ? 13 : 11, weight: .semibold))
                 .foregroundStyle(Impala.accent)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, wide ? 12 : 8)
+                .padding(.vertical, wide ? 5 : 3)
                 .background(Impala.accent.opacity(0.1), in: Capsule())
         }
-        .frame(width: 110, height: 74)
+        .frame(maxWidth: wide ? .infinity : 110)
+        .frame(width: wide ? nil : 110, height: wide ? 185 : 74)
         .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
@@ -240,40 +252,66 @@ private struct PdfPreview: View {
 /// `.hv-continue`: Karte mit Vorschau, „Weitermachen“, Titel und Zeitpunkt.
 struct ContinueCard: View {
     let page: PageSummary
+    let excerpt: [String]
+    let heftPageIds: [String]
+    let wide: Bool
     @Environment(ImpalaStore.self) private var store
 
     var body: some View {
-        HStack(spacing: Space.s4) {
-            preview
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Weitermachen")
-                    .font(.system(size: TextSize.xs, weight: .semibold))
-                    .foregroundStyle(Impala.text2)
-                Text(PageStyle.title(page))
-                    .font(.system(size: TextSize.lg, weight: .semibold))
-                    .foregroundStyle(Impala.text)
-                    .lineLimit(1)
-                Text(metaText)
-                    .font(.system(size: TextSize.sm))
-                    .foregroundStyle(Impala.text2)
+        Group {
+            if wide {
+                VStack(alignment: .leading, spacing: Space.s3) {
+                    preview
+                    copy
+                }
+            } else {
+                HStack(spacing: Space.s4) {
+                    preview
+                    copy
+                    Spacer(minLength: 0)
+                }
             }
-            Spacer(minLength: 0)
         }
         .padding(Space.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
+    }
+
+    private var copy: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Weitermachen")
+                .font(.system(size: TextSize.xs, weight: .semibold))
+                .foregroundStyle(Impala.text2)
+            Text(PageStyle.title(page))
+                .font(.system(size: TextSize.lg, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .lineLimit(1)
+            Text(metaText)
+                .font(.system(size: TextSize.sm))
+                .foregroundStyle(Impala.text2)
+        }
+    }
+
+    private var activeHeftIndex: Int {
+        guard !heftPageIds.isEmpty else { return 0 }
+        let saved = HeftLastPage.index[page.id] ?? 0
+        return min(max(0, saved), heftPageIds.count - 1)
+    }
+
+    private var activeHeftPageId: String? {
+        guard !heftPageIds.isEmpty else { return nil }
+        return heftPageIds[activeHeftIndex]
     }
 
     @ViewBuilder
     private var preview: some View {
         if page.kind == .heft {
-            HeftThumbnailPreview(core: store.core, page: page)
+            HeftThumbnailPreview(core: store.core, page: page, heftPageId: activeHeftPageId, wide: wide)
         } else if page.pdfId != nil {
-            PdfPreview()
+            PdfPreview(wide: wide)
         } else {
-            let content = store.core.page(id: page.id)?.content ?? ""
-            let excerpt = markdownExcerpt(title: page.title, content: content)
-            NoteExcerptPreview(lines: excerpt)
+            NoteExcerptPreview(lines: excerpt, wide: wide)
         }
     }
 
@@ -281,13 +319,63 @@ struct ContinueCard: View {
         let when = HomeFormat.whenText(page.updated)
         let whenSuffix = when.isEmpty ? "" : " · \(when)"
         if page.kind == .heft {
-            let count = store.core.heftPageIds(pageId: page.id).count
-            let countText = count > 1 ? "Heft · Seite \(count) von \(count)" : "Heft"
+            let count = heftPageIds.count
+            let at = count > 0 ? activeHeftIndex + 1 : 1
+            let countText = count > 1 ? "Heft · Seite \(at) von \(count)" : "Heft"
             return "\(countText)\(whenSuffix)"
         } else if page.pdfId != nil {
             return "PDF\(whenSuffix)"
         } else {
             return "Notiz\(whenSuffix)"
         }
+    }
+}
+
+/// Leerer Zustand für „Weitermachen“ wie `.hv-continue.empty` in der PWA.
+struct EmptyContinueCard: View {
+    let wide: Bool
+
+    var body: some View {
+        let badge = ZStack {
+            Impala.surface
+            Icon("plus", size: wide ? 24 : 18)
+                .foregroundStyle(Impala.accent)
+        }
+        .frame(maxWidth: wide ? .infinity : 110)
+        .frame(width: wide ? nil : 110, height: wide ? 185 : 74)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .stroke(Impala.edgeSoft, lineWidth: 1)
+        )
+
+        let copy = VStack(alignment: .leading, spacing: 3) {
+            Text("Noch keine Seiten")
+                .font(.system(size: TextSize.xs, weight: .semibold))
+                .foregroundStyle(Impala.text2)
+            Text("Erste Seite anlegen")
+                .font(.system(size: TextSize.lg, weight: .semibold))
+                .foregroundStyle(Impala.text)
+                .lineLimit(1)
+        }
+
+        Group {
+            if wide {
+                VStack(alignment: .leading, spacing: Space.s3) {
+                    badge
+                    copy
+                }
+            } else {
+                HStack(spacing: Space.s4) {
+                    badge
+                    copy
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(Space.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Impala.panel, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
     }
 }

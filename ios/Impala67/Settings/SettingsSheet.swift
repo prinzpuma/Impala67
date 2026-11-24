@@ -1083,7 +1083,7 @@ private struct AppSection: View {
 private struct ProfilerSection: View {
     @State private var isExpanded = false
     @State private var enabled = Profiler.shared.isEnabled
-    @State private var records: [Profiler.Record] = []
+    @State private var records: [Profiler.Record] = Profiler.shared.snapshot()
     @State private var share: SharedFile?
     @State private var copied = false
 
@@ -1155,6 +1155,11 @@ private struct ProfilerSection: View {
             }
         }
         .onAppear(perform: reload)
+        .onChange(of: isExpanded) { _, open in if open { reload() } }
+        .onChange(of: enabled) { _, _ in reload() }
+        .onReceive(NotificationCenter.default.publisher(for: Profiler.didChangeNotification)) { _ in
+            if isExpanded { reload() }
+        }
         .sheet(item: $share) { ShareSheet(items: [$0.url]) }
     }
 
