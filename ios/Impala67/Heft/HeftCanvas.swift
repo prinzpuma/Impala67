@@ -883,7 +883,9 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Eigenes Schieben oder Zoomen bricht den Doppeltipp-Zoom ab.
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { zoomer.stop() }
-        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { zoomer.stop() }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            if !zoomer.stepping { zoomer.stop() }
+        }
 
         /// Ebenen mitzoomen und die Seiten mittig halten, solange sie schmaler als der Canvas sind.
         private func layoutPage() {

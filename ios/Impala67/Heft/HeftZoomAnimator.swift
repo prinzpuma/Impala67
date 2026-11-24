@@ -17,6 +17,9 @@ final class HeftZoomAnimator: NSObject {
     private var screen: CGPoint = .zero
     /// Wie `animateZoom` in der PWA (280 ms, easeOutCubic).
     private static let duration: CFTimeInterval = 0.28
+    /// Wahr, solange ein eigener Zoomschritt läuft: `setZoomScale` meldet auch dann `scrollViewWillBeginZooming`,
+    /// das darf die Animation nicht für einen Nutzer-Pinch halten und abbrechen.
+    private(set) var stepping = false
 
     /// Zoomt auf `target`; `p` ist der Tipp in (gezoomten) Inhaltskoordinaten des Scroll-Views.
     func zoom(_ scroll: UIScrollView, to target: CGFloat, at p: CGPoint) {
@@ -51,6 +54,8 @@ final class HeftZoomAnimator: NSObject {
 
     private func step(_ t: CGFloat) {
         guard let scroll else { return stop() }
+        stepping = true
+        defer { stepping = false }
         let e = 1 - pow(1 - t, 3)
         let z = from + (to - from) * e
         // Ruft `scrollViewDidZoom` und setzt damit die Seitenränder für diesen Zoom.
