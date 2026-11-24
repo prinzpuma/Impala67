@@ -85,11 +85,13 @@ internal fun ScanEditor(index: Int, shot: ScanShot, onDelete: () -> Unit, onDone
     }
     // Querformat wie der Scanner: Bild links, Leiste rechts; Hochformat untereinander.
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+        // Breite der Leiste hier festlegen: maxHeight ist in Row nicht erreichbar (DslMarker).
+        val railWidth = if (maxHeight < 430.dp) 208.dp else 232.dp
         if (maxWidth > maxHeight) {
             Row(Modifier.fillMaxSize()) {
                 image(Modifier.weight(1f).fillMaxHeight())
                 Column(
-                    Modifier.width(if (maxHeight < 430.dp) 208.dp else 232.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(12.dp),
+                    Modifier.width(railWidth).fillMaxHeight().verticalScroll(rememberScrollState()).padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text("Scan ${index + 1} bearbeiten", color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)

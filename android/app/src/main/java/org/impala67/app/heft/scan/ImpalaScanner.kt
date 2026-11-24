@@ -232,11 +232,13 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
             // Querformat ist der Normalfall: links Aufnahmen, Mitte Kamera, rechts Leiste mit Auslöser
             // (web/heft-scanner-ui.js). Hochformat: dieselben Teile untereinander. Beim Drehen bleibt alles erhalten.
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+                // Breite der Leiste hier festlegen: maxHeight ist in Row nicht erreichbar (DslMarker).
+                val railWidth = if (maxHeight < 430.dp) 208.dp else 232.dp
                 if (maxWidth > maxHeight) {
                     Row(Modifier.fillMaxSize()) {
                         ShotStrip(ui, vertical = true, Modifier.width(100.dp).fillMaxHeight())
                         camera(Modifier.weight(1f).fillMaxHeight())
-                        ScanRail(ui, Modifier.width(if (maxHeight < 430.dp) 208.dp else 232.dp).fillMaxHeight())
+                        ScanRail(ui, Modifier.width(railWidth).fillMaxHeight())
                     }
                 } else {
                     Column(Modifier.fillMaxSize()) {
