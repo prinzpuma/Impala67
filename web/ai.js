@@ -124,7 +124,7 @@ export const AI = (() => {
 			const res = await fetch(url, { method, headers: Object.fromEntries(headers), body, signal: controller.signal });
 			const info = { ...meta, status: res.status, ms: Math.round(performance.now() - started), requestId: res.headers.get("x-request-id") || res.headers.get("x-goog-request-id") || null };
 			debugEvent(res.ok ? "HTTP-Erfolg" : "HTTP-Fehler", info);
-			return { res, controller, done: () => { clearTimeout(timer); activeControllers.delete(controller); } };
+			return { res, controller, headersDone: () => clearTimeout(timer), done: () => { clearTimeout(timer); activeControllers.delete(controller); } };
 		} catch (error) {
 			clearTimeout(timer);
 			activeControllers.delete(controller);
@@ -142,7 +142,9 @@ export const AI = (() => {
 		},
 		// Stückweise (SSE): read() liefert das nächste Stück oder null; 30 s ohne Daten brechen ab.
 		async open(req) {
-			const { res, controller, done } = await fetchTracked(req);
+			const { res, controller, headersDone, done } = await fetchTracked(req);
+			// Ab dem Antwortkopf wacht nur noch die Stream-Pause (30 s) – lange Antworten laufen durch.
+			headersDone();
 			const reader = res.body?.getReader?.();
 			let finished = false;
 			const finish = () => { if (!finished) { finished = true; done(); } };
@@ -153,7 +155,7 @@ export const AI = (() => {
 					if (!reader) { finish(); return null; }
 					let timer = 0;
 					try {
-						const idle = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(timeoutError("den Datenstrom", LIMIT.streamIdleMs)); }, LIMIT.streamIdleMs); });
+						const idle = new Promise((_, reject) => { timer = setTimeout(() => { reject(timeoutError("den Datenstrom", LIMIT.streamIdleMs)); controller.abort(); }, LIMIT.streamIdleMs); });
 						const { value, done: end } = await Promise.race([reader.read(), idle]);
 						if (end) { finish(); return null; }
 						return value;
