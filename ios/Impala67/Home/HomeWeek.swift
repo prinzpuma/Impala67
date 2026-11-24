@@ -203,140 +203,12 @@ struct LearningTimeSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.s5) {
-                    HStack {
-                        Button { weekOffset -= 1 } label: {
-                            Icon("chevron-left", size: 15)
-                                .foregroundStyle(Impala.text)
-                                .frame(width: 34, height: 34)
-                                .background(Impala.surface, in: Circle())
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Vorherige Woche")
-
-                        Spacer()
-                        Text(weekLabel)
-                            .font(.system(size: TextSize.md, weight: .semibold))
-                            .foregroundStyle(Impala.text)
-                        Spacer()
-
-                        Button { if weekOffset < 0 { weekOffset += 1 } } label: {
-                            Icon("chevron-right", size: 15)
-                                .foregroundStyle(weekOffset < 0 ? Impala.text : Impala.text2.opacity(0.35))
-                                .frame(width: 34, height: 34)
-                                .background(Impala.surface, in: Circle())
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(weekOffset >= 0)
-                        .accessibilityLabel("Nächste Woche")
-                    }
-
-                    HStack(spacing: Space.s3) {
-                        summaryCard(label: "Woche", value: HomeFormat.dur(weekMin), note: "Ziel: \(HomeFormat.dur(Double(goalMin)))")
-                        summaryCard(label: "Heute", value: HomeFormat.dur(todayMin), note: todayMin >= dailyTargetMin ? "Tagesschnitt erreicht" : "Schnitt: \(HomeFormat.dur(dailyTargetMin))")
-                        summaryCard(label: "Streak", value: streak == 1 ? "1 Tag" : "\(streak) Tage", note: "≥ 5 Min pro Tag")
-                    }
-
-                    VStack(alignment: .leading, spacing: Space.s3) {
-                        Text("Lernzeit pro Tag")
-                            .font(.system(size: TextSize.sm, weight: .semibold))
-                            .foregroundStyle(Impala.text)
-                        Chart {
-                            ForEach(dayBars) { bar in
-                                BarMark(
-                                    x: .value("Tag", bar.label),
-                                    y: .value("Minuten", bar.minutes)
-                                )
-                                .foregroundStyle(weekOffset == 0 && bar.index == LearningTime.weekdayIndex() ? Impala.accent : Impala.accent.opacity(0.5))
-                                .cornerRadius(5)
-                            }
-                            RuleMark(y: .value("Tagesschnitt", dailyTargetMin))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                                .foregroundStyle(Impala.text2.opacity(0.6))
-                        }
-                        .chartYAxisLabel("Min")
-                        .frame(height: 190)
-                    }
-                    .padding(Space.s4)
-                    .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
-
-                    VStack(alignment: .leading, spacing: Space.s3) {
-                        Text("Bereiche")
-                            .font(.system(size: TextSize.sm, weight: .semibold))
-                            .foregroundStyle(Impala.text)
-                        if categoryRows.isEmpty {
-                            Text("In dieser Woche wurde noch keine Lernzeit erfasst.")
-                                .font(.system(size: TextSize.sm))
-                                .foregroundStyle(Impala.text2)
-                        } else {
-                            let totalMin = max(1.0, categoryRows.reduce(0) { $0 + $1.minutes })
-                            ForEach(categoryRows) { row in
-                                HStack(spacing: Space.s3) {
-                                    Icon(row.icon, size: 15)
-                                        .foregroundStyle(Impala.accent)
-                                        .frame(width: 24)
-                                    Text(row.label)
-                                        .font(.system(size: TextSize.sm, weight: .medium))
-                                        .foregroundStyle(Impala.text)
-                                    Spacer()
-                                    Text(HomeFormat.dur(row.minutes))
-                                        .font(.system(size: TextSize.sm).monospacedDigit())
-                                        .foregroundStyle(Impala.text2)
-                                }
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        Capsule().fill(Impala.text.opacity(0.07))
-                                        Capsule().fill(Impala.accent.opacity(0.65))
-                                            .frame(width: geo.size.width * CGFloat(min(1, row.minutes / totalMin)))
-                                    }
-                                }
-                                .frame(height: 5)
-                            }
-                        }
-                    }
-                    .padding(Space.s4)
-                    .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
-
-                    VStack(alignment: .leading, spacing: Space.s2) {
-                        Text("Wochenziel")
-                            .font(.system(size: TextSize.sm, weight: .semibold))
-                            .foregroundStyle(Impala.text)
-                        HStack(spacing: Space.s2) {
-                            ForEach(WeekGoal.presets, id: \.self) { preset in
-                                let active = goalMin == preset
-                                Button { onSetGoal(preset) } label: {
-                                    Text(HomeFormat.dur(Double(preset)))
-                                        .font(.system(size: TextSize.sm, weight: active ? .semibold : .regular))
-                                        .foregroundStyle(active ? Impala.accent : Impala.text2)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(minHeight: 36)
-                                        .background(active ? Impala.activeTint : Impala.surface, in: Capsule())
-                                        .overlay(Capsule().stroke(active ? Impala.accentBorder : Impala.edgeSoft, lineWidth: 1))
-                                        .contentShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    Button(action: onOpenStats) {
-                        HStack {
-                            Icon("chart", size: 15)
-                            Text("Karten-Statistik öffnen")
-                                .font(.system(size: TextSize.sm, weight: .semibold))
-                            Spacer()
-                            Icon("chevron-right", size: 13)
-                        }
-                        .foregroundStyle(Impala.accent)
-                        .padding(.horizontal, Space.s4)
-                        .frame(minHeight: 44)
-                        .background(Impala.activeTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                        .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+                    weekHeader
+                    summaryRow
+                    dailyChartCard
+                    categoriesCard
+                    goalSection
+                    statsButton
                 }
                 .padding(Space.s5)
             }
@@ -346,6 +218,164 @@ struct LearningTimeSheet: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { CloseButton() } }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private var weekHeader: some View {
+        HStack {
+            Button { weekOffset -= 1 } label: {
+                Icon("chevron-left", size: 15)
+                    .foregroundStyle(Impala.text)
+                    .frame(width: 34, height: 34)
+                    .background(Impala.surface, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Vorherige Woche")
+
+            Spacer()
+            Text(weekLabel)
+                .font(.system(size: TextSize.md, weight: .semibold))
+                .foregroundStyle(Impala.text)
+            Spacer()
+
+            Button { if weekOffset < 0 { weekOffset += 1 } } label: {
+                Icon("chevron-right", size: 15)
+                    .foregroundStyle(weekOffset < 0 ? Impala.text : Impala.text2.opacity(0.35))
+                    .frame(width: 34, height: 34)
+                    .background(Impala.surface, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(weekOffset >= 0)
+            .accessibilityLabel("Nächste Woche")
+        }
+    }
+
+    private var summaryRow: some View {
+        HStack(spacing: Space.s3) {
+            summaryCard(label: "Woche", value: HomeFormat.dur(weekMin), note: "Ziel: \(HomeFormat.dur(Double(goalMin)))")
+            summaryCard(label: "Heute", value: HomeFormat.dur(todayMin), note: todayMin >= dailyTargetMin ? "Tagesschnitt erreicht" : "Schnitt: \(HomeFormat.dur(dailyTargetMin))")
+            summaryCard(label: "Streak", value: streak == 1 ? "1 Tag" : "\(streak) Tage", note: "≥ 5 Min pro Tag")
+        }
+    }
+
+    private var dailyChartCard: some View {
+        VStack(alignment: .leading, spacing: Space.s3) {
+            Text("Lernzeit pro Tag")
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+            Chart {
+                ForEach(dayBars) { bar in
+                    BarMark(
+                        x: .value("Tag", bar.label),
+                        y: .value("Minuten", bar.minutes)
+                    )
+                    .foregroundStyle(weekOffset == 0 && bar.index == LearningTime.weekdayIndex() ? Impala.accent : Impala.accent.opacity(0.5))
+                    .cornerRadius(5)
+                }
+                RuleMark(y: .value("Tagesschnitt", dailyTargetMin))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(Impala.text2.opacity(0.6))
+            }
+            .chartYAxisLabel("Min")
+            .frame(height: 190)
+        }
+        .padding(Space.s4)
+        .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
+    }
+
+    private var categoriesCard: some View {
+        VStack(alignment: .leading, spacing: Space.s3) {
+            Text("Bereiche")
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+            if categoryRows.isEmpty {
+                Text("In dieser Woche wurde noch keine Lernzeit erfasst.")
+                    .font(.system(size: TextSize.sm))
+                    .foregroundStyle(Impala.text2)
+            } else {
+                let totalMin = max(1.0, categoryRows.reduce(0) { $0 + $1.minutes })
+                ForEach(categoryRows) { row in
+                    categoryRowView(row, totalMin: totalMin)
+                }
+            }
+        }
+        .padding(Space.s4)
+        .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
+    }
+
+    private func categoryRowView(_ row: CategoryRow, totalMin: Double) -> some View {
+        VStack(spacing: 5) {
+            HStack(spacing: Space.s3) {
+                Icon(row.icon, size: 15)
+                    .foregroundStyle(Impala.accent)
+                    .frame(width: 24)
+                Text(row.label)
+                    .font(.system(size: TextSize.sm, weight: .medium))
+                    .foregroundStyle(Impala.text)
+                Spacer()
+                Text(HomeFormat.dur(row.minutes))
+                    .font(.system(size: TextSize.sm).monospacedDigit())
+                    .foregroundStyle(Impala.text2)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Impala.text.opacity(0.07))
+                    Capsule().fill(Impala.accent.opacity(0.65))
+                        .frame(width: geo.size.width * CGFloat(min(1, row.minutes / totalMin)))
+                }
+            }
+            .frame(height: 5)
+        }
+    }
+
+    private var goalSection: some View {
+        VStack(alignment: .leading, spacing: Space.s2) {
+            Text("Wochenziel")
+                .font(.system(size: TextSize.sm, weight: .semibold))
+                .foregroundStyle(Impala.text)
+            HStack(spacing: Space.s2) {
+                ForEach(WeekGoal.presets, id: \.self) { preset in
+                    goalPresetButton(preset)
+                }
+            }
+        }
+    }
+
+    private func goalPresetButton(_ preset: Int) -> some View {
+        let active = goalMin == preset
+        let label = HomeFormat.dur(Double(preset))
+        return Button { onSetGoal(preset) } label: {
+            Text(label)
+                .font(.system(size: TextSize.sm, weight: active ? .semibold : .regular))
+                .foregroundStyle(active ? Impala.accent : Impala.text2)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 36)
+                .background(active ? Impala.activeTint : Impala.surface, in: Capsule())
+                .overlay(Capsule().stroke(active ? Impala.accentBorder : Impala.edgeSoft, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var statsButton: some View {
+        Button(action: onOpenStats) {
+            HStack {
+                Icon("chart", size: 15)
+                Text("Karten-Statistik öffnen")
+                    .font(.system(size: TextSize.sm, weight: .semibold))
+                Spacer()
+                Icon("chevron-right", size: 13)
+            }
+            .foregroundStyle(Impala.accent)
+            .padding(.horizontal, Space.s4)
+            .frame(minHeight: 44)
+            .background(Impala.activeTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func summaryCard(label: String, value: String, note: String) -> some View {
@@ -364,11 +394,5 @@ struct LearningTimeSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
