@@ -1,7 +1,7 @@
 //! Verhalten, das die Golden-Files nicht abdecken: bewusste Abweichungen vom JS, SVG-Export,
 //! Hilfen für die Eingabe.
 
-use impala_heft::diff::{Shadow, diff_document};
+use impala_heft::diff::{Shadow, diff_document, diff_pages};
 use impala_heft::doc::{HeftDoc, HeftPage, Image, Paper, Point, Shape, Stroke, TextBox, Tool};
 use impala_heft::eraser::StrokeEraser;
 use impala_heft::export::{EXPORT_W, export_file_name, page_canvas_size, pdf_image_box};
@@ -388,4 +388,28 @@ fn seite_uebernimmt_format_des_hintergrunds() {
     let (ops, _) = impala_heft::diff_document(None, &doc);
     assert_eq!(serde_json::to_value(&ops).unwrap()[0]["page"]["h"], json!(707));
     assert_eq!(HeftDoc::from_value(serde_json::to_value(&doc).unwrap()), doc);
+}
+
+#[test]
+fn seiten_diff_gleicht_vollem_diff() {
+    let mut doc = HeftDoc::default();
+    for id in ["a", "b", "c"] {
+        let mut page = HeftPage::empty(id, Paper::Lined);
+        page.strokes.push(pen(&format!("{id}1"), &[[0.0, 0.0], [5.0, 5.0]]));
+        doc.pages.push(page);
+    }
+    let shadow = Shadow::of(&doc);
+    let mut next = doc.clone();
+    next.pages[1].strokes.push(pen("b2", &[[1.0, 1.0], [9.0, 9.0]]));
+    next.pages[1].strokes.remove(0);
+    next.pages.insert(0, HeftPage::empty("neu", Paper::Grid));
+    next.pages.remove(3);
+    let order: Vec<String> = next.pages.iter().map(|p| p.id.clone()).collect();
+    let changed = vec![next.pages[0].clone(), next.pages[2].clone()];
+    let (full, full_shadow) = diff_document(Some(&shadow), &next);
+    let (part, part_shadow) = diff_pages(&shadow, &order, &changed).expect("alle Seiten bekannt");
+    assert_eq!(serde_json::to_value(&full).unwrap(), serde_json::to_value(&part).unwrap());
+    assert_eq!(full_shadow, part_shadow);
+    // Neue Seite nicht mitgeschickt: kein Teil-Diff möglich.
+    assert!(diff_pages(&shadow, &order, &changed[1..]).is_none());
 }

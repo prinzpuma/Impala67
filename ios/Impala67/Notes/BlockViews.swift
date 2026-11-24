@@ -6,12 +6,18 @@ import UIKit
 /// Eingabefeld, Tabellen zum Raster aus Zellen; alles andere lässt sich über Halten → „Als Markdown
 /// bearbeiten“ ändern – auch in Callout, Toggle und Spalten. Nur in reinen Anzeigen
 /// (`NoteModel.isReadOnly`: Lernkarten, Chat) bleibt alles außer Checkboxen und Toggles stehen.
-struct BlockRow: View {
+struct BlockRow: View, Equatable {
     let block: MdBlock
     let number: Int?
     let first: Bool
     let model: NoteModel
     @State private var raw: String?
+
+    /// PERF: Tippen ersetzt `model.blocks`; ohne Vergleich rechnete SwiftUI dann jede Zeile neu. Was die Zeile
+    /// sonst vom Modell liest (aktiver Block, Fokus), meldet die Beobachtung ihr direkt.
+    nonisolated static func == (a: BlockRow, b: BlockRow) -> Bool {
+        a.block == b.block && a.number == b.number && a.first == b.first && a.model === b.model
+    }
 
     private var editing: Bool { model.activeId == block.id }
 
@@ -207,7 +213,7 @@ private struct BlockInput: View {
             onBlur: { model.blurred(id, token: $0) },
             wants: { model.wants($0, id: id, text: $1) },
             onKey: { model.handle($0, id: id) },
-            onPasteImages: { model.insertImages($0, after: id) }
+            onPasteImages: { images in Task { await model.insertImages(images, after: id) } }
         )
     }
 }

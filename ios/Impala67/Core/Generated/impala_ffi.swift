@@ -4058,6 +4058,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      */
     func libraryNotionView(smart: String, query: String)  -> NotionLibraryView
     
+    /**
+     * Link-Menü (`[[`, `openLinkMenu` der PWA): höchstens `limit` zuletzt bearbeitete aktive Seiten außer
+     * `exclude`, deren Titel `query` enthält (ohne Groß-/Kleinschreibung).
+     */
+    func linkCandidates(query: String, exclude: String, limit: UInt32)  -> [PageSummary]
+    
     func loadInfo()  -> LoadInfo
     
     /**
@@ -4145,6 +4151,12 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
     func pageSubtree(id: String)  -> [String]
+    
+    /**
+     * Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.
+     * Für die Tab-Leiste: je Änderung nur Titel und Icon statt jeder offenen Seite samt Inhalt.
+     */
+    func pageSummaries(ids: [String])  -> [PageSummary]
     
     /**
      * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
@@ -5899,6 +5911,20 @@ open func libraryNotionView(smart: String, query: String) -> NotionLibraryView  
 })
 }
     
+    /**
+     * Link-Menü (`[[`, `openLinkMenu` der PWA): höchstens `limit` zuletzt bearbeitete aktive Seiten außer
+     * `exclude`, deren Titel `query` enthält (ohne Groß-/Kleinschreibung).
+     */
+open func linkCandidates(query: String, exclude: String, limit: UInt32) -> [PageSummary]  {
+    return try!  FfiConverterSequenceTypePageSummary.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_link_candidates(self.uniffiClonePointer(),
+        FfiConverterString.lower(query),
+        FfiConverterString.lower(exclude),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
 open func loadInfo() -> LoadInfo  {
     return try!  FfiConverterTypeLoadInfo_lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_load_info(self.uniffiClonePointer(),$0
@@ -6082,6 +6108,18 @@ open func pageSubtree(id: String) -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_page_subtree(self.uniffiClonePointer(),
         FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.
+     * Für die Tab-Leiste: je Änderung nur Titel und Icon statt jeder offenen Seite samt Inhalt.
+     */
+open func pageSummaries(ids: [String]) -> [PageSummary]  {
+    return try!  FfiConverterSequenceTypePageSummary.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_impalacore_page_summaries(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(ids),$0
     )
 })
 }
@@ -27719,6 +27757,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_library_notion_view() != 53167) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_link_candidates() != 47151) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_load_info() != 7430) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27768,6 +27809,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_page_summaries() != 27770) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_palette_chats() != 55124) {

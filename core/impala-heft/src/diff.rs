@@ -370,10 +370,29 @@ fn diff_items<T: DiffItem>(
 /// Reihenfolge wie in JS: entfernte Seiten, neue Seiten, Reihenfolge (nur wenn neu oder
 /// geändert), dann je Seite Papier, Text, Striche, Bilder, Textfelder.
 pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>, Shadow) {
-    let mut ops = Vec::new();
     let old_pages: &[ShadowPage] = previous.map_or(&[], |p| &p.pages);
+    let entries: Vec<(&str, Option<&HeftPage>)> = next.pages.iter().map(|p| (p.id.as_str(), Some(p))).collect();
+    diff_ordered(old_pages, &entries).expect("jede Seite liegt vor")
+}
+
+/// Wie [`diff_document`], aber nur die Seiten in `changed` werden verglichen; alle übrigen
+/// Seiten aus `order` gelten als unverändert (ihr Schatten bleibt). So kostet ein Strich auf
+/// einem dicken Heft eine Seite statt des ganzen Dokuments (`HeftShadow.diffPages`).
+/// `None`, wenn eine Seite aus `order` weder im Schatten noch in `changed` steht.
+pub fn diff_pages(previous: &Shadow, order: &[String], changed: &[HeftPage]) -> Option<(Vec<HeftOp>, Shadow)> {
+    let by_id: HashMap<&str, &HeftPage> = changed.iter().map(|p| (p.id.as_str(), p)).collect();
+    let entries: Vec<(&str, Option<&HeftPage>)> = order.iter().map(|id| (id.as_str(), by_id.get(id.as_str()).copied())).collect();
+    diff_ordered(&previous.pages, &entries)
+}
+
+/// entries: Seiten-IDs in neuer Reihenfolge, je mit der Seite oder `None` (= unverändert).
+fn diff_ordered(old_pages: &[ShadowPage], entries: &[(&str, Option<&HeftPage>)]) -> Option<(Vec<HeftOp>, Shadow)> {
+    let mut ops = Vec::new();
     let old_by_id: HashMap<&str, &ShadowPage> = old_pages.iter().map(|p| (p.id.as_str(), p)).collect();
-    let next_ids: HashSet<&str> = next.pages.iter().map(|p| p.id.as_str()).collect();
+    if entries.iter().any(|(id, page)| page.is_none() && !old_by_id.contains_key(id)) {
+        return None;
+    }
+    let next_ids: HashSet<&str> = entries.iter().map(|(id, _)| *id).collect();
 
     for p in old_pages {
         if !next_ids.contains(p.id.as_str()) {
@@ -381,62 +400,63 @@ pub fn diff_document(previous: Option<&Shadow>, next: &HeftDoc) -> (Vec<HeftOp>,
         }
     }
     let mut added = false;
-    for (i, p) in next.pages.iter().enumerate() {
-        if !old_by_id.contains_key(p.id.as_str()) {
-            ops.push(HeftOp::PageAdd {
-                at: Some(i as f64),
-                page: p.id.clone(),
-                paper: Some(p.paper.clone()),
-                height: p.height,
-            });
+    for (i, (id, page)) in entries.iter().enumerate() {
+        if let (false, Some(p)) = (old_by_id.contains_key(id), page) {
+            ops.push(HeftOp::PageAdd { at: Some(i as f64), page: p.id.clone(), paper: Some(p.paper.clone()), height: p.height });
             added = true;
         }
     }
     // Die Reihenfolge wird nur übertragen, wenn sie sich tatsächlich geändert hat.
     let kept_before = old_pages.iter().filter(|p| next_ids.contains(p.id.as_str())).map(|p| p.id.as_str());
-    let kept_after = next.pages.iter().filter(|p| old_by_id.contains_key(p.id.as_str())).map(|p| p.id.as_str());
+    let kept_after = entries.iter().map(|(id, _)| *id).filter(|id| old_by_id.contains_key(id));
     if added || !kept_before.eq(kept_after) {
-        ops.push(HeftOp::PageOrder { order: next.pages.iter().map(|p| p.id.clone()).collect() });
+        ops.push(HeftOp::PageOrder { order: entries.iter().map(|(id, _)| (*id).to_owned()).collect() });
     }
 
-    let pages = next
-        .pages
+    let shadow = entries
         .iter()
-        .map(|page: &HeftPage| {
-            let old = old_by_id.get(page.id.as_str()).copied();
-            if let Some(old) = old
-                && old.paper != page.paper
-            {
-                ops.push(HeftOp::PagePaper { page: page.id.clone(), paper: page.paper.clone() });
-            }
-            if old.map_or(("", "", ""), |o| (o.ocr_text.as_str(), o.ocr_src.as_str(), o.ocr_key.as_str()))
-                != (page.ocr_text.as_str(), page.ocr_src.as_str(), page.ocr_key.as_str())
-            {
-                ops.push(HeftOp::Ocr {
-                    page: page.id.clone(),
-                    text: page.ocr_text.clone(),
-                    src: page.ocr_src.clone(),
-                    key: page.ocr_key.clone(),
-                });
-            }
-            let background = page.background.as_ref().map(Signature::of_image);
-            if old.and_then(|o| o.background.as_ref()) != background.as_ref() {
-                let had = old.is_some_and(|o| o.background.is_some());
-                ops.extend(background_ops(&page.id, had, page.background.clone()));
-            }
-            let id = &page.id;
-            ShadowPage {
-                id: id.clone(),
-                paper: page.paper.clone(),
-                ocr_text: page.ocr_text.clone(),
-                ocr_src: page.ocr_src.clone(),
-                ocr_key: page.ocr_key.clone(),
-                background,
-                strokes: diff_items(&mut ops, id, old.map(|o| &o.strokes), &page.strokes),
-                images: diff_items(&mut ops, id, old.map(|o| &o.images), &page.images),
-                texts: diff_items(&mut ops, id, old.map(|o| &o.texts), &page.texts),
+        .map(|(id, page)| {
+            let old = old_by_id.get(id).copied();
+            match page {
+                Some(page) => diff_page(&mut ops, old, page),
+                None => old.expect("oben geprüft").clone(),
             }
         })
         .collect();
-    (ops, Shadow { pages })
+    Some((ops, Shadow { pages: shadow }))
+}
+
+fn diff_page(ops: &mut Vec<HeftOp>, old: Option<&ShadowPage>, page: &HeftPage) -> ShadowPage {
+    if let Some(old) = old
+        && old.paper != page.paper
+    {
+        ops.push(HeftOp::PagePaper { page: page.id.clone(), paper: page.paper.clone() });
+    }
+    if old.map_or(("", "", ""), |o| (o.ocr_text.as_str(), o.ocr_src.as_str(), o.ocr_key.as_str()))
+        != (page.ocr_text.as_str(), page.ocr_src.as_str(), page.ocr_key.as_str())
+    {
+        ops.push(HeftOp::Ocr {
+            page: page.id.clone(),
+            text: page.ocr_text.clone(),
+            src: page.ocr_src.clone(),
+            key: page.ocr_key.clone(),
+        });
+    }
+    let background = page.background.as_ref().map(Signature::of_image);
+    if old.and_then(|o| o.background.as_ref()) != background.as_ref() {
+        let had = old.is_some_and(|o| o.background.is_some());
+        ops.extend(background_ops(&page.id, had, page.background.clone()));
+    }
+    let id = &page.id;
+    ShadowPage {
+        id: id.clone(),
+        paper: page.paper.clone(),
+        ocr_text: page.ocr_text.clone(),
+        ocr_src: page.ocr_src.clone(),
+        ocr_key: page.ocr_key.clone(),
+        background,
+        strokes: diff_items(ops, id, old.map(|o| &o.strokes), &page.strokes),
+        images: diff_items(ops, id, old.map(|o| &o.images), &page.images),
+        texts: diff_items(ops, id, old.map(|o| &o.texts), &page.texts),
+    }
 }

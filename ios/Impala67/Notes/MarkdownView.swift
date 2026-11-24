@@ -16,7 +16,7 @@ struct MarkdownView: View {
     }
 
     var body: some View {
-        let numbers = listNumbers(model.blocks)
+        let numbers = model.listNumbers
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(model.blocks.enumerated()), id: \.element.id) { i, b in
                 BlockRow(block: b, number: numbers[b.id], first: i == 0, model: model)

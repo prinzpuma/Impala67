@@ -460,6 +460,17 @@ impl HeftShadow {
     pub fn diff(&self, doc: &JsValue) -> Result<HeftDiff, JsError> {
         diff_from(Some(&self.0), doc)
     }
+
+    /// Wie `diff`, aber nur `doc.pages` (die geänderten Seiten) werden verglichen; die übrigen
+    /// Seiten aus `order` gelten als unverändert. `undefined`, wenn eine Seite fehlt.
+    #[wasm_bindgen(js_name = diffPages)]
+    pub fn diff_pages(&self, order: Vec<String>, doc: &JsValue) -> Result<Option<HeftDiff>, JsError> {
+        let changed = doc_from(doc)?;
+        Ok(impala_heft::diff_pages(&self.0, &order, &changed.pages).map(|(ops, shadow)| HeftDiff {
+            ops: serde_json::to_value(ops).unwrap_or(Value::Null),
+            shadow: Some(HeftShadow(shadow)),
+        }))
+    }
 }
 
 /// Operationen, die ein leeres Heft in `doc` überführen.

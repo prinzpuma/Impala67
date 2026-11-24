@@ -320,7 +320,7 @@ export function createHeftViewport(ctx) {
 		x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
 		const t = tile.__heftTile, f = t.dpr * t.k, s = t.dpr * t.scale, cull = pageRectForTile(r);
 		if (!background || !ctx.paintLayerAsync(tile, pg, i, [s, 0, 0, s, -t.x * f, -t.y * f], cull, () => tile.__heftTile === t, () => renderDetailTile(i, true))) {
-			tile.__heftJob = (tile.__heftJob || 0) + 1;
+			tile.__heftJob = (tile.__heftJob || 0) + 1; tile.__heftPending = false;
 			x.setTransform(1, 0, 0, 1, 0, 0);
 			x.clearRect(0, 0, tile.width, tile.height);
 			tileTransform(x, t);
@@ -398,6 +398,38 @@ export function createHeftViewport(ctx) {
 		return true;
 	}
 
+	// PERF (Radierer, Lasso): nur den Ausschnitt rect { minX, minY, maxX, maxY } (Seitenkoordinaten)
+	// der Basis-Seite und der Detail-Kachel neu zeichnen statt der ganzen Seite. Der Ausschnitt wird
+	// auf ganze Gerätepixel gerundet, damit an seinem Rand keine Halbpixel-Naht entsteht. Rastert der
+	// Worker eine Fläche gerade noch (__heftPending), käme sein Bild mit dem alten Stand danach an –
+	// dann wie bisher die ganze Seite. Rückgabe false = Aufrufer zeichnet die Seite selbst neu.
+	function redrawRect(i, rect) {
+		const pg = ctx.doc()?.pages[i];
+		if (!pg || !rect) return false;
+		const base = ctx.canvases()[i], tile = ctx.detailCanvases()[i];
+		const tileOn = tile && tile.__heftTile && tile.style.display !== "none";
+		if (!base || base.width < 2 || base.__heftPending || (tileOn && tile.__heftPending)) return false;
+		const paint = (cv, setT) => {
+			const x = cv.getContext("2d");
+			setT(x);
+			const m = x.getTransform();
+			const x0 = Math.max(0, Math.floor(m.a * rect.minX + m.e)), y0 = Math.max(0, Math.floor(m.d * rect.minY + m.f));
+			const x1 = Math.min(cv.width, Math.ceil(m.a * rect.maxX + m.e)), y1 = Math.min(cv.height, Math.ceil(m.d * rect.maxY + m.f));
+			if (x1 <= x0 || y1 <= y0) return;
+			x.save();
+			x.setTransform(1, 0, 0, 1, 0, 0);
+			x.clearRect(x0, y0, x1 - x0, y1 - y0);
+			x.beginPath(); x.rect(x0, y0, x1 - x0, y1 - y0); x.clip();
+			setT(x);
+			// Culling-Rechteck in Seitenkoordinaten (der gerundete Ausschnitt ist minimal größer).
+			const cull = { x: (x0 - m.e) / m.a - 1, y: (y0 - m.f) / m.d - 1, w: (x1 - x0) / m.a + 2, h: (y1 - y0) / m.d + 2 };
+			ctx.renderPageTo(x, pg, i, cull);
+			x.restore();
+		};
+		paint(base, ctx.applyTransform);
+		if (tileOn) paint(tile, (x) => tileTransform(x, tile.__heftTile));
+		return true;
+	}
 	function commitStrokeRender(i, stroke) {
 		const finish = PERF_PROFILER.start("heft.stroke", { points: stroke?.pts?.length || 0 }, 8);
 		const cv = ctx.canvases()[i];
@@ -682,7 +714,7 @@ export function createHeftViewport(ctx) {
 		view, gesture, PALM_UNDO_MS, scale: () => scale,
 		viewport, contentSize, scrollEl, stopAnim, navReset, animateTo, layout, reset, centerPageIndex,
 		visiblePageIndices, pageRectForTile, renderDetailTile, renderVisiblePages,
-		liveInkCtx, clearLiveInk, commitStrokeRender, applyTouchAction,
+		liveInkCtx, clearLiveInk, commitStrokeRender, redrawRect, applyTouchAction,
 		onPenBoundary, onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onWheelZoom,
 	};
 }

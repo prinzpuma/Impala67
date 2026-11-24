@@ -86,9 +86,9 @@ final class SemanticStatus {
 
     /// Nach einer Seitenänderung: kurz warten (Tippen), dann im Hintergrund nachführen.
     func pagesChanged(core: ImpalaCore) async {
-        guard HomeSettings.read(core).relatedPages else { return }
+        // Erst entprellen, dann die Einstellung lesen: sonst fragte jedes Speichern beim Tippen den Kern.
         try? await Task.sleep(for: .seconds(3))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, HomeSettings.read(core).relatedPages else { return }
         if running {
             again = true
             return

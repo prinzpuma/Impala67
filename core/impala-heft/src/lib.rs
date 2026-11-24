@@ -18,7 +18,7 @@ pub mod ops;
 pub mod pages;
 pub mod worksheet;
 
-pub use diff::{Shadow, diff_document};
+pub use diff::{Shadow, diff_document, diff_pages};
 pub use doc::{
     BBox, HeftDoc, HeftPage, Image, PAGE_H, PAGE_W, Paper, Point, Shape, Stroke, TextBox, Tool, blob_id,
     compose_page_text,

@@ -23,8 +23,11 @@ struct NoteEditor: View {
             }
         }
         .task(id: pageId) {
-            model?.flush()
-            model = NoteModel(core: store.core, pageId: pageId)
+            // Ohne Warten: das Lesen unten läuft auf derselben Schreib-Warteschlange dahinter.
+            model?.flush(wait: false)
+            let loaded = await NoteModel.load(core: store.core, pageId: pageId)
+            guard !Task.isCancelled else { return }
+            model = NoteModel(core: store.core, pageId: pageId, loaded: loaded)
         }
         .onDisappear { model?.flush() }
         .onChange(of: scenePhase) { _, phase in
@@ -116,8 +119,13 @@ private struct NoteBody: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .task(id: "\(model.pageId):\(store.pageMetaRevision)") {
-            isDbPage = store.core.pageDb(id: model.pageId) != nil
-            if let s = store.core.page(id: model.pageId)?.summary {
+            let (core, id) = (store.core, model.pageId)
+            let (db, summary) = await Task.detached(priority: .userInitiated) {
+                (core.pageDb(id: id) != nil, core.pageSummaries(ids: [id]).first)
+            }.value
+            guard !Task.isCancelled else { return }
+            isDbPage = db
+            if let s = summary, cover.name != s.cover || cover.img != s.coverImg {
                 withAnimation(.snappy) { cover = (s.cover, s.coverImg) }
             }
         }
@@ -126,7 +134,7 @@ private struct NoteBody: View {
             let after = model.activeId
             Task {
                 let images = await Self.loadImages(providers)
-                model.insertImages(images, after: after)
+                await model.insertImages(images, after: after)
             }
             return true
         }
@@ -199,7 +207,7 @@ private struct NoteBody: View {
             allowedContentTypes: model.mediaRequest == .pdf ? [.pdf] : [.item],
             allowsMultipleSelection: true
         ) { result in
-            if case .success(let urls) = result { urls.forEach(importFile) }
+            if case .success(let urls) = result { Task { for url in urls { await importFile(url) } } }
         }
         .photosPicker(
             isPresented: Binding(get: { model.mediaRequest == .image }, set: { if !$0 && photos.isEmpty { model.finishMedia() } }),
@@ -214,10 +222,11 @@ private struct NoteBody: View {
     // MARK: Blöcke mit Griff zum Ziehen
 
     private var blockList: some View {
-        let numbers = listNumbers(model.blocks)
+        let numbers = model.listNumbers
         return VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(model.blocks.enumerated()), id: \.element.id) { i, b in
                 BlockRow(block: b, number: numbers[b.id], first: i == 0, model: model)
+                    .equatable()
                     .overlay(alignment: .topLeading) {
                         if dragId == b.id || (dragId == nil && (model.activeId == b.id || hovered == b.id)) {
                             blockGutter(b).offset(x: -48)
@@ -321,11 +330,15 @@ private struct NoteBody: View {
         return .handled
     }
 
-    private func importFile(_ url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    private func importFile(_ url: URL) async {
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-        guard let data = try? Data(contentsOf: url), model.addMedia(data, mime: mime, name: url.lastPathComponent) else {
+        // Lesen im Hintergrund: große PDFs blockierten sonst den Hauptthread.
+        let data = await Task.detached(priority: .userInitiated) { () -> Data? in
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            return try? Data(contentsOf: url)
+        }.value
+        guard let data, await model.addMedia(data, mime: mime, name: url.lastPathComponent) else {
             model.showToast("Datei konnte nicht gelesen werden.", style: .error)
             return
         }
@@ -354,7 +367,7 @@ private struct NoteBody: View {
             let type = item.supportedContentTypes.first { $0.conforms(to: .image) } ?? .jpeg
             let ext = type.preferredFilenameExtension ?? "jpg"
             guard let data = try? await item.loadTransferable(type: Data.self),
-                  model.addMedia(data, mime: type.preferredMIMEType ?? "image/jpeg", name: items.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)")
+                  await model.addMedia(data, mime: type.preferredMIMEType ?? "image/jpeg", name: items.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)")
             else {
                 model.showToast("Datei konnte nicht gelesen werden.", style: .error)
                 continue
@@ -792,20 +805,28 @@ private struct PageChrome: View {
         .sheet(isPresented: $showHistory) {
             PageHistorySheet(model: model)
         }
-        .task(id: "\(model.pageId):\(store.pageMetaRevision):\(store.pagesRevision)") {
+        // Kopfdaten nur bei Änderungen an Titel, Icon, Ort, Favorit, Archiv – nicht bei jedem Speichern des Textes
+        // (vorher las jedes automatische Speichern die ganze Seite samt Inhalt neu).
+        .task(id: "\(model.pageId):\(store.pageMetaRevision)") {
             let pageId = model.pageId
             let core = store.core
-            let loaded = await Task.detached(priority: .userInitiated) { () -> (PageSummary?, Bool, Int, Bool) in
-                guard let detail = core.page(id: pageId) else { return (nil, false, 0, false) }
-                let marksCount = highlightCount(detail.content)
-                return (detail.summary, detail.archived, marksCount, core.pageDb(id: pageId) != nil)
+            let loaded = await Task.detached(priority: .userInitiated) { () -> (PageSummary?, Bool, Bool) in
+                guard let detail = core.page(id: pageId) else { return (nil, false, false) }
+                return (detail.summary, detail.archived, core.pageDb(id: pageId) != nil)
             }.value
             if !Task.isCancelled {
                 summary = loaded.0
                 isArchived = loaded.1
-                marks = loaded.2
-                isDb = loaded.3
+                isDb = loaded.2
             }
+        }
+        // Markierungen zählen aus dem gespeicherten Text des Editors (eigene wie übernommene Stände).
+        .task(id: "\(model.pageId):\(model.savedRevision)") {
+            if marks > 0 || model.savedRevision > 0 { try? await Task.sleep(for: .milliseconds(300)) }
+            guard !Task.isCancelled else { return }
+            let content = model.savedContent
+            let count = await Task.detached(priority: .utility) { highlightCount(content) }.value
+            if !Task.isCancelled { marks = count }
         }
     }
 

@@ -1502,6 +1502,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(void*_Nonnu
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_library_notion_view(void*_Nonnull ptr, RustBuffer smart, RustBuffer query, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LINK_CANDIDATES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LINK_CANDIDATES
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_link_candidates(void*_Nonnull ptr, RustBuffer query, RustBuffer exclude, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LOAD_INFO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_LOAD_INFO
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_load_info(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -1585,6 +1590,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subject(void*_Nonnull ptr
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUBTREE
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_subtree(void*_Nonnull ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUMMARIES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PAGE_SUMMARIES
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_page_summaries(void*_Nonnull ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_PALETTE_CHATS
@@ -4187,6 +4197,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_library_notion_view(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LINK_CANDIDATES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LINK_CANDIDATES
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_link_candidates(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LOAD_INFO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_LOAD_INFO
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_load_info(void
@@ -4286,6 +4302,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subject(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUBTREE
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_subtree(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUMMARIES
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_PAGE_SUMMARIES
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_page_summaries(void
     
 );
 #endif

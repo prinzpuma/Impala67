@@ -530,6 +530,31 @@ impl ImpalaCore {
         summaries(pages)
     }
 
+    /// Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.
+    /// Für die Tab-Leiste: je Änderung nur Titel und Icon statt jeder offenen Seite samt Inhalt.
+    pub fn page_summaries(&self, ids: Vec<String>) -> Vec<PageSummary> {
+        let inner = self.lock();
+        let state = inner.model.state();
+        ids.iter().filter_map(|id| state.pages.get(id)).filter(|p| !p.is_trashed()).map(summary).collect()
+    }
+
+    /// Link-Menü (`[[`, `openLinkMenu` der PWA): höchstens `limit` zuletzt bearbeitete aktive Seiten außer
+    /// `exclude`, deren Titel `query` enthält (ohne Groß-/Kleinschreibung).
+    pub fn link_candidates(&self, query: String, exclude: String, limit: u32) -> Vec<PageSummary> {
+        let inner = self.lock();
+        let q = query.to_lowercase();
+        let mut pages: Vec<&Page> = inner
+            .model
+            .state()
+            .active_pages()
+            .into_iter()
+            .filter(|p| p.id() != exclude && (q.is_empty() || p.title().to_lowercase().contains(&q)))
+            .collect();
+        pages.sort_by(|a, b| b.updated().cmp(a.updated()));
+        pages.truncate(limit as usize);
+        summaries(pages)
+    }
+
     pub fn trashed_pages(&self) -> Vec<PageSummary> {
         summaries(self.lock().model.state().trashed_pages())
     }

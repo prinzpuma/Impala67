@@ -464,6 +464,7 @@ struct HeftCanvas: UIViewRepresentable {
             loading.removeAll()
             known.removeAll()
             parked.removeAll()
+            eraseRun = nil
             evictTask?.cancel()
             removed.removeAll()
             pending.removeAll()
@@ -569,6 +570,7 @@ struct HeftCanvas: UIViewRepresentable {
         /// PencilKit nicht alles neu zeichnet), Papier, Bilder, Textfelder und sichtbare Striche nachziehen.
         private func apply(_ datas: [HeftPageData], built: [String: Built] = [:]) {
             guard let canvas else { return }
+            flushErase()
             let fresh = datas.filter { slot[$0.id] != nil }
             guard !fresh.isEmpty else { return }
             let pages = Set(fresh.map(\.id))
@@ -678,7 +680,7 @@ struct HeftCanvas: UIViewRepresentable {
             guard let canvas, let r = visibleRange(), !applying else { return }
             // Nicht mitten in einem Strich oder vor dem Schreiben wartender Stiftstriche.
             let drawing = canvas.drawingGestureRecognizer.state
-            if !pending.isEmpty || drawing == .began || drawing == .changed {
+            if !pending.isEmpty || eraseRun != nil || drawing == .began || drawing == .changed {
                 scheduleEvict()
                 return
             }
@@ -778,15 +780,20 @@ struct HeftCanvas: UIViewRepresentable {
 
         /// Sichtbare Striche nachziehen: gespeicherte (in PencilKit durchsichtige) Striche je Seite in
         /// Zeichenreihenfolge, mit ihren Kerndaten und der Lage seit dem Laden (Lasso-Verschieben).
-        private func updateInk(hiding hidden: Set<UInt32> = []) {
+        /// `only`: nur diese Seiten abgleichen (nil = alle). Jede Seite vergleicht alle ihre Striche – bei
+        /// Radierer und Lasso genügt die eine Seite, um die es geht.
+        private func updateInk(hiding hidden: Set<UInt32> = [], only pages: Set<String>? = nil) {
             guard let canvas, !inks.isEmpty else { return }
             var lists: [String: [(data: HeftStroke, transform: CGAffineTransform)]] = [:]
-            for stroke in canvas.drawing.strokes where HeftInk.isHidden(stroke) && !hidden.contains(stroke.randomSeed) {
-                guard let k = known[stroke.randomSeed], inks[k.page] != nil else { continue }
+            for stroke in canvas.drawing.strokes where !hidden.contains(stroke.randomSeed) {
+                guard let k = known[stroke.randomSeed], inks[k.page] != nil, pages?.contains(k.page) ?? true,
+                      HeftInk.isHidden(stroke) else { continue }
                 let t: CGAffineTransform = k.drawn == stroke.transform ? .identity : k.drawn.inverted().concatenating(stroke.transform)
                 lists[k.page, default: []].append((data: k.data, transform: t))
             }
-            for (id, v) in inks { v.update(lists[id] ?? []) }
+            // Laufende Radier-Geste: ihre Seite zeigt den Stand der Geste (die Zeichnung zieht erst am Ende nach).
+            if let run = eraseRun, pages?.contains(run.page) ?? true { lists[run.page] = run.inkList() }
+            for (id, v) in inks where pages?.contains(id) ?? true { v.update(lists[id] ?? []) }
         }
 
         /// Sichtbaren Ausschnitt an die Seiten melden (scharfe Detail-Bitmap beim Zoomen).
@@ -919,20 +926,26 @@ struct HeftCanvas: UIViewRepresentable {
         }
 
         func canvasViewDrawingDidChange(_ canvas: PKCanvasView) {
-            if !applying { sync(canvas) }
+            // Änderung mitten in einer Radier-Geste (z. B. Rückgängig per Fingertipp): erst die zurückgehaltenen
+            // Radier-Schritte in die Zeichnung, damit der Abgleich den richtigen Stand vergleicht.
+            if !applying { flushErase() }
             // Radierer, Lasso, Rückgängig: die sichtbaren Striche folgen der Zeichnung (nach dem Abgleich,
-            // damit neu geschriebene Striche schon ihre Kerndaten haben).
-            updateInk()
+            // damit neu geschriebene Striche schon ihre Kerndaten haben). PERF: Ein neuer Stiftstrich ändert keine
+            // gespeicherte Tinte (PencilKit zeigt ihn selbst) – dann kein Abgleich aller Seiten.
+            if applying || sync(canvas) { updateInk() }
             refreshUndo()
             // Rückgängig, fremde Änderung: Auswahlrahmen folgt den verbliebenen Strichen.
             if !lassoSeeds.isEmpty { refreshLasso() }
         }
 
         /// Vergleicht die Zeichnung mit dem letzten Stand und schreibt die Unterschiede in den Kern.
-        private func sync(_ canvas: PKCanvasView) {
+        /// Rückgabe: Hat sich gespeicherte (von `HeftInkView` gezeigte) Tinte geändert?
+        @discardableResult
+        private func sync(_ canvas: PKCanvasView) -> Bool {
             let done = Profiler.shared.begin("heft.drawing-diff")
             defer { done() }
             let strokes = canvas.drawing.strokes
+            var inkChanged = false
             var seen = Set<UInt32>()
             var moves: [String: (page: String, dx: Double, dy: Double, ids: [String])] = [:]
             var toRemove: [(page: String, id: String)] = []
@@ -942,7 +955,7 @@ struct HeftCanvas: UIViewRepresentable {
                 seen.insert(seed)
                 // Rückgängig/Wiederholen holt einen Strich einer entladenen Seite zurück: wieder bekannt; eine
                 // Lageänderung (z. B. Lasso-Verschieben zurückgenommen) erkennt der Vergleich darunter.
-                if known[seed] == nil, let k = parked.removeValue(forKey: seed) { known[seed] = k }
+                if known[seed] == nil, let k = parked.removeValue(forKey: seed) { known[seed] = k; inkChanged = true }
                 if var k = known[seed] {
                     // Unverändert, verschoben (Lasso) oder anders geändert → neu schreiben. Ohne Maske
                     // (Pixel-Radierer) und mit gleicher Lage ist der Strich unverändert – `renderBounds` für
@@ -951,6 +964,7 @@ struct HeftCanvas: UIViewRepresentable {
                     if t == k.transform && stroke.mask == nil { continue }
                     let bounds = stroke.renderBounds
                     if t == k.transform && bounds == k.bounds { continue }
+                    inkChanged = true
                     let rel = k.transform.inverted().concatenating(t)
                     let shifted = k.bounds.offsetBy(dx: bounds.minX - k.bounds.minX, dy: bounds.minY - k.bounds.minY)
                     if t != k.transform, rel.a == 1, rel.b == 0, rel.c == 0, rel.d == 1, shifted.size == bounds.size {
@@ -965,12 +979,14 @@ struct HeftCanvas: UIViewRepresentable {
                         addStroke(stroke, original: (page: k.page, data: k.data))
                     }
                 } else if let original = removed.removeValue(forKey: seed) {
+                    inkChanged = true
                     addStroke(stroke, original: original)
                 } else if pending.contains(where: { $0.randomSeed == seed }) {
                     continue
                 } else if stroke.ink.inkType == .pen {
                     pending.append(stroke)
                 } else {
+                    if HeftInk.isHidden(stroke) { inkChanged = true }
                     addStroke(stroke, original: nil)
                 }
             }
@@ -994,6 +1010,7 @@ struct HeftCanvas: UIViewRepresentable {
             if !pending.isEmpty {
                 DispatchQueue.main.async { [weak self] in self?.commitPending() }
             }
+            return inkChanged || !toRemove.isEmpty || !moves.isEmpty
         }
 
         /// Wartende Stiftstriche schreiben; wurde ein einzelner Strich am Ende gehalten und erkennt der Kern
@@ -1045,6 +1062,10 @@ struct HeftCanvas: UIViewRepresentable {
         // MARK: Präziser Radierer (HeftErase.swift)
 
         /// Laufende Radier-Geste: Seite, Kern-Radierer, Zeichnung davor (Rückgängig) und Strich-ID → Seed.
+        /// PERF: Die PencilKit-Zeichnung neu zu setzen kostet bei vollen Seiten viel; je Bewegung zeichnet
+        /// deshalb nur `HeftInkView` die eine Seite (ausschnittsweise) neu, die Zeichnung zieht am Ende einmal
+        /// nach (`gone`/`added`). Nur wenn ein frischer, von PencilKit selbst gezeigter Strich getroffen wird,
+        /// sofort – sonst bliebe er bis zum Absetzen stehen.
         private struct EraseRun {
             let page: String
             let origin: CGPoint
@@ -1053,6 +1074,16 @@ struct HeftCanvas: UIViewRepresentable {
             var seeds: [String: UInt32]
             var originals: Set<String>
             var changed = false
+            /// Gespeicherte Tinte der Seite in Zeichenreihenfolge, wie `updateInk` sie liefert.
+            var order: [UInt32] = []
+            var ink: [UInt32: (data: HeftStroke, transform: CGAffineTransform)] = [:]
+            /// Frische (sichtbare) Striche der Seite.
+            var visible: Set<UInt32> = []
+            /// Noch nicht in die Zeichnung übernommen: entfernte Seeds und neue Reste.
+            var gone: Set<UInt32> = []
+            var added: [PKStroke] = []
+
+            func inkList() -> [(data: HeftStroke, transform: CGAffineTransform)] { order.compactMap { ink[$0] } }
         }
         private var eraseRun: EraseRun?
 
@@ -1063,8 +1094,15 @@ struct HeftCanvas: UIViewRepresentable {
             LearningTracker.shared.poke()
             var seeds: [String: UInt32] = [:]
             var data: [HeftStroke] = []
+            var order: [UInt32] = []
+            var ink: [UInt32: (data: HeftStroke, transform: CGAffineTransform)] = [:]
+            var visible = Set<UInt32>()
             for s in canvas.drawing.strokes {
                 guard let k = known[s.randomSeed], k.page == page else { continue }
+                if HeftInk.isHidden(s) {
+                    order.append(s.randomSeed)
+                    ink[s.randomSeed] = (data: k.data, transform: k.drawn == s.transform ? .identity : k.drawn.inverted().concatenating(s.transform))
+                } else { visible.insert(s.randomSeed) }
                 let rel = k.drawn.inverted().concatenating(s.transform)
                 if rel.isIdentity {
                     data.append(k.data)
@@ -1076,20 +1114,22 @@ struct HeftCanvas: UIViewRepresentable {
             guard let gesture = attempt("heftEraseGesture", { try HeftEraseGesture(strokes: data, radius: Double(eraser.radius), mode: eraser.mode) })
             else { return }
             eraseRun = EraseRun(page: page, origin: origin(of: page), gesture: gesture, before: canvas.drawing,
-                                seeds: seeds, originals: Set(seeds.keys))
+                                seeds: seeds, originals: Set(seeds.keys), order: order, ink: ink, visible: visible)
             eraseMoved(p)
         }
 
         /// Getroffene Striche in der Zeichnung gegen ihre Reste tauschen (wie `replaceWithShape`).
         private func eraseMoved(_ p: CGPoint) {
-            guard let canvas, var run = eraseRun else { return }
+            guard var run = eraseRun else { return }
             let changes = run.gesture.eraseAt(x: Double(p.x - run.origin.x), y: Double(p.y - run.origin.y))
             guard !changes.isEmpty else { return }
             var gone = Set<UInt32>()
             var added: [PKStroke] = []
+            var now = false
             for c in changes {
                 guard let seed = run.seeds.removeValue(forKey: c.id) else { continue }
                 gone.insert(seed)
+                if run.visible.contains(seed) { now = true }
                 // Originale merkt sich der Abgleich wie gelöschte Striche: Rückgängig holt sie zurück.
                 if let k = known.removeValue(forKey: seed), run.originals.contains(c.id) { removed[seed] = (page: k.page, data: k.data) }
                 for piece in c.pieces {
@@ -1097,22 +1137,43 @@ struct HeftCanvas: UIViewRepresentable {
                     guard let pk = HeftInk.pkStroke(piece, seed: s, hidden: true, offset: run.origin) else { continue }
                     known[s] = Known(id: piece.id, page: run.page, data: piece, transform: .identity, bounds: pk.renderBounds, drawn: .identity)
                     run.seeds[piece.id] = s
+                    run.ink[s] = (data: piece, transform: .identity)
+                    run.order.append(s)
                     added.append(pk)
                 }
             }
             run.changed = true
+            run.order.removeAll { gone.contains($0) }
+            for seed in gone { run.ink[seed] = nil }
+            // Ein Rest, der noch gar nicht in der Zeichnung steht, fällt einfach aus der Sammlung.
+            let unwritten = Set(run.added.map(\.randomSeed))
+            run.added.removeAll { gone.contains($0.randomSeed) }
+            run.gone.formUnion(gone.subtracting(unwritten))
+            run.added += added
+            eraseRun = run
+            if now { flushErase() }
+            updateInk(only: [run.page])
+        }
+
+        /// Zurückgehaltene Radier-Schritte in die PencilKit-Zeichnung übernehmen (ein Neusetzen).
+        private func flushErase() {
+            guard let canvas, var run = eraseRun, !run.gone.isEmpty || !run.added.isEmpty else { return }
+            let (gone, added) = (run.gone, run.added)
+            run.gone = []
+            run.added = []
             eraseRun = run
             applying = true
             canvas.drawing = PKDrawing(strokes: canvas.drawing.strokes.filter { !gone.contains($0.randomSeed) } + added)
             applying = false
-            updateInk()
         }
 
         /// Ende der Geste: Netto-Änderung als ein Schreibvorgang, ein Rückgängig-Schritt.
         private func eraseEnded() {
+            flushErase()
             guard let run = eraseRun else { return }
             eraseRun = nil
             guard run.changed, let canvas else { return }
+            updateInk(only: [run.page])
             let net = run.gesture.net()
             if !net.removed.isEmpty { removeStrokes(net.removed.map { (page: run.page, id: $0) }) }
             if !net.added.isEmpty {
@@ -1140,6 +1201,9 @@ struct HeftCanvas: UIViewRepresentable {
             }.map(\.randomSeed))
             refreshLasso()
         }
+
+        /// Seiten der ausgewählten Striche (Lasso-Vorschau blendet nur dort Tinte aus).
+        private func lassoPages() -> Set<String> { Set(lassoSeeds.compactMap { known[$0]?.page }) }
 
         private func lassoStrokes() -> [PKStroke] {
             guard let canvas, !lassoSeeds.isEmpty else { return [] }
@@ -1174,7 +1238,7 @@ struct HeftCanvas: UIViewRepresentable {
             }
             let scale = min(canvas.traitCollection.displayScale * canvas.zoomScale, 4)
             let image = PKDrawing(strokes: visible).image(from: box, scale: scale)
-            updateInk(hiding: lassoSeeds)
+            updateInk(hiding: lassoSeeds, only: lassoPages())
             return image
         }
 
@@ -1182,7 +1246,7 @@ struct HeftCanvas: UIViewRepresentable {
         private func lassoCommit(_ t: CGAffineTransform) {
             guard let canvas else { return }
             guard !t.isIdentity else {
-                updateInk()
+                updateInk(only: lassoPages())
                 refreshLasso()
                 return
             }

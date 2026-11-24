@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { HANDSCHRIFT } from "./handschrift.js";
 import { PDFS } from "./pdfs.js";
 import { movePage, canDeletePages } from "./heft-pages-core.js";
-import { documentShadow, diffDocument, applyOpsToShadow, emptyHeftPage, pageImages, pageHeight, PAGE_W } from "./heft-document-core.js";
+import { documentShadow, diffDocument, diffChangedPages, applyOpsToShadow, emptyHeftPage, pageImages, pageHeight, PAGE_W } from "./heft-document-core.js";
 import {
 	KEY,
 	INK_LEGACY,
@@ -333,16 +333,24 @@ export const HEFT = (() => {
 	// ein Speichern ein); saving: ein Speichern läuft gerade. Beides entscheidet, wie Fremdänderungen
 	// übernommen werden (adoptForeign).
 	let unsaved = false, saving = false, editSeq = 0;
-	function scheduleSave() { unsaved = true; editSeq++; clearTimeout(saveT); saveT = setTimeout(saveNow, 350); }
+	// PERF: Geänderte Seiten seit dem letzten Speichern (null = alles vergleichen). Die heißen Pfade
+	// (Strich, Radieren, Lasso, Bild verschieben) nennen ihre Seite; dann geht nur sie in den Diff,
+	// nicht das ganze Heft. Jeder andere Aufruf ohne Seite vergleicht wie bisher alles.
+	let dirtyPages = new Set();
+	function scheduleSave(pageId) {
+		unsaved = true; editSeq++;
+		if (pageId && dirtyPages) dirtyPages.add(pageId); else dirtyPages = null;
+		clearTimeout(saveT); saveT = setTimeout(saveNow, 350);
+	}
 	const refresh = (i) => { scheduleSave(); redrawPage(i); renderThumb(i); updateChrome(); };
 
 	// Speichern = Unterschied ermitteln und als Operationsliste ins Log schicken.
 	// Kein Blob, kein Hash, keine Datei — der Sync trägt das Event wie jedes andere.
 	// Messpunkte: Diff und Schatten laufen synchron über das ganze Heft — Verdacht für
 	// die Hänger kurz nach dem Absetzen des Stifts (Trace: touchend bis 1,4 s).
-	async function persistDoc(savePid, saveDoc) {
+	async function persistDoc(savePid, saveDoc, changed) {
 		const pages = saveDoc?.pages?.length;
-		const { ops } = PERF_PROFILER.measure("heft.save-diff", () => diffDocument(published[savePid], saveDoc), { pages }, 16);
+		const { ops } = PERF_PROFILER.measure("heft.save-diff", () => diffChangedPages(published[savePid], saveDoc, changed), { pages, changed: changed ? changed.size : pages }, 16);
 		if (!ops.length) return;
 		await PERF_PROFILER.run("heft.save-blobs", () => persistReferencedBlobs(saveDoc), {}, 16);
 		dropThumbs(savePid);
@@ -361,12 +369,13 @@ export const HEFT = (() => {
 		clearTimeout(saveT);
 		if (!pid || !doc) return;
 
-		const savePid = pid, saveDoc = doc, seq = editSeq;
+		const savePid = pid, saveDoc = doc, seq = editSeq, changed = dirtyPages && dirtyPages.size ? dirtyPages : null;
+		dirtyPages = new Set();
 		saving = true;
 		try {
-			await PERF_PROFILER.run("heft.save", () => persistDoc(savePid, saveDoc), { pages: saveDoc.pages?.length }, 30);
+			await PERF_PROFILER.run("heft.save", () => persistDoc(savePid, saveDoc, changed), { pages: saveDoc.pages?.length }, 30);
 			if (savePid === pid && seq === editSeq) unsaved = false;
-		} catch (e) { console.warn("Heft: Speichern fehlgeschlagen", e); }
+		} catch (e) { dirtyPages = null; console.warn("Heft: Speichern fehlgeschlagen", e); }
 		finally { saving = false; }
 	}
 
@@ -600,7 +609,7 @@ export const HEFT = (() => {
 		if (!doc || !doc.pages[i]) return;
 		const cv = canvases[i];
 		if (cv && cv.width >= 2 && cv.height >= 2) {
-			cv.__heftJob = (cv.__heftJob || 0) + 1;
+			cv.__heftJob = (cv.__heftJob || 0) + 1; cv.__heftPending = false;
 			const x = cv.getContext('2d');
 			x.setTransform(1, 0, 0, 1, 0, 0);
 			x.clearRect(0, 0, cv.width, cv.height);
@@ -623,12 +632,14 @@ export const HEFT = (() => {
 		const job = ink.render(strokes, w, h, m);
 		if (!job) return false;
 		const token = cv.__heftJob = (cv.__heftJob || 0) + 1, sent = pg.strokes, n0 = sent ? sent.length : 0;
+		cv.__heftPending = true;
 		const x = cv.getContext('2d');
 		const setM = () => x.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
 		x.setTransform(1, 0, 0, 1, 0, 0);
 		x.clearRect(0, 0, w, h);
 		if (!cull) { setM(); renderPageUnder(x, pg); }
 		job.then((bitmap) => {
+			if (cv.__heftJob === token) cv.__heftPending = false;
 			if (cv.__heftJob !== token || cv.width !== w || cv.height !== h || !stillCurrent()) { bitmap?.close(); return; }
 			// Dokument inzwischen neu geladen (gleiche Fläche, neue Seitenobjekte): neu anstoßen,
 			// sonst bliebe die Fläche bis zur nächsten Größenänderung ohne Striche.
@@ -1649,7 +1660,7 @@ export const HEFT = (() => {
 			unmount();
 			const token = mountToken;
 			host = container;
-			pid = pageId;
+			pid = pageId; dirtyPages = null;
 			if (getComputedStyle(host).position === "static") host.style.position = "relative";
 			host.innerHTML = '<div class="heft-loading" role="status">Heft laden…</div>';
 			// Arbeitskopien anderer Hefte freigeben: nur das geöffnete bleibt im Speicher.

@@ -313,27 +313,39 @@ final class ShellModel {
     }
 
     private func computeTabInfo(_ tab: String) -> TabItem {
-        if tab.hasPrefix("chat:") {
-            let title = store.core.chat(id: String(tab.dropFirst(5)))?.title ?? ""
-            return TabItem(title: title.isEmpty ? "Chat" : title, icon: "sparkles", emoji: nil, kind: nil)
+        computeTabInfos([tab])[tab] ?? Self.unnamedTab
+    }
+
+    private static let unnamedTab = TabItem(title: "Unbenannt", icon: "file", emoji: nil, kind: nil)
+
+    /// PERF: Titel und Icons aller Tabs mit zwei Kern-Aufrufen (Seitenköpfe ohne Inhalt, Chat-Liste ohne
+    /// Verlauf). Vorher las jede Änderung jede offene Seite samt Inhalt bzw. jeden Chat samt Nachrichten.
+    private func computeTabInfos(_ list: [String]) -> [String: TabItem] {
+        var map: [String: TabItem] = [:]
+        let pageIds = list.filter { !$0.hasPrefix("chat:") && $0 != Self.cardsTab }
+        let summaries = pageIds.isEmpty ? [] : store.core.pageSummaries(ids: pageIds)
+        let byId = Dictionary(summaries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let chatTitles: [String: String] = list.contains { $0.hasPrefix("chat:") }
+            ? Dictionary(store.core.chats().map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a }) : [:]
+        for tab in list {
+            if tab.hasPrefix("chat:") {
+                let title = chatTitles[String(tab.dropFirst(5))] ?? ""
+                map[tab] = TabItem(title: title.isEmpty ? "Chat" : title, icon: "sparkles", emoji: nil, kind: nil)
+            } else if tab == Self.cardsTab {
+                map[tab] = TabItem(title: "Karteikarten", icon: "cards", emoji: nil, kind: nil)
+            } else if let summary = byId[tab] {
+                map[tab] = TabItem(title: PageStyle.title(summary), icon: PageStyle.iconName(summary), emoji: PageStyle.emoji(summary), kind: summary.kind)
+            } else {
+                map[tab] = Self.unnamedTab
+            }
         }
-        if tab == Self.cardsTab { return TabItem(title: "Karteikarten", icon: "cards", emoji: nil, kind: nil) }
-        guard let p = store.core.page(id: tab), !p.trashed else {
-            return TabItem(title: "Unbenannt", icon: "file", emoji: nil, kind: nil)
-        }
-        let summary = p.summary
-        return TabItem(title: PageStyle.title(summary), icon: PageStyle.iconName(summary), emoji: PageStyle.emoji(summary), kind: summary.kind)
+        return map
     }
 
     func refreshTabInfos() {
-        var map: [String: TabItem] = [:]
-        for tab in tabs {
-            map[tab] = computeTabInfo(tab)
-        }
-        if let active, map[active] == nil {
-            map[active] = computeTabInfo(active)
-        }
-        tabInfoMap = map
+        var list = tabs
+        if let active, !list.contains(active) { list.append(active) }
+        tabInfoMap = computeTabInfos(list)
     }
 
     init(store: ImpalaStore) {

@@ -37,6 +37,15 @@ export function diffDocument(previous, next) {
 	try { return { ops: diff.ops, shadow: diff.takeShadow() }; } finally { diff.free(); }
 }
 
+// Wie diffDocument, aber nur die Seiten mit IDs in `changed` werden verglichen (alle übrigen gelten
+// als unverändert). Ohne Schatten oder wenn eine neue Seite fehlt: voller Vergleich.
+export function diffChangedPages(previous, next, changed) {
+	const pages = previous && changed ? next.pages.filter((pg) => changed.has(pg.id)) : null;
+	const diff = pages && previous.diffPages(next.pages.map((pg) => pg.id), { pages });
+	if (!diff) return diffDocument(previous, next);
+	try { return { ops: diff.ops, shadow: diff.takeShadow() }; } finally { diff.free(); }
+}
+
 // Schreibt Log-Operationen in einen Schatten fort — mit denselben Regeln wie der Reducer.
 export function applyOpsToShadow(shadow, ops) {
 	shadow?.applyOps(ops || []);

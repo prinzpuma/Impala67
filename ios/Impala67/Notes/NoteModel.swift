@@ -59,6 +59,20 @@ final class NoteModel {
     }
     @ObservationIgnored private var savedTitle = ""
     @ObservationIgnored private var savedMarkdown = ""
+    /// Zählt jeden neuen gespeicherten bzw. übernommenen Inhalt. Der Seitenkopf zählt daran die Markierungen
+    /// nach, statt bei jedem Speichern die ganze Seite aus dem Kern zu lesen.
+    private(set) var savedRevision = 0
+    /// Zuletzt gespeicherter bzw. übernommener Markdown-Inhalt.
+    var savedContent: String { savedMarkdown }
+    /// Listennummern zu `blocks` (Kern-Aufruf über alle Blöcke); reines Tippen ändert sie nicht und rechnet
+    /// deshalb nicht neu. nil = neu berechnen.
+    @ObservationIgnored private var numbersCache: [String: Int]?
+    var listNumbers: [String: Int] {
+        if let c = numbersCache { return c }
+        let n = mdListNumbers(blocks: blocks).mapValues { Int($0) }
+        numbersCache = n
+        return n
+    }
     @ObservationIgnored private var dirtyTitle = false
     @ObservationIgnored private var dirtyContent = false
     @ObservationIgnored private var lastEdit = Date.distantPast
@@ -67,7 +81,7 @@ final class NoteModel {
     @ObservationIgnored private var pendingWrites = 0
     /// Schreibt der Reihe nach, damit ein Speichern beim Tippen den Hauptthread nicht an der Kern-Sperre
     /// warten lässt (Sync); ein sofortiges Speichern (`flush()`) wartet auf alles davor.
-    private static let writer = DispatchQueue(label: "impala.note.write", qos: .userInitiated)
+    nonisolated private static let writer = DispatchQueue(label: "impala.note.write", qos: .userInitiated)
     /// Nur Anzeige (Lernkarten): Änderungen bleiben im Speicher, nichts geht in den Kern.
     @ObservationIgnored private var readOnly = false
 
@@ -77,14 +91,33 @@ final class NoteModel {
     /// Nur Anzeige (Lernkarten, Chat): kein Antippen zum Bearbeiten, kein Blockmenü.
     var isReadOnly: Bool { readOnly }
 
-    init(core: ImpalaCore, pageId: String) {
+    /// Gelesene Seite: Titel, Markdown und die daraus geparsten Blöcke.
+    struct Loaded: Sendable {
+        let title: String
+        let content: String
+        let blocks: [MdBlock]
+    }
+
+    /// Seite lesen und parsen, ohne den Hauptthread (Kern-Sperre, Parser); hinter allen noch laufenden
+    /// Speichervorgängen, damit ein eben verlassener Stand schon im Kern steht.
+    nonisolated static func load(core: ImpalaCore, pageId: String) async -> Loaded? {
+        await withCheckedContinuation { cont in
+            writer.async {
+                guard let page = core.page(id: pageId) else { return cont.resume(returning: nil) }
+                cont.resume(returning: Loaded(title: page.summary.title, content: page.content,
+                                              blocks: markdownToBlocks(markdown: page.content)))
+            }
+        }
+    }
+
+    init(core: ImpalaCore, pageId: String, loaded: Loaded?) {
         self.core = core
         self.pageId = pageId
-        guard let page = core.page(id: pageId) else { return }
-        title = page.summary.title
+        guard let loaded else { return }
+        title = loaded.title
         savedTitle = title
-        savedMarkdown = page.content
-        blocks = markdownToBlocks(markdown: page.content)
+        savedMarkdown = loaded.content
+        blocks = loaded.blocks
     }
 
     /// Markdown ohne Seite anzeigen (Vorder-/Rückseite einer Lernkarte über `MarkdownView`).
@@ -107,6 +140,8 @@ final class NoteModel {
         }
         if page.content != savedMarkdown {
             savedMarkdown = page.content
+            savedRevision += 1
+            numbersCache = nil
             // Fremder Stand: kein Rückgängig-Schritt – „Rückgängig“ machte sonst die Änderung des anderen Geräts weg.
             blocks = markdownToBlocks(markdown: page.content)
             undoStack = []
@@ -154,7 +189,10 @@ final class NoteModel {
         dirtyTitle = false
         dirtyContent = false
         if let newTitle { savedTitle = newTitle }
-        if let md { savedMarkdown = md }
+        if let md {
+            savedMarkdown = md
+            savedRevision += 1
+        }
         guard newTitle != nil || md != nil else {
             if wait { Self.writer.sync {} }
             return
@@ -175,7 +213,8 @@ final class NoteModel {
     // MARK: Verlauf
 
     /// Jede Änderung der Blöcke läuft hierüber; Tippen in kurzer Folge ist ein Verlaufsschritt.
-    func mutate(structural: Bool, _ change: ([MdBlock]) -> [MdBlock]) {
+    /// `textOnly`: nur Text geändert (Tippen) – Blockarten und damit Listennummern bleiben.
+    func mutate(structural: Bool, textOnly: Bool = false, _ change: ([MdBlock]) -> [MdBlock]) {
         let next = change(blocks)
         guard next != blocks else { return }
         let now = Date()
@@ -185,6 +224,7 @@ final class NoteModel {
             if undoStack.count > 100 { undoStack.removeFirst() }
         }
         redoStack.removeAll()
+        if !textOnly { numbersCache = nil }
         blocks = next
         lastEdit = now
         dirtyContent = true
@@ -199,6 +239,7 @@ final class NoteModel {
         redoStack.removeAll()
         activeId = nil
         menu = nil
+        numbersCache = nil
         blocks = next
         dirtyContent = true
         if newTitle != title {
@@ -223,6 +264,7 @@ final class NoteModel {
 
     private func restore(_ step: Step) {
         let list = step.blocks
+        numbersCache = nil
         blocks = list
         if let t = step.title, t != title {
             title = t
@@ -343,7 +385,7 @@ final class NoteModel {
                 return
             }
         }
-        mutate(structural: false) { list in list.mapDeep(id) { $0.withText(text) } }
+        mutate(structural: false, textOnly: true) { list in list.mapDeep(id) { $0.withText(text) } }
         if !b.keepsNewlines { updateMenu(id, text: text, caret: at) }
     }
 

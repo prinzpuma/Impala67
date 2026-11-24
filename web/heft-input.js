@@ -15,7 +15,7 @@ import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, is
 
 export function createHeftInput(H) {
 	const { vp, imagesOf, textsOf, hitText, redrawPage, updateChrome, dropLasso, pushUndo, refresh, openTextEditor, setWriting, drawStroke, scheduleSave, renderThumb } = H;
-	const { stopAnim, applyTouchAction, gesture, PALM_UNDO_MS, liveInkCtx, clearLiveInk, commitStrokeRender } = vp;
+	const { stopAnim, applyTouchAction, gesture, PALM_UNDO_MS, liveInkCtx, clearLiveInk, commitStrokeRender, redrawRect } = vp;
 	const activePenPointers = new Set();
 	let lastPenUpAt = 0, lastStrokeAt = 0;
 	const PEN_GRACE_MS = 400;
@@ -36,8 +36,32 @@ export function createHeftInput(H) {
 	// Nur der Zeiger, der die Geste begonnen hat, bewegt oder beendet sie.
 	const ownsDrawing = (e) => H.drawing.pointerId == null || e.pointerId === H.drawing.pointerId;
 	const hitImage = (pg, p) => hitBox(imagesOf(pg), p);
-	let eraseFrame = 0; // PERF: gedrosselter Redraw für Radierer & Lasso-Verschieben
-	const redrawNextFrame = (pi) => { if (!eraseFrame) eraseFrame = requestAnimationFrame(() => { eraseFrame = 0; redrawPage(pi); }); };
+	// PERF: gedrosselter Redraw für Radierer & Lasso — höchstens einer pro Frame und nur im
+	// Ausschnitt, der sich geändert hat (dirty: Seitenkoordinaten, null = ganze Seite).
+	let eraseFrame = 0, framePage = -1, dirty = null, fullFrame = false, afterFrame = null;
+	const grow = (r, b, m) => (b ? (r ? { minX: Math.min(r.minX, b.minX - m), minY: Math.min(r.minY, b.minY - m), maxX: Math.max(r.maxX, b.maxX + m), maxY: Math.max(r.maxY, b.maxY + m) } : { minX: b.minX - m, minY: b.minY - m, maxX: b.maxX + m, maxY: b.maxY + m }) : r);
+	// Halbe Linienbreite eines Strichs (Marker 1,5 × size, Stift höchstens 0,8 × size) plus Kantenglättung.
+	const inkMargin = (st) => (st.size || 3) * 1.6 + 2;
+	function redrawNextFrame(pi, rect, after = null) {
+		if (framePage !== pi && framePage >= 0) fullFrame = true;
+		framePage = pi;
+		if (rect) dirty = grow(dirty, rect, 0); else fullFrame = true;
+		afterFrame = after;
+		if (eraseFrame) return;
+		eraseFrame = requestAnimationFrame(() => {
+			const p = framePage, r = dirty, full = fullFrame, then = afterFrame;
+			eraseFrame = 0; framePage = -1; dirty = null; fullFrame = false; afterFrame = null;
+			if (full || !redrawRect(p, r)) redrawPage(p);
+			if (then) then();
+		});
+	}
+	// Ausschnitt eines Lassos: Rahmen samt Eckgriffen (Radius 5,5) alter und neuer Lage, mindestens
+	// so breit wie die dickste Linie der Auswahl.
+	const lassoRect = (a, b) => {
+		const d = H.drawing;
+		if (d.inkPad == null) d.inkPad = Math.max(12, ...d.strokes.map(inkMargin));
+		return grow(grow(null, a, d.inkPad), b, d.inkPad);
+	};
 	// Radierer-Feedback ("wo wirkt er?"): ein Ring in echter Radierer-Größe als DOM-Element
 	// im Host. Bewusst KEIN Canvas-Zeichnen — das hinterlässt Schlieren auf der Seite oder
 	// erzwingt zusätzliche Redraws; dieses Element folgt einfach dem Zeiger.
@@ -73,11 +97,14 @@ export function createHeftInput(H) {
 		if (!changes.length) return;
 		const live = H.drawing.live, gone = new Set();
 		const pieces = [];
+		let rect = null;
 		for (const c of changes) {
 			const orig = live.get(c.id);
 			live.delete(c.id);
 			if (!orig) continue;
 			gone.add(orig);
+			// Die Reste liegen im Rahmen des Originals: dessen Fläche neu zeichnen genügt.
+			rect = grow(rect, strokeBounds(orig), inkMargin(orig));
 			for (const p of c.pieces) {
 				const piece = { ...orig, id: p.id, pts: p.pts, bbox: p.bbox };
 				live.set(p.id, piece); pieces.push(piece);
@@ -85,8 +112,8 @@ export function createHeftInput(H) {
 		}
 		pg.strokes = pg.strokes.filter((s) => !gone.has(s)).concat(pieces);
 		// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
-		// als Pointer-Events eintreffen.
-		redrawNextFrame(H.drawing.pageIdx);
+		// als Pointer-Events eintreffen — und nur dort, wo radiert wurde.
+		redrawNextFrame(H.drawing.pageIdx, rect);
 	}
 	function onDown(e) {
 
@@ -329,8 +356,15 @@ export function createHeftInput(H) {
 			const last = H.drawing.pts[H.drawing.pts.length - 1];
 			if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 2.5) {
 				H.drawing.pts.push(p);
-				if (!clearLiveInk(H.drawing.pageIdx)) redrawPage(H.drawing.pageIdx);
-				drawLassoPath(H.drawing.ctx, H.drawing.pts);
+				const d = H.drawing;
+				// Mit Nass-Ebene: nur sie leeren und den Pfad neu ziehen. Ohne: Pfad direkt auf der
+				// Seite – vorher je Zeigerbewegung die ganze Seite neu, jetzt höchstens einmal pro Frame
+				// und nur im Rahmen des Pfads.
+				if (clearLiveInk(d.pageIdx)) drawLassoPath(d.ctx, d.pts);
+				else {
+					d.box = grow(d.box || grow(null, { minX: d.pts[0][0], minY: d.pts[0][1], maxX: d.pts[0][0], maxY: d.pts[0][1] }, 4), { minX: p[0], minY: p[1], maxX: p[0], maxY: p[1] }, 4);
+					redrawNextFrame(d.pageIdx, d.box, () => { if (H.drawing === d) drawLassoPath(d.ctx, d.pts); });
+				}
 			}
 			return;
 		}
@@ -339,11 +373,13 @@ export function createHeftInput(H) {
 			const pm = pos(e, H.drawing.cv);
 			const dx = pm[0] - H.drawing.start[0], dy = pm[1] - H.drawing.start[1];
 			if (dx !== H.drawing.dx || dy !== H.drawing.dy) {
+				const b = H.drawing.bounds0, at = (ox, oy) => ({ minX: b.minX + ox, maxX: b.maxX + ox, minY: b.minY + oy, maxY: b.maxY + oy });
+				const before = at(H.drawing.dx, H.drawing.dy), after = at(dx, dy);
 				applyGeometries(H.drawing.strokes, H.drawing.transform.moveBy(dx, dy));
 				H.drawing.dx = dx; H.drawing.dy = dy;
-				const b = H.drawing.bounds0;
-				if (H.lassoSel) H.lassoSel.bounds = { minX: b.minX + dx, maxX: b.maxX + dx, minY: b.minY + dy, maxY: b.maxY + dy };
-				redrawNextFrame(H.drawing.pageIdx); // PERF: pro Frame statt pro Pointer-Event
+				if (H.lassoSel) H.lassoSel.bounds = after;
+				// PERF: pro Frame statt pro Pointer-Event, nur alte und neue Lage der Auswahl.
+				redrawNextFrame(H.drawing.pageIdx, lassoRect(before, after));
 			}
 			return;
 		}
@@ -376,10 +412,11 @@ export function createHeftInput(H) {
 
 			const factor = Math.max(0.15, Math.min(6.0, maxFactor, currentDist / startDist));
 
+			const before = H.lassoSel && H.lassoSel.bounds;
 			applyGeometries(H.drawing.strokes, H.drawing.transform.scaleBy(anchor[0], anchor[1], factor));
 			H.drawing.factor = factor;
 			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
-			redrawNextFrame(H.drawing.pageIdx);
+			redrawNextFrame(H.drawing.pageIdx, before && H.lassoSel ? lassoRect(before, H.lassoSel.bounds) : null);
 			return;
 		}
 		if (H.drawing.snapped) {
@@ -457,7 +494,7 @@ export function createHeftInput(H) {
 		if (H.drawing.lassoMove) {
 			if (H.drawing.dx || H.drawing.dy) {
 				pushUndo({ kind: "lassoMove", strokes: H.drawing.strokes, dx: H.drawing.dx, dy: H.drawing.dy, pageIdx: pi });
-				scheduleSave(); renderThumb(pi);
+				scheduleSave(pg.id); renderThumb(pi);
 			}
 			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
@@ -465,7 +502,7 @@ export function createHeftInput(H) {
 		if (H.drawing.lassoResize) {
 			if (Math.abs(H.drawing.factor - 1) > 0.001) {
 				pushUndo({ kind: "lassoResize", strokes: H.drawing.strokes, prev: H.drawing.originals, pageIdx: pi });
-				scheduleSave(); renderThumb(pi);
+				scheduleSave(pg.id); renderThumb(pi);
 			}
 			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
@@ -486,7 +523,7 @@ export function createHeftInput(H) {
 			}
 			if (H.drawing.moved && (im.x !== orig.x || im.y !== orig.y || im.w !== orig.w)) {
 				pushUndo({ kind: "imgMod", im, pageIdx: pi, prev: orig });
-				scheduleSave(); renderThumb(pi);
+				scheduleSave(pg.id); renderThumb(pi);
 			}
 			H.drawing = null;
 			updateChrome();
@@ -499,7 +536,7 @@ export function createHeftInput(H) {
 			H.drawing.eraser.free();
 			if (removed.length) {
 				pushUndo({ kind: "erase", removed, added, pageIdx: pi });
-				scheduleSave();
+				scheduleSave(pg.id);
 				renderThumb(pi);
 			}
 		} else {
@@ -512,7 +549,7 @@ export function createHeftInput(H) {
 			strokeBounds(stroke);
 			pg.strokes.push(stroke);
 			pushUndo({ kind: "add", stroke, pageIdx: pi });
-			scheduleSave();
+			scheduleSave(pg.id);
 
 			commitStrokeRender(pi, stroke);
 			renderThumb(pi);
@@ -526,6 +563,7 @@ export function createHeftInput(H) {
 		laserTimers.forEach(clearTimeout); laserTimers.clear();
 		activePenPointers.clear();
 		if (eraseFrame) { cancelAnimationFrame(eraseFrame); eraseFrame = 0; }
+		framePage = -1; dirty = null; fullFrame = false; afterFrame = null;
 		if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
 		cancelPick();
 	}

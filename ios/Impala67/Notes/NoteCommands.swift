@@ -237,10 +237,8 @@ extension NoteModel {
 
     /// Seiten für das Link-Menü: höchstens 8 ohne die aktuelle, Titel enthält die Suche (`openLinkMenu`).
     func linkItems(_ query: String) -> [PageSummary] {
-        let q = query.lowercased()
-        return Array(core.recentPages(limit: UInt32.max)
-            .lazy.filter { $0.id != self.pageId && (q.isEmpty || $0.title.lowercased().contains(q)) }
-            .prefix(8))
+        // Filtern und Kürzen im Kern: vorher kamen bei jedem Tastendruck alle Seiten herüber.
+        core.linkCandidates(query: query, exclude: pageId, limit: 8)
     }
 
     private var menuCount: Int {
@@ -548,9 +546,14 @@ extension NoteModel {
         mutate(structural: structural) { list in list.mapDeep(id) { $0.withKind(.table(rows: rows)) } }
     }
 
-    /// Datei im Kern ablegen und als Bild- bzw. Dateiblock hinter `mediaAfter` einfügen.
-    func addMedia(_ data: Data, mime: String, name: String) -> Bool {
-        guard let fileId = attempt("addFile", { try core.addFile(bytes: data, mime: mime, name: name) }) else { return false }
+    /// Datei im Kern ablegen und als Bild- bzw. Dateiblock hinter `mediaAfter` einfügen. Das Ablegen (Bytes
+    /// schreiben, Kern-Sperre) läuft im Hintergrund, nur das Einfügen des Blocks auf dem Hauptthread.
+    func addMedia(_ data: Data, mime: String, name: String) async -> Bool {
+        let core = core
+        let stored = await Task.detached(priority: .userInitiated) {
+            attempt("addFile", { try core.addFile(bytes: data, mime: mime, name: name) })
+        }.value
+        guard let fileId = stored else { return false }
         let kind: MdBlockKind = mime.hasPrefix("image/")
             ? .image(alt: name.replacingOccurrences(of: #"\.[A-Za-z0-9]+$"#, with: "", options: .regularExpression), src: fileId)
             : .file(src: fileId, name: name)
@@ -578,12 +581,12 @@ extension NoteModel {
 
     /// Bilder aus der Zwischenablage oder per Drag & Drop hinter `after` einfügen (ohne: am Ende), als
     /// PNG bzw. JPEG wie beim Foto-Import. Ein leerer Absatz an der Stelle wird durch das Bild ersetzt.
-    func insertImages(_ images: [(data: Data, mime: String)], after id: String?) {
+    func insertImages(_ images: [(data: Data, mime: String)], after id: String?) async {
         mediaAfter = id ?? blocks.last?.id
         var n = 0
         for (i, im) in images.enumerated() {
             let ext = im.mime == "image/png" ? "png" : "jpg"
-            if addMedia(im.data, mime: im.mime, name: images.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)") { n += 1 }
+            if await addMedia(im.data, mime: im.mime, name: images.count > 1 ? "Bild \(i + 1).\(ext)" : "Bild.\(ext)") { n += 1 }
         }
         mediaAfter = nil
         if let a = activeId, blocks.deep(a) == nil { endEditing() }
