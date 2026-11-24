@@ -232,7 +232,7 @@ private struct TrashSheet: View {
                     hasAnyTrash: hasAnyTrash
                 )
             }
-            .padding(Space.s5)
+            .padding(Space.s4)
         }
         .background(Impala.panel)
         .navigationTitle("Papierkorb")

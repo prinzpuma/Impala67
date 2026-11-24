@@ -202,7 +202,7 @@ struct LearningTimeSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Space.s5) {
+                VStack(alignment: .leading, spacing: Space.s4) {
                     weekHeader
                     summaryRow
                     dailyChartCard
@@ -210,7 +210,7 @@ struct LearningTimeSheet: View {
                     goalSection
                     statsButton
                 }
-                .padding(Space.s5)
+                .padding(Space.s4)
             }
             .background(Impala.panel)
             .navigationTitle("Lernzeit")
