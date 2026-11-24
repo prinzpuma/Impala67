@@ -191,6 +191,24 @@ export function createScanner(host) {
 		scanUI = null;
 	}
 
+	// Schließen mit Aufnahmen, die noch nicht eingefügt oder gespeichert sind: erst nachfragen.
+	// Eigener Dialog im Scanner, weil #overlay (U.confirm) unter dem Scanner liegt.
+	function requestClose() {
+		const owner = scanUI;
+		if (!owner) return;
+		const n = owner.shots.length;
+		if (!n) { closeScanner(); return; }
+		if (owner.wrap.querySelector(".heft-scan-ask")) return;
+		const ask = document.createElement("div");
+		ask.className = "heft-scan-busy heft-scan-ask";
+		ask.innerHTML = '<div role="alertdialog" aria-modal="true" aria-labelledby="heftScanAskText">' +
+			'<p id="heftScanAskText">' + (n === 1 ? "1 Scan ist" : n + " Scans sind") + ' noch nicht gespeichert. Trotzdem schließen?</p>' +
+			'<div><button type="button" data-hescankeep="1">Weiter scannen</button>' +
+			'<button type="button" class="danger" data-hescandiscard="1">Verwerfen</button></div></div>';
+		owner.wrap.appendChild(ask);
+		ask.querySelector("[data-hescankeep]").focus();
+	}
+
 	function quadDelta(a, b) {
 		if (!a || !b || a.length !== 4 || b.length !== 4) return Infinity;
 		let sum = 0;
@@ -308,7 +326,9 @@ export function createScanner(host) {
 		const owner = scanUI;
 		if (!b || !owner) return;
 		const d = b.dataset;
-		if (d.hescanclose) closeScanner();
+		if (d.hescanclose) requestClose();
+		else if (d.hescankeep) b.closest(".heft-scan-ask")?.remove();
+		else if (d.hescandiscard) closeScanner();
 		else if (d.hescanshot) scanCapture();
 		else if (d.hescanpdf) scanFinishPdf();
 		else if (d.hescanheft) scanFinishHeft();
@@ -816,8 +836,10 @@ export function createScanner(host) {
 
 	// Escape schließt zuerst die Nachbearbeitung, dann den Scanner. true = behandelt.
 	function handleEscape() {
+		const ask = scanUI && scanUI.wrap.querySelector(".heft-scan-ask");
+		if (ask) { ask.remove(); return true; }
 		if (scanUI && scanUI.edit) { closeEdit(); return true; }
-		if (scanUI) { closeScanner(); return true; }
+		if (scanUI) { requestClose(); return true; }
 		return false;
 	}
 

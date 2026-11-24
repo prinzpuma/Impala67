@@ -29,6 +29,8 @@ function init() {
 	const onInput = (e) => {
 		const now = performance.now();
 		if (pending || document.hidden || now < WARMUP_MS) return;
+		// Im Scanner sind Aufnahme und Aufbereitung gewollt rechenintensiv – kein Ruckeln der App.
+		if (e.target?.closest?.(".heft-scan")) return;
 		pending = true;
 		const at = e.timeStamp > 0 && e.timeStamp <= now ? e.timeStamp : now;
 		requestAnimationFrame(() => {

@@ -255,6 +255,11 @@ body:not(.tabs-in-sidebar) .heft-corner-l-group .heft-nav-forward { display: non
 .heft-scan-actions button:disabled { background: var(--surface-active); color: rgba(255,255,255,.5) }
 /* Busy-Overlay nur für Abschluss und Export — sonst wirkt die Aufnahme blockiert */
 .heft-scan-busy { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(3,5,10,.55); pointer-events: all }
+.heft-scan-ask > div { display: grid; gap: var(--space-4, 16px); max-width: min(340px, calc(100vw - 32px)); padding: 20px; border-radius: var(--radius-lg); background: var(--menu-bg); box-shadow: var(--elev-3); text-align: center }
+.heft-scan-ask p { margin: 0; font-size: var(--text-md); line-height: 1.4 }
+.heft-scan-ask > div > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center }
+.heft-scan-ask button { min-height: 44px; padding: 0 18px; border: 1px solid var(--edge); border-radius: var(--radius-pill); background: var(--surface-hover); color: var(--text); font: inherit; cursor: pointer }
+.heft-scan-ask button.danger { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger) }
 .heft-scan-busy[hidden] { display: none !important }
 .heft-scan-busy span { padding: 10px var(--space-4); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18) }
 /* Nachbearbeitungs-Ansicht — Ecken-Zuschnitt, Filter, Drehen */

@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -77,6 +78,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.R
+import org.impala67.app.ui.theme.Impala
 import org.impala67.app.ui.theme.TextSize
 import uniffi.impala_ffi.ScanDetection
 import uniffi.impala_ffi.scanDetect
@@ -142,14 +144,17 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
             busy = false
         }
     }
-    BackHandler { if (editing != null) editing = null else onClose() }
+    // Schließen mit noch nicht eingefügten oder gespeicherten Aufnahmen: erst nachfragen (wie die PWA).
+    var askClose by remember { mutableStateOf(false) }
+    val requestClose = { if (shots.isEmpty()) onClose() else askClose = true }
+    BackHandler { if (editing != null) editing = null else requestClose() }
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = requestClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Dateien scannen", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
-                    DarkIcon(R.drawable.ic_i_x, "Schließen", onClose)
+                    DarkIcon(R.drawable.ic_i_x, "Schließen", requestClose)
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (hasCamera) {
@@ -190,6 +195,12 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
                     ) { Text("In Heft einfügen (${shots.size})", color = Color.White, fontWeight = FontWeight.SemiBold) }
                 }
             }
+            if (askClose) AlertDialog(
+                onDismissRequest = { askClose = false },
+                text = { Text(if (shots.size == 1) "1 Scan ist noch nicht gespeichert. Trotzdem schließen?" else "${shots.size} Scans sind noch nicht gespeichert. Trotzdem schließen?") },
+                confirmButton = { TextButton({ askClose = false; onClose() }) { Text("Verwerfen", color = Impala.colors.danger) } },
+                dismissButton = { TextButton({ askClose = false }) { Text("Weiter scannen") } },
+            )
             editing?.let { i ->
                 shots.getOrNull(i)?.let { s ->
                     ScanEditor(i, s, onDelete = { shots.removeAt(i); editing = null }) {
