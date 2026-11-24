@@ -7,9 +7,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.display.DisplayManager
 import android.net.Uri
-import android.view.Surface
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,10 +31,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -42,6 +47,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -50,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -149,16 +157,29 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
     val requestClose = { if (shots.isEmpty()) onClose() else askClose = true }
     BackHandler { if (editing != null) editing = null else requestClose() }
 
+    var shootRequest by remember { mutableIntStateOf(0) }
+    val insert: () -> Unit = {
+        busy = true
+        scope.launch {
+            val pages = withContext(Dispatchers.Default) { shots.map { it.toPage() } }
+            busy = false
+            onInsert(pages)
+        }
+    }
+    val ui = ScanUi(
+        shots = shots, filter = filter, auto = auto, hasCamera = hasCamera, busy = busy,
+        onFilter = { filter = it }, onAuto = { auto = !auto }, onPhotos = { photos.launch("image/*") },
+        onShoot = { shootRequest++ }, onPdf = { pdf.launch("scan-${LocalDate.now()}.pdf") }, onInsert = insert,
+        onOpen = { editing = it }, onDelete = { shots.removeAt(it) }, onClose = requestClose,
+    )
+
     Dialog(onDismissRequest = requestClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Dateien scannen", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
-                    DarkIcon(R.drawable.ic_i_x, "Schließen", requestClose)
-                }
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+            // movableContentOf: Beim Drehen wandert die Kamera zwischen Zeile und Spalte, ohne neu zu starten.
+            val camera = remember { movableContentOf { m: Modifier ->
+                Box(m) {
                     if (hasCamera) {
-                        CameraPane(auto && editing == null, onCapture = { bmp ->
+                        CameraPane(auto && editing == null, shootRequest, onCapture = { bmp ->
                             flash = true
                             vibrate(context)
                             scope.launch { addBitmap(bmp); delay(140); flash = false }
@@ -171,28 +192,30 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
                     }
                     if (flash) Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.7f)))
                 }
-                if (shots.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    shots.forEachIndexed { i, s -> Thumb(i, s, { editing = i }) { shots.removeAt(i) } }
-                }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ScanFilter.entries.forEach { f -> Pill(f.label, filter == f) { filter = f } }
-                    Pill(if (auto) "Auto-Scan an" else "Auto-Scan aus", auto) { auto = !auto }
-                    Pill("Fotos", false) { photos.launch("image/*") }
-                }
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ pdf.launch("scan-${LocalDate.now()}.pdf") }, enabled = shots.isNotEmpty() && !busy) { Text("Als PDF speichern", color = Color.White) }
-                    Box(Modifier.weight(1f))
-                    TextButton(
-                        {
-                            busy = true
-                            scope.launch {
-                                val pages = withContext(Dispatchers.Default) { shots.map { it.toPage() } }
-                                busy = false
-                                onInsert(pages)
-                            }
-                        },
-                        enabled = shots.isNotEmpty() && !busy,
-                    ) { Text("In Heft einfügen (${shots.size})", color = Color.White, fontWeight = FontWeight.SemiBold) }
+            } }
+            // Querformat ist der Normalfall: links Aufnahmen, Mitte Kamera, rechts Leiste mit Auslöser
+            // (web/heft-scanner-ui.js). Hochformat: dieselben Teile untereinander. Beim Drehen bleibt alles erhalten.
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+                if (maxWidth > maxHeight) {
+                    Row(Modifier.fillMaxSize()) {
+                        ShotStrip(ui, vertical = true, Modifier.width(100.dp).fillMaxHeight())
+                        camera(Modifier.weight(1f).fillMaxHeight())
+                        ScanRail(ui, Modifier.width(if (maxHeight < 430.dp) 208.dp else 232.dp).fillMaxHeight())
+                    }
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        ScanHeader(ui.onClose, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                        camera(Modifier.weight(1f).fillMaxWidth())
+                        ShotStrip(ui, vertical = false, Modifier.fillMaxWidth().height(132.dp))
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+                            ScanFilter.entries.forEach { f -> RailButton(f.label, ui.filter == f) { ui.onFilter(f) } }
+                        }
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { ToolButtons(ui) }
+                            if (ui.hasCamera) Shutter(ui.onShoot) else Box(Modifier.size(68.dp))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) { FinishButtons(ui) }
+                        }
+                    }
                 }
             }
             if (askClose) AlertDialog(
@@ -216,9 +239,124 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
     }
 }
 
+/** Zustand und Aktionen der Scanner-Bedienung, für Quer- und Hochformat gleich. */
+private class ScanUi(
+    val shots: List<ScanShot>,
+    val filter: ScanFilter,
+    val auto: Boolean,
+    val hasCamera: Boolean,
+    val busy: Boolean,
+    val onFilter: (ScanFilter) -> Unit,
+    val onAuto: () -> Unit,
+    val onPhotos: () -> Unit,
+    val onShoot: () -> Unit,
+    val onPdf: () -> Unit,
+    val onInsert: () -> Unit,
+    val onOpen: (Int) -> Unit,
+    val onDelete: (Int) -> Unit,
+    val onClose: () -> Unit,
+) {
+    val canFinish get() = shots.isNotEmpty() && !busy
+}
+
+@Composable
+private fun ScanHeader(onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text("Scannen", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
+        DarkIcon(R.drawable.ic_i_x, "Schließen", onClose)
+    }
+}
+
+/** Bedienleiste im Querformat: Kopf, Filter 2×2, Auto/Fotos, Auslöser mittig, PDF | Ins Heft. Feste Breite, damit nichts springt. */
+@Composable
+private fun ScanRail(ui: ScanUi, modifier: Modifier) {
+    Column(
+        modifier.background(Color.White.copy(alpha = 0.03f)).verticalScroll(rememberScrollState()).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ScanHeader(ui.onClose)
+        ScanFilter.entries.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                pair.forEach { f -> RailButton(f.label, ui.filter == f, Modifier.weight(1f)) { ui.onFilter(f) } }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ToolButtons(ui, Modifier.weight(1f)) }
+        Box(Modifier.fillMaxWidth().height(84.dp), contentAlignment = Alignment.Center) {
+            if (ui.hasCamera) Shutter(ui.onShoot)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { FinishButtons(ui, Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun ToolButtons(ui: ScanUi, modifier: Modifier = Modifier) {
+    if (ui.hasCamera) RailButton("Auto", ui.auto, modifier, R.drawable.ic_i_zap, onClick = ui.onAuto)
+    RailButton("Fotos", false, modifier, R.drawable.ic_i_image, onClick = ui.onPhotos)
+}
+
+@Composable
+private fun FinishButtons(ui: ScanUi, modifier: Modifier = Modifier) {
+    RailButton("PDF", false, modifier, R.drawable.ic_i_file, enabled = ui.canFinish, onClick = ui.onPdf)
+    RailButton(if (ui.shots.isEmpty()) "Ins Heft" else "Ins Heft (${ui.shots.size})", true, modifier, R.drawable.ic_i_notebook, enabled = ui.canFinish, onClick = ui.onInsert)
+}
+
+/** Knopf der Scanner-Leiste (Filter, Auto, Fotos, Abschluss): aktiv hell, sonst dunkel; mindestens 44 dp hoch. */
+@Composable
+private fun RailButton(label: String, active: Boolean, modifier: Modifier = Modifier, icon: Int? = null, enabled: Boolean = true, onClick: () -> Unit) {
+    val bg = when {
+        !enabled -> Color.White.copy(alpha = 0.08f)
+        active -> Impala.colors.accent
+        else -> Color.White.copy(alpha = 0.14f)
+    }
+    val fg = when {
+        !enabled -> Color.White.copy(alpha = 0.4f)
+        active -> Impala.colors.onAccent
+        else -> Color.White
+    }
+    Row(
+        modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).background(bg).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (icon != null) {
+            Icon(painterResource(icon), null, Modifier.size(16.dp), tint = fg)
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(label, color = fg, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun Shutter(onClick: () -> Unit) {
+    Box(
+        Modifier.size(68.dp).clip(CircleShape).border(4.dp, Color.White.copy(alpha = 0.35f), CircleShape).padding(6.dp).clip(CircleShape)
+            .background(Color.White).clickable(onClickLabel = "Seite aufnehmen", onClick = onClick),
+    )
+}
+
+/** Aufnahmen: im Querformat eine Spalte links, im Hochformat eine Zeile; leer mit Platzhalter, feste Größe. */
+@Composable
+private fun ShotStrip(ui: ScanUi, vertical: Boolean, modifier: Modifier) {
+    Box(modifier.background(Color.White.copy(alpha = 0.03f)), contentAlignment = Alignment.Center) {
+        if (ui.shots.isEmpty()) {
+            Text("Aufnahmen erscheinen hier", Modifier.padding(8.dp), color = Color.White.copy(alpha = 0.45f), fontSize = TextSize.xs2, textAlign = TextAlign.Center)
+            return@Box
+        }
+        val scroll = rememberScrollState()
+        // Neue Aufnahme ans Ende scrollen.
+        LaunchedEffect(ui.shots.size) { delay(32); scroll.animateScrollTo(scroll.maxValue) }
+        val items: @Composable () -> Unit = { ui.shots.forEachIndexed { i, s -> Thumb(i, s, { ui.onOpen(i) }) { ui.onDelete(i) } } }
+        if (vertical) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) { items() }
+        } else {
+            Row(Modifier.fillMaxSize().horizontalScroll(scroll).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { items() }
+        }
+    }
+}
+
 /** Kamera mit Vorschau, Analyse (Erkennungsrahmen) und Auslöser; Taschenlampe, wenn das Gerät eine hat. */
 @Composable
-private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (String) -> Unit) {
+private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> Unit, onToast: (String) -> Unit) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
@@ -245,6 +383,10 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
         preview.targetRotation = rotation
         analysis.targetRotation = rotation
         capture.targetRotation = rotation
+        // Während der Drehung liefert die Analyse Bilder in alter und neuer Lage: Erkennung neu
+        // beginnen und Auto-Scan gut 1 s pausieren, damit kein Bild mitten im Drehen ausgelöst wird.
+        stable = 0
+        lastShot = max(lastShot, System.currentTimeMillis() - AUTO_PAUSE_MS + 1200)
     }
     var shooting by remember { mutableStateOf(false) }
     val shoot = {
@@ -296,6 +438,8 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
         }, ContextCompat.getMainExecutor(context))
         onDispose { provider?.unbindAll(); executor.shutdown() }
     }
+    // Auslöser sitzt in der Bedienleiste (ImpalaScanner) und meldet sich hier über den Zähler.
+    LaunchedEffect(shootRequest) { if (shootRequest > 0) shoot() }
     // Auto-Scan: nach 5 stabilen, brauchbaren Bildern auslösen, danach 1,8 s Pause und neues Blatt abwarten.
     LaunchedEffect(stable, auto, armed) {
         if (auto && armed && stable >= STABLE_FRAMES && System.currentTimeMillis() - lastShot > AUTO_PAUSE_MS) shoot()
@@ -321,15 +465,10 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
             Modifier.align(Alignment.TopCenter).padding(top = 12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
             color = if (ready) Color(0xFF34C759) else Color.White, fontSize = TextSize.sm,
         )
-        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            if (camera?.cameraInfo?.hasFlashUnit() == true) {
-                DarkIcon(R.drawable.ic_i_flashlight, "Licht") { torch = !torch; camera?.cameraControl?.enableTorch(torch) }
-            } else Box(Modifier.size(40.dp))
-            Box(
-                Modifier.size(72.dp).clip(CircleShape).border(4.dp, Color.White, CircleShape).padding(6.dp).clip(CircleShape)
-                    .background(if (shooting) Color.Gray else Color.White).clickable { shoot() },
-            )
-            Box(Modifier.size(40.dp))
+        if (camera?.cameraInfo?.hasFlashUnit() == true) {
+            Box(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+                DarkIcon(R.drawable.ic_i_flashlight, if (torch) "Licht aus" else "Licht") { torch = !torch; camera?.cameraControl?.enableTorch(torch) }
+            }
         }
     }
 }

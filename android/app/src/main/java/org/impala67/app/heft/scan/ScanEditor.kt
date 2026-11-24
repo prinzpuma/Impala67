@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,29 +70,59 @@ internal fun ScanEditor(index: Int, shot: ScanShot, onDelete: () -> Unit, onDone
         delay(120)
         result = withContext(Dispatchers.Default) { runCatching { shot.render(900) }.getOrNull() }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Scan ${index + 1} bearbeiten", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
-                Pill("Vorher", before) { before = true }
-                Box(Modifier.size(6.dp))
-                Pill("Nachher", !before) { before = false }
+    val image: @Composable (Modifier) -> Unit = { m ->
+        Box(m.padding(12.dp), contentAlignment = Alignment.Center) {
+            if (before) CornerEditor(shot.original, corners) { version++ }
+            else result?.let { Image(it.asImageBitmap(), "Ergebnis", Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        }
+    }
+    val done = {
+        shot.corners = corners.toList()
+        onDone()
+    }
+    // Querformat wie der Scanner: Bild links, Leiste rechts; Hochformat untereinander.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+        if (maxWidth > maxHeight) {
+            Row(Modifier.fillMaxSize()) {
+                image(Modifier.weight(1f).fillMaxHeight())
+                Column(
+                    Modifier.width(if (maxHeight < 430.dp) 208.dp else 232.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Scan ${index + 1} bearbeiten", color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Pill("Vorher", before) { before = true }
+                        Pill("Nachher", !before) { before = false }
+                    }
+                    ScanFilter.entries.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { pair.forEach { f -> Pill(f.label, filter == f) { filter = f } } }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DarkIcon(R.drawable.ic_i_rotate, "Drehen") { rotation = (rotation + 1) % 4 }
+                        TextButton(onDelete) { Text("Löschen", color = Color(0xFFFF6B6B)) }
+                    }
+                    Text("Ecken anpassen: in „Vorher“ ziehen", color = Color.White.copy(alpha = 0.6f), fontSize = TextSize.xs)
+                    TextButton(done) { Text("Fertig", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                if (before) CornerEditor(shot.original, corners) { version++ }
-                else result?.let { Image(it.asImageBitmap(), "Ergebnis", Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-            }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ScanFilter.entries.forEach { f -> Pill(f.label, filter == f) { filter = f } }
-            }
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DarkIcon(R.drawable.ic_i_rotate, "Drehen") { rotation = (rotation + 1) % 4 }
-                Text("Ecken anpassen: in „Vorher“ ziehen", color = Color.White.copy(alpha = 0.6f), fontSize = TextSize.xs, modifier = Modifier.weight(1f))
-                TextButton(onDelete) { Text("Löschen", color = Color(0xFFFF6B6B)) }
-                TextButton({
-                    shot.corners = corners.toList()
-                    onDone()
-                }) { Text("Fertig", color = Color.White, fontWeight = FontWeight.SemiBold) }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Scan ${index + 1} bearbeiten", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
+                    Pill("Vorher", before) { before = true }
+                    Box(Modifier.size(6.dp))
+                    Pill("Nachher", !before) { before = false }
+                }
+                image(Modifier.weight(1f).fillMaxWidth())
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ScanFilter.entries.forEach { f -> Pill(f.label, filter == f) { filter = f } }
+                }
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DarkIcon(R.drawable.ic_i_rotate, "Drehen") { rotation = (rotation + 1) % 4 }
+                    Text("Ecken anpassen: in „Vorher“ ziehen", color = Color.White.copy(alpha = 0.6f), fontSize = TextSize.xs, modifier = Modifier.weight(1f))
+                    TextButton(onDelete) { Text("Löschen", color = Color(0xFFFF6B6B)) }
+                    TextButton(done) { Text("Fertig", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                }
             }
         }
     }
@@ -110,7 +143,8 @@ private fun CornerEditor(img: Bitmap, corners: MutableList<Double>, onChanged: (
         Image(img.asImageBitmap(), "Original", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         var drag by remember { mutableIntStateOf(-1) }
         Canvas(
-            Modifier.fillMaxSize().pointerInput(img) {
+            // Maßstab und Versatz als Schlüssel: nach dem Drehen gelten neue Werte für die Gesten.
+            Modifier.fillMaxSize().pointerInput(img, k, ox, oy) {
                 detectDragGestures(
                     onDragStart = { p ->
                         drag = (0 until 4).minByOrNull { i -> hypot(ox + corners[i * 2] * k - p.x, oy + corners[i * 2 + 1] * k - p.y) } ?: -1

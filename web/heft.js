@@ -716,6 +716,7 @@ export const HEFT = (() => {
 	function applyHistory(fromStack, toStack, isRedo) {
 		PERF_PROFILER.measure("heft.undo-redo", () => {
 			const a = fromStack.pop(); if (!a || !doc) return;
+			if (a.kind === "pagesAdd") { applyPagesAdd(a, isRedo, toStack); return; }
 			// Seite über ID auflösen (Index driftet); Seite weg = Eintrag tot, nicht raten.
 			const pi = a.pageId ? doc.pages.findIndex((p) => p.id === a.pageId) : (a.pageIdx != null ? a.pageIdx : idx);
 			const pg = pi >= 0 ? doc.pages[pi] : null; if (!pg) return;
@@ -782,6 +783,27 @@ export const HEFT = (() => {
 			toStack.push(a);
 			refresh(pi);
 		}, { isRedo }, 16);
+	}
+	// Eingefügte Seiten (neue Seite, Scans): Undo nimmt sie heraus, Redo setzt sie an dieselbe Stelle.
+	// Aufgelöst über IDs; Undo merkt sich den aktuellen Stand der Seiten (samt Strichen seither).
+	function applyPagesAdd(a, isRedo, toStack) {
+		const ids = new Set(a.pages.map((p) => p.id));
+		if (isRedo) {
+			const have = new Set(doc.pages.map((p) => p.id));
+			const back = a.pages.filter((p) => !have.has(p.id));
+			if (!back.length) return;
+			doc.pages.splice(Math.min(a.at, doc.pages.length), 0, ...back);
+		} else {
+			const at = doc.pages.findIndex((p) => ids.has(p.id));
+			const live = doc.pages.filter((p) => ids.has(p.id));
+			if (at < 0 || live.length >= doc.pages.length) return; // eine Seite muss bleiben
+			a.at = at; a.pages = live;
+			for (let i = doc.pages.length - 1; i >= 0; i--) if (ids.has(doc.pages[i].id)) doc.pages.splice(i, 1);
+		}
+		sel = null; lassoSel = null;
+		toStack.push(a);
+		scheduleSave(); rebuildScroll();
+		go(isRedo ? a.at + a.pages.length - 1 : Math.min(a.at, doc.pages.length - 1));
 	}
 	function undo() { applyHistory(undoStack, redoStack, false); }
 	function redo() { applyHistory(redoStack, undoStack, true); }
@@ -1238,8 +1260,10 @@ export const HEFT = (() => {
 	}
 	function addPageAt(paper, pageObj) {
 		const at = insertIndex();
-		doc.pages.splice(at, 0, pageObj || newPage(paper || (page() ? page().paper : "lined")));
+		const pg = pageObj || newPage(paper || (page() ? page().paper : "lined"));
+		doc.pages.splice(at, 0, pg);
 		sel = null;
+		pushUndo({ kind: "pagesAdd", at, pages: [pg] });
 		scheduleSave(); rebuildScroll(); go(at);
 	}
 	// Bestätigung über den In-App-Dialog: natives confirm() kann Chrome lautlos mit false
@@ -1336,9 +1360,11 @@ export const HEFT = (() => {
 	}
 	function insertScannedPages(images) {
 		if (!doc || !images.length) { if (U.toast) U.toast("Keine fertigen Scans zum Einfügen", "error"); return; }
-		let at = insertIndex();
-		images.forEach((im) => { doc.pages.splice(at, 0, imagePage(im, "blank")); at++; }); // als Seitenhintergrund
-		scheduleSave(); rebuildScroll(); go(at - 1);
+		const start = insertIndex();
+		const pages = images.map((im) => imagePage(im, "blank")); // Scan als Seitenhintergrund
+		doc.pages.splice(start, 0, ...pages);
+		pushUndo({ kind: "pagesAdd", at: start, pages });
+		scheduleSave(); rebuildScroll(); go(start + pages.length - 1);
 		if (U.toast) U.toast(images.length + " Scan(s) als Heftseiten eingefügt");
 		BUS.emit("heft:start-background-scan");
 	}

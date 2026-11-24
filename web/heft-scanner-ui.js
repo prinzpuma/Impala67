@@ -5,7 +5,7 @@
 import { U } from "./util.js";
 import { SCANCORE } from "./heft-scan.js";
 import { buildPdf } from "./heft-export.js";
-import { lead } from "./icons.js";
+import { icon, lead } from "./icons.js";
 
 const { SCAN_MODES, loadImg, quadArea, isConvex, detectQuadAsync, liveCheck, processShot, blobToDataUrl } = SCANCORE;
 
@@ -53,24 +53,26 @@ export function createScanner(host) {
 			'<button type="button" data-hescanfilter="' + m[0] + '" aria-pressed="' + (m[0] === "color" ? "true" : "false") + '"' + (m[0] === "color" ? ' class="active"' : "") + ">" + m[1] + "</button>").join("");
 		const wrap = document.createElement("div");
 		wrap.className = "heft-scan";
+		// Aufbau fürs Querformat (Normalfall): links die Aufnahmen, Mitte die Kamera, rechts die Bedienleiste
+		// mit Auslöser. Hochformat (Tablet) ordnet dieselben Teile per CSS untereinander an.
 		wrap.innerHTML =
-			'<div class="heft-scan-top"><b>Dateien scannen</b><button type="button" data-hescanclose="1" title="Schließen" aria-label="Schließen">✕</button></div>' +
+			'<div class="heft-scan-shots" aria-label="Aufnahmen"></div>' +
 			'<div class="heft-scan-stage"><video autoplay playsinline muted></video>' +
 				'<svg class="heft-scan-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="7,7 93,7 93,93 7,93"></polygon></svg>' +
 				'<div class="heft-scan-quality" data-hescanquality="1" role="status" aria-live="polite">Kamera wird geprüft…</div>' +
-				'<div class="heft-scan-flash" aria-hidden="true"></div>' +
-				'<div class="heft-scan-hint">Blatt vollständig ins Bild legen. Grün = bereit; der Rahmen zeigt exakt den späteren Zuschnitt.</div></div>' +
-			'<div class="heft-scan-shots"></div>' +
-			'<div class="heft-scan-modes" role="group" aria-label="Filter für neue und vorhandene Seiten">' + filters + '</div>' +
-			'<div class="heft-scan-bar">' +
+				'<div class="heft-scan-flash" aria-hidden="true"></div></div>' +
+			'<div class="heft-scan-rail">' +
+				'<div class="heft-scan-top"><b>Scannen</b><button type="button" data-hescanclose="1" title="Schließen" aria-label="Schließen">' + icon("x") + '</button></div>' +
+				'<div class="heft-scan-modes" role="group" aria-label="Filter für neue und vorhandene Seiten">' + filters + '</div>' +
 				'<div class="heft-scan-tools">' +
-					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Auto-Scan aktivieren">' + lead("zap") + 'Auto aus</button>' +
+					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Automatisch auslösen, sobald ein Blatt ruhig erkannt ist">' + lead("zap") + 'Auto</button>' +
 					'<button type="button" data-hescantorch="1" aria-pressed="false" title="Taschenlampe" hidden>' + lead("flashlight") + 'Licht</button>' +
+					'<button type="button" data-hescanpick="1" title="Fotos oder Bilder auswählen">' + lead("image") + 'Fotos</button>' +
 				'</div>' +
 				'<button type="button" class="heft-scan-shutter" data-hescanshot="1" title="Seite aufnehmen" aria-label="Seite aufnehmen" disabled></button>' +
 				'<div class="heft-scan-actions">' +
-					'<button type="button" data-hescanpdf="1" disabled>' + lead("file") + 'Als PDF speichern</button>' +
-					'<button type="button" data-hescanheft="1" disabled>' + lead("notebook") + 'In Heft einfügen</button>' +
+					'<button type="button" data-hescanpdf="1" title="Als PDF speichern" disabled>' + lead("file") + 'PDF</button>' +
+					'<button type="button" class="primary" data-hescanheft="1" disabled>' + lead("notebook") + 'Ins Heft</button>' +
 				'</div>' +
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Seiten werden vorbereitet…</span></div>';
@@ -78,6 +80,8 @@ export function createScanner(host) {
 		scanUI = { wrap, stream: null, track: null, torch: false, shots: [], stripCount: 0, edit: null, mode: "color", busy: false, exporting: false, pending: 0, queue: Promise.resolve(), liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
 		const ui = scanUI;
 		wrap.addEventListener("click", onScanClick);
+		ui.onResize = () => onScannerResize(ui);
+		addEventListener("resize", ui.onResize);
 		try {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("getUserMedia fehlt");
 
@@ -102,6 +106,7 @@ export function createScanner(host) {
 		} catch (e) {
 			console.warn("Heft: Kamera nicht verfügbar", e);
 			if (scanUI === ui) {
+				wrap.classList.add("nocam");
 				wrap.querySelector(".heft-scan-stage").innerHTML =
 					'<div class="heft-scan-nocam"><p>Keine Kamera verfügbar oder Zugriff abgelehnt.</p>' +
 					'<button type="button" data-hescanpick="1">Fotos auswählen…</button></div>';
@@ -172,6 +177,7 @@ export function createScanner(host) {
 		owner.stream = null;
 		owner.track = null;
 		owner.torch = false;
+		owner.wrap.classList.add("nocam");
 		const stage = owner.wrap.querySelector(".heft-scan-stage");
 		if (stage) stage.innerHTML = '<div class="heft-scan-nocam"><p>Kameraverbindung wurde unterbrochen.</p><button type="button" data-hescanpick="1">Fotos auswählen…</button><small>Bereits aufgenommene Scans bleiben erhalten.</small></div>';
 		const tb = owner.wrap.querySelector("[data-hescantorch]");
@@ -185,6 +191,8 @@ export function createScanner(host) {
 		if (!owner) return;
 		closeEdit();
 		stopLiveQuality();
+		removeEventListener("resize", owner.onResize);
+		clearTimeout(owner.resizeT);
 		stopStream(owner.stream);
 		owner.shots.forEach(revokeThumb);
 		try { owner.wrap.remove(); } catch {  }
@@ -208,6 +216,28 @@ export function createScanner(host) {
 		owner.wrap.appendChild(ask);
 		ask.querySelector("[data-hescankeep]").focus();
 	}
+
+	// Drehen oder Fenstergröße ändern: Kamerabild und Rahmen wechseln die Lage. Erkennung neu
+	// beginnen und Auto-Scan kurz pausieren, damit kein Bild mitten in der Drehung ausgelöst wird;
+	// eine offene Nachbearbeitung danach neu einpassen.
+	function onScannerResize(owner) {
+		if (scanUI !== owner) return;
+		owner.liveHistory = [];
+		owner.liveStable = 0;
+		owner.autoCooldown = Math.max(owner.autoCooldown, Date.now() + 1200);
+		clearTimeout(owner.resizeT);
+		owner.resizeT = setTimeout(() => {
+			const ed = curEdit();
+			if (scanUI !== owner || !ed) return;
+			if (ed.cornerMode) layoutEdit();
+			else if (ed.sh.out) drawEditResult(ed.sh);
+		}, 150);
+	}
+	// Handy im Hochformat: „Bitte quer halten“ (#rotateHint) deckt den Scanner ab – dann nicht prüfen und nie auslösen.
+	const coveredByRotateHint = () => {
+		const el = document.getElementById("rotateHint");
+		return !!el && getComputedStyle(el).display !== "none";
+	};
 
 	function quadDelta(a, b) {
 		if (!a || !b || a.length !== 4 || b.length !== 4) return Infinity;
@@ -269,7 +299,7 @@ export function createScanner(host) {
 		// Die Erkennung läuft im Worker. Während eine Prüfung läuft, wird der 340-ms-Takt
 		// übersprungen; Ergebnisse nach Schließen/Wechsel des Scanners werden verworfen.
 		const check = async () => {
-			if (scanUI !== owner || owner.busy || owner.liveBusy || !video.videoWidth || !video.isConnected) return;
+			if (scanUI !== owner || owner.busy || owner.liveBusy || !video.videoWidth || !video.isConnected || coveredByRotateHint()) return;
 			owner.liveBusy = true;
 			try {
 				const frame = await liveCheck(video);
@@ -381,7 +411,7 @@ export function createScanner(host) {
 		else owner.autoArmed = false;
 		b.classList.toggle("active", owner.autoCapture);
 		b.setAttribute("aria-pressed", String(owner.autoCapture));
-		b.innerHTML = lead("zap") + (owner.autoCapture ? "Auto an" : "Auto aus");
+		b.title = owner.autoCapture ? "Auto-Scan an: löst aus, sobald ein Blatt ruhig erkannt ist" : "Automatisch auslösen, sobald ein Blatt ruhig erkannt ist";
 	}
 
 	async function scanCapture(isAuto = false) {
@@ -539,14 +569,14 @@ export function createScanner(host) {
 			const grew = owner.shots.length > owner.stripCount;
 			owner.stripCount = owner.shots.length;
 			strip.innerHTML = owner.shots.map(shotTileHtml).join("");
-			if (grew) strip.scrollLeft = strip.scrollWidth;
+			if (grew) { strip.scrollLeft = strip.scrollWidth; strip.scrollTop = strip.scrollHeight; }
 		}
 		const n = owner.shots.filter((sh) => sh.out).length;
 		const enabled = n > 0 || owner.pending > 0;
 		const pdfBtn = owner.wrap.querySelector("[data-hescanpdf]");
 		const heftBtn = owner.wrap.querySelector("[data-hescanheft]");
-		if (pdfBtn) { pdfBtn.disabled = !enabled; pdfBtn.innerHTML = lead("file") + "Als PDF speichern" + (n ? " (" + n + ")" : ""); }
-		if (heftBtn) { heftBtn.disabled = !enabled; heftBtn.innerHTML = lead("notebook") + "In Heft einfügen" + (n ? " (" + n + ")" : ""); }
+		if (pdfBtn) pdfBtn.disabled = !enabled;
+		if (heftBtn) { heftBtn.disabled = !enabled; heftBtn.innerHTML = lead("notebook") + "Ins Heft" + (n ? " (" + n + ")" : ""); }
 	}
 	function scanPickFiles() {
 		const owner = scanUI;
@@ -641,7 +671,7 @@ export function createScanner(host) {
 		const ed = document.createElement("div");
 		ed.className = "heft-scan-edit";
 		ed.innerHTML =
-			'<div class="heft-scan-top"><b>Scan ' + (i + 1) + ' bearbeiten</b><button type="button" data-hescaneditback="1" title="Zurück" aria-label="Zurück">✕</button></div>' +
+			'<div class="heft-scan-top"><b>Scan ' + (i + 1) + ' bearbeiten</b><button type="button" data-hescaneditback="1" title="Zurück" aria-label="Zurück">' + icon("x") + '</button></div>' +
 			'<div class="heft-scan-editstage"><canvas></canvas></div>' +
 			'<div class="heft-scan-modes">' + SCAN_MODES.map((m) =>
 				'<button type="button" data-hescanmode="' + m[0] + '" class="' + (sh.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>').join("") + '</div>' +
