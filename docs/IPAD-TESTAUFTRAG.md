@@ -17,7 +17,9 @@ Einrichtung der Bridge: `node mcp/lan-setup.mjs` (Port 8766), Adresse in der App
 ## Werkzeuge
 
 - Bedienen: `impala_ui_tree` (`query`, `interactive: true`), `impala_tap` (`label`, `index` oder `x`/`y`),
-  `impala_type` (`submit: true` = Enter).
+  `impala_type` (`submit: true` = Enter). Achtung: `impala_tap` löst wie VoiceOver aus und trifft auch Knöpfe,
+  die mit dem Finger nicht reagieren (fehlende `contentShape` bei `.buttonStyle(.plain)`). Trefferflächen
+  deshalb nur per Finger oder mit `x`/`y` am Rand des Knopfs prüfen.
 - Navigieren: `impala_run_ui_action` – `open_page`, `close_active_tab`, `search_ui`, `toggle_sidebar`,
   `trigger_sync`, `go_back`, `dismiss`.
 - Messen: `impala_get_performance_trace`, `impala_get_diagnostics`.

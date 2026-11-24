@@ -240,6 +240,7 @@ private struct ListMarker: View {
                     .scaleEffect(checked ? 1 : 0.94)
                     .animation(.spring(duration: 0.3, bounce: 0.45), value: checked)
                     .frame(width: 28, height: 31)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(checked ? "Erledigt" : "Offen")
@@ -286,6 +287,7 @@ private struct CodeBlockView: View {
                             Icon(copied ? "check" : "copy", size: 14).foregroundStyle(Impala.text2)
                                 .contentTransition(.opacity)
                                 .frame(width: 26, height: 22)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Code kopieren")

@@ -88,6 +88,9 @@ struct AiOrbButton: View {
                 }
             }
             .frame(width: 56, height: 56)
+            // Ganzer Kreis tippbar: Mit `.plain` zählte sonst nur das kleine Funken-Symbol in der Mitte,
+            // die Glasfläche drumherum fing keinen Tipp (wie die Lernkarten-Knöpfe: Form im Label).
+            .contentShape(Circle())
             .animation(.spring(duration: 0.4, bounce: 0.3), value: tier.showsAnimal)
         }
         .buttonStyle(.plain)

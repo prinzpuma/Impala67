@@ -221,7 +221,7 @@ struct LibToolbar<Left: View, Trailing: View>: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if !query.isEmpty {
-                    Button { query = "" } label: { Icon("x", size: 12).foregroundStyle(Impala.text2) }
+                    Button { query = "" } label: { Icon("x", size: 12).foregroundStyle(Impala.text2).frame(width: 28, height: 28).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Suche leeren")
                 }

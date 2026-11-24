@@ -179,7 +179,7 @@ struct StatsScreen: View {
             VStack(alignment: .leading, spacing: Space.s6) {
                 HStack(spacing: Space.s2) {
                     Button { withAnimation(.smooth) { shell.cards.view = .decks } } label: {
-                        Icon("chevron-left", size: 18).foregroundStyle(Impala.text2).frame(width: 36, height: 36)
+                        Icon("chevron-left", size: 18).foregroundStyle(Impala.text2).frame(width: 36, height: 36).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Zurück zu den Stapeln")

@@ -316,7 +316,7 @@ private struct AttachmentChip: View {
                     .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
             }
             Text(attachment.name).font(.system(size: TextSize.xs, weight: .medium)).foregroundStyle(Impala.text).lineLimit(1)
-            Button(action: onRemove) { Icon("x", size: 10).foregroundStyle(Impala.text2).frame(width: 24, height: 24) }
+            Button(action: onRemove) { Icon("x", size: 10).foregroundStyle(Impala.text2).frame(width: 24, height: 24).contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Anhang entfernen")
         }
@@ -338,6 +338,7 @@ private struct RoundButton: View {
             Icon(icon, size: 15)
                 .foregroundStyle(prominent ? Impala.onAccent : Impala.text)
                 .frame(width: 34, height: 34)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .glassEffect(prominent ? .regular.tint(Impala.accent).interactive() : .regular.interactive(), in: Circle())
