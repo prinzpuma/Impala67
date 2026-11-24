@@ -62,7 +62,7 @@ export function createScanner(host) {
 				'<div class="heft-scan-quality" data-hescanquality="1" role="status" aria-live="polite">Kamera wird geprüft…</div>' +
 				'<div class="heft-scan-flash" aria-hidden="true"></div></div>' +
 			'<div class="heft-scan-rail">' +
-				'<div class="heft-scan-top"><b>Scannen</b><button type="button" data-hescanclose="1" title="Schließen" aria-label="Schließen">' + icon("x") + '</button></div>' +
+				'<div class="heft-scan-top"><b>Scannen<small data-hescancount="1">Noch keine Seite</small></b><button type="button" data-hescanclose="1" title="Schließen" aria-label="Schließen">' + icon("x") + '</button></div>' +
 				'<div class="heft-scan-modes" role="group" aria-label="Filter für neue und vorhandene Seiten">' + filters + '</div>' +
 				'<div class="heft-scan-tools">' +
 					'<button type="button" data-hescanautocap="1" aria-pressed="false" title="Automatisch auslösen, sobald ein Blatt ruhig erkannt ist">' + lead("zap") + 'Auto</button>' +
@@ -77,7 +77,7 @@ export function createScanner(host) {
 			'</div>' +
 			'<div class="heft-scan-busy" hidden><span>Seiten werden vorbereitet…</span></div>';
 		document.body.appendChild(wrap);
-		scanUI = { wrap, stream: null, track: null, torch: false, shots: [], stripCount: 0, edit: null, mode: "color", busy: false, exporting: false, pending: 0, queue: Promise.resolve(), liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: false, autoCooldown: 0 };
+		scanUI = { wrap, stream: null, track: null, torch: false, shots: [], stripCount: 0, edit: null, mode: "color", busy: false, exporting: false, pending: 0, queue: Promise.resolve(), liveTimer: 0, liveStable: 0, liveMissing: 0, liveHistory: [], autoCapture: false, autoArmed: true, autoCooldown: 0 };
 		const ui = scanUI;
 		wrap.addEventListener("click", onScanClick);
 		ui.onResize = () => onScannerResize(ui);
@@ -284,7 +284,7 @@ export function createScanner(host) {
 		const stableReady = ready && info.stable;
 		guide.parentElement.classList.toggle("ready", stableReady);
 		guide.parentElement.classList.toggle("warn", !stableReady);
-		if (stableReady) label.textContent = "✓ Dokument stabil erkannt · bereit";
+		if (stableReady) label.textContent = "Blatt erkannt · bereit";
 		else if (!info.found) label.textContent = "Blatt vollständig ins Bild legen";
 		else if (!framingOK) label.textContent = "Blattrand vollständig sichtbar halten";
 		else if (!sharpOK) label.textContent = "Kamera ruhiger halten";
@@ -308,6 +308,7 @@ export function createScanner(host) {
 				const ready = setLiveGuide(info, video);
 				if (!ready) {
 					owner.liveStable = 0;
+					setShutterReady(owner, 0);
 
 					owner.liveMissing = info.found ? 0 : owner.liveMissing + 1;
 					if (owner.liveMissing >= 3) owner.autoArmed = true;
@@ -315,10 +316,12 @@ export function createScanner(host) {
 				}
 				owner.liveMissing = 0;
 				owner.liveStable++;
+				// Ring um den Auslöser: grün = bereit; mit Auto füllt er sich bis zur Aufnahme.
+				setShutterReady(owner, owner.autoCapture && owner.autoArmed ? Math.min(1, owner.liveStable / 5) : 1);
 				// Nach einer Aufnahme wartet Auto-Scan, bis das Blatt kurz aus dem Bild war.
 				if (owner.autoCapture && !owner.autoArmed) {
 					const label = owner.wrap.querySelector("[data-hescanquality]");
-					if (label) label.textContent = "✓ Aufgenommen · nächstes Blatt hinlegen";
+					if (label) label.textContent = "Aufgenommen · nächstes Blatt hinlegen";
 				}
 				// Während der Nachbearbeitung nie selbst auslösen.
 				if (owner.autoCapture && owner.autoArmed && !owner.edit && owner.liveStable >= 5 && Date.now() > owner.autoCooldown) {
@@ -332,6 +335,12 @@ export function createScanner(host) {
 		};
 		check();
 		owner.liveTimer = setInterval(check, 340);
+	}
+	function setShutterReady(owner, progress) {
+		const shut = owner.wrap.querySelector(".heft-scan-shutter");
+		if (!shut) return;
+		shut.classList.toggle("ready", progress > 0);
+		shut.style.setProperty("--scan-progress", String(progress));
 	}
 	function stopLiveQuality() {
 		if (scanUI && scanUI.liveTimer) { clearInterval(scanUI.liveTimer); scanUI.liveTimer = 0; }
@@ -373,7 +382,8 @@ export function createScanner(host) {
 			const ed = curEdit();
 			if (ed) {
 				ed.compare = !ed.compare;
-				b.textContent = ed.compare ? "◐ Nur Scan" : "◑ Vorher/Nachher";
+				b.innerHTML = lead("columns") + (ed.compare ? "Nur Scan" : "Vorher/Nachher");
+				b.setAttribute("aria-pressed", String(ed.compare));
 				if (!ed.cornerMode && ed.sh.out) drawEditResult(ed.sh);
 			}
 		}
@@ -395,7 +405,7 @@ export function createScanner(host) {
 			if (ed) {
 				ed.rot = (ed.rot + 1) % 4;
 				const rb = ed.el.querySelector("[data-hescanrot]");
-				if (rb) rb.textContent = "⟳ Drehen" + (ed.rot ? " (" + (ed.rot * 90) + "°)" : "");
+				if (rb) rb.innerHTML = lead("rotate") + "Drehen" + (ed.rot ? " (" + (ed.rot * 90) + "°)" : "");
 				queueEditReprocess();
 			}
 		}
@@ -407,8 +417,9 @@ export function createScanner(host) {
 	}
 	function toggleAutoCapture(owner, b) {
 		owner.autoCapture = !owner.autoCapture;
-		if (owner.autoCapture) { owner.autoArmed = true; owner.liveStable = 0; }
-		else owner.autoArmed = false;
+		// Nicht neu scharf schalten: Liegt das eben aufgenommene Blatt noch da, käme es sonst doppelt.
+		// autoArmed ist beim Öffnen an und wird nach jeder Aufnahme erst durch einen Blattwechsel wieder gesetzt.
+		owner.liveStable = 0;
 		b.classList.toggle("active", owner.autoCapture);
 		b.setAttribute("aria-pressed", String(owner.autoCapture));
 		b.title = owner.autoCapture ? "Auto-Scan an: löst aus, sobald ein Blatt ruhig erkannt ist" : "Automatisch auslösen, sobald ein Blatt ruhig erkannt ist";
@@ -546,7 +557,7 @@ export function createScanner(host) {
 		revokeThumb(sh);
 		sh.thumbUrl = URL.createObjectURL(out.blob);
 	}
-	function shotTileHtml(sh, i) {
+	function shotTileHtml(sh, i, fresh) {
 		const n = i + 1;
 		const hasThumb = !!sh.thumbUrl;
 		let note = "";
@@ -555,7 +566,7 @@ export function createScanner(host) {
 		const inner = hasThumb ? '<img src="' + sh.thumbUrl + '" alt="Seite ' + n + '">'
 			: (sh.failed ? '<b class="heft-scan-failmark" aria-hidden="true">!</b>' : '<i class="heft-scan-spin" aria-hidden="true"></i>');
 		const cls = "heft-scan-shot" + (hasThumb || sh.failed ? "" : " pending") + (sh.failed ? " failed" : "");
-		return '<div class="heft-scan-tile">' +
+		return '<div class="heft-scan-tile' + (fresh ? " is-new" : "") + '">' +
 			'<button type="button" class="' + cls + '" data-hescanedit="' + i + '" title="Seite ' + n + ' bearbeiten" aria-label="Seite ' + n + ' bearbeiten">' + inner +
 				'<span>' + n + '</span>' + (note ? '<small>' + note + '</small>' : "") + '</button>' +
 			'<button type="button" class="heft-scan-x" data-hescandelshot="' + i + '" title="Seite ' + n + ' löschen" aria-label="Seite ' + n + ' löschen">×</button>' +
@@ -566,12 +577,16 @@ export function createScanner(host) {
 		if (!owner) return;
 		const strip = owner.wrap.querySelector(".heft-scan-shots");
 		if (strip) {
-			const grew = owner.shots.length > owner.stripCount;
+			const before = owner.stripCount;
+			const grew = owner.shots.length > before;
 			owner.stripCount = owner.shots.length;
-			strip.innerHTML = owner.shots.map(shotTileHtml).join("");
+			strip.innerHTML = owner.shots.map((sh, i) => shotTileHtml(sh, i, grew && i >= before)).join("");
 			if (grew) { strip.scrollLeft = strip.scrollWidth; strip.scrollTop = strip.scrollHeight; }
 		}
 		const n = owner.shots.filter((sh) => sh.out).length;
+		const count = owner.wrap.querySelector("[data-hescancount]");
+		const total = owner.shots.length;
+		if (count) count.textContent = !total ? "Noch keine Seite" : total === 1 ? "1 Seite" : total + " Seiten";
 		const enabled = n > 0 || owner.pending > 0;
 		const pdfBtn = owner.wrap.querySelector("[data-hescanpdf]");
 		const heftBtn = owner.wrap.querySelector("[data-hescanheft]");
@@ -676,7 +691,7 @@ export function createScanner(host) {
 			'<div class="heft-scan-modes">' + SCAN_MODES.map((m) =>
 				'<button type="button" data-hescanmode="' + m[0] + '" class="' + (sh.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>').join("") + '</div>' +
 			'<div class="heft-scan-editbar">' +
-				'<button type="button" data-hescancompare="1">◑ Vorher/Nachher</button>' +
+				'<button type="button" data-hescancompare="1" aria-pressed="false">' + lead("columns") + 'Vorher/Nachher</button>' +
 				'<button type="button" data-hescancorners="1">' + lead("expand") + 'Ecken anpassen</button>' +
 				'<button type="button" data-hescanrot="1">' + lead("rotate") + 'Drehen' + (sh.rot ? " (" + (sh.rot * 90) + "°)" : "") + '</button>' +
 				'<button type="button" data-hescandel="1">' + lead("trash") + 'Löschen</button>' +

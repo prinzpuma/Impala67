@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,8 @@ internal fun ScanEditor(index: Int, shot: ScanShot, onDelete: () -> Unit, onDone
     var rotation by remember { mutableIntStateOf(shot.rotation) }
     val corners = remember { mutableStateListOf<Double>().apply { addAll(shot.corners) } }
     var result by remember { mutableStateOf<Bitmap?>(shot.preview) }
+    // Original erst beim Öffnen lesen (liegt nur als JPEG im Speicher).
+    val original by produceState<Bitmap?>(null, shot) { value = withContext(Dispatchers.Default) { runCatching { shot.original() }.getOrNull() } }
     var version by remember { mutableIntStateOf(0) }
     // Nachher neu berechnen, wenn Filter, Drehung oder Ecken sich ändern (kurz entprellt).
     LaunchedEffect(filter, rotation, version) {
@@ -72,7 +75,7 @@ internal fun ScanEditor(index: Int, shot: ScanShot, onDelete: () -> Unit, onDone
     }
     val image: @Composable (Modifier) -> Unit = { m ->
         Box(m.padding(12.dp), contentAlignment = Alignment.Center) {
-            if (before) CornerEditor(shot.original, corners) { version++ }
+            if (before) original?.let { CornerEditor(it, corners) { version++ } }
             else result?.let { Image(it.asImageBitmap(), "Ergebnis", Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         }
     }

@@ -23,12 +23,18 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,14 +55,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,11 +76,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -92,25 +107,25 @@ import uniffi.impala_ffi.ScanDetection
 import uniffi.impala_ffi.scanDetect
 import java.time.LocalDate
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /** Live-Erkennung: Ecken als Bruchteil des Analysebilds (0…1), Seitenverhältnis und Qualität. */
 private data class Live(val corners: List<Double>, val aspect: Float, val det: ScanDetection)
 
 /** Qualitätshinweis wie heft-scanner-ui.js `qualityHint`. */
 private fun hint(d: ScanDetection?, stable: Int, waiting: Boolean): String = when {
-    d == null -> "Suche Blatt…"
-    d.full -> "Blattrand sichtbar halten"
+    d == null -> "Kamera wird geprüft…"
+    d.full -> "Blatt vollständig ins Bild legen"
     d.check.tooDark -> "Mehr Licht nötig"
-    d.check.glare -> "Spiegelung"
+    d.check.glare -> "Zu hell / Spiegelung vermeiden"
     d.check.flat -> "Kontrast zu gering"
     d.check.soft -> "Kamera ruhiger halten"
     stable >= STABLE_FRAMES && waiting -> "Aufgenommen · nächstes Blatt hinlegen"
-    stable >= STABLE_FRAMES -> "stabil erkannt"
-    else -> "Blatt vollständig"
+    stable >= STABLE_FRAMES -> "Blatt erkannt · bereit"
+    else -> "Dokument wird stabilisiert…"
 }
 
 private const val STABLE_FRAMES = 5
@@ -136,39 +151,59 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasCamera = it }
     LaunchedEffect(Unit) { if (!hasCamera && !noCamera) permission.launch(Manifest.permission.CAMERA) }
 
-    val addBitmap: suspend (Bitmap) -> Unit = { raw ->
-        val shot = withContext(Dispatchers.Default) { shotOf(raw, filter) }
-        shot.preview = withContext(Dispatchers.Default) { runCatching { shot.render(480) }.getOrNull() }
-        shots += shot
+    // Ein Arbeits-Thread für alle Scan-Berechnungen: Seiten werden der Reihe nach fertig, und es liegt
+    // nie mehr als ein großes Bild gleichzeitig im Speicher – auch wenn man schnell viele Seiten aufnimmt.
+    val worker = remember { Dispatchers.Default.limitedParallelism(1) }
+    val process: (ScanShot) -> Unit = { s -> scope.launch(worker) { s.ensure() } }
+    val addBitmap: (Bitmap) -> Unit = { raw ->
+        val f = filter
+        scope.launch(worker) {
+            val shot = runCatching { ScanShot.of(raw, f) }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) { shots += shot }
+            shot.ensure()
+        }
+    }
+    // Fertige Seiten in Reihenfolge; fehlende werden zuerst berechnet (hinter allem, was schon wartet).
+    suspend fun finishedPages(): List<ScannedPage> {
+        val list = shots.toList()
+        return withContext(worker) { list.mapNotNull { it.ensure(); it.page } }
     }
     val photos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        scope.launch { uris.forEach { u -> decodeLarge(context, u)?.let { addBitmap(it) } } }
+        scope.launch { uris.forEach { u -> withContext(Dispatchers.IO) { decodeLarge(context, u) }?.let(addBitmap) } }
     }
     val pdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) scope.launch {
             busy = true
-            runCatching { withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri, "wt")!!.use { writeScanPdf(shots.toList(), it) } } }
-                .onSuccess { onToast("PDF gespeichert.") }.onFailure { onToast("PDF konnte nicht gespeichert werden.") }
+            runCatching {
+                val pages = finishedPages()
+                withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri, "wt")!!.use { writeScanPdf(pages, it) } }
+            }.onSuccess { onToast("PDF gespeichert.") }.onFailure { onToast("PDF konnte nicht gespeichert werden.") }
             busy = false
         }
     }
     // Schließen mit noch nicht eingefügten oder gespeicherten Aufnahmen: erst nachfragen (wie die PWA).
     var askClose by remember { mutableStateOf(false) }
     val requestClose = { if (shots.isEmpty()) onClose() else askClose = true }
-    BackHandler { if (editing != null) editing = null else requestClose() }
+    BackHandler {
+        val i = editing
+        if (i == null) requestClose() else { shots.getOrNull(i)?.let(process); editing = null }
+    }
 
     var shootRequest by remember { mutableIntStateOf(0) }
+    // Ring um den Auslöser (0 = kein Blatt, 1 = bereit; mit Auto füllt er sich bis zur Aufnahme).
+    var readiness by remember { mutableFloatStateOf(0f) }
     val insert: () -> Unit = {
         busy = true
         scope.launch {
-            val pages = withContext(Dispatchers.Default) { shots.map { it.toPage() } }
+            val pages = finishedPages()
             busy = false
-            onInsert(pages)
+            if (pages.isEmpty()) onToast("Keine fertigen Scans zum Einfügen.") else onInsert(pages)
         }
     }
     val ui = ScanUi(
-        shots = shots, filter = filter, auto = auto, hasCamera = hasCamera, busy = busy,
-        onFilter = { filter = it }, onAuto = { auto = !auto }, onPhotos = { photos.launch("image/*") },
+        shots = shots, filter = filter, auto = auto, hasCamera = hasCamera, busy = busy, readiness = readiness,
+        // Filter gilt wie in der PWA für neue und vorhandene Seiten.
+        onFilter = { f -> filter = f; shots.forEach { s -> if (s.filter != f) { s.filter = f; process(s) } } }, onAuto = { auto = !auto }, onPhotos = { photos.launch("image/*") },
         onShoot = { shootRequest++ }, onPdf = { pdf.launch("scan-${LocalDate.now()}.pdf") }, onInsert = insert,
         onOpen = { editing = it }, onDelete = { shots.removeAt(it) }, onClose = requestClose,
     )
@@ -179,10 +214,11 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
             val camera = remember { movableContentOf { m: Modifier ->
                 Box(m) {
                     if (hasCamera) {
-                        CameraPane(auto && editing == null, shootRequest, onCapture = { bmp ->
+                        CameraPane(auto && editing == null, active = editing == null, shootRequest, onReady = { readiness = it }, onCapture = { bmp ->
                             flash = true
                             vibrate(context)
-                            scope.launch { addBitmap(bmp); delay(140); flash = false }
+                            addBitmap(bmp)
+                            scope.launch { delay(140); flash = false }
                         }, onToast)
                     } else {
                         Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -204,7 +240,7 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
                     }
                 } else {
                     Column(Modifier.fillMaxSize()) {
-                        ScanHeader(ui.onClose, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                        ScanHeader(ui.shots.size, ui.onClose, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
                         camera(Modifier.weight(1f).fillMaxWidth())
                         ShotStrip(ui, vertical = false, Modifier.fillMaxWidth().height(132.dp))
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
@@ -212,7 +248,7 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
                         }
                         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { ToolButtons(ui) }
-                            if (ui.hasCamera) Shutter(ui.onShoot) else Box(Modifier.size(68.dp))
+                            if (ui.hasCamera) Shutter(ui.readiness, ui.onShoot) else Box(Modifier.size(68.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) { FinishButtons(ui) }
                         }
                     }
@@ -227,11 +263,8 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
             editing?.let { i ->
                 shots.getOrNull(i)?.let { s ->
                     ScanEditor(i, s, onDelete = { shots.removeAt(i); editing = null }) {
-                        scope.launch {
-                            s.preview = withContext(Dispatchers.Default) { runCatching { s.render(480) }.getOrNull() }
-                            shots[i] = s
-                            editing = null
-                        }
+                        process(s)
+                        editing = null
                     }
                 }
             }
@@ -246,6 +279,7 @@ private class ScanUi(
     val auto: Boolean,
     val hasCamera: Boolean,
     val busy: Boolean,
+    val readiness: Float,
     val onFilter: (ScanFilter) -> Unit,
     val onAuto: () -> Unit,
     val onPhotos: () -> Unit,
@@ -260,9 +294,15 @@ private class ScanUi(
 }
 
 @Composable
-private fun ScanHeader(onClose: () -> Unit, modifier: Modifier = Modifier) {
+private fun ScanHeader(count: Int, onClose: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text("Scannen", Modifier.weight(1f), color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.weight(1f)) {
+            Text("Scannen", color = Color.White, fontSize = TextSize.md, fontWeight = FontWeight.SemiBold)
+            Text(
+                when (count) { 0 -> "Noch keine Seite"; 1 -> "1 Seite"; else -> "$count Seiten" },
+                color = Color.White.copy(alpha = 0.55f), fontSize = TextSize.xs2,
+            )
+        }
         DarkIcon(R.drawable.ic_i_x, "Schließen", onClose)
     }
 }
@@ -271,10 +311,10 @@ private fun ScanHeader(onClose: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun ScanRail(ui: ScanUi, modifier: Modifier) {
     Column(
-        modifier.background(Color.White.copy(alpha = 0.03f)).verticalScroll(rememberScrollState()).padding(12.dp),
+        modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.012f)))).verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ScanHeader(ui.onClose)
+        ScanHeader(ui.shots.size, ui.onClose)
         ScanFilter.entries.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pair.forEach { f -> RailButton(f.label, ui.filter == f, Modifier.weight(1f)) { ui.onFilter(f) } }
@@ -282,7 +322,7 @@ private fun ScanRail(ui: ScanUi, modifier: Modifier) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ToolButtons(ui, Modifier.weight(1f)) }
         Box(Modifier.fillMaxWidth().height(84.dp), contentAlignment = Alignment.Center) {
-            if (ui.hasCamera) Shutter(ui.onShoot)
+            if (ui.hasCamera) Shutter(ui.readiness, ui.onShoot)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { FinishButtons(ui, Modifier.weight(1f)) }
     }
@@ -326,12 +366,24 @@ private fun RailButton(label: String, active: Boolean, modifier: Modifier = Modi
     }
 }
 
+/** Auslöser mit Ring: grau = kein Blatt, grün = bereit; mit Auto füllt sich der Ring bis zur Aufnahme (wie die PWA). */
 @Composable
-private fun Shutter(onClick: () -> Unit) {
-    Box(
-        Modifier.size(68.dp).clip(CircleShape).border(4.dp, Color.White.copy(alpha = 0.35f), CircleShape).padding(6.dp).clip(CircleShape)
-            .background(Color.White).clickable(onClickLabel = "Seite aufnehmen", onClick = onClick),
-    )
+private fun Shutter(readiness: Float, onClick: () -> Unit) {
+    val progress by animateFloatAsState(readiness, tween(160), label = "shutter")
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.93f else 1f, tween(100), label = "shutterPress")
+    Canvas(
+        Modifier.size(72.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+            .clickable(press, indication = null, onClickLabel = "Seite aufnehmen", onClick = onClick),
+    ) {
+        val ring = 5.dp.toPx()
+        val green = Color(0xFF61D68E)
+        if (progress >= 1f) drawCircle(green.copy(alpha = 0.35f), radius = size.minDimension / 2)
+        drawCircle(Color.White.copy(alpha = 0.3f), radius = size.minDimension / 2 - ring / 2, style = Stroke(ring))
+        drawArc(green, -90f, 360f * progress, useCenter = false, topLeft = Offset(ring / 2, ring / 2), size = Size(size.width - ring, size.height - ring), style = Stroke(ring))
+        drawCircle(Color.White, radius = size.minDimension / 2 - ring - 2.dp.toPx())
+    }
 }
 
 /** Aufnahmen: im Querformat eine Spalte links, im Hochformat eine Zeile; leer mit Platzhalter, feste Größe. */
@@ -345,7 +397,7 @@ private fun ShotStrip(ui: ScanUi, vertical: Boolean, modifier: Modifier) {
         val scroll = rememberScrollState()
         // Neue Aufnahme ans Ende scrollen.
         LaunchedEffect(ui.shots.size) { delay(32); scroll.animateScrollTo(scroll.maxValue) }
-        val items: @Composable () -> Unit = { ui.shots.forEachIndexed { i, s -> Thumb(i, s, { ui.onOpen(i) }) { ui.onDelete(i) } } }
+        val items: @Composable () -> Unit = { ui.shots.forEachIndexed { i, s -> key(s) { Thumb(i, s, { ui.onOpen(i) }) { ui.onDelete(i) } } } }
         if (vertical) {
             Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) { items() }
         } else {
@@ -356,7 +408,7 @@ private fun ShotStrip(ui: ScanUi, vertical: Boolean, modifier: Modifier) {
 
 /** Kamera mit Vorschau, Analyse (Erkennungsrahmen) und Auslöser; Taschenlampe, wenn das Gerät eine hat. */
 @Composable
-private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> Unit, onToast: (String) -> Unit) {
+private fun CameraPane(auto: Boolean, active: Boolean, shootRequest: Int, onReady: (Float) -> Unit, onCapture: (Bitmap) -> Unit, onToast: (String) -> Unit) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
@@ -369,7 +421,9 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
     var armed by remember { mutableStateOf(true) }
     var missing by remember { mutableStateOf(0) }
     val executor = remember { Executors.newSingleThreadExecutor() }
-    val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
+    val analyzing = remember { AtomicBoolean(true) }
+    SideEffect { analyzing.set(active) }
+    val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build() }
     val preview = remember { Preview.Builder().build() }
     val analysis = remember {
         ImageAnalysis.Builder()
@@ -394,7 +448,9 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
             shooting = true
             capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
-                    val bmp = image.use { it.toBitmap().rotated(it.imageInfo.rotationDegrees) }
+                    // Gleich auf die Arbeitsgröße bringen und drehen (ein Schritt): das volle Sensorbild
+                    // wird sofort wieder frei, statt bis zur Aufbereitung im Speicher zu liegen.
+                    val bmp = image.use { it.toBitmap().scaledRotated(SCAN_SOURCE_EDGE, it.imageInfo.rotationDegrees) }
                     ContextCompat.getMainExecutor(context).execute { shooting = false; lastShot = System.currentTimeMillis(); stable = 0; armed = false; onCapture(bmp) }
                 }
                 override fun onError(exception: ImageCaptureException) {
@@ -413,13 +469,16 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
             analysis.setAnalyzer(executor) { proxy ->
                 proxy.use { p ->
                     val now = System.currentTimeMillis()
-                    if (now - lastRun < 180) return@use
+                    // Während der Nachbearbeitung ruht die Erkennung (spart Akku und Rechenzeit).
+                    if (!analyzing.get() || now - lastRun < 180) return@use
                     lastRun = now
-                    val bmp = p.toBitmap().rotated(p.imageInfo.rotationDegrees)
-                    val det = runCatching { scanDetect(bmp.toScanImage(640)) }.getOrNull() ?: return@use
-                    val k = min(1f, 640f / max(bmp.width, bmp.height))
-                    val w = bmp.width * k
-                    val h = bmp.height * k
+                    // Analysebild klein gedreht und gleich wieder freigegeben: läuft ~5× je Sekunde.
+                    val bmp = p.toBitmap().scaledRotated(640, p.imageInfo.rotationDegrees)
+                    val w = bmp.width.toFloat()
+                    val h = bmp.height.toFloat()
+                    val det = runCatching { scanDetect(bmp.toScanImage(640)) }.getOrNull()
+                    bmp.recycle()
+                    if (det == null) return@use
                     val norm = det.corners.mapIndexed { i, v -> if (i % 2 == 0) v / w else v / h }
                     ContextCompat.getMainExecutor(context).execute {
                         val prev = live?.corners
@@ -427,7 +486,7 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
                         stable = if (ok && prev != null && norm.zip(prev).all { (a, b) -> abs(a - b) < 0.02 }) stable + 1 else 0
                         missing = if (det.full) missing + 1 else 0
                         if (missing >= 3) armed = true
-                        live = Live(norm, bmp.width / bmp.height.toFloat(), det)
+                        live = Live(norm, w / h, det)
                     }
                 }
             }
@@ -442,6 +501,7 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
     LaunchedEffect(shootRequest) { if (shootRequest > 0) shoot() }
     // Auto-Scan: nach 5 stabilen, brauchbaren Bildern auslösen, danach 1,8 s Pause und neues Blatt abwarten.
     LaunchedEffect(stable, auto, armed) {
+        onReady(if (auto && armed) min(1f, stable / STABLE_FRAMES.toFloat()) else if (stable >= STABLE_FRAMES) 1f else 0f)
         if (auto && armed && stable >= STABLE_FRAMES && System.currentTimeMillis() - lastShot > AUTO_PAUSE_MS) shoot()
     }
     Box(Modifier.fillMaxSize()) {
@@ -456,15 +516,19 @@ private fun CameraPane(auto: Boolean, shootRequest: Int, onCapture: (Bitmap) -> 
             val oy = (size.height - bh) / 2
             val pts = (0 until 4).map { Offset(ox + (l.corners[it * 2] * bw).toFloat(), oy + (l.corners[it * 2 + 1] * bh).toFloat()) }
             val path = Path().apply { moveTo(pts[0].x, pts[0].y); pts.drop(1).forEach { lineTo(it.x, it.y) }; close() }
-            val color = if (ready) Color(0xFF34C759) else Color.White
+            val color = if (ready) Color(0xFF61D68E) else Color(0xFFE8C65A)
             drawPath(path, color.copy(alpha = 0.18f))
+            if (ready) drawPath(path, color.copy(alpha = 0.35f), style = Stroke(8.dp.toPx()))
             drawPath(path, color, style = Stroke(3.dp.toPx()))
         }
-        Text(
-            hint(l?.det, stable, auto && !armed),
-            Modifier.align(Alignment.TopCenter).padding(top = 12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
-            color = if (ready) Color(0xFF34C759) else Color.White, fontSize = TextSize.sm,
-        )
+        Row(
+            Modifier.align(Alignment.TopCenter).padding(top = 12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (ready) Color(0xFF61D68E) else Color(0xFFE8C65A)))
+            Spacer(Modifier.width(7.dp))
+            Text(hint(l?.det, stable, auto && !armed), color = Color.White, fontSize = TextSize.sm, fontWeight = FontWeight.SemiBold)
+        }
         if (camera?.cameraInfo?.hasFlashUnit() == true) {
             Box(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
                 DarkIcon(R.drawable.ic_i_flashlight, if (torch) "Licht aus" else "Licht") { torch = !torch; camera?.cameraControl?.enableTorch(torch) }
@@ -494,14 +558,27 @@ private fun rememberDisplayRotation(): Int {
     return rotation
 }
 
+/** Miniatur einer Aufnahme: Ladeanzeige, solange die Seite im Hintergrund berechnet wird; neue ploppen kurz auf. */
 @Composable
 private fun Thumb(i: Int, s: ScanShot, onOpen: () -> Unit, onDelete: () -> Unit) {
-    Column(Modifier.width(78.dp)) {
-        Box(Modifier.size(78.dp, 100.dp).clip(RoundedCornerShape(8.dp)).background(Color.DarkGray).clickable(onClick = onOpen)) {
-            (s.preview ?: s.original).let { Image(it.asImageBitmap(), "Scan ${i + 1}", Modifier.fillMaxSize()) }
-            Text("${i + 1}", Modifier.align(Alignment.BottomStart).padding(4.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 6.dp), color = Color.White, fontSize = TextSize.xs2)
-            Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onDelete), contentAlignment = Alignment.Center) {
-                Text("×", color = Color.White, fontSize = TextSize.sm)
+    val appear = remember { Animatable(0.6f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
+    Column(Modifier.width(78.dp).graphicsLayer { scaleX = appear.value; scaleY = appear.value; alpha = ((appear.value - 0.6f) / 0.4f).coerceIn(0f, 1f) }) {
+        Box(
+            Modifier.size(78.dp, 100.dp).shadow(6.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.08f)).border(1.dp, if (s.failed) Color(0xFFE97366) else Color.White.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
+                .clickable(onClick = onOpen),
+            contentAlignment = Alignment.Center,
+        ) {
+            val p = s.preview
+            when {
+                p != null -> Image(p.asImageBitmap(), "Scan ${i + 1}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                s.failed -> Text("!", color = Color(0xFFF29A8F), fontSize = TextSize.md, fontWeight = FontWeight.Bold)
+                else -> CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+            }
+            Text("${i + 1}", Modifier.align(Alignment.BottomStart).padding(4.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 6.dp), color = Color.White, fontSize = TextSize.xs2, fontWeight = FontWeight.Bold)
+            Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.65f)).clickable(onClickLabel = "Seite ${i + 1} löschen", onClick = onDelete), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_i_x), null, Modifier.size(12.dp), tint = Color.White)
             }
         }
         if (s.note.isNotEmpty()) Text(s.note, color = Color(0xFFFFB74D), fontSize = TextSize.xs2, maxLines = 1)
@@ -524,29 +601,11 @@ internal fun DarkIcon(icon: Int, label: String, onClick: () -> Unit) {
     }
 }
 
-/** Neues Blatt: Kanten auf einer verkleinerten Kopie suchen, Ecken auf das Original umrechnen, Qualitätsnotiz. */
-private fun shotOf(raw: Bitmap, filter: ScanFilter): ScanShot {
-    val k0 = min(1f, 4096f / max(raw.width, raw.height))
-    val original = if (k0 < 1f) Bitmap.createScaledBitmap(raw, (raw.width * k0).roundToInt(), (raw.height * k0).roundToInt(), true) else raw
-    val k = min(1f, 1200f / max(original.width, original.height))
-    val det = runCatching { scanDetect(original.toScanImage(1200)) }.getOrNull()
-    val corners = det?.corners?.map { it / k } ?: listOf(0.0, 0.0, original.width - 1.0, 0.0, original.width - 1.0, original.height - 1.0, 0.0, original.height - 1.0)
-    val note = when {
-        det == null -> ""
-        det.check.tooDark -> "Mehr Licht nötig"
-        det.check.glare -> "Spiegelung"
-        det.check.flat -> "Kontrast zu gering"
-        det.check.soft -> "Unscharf"
-        else -> ""
-    }
-    return ScanShot(original, corners, filter, 0, note)
-}
-
 private fun decodeLarge(context: Context, uri: Uri): Bitmap? = runCatching {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
     var sample = 1
-    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 4096) sample *= 2
+    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= SCAN_SOURCE_EDGE) sample *= 2
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
 }.getOrNull()
 
