@@ -262,14 +262,14 @@ final class ShellModel {
 
     /// Neuer Chat als Tab (`startNewChat` der PWA): Sidebar „Neuer Chat“, Befehls-Menü.
     func openNewChat() {
-        open("chat:" + UUID().uuidString.lowercased())
+        open("chat:" + ChatModel.newId())
     }
 
     /// „Chat in eigenem Tab öffnen“ (`btnChatExpand`): der Panel-Chat zieht samt Eingabe in einen Tab,
     /// das Panel beginnt leer und klappt ein.
     func movePanelChatToTab() {
         guard !chat.running else { return }
-        let id = chat.chatId.isEmpty ? UUID().uuidString.lowercased() : chat.chatId
+        let id = chat.chatId
         let target = tabChat(id)
         if target.inputDraft.isEmpty { target.inputDraft = chat.inputDraft }
         if target.attachment == nil { target.attachment = chat.attachment }

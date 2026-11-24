@@ -288,14 +288,14 @@ private struct QuestionCard: View {
     }
 }
 
-/// Antwort in Arbeit: Gedankengang, gestreamter Entwurf oder Statuszeile.
+/// Antwort in Arbeit: Gedankengang, gestreamter Entwurf oder Statuszeile. Liest Entwurf und Gedankengang selbst,
+/// damit je Token nur dieser Block neu zeichnet und nicht der ganze Verlauf.
 struct LiveBlock: View {
-    let thinking: String
-    let draft: String
-    let tool: String?
     @Environment(ImpalaStore.self) private var store
+    @Environment(ChatModel.self) private var chat
 
     var body: some View {
+        let thinking = chat.thinking, draft = chat.draft, tool = chat.tool
         VStack(alignment: .leading, spacing: Space.s2) {
             if !thinking.isEmpty { ThinkBox(text: thinking, live: true) }
             if !draft.isEmpty {

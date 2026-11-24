@@ -80,6 +80,7 @@ struct HeftCanvas: UIViewRepresentable {
 
     static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
         coordinator.flush()
+        coordinator.stopObserving()
     }
 
     @MainActor
@@ -261,6 +262,12 @@ struct HeftCanvas: UIViewRepresentable {
         /// Kern-Sperre, und eine geladene Seite enthält immer alles vorher Geschriebene.
         private let writer = DispatchQueue(label: "impala.heft.write", qos: .userInitiated)
         private var resignObserver: NSObjectProtocol?
+
+        /// Heft geschlossen: Beobachter abmelden (sonst blieb je geöffnetem Heft einer zurück).
+        func stopObserving() {
+            if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
+            resignObserver = nil
+        }
 
         /// Zuletzt übernommenes Werkzeug der Leiste.
         private var appliedTools: HeftToolSetting?

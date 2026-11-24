@@ -45,8 +45,9 @@ enum HeftLastPage {
 final class ChatModel {
     @ObservationIgnored private let core: ImpalaCore
 
-    /// Offener Chat; leer = neuer Chat (die ID kommt mit dem Ende des ersten Laufs).
-    private(set) var chatId = ""
+    /// Offener Chat. Ein neuer Chat bekommt seine ID gleich (`startNewChat` der PWA); der Kern legt ihn mit der
+    /// ersten Nachricht unter dieser ID an – auch wenn der erste Lauf scheitert, bleibt der Verlauf so erreichbar.
+    private(set) var chatId = ChatModel.newId()
     private(set) var messages: [ChatMessage] = []
     /// Antwortentwurf des laufenden Laufs (ganzer bisheriger Text).
     private(set) var draft = ""
@@ -113,6 +114,7 @@ final class ChatModel {
         resetLive()
         running = true
         runPageId = activePageId
+        platform.begin()
         let request = AiRunRequest(
             chatId: chatId,
             text: prompt,
@@ -214,7 +216,7 @@ final class ChatModel {
     /// Leeren Chat beginnen (nicht während eines Laufs).
     func newChat() {
         guard !running else { return }
-        chatId = ""
+        chatId = Self.newId()
         messages = []
         error = nil
     }
@@ -223,7 +225,7 @@ final class ChatModel {
     func delete(_ ids: Set<String>) {
         let gone = ids.subtracting(running ? [chatId] : [])
         for id in gone { attempt("deleteChat", { try core.deleteChat(id: id) }) }
-        if gone.contains(chatId) { chatId = ""; messages = []; error = nil }
+        if gone.contains(chatId) { chatId = Self.newId(); messages = []; error = nil }
     }
 
     /// Umbenennen; leerer Titel bleibt beim alten.
@@ -396,6 +398,8 @@ final class ChatModel {
         return a
     }
 
+    nonisolated static func newId() -> String { UUID().uuidString.lowercased() }
+
     static func describe(_ e: Error) -> String {
         guard let f = e as? AiFailure else { return e.localizedDescription }
         switch f {
@@ -455,20 +459,35 @@ private final class RunPlatform: AiPlatform, @unchecked Sendable {
     private let lock = NSLock()
     private var waiting: DispatchSemaphore?
     private var reply: String?
+    /// Stopp kam, bevor die Rückfrage wartete: Sie endet dann sofort, statt den Lauf-Thread ewig zu blockieren.
+    private var cancelled = false
 
     init(core: ImpalaCore) { self.core = core }
 
+    /// Vor jedem Lauf: ein Stopp aus dem vorigen Lauf gilt nicht mehr.
+    func begin() { lock.withLock { cancelled = false } }
+
     func ask(question: String, options: [String]) -> String? {
         let sem = DispatchSemaphore(value: 0)
-        lock.withLock { waiting = sem; reply = nil }
+        let stopped = lock.withLock { () -> Bool in
+            if cancelled { return true }
+            waiting = sem
+            reply = nil
+            return false
+        }
+        if stopped { return nil }
         sem.wait()
         return lock.withLock { reply }
     }
 
     /// Beantwortet die offene Rückfrage (`nil` = abgebrochen); `false`, wenn keine offen ist.
+    /// `nil` ohne offene Rückfrage merkt sich den Stopp für eine gleich folgende.
     func respond(_ answer: String?) -> Bool {
         lock.withLock {
-            guard let w = waiting else { return false }
+            guard let w = waiting else {
+                if answer == nil { cancelled = true }
+                return false
+            }
             reply = answer
             waiting = nil
             w.signal()

@@ -24,7 +24,7 @@ struct ChatView: View {
                         ChatMessageRow(message: row.message) { text in chat.inputDraft = text; focused = true }
                             .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
                     }
-                    if chat.running { LiveBlock(thinking: chat.thinking, draft: chat.draft, tool: chat.tool).transition(.opacity) }
+                    if chat.running { LiveBlock().transition(.opacity) }
                     if let e = chat.error { ChatErrorBox(error: e).transition(.opacity) }
                     Color.clear.frame(height: 1).id("end")
                 }

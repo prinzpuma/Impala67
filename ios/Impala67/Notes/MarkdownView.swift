@@ -8,10 +8,11 @@ struct MarkdownView: View {
     @Environment(ShellModel.self) private var shell
     @State private var model: NoteModel
 
-    /// Sofort geparst, damit die Karte beim Umdrehen nicht nachspringt.
+    /// Sofort geparst, damit die Karte beim Umdrehen nicht nachspringt. `State(initialValue:)` läuft bei jedem
+    /// Neuzeichnen des Elternteils; ohne Zwischenspeicher parste das jedes Mal (beim Streamen je Token doppelt).
     init(_ markdown: String, core: ImpalaCore) {
         self.markdown = markdown
-        _model = State(initialValue: NoteModel(core: core, markdown: markdown))
+        _model = State(initialValue: MarkdownCache.model(markdown, core: core))
     }
 
     var body: some View {
@@ -22,7 +23,7 @@ struct MarkdownView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onChange(of: markdown) { model = NoteModel(core: store.core, markdown: markdown) }
+        .onChange(of: markdown) { model = MarkdownCache.model(markdown, core: store.core) }
         .environment(\.openURL, OpenURLAction { url in open(url) })
     }
 
@@ -36,5 +37,20 @@ struct MarkdownView: View {
         default: break
         }
         return .handled
+    }
+}
+
+/// Zuletzt geparste Texte (nur Anzeige, schreibgeschützt – gleiche Texte dürfen sich ein Modell teilen).
+@MainActor
+private enum MarkdownCache {
+    private static var models: [String: NoteModel] = [:]
+
+    static func model(_ markdown: String, core: ImpalaCore) -> NoteModel {
+        if let m = models[markdown] { return m }
+        // Gestreamte Entwürfe erzeugen viele Zwischenstände: klein halten statt aufwendig zu verdrängen.
+        if models.count >= 48 { models.removeAll(keepingCapacity: true) }
+        let m = NoteModel(core: core, markdown: markdown)
+        models[markdown] = m
+        return m
     }
 }
