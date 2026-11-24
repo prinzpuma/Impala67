@@ -1040,6 +1040,19 @@ export class ModelCore {
         }
     }
     /**
+     * @param {string} deck
+     * @param {string | null} [page_id]
+     * @returns {any}
+     */
+    cardSubject(deck, page_id) {
+        const ptr0 = passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(page_id) ? 0 : passStringToWasm0(page_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.modelcore_cardSubject(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+        return takeObject(ret);
+    }
+    /**
      * @param {string} root
      * @param {boolean} include_trashed
      * @returns {string}
@@ -2377,6 +2390,17 @@ export class ModelCore {
             wasm.__wbindgen_add_to_stack_pointer(16);
             wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
         }
+    }
+    /**
+     * @param {string} id
+     * @param {boolean} ignore_manual
+     * @returns {any}
+     */
+    pageSubject(id, ignore_manual) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.modelcore_pageSubject(this.__wbg_ptr, ptr0, len0, ignore_manual);
+        return takeObject(ret);
     }
     /**
      * @param {string} id
@@ -4044,6 +4068,71 @@ export function driveModeSelectable(cf_sync_key) {
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.driveModeSelectable(ptr0, len0);
     return ret !== 0;
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+export function fachClean(value) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(value, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.fachClean(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred2_0 = r0;
+        deferred2_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {string} deck
+ * @returns {any}
+ */
+export function fachDeckSubject(deck) {
+    const ptr0 = passStringToWasm0(deck, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.fachDeckSubject(ptr0, len0);
+    return takeObject(ret);
+}
+
+/**
+ * @returns {any}
+ */
+export function fachKnownSubjects() {
+    const ret = wasm.fachKnownSubjects();
+    return takeObject(ret);
+}
+
+/**
+ * @param {string} value
+ * @returns {string | undefined}
+ */
+export function fachResolveSubject(value) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(value, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.fachResolveSubject(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        let v2;
+        if (r0 !== 0) {
+            v2 = getStringFromWasm0(r0, r1);
+            wasm.__wbindgen_export5(r0, r1 * 1, 1);
+        }
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
 }
 
 /**
@@ -6356,7 +6445,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5526(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5602(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6402,7 +6491,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5526(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5602(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6495,7 +6584,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 213, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5470);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5546);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6522,14 +6611,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5526(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5526(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5602(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5602(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5470(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5546(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5470(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5546(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

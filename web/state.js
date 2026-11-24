@@ -780,6 +780,8 @@ export const STATE = (() => {
 		gradesBySubject: () => JSON.parse(M.gradesBySubject()),
 		exportGradesMarkdown: (todayLabel = "") => M.exportGradesMarkdown(String(todayLabel)),
 		mergedChatSessions: (localRaw = [], now = "") => JSON.parse(M.mergedChatSessions(JSON.stringify(localRaw), String(now))),
+		pageSubject: (id, ignoreManual = false) => M.pageSubject(String(id || ""), !!ignoreManual),
+		cardSubject: (deck = "", pageId = null) => M.cardSubject(String(deck || ""), pageId ? String(pageId) : undefined),
 	};
 })();
 

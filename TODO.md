@@ -21,9 +21,6 @@ Stand: 15.11.2026.
 - **Heft-KI**: Aktionen auf Basis von `ocrText` und Seitenbildern, z. B. „Lernzettel aus diesem Heft“, „Karteikarten
   aus Heft-Seite“.
 - **Handschrift schärfen**: lange Sätze, Skizzen-Abgrenzung, Mathe (`handwriting/evaluate_notes_benchmark.py`).
-- **Fach-Erkennung in den Kern**: PWA auf `core/impala-fach` umstellen, `web/fach.js` bis auf die Embedding-Einordnung löschen.
-- **Toten Cloud-Embedding-Weg entfernen**: `SemanticSearch::with_cloud_embeddings`/`cloud` in `core/impala-ffi/src/rag.rs`,
-  Remote-Queue in `web/ai.js` (`embedProvider`, `remoteEmbed*`).
 - **iPad-Semantik**: Suche nach Bedeutung, RAG-Quellen im Chat, Fach-Einordnung per Embedding; SwiftUI-Menüs barrierefrei.
 - **Android-Semantik**: „Verwandt“-Leiste und RAG-Quellen (semantischer Index auf Android).
 

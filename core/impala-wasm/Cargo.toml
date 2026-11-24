@@ -22,6 +22,7 @@ impala-ink = { path = "../impala-ink", default-features = false }
 impala-srs = { path = "../impala-srs" }
 impala-markdown = { path = "../impala-markdown" }
 impala-heft = { path = "../impala-heft" }
+impala-fach = { path = "../impala-fach" }
 impala-lehrer = { path = "../impala-lehrer" }
 impala-model = { path = "../impala-model" }
 impala-storage = { path = "../impala-storage", default-features = false }

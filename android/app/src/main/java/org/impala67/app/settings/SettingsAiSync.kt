@@ -67,7 +67,7 @@ private fun SemanticSearchRow() {
         is SemanticState.Downloading -> "Lädt… ${s.percent} %" + if (s.files > 1) " (Datei ${s.file + 1} von ${s.files})" else ""
         SemanticState.Loading -> "Modell wird geladen…"
         is SemanticState.Indexing -> "Indexiert Notizen… noch ${s.remaining}"
-        is SemanticState.Ready -> if (s.cloudModel != null) "Aktiv über Cloud-Quelle (${s.cloudModel})" else "Aktiv – läuft lokal auf dem Gerät"
+        is SemanticState.Ready -> "Aktiv – läuft lokal auf dem Gerät"
         is SemanticState.Failed -> "Fehler: ${s.message}"
     }
     SettingsRow("Semantische Suche (Bekko a8m)", description) {

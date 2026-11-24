@@ -46,7 +46,7 @@ sealed interface SemanticState {
     data class Downloading(val percent: Int, val file: Int, val files: Int) : SemanticState
     data object Loading : SemanticState
     data class Indexing(val remaining: Int) : SemanticState
-    data class Ready(val cloudModel: String?) : SemanticState
+    data object Ready : SemanticState
     data class Failed(val message: String) : SemanticState
 }
 
@@ -156,11 +156,9 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
     private fun refresh(store: ImpalaStore) {
         if (_state.value is SemanticState.Downloading) return
         val setup = embeddingSetup(store.core, modelDir.path)
-        // Cloud: jede Änderung an Modell oder Quelle baut neu; das lokale Modell nur einmal laden.
         val key = when (setup) {
             is EmbeddingSetup.Off -> ""
             is EmbeddingSetup.Local -> if (setup.downloaded) "local" else ""
-            is EmbeddingSetup.Cloud -> "cloud:" + setup.model + "|" + store.core.settingsJson().hashCode()
         }
         if (key != searchKey) {
             drop()
@@ -169,13 +167,11 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
                 return
             }
             search = runCatching {
-                if (setup is EmbeddingSetup.Local) SemanticSearch.withLocalModel(store.core, modelDir.path)
-                else SemanticSearch.withCloudEmbeddings(store.core)
+                SemanticSearch.withLocalModel(store.core, modelDir.path)
             }.onFailure { fail(it) }.getOrNull() ?: return
             searchKey = key
         }
         val s = search ?: return
-        val cloudModel = (setup as? EmbeddingSetup.Cloud)?.model
         // In Schritten, damit der Fortschritt sichtbar ist und neue Änderungen bald drankommen.
         while (true) {
             val report = runCatching { s.update(PAGES_PER_STEP) }.onFailure { fail(it) }.getOrNull() ?: return
@@ -183,7 +179,7 @@ class SemanticIndex(filesDir: File, private val store: Deferred<ImpalaStore>, pr
             if (report.remaining == 0u) break
             _state.value = SemanticState.Indexing(report.remaining.toInt())
         }
-        _state.value = SemanticState.Ready(cloudModel)
+        _state.value = SemanticState.Ready
     }
 
     private fun fail(e: Throwable) {

@@ -15,12 +15,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use impala_ai::{EmbedRoute, Provider, embed_provider, embed_remote, embed_route};
-use impala_net::{HttpClient, UreqClient, block_on};
+use impala_net::UreqClient;
 use impala_search::embed::LOCAL_EMBEDDING_MODELS;
 use impala_search::onnx::OnnxEmbedder;
 use impala_search::store::{EMBEDDING_BATCH_SIZE, GRAPH_CARD_PREFIX};
@@ -31,7 +29,7 @@ use impala_search::{
 use impala_storage::{Blob, Storage, Write};
 use serde_json::{Value, json};
 
-use crate::ai::{ai_providers, setting_text};
+use crate::ai::setting_text;
 use crate::{ImpalaCore, Inner, Shared, lock};
 
 /// Fehler der semantischen Suche.
@@ -123,12 +121,10 @@ pub struct LocalEmbeddingModel {
 /// Wie die Einstellungen die Vektoren beziehen.
 #[derive(Debug, Clone, PartialEq, uniffi::Enum)]
 pub enum EmbeddingSetup {
-    /// Kein Embedding-Modell gewählt: keine semantische Suche.
+    /// Kein lokales Embedding-Modell gewählt: keine semantische Suche.
     Off,
     /// Lokales Modell; `downloaded` = Dateien liegen im Modellverzeichnis.
     Local { downloaded: bool },
-    /// Cloud-Quelle ([`SemanticSearch::with_cloud_embeddings`]).
-    Cloud { model: String },
 }
 
 fn model_present(dir: &Path) -> bool {
@@ -142,16 +138,16 @@ pub fn local_embedding_model(model_dir: String) -> LocalEmbeddingModel {
     LocalEmbeddingModel { id: m.id.to_owned(), size_mb: m.size_mb, downloaded: model_present(Path::new(&model_dir)) }
 }
 
-/// Lokal, Cloud oder aus – laut `embedModel`/`embedProviderId` (wie `embed` in ai.js).
+/// Lokal oder aus – laut `embedModel`/`embedProviderId`.
 #[uniffi::export]
 pub fn embedding_setup(core: Arc<ImpalaCore>, model_dir: String) -> EmbeddingSetup {
     let shared = core.shared();
     let inner = lock(&shared);
     let (model, provider_id) = (setting_text(&inner, "embedModel"), setting_text(&inner, "embedProviderId"));
-    match embed_route(&provider_id, &model) {
-        Err(_) => EmbeddingSetup::Off,
-        Ok(EmbedRoute::Local) => EmbeddingSetup::Local { downloaded: model_present(Path::new(&model_dir)) },
-        Ok(EmbedRoute::Remote) => EmbeddingSetup::Cloud { model },
+    if !model.is_empty() && (provider_id == "local" || model.starts_with("local:")) {
+        EmbeddingSetup::Local { downloaded: model_present(Path::new(&model_dir)) }
+    } else {
+        EmbeddingSetup::Off
     }
 }
 
@@ -219,37 +215,6 @@ impl Embedder for PlatformEmbedder {
         self.inner
             .embed(texts.iter().map(|t| (*t).to_owned()).collect())
             .map_err(|e| EmbedError::Inference(e.to_string()))
-    }
-}
-
-/// Embeddings über `POST /embeddings` einer Cloud-Quelle (Einstellungen `embedModel`/`embedProviderId`).
-struct CloudEmbedder<H> {
-    http: H,
-    provider: Provider,
-    model: String,
-    key: String,
-    provider_id: String,
-    dim: AtomicUsize,
-}
-
-impl<H: HttpClient> Embedder for CloudEmbedder<H> {
-    fn model_key(&self) -> &str {
-        &self.key
-    }
-    fn provider_id(&self) -> &str {
-        &self.provider_id
-    }
-    fn dim(&self) -> usize {
-        self.dim.load(Ordering::Relaxed)
-    }
-    fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let texts: Vec<String> = texts.iter().map(|t| (*t).to_owned()).collect();
-        let vectors = block_on(embed_remote(&self.http, &self.provider, &self.model, &texts))
-            .map_err(|e| EmbedError::Inference(e.to_string()))?;
-        if let Some(v) = vectors.first() {
-            self.dim.store(v.len(), Ordering::Relaxed);
-        }
-        Ok(vectors)
     }
 }
 
@@ -432,40 +397,6 @@ impl SemanticSearch {
         })
     }
 
-    fn cloud<H: HttpClient + Send + Sync + 'static>(core: &ImpalaCore, http: H) -> Result<Arc<Self>, SearchFailure> {
-        let shared = core.shared();
-        let inner = lock(&shared);
-        let (model, provider_id) = (setting_text(&inner, "embedModel"), setting_text(&inner, "embedProviderId"));
-        let route = embed_route(&provider_id, &model).map_err(embed_err)?;
-        if route == EmbedRoute::Local {
-            return Err(embed_err("Lokales Modell: die Plattform muss einen TextEmbedder liefern."));
-        }
-        let providers = ai_providers(&inner);
-        let active = setting_text(&inner, "aiProviderId");
-        let provider = embed_provider(&providers, &provider_id, &active)
-            .cloned()
-            .ok_or_else(|| embed_err("Keine Quelle für Embeddings konfiguriert."))?;
-        drop(inner);
-        let embedder = CloudEmbedder {
-            key: vector_model_key(&model),
-            http,
-            provider,
-            model,
-            provider_id,
-            dim: AtomicUsize::new(0),
-        };
-        Ok(SemanticSearch::start(core, Box::new(embedder)))
-    }
-
-    /// Wie [`SemanticSearch::with_cloud_embeddings`] mit eigenem HTTP-Client (Tests).
-    #[cfg(test)]
-    pub(crate) fn with_http<H: HttpClient + Send + Sync + 'static>(
-        core: &ImpalaCore,
-        http: H,
-    ) -> Result<Arc<Self>, SearchFailure> {
-        Self::cloud(core, http)
-    }
-
     fn mark_dirty(&self) {
         self.cache.lock().unwrap_or_else(|e| e.into_inner()).index = None;
     }
@@ -611,13 +542,6 @@ impl SemanticSearch {
         local.model.lock().unwrap_or_else(|e| e.into_inner()).take().is_some()
     }
 
-    /// Index mit Vektoren einer Cloud-Quelle laut Einstellungen (`embedModel`, `embedProviderId`,
-    /// `aiProviders` mit Schlüssel). Für lokale Modelle (`local:…`) stattdessen [`SemanticSearch::new`].
-    #[uniffi::constructor]
-    pub fn with_cloud_embeddings(core: Arc<ImpalaCore>) -> Result<Arc<Self>, SearchFailure> {
-        SemanticSearch::cloud(&core, UreqClient::default())
-    }
-
     /// Wie viele Seiten sind neu oder geändert (und damit für `update` offen)?
     pub fn pending_pages(&self) -> Result<u32, SearchFailure> {
         let (stale, orphans) = self.plan()?;
@@ -707,7 +631,7 @@ impl SemanticSearch {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
 
@@ -790,49 +714,6 @@ mod tests {
         assert_eq!(again.update(0).unwrap().indexed, 0);
         assert_eq!(bag.calls.load(Ordering::Relaxed), calls);
         assert_eq!(again.search("katze".into(), 3).unwrap()[0].title, "Haustiere");
-    }
-
-    /// Falscher Embedding-Server (`POST /embeddings`) mit denselben Wortsack-Vektoren.
-    struct Cloud;
-
-    impl HttpClient for Cloud {
-        async fn send(&self, req: &impala_net::Request) -> Result<impala_net::Response, impala_net::NetError> {
-            assert!(req.url.ends_with("/embeddings"), "{}", req.url);
-            let body: Value = serde_json::from_slice(&req.body).unwrap();
-            assert_eq!(body["model"], "text-embedding-test");
-            let bag = Bag::new();
-            let texts: Vec<String> =
-                body["input"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
-            let data: Vec<Value> = bag
-                .embed(texts)
-                .unwrap()
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| json!({ "index": i, "embedding": v }))
-                .collect();
-            Ok(impala_net::Response {
-                status: 200,
-                headers: vec![],
-                body: json!({ "data": data }).to_string().into_bytes(),
-            })
-        }
-    }
-
-    #[test]
-    fn cloud_embeddings_aus_den_einstellungen() {
-        let core = ImpalaCore::open_in_memory().unwrap();
-        let settings = json!({
-            "embedModel": "text-embedding-test", "embedProviderId": "cloud",
-            "aiProviders": [{ "id": "cloud", "name": "Cloud", "base": "https://emb.test/v1", "key": "k" }],
-        });
-        // Ohne Modell: klare Fehlermeldung.
-        assert!(matches!(SemanticSearch::with_http(&core, Cloud), Err(SearchFailure::Embedding { .. })));
-        core.dispatch("settingsSet".into(), settings.to_string()).unwrap();
-        let hund = core.create_page("Tiere".into(), "Der Hund bellt laut.".into(), None, None).unwrap();
-        core.create_page("Wetter".into(), "Heute regnet es, das Wetter ist schlecht.".into(), None, None).unwrap();
-        let search = SemanticSearch::with_http(&core, Cloud).unwrap();
-        assert_eq!(search.update(0).unwrap().indexed, 2);
-        assert_eq!(search.search("hund".into(), 1).unwrap()[0].page_id, hund);
     }
 
     #[test]

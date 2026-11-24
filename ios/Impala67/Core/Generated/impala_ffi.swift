@@ -6878,18 +6878,6 @@ public convenience init(core: ImpalaCore, embedder: TextEmbedder) {
 
     
     /**
-     * Index mit Vektoren einer Cloud-Quelle laut Einstellungen (`embedModel`, `embedProviderId`,
-     * `aiProviders` mit Schlüssel). Für lokale Modelle (`local:…`) stattdessen [`SemanticSearch::new`].
-     */
-public static func withCloudEmbeddings(core: ImpalaCore)throws  -> SemanticSearch  {
-    return try  FfiConverterTypeSemanticSearch_lift(try rustCallWithError(FfiConverterTypeSearchFailure_lift) {
-    uniffi_impala_ffi_fn_constructor_semanticsearch_with_cloud_embeddings(
-        FfiConverterTypeImpalaCore_lower(core),$0
-    )
-})
-}
-    
-    /**
      * Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Das Modell
      * lädt erst beim ersten Einbetten (einige Sekunden) und bleibt bis [`Self::release_idle_model`].
      */
@@ -21536,18 +21524,13 @@ extension EmbedFailure: Foundation.LocalizedError {
 public enum EmbeddingSetup {
     
     /**
-     * Kein Embedding-Modell gewählt: keine semantische Suche.
+     * Kein lokales Embedding-Modell gewählt: keine semantische Suche.
      */
     case off
     /**
      * Lokales Modell; `downloaded` = Dateien liegen im Modellverzeichnis.
      */
     case local(downloaded: Bool
-    )
-    /**
-     * Cloud-Quelle ([`SemanticSearch::with_cloud_embeddings`]).
-     */
-    case cloud(model: String
     )
 }
 
@@ -21571,9 +21554,6 @@ public struct FfiConverterTypeEmbeddingSetup: FfiConverterRustBuffer {
         case 2: return .local(downloaded: try FfiConverterBool.read(from: &buf)
         )
         
-        case 3: return .cloud(model: try FfiConverterString.read(from: &buf)
-        )
-        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -21589,11 +21569,6 @@ public struct FfiConverterTypeEmbeddingSetup: FfiConverterRustBuffer {
         case let .local(downloaded):
             writeInt(&buf, Int32(2))
             FfiConverterBool.write(downloaded, into: &buf)
-            
-        
-        case let .cloud(model):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(model, into: &buf)
             
         }
     }
@@ -26425,7 +26400,7 @@ public func embeddingModelKey(model: String) -> String  {
 })
 }
 /**
- * Lokal, Cloud oder aus – laut `embedModel`/`embedProviderId` (wie `embed` in ai.js).
+ * Lokal oder aus – laut `embedModel`/`embedProviderId`.
  */
 public func embeddingSetup(core: ImpalaCore, modelDir: String) -> EmbeddingSetup  {
     return try!  FfiConverterTypeEmbeddingSetup_lift(try! rustCall() {
@@ -27103,7 +27078,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_embedding_model_key() != 6125) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_impala_ffi_checksum_func_embedding_setup() != 16401) {
+    if (uniffi_impala_ffi_checksum_func_embedding_setup() != 54402) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_flatten_decks() != 50954) {
@@ -28031,9 +28006,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_constructor_semanticsearch_new() != 31129) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_impala_ffi_checksum_constructor_semanticsearch_with_cloud_embeddings() != 64946) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_constructor_semanticsearch_with_local_model() != 5876) {

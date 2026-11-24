@@ -1686,8 +1686,6 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
-
-
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2385,8 +2383,6 @@ fun uniffi_impala_ffi_checksum_constructor_impalacore_open_in_memory(
 ): Short
 fun uniffi_impala_ffi_checksum_constructor_semanticsearch_new(
 ): Short
-fun uniffi_impala_ffi_checksum_constructor_semanticsearch_with_cloud_embeddings(
-): Short
 fun uniffi_impala_ffi_checksum_constructor_semanticsearch_with_local_model(
 ): Short
 fun ffi_impala_ffi_uniffi_contract_version(
@@ -3001,8 +2997,6 @@ fun uniffi_impala_ffi_fn_free_semanticsearch(`ptr`: Pointer,uniffi_out_err: Unif
 ): Unit
 fun uniffi_impala_ffi_fn_constructor_semanticsearch_new(`core`: Pointer,`embedder`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_impala_ffi_fn_constructor_semanticsearch_with_cloud_embeddings(`core`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
-): Pointer
 fun uniffi_impala_ffi_fn_constructor_semanticsearch_with_local_model(`core`: Pointer,`modelDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
 fun uniffi_impala_ffi_fn_method_semanticsearch_index_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3434,7 +3428,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_embedding_model_key() != 6125.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_impala_ffi_checksum_func_embedding_setup() != 16401.toShort()) {
+    if (lib.uniffi_impala_ffi_checksum_func_embedding_setup() != 54402.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_flatten_decks() != 50954.toShort()) {
@@ -4362,9 +4356,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_new() != 31129.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_with_cloud_embeddings() != 64946.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_constructor_semanticsearch_with_local_model() != 5876.toShort()) {
@@ -13449,21 +13440,6 @@ open class SemanticSearch: Disposable, AutoCloseable, SemanticSearchInterface
     companion object {
         
     /**
-     * Index mit Vektoren einer Cloud-Quelle laut Einstellungen (`embedModel`, `embedProviderId`,
-     * `aiProviders` mit Schlüssel). Für lokale Modelle (`local:…`) stattdessen [`SemanticSearch::new`].
-     */
-    @Throws(SearchFailure::class) fun `withCloudEmbeddings`(`core`: ImpalaCore): SemanticSearch {
-            return FfiConverterTypeSemanticSearch.lift(
-    uniffiRustCallWithError(SearchFailure) { _status ->
-    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_constructor_semanticsearch_with_cloud_embeddings(
-        FfiConverterTypeImpalaCore.lower(`core`),_status)
-}
-    )
-    }
-    
-
-        
-    /**
      * Index mit dem lokalen Modell aus `model_dir` ([`download_local_embedding_model`]). Das Modell
      * lädt erst beim ersten Einbetten (einige Sekunden) und bleibt bis [`Self::release_idle_model`].
      */
@@ -21196,7 +21172,7 @@ public object FfiConverterTypeEmbedFailure : FfiConverterRustBuffer<EmbedFailure
 sealed class EmbeddingSetup {
     
     /**
-     * Kein Embedding-Modell gewählt: keine semantische Suche.
+     * Kein lokales Embedding-Modell gewählt: keine semantische Suche.
      */
     object Off : EmbeddingSetup()
     
@@ -21206,14 +21182,6 @@ sealed class EmbeddingSetup {
      */
     data class Local(
         val `downloaded`: kotlin.Boolean) : EmbeddingSetup() {
-        companion object
-    }
-    
-    /**
-     * Cloud-Quelle ([`SemanticSearch::with_cloud_embeddings`]).
-     */
-    data class Cloud(
-        val `model`: kotlin.String) : EmbeddingSetup() {
         companion object
     }
     
@@ -21231,9 +21199,6 @@ public object FfiConverterTypeEmbeddingSetup : FfiConverterRustBuffer<EmbeddingS
             1 -> EmbeddingSetup.Off
             2 -> EmbeddingSetup.Local(
                 FfiConverterBoolean.read(buf),
-                )
-            3 -> EmbeddingSetup.Cloud(
-                FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -21253,13 +21218,6 @@ public object FfiConverterTypeEmbeddingSetup : FfiConverterRustBuffer<EmbeddingS
                 + FfiConverterBoolean.allocationSize(value.`downloaded`)
             )
         }
-        is EmbeddingSetup.Cloud -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-                + FfiConverterString.allocationSize(value.`model`)
-            )
-        }
     }
 
     override fun write(value: EmbeddingSetup, buf: ByteBuffer) {
@@ -21271,11 +21229,6 @@ public object FfiConverterTypeEmbeddingSetup : FfiConverterRustBuffer<EmbeddingS
             is EmbeddingSetup.Local -> {
                 buf.putInt(2)
                 FfiConverterBoolean.write(value.`downloaded`, buf)
-                Unit
-            }
-            is EmbeddingSetup.Cloud -> {
-                buf.putInt(3)
-                FfiConverterString.write(value.`model`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -27010,7 +26963,7 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
-         * Lokal, Cloud oder aus – laut `embedModel`/`embedProviderId` (wie `embed` in ai.js).
+         * Lokal oder aus – laut `embedModel`/`embedProviderId`.
          */ fun `embeddingSetup`(`core`: ImpalaCore, `modelDir`: kotlin.String): EmbeddingSetup {
             return FfiConverterTypeEmbeddingSetup.lift(
     uniffiRustCall() { _status ->

@@ -206,54 +206,20 @@ export const AI = (() => {
 	}
 
 	// ---------- Embeddings ----------
-	// Cloud-Embeddings nacheinander, Vordergrund (Suche) vor Hintergrund (Indexieren).
-	const remoteEmbedForeground = [], remoteEmbedBackground = [];
-	let processingRemoteEmbeds = false;
-	async function runRemoteEmbed({ texts, provider, model }) {
-		const started = performance.now();
-		try {
-			return (await CORE.aiEmbedRemote(http, provider, model, texts)).map((v) => Array.from(v));
-		} catch (error) {
-			debugEvent(error?.status ? "Embedding-Fehler" : "Embedding-Netzwerkfehler", { provider: provider.id, model, status: error?.status, ms: Math.round(performance.now() - started), error: errorText(error) });
-			throw error;
-		}
-	}
-	async function processRemoteEmbedQueue() {
-		if (processingRemoteEmbeds) return;
-		processingRemoteEmbeds = true;
-		try {
-			while (remoteEmbedForeground.length || remoteEmbedBackground.length) {
-				const job = remoteEmbedForeground.shift() || remoteEmbedBackground.shift();
-				try { job.resolve(await runRemoteEmbed(job)); }
-				catch (error) { job.reject(error); }
-			}
-		} finally { processingRemoteEmbeds = false; }
-	}
-	function embedProvider() {
-		const byId = (id) => (id && providers().find((p) => p.id === id)) || null;
-		return byId(S.settings.embedProviderId) || byId(S.settings.aiProviderId) || providers()[0] || null;
-	}
 	async function embed(texts, options = {}) {
 		if (!Array.isArray(texts)) throw new TypeError("Embedding-Texte müssen als Array übergeben werden.");
 		const model = String(S.settings.embedModel || "");
 		if (!model) throw new Error("Kein Embedding-Modell konfiguriert.");
-		if (S.settings.embedProviderId === "local" || model.startsWith("local:")) {
-			const started = performance.now();
-			try {
-				return await EMBEDDINGS.embedLocal(texts, { modelId: model, priority: options.priority || "foreground" });
-			} catch (err) {
-				debugEvent("Lokaler-Embedding-Fehler", { model, error: errorText(err), ms: Math.round(performance.now() - started) });
-				throw err;
-			}
+		if (S.settings.embedProviderId !== "local" && !model.startsWith("local:")) {
+			throw new Error("Cloud-Embeddings werden nicht mehr unterstützt (Einstellungen → KI).");
 		}
-		const provider = embedProvider();
-		if (!provider?.base) throw new Error("Keine Quelle für Embeddings konfiguriert (Einstellungen → KI).");
-		return new Promise((resolve, reject) => {
-			(options.priority === "background" ? remoteEmbedBackground : remoteEmbedForeground).push({
-				texts: texts.slice(), provider: { id: provider.id, name: provider.name || "", base: provider.base, key: provider.key || "" }, model, resolve, reject,
-			});
-			processRemoteEmbedQueue();
-		});
+		const started = performance.now();
+		try {
+			return await EMBEDDINGS.embedLocal(texts, { modelId: model, priority: options.priority || "foreground" });
+		} catch (err) {
+			debugEvent("Lokaler-Embedding-Fehler", { model, error: errorText(err), ms: Math.round(performance.now() - started) });
+			throw err;
+		}
 	}
 
 	// ---------- Einfache Anfragen ----------
