@@ -878,7 +878,7 @@ struct HeftCanvas: UIViewRepresentable {
             guard fit > 0 else { return }
             let k = canvas.zoomScale / fit
             let target = k >= 1.9 ? fit : min(canvas.maximumZoomScale, fit * max(2.2, k * 1.8))
-            zoomer.zoom(canvas, to: target, at: gesture.location(in: canvas))
+            zoomer.zoom(canvas, to: target, at: gesture.location(in: canvas), contentSize: contentSize)
         }
 
         /// Eigenes Schieben oder Zoomen bricht den Doppeltipp-Zoom ab.

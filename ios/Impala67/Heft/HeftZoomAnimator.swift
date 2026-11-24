@@ -21,11 +21,15 @@ final class HeftZoomAnimator: NSObject {
     /// das darf die Animation nicht für einen Nutzer-Pinch halten und abbrechen.
     private(set) var stepping = false
 
+    /// Ungezoomte Größe aller Seiten; je Schritt × Zoom als `contentSize` (wie `fitWidth`).
+    private var base: CGSize = .zero
+
     /// Zoomt auf `target`; `p` ist der Tipp in (gezoomten) Inhaltskoordinaten des Scroll-Views.
-    func zoom(_ scroll: UIScrollView, to target: CGFloat, at p: CGPoint) {
+    func zoom(_ scroll: UIScrollView, to target: CGFloat, at p: CGPoint, contentSize: CGSize) {
         stop()
         let z = max(scroll.zoomScale, 0.0001)
         self.scroll = scroll
+        base = contentSize
         from = z
         to = target
         anchor = CGPoint(x: p.x / z, y: p.y / z)
@@ -60,6 +64,9 @@ final class HeftZoomAnimator: NSObject {
         let z = from + (to - from) * e
         // Ruft `scrollViewDidZoom` und setzt damit die Seitenränder für diesen Zoom.
         scroll.setZoomScale(z, animated: false)
+        // Inhaltsgröße selbst setzen: Hinkt sie hinterher, klemmt der Ausschnitt unten an die alte Größe und das
+        // Heft wächst von links oben statt um den Finger.
+        scroll.contentSize = CGSize(width: base.width * z, height: base.height * z)
         let inset = scroll.contentInset
         let minX = -inset.left, minY = -inset.top
         let maxX = max(minX, scroll.contentSize.width + inset.right - scroll.bounds.width)
