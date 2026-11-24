@@ -1684,6 +1684,10 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -2197,6 +2201,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_library_heft_shelf(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_library_notion_view(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_link_candidates(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_load_info(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_mark_home_article_read(
@@ -2230,6 +2236,8 @@ fun uniffi_impala_ffi_checksum_method_impalacore_page_props(
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subject(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_page_subtree(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_page_summaries(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_palette_chats(
 ): Short
@@ -2843,6 +2851,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_library_heft_shelf(`ptr`: Pointer,`fo
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_library_notion_view(`ptr`: Pointer,`smart`: RustBuffer.ByValue,`query`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_link_candidates(`ptr`: Pointer,`query`: RustBuffer.ByValue,`exclude`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_load_info(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_mark_home_article_read(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2876,6 +2886,8 @@ fun uniffi_impala_ffi_fn_method_impalacore_page_props(`ptr`: Pointer,`id`: RustB
 fun uniffi_impala_ffi_fn_method_impalacore_page_subject(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_page_subtree(`ptr`: Pointer,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_page_summaries(`ptr`: Pointer,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_palette_chats(`ptr`: Pointer,`query`: RustBuffer.ByValue,`includeMessages`: Byte,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -4076,6 +4088,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_library_notion_view() != 53167.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_link_candidates() != 47151.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_load_info() != 7430.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4125,6 +4140,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_subtree() != 4100.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_page_summaries() != 27770.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_palette_chats() != 55124.toShort()) {
@@ -9616,6 +9634,12 @@ public interface ImpalaCoreInterface {
      */
     fun `libraryNotionView`(`smart`: kotlin.String, `query`: kotlin.String): NotionLibraryView
     
+    /**
+     * Link-Menü (`[[`, `openLinkMenu` der PWA): höchstens `limit` zuletzt bearbeitete aktive Seiten außer
+     * `exclude`, deren Titel `query` enthält (ohne Groß-/Kleinschreibung).
+     */
+    fun `linkCandidates`(`query`: kotlin.String, `exclude`: kotlin.String, `limit`: kotlin.UInt): List<PageSummary>
+    
     fun `loadInfo`(): LoadInfo
     
     /**
@@ -9703,6 +9727,12 @@ public interface ImpalaCoreInterface {
      * Alle Seiten-IDs des Teilbaums (die Seite selbst zuerst).
      */
     fun `pageSubtree`(`id`: kotlin.String): List<kotlin.String>
+    
+    /**
+     * Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.
+     * Für die Tab-Leiste: je Änderung nur Titel und Icon statt jeder offenen Seite samt Inhalt.
+     */
+    fun `pageSummaries`(`ids`: List<kotlin.String>): List<PageSummary>
     
     /**
      * Durchsucht Chats für die Befehlspalette (sortiert nach `updated` absteigend):
@@ -11886,6 +11916,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     }
     
 
+    
+    /**
+     * Link-Menü (`[[`, `openLinkMenu` der PWA): höchstens `limit` zuletzt bearbeitete aktive Seiten außer
+     * `exclude`, deren Titel `query` enthält (ohne Groß-/Kleinschreibung).
+     */override fun `linkCandidates`(`query`: kotlin.String, `exclude`: kotlin.String, `limit`: kotlin.UInt): List<PageSummary> {
+            return FfiConverterSequenceTypePageSummary.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_link_candidates(
+        it, FfiConverterString.lower(`query`),FfiConverterString.lower(`exclude`),FfiConverterUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `loadInfo`(): LoadInfo {
             return FfiConverterTypeLoadInfo.lift(
     callWithPointer {
@@ -12141,6 +12187,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_subtree(
         it, FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Kopfdaten (ohne Inhalt) der Seiten `ids` in dieser Reihenfolge; unbekannte und gelöschte fehlen.
+     * Für die Tab-Leiste: je Änderung nur Titel und Icon statt jeder offenen Seite samt Inhalt.
+     */override fun `pageSummaries`(`ids`: List<kotlin.String>): List<PageSummary> {
+            return FfiConverterSequenceTypePageSummary.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_page_summaries(
+        it, FfiConverterSequenceString.lower(`ids`),_status)
 }
     }
     )
