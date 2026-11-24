@@ -58,9 +58,10 @@ export function createHeftInput(H) {
 		const ring = H.host && H.host.querySelector(".heft-eraser-ring");
 		if (ring) ring.hidden = true;
 	}
-	// Strichradierer: ein berührter Strich geht GANZ weg. Das Auftrennen an der
-	// Radierer-Fläche ist wieder raus — es kostete pro Pointer-Event neue Strich-Objekte
-	// (samt neuen IDs, Sync-Ereignissen und Voll-Redraws) und war deshalb zäh.
+	// Radierer wie GoodNotes (Kern: impala_heft::eraser): „präzise“ schneidet nur die überfahrene
+	// Stelle heraus, die Reste werden eigene Striche; „Strich“ nimmt berührte Striche ganz weg. Der
+	// Kern prüft die ganze Bahn seit dem letzten Punkt. Gespeichert wird erst am Gestenende (eine
+	// Geste = ein Speichern, ein Rückgängig-Schritt).
 	function eraseAt(e) {
 		// PERF: erst messen, dann den Ring verschieben — andersherum erzwang jedes
 		// Pointer-Event ein zusätzliches synchrones Layout.
@@ -68,15 +69,24 @@ export function createHeftInput(H) {
 		showEraserRing(e);
 		// Der Radierer des Kerns kennt die Striche der Seite seit Gestenbeginn; Mini-Schritte
 		// (unter 35 % des Radius) prüft er nicht erneut.
-		const hit = H.drawing.eraser.eraseAt(p0[0], p0[1]);
-		if (hit.length) {
-			const ids = new Set(Array.from(hit, (i) => H.drawing.eraseList[i].id));
-			const removed = pg.strokes.filter((s) => ids.has(s.id));
-			pg.strokes = pg.strokes.filter((s) => !ids.has(s.id)); H.drawing.removed.push(...removed);
-			// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
-			// als Pointer-Events eintreffen.
-			redrawNextFrame(H.drawing.pageIdx);
+		const changes = H.drawing.eraser.eraseAt(p0[0], p0[1]);
+		if (!changes.length) return;
+		const live = H.drawing.live, gone = new Set();
+		const pieces = [];
+		for (const c of changes) {
+			const orig = live.get(c.id);
+			live.delete(c.id);
+			if (!orig) continue;
+			gone.add(orig);
+			for (const p of c.pieces) {
+				const piece = { ...orig, id: p.id, pts: p.pts, bbox: p.bbox };
+				live.set(p.id, piece); pieces.push(piece);
+			}
 		}
+		pg.strokes = pg.strokes.filter((s) => !gone.has(s)).concat(pieces);
+		// PERF: höchstens EIN Redraw pro Frame — der Bildschirm zeichnet seltener,
+		// als Pointer-Events eintreffen.
+		redrawNextFrame(H.drawing.pageIdx);
 	}
 	function onDown(e) {
 
@@ -178,7 +188,18 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.sel) { const spi = H.sel.pageIdx; H.sel = null; redrawPage(spi); }
-		if (H.tool === "eraser") { H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true, removed: [], eraseList: pg.strokes.slice(), eraser: new CORE.HeftEraser(...packStrokes(pg.strokes), H.eraserSize), cv, ctx: x, pageIdx: pi }; eraseAt(e); }
+		if (H.tool === "eraser") {
+			// Schlüssel je Strich: die ID, bei Altständen ohne (doppelte) ID die Position.
+			const list = pg.strokes.slice(), seen = new Set();
+			const keys = list.map((s, i) => { const k = s.id && !seen.has(s.id) ? s.id : "\u0000" + i; seen.add(k); return k; });
+			H.drawing = {
+				pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, erasing: true,
+				start: new Map(keys.map((k, i) => [k, list[i]])), live: new Map(keys.map((k, i) => [k, list[i]])),
+				eraser: new CORE.HeftEraser(...packStrokes(list), keys, H.eraserSize, H.eraserMode, U.uid()),
+				cv, ctx: x, pageIdx: pi,
+			};
+			eraseAt(e);
+		}
 		else {
 			H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, tool: H.tool, color: H.color, size: H.size, pts: [p], cv, ctx: x, pageIdx: pi }; armHoldSnap(p);
 			// Finger (wenn er zeichnet) oder Maus: Halten auf Bild/Text wählt es aus statt zu zeichnen.
@@ -472,8 +493,12 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.drawing.erasing) {
-			if (H.drawing.removed.length) {
-				pushUndo({ kind: "erase", removed: H.drawing.removed, pageIdx: pi });
+			const { start, live } = H.drawing;
+			const removed = [...start].filter(([k]) => !live.has(k)).map(([, s]) => s);
+			const added = [...live].filter(([k]) => !start.has(k)).map(([, s]) => s);
+			H.drawing.eraser.free();
+			if (removed.length) {
+				pushUndo({ kind: "erase", removed, added, pageIdx: pi });
 				scheduleSave();
 				renderThumb(pi);
 			}

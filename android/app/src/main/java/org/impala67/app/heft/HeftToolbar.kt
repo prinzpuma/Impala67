@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -228,6 +229,10 @@ fun HeftOptions(vm: HeftViewModel, phone: Boolean, modifier: Modifier = Modifier
                     Box(Modifier.width(16.dp).height(maxOf(2, (value / 5).roundToInt()).dp).clip(CircleShape).background(color))
                 }
             }
+            Sep(tray = true)
+            HeftPalette.eraserModes.forEach { (mode, label, hint) ->
+                ModeButton(label, hint, t.eraserMode == mode, cell) { vm.setEraserMode(mode) }
+            }
         } else {
             val pen = HeftPalette.color(t.color)
             HeftPalette.sizes.forEach { (label, value) ->
@@ -342,6 +347,19 @@ private fun SizeButton(label: String, active: Boolean, cell: Dp, onClick: () -> 
             .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
         Alignment.Center,
     ) { content(if (active) c.accent else c.text2) }
+}
+
+/** `.heft-mode`: Textknopf im Radierer-Menü (Präzise / Strich). */
+@Composable
+private fun ModeButton(label: String, hint: String, active: Boolean, cell: Dp, onClick: () -> Unit) {
+    val c = Impala.colors
+    val bg by animateColorAsState(if (active) c.tint3 else Color.Transparent, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "mode-bg")
+    Box(
+        Modifier.height(cell).clip(ButtonShape).background(bg)
+            .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = hint }
+            .padding(horizontal = 8.dp),
+        Alignment.Center,
+    ) { Text(label, color = if (active) c.accent else c.text2, style = MaterialTheme.typography.labelMedium) }
 }
 
 /** `.heft-sep`: feiner senkrechter Trenner. */

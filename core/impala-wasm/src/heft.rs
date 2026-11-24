@@ -6,7 +6,7 @@
 use impala_heft::geometry::StrokeGeometry;
 use impala_heft::lasso::{LassoTouch, duplicate_strokes, hit_lasso_handle, is_lasso_body_hit, lasso_handles};
 use impala_heft::{
-    BBox, HeftDoc, HeftPage, Image, Paper, Point, Shadow, Stroke, StrokeEraser, compose_page_text, diff_document,
+    BBox, HeftDoc, HeftPage, Image, Paper, Point, EraseMode, Shadow, Stroke, StrokeEraser, compose_page_text, diff_document,
     export, fit_stroke_shape, hit_box, lasso_bounds, near_point, parse_ops, point_in_polygon, select_strokes_by_lasso,
 };
 use js_sys::{Float64Array, Function, JSON, Object};
@@ -221,8 +221,8 @@ impl HeftTransform {
     }
 }
 
-/// Strich-Radierer einer Geste: kennt die Striche der Seite; jeder Aufruf entfernt die
-/// getroffenen und liefert ihre Indizes in der aktuellen (schon verkürzten) Liste.
+/// Radierer einer Geste: kennt die Striche der Seite (mit ihren IDs) und schneidet bzw. entfernt sie
+/// bei jedem Schritt (`impala_heft::eraser`).
 #[wasm_bindgen]
 pub struct HeftEraser {
     strokes: Vec<Stroke>,
@@ -231,36 +231,42 @@ pub struct HeftEraser {
 
 #[wasm_bindgen]
 impl HeftEraser {
-    /// Striche der Seite im Binärformat ([`unpack`]).
+    /// Striche der Seite im Binärformat ([`unpack`]) samt ihren IDs; `mode` `precise` oder `stroke`,
+    /// `seed` ein frisches, eindeutiges Präfix für die IDs der Teilstriche.
     #[wasm_bindgen(constructor)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         coords: &[f64],
         counts: &[u32],
         sizes: &[f64],
         bboxes: &[f64],
         shapes: &str,
+        ids: Vec<String>,
         radius: f64,
+        mode: &str,
+        seed: String,
     ) -> Result<HeftEraser, JsError> {
         let mut strokes = unpack(coords, counts, sizes, bboxes, shapes)?;
-        // Eingabe-Index je Strich, damit `erase_at` entfernte Indizes ohne Klonen abliest.
-        strokes.iter_mut().enumerate().for_each(|(i, s)| s.id = i.to_string());
-        Ok(HeftEraser { strokes, eraser: StrokeEraser::new(radius) })
+        if ids.len() != strokes.len() {
+            return Err(JsError::new("IDs passen nicht zu den Strichen"));
+        }
+        strokes.iter_mut().zip(ids).for_each(|(s, id)| s.id = id);
+        Ok(HeftEraser { strokes, eraser: StrokeEraser::with_mode(radius, EraseMode::parse(mode), seed) })
     }
 
-    /// Radiert an (x, y): Indizes (in die Eingabe von `new`) der entfernten Striche.
+    /// Radiert bis (x, y): `[{ id, pieces: [{ id, pts, bbox }] }]` – jeder getroffene Strich mit seinen
+    /// Resten (leer: ganz weg). Teilstriche erben in JS Werkzeug, Farbe und Breite des Originals.
     #[wasm_bindgen(js_name = eraseAt)]
-    pub fn erase_at(&mut self, x: f64, y: f64) -> Vec<u32> {
-        let removed = self.eraser.erase_at(&mut self.strokes, x, y);
-        if removed.is_empty() {
-            return Vec::new();
-        }
-        let mut gone = Vec::with_capacity(removed.len());
-        for s in &removed {
-            if let Ok(i) = s.id.parse::<u32>() {
-                gone.push(i);
-            }
-        }
-        gone
+    pub fn erase_at(&mut self, x: f64, y: f64) -> JsValue {
+        let changes = self.eraser.erase_at(&mut self.strokes, x, y);
+        out(changes
+            .iter()
+            .map(|c| {
+                let pieces: Vec<Value> =
+                    c.pieces.iter().map(|p| json!({ "id": p.id, "pts": p.pts, "bbox": p.bbox })).collect();
+                json!({ "id": c.removed.id, "pieces": pieces })
+            })
+            .collect::<Vec<_>>())
     }
 }
 

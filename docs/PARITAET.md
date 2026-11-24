@@ -87,6 +87,8 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 
 | PWA-Funktion | Android | iPad |
 |---|---|---|
+| Radierer wie GoodNotes: präzise schneidet nur die überfahrene Stelle aus dem Strich, ganze Bahn ohne Lücken, Ring in echter Größe | ✅ | 🟡 am Gerät prüfen |
+| Radierer-Menü: Präzise / Strich (ganze Striche), gemerkt | ✅ | 🟡 am Gerät prüfen |
 | Lasso: Bilder/Textfelder mitnehmen, Drehen | prüfen | 🟡 am Gerät prüfen |
 | Entf/Rücktaste löscht Lasso-Auswahl | ❌ | 🟡 nur Leiste |
 | Optionsleiste verschiebbar (⠿) | ❌ | prüfen |

@@ -105,7 +105,7 @@ export const HEFT = (() => {
 
 	const savedTools = loadToolPrefs();
 	let tool = "pen", color = savedTools.color, size = savedTools.size, onlyPen = savedTools.onlyPen;
-	let eraserSize = savedTools.eraserSize;
+	let eraserSize = savedTools.eraserSize, eraserMode = savedTools.eraserMode;
 	const pens = savedTools.pens;
 	let penSlot = savedTools.penSlot;
 	({ color, size } = pens[penSlot]);
@@ -113,7 +113,7 @@ export const HEFT = (() => {
 	// Textfeld, das gerade im Editor liegt: wird beim Zeichnen ausgelassen. Ansichtszustand
 	// gehört nicht ins Dokument (vorher txt.hidden – das wurde mitgespeichert und synchronisiert).
 	let editingTxtId = null;
-	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, pens, penSlot }); }
+	function saveToolPrefs() { persistToolPrefs({ color, size, onlyPen, eraserSize, eraserMode, pens, penSlot }); }
 	let expanded = false;
 	let trayPos = null;
 	let trayDrag = null;
@@ -693,6 +693,7 @@ export const HEFT = (() => {
 		get size() { return size; },
 		get onlyPen() { return onlyPen; },
 		get eraserSize() { return eraserSize; },
+		get eraserMode() { return eraserMode; },
 		get drawing() { return drawing; }, set drawing(v) { drawing = v; },
 		get sel() { return sel; }, set sel(v) { sel = v; },
 		get lassoSel() { return lassoSel; }, set lassoSel(v) { lassoSel = v; },
@@ -730,10 +731,19 @@ export const HEFT = (() => {
 				a.txt = textsOf(pg).find((o) => o.id === a.txt.id) || a.txt;
 				const cur = a.txt.text; a.txt.text = a.prev; a.prev = cur;
 			}
+			else if (a.kind === "erase") {
+				// Radieren: Originale gegen die Reste tauschen (präzise) bzw. nur zurückholen.
+				const drop = new Set((isRedo ? a.removed : a.added || []).map((s) => s.id));
+				const back = isRedo ? a.added || [] : a.removed;
+				const have = new Set(pg.strokes.map((s) => s.id));
+				pg.strokes = pg.strokes.filter((s) => !drop.has(s.id));
+				back.forEach((s) => { if (!have.has(s.id)) pg.strokes.push(s); });
+				if (lassoSel && lassoSel.strokes.some((s) => drop.has(s.id))) lassoSel = null;
+			}
 			else {
 
 				const spec = {
-					add: ["strokes", [a.stroke], true], erase: ["strokes", a.removed, false],
+					add: ["strokes", [a.stroke], true],
 					lassoDel: ["strokes", a.strokes, false],
 					lassoDup: ["strokes", a.strokes, true],
 					imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
@@ -773,6 +783,7 @@ export const HEFT = (() => {
 		color,
 		size,
 		eraserSize,
+		eraserMode,
 		onlyPen,
 		pens,
 		penSlot,
@@ -1454,6 +1465,7 @@ export const HEFT = (() => {
 			if (tool === "pen") pens[penSlot] = { color, size };
 		}
 		else if (d.heerasersize) eraserSize = parseFloat(d.heerasersize);
+		else if (d.heerasermode) eraserMode = d.heerasermode === "stroke" ? "stroke" : "precise";
 		else if (d.heundo) { undo(); return; }
 		else if (d.heredo) { redo(); return; }
 		else if (d.hecollapse) { chromeMin = true; updateChrome(); return; }

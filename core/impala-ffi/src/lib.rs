@@ -22,6 +22,7 @@ mod drive;
 mod heft;
 mod heft_export;
 mod heft_history;
+mod heft_erase;
 mod heft_items;
 mod heft_lasso;
 mod heft_library;

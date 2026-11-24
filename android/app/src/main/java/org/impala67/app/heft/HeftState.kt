@@ -50,6 +50,11 @@ object HeftPalette {
     val colors = listOf("#1c1c1e", "#2f6fed", "#e0483e", "#1f9d55", "#f5b800", "#8b7cc8")
     val sizes = listOf("Fein" to 1.6, "Mittel" to 3.0, "Breit" to 5.5)
     val eraser = listOf("Klein" to 10.0, "Mittel" to 16.0, "Groß" to 30.0)
+    /** Radier-Arten wie heft-toolbar-ui.js: Wert, Beschriftung, Hinweis. */
+    val eraserModes = listOf(
+        Triple("precise", "Präzise", "Nur die überfahrene Stelle radieren"),
+        Triple("stroke", "Strich", "Ganze Striche radieren"),
+    )
 
     /** CSS-Farbe des Kerns (`#rrggbb`, selten `#rgb`) → Android-ARGB; unlesbares wird Tintenschwarz. */
     fun parse(css: String): Int = runCatching { android.graphics.Color.parseColor(css) }.getOrDefault(0xFF1C1C1E.toInt())
@@ -71,6 +76,8 @@ data class HeftTools(
     val color: String = pens[penSlot].color,
     val size: Double = pens[penSlot].size,
     val eraserSize: Double = 16.0,
+    /** Wie GoodNotes: `precise` schneidet nur die überfahrene Stelle, `stroke` nimmt ganze Striche (heft-tools.js `eraserMode`). */
+    val eraserMode: String = "precise",
     /** Standard wie in der PWA: nur der Stift zeichnet, der Finger scrollt und zoomt. */
     val onlyPen: Boolean = true,
     /** Optionsleiste (Farbe/Dicke bzw. Radiergröße) offen. */
@@ -80,7 +87,7 @@ data class HeftTools(
 ) {
     /** Gespeicherter Teil wie `saveToolPrefs` (heft-tools.js); das Werkzeug selbst startet immer als Stift. */
     fun toJson(): String = JSONObject()
-        .put("color", color).put("size", size).put("onlyPen", onlyPen).put("eraserSize", eraserSize).put("penSlot", penSlot).put("collapsed", collapsed)
+        .put("color", color).put("size", size).put("onlyPen", onlyPen).put("eraserSize", eraserSize).put("eraserMode", eraserMode).put("penSlot", penSlot).put("collapsed", collapsed)
         .put("pens", JSONArray(pens.map { JSONObject().put("color", it.color).put("size", it.size) }))
         .toString()
 
@@ -100,6 +107,7 @@ data class HeftTools(
                 color = o.optString("color").ifEmpty { pens[slot].color },
                 size = o.optDouble("size").takeUnless { it.isNaN() } ?: pens[slot].size,
                 eraserSize = o.optDouble("eraserSize").takeUnless { it.isNaN() } ?: d.eraserSize,
+                eraserMode = if (o.optString("eraserMode") == "stroke") "stroke" else "precise",
                 onlyPen = o.optBoolean("onlyPen", true),
                 collapsed = o.optBoolean("collapsed", false),
             )

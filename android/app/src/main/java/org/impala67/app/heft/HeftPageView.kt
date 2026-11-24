@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +82,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
     val visible = remember(saved, savedIds, pendingSnapshot, erased) {
         saved.filter { it.id !in erased } + pendingSnapshot.filter { it.id !in savedIds && it.id !in erased }
     }
+    val visibleNow by rememberUpdatedState(visible)
     // Lasso-Vorschau: Striche, die noch an der alten Stelle liegen, zeichnet die Seite verschoben.
     val sel = vm.lasso?.takeIf { it.heftPageId == heftPageId }
     val drag = sel?.drag
@@ -99,9 +101,15 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
     val tracker = remember {
         EraseTracker(
             scope,
-            find = { x, y -> vm.strokesAt(heftPageId, x, y, vm.tools.eraserSize) },
-            onHit = { erased = erased + it },
-            onDone = { ids -> ring = null; vm.removeStrokes(heftPageId, ids) },
+            strokes = { visibleNow },
+            radius = { vm.tools.eraserSize },
+            mode = { vm.tools.eraserMode },
+            onStep = { removed, pieces ->
+                erased = erased + removed
+                pending.removeAll { it.id in removed }
+                pending += pieces
+            },
+            onDone = { net -> ring = null; vm.commitErase(heftPageId, net) },
         )
     }
 

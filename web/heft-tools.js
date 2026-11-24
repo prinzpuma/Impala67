@@ -21,6 +21,8 @@ export function loadToolPrefs(storage = U.storage) {
 		size: typeof saved.size === "number" ? saved.size : 3,
 		onlyPen: saved.onlyPen !== false,
 		eraserSize: typeof saved.eraserSize === "number" ? saved.eraserSize : 16,
+		// Wie GoodNotes: präzise (schneidet nur die überfahrene Stelle) oder ganze Striche.
+		eraserMode: saved.eraserMode === "stroke" ? "stroke" : "precise",
 		pens: normPens(saved.pens),
 		penSlot: Number.isInteger(saved.penSlot) && saved.penSlot >= 0 && saved.penSlot < DEFAULT_PENS.length ? saved.penSlot : 0,
 	};
@@ -33,6 +35,7 @@ export function saveToolPrefs(prefs = {}, storage = U.storage) {
 		size: typeof prefs.size === "number" ? prefs.size : 3,
 		onlyPen: prefs.onlyPen !== false,
 		eraserSize: typeof prefs.eraserSize === "number" ? prefs.eraserSize : 16,
+		eraserMode: prefs.eraserMode === "stroke" ? "stroke" : "precise",
 		pens: normPens(prefs.pens),
 		penSlot: Number.isInteger(prefs.penSlot) ? prefs.penSlot : 0,
 	});

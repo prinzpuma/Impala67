@@ -23,7 +23,7 @@ pub use doc::{
     BBox, HeftDoc, HeftPage, Image, PAGE_H, PAGE_W, Paper, Point, Shape, Stroke, TextBox, Tool, blob_id,
     compose_page_text,
 };
-pub use eraser::StrokeEraser;
+pub use eraser::{EraseChange, EraseMode, StrokeEraser};
 pub use geometry::{StrokeGeometry, fit_stroke_shape, hit_box, near_point, point_in_polygon};
 pub use json::{js_hypot, js_round, js_to_fixed};
 pub use lasso::{lasso_bounds, select_strokes_by_lasso};

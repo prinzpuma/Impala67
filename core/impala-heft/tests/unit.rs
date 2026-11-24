@@ -128,7 +128,7 @@ fn radierer_drosselt_kleine_schritte() {
     assert!(e.erase_at(&mut list, 50.0, 81.0).is_empty()); // träfe b, aber nur 9 bewegt
     assert_eq!(list.len(), 2);
     let gone = e.erase_at(&mut list, 50.0, 79.0);
-    assert_eq!(gone.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["b"]);
+    assert_eq!(gone.iter().map(|c| c.removed.id.as_str()).collect::<Vec<_>>(), ["b"]);
     assert_eq!(list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["a"]);
 }
 

@@ -3292,6 +3292,165 @@ public func FfiConverterTypeDriveTokens_lower(_ value: DriveTokens) -> UnsafeMut
 
 
 
+public protocol HeftEraseGestureProtocol: AnyObject, Sendable {
+    
+    /**
+     * Radiert bis (x, y).
+     */
+    func eraseAt(x: Double, y: Double)  -> [HeftEraseChange]
+    
+    /**
+     * Netto-Änderung seit Gestenbeginn (Zwischenstücke, die selbst wieder wegradiert wurden, fehlen).
+     */
+    func net()  -> HeftEraseResult
+    
+}
+open class HeftEraseGesture: HeftEraseGestureProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_impala_ffi_fn_clone_hefterasegesture(self.pointer, $0) }
+    }
+    /**
+     * `strokes`: die Striche der Seite (Seitenkoordinaten), `radius` in Seiteneinheiten,
+     * `mode` `precise` (Standard) oder `stroke`.
+     */
+public convenience init(strokes: [HeftStroke], radius: Double, mode: String)throws  {
+    let pointer =
+        try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_constructor_hefterasegesture_new(
+        FfiConverterSequenceTypeHeftStroke.lower(strokes),
+        FfiConverterDouble.lower(radius),
+        FfiConverterString.lower(mode),$0
+    )
+}
+    self.init(unsafeFromRawPointer: pointer)
+}
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_impala_ffi_fn_free_hefterasegesture(pointer, $0) }
+    }
+
+    
+
+    
+    /**
+     * Radiert bis (x, y).
+     */
+open func eraseAt(x: Double, y: Double) -> [HeftEraseChange]  {
+    return try!  FfiConverterSequenceTypeHeftEraseChange.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_hefterasegesture_erase_at(self.uniffiClonePointer(),
+        FfiConverterDouble.lower(x),
+        FfiConverterDouble.lower(y),$0
+    )
+})
+}
+    
+    /**
+     * Netto-Änderung seit Gestenbeginn (Zwischenstücke, die selbst wieder wegradiert wurden, fehlen).
+     */
+open func net() -> HeftEraseResult  {
+    return try!  FfiConverterTypeHeftEraseResult_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_method_hefterasegesture_net(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftEraseGesture: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = HeftEraseGesture
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> HeftEraseGesture {
+        return HeftEraseGesture(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: HeftEraseGesture) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftEraseGesture {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: HeftEraseGesture, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseGesture_lift(_ pointer: UnsafeMutableRawPointer) throws -> HeftEraseGesture {
+    return try FfiConverterTypeHeftEraseGesture.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseGesture_lower(_ value: HeftEraseGesture) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeHeftEraseGesture.lower(value)
+}
+
+
+
+
+
+
 /**
  * Der Kern einer nativen App: eine Datenbank, ein Zustand. Alle Methoden sind threadsicher
  * (intern serialisiert); lange Aufrufe (Ã–ffnen, Import, Export) gehÃ¶ren in einen Hintergrund-Thread.
@@ -12723,6 +12882,152 @@ public func FfiConverterTypeHeftEdit_lift(_ buf: RustBuffer) throws -> HeftEdit 
 #endif
 public func FfiConverterTypeHeftEdit_lower(_ value: HeftEdit) -> RustBuffer {
     return FfiConverterTypeHeftEdit.lower(value)
+}
+
+
+/**
+ * Ein getroffener Strich und seine Reste (leer: ganz weg).
+ */
+public struct HeftEraseChange {
+    public var id: String
+    public var pieces: [HeftStroke]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, pieces: [HeftStroke]) {
+        self.id = id
+        self.pieces = pieces
+    }
+}
+
+#if compiler(>=6)
+extension HeftEraseChange: Sendable {}
+#endif
+
+
+extension HeftEraseChange: Equatable, Hashable {
+    public static func ==(lhs: HeftEraseChange, rhs: HeftEraseChange) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.pieces != rhs.pieces {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(pieces)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftEraseChange: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftEraseChange {
+        return
+            try HeftEraseChange(
+                id: FfiConverterString.read(from: &buf), 
+                pieces: FfiConverterSequenceTypeHeftStroke.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftEraseChange, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterSequenceTypeHeftStroke.write(value.pieces, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseChange_lift(_ buf: RustBuffer) throws -> HeftEraseChange {
+    return try FfiConverterTypeHeftEraseChange.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseChange_lower(_ value: HeftEraseChange) -> RustBuffer {
+    return FfiConverterTypeHeftEraseChange.lower(value)
+}
+
+
+/**
+ * Ergebnis der ganzen Geste gegenüber dem Anfang: zu löschende Original-IDs und neue Reste.
+ */
+public struct HeftEraseResult {
+    public var removed: [String]
+    public var added: [HeftStroke]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(removed: [String], added: [HeftStroke]) {
+        self.removed = removed
+        self.added = added
+    }
+}
+
+#if compiler(>=6)
+extension HeftEraseResult: Sendable {}
+#endif
+
+
+extension HeftEraseResult: Equatable, Hashable {
+    public static func ==(lhs: HeftEraseResult, rhs: HeftEraseResult) -> Bool {
+        if lhs.removed != rhs.removed {
+            return false
+        }
+        if lhs.added != rhs.added {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(removed)
+        hasher.combine(added)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftEraseResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftEraseResult {
+        return
+            try HeftEraseResult(
+                removed: FfiConverterSequenceString.read(from: &buf), 
+                added: FfiConverterSequenceTypeHeftStroke.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftEraseResult, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.removed, into: &buf)
+        FfiConverterSequenceTypeHeftStroke.write(value.added, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseResult_lift(_ buf: RustBuffer) throws -> HeftEraseResult {
+    return try FfiConverterTypeHeftEraseResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftEraseResult_lower(_ value: HeftEraseResult) -> RustBuffer {
+    return FfiConverterTypeHeftEraseResult.lower(value)
 }
 
 
@@ -24591,6 +24896,31 @@ fileprivate struct FfiConverterSequenceTypeHeatmapCellRecord: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHeftEraseChange: FfiConverterRustBuffer {
+    typealias SwiftType = [HeftEraseChange]
+
+    public static func write(_ value: [HeftEraseChange], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHeftEraseChange.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HeftEraseChange] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HeftEraseChange]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHeftEraseChange.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHeftFolder: FfiConverterRustBuffer {
     typealias SwiftType = [HeftFolder]
 
@@ -27035,6 +27365,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_drivetokens_token_expired() != 14649) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_hefterasegesture_erase_at() != 54452) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_hefterasegesture_net() != 20492) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards() != 4946) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27639,6 +27975,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_constructor_drivesync_new() != 42801) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_constructor_hefterasegesture_new() != 35899) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_constructor_impalacore_open() != 11930) {

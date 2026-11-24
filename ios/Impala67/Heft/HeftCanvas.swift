@@ -198,6 +198,7 @@ struct HeftCanvas: UIViewRepresentable {
         private let select = HeftSelectLayer()
         private let lasso = HeftLassoLayer()
         private let laser = HeftLaserLayer()
+        private let eraser = HeftEraseLayer()
         /// Text direkt auf der Seite (HeftTextInline.swift) und was gerade bearbeitet wird (Seitenkoordinaten).
         private let inline = HeftInlineText()
         private var inlineEdit: (textId: String?, page: String, origin: CGPoint)?
@@ -272,7 +273,12 @@ struct HeftCanvas: UIViewRepresentable {
             // Eigenes Lasso statt PencilKits: PencilKit zeichnet dann nichts.
             let lassoOn = s.tool == .lasso
             let textOn = s.tool == .text
-            canvas.drawingGestureRecognizer.isEnabled = !lassoOn && s.tool != .laser && !textOn
+            // Präziser Radierer: eigene Geste (HeftErase.swift); ganze Striche radiert PencilKit selbst.
+            let precise = s.tool == .eraser && s.eraserMode != "stroke"
+            canvas.drawingGestureRecognizer.isEnabled = !lassoOn && s.tool != .laser && !textOn && !precise
+            eraser.radius = s.eraserSize
+            eraser.mode = s.eraserMode
+            eraser.active = precise
             textTap.isEnabled = textOn
             select.canvasTap.isEnabled = !textOn
             if !textOn { endInline() }
@@ -282,7 +288,7 @@ struct HeftCanvas: UIViewRepresentable {
             // Lasso/Laser: der Stift (und ein Finger, falls er zeichnen darf) gehört ihnen, Scrollen bleibt
             // beim Finger bzw. bei zwei Fingern – wie beim Schreiben.
             let pan = canvas.panGestureRecognizer
-            if lassoOn || s.tool == .laser || textOn {
+            if lassoOn || s.tool == .laser || textOn || precise {
                 if panDefaults == nil { panDefaults = (pan.allowedTouchTypes, pan.minimumNumberOfTouches) }
                 pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
                 pan.minimumNumberOfTouches = s.onlyPen ? 1 : 2
@@ -364,6 +370,11 @@ struct HeftCanvas: UIViewRepresentable {
             canvas.addSubview(lasso)
             canvas.addSubview(laser)
             canvas.addGestureRecognizer(laser.draw)
+            canvas.addSubview(eraser)
+            canvas.addGestureRecognizer(eraser.draw)
+            eraser.onBegin = { [weak self] p in self?.eraseBegan(p) }
+            eraser.onMove = { [weak self] p in self?.eraseMoved(p) }
+            eraser.onEnd = { [weak self] in self?.eraseEnded() }
             textTap.addTarget(self, action: #selector(textTapped(_:)))
             textTap.isEnabled = false
             canvas.addGestureRecognizer(textTap)
@@ -393,6 +404,7 @@ struct HeftCanvas: UIViewRepresentable {
             }
             lasso.fingerDraws = select.fingerDraws
             laser.fingerDraws = select.fingerDraws
+            eraser.fingerDraws = select.fingerDraws
             select.onHoldBegan = { [weak canvas] in
                 // Ab- und wieder Anschalten bricht den angefangenen Strich bzw. das Scrollen dieses Fingers ab.
                 guard let canvas else { return }
@@ -481,6 +493,7 @@ struct HeftCanvas: UIViewRepresentable {
             select.configure(size: contentSize, pages: [])
             lasso.configure(size: contentSize)
             laser.configure(size: contentSize)
+            eraser.configure(size: contentSize)
             clearLasso()
             let z = canvas.zoomScale
             canvas.contentSize = CGSize(width: contentSize.width * z, height: contentSize.height * z)
@@ -868,6 +881,7 @@ struct HeftCanvas: UIViewRepresentable {
             select.follow(zoom: z)
             lasso.follow(zoom: z)
             laser.follow(zoom: z)
+            eraser.follow(zoom: z)
             if inlineEdit != nil { inline.follow(zoom: z) }
             let w = Self.pageSize.width * z
             let side = max(Self.gutter, (canvas.bounds.width - w) / 2)
@@ -1019,6 +1033,89 @@ struct HeftCanvas: UIViewRepresentable {
             HeftOcr.schedule(core: core, pageId: pageId, heftPageId: page)
             if AppHaptics.isEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             return true
+        }
+
+        // MARK: Präziser Radierer (HeftErase.swift)
+
+        /// Laufende Radier-Geste: Seite, Kern-Radierer, Zeichnung davor (Rückgängig) und Strich-ID → Seed.
+        private struct EraseRun {
+            let page: String
+            let origin: CGPoint
+            let gesture: HeftEraseGesture
+            let before: PKDrawing
+            var seeds: [String: UInt32]
+            var originals: Set<String>
+            var changed = false
+        }
+        private var eraseRun: EraseRun?
+
+        /// Der Kern bekommt die Striche der Seite, wie sie gerade liegen (Daten plus Lasso-Verschiebung).
+        private func eraseBegan(_ p: CGPoint) {
+            guard let canvas, let page = pageAt(p) else { return }
+            clearSelection()
+            LearningTracker.shared.poke()
+            var seeds: [String: UInt32] = [:]
+            var data: [HeftStroke] = []
+            for s in canvas.drawing.strokes {
+                guard let k = known[s.randomSeed], k.page == page else { continue }
+                let rel = k.drawn.inverted().concatenating(s.transform)
+                if rel.isIdentity {
+                    data.append(k.data)
+                } else if rel.a == 1, rel.b == 0, rel.c == 0, rel.d == 1 {
+                    data.append(HeftInk.translated(k.data, dx: Double(rel.tx), dy: Double(rel.ty)))
+                } else { continue }
+                seeds[k.id] = s.randomSeed
+            }
+            guard let gesture = attempt("heftEraseGesture", { try HeftEraseGesture(strokes: data, radius: Double(eraser.radius), mode: eraser.mode) })
+            else { return }
+            eraseRun = EraseRun(page: page, origin: origin(of: page), gesture: gesture, before: canvas.drawing,
+                                seeds: seeds, originals: Set(seeds.keys))
+            eraseMoved(p)
+        }
+
+        /// Getroffene Striche in der Zeichnung gegen ihre Reste tauschen (wie `replaceWithShape`).
+        private func eraseMoved(_ p: CGPoint) {
+            guard let canvas, var run = eraseRun else { return }
+            let changes = run.gesture.eraseAt(x: Double(p.x - run.origin.x), y: Double(p.y - run.origin.y))
+            guard !changes.isEmpty else { return }
+            var gone = Set<UInt32>()
+            var added: [PKStroke] = []
+            for c in changes {
+                guard let seed = run.seeds.removeValue(forKey: c.id) else { continue }
+                gone.insert(seed)
+                // Originale merkt sich der Abgleich wie gelöschte Striche: Rückgängig holt sie zurück.
+                if let k = known.removeValue(forKey: seed), run.originals.contains(c.id) { removed[seed] = (page: k.page, data: k.data) }
+                for piece in c.pieces {
+                    let s = HeftInk.seed(piece.id)
+                    guard let pk = HeftInk.pkStroke(piece, seed: s, hidden: true, offset: run.origin) else { continue }
+                    known[s] = Known(id: piece.id, page: run.page, data: piece, transform: .identity, bounds: pk.renderBounds, drawn: .identity)
+                    run.seeds[piece.id] = s
+                    added.append(pk)
+                }
+            }
+            run.changed = true
+            eraseRun = run
+            applying = true
+            canvas.drawing = PKDrawing(strokes: canvas.drawing.strokes.filter { !gone.contains($0.randomSeed) } + added)
+            applying = false
+            updateInk()
+        }
+
+        /// Ende der Geste: Netto-Änderung als ein Schreibvorgang, ein Rückgängig-Schritt.
+        private func eraseEnded() {
+            guard let run = eraseRun else { return }
+            eraseRun = nil
+            guard run.changed, let canvas else { return }
+            let net = run.gesture.net()
+            if !net.removed.isEmpty { removeStrokes(net.removed.map { (page: run.page, id: $0) }) }
+            if !net.added.isEmpty {
+                batchAdd[run.page, default: []] += net.added
+                scheduleFlush()
+            }
+            let old = run.before
+            canvas.undoManager?.registerUndo(withTarget: self) { me in me.setDrawing(old) }
+            refreshUndo()
+            HeftOcr.schedule(core: core, pageId: pageId, heftPageId: run.page)
         }
 
         // MARK: Lasso (HeftLasso.swift)

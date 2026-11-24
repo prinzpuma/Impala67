@@ -28,6 +28,7 @@ import org.impala67.app.settings.DevicePrefs
 import uniffi.impala_ffi.Changes
 import uniffi.impala_ffi.HeftChange
 import uniffi.impala_ffi.HeftEdit
+import uniffi.impala_ffi.HeftEraseResult
 import uniffi.impala_ffi.HeftPageData
 import uniffi.impala_ffi.HeftShape
 import uniffi.impala_ffi.HeftStroke
@@ -189,6 +190,12 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         saveTools()
     }
 
+    // funktion: heft.radierer-modus
+    fun setEraserMode(mode: String) {
+        tools = tools.copy(eraserMode = if (mode == "stroke") "stroke" else "precise")
+        saveTools()
+    }
+
     fun toggleOnlyPen() {
         tools = tools.copy(onlyPen = !tools.onlyPen)
         saveTools()
@@ -237,11 +244,19 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         super.onCleared()
     }
 
-    /** Striche unter dem Radierer, oberster zuerst (nur Lesen, schreibt zuvor offene Striche). */
-    suspend fun strokesAt(heftPageId: String, x: Double, y: Double, radius: Double): List<String> {
-        val pending = takeStrokeBatch()
-        if (pending != null) writes.withLock { commitBatchLocked(pending) }
-        return store.write { runCatching { it.heftStrokesAt(pageId, heftPageId, x, y, radius) }.getOrDefault(emptyList()) }
+    /**
+     * Ergebnis einer Radier-Geste (`HeftEraseGesture.net`) als *ein* Event und ein Rückgängig-Schritt:
+     * Originale weg, Reste (präziser Radierer) dazu – noch offene Striche schreibt `write` vorher.
+     */
+    fun commitErase(heftPageId: String, net: HeftEraseResult) {
+        if (net.removed.isEmpty() && net.added.isEmpty()) return
+        HeftActivity.noteWrite()
+        val changes = buildList {
+            if (net.removed.isNotEmpty()) add(HeftChange.RemoveStrokes(heftPageId, net.removed))
+            net.added.forEach { add(HeftChange.AddStroke(heftPageId, it)) }
+        }
+        write(failed = { overlayResetRev++ }) { it.heftApply(pageId, changes) }
+        indexer.schedule(heftPageId)
     }
 
     /** Neue Seite nach Position `at` (`null`: hinten). */

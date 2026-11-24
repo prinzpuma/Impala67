@@ -258,15 +258,19 @@ fn lasso_wie_heft_lasso() {
 
 #[test]
 fn radierer_wie_heft_input() {
+    // Der Radierer prüft heute die ganze Bahn zwischen zwei Punkten (früher nur die Punkte): Er trifft
+    // mindestens alles, was der alte Punkt-Radierer traf.
     let mut total = 0;
     for (i, c) in load("lasso")["eraser"].as_array().unwrap().iter().enumerate() {
         let mut list = strokes(&c["strokes"]);
         let mut eraser = StrokeEraser::new(f(&c["radius"]));
-        for (k, p) in c["path"].as_array().unwrap().iter().enumerate() {
-            let removed: Vec<String> =
-                eraser.erase_at(&mut list, f(&p[0]), f(&p[1])).into_iter().map(|s| s.id).collect();
-            assert_eq!(to_value(&removed), c["removed"][k], "Radierer {i}, Schritt {k}");
-            total += removed.len();
+        let mut gone = std::collections::HashSet::new();
+        for p in c["path"].as_array().unwrap() {
+            gone.extend(eraser.erase_at(&mut list, f(&p[0]), f(&p[1])).into_iter().map(|c| c.removed.id));
+        }
+        for old in c["removed"].as_array().unwrap().iter().flat_map(|r| r.as_array().unwrap()) {
+            assert!(gone.contains(old.as_str().unwrap()), "Radierer {i}: {old} fehlt");
+            total += 1;
         }
     }
     assert!(total > 10, "Radierer trifft kaum");

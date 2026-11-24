@@ -18,6 +18,8 @@ struct HeftToolSetting: Equatable {
     var color: String
     var size: CGFloat
     var eraserSize: CGFloat
+    /// `precise` (eigene Geste, HeftErase.swift) oder `stroke` (PencilKits Strich-Radierer).
+    var eraserMode: String
     var onlyPen: Bool
     var ruler: Bool
 
@@ -42,6 +44,11 @@ final class HeftTools {
 
     static let sizes: [(label: String, value: CGFloat)] = [("Fein", 1.6), ("Mittel", 3), ("Breit", 5.5)]
     static let eraserSizes: [(label: String, value: CGFloat)] = [("Klein", 10), ("Mittel", 16), ("Groß", 30)]
+    /// Radier-Arten wie heft-toolbar-ui.js (GoodNotes: präzise oder ganze Striche).
+    static let eraserModes: [(mode: String, label: String, hint: String)] = [
+        ("precise", "Präzise", "Nur die überfahrene Stelle radieren"),
+        ("stroke", "Strich", "Ganze Striche radieren"),
+    ]
     static let defaultPens = [
         HeftPen(color: HeftPalette.colors[0].css, size: 3),
         HeftPen(color: HeftPalette.colors[1].css, size: 3),
@@ -52,6 +59,7 @@ final class HeftTools {
     private(set) var color = HeftPalette.colors[0].css
     private(set) var size: CGFloat = HeftPalette.size
     private(set) var eraserSize: CGFloat = 16
+    private(set) var eraserMode = "precise"
     private(set) var onlyPen = true
     private(set) var pens = HeftTools.defaultPens
     private(set) var penSlot = 0
@@ -70,6 +78,8 @@ final class HeftTools {
         var size: CGFloat
         var onlyPen: Bool
         var eraserSize: CGFloat
+        /// Fehlt in älteren Ständen.
+        var eraserMode: String?
         var pens: [HeftPen]
         var penSlot: Int
     }
@@ -81,12 +91,13 @@ final class HeftTools {
         size = s.size
         onlyPen = s.onlyPen
         eraserSize = s.eraserSize
+        eraserMode = s.eraserMode == "stroke" ? "stroke" : "precise"
         if s.pens.count == Self.defaultPens.count { pens = s.pens }
         penSlot = pens.indices.contains(s.penSlot) ? s.penSlot : 0
     }
 
     var setting: HeftToolSetting {
-        HeftToolSetting(tool: tool, color: color, size: size, eraserSize: eraserSize, onlyPen: onlyPen, ruler: ruler)
+        HeftToolSetting(tool: tool, color: color, size: size, eraserSize: eraserSize, eraserMode: eraserMode, onlyPen: onlyPen, ruler: ruler)
     }
 
     /// Stift-Favorit wählen; erneuter Tipp auf den aktiven öffnet Farbe und Dicke.
@@ -134,6 +145,12 @@ final class HeftTools {
         save()
     }
 
+    // funktion: heft.radierer-modus
+    func setEraserMode(_ m: String) {
+        eraserMode = m == "stroke" ? "stroke" : "precise"
+        save()
+    }
+
     func toggleOnlyPen() {
         onlyPen.toggle()
         save()
@@ -164,7 +181,7 @@ final class HeftTools {
     }
 
     private func save() {
-        let s = Saved(color: color, size: size, onlyPen: onlyPen, eraserSize: eraserSize, pens: pens, penSlot: penSlot)
+        let s = Saved(color: color, size: size, onlyPen: onlyPen, eraserSize: eraserSize, eraserMode: eraserMode, pens: pens, penSlot: penSlot)
         if let data = try? JSONEncoder().encode(s) { UserDefaults.standard.set(data, forKey: Self.key) }
     }
 }
@@ -267,6 +284,12 @@ struct HeftToolPill: View {
                     ToolButton(active: tools.eraserSize == z.value, label: "Radierer: \(z.label)",
                                action: { tools.setEraserSize(z.value) }) {
                         Capsule().fill(Impala.text).frame(width: 18, height: max(2, (z.value / 5).rounded()))
+                    }
+                }
+                sep
+                ForEach(HeftTools.eraserModes, id: \.mode) { m in
+                    ToolButton(active: tools.eraserMode == m.mode, label: m.hint, action: { tools.setEraserMode(m.mode) }) {
+                        Text(m.label).font(.caption.weight(.semibold)).padding(.horizontal, 10)
                     }
                 }
             } else {

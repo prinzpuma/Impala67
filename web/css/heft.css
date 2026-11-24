@@ -492,6 +492,7 @@ body.tabs-in-sidebar .heft-scroll {
 :root body .heft-chrome .heft-tray.is-vertical .heft-sep { width: 20px; height: 1px; margin: 4px 0 }
 :root body .heft-chrome .heft-tray .heft-opt,
 :root body .heft-chrome .heft-tray .heft-size { width: 32px; min-width: 32px !important; height: 32px; min-height: 32px; border-radius: var(--radius-pill) }
+:root body .heft-chrome .heft-tray .heft-size.heft-mode { width: auto; padding: 0 var(--space-2) !important; font-size: var(--text-xs); font-weight: 600; white-space: nowrap }
 :root body .heft-chrome .heft-tray .heft-size.active,
 :root body .heft-chrome .heft-tray .heft-opt.active { background: var(--b-tint-2); color: var(--text) }
 :root body .heft-chrome .heft-tray .heft-size-dot i {

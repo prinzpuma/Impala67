@@ -46,6 +46,8 @@
 		{ "id": "editor.markdown-zip", "bereich": "editor", "titel": "Markdown-ZIP mit Medien", "android": "❌", "ios": "🟡 nur `.md`" },
 
 		{ "id": "heft.oeffnen", "bereich": "heft", "titel": "Heft öffnen", "pwa": ["heft.js"], "leistung": { "ms": 300, "pwa": "heft.mount", "ios": "heft.load" } },
+		{ "id": "heft.radierer-praezise", "bereich": "heft", "titel": "Radierer wie GoodNotes: präzise schneidet nur die überfahrene Stelle aus dem Strich, ganze Bahn ohne Lücken, Ring in echter Größe", "pwa": ["heft-input.js"], "ios": "🟡 am Gerät prüfen" },
+		{ "id": "heft.radierer-modus", "bereich": "heft", "titel": "Radierer-Menü: Präzise / Strich (ganze Striche), gemerkt", "pwa": ["data-heerasermode"], "ios": "🟡 am Gerät prüfen" },
 		{ "id": "heft.strich", "bereich": "heft", "titel": "Strich zeichnen (ein Bild pro Frame)", "leistung": { "ms": 16, "pwa": "heft.stroke", "android": "heft:strokeLayer" } },
 		{ "id": "heft.speichern", "bereich": "heft", "titel": "Heft speichern", "leistung": { "ms": 50, "pwa": "heft.save", "ios": "heft.commit" } },
 		{ "id": "heft.lasso-objekte", "bereich": "heft", "titel": "Lasso: Bilder/Textfelder mitnehmen, Drehen", "pwa": ["heft-lasso.js"], "android": "prüfen", "ios": "🟡 am Gerät prüfen" },

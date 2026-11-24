@@ -44,6 +44,7 @@ export function toolbarHtml({
 	color,
 	size,
 	eraserSize,
+	eraserMode,
 	onlyPen,
 	pens,
 	penSlot,
@@ -107,6 +108,10 @@ export function toolbarHtml({
 				'<button type="button" class="heft-tray-drag" data-hetraydrag="1" title="Optionen verschieben" aria-label="Optionen verschieben">⠿</button>' +
 				[["Klein", 10], ["Mittel", 16], ["Groß", 30]].map((z) => '<button type="button" class="heft-size' + (eraserSize === z[1] ? " active" : "") +
 					'" data-heerasersize="' + z[1] + '" title="Radierer: ' + z[0] + '"><i style="height:' + Math.max(2, Math.round(z[1] / 5)) + 'px"></i></button>').join("") +
+				'<span class="heft-sep" aria-hidden="true"></span>' +
+				[["precise", "Präzise", "Nur die überfahrene Stelle radieren"], ["stroke", "Strich", "Ganze Striche radieren"]].map((m) =>
+					'<button type="button" class="heft-size heft-mode' + (eraserMode === m[0] ? " active" : "") + '" data-heerasermode="' + m[0] +
+					'" title="' + m[2] + '" aria-pressed="' + (eraserMode === m[0]) + '">' + m[1] + '</button>').join("") +
 			'</div>';
 	}
 

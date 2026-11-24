@@ -876,6 +876,31 @@ RustBuffer uniffi_impala_ffi_fn_method_drivetokens_renew_token(void*_Nonnull ptr
 void uniffi_impala_ffi_fn_method_drivetokens_token_expired(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_HEFTERASEGESTURE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_HEFTERASEGESTURE
+void*_Nonnull uniffi_impala_ffi_fn_clone_hefterasegesture(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FREE_HEFTERASEGESTURE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FREE_HEFTERASEGESTURE
+void uniffi_impala_ffi_fn_free_hefterasegesture(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CONSTRUCTOR_HEFTERASEGESTURE_NEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CONSTRUCTOR_HEFTERASEGESTURE_NEW
+void*_Nonnull uniffi_impala_ffi_fn_constructor_hefterasegesture_new(RustBuffer strokes, double radius, RustBuffer mode, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_HEFTERASEGESTURE_ERASE_AT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_HEFTERASEGESTURE_ERASE_AT
+RustBuffer uniffi_impala_ffi_fn_method_hefterasegesture_erase_at(void*_Nonnull ptr, double x, double y, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_HEFTERASEGESTURE_NET
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_HEFTERASEGESTURE_NET
+RustBuffer uniffi_impala_ffi_fn_method_hefterasegesture_net(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_IMPALACORE
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_CLONE_IMPALACORE
 void*_Nonnull uniffi_impala_ffi_fn_clone_impalacore(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -3454,6 +3479,18 @@ uint16_t uniffi_impala_ffi_checksum_method_drivetokens_token_expired(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_HEFTERASEGESTURE_ERASE_AT
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_HEFTERASEGESTURE_ERASE_AT
+uint16_t uniffi_impala_ffi_checksum_method_hefterasegesture_erase_at(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_HEFTERASEGESTURE_NET
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_HEFTERASEGESTURE_NET
+uint16_t uniffi_impala_ffi_checksum_method_hefterasegesture_net(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_ACTIVE_PLAIN_CARDS
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_active_plain_cards(void
@@ -4663,6 +4700,12 @@ uint16_t uniffi_impala_ffi_checksum_constructor_drivechangetimer_new(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_CONSTRUCTOR_DRIVESYNC_NEW
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_CONSTRUCTOR_DRIVESYNC_NEW
 uint16_t uniffi_impala_ffi_checksum_constructor_drivesync_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_CONSTRUCTOR_HEFTERASEGESTURE_NEW
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_CONSTRUCTOR_HEFTERASEGESTURE_NEW
+uint16_t uniffi_impala_ffi_checksum_constructor_hefterasegesture_new(void
     
 );
 #endif
