@@ -544,7 +544,7 @@ struct HeftCanvas: UIViewRepresentable {
                 let built = datas.map { d in Built(origin: origins[d.id] ?? .zero, strokes: Self.build(d, at: origins[d.id] ?? .zero)) }
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
-                    let done = Profiler.shared.begin("heft.apply")
+                    let done = Profiler.shared.begin("heft.load")
                     defer { done() }
                     self.loading.subtract(need)
                     self.apply(datas, built: Dictionary(uniqueKeysWithValues: zip(datas.map(\.id), built)))
