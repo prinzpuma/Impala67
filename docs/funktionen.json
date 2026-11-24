@@ -62,7 +62,7 @@
 		{ "id": "heft.hintergrund-text", "bereich": "heft", "titel": "Text von Scans/PDF-Seiten/Arbeitsblättern lesen, zusammen mit der Handschrift (Suche)", "pwa": ["heft-indexer.js"], "android": "✅ ML Kit Text", "ios": "✅ Vision" },
 		{ "id": "heft.seitenformat", "bereich": "heft", "titel": "Seite übernimmt das Format des Hintergrunds (Querformat, Letter …)", "pwa": ["heft-import.js"], "android": "✅", "ios": "✅" },
 		{ "id": "heft.import-dialog", "bereich": "heft", "titel": "Import-Dialog mit Ziel und Position; PDF-Text übernehmen", "pwa": ["heft-import.js"], "android": "🟡", "ios": "🟡" },
-		{ "id": "heft.letzte-seite", "bereich": "heft", "titel": "Zuletzt angesehene Seite merken", "android": "🟡 nur Sitzung", "ios": "prüfen" },
+		{ "id": "heft.letzte-seite", "bereich": "heft", "titel": "Zuletzt angesehene Seite merken" },
 		{ "id": "heft.seite-an-ki", "bereich": "heft", "titel": "„Heft-Seite als Bild an KI anhängen“", "android": "prüfen", "ios": "prüfen" },
 		{ "id": "heft.arbeitsblatt", "bereich": "heft", "titel": "KI-Arbeitsblätter aus Vorlagen direkt als Heftseiten erzeugen (`create_worksheet`)", "pwa": ["worksheet.js"], "android": "❌", "ios": "❌" },
 

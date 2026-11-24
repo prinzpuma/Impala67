@@ -29,10 +29,15 @@ enum Refine: String, CaseIterable, Identifiable {
     }
 }
 
-/// Zuletzt angezeigte Heftseite je Heft (Kontext und `view_heft_page` der KI).
+/// Zuletzt angezeigte Heftseite je Heft (Öffnen springt dorthin; Kontext und `view_heft_page` der KI).
+/// Gerätewahl wie in der PWA (`impala67HeftPos`), bleibt über Neustarts erhalten.
 @MainActor
+// funktion: heft.letzte-seite
 enum HeftLastPage {
-    static var index: [String: Int] = [:]
+    private static let key = "impala67HeftPos"
+    static var index: [String: Int] = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:] {
+        didSet { if index != oldValue { UserDefaults.standard.set(index, forKey: key) } }
+    }
     /// Zuletzt geöffnetes Heft (Seiten-ID), für den Profiler-Bericht.
     static var open: String?
 }

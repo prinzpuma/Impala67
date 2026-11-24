@@ -1,5 +1,7 @@
 package org.impala67.app.heft
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,13 +18,27 @@ import uniffi.impala_ffi.HeftPageData
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
-/** Zuletzt angesehene Heftseite je Heft (in der PWA `HEFT.lastPage`); gilt nur für die laufende Sitzung. */
+/**
+ * Zuletzt angesehene Heftseite je Heft (in der PWA `HEFT.lastPage`, dort `impala67HeftPos`): Gerätewahl,
+ * bleibt über Neustarts erhalten. [init] beim App-Start; davor gilt nur der Speicher der Sitzung.
+ */
+// funktion: heft.letzte-seite
 object HeftLastPage {
     private val pages = ConcurrentHashMap<String, Int>()
+    private var prefs: SharedPreferences? = null
+
+    fun init(context: Context) {
+        val sp = context.getSharedPreferences("impala67HeftPos", Context.MODE_PRIVATE)
+        sp.all.forEach { (id, v) -> if (v is Int) pages[id] = v }
+        prefs = sp
+    }
 
     operator fun get(pageId: String) = pages[pageId] ?: 0
 
-    operator fun set(pageId: String, index: Int) { pages[pageId] = index }
+    operator fun set(pageId: String, index: Int) {
+        if (pages.put(pageId, index) == index) return
+        prefs?.edit()?.putInt(pageId, index)?.apply()
+    }
 }
 
 /**

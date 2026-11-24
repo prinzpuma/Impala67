@@ -49,6 +49,7 @@ class ImpalaApp : Application() {
         super.onCreate()
         org.impala67.app.diag.Profiler.init(this)
         org.impala67.app.diag.Profiler.restore()
+        org.impala67.app.heft.HeftLastPage.init(this)
         // Choreographer braucht den Hauptthread.
         scope.launch(Dispatchers.Main) { prefs.profiler.collect { org.impala67.app.diag.Profiler.setEnabled(it) } }
         BackgroundWork.schedule(this)
