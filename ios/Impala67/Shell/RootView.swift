@@ -35,8 +35,9 @@ struct RootView: View {
                             TabBar()
                         }
                         MainContent()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(minWidth: 0, maxWidth: .infinity)
                     .background(Impala.panel)
                     .clipShape(RoundedRectangle(cornerRadius: isCompact ? 0 : Radius.lg, style: .continuous))
                     .overlay {

@@ -20,27 +20,37 @@ struct WeekStat: View {
     var body: some View {
         let reached = pct >= 100
         VStack(alignment: .leading, spacing: Space.s1) {
-            HStack {
-                Text("Diese Woche gelernt").font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
-                if onOpenDetail != nil {
-                    Spacer(minLength: 0)
-                    Icon("chevron-right", size: 12).foregroundStyle(Impala.text2.opacity(0.6))
+            Button {
+                onOpenDetail?()
+            } label: {
+                VStack(alignment: .leading, spacing: Space.s1) {
+                    HStack {
+                        Text("Diese Woche gelernt").font(.system(size: TextSize.xs)).foregroundStyle(Impala.text2)
+                        if onOpenDetail != nil {
+                            Spacer(minLength: 0)
+                            Icon("chevron-right", size: 12).foregroundStyle(Impala.text2.opacity(0.6))
+                        }
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(HomeFormat.dur(weekMin))
+                            .font(.system(size: 30, weight: .semibold, design: .rounded))
+                            .kerning(-0.6)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .foregroundStyle(Impala.text)
+                        Text(reached ? "· Ziel geschafft" : "von " + HomeFormat.dur(Double(goalMin)))
+                            .font(.system(size: TextSize.md))
+                            .foregroundStyle(reached ? Impala.success : Impala.text2)
+                            .contentTransition(.numericText())
+                    }
+                    goalBar(reached: reached)
+                    bars
                 }
+                .contentShape(Rectangle())
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(HomeFormat.dur(weekMin))
-                    .font(.system(size: 30, weight: .semibold, design: .rounded))
-                    .kerning(-0.6)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .foregroundStyle(Impala.text)
-                Text(reached ? "· Ziel geschafft" : "von " + HomeFormat.dur(Double(goalMin)))
-                    .font(.system(size: TextSize.md))
-                    .foregroundStyle(reached ? Impala.success : Impala.text2)
-                    .contentTransition(.numericText())
-            }
-            goalBar(reached: reached)
-            bars
+            .buttonStyle(.plain)
+            .disabled(onOpenDetail == nil)
+            .accessibilityLabel("Diese Woche gelernt")
             HStack {
                 Text(streak > 0 ? HomeFormat.days(streak, "Tag", "Tage") + " am Stück" : "Heute lernen startet einen Streak")
                     .font(.system(size: TextSize.xs))
@@ -62,8 +72,6 @@ struct WeekStat: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Impala.panel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Impala.edgeSoft, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture { onOpenDetail?() }
         .animation(.spring(duration: 0.6, bounce: 0.15), value: goalMin)
         .animation(.spring(duration: 0.6, bounce: 0.15), value: week)
         .onAppear {

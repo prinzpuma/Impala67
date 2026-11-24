@@ -224,7 +224,7 @@ impl Model {
         if js::lt(&self.loaded_time, &ev.t) {
             self.loaded_time.clone_from(&ev.t);
         }
-        let t = matches!(ev.kind.as_str(), "heftOps" | "heftSnap").then(|| ev.t.clone());
+        let t = is_heft_content_event(&ev).then(|| ev.t.clone());
         let live = (!loading).then_some(Live { current_chat_id: self.current_chat_id.as_deref() });
         let fx = self.state.apply_owned(ev, live);
         if let Some((hash, len)) = &fx.blob {
@@ -756,6 +756,29 @@ fn take_str_or_empty(v: Option<Value>) -> String {
 fn take_order_times(v: Value) -> Option<OrderTimes> {
     let Value::Object(o) = v else { return None };
     Some(o.into_iter().map(|(k, v)| (k, take_str_or_empty(Some(v)))).collect())
+}
+
+/// `true`, wenn das Heft-Event eine echte Nutzeränderung enthält (nicht nur Hintergrund-OCR).
+fn is_heft_content_event(ev: &LogEvent) -> bool {
+    match ev.kind.as_str() {
+        "heftSnap" => true,
+        "heftOps" => {
+            let Some(ops) = ev.payload.get("ops").and_then(Value::as_array) else { return true };
+            ops.iter().any(|op| {
+                let kind = op.get("op").and_then(Value::as_str).unwrap_or("");
+                if kind == "ocr" {
+                    return false;
+                }
+                if kind == "pgb"
+                    && op.get("bg").and_then(|b| b.get("ocr")).and_then(Value::as_str).is_some()
+                {
+                    return false;
+                }
+                true
+            })
+        }
+        _ => false,
+    }
 }
 
 /// `eventLogInfoOf` über das sortierte Log: Event mit der höchsten `seq` (bei Gleichstand das letzte).

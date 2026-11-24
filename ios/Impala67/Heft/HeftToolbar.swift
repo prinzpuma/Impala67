@@ -195,8 +195,17 @@ struct HeftToolPill: View {
     var body: some View {
         VStack(spacing: Space.s2) {
             GlassEffectContainer {
-                HStack(spacing: 2) {
-                    if tools.collapsed { mini } else { full }
+                Group {
+                    if tools.collapsed {
+                        HStack(spacing: 2) { mini }
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 2) { full }
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 2) { full }
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, Space.s1)
                 .frame(height: 48)

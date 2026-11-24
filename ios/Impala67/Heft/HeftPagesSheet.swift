@@ -104,7 +104,7 @@ struct HeftPagesSheet: View {
                             Button { UIPasteboard.general.string = "#" + pageId } label: {
                                 Label { Text("Internen Link kopieren") } icon: { Icon("link") }
                             }
-                        } label: { Icon("share", size: 16) }
+                        } label: { Icon("upload", size: 16) }
                         .accessibilityLabel("Teilen")
                         Button { dismiss() } label: { Icon("x", size: 15) }
                             .accessibilityLabel("Schließen")
@@ -259,28 +259,34 @@ struct HeftPagesSheet: View {
 
     /// `.heft-pop-add`: getönte Fläche im Seitenformat, „+“ im Kreis, darunter „Neue Seite“.
     private var addTile: some View {
-        Button {
+        let shape = RoundedRectangle(cornerRadius: Radius.xs)
+        return Button {
             add(nil)
         } label: {
             VStack(spacing: 6) {
-                VStack(spacing: Space.s2) {
-                    Icon("plus", size: 20)
-                        .foregroundStyle(Impala.text2)
-                        .frame(width: 40, height: 40)
-                        .background(Impala.activeTint, in: Circle())
-                    Text("Neue Seite")
-                        .font(.system(size: TextSize.xs, weight: .semibold))
-                        .foregroundStyle(Impala.text2)
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1000.0 / 1414.0, contentMode: .fit)
-                .background(Impala.surface, in: RoundedRectangle(cornerRadius: Radius.xs))
-                .padding(4)
+                Impala.surface
+                    .aspectRatio(1000.0 / 1414.0, contentMode: .fit)
+                    .overlay {
+                        VStack(spacing: Space.s2) {
+                            Icon("plus", size: 20)
+                                .foregroundStyle(Impala.text2)
+                                .frame(width: 40, height: 40)
+                                .background(Impala.activeTint, in: Circle())
+                            Text("Neue Seite")
+                                .font(.system(size: TextSize.xs, weight: .semibold))
+                                .foregroundStyle(Impala.text2)
+                                .lineLimit(1)
+                        }
+                        .padding(Space.s2)
+                    }
+                    .clipShape(shape)
+                    .overlay(shape.strokeBorder(Impala.edgeSoft, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+                    .padding(4)
                 Text(" ")
                     .font(.system(size: TextSize.xs))
                     .padding(.vertical, 1)
             }
-            .contentShape(RoundedRectangle(cornerRadius: Radius.xs))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu {

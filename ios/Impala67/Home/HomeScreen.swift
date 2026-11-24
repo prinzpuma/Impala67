@@ -123,7 +123,7 @@ struct HomeScreen: View {
                         .foregroundStyle(Impala.text2)
                 }
                 .riseIn(1)
-                let main = VStack(alignment: .leading, spacing: Space.s6) {
+                let hero = Group {
                     if let last {
                         Button { shell.open(last.id) } label: {
                             ContinueCard(
@@ -142,16 +142,6 @@ struct HomeScreen: View {
                         .pressable()
                         .riseIn(2)
                     }
-                    if !pins.isEmpty {
-                        FlowRow(pins: Array(pins)) { shell.open($0) }
-                            .riseIn(3)
-                    }
-                    if let recall {
-                        RecallCard(recall: recall) {
-                            shell.openCards(.review(deck: recall.deck.isEmpty ? nil : recall.deck, mix: false))
-                        }
-                        .riseIn(3)
-                    }
                 }
                 let stats = VStack(spacing: Space.s4) {
                     dueCard(open: open, hasCards: hasCards, estMin: estMin)
@@ -163,15 +153,26 @@ struct HomeScreen: View {
                     ) { storedGoal = WeekGoal.next(after: goal) }
                 }
                 .riseIn(3)
-                // `.hv-grid`: breit zwei Spalten (Kennzahlen rechts), schmal untereinander.
+                // `.hv-grid`: breit zwei Spalten (Weitermachen + Kennzahlen rechts auf gleicher Höhe),
+                // schmal untereinander; angeheftete Seiten und Rückblick darunter über die volle Breite.
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: Space.s4) {
-                        main.frame(maxWidth: .infinity, alignment: .leading)
+                        hero.frame(maxWidth: .infinity, alignment: .leading)
                         stats.frame(width: 280)
                     }
                 } else {
-                    main
+                    hero
                     stats
+                }
+                if !pins.isEmpty {
+                    FlowRow(pins: Array(pins)) { shell.open($0) }
+                        .riseIn(3)
+                }
+                if let recall {
+                    RecallCard(recall: recall) {
+                        shell.openCards(.review(deck: recall.deck.isEmpty ? nil : recall.deck, mix: false))
+                    }
+                    .riseIn(3)
                 }
                 ArticleSection(
                     articles: articles, writer: writer,

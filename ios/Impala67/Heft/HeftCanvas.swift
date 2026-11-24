@@ -537,15 +537,15 @@ struct HeftCanvas: UIViewRepresentable {
             loading.formUnion(need)
             let (core, pageId) = (core, pageId)
             let origins = Dictionary(uniqueKeysWithValues: need.map { ($0, origin(of: $0)) })
-            let done = Profiler.shared.begin("heft.load")
             writer.async {
                 let datas = need.compactMap { hid in attempt("heftPage", { try core.heftPage(pageId: pageId, heftPageId: hid) }) }
                 // PencilKit-Striche gleich hier bauen: Bei vollen Seiten kostete das auf dem Hauptthread
                 // beim Öffnen rund 200 ms. Gilt nur, solange die Seite noch an derselben Stelle liegt.
                 let built = datas.map { d in Built(origin: origins[d.id] ?? .zero, strokes: Self.build(d, at: origins[d.id] ?? .zero)) }
                 DispatchQueue.main.async { [weak self] in
-                    done()
                     guard let self else { return }
+                    let done = Profiler.shared.begin("heft.apply")
+                    defer { done() }
                     self.loading.subtract(need)
                     self.apply(datas, built: Dictionary(uniqueKeysWithValues: zip(datas.map(\.id), built)))
                 }

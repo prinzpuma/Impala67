@@ -1,7 +1,7 @@
 {
-	"sources": "813d2ef159a8f4f0ea8fb61f93d2e637c2a1ac22197c94bcfb139f2d2947b86e",
+	"sources": "2c667e94818eef00b2f555c1815474b9be8db102ea6ec81bf681e8d916015426",
 	"output": {
 		"impala_core.js": "8c739280f99a03604c519a8bcd2e1f2d848abba08d69775949d3dac570e115a8",
-		"impala_core_bg.wasm": "a4fced5c8173b12ca46b0b31d683e922f03fb7a2277c34a8953b21d5eebed4be"
+		"impala_core_bg.wasm": "6596cac1a03d21d8792a58808be952d80ccacc40cb1d6968307e3cefe78a76d4"
 	}
 }

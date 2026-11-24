@@ -45,7 +45,7 @@ struct PdfScreen: View {
                 HStack(spacing: Space.s2) {
                     if let shareURL {
                         ShareLink(item: shareURL) {
-                            Icon("share", size: 15)
+                            Icon("upload", size: 15)
                                 .foregroundStyle(Impala.text2)
                                 .frame(width: 36, height: 36)
                                 .background(Impala.surface.opacity(0.8), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
