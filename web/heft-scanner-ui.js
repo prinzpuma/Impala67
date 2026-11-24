@@ -267,8 +267,13 @@ export function createScanner(host) {
 				}
 				owner.liveMissing = 0;
 				owner.liveStable++;
-
-				if (owner.autoCapture && owner.autoArmed && owner.liveStable >= 5 && Date.now() > owner.autoCooldown) {
+				// Nach einer Aufnahme wartet Auto-Scan, bis das Blatt kurz aus dem Bild war.
+				if (owner.autoCapture && !owner.autoArmed) {
+					const label = owner.wrap.querySelector("[data-hescanquality]");
+					if (label) label.textContent = "✓ Aufgenommen · nächstes Blatt hinlegen";
+				}
+				// Während der Nachbearbeitung nie selbst auslösen.
+				if (owner.autoCapture && owner.autoArmed && !owner.edit && owner.liveStable >= 5 && Date.now() > owner.autoCooldown) {
 					owner.autoArmed = false;
 					owner.liveStable = 0;
 					owner.autoCooldown = Date.now() + 1800;

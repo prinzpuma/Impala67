@@ -91,13 +91,14 @@ import kotlin.math.roundToInt
 private data class Live(val corners: List<Double>, val aspect: Float, val det: ScanDetection)
 
 /** Qualitätshinweis wie heft-scanner-ui.js `qualityHint`. */
-private fun hint(d: ScanDetection?, stable: Int): String = when {
+private fun hint(d: ScanDetection?, stable: Int, waiting: Boolean): String = when {
     d == null -> "Suche Blatt…"
     d.full -> "Blattrand sichtbar halten"
     d.check.tooDark -> "Mehr Licht nötig"
     d.check.glare -> "Spiegelung"
     d.check.flat -> "Kontrast zu gering"
     d.check.soft -> "Kamera ruhiger halten"
+    stable >= STABLE_FRAMES && waiting -> "Aufgenommen · nächstes Blatt hinlegen"
     stable >= STABLE_FRAMES -> "stabil erkannt"
     else -> "Blatt vollständig"
 }
@@ -117,7 +118,7 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
     val shots = remember { mutableStateListOf<ScanShot>() }
     var editing by remember { mutableStateOf<Int?>(null) }
     var filter by remember { mutableStateOf(ScanFilter.COLOR) }
-    var auto by remember { mutableStateOf(true) }
+    var auto by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var flash by remember { mutableStateOf(false) }
     var hasCamera by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -152,7 +153,7 @@ fun ImpalaScanner(onInsert: (List<ScannedPage>) -> Unit, onToast: (String) -> Un
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (hasCamera) {
-                        CameraPane(auto, onCapture = { bmp ->
+                        CameraPane(auto && editing == null, onCapture = { bmp ->
                             flash = true
                             vibrate(context)
                             scope.launch { addBitmap(bmp); delay(140); flash = false }
@@ -215,6 +216,9 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
     var camera by remember { mutableStateOf<Camera?>(null) }
     var torch by remember { mutableStateOf(false) }
     var lastShot by remember { mutableStateOf(0L) }
+    // Nach einer Aufnahme erst wieder auslösen, wenn das Blatt kurz aus dem Bild war (wie `autoArmed` der PWA).
+    var armed by remember { mutableStateOf(true) }
+    var missing by remember { mutableStateOf(0) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
     val preview = remember { Preview.Builder().build() }
@@ -238,7 +242,7 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
             capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
                     val bmp = image.use { it.toBitmap().rotated(it.imageInfo.rotationDegrees) }
-                    ContextCompat.getMainExecutor(context).execute { shooting = false; lastShot = System.currentTimeMillis(); stable = 0; onCapture(bmp) }
+                    ContextCompat.getMainExecutor(context).execute { shooting = false; lastShot = System.currentTimeMillis(); stable = 0; armed = false; onCapture(bmp) }
                 }
                 override fun onError(exception: ImageCaptureException) {
                     ContextCompat.getMainExecutor(context).execute { shooting = false; onToast("Aufnahme fehlgeschlagen.") }
@@ -266,7 +270,10 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
                     val norm = det.corners.mapIndexed { i, v -> if (i % 2 == 0) v / w else v / h }
                     ContextCompat.getMainExecutor(context).execute {
                         val prev = live?.corners
-                        stable = if (!det.full && prev != null && norm.zip(prev).all { (a, b) -> abs(a - b) < 0.02 }) stable + 1 else 0
+                        val ok = !det.full && !det.check.tooDark && !det.check.glare && !det.check.flat && !det.check.soft
+                        stable = if (ok && prev != null && norm.zip(prev).all { (a, b) -> abs(a - b) < 0.02 }) stable + 1 else 0
+                        missing = if (det.full) missing + 1 else 0
+                        if (missing >= 3) armed = true
                         live = Live(norm, bmp.width / bmp.height.toFloat(), det)
                     }
                 }
@@ -278,9 +285,9 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
         }, ContextCompat.getMainExecutor(context))
         onDispose { provider?.unbindAll(); executor.shutdown() }
     }
-    // Auto-Scan: nach 5 stabilen Bildern auslösen, danach 1,8 s Pause.
-    LaunchedEffect(stable, auto) {
-        if (auto && stable >= STABLE_FRAMES && System.currentTimeMillis() - lastShot > AUTO_PAUSE_MS) shoot()
+    // Auto-Scan: nach 5 stabilen, brauchbaren Bildern auslösen, danach 1,8 s Pause und neues Blatt abwarten.
+    LaunchedEffect(stable, auto, armed) {
+        if (auto && armed && stable >= STABLE_FRAMES && System.currentTimeMillis() - lastShot > AUTO_PAUSE_MS) shoot()
     }
     Box(Modifier.fillMaxSize()) {
         request?.let { CameraXViewfinder(surfaceRequest = it, modifier = Modifier.fillMaxSize()) }
@@ -299,7 +306,7 @@ private fun CameraPane(auto: Boolean, onCapture: (Bitmap) -> Unit, onToast: (Str
             drawPath(path, color, style = Stroke(3.dp.toPx()))
         }
         Text(
-            hint(l?.det, stable),
+            hint(l?.det, stable, auto && !armed),
             Modifier.align(Alignment.TopCenter).padding(top = 12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
             color = if (ready) Color(0xFF34C759) else Color.White, fontSize = TextSize.sm,
         )
