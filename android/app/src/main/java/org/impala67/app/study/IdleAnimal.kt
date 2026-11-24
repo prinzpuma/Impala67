@@ -50,7 +50,7 @@ enum class IdlePose { PEEK, SLEEP, SIDE, BADGE }
 
 /**
  * Leerlauf-Tier (`.lz-tier`, Zeichnung aus tools/lernzeit-tier.mjs): ein kleines Impala unten rechts, je Pause in
- * einer anderen Pose. Es fängt keine Berührungen ab – jede Eingabe setzt die Lernzeit fort und lässt es verschwinden.
+ * einer anderen Pose. Es fängt keine Berührungen ab – jede Eingabe setzt die Lernzeit fort, das Tier geht kurz danach.
  * Android hat unten rechts keinen KI-Knopf; die Plakette sitzt deshalb selbst in der Ecke.
  */
 @Composable

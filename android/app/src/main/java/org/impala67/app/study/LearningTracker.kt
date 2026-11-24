@@ -117,6 +117,8 @@ class LearningTracker(private val store: ImpalaStore) {
  * Hülle um die ganze App: meldet Eingaben an den [LearningTracker], folgt dem aktuellen Ziel, pausiert im
  * Hintergrund und in den Einstellungen ([paused]) und zeigt das Leerlauf-Tier sowie die Pausen-Erinnerung.
  */
+private const val ANIMAL_LINGER_MS = 2_500L
+
 @Composable
 fun LearningTimeHost(store: ImpalaStore, prefs: DevicePrefs, current: NavKey, paused: Boolean, content: @Composable () -> Unit) {
     val tracker = remember(store) { LearningTracker(store) }
@@ -124,6 +126,7 @@ fun LearningTimeHost(store: ImpalaStore, prefs: DevicePrefs, current: NavKey, pa
     val breakOn by prefs.breakReminder.collectAsStateWithLifecycle(false)
     var foreground by remember { mutableStateOf(true) }
     var idle by remember { mutableStateOf(false) }
+    var showAnimal by remember { mutableStateOf(false) }
     var pose by remember { mutableStateOf(IdlePose.entries.random()) }
     var breakAsk by remember { mutableStateOf(false) }
     var ctx by remember { mutableStateOf<LearnContext?>(null) }
@@ -160,9 +163,15 @@ fun LearningTimeHost(store: ImpalaStore, prefs: DevicePrefs, current: NavKey, pa
                 tracker.pause(tracker.lastActivity) // Leerlauf zählt nie als Lernzeit
                 pose = IdlePose.entries[(pose.ordinal + 1) % IdlePose.entries.size] // jede Pause eine andere Pose
                 idle = true
+                showAnimal = true
             }
             if (breakOn && tracker.continuousSince > 0 && now - tracker.continuousSince > LearningTracker.BREAK_MS) breakAsk = true
         }
+    }
+    // Die Lernzeit läuft mit der ersten Eingabe sofort weiter; das Tier bleibt noch kurz sichtbar und geht dann
+    // (sonst ist es beim ersten Touch weg, bevor man es wahrnimmt). Wie lernzeit.js `ANIMAL_LINGER_MS`.
+    LaunchedEffect(idle) {
+        if (!idle && showAnimal) { delay(ANIMAL_LINGER_MS); showAnimal = false }
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box(
@@ -179,7 +188,7 @@ fun LearningTimeHost(store: ImpalaStore, prefs: DevicePrefs, current: NavKey, pa
             .onPreviewKeyEvent { tracker.poke(); if (idle) idle = false; false },
     ) {
         content()
-        IdleAnimal(idle && ctx != null && ctx?.category != "notes", pose, Modifier.align(Alignment.BottomEnd))
+        IdleAnimal(showAnimal && ctx != null && ctx?.category != "notes", pose, Modifier.align(Alignment.BottomEnd))
     }
     if (breakAsk) {
         AlertDialog(

@@ -27,6 +27,11 @@ export const LERNZEIT = (() => {
 	let tracker = new CORE.LzSessionTracker();
 	let idle = false; // Leerlauf-Pause: endet mit der nächsten Eingabe
 	let animal = null; // dezentes Tier am Rand, solange idle (nicht in Notizen)
+	let animalLeaveTimer = 0;
+	// Nach der ersten Eingabe bleibt das Tier noch kurz sichtbar und geht dann sanft –
+	// sonst ist es beim ersten Touch weg, bevor man es überhaupt wahrnimmt.
+	const ANIMAL_LINGER_MS = 2500;
+	const ANIMAL_LEAVE_MS = 400;
 	let timerEndsAt = Number(localStorage.getItem(TIMER_KEY) || 0);
 
 	let activeStretchMs = 0;
@@ -120,17 +125,26 @@ export const LERNZEIT = (() => {
 
 	// Aktivität melden — EINE Stelle für alle Eingabewege (Maus, Stift, Tastatur und das
 	// 🎮 Gamepad aus controller.js, das keine pointer-/keydown-Ereignisse erzeugt). Jede
-	// Eingabe beendet eine Leerlauf-Pause: Tier weg, Lernzeit läuft weiter, die Eingabe
-	// selbst wirkt ganz normal.
+	// Eingabe beendet eine Leerlauf-Pause: Lernzeit läuft sofort weiter, das Tier verabschiedet
+	// sich kurz danach (leaveAnimal), die Eingabe selbst wirkt ganz normal.
 	function poke() {
 		lastActivityAt = Date.now();
 		if (!idle) return;
 		idle = false;
-		hideAnimal();
+		leaveAnimal();
 		openSegment(categoryNow());
 	}
 
+	function leaveAnimal() {
+		if (!animal || animalLeaveTimer) return;
+		animalLeaveTimer = setTimeout(() => {
+			animal?.classList.add("lz-tier--leaving");
+			animalLeaveTimer = setTimeout(hideAnimal, ANIMAL_LEAVE_MS);
+		}, ANIMAL_LINGER_MS);
+	}
 	function hideAnimal() {
+		clearTimeout(animalLeaveTimer);
+		animalLeaveTimer = 0;
 		if (!animal) return;
 		animal.closest("#btnAiFab")?.classList.remove("lz-idle");
 		animal.remove();

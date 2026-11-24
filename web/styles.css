@@ -829,6 +829,9 @@ body.perf-mode *:not(.boot-spinner):not(#bootSplash *), body.perf-mode *::before
 @keyframes lz-peek { 0% { transform: translateY(100%) } 60% { transform: translateY(-4%) } 100% { transform: none } }
 @keyframes lz-side { from { transform: translateX(110%) rotate(-62deg) } }
 @keyframes lz-pop { 0% { transform: scale(0) } 70% { transform: scale(1.1) } 100% { transform: none } }
+/* Abschied nach der ersten Eingabe (lernzeit.js leaveAnimal): nur Deckkraft, damit die Posen-Drehung bleibt. */
+.lz-tier.lz-tier--leaving { animation: lz-leave .4s ease-in forwards }
+@keyframes lz-leave { to { opacity:0 } }
 @keyframes lz-blink { 0%, 92%, 100% { transform: none } 95% { transform: scaleY(.1) } }
 @keyframes lz-z { 0% { opacity:0; transform: none } 30% { opacity:1 } 100% { opacity:0; transform: translate(10px,-20px) } }
 body.perf-mode :is(.lz-tier, .lz-eye, .lz-z) { animation:none }

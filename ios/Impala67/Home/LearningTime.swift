@@ -17,8 +17,13 @@ struct LearningTime {
 
     /// Die 7 Tage der laufenden Woche (Mo–So).
     func week(_ today: Date = .now) -> [Int] {
+        week(offset: 0, today: today)
+    }
+
+    /// Die 7 Tage einer Woche relativ zur aktuellen (`offset = 0`: diese Woche, `-1`: letzte Woche).
+    func week(offset: Int, today: Date = .now) -> [Int] {
         let ms = Int64(today.timeIntervalSince1970 * 1000)
-        let raw = learningTimeWeekData(totals: totals.mapValues { UInt64($0) }, nowMs: ms, weekOffset: 0, zone: SystemZone.shared)
+        let raw = learningTimeWeekData(totals: totals.mapValues { UInt64($0) }, nowMs: ms, weekOffset: Int32(offset), zone: SystemZone.shared)
         return raw.map { Int($0) }
     }
 
@@ -106,6 +111,8 @@ final class LearningTracker {
     static let idleAfter: TimeInterval = 60
     /// Notizen liest man oft länger ohne Eingabe.
     static let notesIdleAfter: TimeInterval = 3 * 60
+    /// Nach der ersten Eingabe bleibt das Tier noch kurz sichtbar (lernzeit.js `ANIMAL_LINGER_MS`).
+    static let animalLinger: Duration = .milliseconds(2500)
 
     private struct Session {
         let id = UUID().uuidString
@@ -126,13 +133,14 @@ final class LearningTracker {
     @ObservationIgnored private var current: Session?
     @ObservationIgnored private var lastActivity = Date()
     @ObservationIgnored private weak var core: ImpalaCore?
+    @ObservationIgnored private var animalLeave: Task<Void, Never>?
 
     /// Abschnitt öffnen oder fortsetzen (`openSegment`).
     func open(_ ctx: LearnContext, core: ImpalaCore) {
         self.core = core
         lastActivity = Date()
         idle = false
-        showsAnimal = false
+        hideAnimal()
         if var s = current, s.ctx == ctx {
             if s.activeStart != nil { return }
             if let p = s.pausedAt, Date().timeIntervalSince(p) <= Self.sessionGap {
@@ -160,10 +168,26 @@ final class LearningTracker {
         persist(s)
     }
 
-    /// Eingabe: hält die Sitzung wach und setzt sie nach einer Leerlauf-Pause fort.
+    /// Eingabe: hält die Sitzung wach und setzt sie nach einer Leerlauf-Pause sofort fort. Das Tier geht erst kurz
+    /// danach – sonst ist es beim ersten Touch weg, bevor man es wahrnimmt.
     func poke() {
         lastActivity = Date()
-        if idle, let ctx = current?.ctx, let core { open(ctx, core: core) }
+        guard idle, let ctx = current?.ctx, let core else { return }
+        let wasShowing = showsAnimal
+        open(ctx, core: core)
+        guard wasShowing else { return }
+        showsAnimal = true
+        animalLeave = Task { [weak self] in
+            try? await Task.sleep(for: Self.animalLinger)
+            guard !Task.isCancelled else { return }
+            self?.showsAnimal = false
+        }
+    }
+
+    private func hideAnimal() {
+        animalLeave?.cancel()
+        animalLeave = nil
+        showsAnimal = false
     }
 
     /// Takt (alle 5 s): nach 60 s (Notizen: 3 min) ohne Eingabe rückwirkend pausieren.
@@ -174,6 +198,7 @@ final class LearningTracker {
         pause(at: lastActivity)
         let all = IdlePose.allCases
         pose = all[((all.firstIndex(of: pose) ?? 0) + 1) % all.count]
+        animalLeave?.cancel()
         showsAnimal = s.ctx.category != "notes"
         idle = true
     }
@@ -182,7 +207,7 @@ final class LearningTracker {
     func leave() {
         pause()
         idle = false
-        showsAnimal = false
+        hideAnimal()
     }
 
     private func persist(_ s: Session) {
@@ -218,7 +243,7 @@ private struct LearningTimeModifier: ViewModifier {
                     IdleAnimal(pose: tracker.pose, avoidOrb: tracker.orbShown)
                 }
             }
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: tracker.idle)
+            .animation(.spring(duration: 0.4, bounce: 0.2), value: tracker.showsAnimal)
             .onAppear { tracker.open(ctx, core: store.core) }
             .onDisappear { tracker.leave() }
             .onChange(of: ctx) { tracker.open(ctx, core: store.core) }
