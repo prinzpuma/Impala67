@@ -47,7 +47,7 @@ Dieselben flachen Werkzeuge wie die App-KI (Definitionen: `core/impala-ai/src/to
 - `impala_heft_page_image` — Heftseite als Bild mit Raster (inkl. Seitenhintergrund wie PDF-Vorlagen) plus Lesung des lokalen Modells.
 - `impala_heft_label_lines` — eigene Zeilen-Lesung als Trainingsbeispiele speichern.
 - `impala_heft_add_pages` — Bild oder PDF (`file_path` oder `data_base64`) als festliegende Seitenvorlage an beliebiger Stelle ins Heft legen. Derselbe Aufruf (gleiches Heft, gleiche Datei, gleiche Stelle) wird in der App nur einmal ausgeführt, auch wenn er nach einem Timeout wiederholt wird (Antwort dann mit `deduplicated: true`).
-- `impala_heft_delete_pages` — Heftseiten per Index löschen; Seiten mit Handschrift, Bildern oder Textboxen nur mit `allow_content: true`.
+- `impala_heft_delete_pages` — Heftseiten ab 1 löschen; Seiten mit Handschrift, Bildern oder Textboxen nur mit `allow_content: true`.
 
 **Speicher**
 - `impala_storage_report` — größte PDFs und Cloudflare-Quota.

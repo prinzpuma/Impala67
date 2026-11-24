@@ -26,10 +26,25 @@ export const HEFT_LABEL = (() => {
 	const segmentLines = (strokes) => CORE.inkSegmentLines(JSON.stringify(strokes)).map((idx) => idx.map((i) => strokes[i]));
 	const orderLineStrokes = (strokes) => [...CORE.inkOrderLineStrokes(JSON.stringify(strokes))].map((i) => strokes[i]);
 
+	// page ist 1-basiert (wie write_to_heft/view_heft_page); altes page_index (0-basiert) bleibt als Rückfall.
+	function resolvePageIdx(page, page_index) {
+		if (page != null) {
+			const n = Number(page);
+			if (!Number.isInteger(n) || n < 1) throw new Error(`page muss >= 1 sein (erhalten: ${page})`);
+			return n - 1;
+		}
+		if (page_index != null) {
+			const n = Number(page_index);
+			if (!Number.isInteger(n) || n < 0) throw new Error(`page_index muss >= 0 sein (erhalten: ${page_index})`);
+			return n;
+		}
+		return 0;
+	}
+
 	function getPage(pageId, pageIdx) {
 		const doc = STATE.heftDoc(pageId);
 		const pg = doc?.pages?.[pageIdx];
-		if (!pg) throw new Error(`Heftseite nicht gefunden: ${pageId}, Seite ${pageIdx}`);
+		if (!pg) throw new Error(`Heftseite nicht gefunden: ${pageId}, Seite ${pageIdx + 1}`);
 		return { doc, pg, strokes: filterInkStrokes(pg.strokes || []) };
 	}
 
@@ -94,9 +109,10 @@ export const HEFT_LABEL = (() => {
 		}
 	}
 
-	async function pageImage({ page_id, page_index = 0 }) {
-		const { doc, pg, strokes } = getPage(page_id, page_index);
-		const base = await appRender(page_id, page_index);
+	async function pageImage({ page_id, page, page_index }) {
+		const pageIdx = resolvePageIdx(page, page_index);
+		const { doc, pg, strokes } = getPage(page_id, pageIdx);
+		const base = await appRender(page_id, pageIdx);
 		let appReading = "";
 		try {
 			appReading = strokes.length ? await HANDSCHRIFT.recognizeStrokes(pg.strokes, {}, "label") : "";
@@ -105,7 +121,7 @@ export const HEFT_LABEL = (() => {
 		}
 		return {
 			pageId: page_id,
-			pageIndex: page_index,
+			page: pageIdx + 1,
 			pageCount: doc.pages.length,
 			size: { width: PAGE_W, height: pageHeight(pg) },
 			inkStrokes: strokes.length,
@@ -132,8 +148,9 @@ export const HEFT_LABEL = (() => {
 		}));
 	}
 
-	async function labelLines({ page_id, page_index = 0, lines, save = true }) {
-		const { strokes } = getPage(page_id, page_index);
+	async function labelLines({ page_id, page, page_index, lines, save = true }) {
+		const pageIdx = resolvePageIdx(page, page_index);
+		const { strokes } = getPage(page_id, pageIdx);
 		if (!Array.isArray(lines) || !lines.length) throw new Error("lines fehlt: [{ box: [x0, y0, x1, y1], text, angle }]");
 		const boxes = lines.map((l, i) => {
 			const b = l.box;
@@ -167,7 +184,7 @@ export const HEFT_LABEL = (() => {
 			llmLinesPerAppLine.get(k).add(j);
 		}
 
-		if (save) HANDSCHRIFT.removeTrainingSamples({ source: "llm", pageId: page_id, pageIdx: page_index });
+		if (save) HANDSCHRIFT.removeTrainingSamples({ source: "llm", pageId: page_id, pageIdx });
 		const results = [];
 		let errApp = 0, chars = 0, saved = 0, saveFailed = 0;
 		for (let j = 0; j < lines.length; j++) {
@@ -186,7 +203,7 @@ export const HEFT_LABEL = (() => {
 				row.app = `(Fehler: ${e.message})`;
 			}
 			if (save) {
-				if (HANDSCHRIFT.saveTrainingSample(lineStrokes, text, { source: "llm", pageId: page_id, pageIdx: page_index })) saved++;
+				if (HANDSCHRIFT.saveTrainingSample(lineStrokes, text, { source: "llm", pageId: page_id, pageIdx })) saved++;
 				else saveFailed++;
 			}
 			results.push(row);
@@ -194,7 +211,7 @@ export const HEFT_LABEL = (() => {
 
 		return {
 			pageId: page_id,
-			pageIndex: page_index,
+			page: pageIdx + 1,
 			saved,
 			...(saveFailed ? { saveFailed, hint: "Speichern fehlgeschlagen (Speicher voll?) – Samples exportieren und leeren." } : {}),
 			modelCer: chars ? Math.round((1000 * errApp) / chars) / 10 : null,

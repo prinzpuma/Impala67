@@ -98,13 +98,20 @@ async function addHeftPages(args) {
 	const pagesNow = () => (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages || [];
 	const oldPages = pagesNow();
 	if (args.replace) {
-		const blocked = oldPages.map((p, i) => (heftPageHasContent(p) ? i : -1)).filter((i) => i >= 0);
+		const blocked = oldPages.map((p, i) => (heftPageHasContent(p) ? i + 1 : 0)).filter(Boolean);
 		if (blocked.length && !args.allow_content) {
 			throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true ersetzen.`);
 		}
 	}
 	const before = oldPages.map((p) => p.id);
-	const pos = args.replace ? 0 : (Number.isInteger(args.at) ? args.at : (args.position || "end"));
+	let pos = args.position || "end";
+	if (args.replace) {
+		pos = 0;
+	} else if (args.at != null) {
+		const n = Number(args.at);
+		if (!Number.isInteger(n) || n < 1) throw new Error(`at muss >= 1 sein (erhalten: ${args.at})`);
+		pos = n - 1;
+	}
 	const end = await HEFT.importFiles(pageId, [new File([bytes], name, { type })], pos);
 	let pageCount = pagesNow().length;
 	// Ein neues Heft verliert beim Import seine leere Startseite (heft-import.js).
@@ -123,7 +130,7 @@ async function addHeftPages(args) {
 	RENDER.render();
 	return {
 		ok: true,
-		inserted: { from: end - added, to: end - 1 },
+		inserted: { from: end - added + 1, to: end },
 		pageCount,
 		...(replacedBlank && !args.replace ? { replacedEmptyFirstPage: true } : {}),
 		...(args.replace ? { replacedPages } : {}),
@@ -478,12 +485,13 @@ export function initMcpBridge() {
 						const { HEFT } = await import("./heft.js");
 						const doc = HEFT.openDoc(pageId) || STATE.heftDoc(pageId);
 						const pages = doc?.pages || [];
-						const want = parsePageIndices(args.pages);
-						if (!want.length) throw new Error("pages fehlt: z. B. [1, 2] oder '3-16'");
-						const bad = want.filter((i) => i < 0 || i >= pages.length);
-						if (bad.length) throw new Error(`Seite(n) ${bad.join(", ")} gibt es nicht (Heft hat ${pages.length} Seiten, 0-basiert)`);
-						if (want.length >= pages.length) throw new Error("Ein Heft braucht mindestens eine Seite.");
-						const blocked = want.filter((i) => heftPageHasContent(pages[i]));
+						const wantPages = parsePageIndices(args.pages);
+						if (!wantPages.length) throw new Error("pages fehlt: z. B. [1, 2] oder '3-16'");
+						const bad = wantPages.filter((p) => p < 1 || p > pages.length);
+						if (bad.length) throw new Error(`Seite(n) ${bad.join(", ")} gibt es nicht (Heft hat ${pages.length} Seiten, ab 1)`);
+						if (wantPages.length >= pages.length) throw new Error("Ein Heft braucht mindestens eine Seite.");
+						const want = wantPages.map((p) => p - 1);
+						const blocked = want.filter((i) => heftPageHasContent(pages[i])).map((i) => i + 1);
 						if (blocked.length && !args.allow_content) {
 							throw new Error(`Seite(n) ${blocked.join(", ")} enthalten Handschrift, Bilder oder Textboxen — nur mit allow_content=true löschen.`);
 						}
@@ -491,7 +499,7 @@ export function initMcpBridge() {
 						await deleteHeftPageIds(HEFT, pageId, ids);
 						const countNow = (HEFT.openDoc(pageId) || STATE.heftDoc(pageId))?.pages?.length ?? null;
 						RENDER.render();
-						result = { ok: true, deleted: want, pageCount: countNow ?? (pages.length - want.length) };
+						result = { ok: true, deleted: wantPages, pageCount: countNow ?? (pages.length - want.length) };
 						break;
 					}
 					// PERF: Trainings-Werkzeug samt Wortliste (~75 KB) erst bei Bedarf laden, nicht bei jedem Start.

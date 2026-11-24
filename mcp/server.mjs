@@ -555,19 +555,19 @@ const TOOLS = [
 	},
 	{
 		name: "impala_heft_page_image",
-		description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, graues Koordinatenraster alle 100 Einheiten; mit Seitenhintergrund wie PDF-Vorlagen, Bildern und Textboxen) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Erster Schritt zum Beschriften: Seite lesen, dann impala_heft_label_lines aufrufen. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
+		description: "Zeigt eine Handschrift-Heftseite als Bild (1000×1414, graues Koordinatenraster alle 100 Einheiten als Zielhilfe für impala_heft_label_lines; mit Seitenhintergrund wie PDF-Vorlagen, Bildern und Textboxen) plus 'appReading' = was das lokale Handschrift-Modell darauf liest. Erster Schritt zum Beschriften: Seite lesen, dann impala_heft_label_lines aufrufen. Seiten-IDs von Heften liefert impala_list_pages; pageCount nennt die Anzahl der Heftseiten.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				page_id: { type: "string", description: "ID oder Titel der Impala-Seite (des Hefts)" },
-				page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" },
+				page: { type: "number", description: "Heftseite, ab 1 (Standard 1)" },
 			},
 			required: ["page_id"],
 		},
 	},
 	{
 		name: "impala_heft_add_pages",
-		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (0-basierter Index), position (start, before, after, end; Standard end) oder replace=true (ersetzt alle bisherigen Heftseiten). Heft-IDs liefert impala_list_pages (Feld id, pageCount, hasPdf); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt. Anzeigen per impala_run_ui_action open_page mit der id.",
+		description: "Legt ein Bild (PNG/JPEG/WebP) oder eine PDF als Seitenvorlage in ein Handschrift-Heft: jede PDF-Seite bzw. das Bild wird eine eigene Heftseite mit festliegendem Hintergrund, auf die man schreiben kann (nicht verschiebbar). Datei per file_path (lokaler Pfad, liest der MCP-Server) oder data_base64. Einfügen per at (ab 1), position (start, before, after, end; Standard end) oder replace=true (ersetzt alle bisherigen Heftseiten). Heft-IDs liefert impala_list_pages (Feld id, pageCount, hasPdf); neues Heft per impala_create_pages mit heft: true (Antwort enthält die id). Die leere Startseite eines neuen Hefts wird dabei ersetzt. Anzeigen per impala_run_ui_action open_page mit der id.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -575,7 +575,7 @@ const TOOLS = [
 				file_path: { type: "string", description: "Lokaler Pfad zu Bild oder PDF" },
 				data_base64: { type: "string", description: "Dateiinhalt als Base64 (oder Data-URL), falls kein file_path" },
 				filename: { type: "string", description: "Dateiname bei data_base64 (Endung bestimmt den Typ, z. B. blatt.pdf)" },
-				at: { type: "number", description: "Einfügeindex, 0-basiert (0 = vor der ersten Seite)" },
+				at: { type: "number", description: "Einfügeposition ab 1 (1 = vor der ersten Seite)" },
 				position: { type: "string", enum: ["start", "before", "after", "end"], description: "Relativ zur aktuellen Seite, wenn at fehlt (Standard end)" },
 				replace: { type: "boolean", description: "Alle bisherigen Heftseiten durch die neue Vorlage ersetzen (Standard false)" },
 				allow_content: { type: "boolean", description: "Bei replace=true auch Seiten mit Handschrift/Textboxen ersetzen (Standard false)" },
@@ -585,12 +585,12 @@ const TOOLS = [
 	},
 	{
 		name: "impala_heft_delete_pages",
-		description: "Löscht Seiten aus einem Handschrift-Heft (0-basierte Indizes oder Bereiche wie '3-16', z. B. doppelt eingefügte Vorlagen). Seiten mit Handschrift oder Textboxen werden nur mit allow_content=true gelöscht. Antwort: gelöschte Indizes und neue Seitenzahl. Über den Heft-Verlauf wiederherstellbar.",
+		description: "Löscht Seiten aus einem Handschrift-Heft (Seitenzahlen ab 1 oder Bereiche wie '3-16', z. B. doppelt eingefügte Vorlagen). Seiten mit Handschrift oder Textboxen werden nur mit allow_content=true gelöscht. Antwort: gelöschte Seiten und neue Seitenzahl. Über den Heft-Verlauf wiederherstellbar.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				page_id: { type: "string", description: "ID oder Titel des Hefts" },
-				pages: { description: "Heftseiten, 0-basiert: Indizes oder Bereiche (z. B. [1, 2], ['3-16'] oder '3-16')" },
+				pages: { description: "Heftseiten ab 1: Seitenzahlen oder Bereiche (z. B. [1, 2], ['3-16'] oder '3-16')" },
 				allow_content: { type: "boolean", description: "Auch Seiten mit Handschrift/Textboxen löschen (Standard false)" },
 			},
 			required: ["page_id", "pages"],
@@ -603,7 +603,7 @@ const TOOLS = [
 			type: "object",
 			properties: {
 				page_id: { type: "string", description: "ID oder Titel der Impala-Seite (des Hefts)" },
-				page_index: { type: "number", description: "Heftseite, 0-basiert (Standard 0)" },
+				page: { type: "number", description: "Heftseite, ab 1 (Standard 1)" },
 				lines: {
 					type: "array",
 					description: "Zeilen der Seite",
