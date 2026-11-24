@@ -91,6 +91,8 @@ struct HeftCanvas: UIViewRepresentable {
         weak var link: HeftCanvasLink?
         var onCurrentPage: ((String) -> Void)?
         var onPullAdd: (() -> Void)?
+        /// Doppeltipp-Zoom mit festem Punkt unter dem Finger (`HeftZoomAnimator.swift`).
+        private let zoomer = HeftZoomAnimator()
 
         // MARK: Lage der Seiten
 
@@ -868,21 +870,20 @@ struct HeftCanvas: UIViewRepresentable {
         }
 
         /// Doppeltipp wie `heft-viewport.js`: ab 1,9× zurück auf Passbreite, sonst auf mindestens 2,2×
-        /// (bzw. 1,8× des jetzigen Zooms) um den getippten Punkt. Die Faktoren gelten wie in der PWA
-        /// relativ zur Passbreite (dort `view.k = 1`).
+        /// (bzw. 1,8× des jetzigen Zooms); der getippte Punkt bleibt dabei unter dem Finger. Die Faktoren
+        /// gelten wie in der PWA relativ zur Passbreite (dort `view.k = 1`).
         @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
             guard let canvas, canvas.bounds.width > 0, canvas.bounds.height > 0 else { return }
             let fit = (canvas.bounds.width - 2 * Self.gutter) / Self.pageSize.width
             guard fit > 0 else { return }
-            let current = canvas.zoomScale
-            let k = current / fit
+            let k = canvas.zoomScale / fit
             let target = k >= 1.9 ? fit : min(canvas.maximumZoomScale, fit * max(2.2, k * 1.8))
-            // `zoom(to:)` erwartet ungezoomte Koordinaten; der Tipp liegt in gezoomten Inhaltskoordinaten.
-            let p = gesture.location(in: canvas)
-            let pt = CGPoint(x: p.x / current, y: p.y / current)
-            let w = canvas.bounds.width / target, h = canvas.bounds.height / target
-            canvas.zoom(to: CGRect(x: pt.x - w / 2, y: pt.y - h / 2, width: w, height: h), animated: true)
+            zoomer.zoom(canvas, to: target, at: gesture.location(in: canvas))
         }
+
+        /// Eigenes Schieben oder Zoomen bricht den Doppeltipp-Zoom ab.
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { zoomer.stop() }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { zoomer.stop() }
 
         /// Ebenen mitzoomen und die Seiten mittig halten, solange sie schmaler als der Canvas sind.
         private func layoutPage() {
