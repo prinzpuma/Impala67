@@ -128,6 +128,8 @@ pub struct AgentRequest<'a> {
     pub custom_instructions: &'a str,
     pub embed_model: &'a str,
     pub now: LocalTime,
+    /// `None` = kein Schrittlimit (z. B. für Zeitstrahl-Aufbau).
+    pub max_steps: Option<usize>,
 }
 
 /// Zustand je Chat, der Läufe überdauert.
@@ -351,10 +353,9 @@ pub async fn run_agent(
     messages.extend(last);
 
     let mut run = Run { provider, executor, cancel, on_event, messages, edits: vec![] };
-    let mut nudged = false;
     // Kleine Modelle wiederholen einen abgelehnten Aufruf sonst bis MAX_STEPS unverändert.
     let mut failed_calls: Vec<String> = vec![];
-    for _ in 0..MAX_STEPS {
+    for _ in 0..req.max_steps.unwrap_or(usize::MAX) {
         run.check()?;
         (run.on_event)(AgentEvent::Draft(""));
         (run.on_event)(AgentEvent::Thinking(""));
@@ -376,17 +377,6 @@ pub async fn run_agent(
         let reasoning = js::trim(message.reasoning.as_deref().unwrap_or_default()).to_owned();
         let content = js::trim(&message.content).to_owned();
         if message.tool_calls.is_empty() {
-            if content.is_empty() && !nudged {
-                nudged = true;
-                tools = &[];
-                if !reasoning.is_empty() {
-                    run.item(AgentItem::Thought(reasoning));
-                }
-                (run.on_event)(AgentEvent::Draft(""));
-                (run.on_event)(AgentEvent::Thinking(""));
-                run.messages.push(Message::user("Deine Antwort war leer. Sage in ein bis zwei Sätzen konkret, was du getan oder herausgefunden hast — ohne weiteren Werkzeug-Aufruf."));
-                continue;
-            }
             if !reasoning.is_empty() {
                 run.item(AgentItem::Thought(reasoning));
             }

@@ -444,6 +444,7 @@ fn agent_schleife() {
                 custom_instructions: st["customInstructions"].as_str().unwrap_or_default(),
                 embed_model: st["embedModel"].as_str().unwrap_or_default(),
                 now: now(),
+                max_steps: Some(impala_ai::MAX_STEPS),
             };
             let mut items = vec![];
             let outcome = block_on(run_agent(&p, &mut exec, &req, &mut session, &CancelToken::default(), &mut |e| {

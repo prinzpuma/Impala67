@@ -270,6 +270,7 @@ impl AiRun {
                 custom_instructions: input["customInstructions"].as_str().unwrap_or(""),
                 embed_model: input["embedModel"].as_str().unwrap_or(""),
                 now: local_time(&input["now"]),
+                max_steps: (!input["unlimitedSteps"].as_bool().unwrap_or(false)).then_some(impala_ai::MAX_STEPS),
             };
             let emit = |ev: Value| {
                 let _ = on_event.call1(&JsValue::NULL, &to_js(&ev));

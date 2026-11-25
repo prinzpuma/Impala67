@@ -93,6 +93,9 @@ export function skeletonPrompt(tl, { pages = [], wiki = true, focus = "" } = {})
 		`Baue bitte das Gerüst für meinen KI-Zeitstrahl „${tl.title}“${tl.subject ? ` (Fach: ${tl.subject})` : ""}.`,
 		mat,
 		history && wiki ? "Nutze Wikipedia (wikipedia) für die historische Reihenfolge der Entdeckungen." : "",
+		history && wiki
+			? "WICHTIG: Verwende für alle Inhalte ausschließlich deine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen und keine erfundenen Fakten."
+			: "WICHTIG: Verwende für alle Inhalte ausschließlich deine eigenen Notizen (search, read_pages) — kein allgemeines Vorwissen, kein Wikipedia und keine erfundenen Fakten.",
 		focus ? `Mein Schwerpunkt: ${focus}` : "",
 		tl.exam ? `Klausur am ${tl.exam}: alle Wege sollen auf den Klausurstoff zulaufen.` : "",
 		history
@@ -108,6 +111,7 @@ export function fillPrompt(tl, nodes) {
 	return `Arbeite bitte im Zeitstrahl „${tl.title}“ diese Entwurfs-Lektionen aus: ${list}. ` +
 		"Je Lektion mit edit_timeline: body (spannende Story als Einstieg, dann der Klausurstoff mit Formeln/Notation aus meinen Skripten), " +
 		"images (Wikipedia-Bilder), sources (Skriptseiten und Wikipedia) und quiz (3–5 Kontrollfragen, gemischte Typen). " +
+		"WICHTIG: Verwende für alle Inhalte, Fakten, Formeln, Bilder und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen. " +
 		"Titel, Jahr, Strang und Verbindungen bleiben, wie sie sind.";
 }
 

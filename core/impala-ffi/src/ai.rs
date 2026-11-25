@@ -545,6 +545,7 @@ impl AiAssistant {
                 custom_instructions: &prep.resolved.custom,
                 embed_model: &prep.resolved.embed_model,
                 now,
+                max_steps: Some(impala_ai::MAX_STEPS),
             };
             let mut on_event = |ev: AgentEvent<'_>| match ev {
                 AgentEvent::Draft(t) => listener.iter().for_each(|l| l.on_draft(t.to_owned())),

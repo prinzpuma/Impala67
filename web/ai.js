@@ -423,6 +423,7 @@ export const AI = (() => {
 				...baseInput(), chat: target, workspace, ragHits, activePage: page ? { id: page.id, title: page.title } : null,
 				tools: fullToolDefs(), alwaysSendTools: S.settings.alwaysSendTools !== false,
 				embedModel: String(S.settings.embedModel || ""), session,
+				unlimitedSteps: S.view === "zeitstrahl",
 			}, executor, onEvent));
 			if (sessionKey) chatSessions.set(sessionKey, out.session);
 			if (out.pageContext && page) S.pageCtxInfo = { id: page.id, ...out.pageContext };
