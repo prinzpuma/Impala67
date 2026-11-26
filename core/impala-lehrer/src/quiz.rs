@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::layout::view_entry;
+use crate::memory::{record_question_history, update_memory};
 use crate::model::{Node, QResult, Question, QuizAttempt, Timeline, WsStatus};
 use crate::text::{cloze_gaps, fmt_num, norm, parse_number};
 
@@ -86,6 +87,10 @@ fn strings(v: &Value) -> Vec<String> {
     }
 }
 
+pub(crate) fn grade_question(index: usize, q: &Question, answer: &Value) -> GradeItem {
+    grade_one(index, q, answer)
+}
+
 fn grade_one(index: usize, q: &Question, answer: &Value) -> GradeItem {
     let (correct, expected) = match q {
         Question::Choice { options, correct, .. } => {
@@ -136,11 +141,24 @@ fn passes(results: &[Option<bool>]) -> bool {
 
 /// Wertet die Antworten eines Quiz-Versuchs aus und speichert sie im Fortschritt des Knotens.
 pub fn record_quiz(tl: &Value, node: &str, answers: &Value, now: &str) -> Result<RecordOut, String> {
+    record_quiz_with_confidence(tl, node, answers, &Value::Null, now)
+}
+
+/// Wie [`record_quiz`], nimmt aber zusätzlich Konfidenz-Werte (`"sure"|"unsure"|"guess"`) je Frage entgegen
+/// und aktualisiert das FSRS-Erinnerungsmodell sowie die Frage-Historie.
+pub fn record_quiz_with_confidence(
+    tl: &Value,
+    node: &str,
+    answers: &Value,
+    confidences: &Value,
+    now: &str,
+) -> Result<RecordOut, String> {
     let mut tl = Timeline::parse(tl)?;
     let i = tl.find(node).ok_or_else(|| format!("Knoten „{node}“ nicht gefunden."))?;
     let Some(given) = answers.as_array() else {
         return Err("Antworten müssen eine Liste sein (eine Antwort je Frage).".into());
     };
+    let confs = confidences.as_array();
     let n = &mut tl.nodes[i];
     if n.quiz.is_empty() {
         return Err(format!("Knoten „{}“ hat kein Quiz.", n.title));
@@ -159,9 +177,52 @@ pub fn record_quiz(tl: &Value, node: &str, answers: &Value, now: &str) -> Result
         at: now.to_string(),
     });
     n.progress.quiz_passed = passed;
+
+    // Frage-Historie & FSRS-MemoryState aktualisieren (für alle automatisch bewerteten Fragen).
+    let mut mem_pairs: Vec<(bool, String)> = Vec::new();
+    for r in &results {
+        if let Some(ok) = r.correct {
+            let c = confs.and_then(|a| a.get(r.index)).and_then(Value::as_str).unwrap_or("");
+            record_question_history(&mut n.progress.seen_questions, r.index, ok, c, now);
+            mem_pairs.push((ok, c.to_string()));
+        }
+    }
+    if !mem_pairs.is_empty() && pending_ai.is_empty() {
+        let refs: Vec<(bool, &str)> = mem_pairs.iter().map(|(ok, c)| (*ok, c.as_str())).collect();
+        n.progress.memory = Some(update_memory(n.progress.memory.as_ref(), &refs, now));
+    }
+
     tl.updated = now.to_string();
     let grade = Grade { results, auto_correct, auto_total, pending_ai, score, passed };
     Ok(RecordOut { timeline: tl.to_value(), grade })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PretestOut {
+    pub timeline: Value,
+    pub correct: Option<bool>,
+    pub expected: String,
+    pub explain: String,
+}
+
+/// Wertet die kurze Einstiegsfrage (Pre-Test) vor dem Lesen aus und markiert sie als erledigt.
+pub fn record_pretest(tl: &Value, node: &str, answer: &Value, now: &str) -> Result<PretestOut, String> {
+    let mut tl = Timeline::parse(tl)?;
+    let i = tl.find(node).ok_or_else(|| format!("Knoten „{node}“ nicht gefunden."))?;
+    let n = &mut tl.nodes[i];
+    let Some(q) = n.pretest.clone() else {
+        return Err(format!("Knoten „{}“ hat keine Einstiegsfrage.", n.title));
+    };
+    let g = grade_one(0, &q, answer);
+    let explain = match &q {
+        Question::Choice { explain, .. }
+        | Question::Text { explain, .. }
+        | Question::Number { explain, .. }
+        | Question::Cloze { explain, .. } => explain.clone(),
+    };
+    n.progress.pretest_done = true;
+    tl.updated = now.to_string();
+    Ok(PretestOut { timeline: tl.to_value(), correct: g.correct, expected: g.expected, explain })
 }
 
 /// Übernimmt die Bewertung der KI (`check_lesson`): Quiz-Einzelnoten, Arbeitsblatt, `done`, Rückmeldung.

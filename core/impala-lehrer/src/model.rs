@@ -34,6 +34,13 @@ fn lenient_quiz<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Question>, D::Err
     })
 }
 
+fn opt_question<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Question>, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::Null => None,
+        v => Question::from_value(&v).ok(),
+    })
+}
+
 fn opt_text<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     Ok(match Value::deserialize(d)? {
         Value::String(s) if !s.trim().is_empty() => Some(s),
@@ -61,6 +68,10 @@ impl Timeline {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Theme {
@@ -68,6 +79,43 @@ pub struct Theme {
     pub css: String,
     #[serde(deserialize_with = "text")]
     pub accent: String,
+}
+
+/// Lernprofil & Material-Bindung des Zeitstrahls (gesetzt im Grill-Me-Interview oder per MCP).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Brief {
+    /// IDs der verknüpften Skript-/Notiz-Seiten aus der Bibliothek.
+    #[serde(deserialize_with = "lenient_vec")]
+    pub material_pages: Vec<String>,
+    /// Konkretes Lern- oder Klausurziel.
+    #[serde(deserialize_with = "text")]
+    pub goal: String,
+    /// Vorwissen / Einstiegsniveau.
+    #[serde(deserialize_with = "text")]
+    pub level: String,
+    /// Gewünschter Erklär- und Lernstil.
+    #[serde(deserialize_with = "text")]
+    pub style: String,
+    /// Darf Wikipedia für Historie und Bilder genutzt werden?
+    #[serde(default = "default_true")]
+    pub wiki: bool,
+    /// Freie Absprachen / Notizen aus Interview oder MCP-Agent.
+    #[serde(deserialize_with = "text")]
+    pub notes: String,
+}
+
+impl Default for Brief {
+    fn default() -> Self {
+        Brief {
+            material_pages: Vec::new(),
+            goal: String::new(),
+            level: String::new(),
+            style: String::new(),
+            wiki: true,
+            notes: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -83,6 +131,7 @@ pub struct Timeline {
     #[serde(deserialize_with = "text")]
     pub description: String,
     pub theme: Theme,
+    pub brief: Brief,
     /// `history` (Zeitachse mit Jahren, Standard) oder `path` (Lernpfad ohne Jahre).
     #[serde(deserialize_with = "text")]
     pub kind: String,
@@ -106,6 +155,7 @@ impl Default for Timeline {
             subject: String::new(),
             description: String::new(),
             theme: Theme::default(),
+            brief: Brief::default(),
             kind: String::new(),
             exam: String::new(),
             created: String::new(),
@@ -196,6 +246,9 @@ pub struct Node {
     pub svg: Option<String>,
     #[serde(deserialize_with = "lenient_vec")]
     pub sources: Vec<Source>,
+    /// Optionale kurze Einstiegsfrage vor dem Lesen (Pre-Testing-Effekt).
+    #[serde(default, deserialize_with = "opt_question", skip_serializing_if = "Option::is_none")]
+    pub pretest: Option<Question>,
     #[serde(deserialize_with = "lenient_quiz")]
     pub quiz: Vec<Question>,
     #[serde(deserialize_with = "opt_text", skip_serializing_if = "Option::is_none")]
@@ -370,10 +423,50 @@ impl Question {
 pub struct Progress {
     pub quiz: Option<QuizAttempt>,
     pub quiz_passed: bool,
+    pub pretest_done: bool,
     pub worksheet: WorksheetProgress,
     pub done: bool,
     #[serde(deserialize_with = "text")]
     pub feedback: String,
+    /// FSRS-inspiriertes Erinnerungsmodell für verblassende Meisterschaft.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory: Option<MemoryState>,
+    /// Verlauf je Frage im Pool (für Interleaving & Schwachstellen-Radar).
+    #[serde(deserialize_with = "lenient_vec", skip_serializing_if = "Vec::is_empty")]
+    pub seen_questions: Vec<QuestionHistory>,
+}
+
+/// FSRS-inspiriertes Erinnerungsmodell direkt am Knoten.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MemoryState {
+    /// Stabilität in Tagen (Zeit bis Erinnerungsstärke R auf 90 % sinkt).
+    pub stability: f64,
+    /// Schwierigkeit 1.0 (leicht) bis 10.0 (schwer).
+    pub difficulty: f64,
+    #[serde(deserialize_with = "text")]
+    pub last_review: String,
+    #[serde(deserialize_with = "text")]
+    pub next_review: String,
+    pub reps: u32,
+    pub lapses: u32,
+    /// Anzahl „sicher, aber falsch“-Ereignisse (Fehlkonzepte für das Schwachstellen-Radar).
+    pub misconceptions: u32,
+}
+
+/// Verlauf einer einzelnen Frage im Quiz-Pool eines Knotens.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuestionHistory {
+    pub index: usize,
+    pub attempts: u32,
+    pub correct_count: u32,
+    pub last_correct: bool,
+    /// `"sure"`, `"unsure"`, `"guess"` oder leer.
+    #[serde(deserialize_with = "text")]
+    pub last_confidence: String,
+    #[serde(deserialize_with = "text")]
+    pub last_at: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

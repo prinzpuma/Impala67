@@ -5023,6 +5023,32 @@ export function lehrerApplyEdit(tl, edit, now) {
 }
 
 /**
+ * Stellt eine gemischte Kurz-Auffrischung (Interleaving) für verblassende/schwache Knoten zusammen.
+ * @param {any} tl
+ * @param {string} now
+ * @param {number} max_questions
+ * @returns {any}
+ */
+export function lehrerBuildRefresh(tl, now, max_questions) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.lehrerBuildRefresh(retptr, addBorrowedObject(tl), ptr0, len0, max_questions);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Ausgabe für `read_timeline`: Überblick oder ein ganzer Knoten.
  * @param {any} tl
  * @param {string | null} [node]
@@ -5070,6 +5096,36 @@ export function lehrerListEntry(tl) {
 }
 
 /**
+ * Wertet die kurze Einstiegsfrage (Pre-Test) vor dem Lesen aus.
+ * @param {any} tl
+ * @param {string} node
+ * @param {any} answer
+ * @param {string} now
+ * @returns {any}
+ */
+export function lehrerRecordPretest(tl, node, answer, now) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(node, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.lehrerRecordPretest(retptr, addBorrowedObject(tl), ptr0, len0, addBorrowedObject(answer), ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Wertet einen Quiz-Versuch aus: `{ timeline, grade }`.
  * @param {any} tl
  * @param {string} node
@@ -5085,6 +5141,65 @@ export function lehrerRecordQuiz(tl, node, answers, now) {
         const ptr1 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len1 = WASM_VECTOR_LEN;
         wasm.lehrerRecordQuiz(retptr, addBorrowedObject(tl), ptr0, len0, addBorrowedObject(answers), ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Wertet einen Quiz-Versuch inkl. Konfidenz-Liste (`"sure"|"unsure"|"guess"`) aus.
+ * @param {any} tl
+ * @param {string} node
+ * @param {any} answers
+ * @param {any} confidences
+ * @param {string} now
+ * @returns {any}
+ */
+export function lehrerRecordQuizFull(tl, node, answers, confidences, now) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(node, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.lehrerRecordQuizFull(retptr, addBorrowedObject(tl), ptr0, len0, addBorrowedObject(answers), addBorrowedObject(confidences), ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Wertet eine gemischte Auffrischung aus und aktualisiert die FSRS-Werte der beteiligten Knoten.
+ * @param {any} tl
+ * @param {any} submissions
+ * @param {string} now
+ * @returns {any}
+ */
+export function lehrerRecordRefresh(tl, submissions, now) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.lehrerRecordRefresh(retptr, addBorrowedObject(tl), addBorrowedObject(submissions), ptr0, len0);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -5120,7 +5235,7 @@ export function lehrerToolDefs() {
 }
 
 /**
- * Anzeigedaten: `{ cols, lanes, nodes, edges, stats }`.
+ * Anzeigedaten: `{ cols, lanes, nodes, edges, stats, today }` (mit Frische zum Zeitpunkt `now`).
  * @param {any} tl
  * @returns {any}
  */
@@ -5128,6 +5243,30 @@ export function lehrerView(tl) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
         wasm.lehrerView(retptr, addBorrowedObject(tl));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * @param {any} tl
+ * @param {string} now
+ * @returns {any}
+ */
+export function lehrerViewAt(tl, now) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(now, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.lehrerViewAt(retptr, addBorrowedObject(tl), ptr0, len0);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -6445,7 +6584,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5602(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5710(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6491,7 +6630,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5602(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5710(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6583,8 +6722,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 213, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5546);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 215, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5654);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6611,14 +6750,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5602(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5602(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5710(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5710(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5546(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5654(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5546(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5654(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

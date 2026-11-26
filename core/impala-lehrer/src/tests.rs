@@ -405,3 +405,100 @@ fn zeitachse_jahre_straenge_und_klausur() {
     let cleared = edit(Some(p), json!({ "title": "Z", "nodes": [{ "id": "ohm", "year": null }] })).timeline;
     assert!(node(&cleared, "ohm").get("year").is_none());
 }
+
+#[test]
+fn brief_patch_und_describe() {
+    let tl = edit(
+        None,
+        json!({
+            "title": "E-Technik",
+            "brief": { "material_pages": ["p1", "p2", "p1"], "goal": "Klausur 1.3", "level": "Grundlagen", "wiki": false }
+        }),
+    )
+    .timeline;
+    // Partial-Patch: nur style und notes ändern, Rest bleibt erhalten.
+    let tl = edit(Some(tl), json!({ "title": "E-Technik", "brief": { "style": "visuell", "notes": "Viel Rechnen" } })).timeline;
+    let d = describe(&tl, None).unwrap();
+    assert_eq!(d["brief"]["material_pages"], json!(["p1", "p2"]));
+    assert_eq!(d["brief"]["goal"], "Klausur 1.3");
+    assert_eq!(d["brief"]["level"], "Grundlagen");
+    assert_eq!(d["brief"]["style"], "visuell");
+    assert_eq!(d["brief"]["wiki"], false);
+    assert_eq!(d["brief"]["notes"], "Viel Rechnen");
+}
+
+#[test]
+fn fsrs_verblassen_konfidenz_pretest_und_auffrischung() {
+    let tl = edit(
+        None,
+        json!({
+            "title": "E-Technik",
+            "exam": "2026-06-20",
+            "nodes": [
+                {
+                    "id": "ohm",
+                    "title": "Ohm",
+                    "year": 1827,
+                    "pretest": { "type": "number", "q": "U bei 2A, 5 Ohm?", "answer": 10, "unit": "V" },
+                    "quiz": [
+                        { "type": "number", "q": "Q1", "answer": 10 },
+                        { "type": "number", "q": "Q2", "answer": 20 }
+                    ]
+                },
+                {
+                    "id": "kirchhoff",
+                    "title": "Kirchhoff",
+                    "year": 1845,
+                    "parents": ["ohm"],
+                    "quiz": [
+                        { "type": "number", "q": "K1", "answer": 5 },
+                        { "type": "number", "q": "K2", "answer": 0 }
+                    ]
+                }
+            ]
+        }),
+    )
+    .timeline;
+
+    // 1. Pre-Test auswerten
+    let pt = record_pretest(&tl, "ohm", &json!(10), "2026-06-01T10:00:00Z").unwrap();
+    assert_eq!(pt.correct, Some(true));
+    let tl = pt.timeline;
+
+    // 2. Ohm sicher bestehen → frisch am Tag 1, verblasst nach 20 Tagen
+    let r = record_quiz_with_confidence(&tl, "ohm", &json!([10, 20]), &json!(["sure", "sure"]), "2026-06-01T10:05:00Z").unwrap();
+    assert!(r.grade.passed);
+    let tl = r.timeline;
+    let v_now = view_at(&tl, "2026-06-01T12:00:00Z");
+    assert_eq!(v_now["nodes"][0]["memory_state"], "fresh");
+    let v_later = view_at(&tl, "2026-06-25T12:00:00Z");
+    assert!(matches!(v_later["nodes"][0]["memory_state"].as_str(), Some("fading" | "due")));
+
+    // 3. Kirchhoff „sicher, aber falsch“ → sofort Schwachstelle (weak)
+    let r2 = record_quiz_with_confidence(&tl, "kirchhoff", &json!([99, 0]), &json!(["sure", "sure"]), "2026-06-02T10:00:00Z").unwrap();
+    let tl = r2.timeline;
+    let v_weak = view_at(&tl, "2026-06-25T12:00:00Z");
+    assert_eq!(v_weak["nodes"][1]["weak"], true);
+    assert_eq!(v_weak["today"]["weak_count"], 1);
+
+    // 4. Gemischte Kurz-Auffrischung zieht Fragen aus beiden Knoten (Interleaving)
+    let sess = build_refresh_session(&tl, "2026-06-25T12:00:00Z", 6).unwrap();
+    assert!(sess.node_count >= 2);
+    let subs: Vec<Value> = sess
+        .items
+        .iter()
+        .map(|it| {
+            let ans = match (it.node_id.as_str(), it.question_index) {
+                ("ohm", 0) => 10,
+                ("ohm", 1) => 20,
+                ("kirchhoff", 0) => 5,
+                _ => 0,
+            };
+            json!({ "node_id": it.node_id, "question_index": it.question_index, "answer": ans, "confidence": "sure" })
+        })
+        .collect();
+    let out = record_refresh(&tl, &Value::Array(subs), "2026-06-25T12:05:00Z").unwrap();
+    assert_eq!(out.correct_count, out.total_count);
+    let v_after = view_at(&out.timeline, "2026-06-25T12:06:00Z");
+    assert_eq!(v_after["nodes"][0]["memory_state"], "fresh");
+}

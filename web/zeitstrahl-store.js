@@ -94,6 +94,31 @@ export const ZS_STORE = {
 		try { await tx("readwrite", (st) => st.delete(id)); } catch {}
 		BUS.emit("zs:changed", id);
 	},
+	/** Exportiert einen einzelnen oder alle Zeitstrahlen als JSON-Text. */
+	exportJson(id) {
+		const list = id ? [this.getSync(id)].filter(Boolean) : this.all();
+		return JSON.stringify({ v: 1, exportedAt: now(), timelines: list }, null, 2);
+	},
+	/** Importiert eine JSON-Sicherung (einzelner Zeitstrahl oder { timelines: [...] }). */
+	async importJson(text) {
+		await load();
+		let parsed;
+		try { parsed = JSON.parse(String(text || "")); } catch { return { error: "Datei ist kein gültiges JSON." }; }
+		const items = Array.isArray(parsed?.timelines) ? parsed.timelines : (parsed && typeof parsed === "object" && parsed.title ? [parsed] : null);
+		if (!items || !items.length) return { error: "Keine Zeitstrahlen in der Datei gefunden." };
+		let added = 0, updated = 0;
+		for (const raw of items) {
+			if (!raw || typeof raw !== "object" || !String(raw.title || "").trim()) continue;
+			const id = String(raw.id || "").trim() || ("zs-" + String(raw.title).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "neu");
+			const tl = { v: 1, ...raw, id, updated: raw.updated || now() };
+			if (cache.has(id)) updated++; else added++;
+			cache.set(id, tl);
+			await persist(tl);
+		}
+		if (!added && !updated) return { error: "Keine gültigen Zeitstrahlen gefunden." };
+		BUS.emit("zs:changed", "import");
+		return { ok: true, added, updated };
+	},
 	/** Nur für Tests: Speicher leeren. */
 	_reset() { cache = new Map(); loading = Promise.resolve(cache); },
 };
@@ -104,8 +129,12 @@ const safe = (fn) => { try { return fn(); } catch (err) { return { error: String
 
 export const ZS_CORE = {
 	applyEdit: (tl, edit) => safe(() => CORE.lehrerApplyEdit(tl || null, edit, now())),
-	view: (tl) => CORE.lehrerView(tl),
-	recordQuiz: (tl, node, answers) => safe(() => CORE.lehrerRecordQuiz(tl, node, answers, now())),
+	view: (tl) => (CORE.lehrerViewAt ? CORE.lehrerViewAt(tl, now()) : CORE.lehrerView(tl)),
+	recordQuiz: (tl, node, answers, confidences) => safe(() =>
+		CORE.lehrerRecordQuizFull ? CORE.lehrerRecordQuizFull(tl, node, answers, confidences || null, now()) : CORE.lehrerRecordQuiz(tl, node, answers, now())),
+	recordPretest: (tl, node, answer) => safe(() => CORE.lehrerRecordPretest(tl, node, answer, now())),
+	buildRefresh: (tl, max = 6) => safe(() => CORE.lehrerBuildRefresh(tl, now(), max)),
+	recordRefresh: (tl, submissions) => safe(() => CORE.lehrerRecordRefresh(tl, submissions, now())),
 	applyCheck: (tl, check) => safe(() => CORE.lehrerApplyCheck(tl, check, now())),
 	describe: (tl, node) => safe(() => CORE.lehrerDescribe(tl, node || null)),
 	listEntry: (tl) => CORE.lehrerListEntry(tl),

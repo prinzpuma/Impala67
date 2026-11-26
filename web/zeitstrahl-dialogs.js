@@ -48,13 +48,14 @@ const segHtml = (name, value, items) => `<div class="zs-seg" role="radiogroup">$
 	`<span>${icon(ic)}<b>${esc(label)}</b><small>${esc(hint)}</small></span></label>`).join("")}</div>`;
 
 // ---------- Material-Auswahl (Seiten und Hefte des aktuellen Bereichs) ----------
-function materialRows(parentId, depth) {
+function materialRows(parentId, depth, selected) {
 	const kids = STATE.childrenOf?.(parentId || null) || [];
 	return kids.filter((pg) => !STATE.isPageArchived?.(pg)).map((pg) => {
-		const sub = depth < 2 ? materialRows(pg.id, depth + 1) : "";
+		const sub = depth < 2 ? materialRows(pg.id, depth + 1, selected) : "";
 		const kind = pg.kind === "heft" ? "notebook" : sub ? "folder" : "note";
+		const checked = selected?.has(pg.id) ? " checked" : "";
 		const row = `<label class="zs-mat-row" style="--depth:${depth}" data-title="${esc(String(pg.title || "").toLowerCase())}">` +
-			`<input type="checkbox" value="${esc(pg.id)}">${icon(kind)}<span>${esc(pg.title || "Ohne Titel")}</span></label>`;
+			`<input type="checkbox" value="${esc(pg.id)}"${checked}>${icon(kind)}<span>${esc(pg.title || "Ohne Titel")}</span></label>`;
 		return row + sub;
 	}).join("");
 }
@@ -83,17 +84,35 @@ function chosenPages(box) {
 	return [...box.querySelectorAll(".zs-mat-list input:checked")].map((x) => STATE.findPage?.(x.value)).filter(Boolean);
 }
 
+function briefMaterialText(tl, pagesOverride) {
+	const pages = pagesOverride?.length
+		? pagesOverride
+		: (tl?.brief?.material_pages || []).map((id) => STATE.findPage?.(id)).filter(Boolean);
+	if (!pages.length) return "";
+	return `Verknüpftes Material (lies es mit read_pages, IDs in Klammern):\n${pages.slice(0, 60).map((p) => `- ${p.title} (${p.id})`).join("\n")}`;
+}
+
+function briefMetaLines(tl) {
+	const b = tl?.brief || {};
+	return [
+		b.goal ? `Lernziel: ${b.goal}` : "",
+		b.level ? `Vorwissen: ${b.level}` : "",
+		b.style ? `Gewünschter Stil: ${b.style}` : "",
+		b.notes ? `Absprachen: ${b.notes}` : "",
+	].filter(Boolean);
+}
+
 // ---------- Gerüst-Auftrag ----------
-export function skeletonPrompt(tl, { pages = [], wiki = true, focus = "" } = {}) {
+export function skeletonPrompt(tl, { pages = [], wiki, focus = "" } = {}) {
 	const history = tl.kind !== "path";
-	const mat = pages.length
-		? `Material (lies es mit read_pages, IDs in Klammern):\n${pages.slice(0, 60).map((p) => `- ${p.title} (${p.id})`).join("\n")}`
-		: "Such dir das passende Material selbst (search, read_pages).";
+	const useWiki = wiki !== undefined ? !!wiki : tl.brief?.wiki !== false;
+	const mat = briefMaterialText(tl, pages) || "Such dir das passende Material selbst (search, read_pages).";
 	return [
 		`Baue bitte das Gerüst für meinen KI-Zeitstrahl „${tl.title}“${tl.subject ? ` (Fach: ${tl.subject})` : ""}.`,
 		mat,
-		history && wiki ? "Nutze Wikipedia (wikipedia) für die historische Reihenfolge der Entdeckungen." : "",
-		history && wiki
+		...briefMetaLines(tl),
+		history && useWiki ? "Nutze Wikipedia (wikipedia) für die historische Reihenfolge der Entdeckungen." : "",
+		history && useWiki
 			? "WICHTIG: Verwende für alle Inhalte ausschließlich deine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen und keine erfundenen Fakten."
 			: "WICHTIG: Verwende für alle Inhalte ausschließlich deine eigenen Notizen (search, read_pages) — kein allgemeines Vorwissen, kein Wikipedia und keine erfundenen Fakten.",
 		focus ? `Mein Schwerpunkt: ${focus}` : "",
@@ -108,17 +127,40 @@ export function skeletonPrompt(tl, { pages = [], wiki = true, focus = "" } = {})
 
 export function fillPrompt(tl, nodes) {
 	const list = nodes.slice(0, 4).map((n) => `„${n.title}“`).join(", ");
-	return `Arbeite bitte im Zeitstrahl „${tl.title}“ diese Entwurfs-Lektionen aus: ${list}. ` +
-		"Je Lektion mit edit_timeline: body (spannende Story als Einstieg, dann der Klausurstoff mit Formeln/Notation aus meinen Skripten), " +
-		"images (Wikipedia-Bilder), sources (Skriptseiten und Wikipedia) und quiz (3–5 Kontrollfragen, gemischte Typen). " +
-		"WICHTIG: Verwende für alle Inhalte, Fakten, Formeln, Bilder und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen. " +
-		"Titel, Jahr, Strang und Verbindungen bleiben, wie sie sind.";
+	const useWiki = tl?.brief?.wiki !== false;
+	const mat = briefMaterialText(tl);
+	const meta = briefMetaLines(tl);
+	return [
+		`Arbeite bitte im Zeitstrahl „${tl.title}“ diese Entwurfs-Lektionen aus: ${list}.`,
+		mat,
+		...meta,
+		"Je Lektion mit edit_timeline: pretest (1 kurze Einstiegsfrage vor dem Lesen zum Vorwissen-Aktivieren), " +
+			"body (spannende Story als Einstieg, dann der Klausurstoff klar gegliedert mit Formeln/Notation aus meinen Skripten), " +
+			(useWiki ? "images (Wikipedia-Bilder), sources (Skriptseiten und Wikipedia) " : "sources (Skriptseiten) ") +
+			"und quiz (Fragen-Pool mit 6–8 abwechslungsreichen Fragen inkl. Anwendungs-/Transferfragen und kurzer explain-Begründung).",
+		useWiki
+			? "WICHTIG: Verwende für alle Inhalte, Fakten, Formeln, Bilder und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen."
+			: "WICHTIG: Verwende für alle Inhalte, Fakten, Formeln und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) — kein allgemeines Vorwissen und kein Wikipedia.",
+		"Titel, Jahr, Strang und Verbindungen bleiben, wie sie sind.",
+	].filter(Boolean).join("\n\n");
+}
+
+export function downloadJson(filename, text) {
+	const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url; a.download = filename;
+	document.body.appendChild(a); a.click(); a.remove();
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ---------- Zeitstrahl anlegen / bearbeiten ----------
 export function openTimelineDialog(tl, { onOpen } = {}) {
 	const isNew = !tl;
 	const kind = tl?.kind === "path" ? "path" : "history";
+	const brief = tl?.brief || {};
+	const selectedPages = new Set(brief.material_pages || []);
+	const wikiChecked = brief.wiki !== false;
 	const html =
 		`<div class="zs-dlg-head"><h3>${isNew ? "Neuer Zeitstrahl" : "Zeitstrahl bearbeiten"}</h3>` +
 		`<button type="button" class="modal-x" data-zsdlg-close aria-label="Schließen">${icon("x")}</button></div>` +
@@ -130,28 +172,48 @@ export function openTimelineDialog(tl, { onOpen } = {}) {
 		`<div class="zs-dlg-grid">` +
 		`<label>Klausur am<input type="date" name="exam" value="${esc(tl?.exam || "")}"></label>` +
 		`<label>Schwerpunkt<input name="description" value="${esc(tl?.description || "")}" placeholder="Netzwerkanalyse, Operationsverstärker" autocomplete="off"></label></div>` +
-		(isNew
-			? `<div class="zs-dlg-field"><span class="zs-dlg-label">Material <span class="zs-mat-count hint"></span></span>` +
-				`<input class="zs-mat-filter" placeholder="Seiten und Hefte filtern" autocomplete="off">` +
-				`<div class="zs-mat-list">${materialRows(null, 0) || `<p class="hint">Keine Seiten im aktuellen Bereich.</p>`}</div>` +
-				`<label class="zs-check"><input type="checkbox" name="wiki" checked> Wikipedia für Geschichte und Bilder nutzen</label></div>`
-			: "") +
+		`<div class="zs-dlg-grid">` +
+		`<label>Lernziel<input name="goal" value="${esc(brief.goal || "")}" placeholder="z. B. Klausur sicher bestehen / 1,3" autocomplete="off"></label>` +
+		`<label>Vorwissen & Stil<input name="level" value="${esc(brief.level || "")}" placeholder="z. B. Grundlagen da, viel rechnen" autocomplete="off"></label></div>` +
+		`<div class="zs-dlg-field"><span class="zs-dlg-label">Verknüpftes Material <span class="zs-mat-count hint"></span></span>` +
+		`<input class="zs-mat-filter" placeholder="Seiten und Hefte filtern" autocomplete="off">` +
+		`<div class="zs-mat-list">${materialRows(null, 0, selectedPages) || `<p class="hint">Keine Seiten im aktuellen Bereich.</p>`}</div>` +
+		`<label class="zs-check"><input type="checkbox" name="wiki"${wikiChecked ? " checked" : ""}> Wikipedia für Geschichte und Bilder nutzen</label></div>` +
 		`<div class="modal-actions">` +
 		(isNew
 			? `<button type="button" data-zsdlg="empty">Leer anlegen</button><button type="button" class="primary" data-zsdlg="build">${lead("sparkles")}Gerüst bauen lassen</button>`
-			: `<button type="button" class="danger zs-dlg-left" data-zsdlg="delete">${lead("trash")}Löschen</button><button type="button" data-zsdlg-close>Abbrechen</button><button type="button" class="primary" data-zsdlg="save">Speichern</button>`) +
+			: `<button type="button" class="danger zs-dlg-left" data-zsdlg="delete">${lead("trash")}Löschen</button><button type="button" data-zsdlg="export">${lead("download")}Export</button><button type="button" data-zsdlg-close>Abbrechen</button><button type="button" class="primary" data-zsdlg="save">Speichern</button>`) +
 		`</div>`;
 	const dlg = openDialog(html, "zs-dlg-timeline");
 	if (!dlg) return;
 	const { box, close } = dlg;
-	if (isNew) wireMaterial(box);
+	wireMaterial(box);
 	box.querySelector('[name="title"]').focus();
 	const val = (n) => String(box.querySelector(`[name="${n}"]`)?.value || "").trim();
-	const fields = () => ({ subject: val("subject"), description: val("description"), exam: val("exam"), kind: box.querySelector('[name="kind"]:checked')?.value || "history" });
+	const fields = () => {
+		const pages = chosenPages(box);
+		return {
+			subject: val("subject"),
+			description: val("description"),
+			exam: val("exam"),
+			kind: box.querySelector('[name="kind"]:checked')?.value || "history",
+			brief: {
+				material_pages: pages.map((p) => p.id),
+				goal: val("goal"),
+				level: val("level"),
+				wiki: !!box.querySelector('[name="wiki"]')?.checked,
+			},
+		};
+	};
 
 	box.addEventListener("click", async (e) => {
 		const act = e.target.closest("[data-zsdlg]")?.dataset.zsdlg;
 		if (!act) return;
+		if (act === "export") {
+			downloadJson(`${tl.id || "zeitstrahl"}.json`, ZS_STORE.exportJson(tl.id));
+			U.toast?.("Zeitstrahl als JSON exportiert.", "success");
+			return;
+		}
 		if (act === "delete") {
 			const ok = await U.confirm(`„${tl.title}“ mit allen Lektionen und deinem Fortschritt löschen? Das lässt sich nicht rückgängig machen.`, { title: "Zeitstrahl löschen", ok: "Löschen", danger: true });
 			if (!ok) return;
@@ -163,16 +225,16 @@ export function openTimelineDialog(tl, { onOpen } = {}) {
 		const title = val("title");
 		if (!title) { U.toast?.("Gib dem Zeitstrahl einen Namen.", "error"); box.querySelector('[name="title"]').focus(); return; }
 		if (isNew && ZS_STORE.getSync(title)) { U.toast?.(`„${title}“ gibt es schon.`, "error"); return; }
-		const edit = isNew ? { title, ...fields() } : { title: tl.title, new_title: title, ...fields() };
+		const f = fields();
+		const edit = isNew ? { title, ...f } : { title: tl.title, new_title: title, ...f };
 		const out = ZS_CORE.applyEdit(isNew ? null : tl, edit);
 		if (out.error) { U.toast?.(out.error, "error"); return; }
 		if (isNew && ZS_STORE.getSync(out.timeline.id)) { U.toast?.(`„${title}“ gibt es schon.`, "error"); return; }
-		const pages = isNew ? chosenPages(box) : [];
-		const wiki = !!box.querySelector('[name="wiki"]')?.checked;
+		const pages = chosenPages(box);
 		await ZS_STORE.put(out.timeline);
 		close();
 		onOpen?.(out.timeline.id);
-		if (act === "build") await sendAi(skeletonPrompt(out.timeline, { pages, wiki, focus: fields().description }));
+		if (act === "build") await sendAi(skeletonPrompt(out.timeline, { pages, wiki: f.brief.wiki, focus: f.description }));
 	});
 }
 

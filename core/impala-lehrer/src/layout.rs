@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use impala_sort::SortExt;
 use serde_json::{Value, json};
 
+use crate::memory::{is_weak, memory_badge, retrievability};
 use crate::model::{Node, Question, Timeline, WsStatus};
+use crate::session::today_plan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -210,8 +212,14 @@ pub fn is_draft(n: &Node) -> bool {
     n.body.trim().is_empty() && n.quiz.is_empty() && n.worksheet.is_none() && n.images.is_empty() && n.svg.is_none()
 }
 
-fn entry(n: &Node, state: State, (col, lane): (usize, usize)) -> Value {
+fn entry(n: &Node, state: State, (col, lane): (usize, usize), now: &str) -> Value {
     let answered = n.progress.quiz.as_ref().map_or(0, |q| q.results.len());
+    let mastered = state == State::Mastered;
+    let freshness = if mastered {
+        n.progress.memory.as_ref().map_or(100, |m| (retrievability(m, now) * 100.0).round() as u32)
+    } else {
+        0
+    };
     json!({
         "id": n.id,
         "title": n.title,
@@ -223,6 +231,10 @@ fn entry(n: &Node, state: State, (col, lane): (usize, usize)) -> Value {
         "col": col,
         "lane": lane,
         "state": state.as_str(),
+        "freshness": freshness,
+        "memory_state": memory_badge(n, mastered, now),
+        "weak": is_weak(n),
+        "has_pretest": n.pretest.is_some(),
         "quiz": { "total": n.quiz.len(), "answered": answered, "passed": n.progress.quiz_passed },
         "worksheet": n.worksheet.as_ref().map(|_| n.progress.worksheet.status.as_str()),
     })
@@ -235,12 +247,12 @@ fn counts(tl: &Timeline, states: &[State]) -> Value {
     json!({ "total": states.len(), "mastered": mastered, "next": next, "drafts": drafts })
 }
 
-/// Anzeigedaten: Spalten/Spuren, Knoten mit Zustand, Kanten und Zähler.
-pub fn view_of(tl: &Timeline) -> Value {
+/// Anzeigedaten: Spalten/Spuren, Knoten mit Zustand, Frische, Kanten, Zähler und Tagesplan.
+pub fn view_of_at(tl: &Timeline, now: &str) -> Value {
     let parents = parent_indices(tl);
     let st = states(tl, &parents);
     let lay = layout(tl, &parents);
-    let nodes: Vec<Value> = (0..tl.nodes.len()).map(|i| entry(&tl.nodes[i], st[i], lay.pos[i])).collect();
+    let nodes: Vec<Value> = (0..tl.nodes.len()).map(|i| entry(&tl.nodes[i], st[i], lay.pos[i], now)).collect();
     let edges: Vec<Value> = (0..tl.nodes.len())
         .flat_map(|i| parents[i].iter().map(move |&p| (p, i)))
         .map(|(p, i)| json!({ "from": tl.nodes[p].id, "to": tl.nodes[i].id }))
@@ -253,25 +265,31 @@ pub fn view_of(tl: &Timeline) -> Value {
         "nodes": nodes,
         "edges": edges,
         "stats": counts(tl, &st),
+        "today": today_plan(tl, now),
     })
 }
 
-/// Wie [`view_of`], aber nur der Eintrag eines Knotens (nach Position).
+/// Wie [`view_of_at`], aber nur der Eintrag eines Knotens (nach Position).
 pub fn view_entry(tl: &Timeline, idx: usize) -> Value {
     let parents = parent_indices(tl);
     let st = states(tl, &parents);
     let lay = layout(tl, &parents);
-    entry(&tl.nodes[idx], st[idx], lay.pos[idx])
+    entry(&tl.nodes[idx], st[idx], lay.pos[idx], "")
+}
+
+/// `view_at`: mit aktuellem Zeitstempel für Frische & Klausur-Tagesplan.
+pub fn view_at(tl: &Value, now: &str) -> Value {
+    match Timeline::parse(tl) {
+        Ok(t) => view_of_at(&t, now),
+        Err(_) => {
+            json!({ "cols": 0, "lanes": 0, "kind": "history", "exam": "", "nodes": [], "edges": [], "stats": { "total": 0, "mastered": 0, "next": 0, "drafts": 0 }, "today": {} })
+        }
+    }
 }
 
 /// `view`: bei unlesbarem Zeitstrahl eine leere Ansicht statt eines Fehlers.
 pub fn view(tl: &Value) -> Value {
-    match Timeline::parse(tl) {
-        Ok(t) => view_of(&t),
-        Err(_) => {
-            json!({ "cols": 0, "lanes": 0, "kind": "history", "exam": "", "nodes": [], "edges": [], "stats": { "total": 0, "mastered": 0, "next": 0, "drafts": 0 } })
-        }
-    }
+    view_at(tl, "")
 }
 
 /// Ausgabe für das KI-Lesewerkzeug `read_timeline`: Überblick, oder ein ganzer Knoten.
@@ -307,6 +325,8 @@ pub fn describe(tl: &Value, node: Option<&str>) -> Result<Value, String> {
             "description": tl.description,
             "kind": if tl.is_path() { "path" } else { "history" },
             "exam": tl.exam,
+            "brief": tl.brief,
+            "theme": { "accent": tl.theme.accent, "has_css": !tl.theme.css.trim().is_empty() },
             "stats": counts(&tl, &st),
             "nodes": nodes,
         }));

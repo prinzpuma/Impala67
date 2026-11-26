@@ -34,6 +34,7 @@ struct Patch {
     images: Option<Vec<Image>>,
     svg: Option<Option<String>>,
     sources: Option<Vec<Source>>,
+    pretest: Option<Option<Question>>,
     quiz: Option<Vec<Question>>,
     worksheet: Option<Option<String>>,
     deck: Option<Option<String>>,
@@ -139,6 +140,16 @@ fn parse_patch(v: &Value, k: usize) -> Result<Patch, String> {
                 .filter(|s| !s.reference.is_empty())
                 .collect(),
         );
+    }
+    if let Some(pt) = o.get("pretest") {
+        if pt.is_null() {
+            p.pretest = Some(None);
+        } else {
+            let q = Question::from_value(pt)
+                .and_then(|q| q.validate().map(|()| q))
+                .map_err(|e| format!("edit_timeline: {ctx}„pretest“: {e}"))?;
+            p.pretest = Some(Some(q));
+        }
     }
     if let Some(items) = list(o, "quiz", &ctx)? {
         let mut qs = Vec::new();
@@ -249,8 +260,40 @@ pub fn apply_edit(tl: Option<Value>, edit: &Value, now: &str) -> Result<EditOut,
         }
         t.exam = d.to_string();
     }
-    if let Some(a) = text_field(o, "accent", "")?.map(|s| s.trim().to_string()).filter(|a| valid_accent(a)) {
-        t.theme.accent = a;
+    if let Some(a) = o.get("accent") {
+        match a {
+            Value::Null => t.theme.accent.clear(),
+            Value::String(s) if s.trim().is_empty() => t.theme.accent.clear(),
+            Value::String(s) if valid_accent(s.trim()) => t.theme.accent = s.trim().to_string(),
+            _ => {}
+        }
+    }
+    if let Some(b) = o.get("brief").filter(|v| !v.is_null()) {
+        let Some(bo) = b.as_object() else {
+            return Err("edit_timeline: „brief“ muss ein Objekt sein.".into());
+        };
+        if let Some(s) = text_field(bo, "goal", "brief: ")? {
+            t.brief.goal = s;
+        }
+        if let Some(s) = text_field(bo, "level", "brief: ")? {
+            t.brief.level = s;
+        }
+        if let Some(s) = text_field(bo, "style", "brief: ")? {
+            t.brief.style = s;
+        }
+        if let Some(s) = text_field(bo, "notes", "brief: ")? {
+            t.brief.notes = s;
+        }
+        if let Some(w) = bo.get("wiki").and_then(Value::as_bool) {
+            t.brief.wiki = w;
+        }
+        if let Some(pages) = list(bo, "material_pages", "brief: ")? {
+            let mut ids: Vec<String> = Vec::new();
+            for p in pages.iter().filter_map(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+                push_unique(&mut ids, p);
+            }
+            t.brief.material_pages = ids;
+        }
     }
 
     let mut removed: Vec<String> = Vec::new();
@@ -398,6 +441,12 @@ fn apply_patch(n: &mut Node, p: Patch) {
     }
     if let Some(v) = p.deck {
         n.deck = v;
+    }
+    if let Some(pt) = p.pretest {
+        if pt != n.pretest {
+            n.progress.pretest_done = false;
+        }
+        n.pretest = pt;
     }
     if let Some(q) = p.quiz {
         if q != n.quiz {

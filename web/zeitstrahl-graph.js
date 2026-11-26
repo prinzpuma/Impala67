@@ -90,21 +90,23 @@ export function graphHtml(v, { width, zoom }) {
 			return `<line class="zs-tick" x1="${x}" y1="${lineY - 4}" x2="${x}" y2="${lineY + 4}"/><text class="zs-tick-txt" x="${x}" y="${h - 8}" text-anchor="middle">${esc(fmtYear(y))}</text>`;
 		}).join("")
 		: "";
+	const memCls = (n) => n.memory_state && n.memory_state !== "fresh" ? ` mem-${esc(n.memory_state)}` : "";
 	const stems = labeled.map((p) => {
 		const len = STEM + p.row * ROW_H;
 		const y2 = p.side === "up" ? lineY - len : lineY + len;
-		return `<line class="zs-stem is-${esc(p.n.state)}" x1="${p.x}" y1="${lineY}" x2="${p.x}" y2="${y2}"/>`;
+		return `<line class="zs-stem is-${esc(p.n.state)}${memCls(p.n)}" x1="${p.x}" y1="${lineY}" x2="${p.x}" y2="${y2}"/>`;
 	}).join("");
 	const dots = labeled.map((p) =>
-		`<circle class="zs-dotmark is-${esc(p.n.state)}" cx="${p.x}" cy="${lineY}" r="${p.n.state === "next" ? 8 : 6}"/>` +
+		`<circle class="zs-dotmark is-${esc(p.n.state)}${memCls(p.n)}" cx="${p.x}" cy="${lineY}" r="${p.n.state === "next" ? 8 : 6}"/>` +
 		(p.n.state === "next" ? `<circle class="zs-halo" cx="${p.x}" cy="${lineY}" r="15"/>` : "")).join("");
 	const labels = labeled.map((p) => {
 		const len = STEM + p.row * ROW_H;
 		// Oben am unteren Rand ausgerichtet (wächst nach oben), unten am oberen.
 		const pos = p.side === "up" ? `bottom:${h - (lineY - len) + 2}px` : `top:${lineY + len + 2}px`;
 		const when = history ? fmtYear(p.n.year) : `${labeled.indexOf(p) + 1}.`;
-		return `<button type="button" class="zs-mark is-${esc(p.n.state)}${p.n.draft ? " is-draft" : ""} ${p.side}" data-zsnode="${esc(p.n.id)}" ` +
-			`style="left:${p.x - LABEL_W / 2}px;${pos};width:${LABEL_W}px" title="${esc(p.n.title)}${p.n.summary ? " – " + esc(p.n.summary) : ""}">` +
+		const freshHint = p.n.state === "mastered" && p.n.freshness ? ` · Frische ${p.n.freshness}%` : "";
+		return `<button type="button" class="zs-mark is-${esc(p.n.state)}${memCls(p.n)}${p.n.draft ? " is-draft" : ""} ${p.side}" data-zsnode="${esc(p.n.id)}" ` +
+			`style="left:${p.x - LABEL_W / 2}px;${pos};width:${LABEL_W}px" title="${esc(p.n.title)}${p.n.summary ? " – " + esc(p.n.summary) : ""}${freshHint}">` +
 			`<b>${esc(when)}</b><span>${esc(p.n.title)}</span></button>`;
 	}).join("");
 

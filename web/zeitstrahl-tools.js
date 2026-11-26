@@ -20,10 +20,17 @@ async function readTimeline(a) {
 }
 
 async function editTimeline(a) {
-	const { dry_run: dryRun, ...edit } = a;
+	const { dry_run: dryRun, delete: remove, ...edit } = a;
 	if (!String(edit.title || "").trim()) return { error: "edit_timeline: title fehlt." };
 	await ZS_STORE.load();
 	const before = ZS_STORE.getSync(edit.title);
+	if (remove) {
+		if (!before) return { error: `edit_timeline: Zeitstrahl „${edit.title}“ nicht gefunden.` };
+		const summary = { ok: true, deleted: true, timeline: before.title, id: before.id, nodes: (before.nodes || []).length };
+		if (dryRun) return { ...summary, dryRun: true };
+		await ZS_STORE.remove(before.id);
+		return summary;
+	}
 	const out = ZS_CORE.applyEdit(before, edit);
 	if (out.error) return out;
 	const summary = { ok: true, timeline: out.timeline.title, id: out.timeline.id, created: !before, added: out.added, updated: out.updated, removed: out.removed, nodes: out.timeline.nodes.length, ...(out.warnings?.length ? { warnings: out.warnings } : {}) };
