@@ -88,6 +88,21 @@ Datensatz-Inhalt: page.create/patch/append/rename/move, card.create (LaTeX, Unic
 * **Simulator** in `benchmark_agent.py` an die App angeglichen (Meldungen, Schleifenschutz, Anstoß bei leerer Antwort, „Heftseite als Bild empfangen.“, 12 Schritte, Zusatzfelder werden ignoriert). `--tools-from-git HEAD` misst mit den alten Beschreibungen.
 * **Messung Basismodell (je 15 × 3):** alte Beschreibungen 24/45 bzw. 31/45 (zwei Durchgänge), neue 31/45 (8/15 stabil). Tendenz positiv, aber die Streuung zwischen Durchgängen (±7) ist so groß wie der Effekt. Deutlich besser: R3 Patch, R6 Vergleichsseite, V2 Formeln. Offen: Kartenschleifen (R1/R10/V5), zu kurze Kartenfragen, behauptete Erfolge nach gescheitertem `change`.
 
+### Phase 7: v4-Finetune (Lehrer-Trajektorien) & Abgleich mit `gemma.ai/tuning/`
+* **Setup (`e5003a0`):** 66 neue Aufgaben (`tasks_v4/`, natürliche Sprache, `leak_filter.mjs`) mit Haiku als Lehrer durchgespielt, Qwen3.5-4B per QLoRA trainiert (`r=32` inkl. Gated-DeltaNet, 3 Epochen, `lr=1e-4`, Batch 8, Colab `save_strategy="no"`).
+* **Ergebnis `ai-bench`:** Untrainiertes Qwen3.5-4B **83/85 %** → v4-Finetune **70/59 %** (wieder schlechter als das Basismodell).
+* **Diagnose (Abgleich mit `gemma.ai/tuning/` Best Practices):**
+  1. **Kein Replay-Mix (0 % statt 5–15 %):** `merge_dataset.mjs` enthielt nur Impala67-Tool-Trajektorien. Ohne 5–15 % allgemeine Konversationsdaten verliert das Modell allgemeine Fähigkeiten (*Catastrophic Forgetting*).
+  2. **Zu kleiner Datensatz + zu starkes Training ohne Best-Checkpoint:** Deutlich unter den für LoRA SFT empfohlenen **500–5.000 Beispielen**, dazu `r=32`, Batch 8 (statt 16–32), 3 Epochen und im Colab-Notebook `save_strategy="no"` (kein Auswählen des niedrigsten `eval_loss`, stattdessen Overfitting bis Epoche 3).
+  3. **Distribution Shift durch fremden Lehrer:** Ein bereits starkes Basismodell (83/85 %) mit wenigen synthetischen Trajektorien eines anderen Modells (Haiku) per SFT zu überschreiben, erzwingt fremde Formulierungs-/Denkmuster statt eigene Stärken zu schärfen.
+  4. **`fp16` auf Colab-T4:** Ältere GPUs fallen auf `fp16` zurück; `bfloat16` ist deutlich stabiler.
+* **Neue Strategie für Datengenerierung & Training 5 (Qwen 3.5 / Gemma 4):**
+  1. **Mehr Aufgaben sammeln** (Ziel **500–5.000** vielfältige Beispiele, mind. 50 % mit Thinking-Traces).
+  2. **On-Policy generieren + Claude als Denkfehler-Filter:** Das *Zielmodell selbst* pro Aufgabe 4–8× mit Sampling laufen lassen und per `task_helpers.mjs` vorfiltern. **Claude prüft anschließend gezielt auf Denkfehler** (Zufallstreffer mit falscher Begründung, unnötige Tool-Calls, Logikfehler) – sortiert schlechte Läufe aus oder korrigiert nur minimal, ohne den Stil des Zielmodells komplett umzuschreiben.
+  3. **DPO / GRPO statt reinem Fremd-SFT:** Bestandene, von Claude abgesegnete Eigen-Läufe = `chosen`; Läufe mit Denk-/Tool-Fehlern = `rejected` (für DPO) bzw. automatischer Benchmark-Reward (für GRPO).
+  4. **Replay & Hyperparameter:** **5–15 % allgemeine Chat-Daten** beimischen; `r=16`, `lr=1e-4`, `1–2` Epochen, effektive Batch-Size `16–32`, `bfloat16` + PyTorch SDPA, `load_best_model_at_end=True` anhand `eval_loss`.
+  5. **Falls Wechsel auf Gemma 4 (E4B/12B):** Stop-Token `<turn|>` (ID `106`) zusätzlich zu `<eos>` beachten, PyTorch SDPA statt FlashAttention-2 (Head-Dim 512), bei E2B/E4B Per-Layer-Embeddings & bei 26B-MoE Router einfrieren.
+
 ---
 
 ## 3. Aktueller Status & Nächste Schritte
@@ -97,8 +112,8 @@ Datensatz-Inhalt: page.create/patch/append/rename/move, card.create (LaTeX, Unic
 - [x] Baseline des un-finetunten Basismodells dokumentiert (66,7 %).
 - [x] Phase-4-Korrekturen umgesetzt; `check_dataset.py` besteht für alle Beispiele (1.500–3.100 Tokens).
 - [x] Drive-Ordner `Meine Ablage/Impala67-Training/` mit `chat_format.py`, `generate_dataset.py`, `tool_defs.json` angelegt. Colab-Zelle 0 bindet Drive ein, kopiert sie und erzeugt den Datensatz selbst (fester Seed → identisch zur lokalen Prüfung). Nach Änderungen an diesen drei Dateien die Drive-Kopien ersetzen.
-- [ ] **Nächster Schritt:** Lokal `python check_dataset.py` (braucht `pip install transformers jinja2`), dann in Colab alle Zellen ausführen. Zelle 5 (Kurztest) muss einen `page.patch`-Aufruf zeigen.
 - [x] Finetune 2 trainiert und mit `benchmark_agent.py` gemessen: schlechter als das Basismodell (siehe Phase 5) → **nicht verwenden**.
 - [x] **Option A (App):** Tool-Beschreibungen, Fehlermeldungen und Schleifenschutz umgesetzt (Phase 6).
+- [x] **v4-Finetune** mit Haiku-Lehrerdaten getestet (`ai-bench` 83/85 % → 70/59 %, siehe Phase 7) → **nicht verwenden**.
 - [ ] **Ehrlichkeit:** Endet ein Lauf nach einem gescheiterten `change` ohne späteren Erfolg, behauptet das Modell oft trotzdem „erstellt“ – die App sollte das sichtbar markieren.
-- [ ] **Option B (Training 3):** Trainingsdaten aus echten Läufen statt synthetisch: viele Aufgaben auf echten Daten mit dem Basismodell laufen lassen, nur bestandene Verläufe behalten (inkl. vollem Thinking und Bildern) und darauf trainieren (Rejection Sampling / Self-Distillation) – erhält Denkstil und Vision.
+- [ ] **Training 5 (On-Policy + Claude-Denkfehler-Filter + Replay):** 500+ Aufgaben mit dem Zielmodell selbst samplen, von Claude auf Denkfehler filtern lassen, **5–15 % Replay-Daten** beimischen, `r=16` / `1–2` Epochen / Best-Checkpoint (`eval_loss`) oder direkt DPO/GRPO nutzen.
