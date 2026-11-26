@@ -115,15 +115,6 @@ export function eraStyleOf(v) {
 	return eraColors(orderedNodes(v));
 }
 
-/** Fortschritt unter dem Titel: ein Segment je Lektion in Epochenfarbe, gefüllt = geschafft. */
-export function progressHtml(v) {
-	const seq = orderedNodes(v);
-	if (!seq.length) return "";
-	const era = eraColors(seq);
-	return `<div class="zs-meter" role="img" aria-label="${v.stats.mastered} von ${v.stats.total} Lektionen geschafft">` +
-		seq.map((n) => `<i class="is-${esc(n.state)}" style="${era(n)}" title="${esc(n.title)}"></i>`).join("") + `</div>`;
-}
-
 export function overviewHtml(v, layout) {
 	return layout === "reel" ? reelHtml(v) : threadHtml(v);
 }

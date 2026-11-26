@@ -5,7 +5,7 @@ import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { icon, lead } from "./icons.js";
 import { ZS_STORE, ZS_CORE } from "./zeitstrahl-store.js";
-import { overviewHtml, attachOverview, focusNext, orderedNodes, eraStyleOf, progressHtml, fmtYear, examInfo, STATE_LABEL, LAYOUTS } from "./zeitstrahl-graph.js";
+import { overviewHtml, attachOverview, focusNext, orderedNodes, eraStyleOf, fmtYear, examInfo, STATE_LABEL, LAYOUTS } from "./zeitstrahl-graph.js";
 import { openTimelineDialog, openNodeDialog, sendAi, skeletonPrompt, fillPrompt, downloadJson } from "./zeitstrahl-dialogs.js";
 import { openOnboarding } from "./zeitstrahl-onboarding.js";
 import { openLightbox, openSourcePreview, lessonEditorHtml, wireLessonEditor } from "./zeitstrahl-edit.js";
@@ -94,7 +94,7 @@ function heroHtml(tl, v) {
 	const meta = [tl.subject || kLabel, `${v.stats.mastered} von ${v.stats.total} geschafft`, ex ? `Klausur ${ex.rel}` : ""].filter(Boolean).join(" · ");
 	return `<header class="zs-hero">` +
 		`<button type="button" class="zs-iconbtn" data-zshome="1" aria-label="Alle Zeitstrahlen" title="Alle Zeitstrahlen">${icon("chevron-left")}</button>` +
-		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p>${progressHtml(v)}</div>` +
+		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p></div>` +
 		`<div class="zs-hero-actions">` +
 		`<div class="zs-vseg" role="group" aria-label="Ansicht">` +
 		[["faden", "Faden"], ["reel", "Streifen"]].map(([k, l]) => `<button type="button" data-zslayout="${k}" aria-pressed="${ui.layout === k}">${l}</button>`).join("") + `</div>` +

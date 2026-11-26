@@ -117,10 +117,6 @@
 .zs-title { margin: 0; font-size: clamp(1.4rem, 2.2vw, 1.85rem); font-weight: 720; line-height: 1.15; letter-spacing: -.02em; }
 .zs-sub { margin: 4px 0 0; color: var(--text2); font-size: var(--text-sm); }
 .zs-hero-actions { display: flex; align-items: center; gap: 8px; }
-.zs-meter { display: flex; gap: 3px; max-width: 420px; margin-top: 10px; }
-.zs-meter i { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--era) 28%, transparent); }
-.zs-meter i.is-mastered { background: var(--era); }
-.zs-meter i.is-next { background: color-mix(in srgb, var(--era) 28%, transparent); box-shadow: inset 0 0 0 1.5px var(--zs-accent); }
 .zs-note { margin: 0 var(--space-5); font-size: var(--text-sm); color: var(--text2); }
 .zs-note .zs-link { padding: 0; }
 
@@ -424,7 +420,7 @@ body.density-compact .zs-tree-grp { padding-top: 6px; }
 
 /* ---------- FSRS-Verblassen, Heute-dran-Band, Phasen & Konfidenz ---------- */
 
-.zs-today { display: flex; flex-direction: column; gap: 8px; margin: 0 var(--space-5); }
+.zs-today { display: flex; flex-direction: column; gap: 8px; margin: var(--space-1) var(--space-5) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); background: var(--surface-faint); border: 1px solid var(--edge-soft); }
 .zs-today-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .zs-radar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 6px; border-top: 1px solid var(--edge-soft); }
 .zs-pill.is-weak { border-color: var(--danger-border); color: var(--danger); background: var(--danger-soft); }
@@ -446,7 +442,7 @@ body.density-compact .zs-tree-grp { padding-top: 6px; }
 .zs-conf-opt input:checked + span { border-color: var(--zs-accent); background: var(--zs-soft); color: var(--zs-accent); }
 
 .zs-ref-done { padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); border-radius: var(--radius-lg); background: var(--success-soft); border: 1px solid var(--success-border); }
-body.density-compact .zs-today { margin: 0 var(--space-4); }
+body.density-compact .zs-today { margin: 2px var(--space-4) 0; padding: 6px 10px; }
 body.density-compact .zs-thread { --year-w: 96px; --col-gap: 20px; padding-top: var(--space-2); }
 body.density-compact .zs-ch-year { font-size: 38px; }
 body.density-compact .zs-ch-hook { font-size: 1.1rem; margin-bottom: var(--space-2); }
