@@ -5,11 +5,12 @@ import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { icon, lead } from "./icons.js";
 import { ZS_STORE, ZS_CORE } from "./zeitstrahl-store.js";
-import { overviewHtml, attachOverview, focusNext, orderedNodes, fmtYear, examInfo, STATE_LABEL, LAYOUTS } from "./zeitstrahl-graph.js";
+import { overviewHtml, attachOverview, focusNext, orderedNodes, eraStyleOf, progressHtml, fmtYear, examInfo, STATE_LABEL, LAYOUTS } from "./zeitstrahl-graph.js";
 import { openTimelineDialog, openNodeDialog, sendAi, skeletonPrompt, fillPrompt, downloadJson } from "./zeitstrahl-dialogs.js";
 import { openOnboarding } from "./zeitstrahl-onboarding.js";
 import { openLightbox, openSourcePreview, lessonEditorHtml, wireLessonEditor } from "./zeitstrahl-edit.js";
 import { confidenceHtml, refreshHtml, submitRefresh, readInput } from "./zeitstrahl-refresh.js";
+import { decorateLesson } from "./zeitstrahl-lesson.js";
 
 // zeitstrahl.js — KI-Zeitstrahl: Übersicht der Lernwelten, Faden/Streifen (zeitstrahl-graph.js) und
 // Lektionsansicht. Konzept: docs/KI-LEHRERMODUS-PLAN.md §6.
@@ -93,7 +94,7 @@ function heroHtml(tl, v) {
 	const meta = [tl.subject || kLabel, `${v.stats.mastered} von ${v.stats.total} geschafft`, ex ? `Klausur ${ex.rel}` : ""].filter(Boolean).join(" · ");
 	return `<header class="zs-hero">` +
 		`<button type="button" class="zs-iconbtn" data-zshome="1" aria-label="Alle Zeitstrahlen" title="Alle Zeitstrahlen">${icon("chevron-left")}</button>` +
-		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p></div>` +
+		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p>${progressHtml(v)}</div>` +
 		`<div class="zs-hero-actions">` +
 		`<div class="zs-vseg" role="group" aria-label="Ansicht">` +
 		[["faden", "Faden"], ["reel", "Streifen"]].map(([k, l]) => `<button type="button" data-zslayout="${k}" aria-pressed="${ui.layout === k}">${l}</button>`).join("") + `</div>` +
@@ -337,7 +338,7 @@ function lessonHtml(tl, node, entry, v) {
 		`<span class="zs-chip ${entry?.state === "mastered" ? "ok" : entry?.state === "next" ? "next" : ""}">${esc(STATE_LABEL[entry?.state] || "")}</span>` +
 		`<button type="button" class="zs-btn quiet" data-zsedtoggle="1" title="Text und Quiz direkt bearbeiten">${lead("pen")}${ui.editing ? "Fertig" : "Inhalt"}</button>` +
 		`<button type="button" class="zs-iconbtn" data-zsedit="node" aria-label="Metadaten bearbeiten" title="Titel, Jahr & Verbindungen bearbeiten">${icon("gear")}</button></header>` +
-		`<article class="zs-lesson">` +
+		`<article class="zs-lesson" style="${eraStyleOf(v)(node)}">` +
 		`<div class="zs-lesson-hero">` +
 		(node.year != null || svg ? `<div class="zs-lesson-head">${node.year != null ? `<div class="zs-lesson-year">${esc(fmtYear(node.year))}</div>` : ""}` +
 			(svg ? `<img class="zs-lesson-art" src="${svg}" alt="" data-zslb="1" title="Klicken zum Vergrößern">` : "") + `</div>` : "") +
@@ -402,7 +403,11 @@ function render(main) {
 	}
 	if (node) {
 		if (ui.editing) wireLessonEditor(main, tl, node, { onDone: () => { ui.editing = false; rerender(); } });
-		else U.renderMath?.(main.querySelector(".zs-lesson"));
+		else {
+			U.renderMath?.(main.querySelector(".zs-lesson"));
+			const seq = orderedNodes(v);
+			decorateLesson(scroller(main), seq[seq.findIndex((n) => n.id === node.id) + 1] || null);
+		}
 		if (keep && !ui.editing) { restoreInputs(main, keep.inputs); scroller(main).scrollTop = keep.top; } else scroller(main).scrollTop = 0;
 		return;
 	}

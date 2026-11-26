@@ -5,7 +5,7 @@ import { icon } from "./icons.js";
 
 // zeitstrahl-graph.js — Übersicht eines Zeitstrahls in zwei Ansichten:
 // „Faden“ (senkrecht wie ein Longread, zwischen den Kapiteln die offene Frage zur nächsten Lektion)
-// und „Streifen“ (Kapitel-Karten zum Wischen, Epochen als Farbleiste, Zeitsprünge als schmale Streifen).
+// und „Streifen“ (große Kapitel-Karten zum Wischen, Epochen als Farbbänder, Zeitsprünge als Streifen).
 // Aussehen je Zeitstrahl über die Thema-Variablen (--zs-*, siehe css/zeitstrahl.css).
 
 const esc = (s) => U.esc(String(s ?? ""));
@@ -71,12 +71,12 @@ function threadHtml(v) {
 		const when = history ? fmtYear(n.year) : String(i + 1);
 		const ch = `<article class="zs-ch is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsch="${esc(n.id)}">` +
 			`<div class="zs-ch-year">${esc(when)}</div>` +
-			`<div class="zs-ch-body"><div class="zs-ch-card">${artHtml(n, "zs-ch-art")}` +
+			`<div class="zs-ch-body">${artHtml(n, "zs-ch-art")}` +
 			(n.era ? `<div class="zs-ch-era">${esc(n.era)}</div>` : "") +
 			`<h2 class="zs-ch-title">${esc(n.title)}</h2>` +
 			(n.summary ? `<p class="zs-ch-hook">${esc(n.summary)}</p>` : "") +
 			`<div class="zs-ch-act"><button type="button" class="zs-btn${n.state === "next" ? " primary" : ""}" data-zsnode="${esc(n.id)}">${n.state === "mastered" ? "Nochmal lesen" : "Kapitel lesen"}</button>` +
-			`<span class="zs-ch-state">${esc(stateHint(n))}</span></div></div></div></article>`;
+			`<span class="zs-ch-state">${esc(stateHint(n))}</span></div></div></article>`;
 		if (!nx) return ch;
 		const gap = history && n.year != null && nx.year != null && nx.year > n.year
 			? `${Math.round(nx.year - n.year)} ${Math.round(nx.year - n.year) === 1 ? "Jahr" : "Jahre"} später` : "";
@@ -96,17 +96,32 @@ function reelHtml(v) {
 		const prev = seq[i - 1];
 		const years = history && prev && n.year != null && prev.year != null ? Math.round(n.year - prev.year) : 0;
 		const gap = years >= GAP_YEARS ? `<div class="zs-jump" aria-hidden="true"><span>${years} Jahre</span></div>` : "";
+		const cont = prev && prev.era === n.era && !gap;
 		const when = history ? fmtYear(n.year) : String(i + 1);
 		return gap + `<button type="button" class="zs-frame is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsnode="${esc(n.id)}">` +
-			`<span class="zs-frame-band"></span>` +
-			`<span class="zs-frame-in">${n.era ? `<span class="zs-frame-era">${esc(n.era)}</span>` : ""}<span class="zs-frame-year">${esc(when)}</span>${artHtml(n, "zs-frame-art")}` +
+			`<span class="zs-frame-band${cont ? " is-cont" : ""}">${esc(n.era || "")}</span>` +
+			`<span class="zs-frame-in"><span class="zs-frame-year">${esc(when)}</span>${artHtml(n, "zs-frame-art")}` +
 			`<span class="zs-frame-title">${esc(n.title)}</span>` +
 			(n.summary ? `<span class="zs-frame-hook">${esc(n.summary)}</span>` : "") +
 			`<span class="zs-frame-foot"><span class="zs-dot"></span>${esc(stateHint(n) || "Noch offen")}</span></span></button>`;
 	}).join("");
-	return `<div class="zs-reel-wrap"><div class="zs-reel" data-zsreel="1">${frames}</div>` +
+	return `<div class="zs-reel-wrap"><div class="zs-reel" data-zsreel="1">${frames}</div><div class="zs-reel-bar" aria-hidden="true"><i></i></div>` +
 		`<div class="zs-reel-nav"><button type="button" class="zs-iconbtn" data-zsreelnav="-1" aria-label="Zurück">${icon("chevron-left")}</button>` +
 		`<button type="button" class="zs-iconbtn" data-zsreelnav="1" aria-label="Weiter">${icon("chevron-right")}</button></div></div>`;
+}
+
+/** Epochenfarbe einer Lektion (wie in der Übersicht), z. B. für die Lektionsansicht. */
+export function eraStyleOf(v) {
+	return eraColors(orderedNodes(v));
+}
+
+/** Fortschritt unter dem Titel: ein Segment je Lektion in Epochenfarbe, gefüllt = geschafft. */
+export function progressHtml(v) {
+	const seq = orderedNodes(v);
+	if (!seq.length) return "";
+	const era = eraColors(seq);
+	return `<div class="zs-meter" role="img" aria-label="${v.stats.mastered} von ${v.stats.total} Lektionen geschafft">` +
+		seq.map((n) => `<i class="is-${esc(n.state)}" style="${era(n)}" title="${esc(n.title)}"></i>`).join("") + `</div>`;
 }
 
 export function overviewHtml(v, layout) {
@@ -148,8 +163,30 @@ export function attachOverview(root) {
 		ro.observe(thread);
 	}
 	const reel = root.querySelector("[data-zsreel]");
+	if (reel) wireReel(reel, root.querySelector(".zs-reel-bar i"));
 	root.querySelectorAll("[data-zsreelnav]").forEach((b) => b.addEventListener("click", (e) => {
 		e.stopPropagation();
 		reel?.scrollBy({ left: Number(b.dataset.zsreelnav) * Math.max(280, reel.clientWidth * .7), behavior: "smooth" });
 	}));
+}
+
+/** Streifen ohne native Leiste: Mausrad (auch senkrecht) scrollt seitlich, Leiste darunter zeigt die Lage. */
+function wireReel(reel, bar) {
+	const update = () => {
+		if (!bar) return;
+		const max = reel.scrollWidth - reel.clientWidth;
+		const w = reel.scrollWidth ? reel.clientWidth / reel.scrollWidth : 1;
+		bar.parentElement.hidden = max <= 1;
+		bar.style.width = `${w * 100}%`;
+		bar.style.left = `${max > 0 ? (reel.scrollLeft / max) * (1 - w) * 100 : 0}%`;
+	};
+	reel.addEventListener("scroll", update, { passive: true });
+	reel.addEventListener("wheel", (e) => {
+		if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+		const max = reel.scrollWidth - reel.clientWidth;
+		if (max <= 0 || (e.deltaY < 0 && reel.scrollLeft <= 0) || (e.deltaY > 0 && reel.scrollLeft >= max - 1)) return;
+		e.preventDefault();
+		reel.scrollLeft += e.deltaY;
+	}, { passive: false });
+	requestAnimationFrame(update);
 }
