@@ -59,7 +59,10 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
     val pageH = data?.height?.toFloat() ?: heights?.get(heftPageId) ?: HeftPage.HEIGHT
     val cache = remember { StrokeCache() }
     val pending = remember { mutableStateListOf<HeftStroke>() }
+    // Merkt für präzise geschnittene Teilstücke die Ursprungs-ID (gegen Marker-Doppeldruck während Bitmap-Neuaufbau).
+    val pieceRoots = remember { HashMap<String, String>() }
     var erased by remember { mutableStateOf(emptySet<String>()) }
+    var prevSavedIds by remember { mutableStateOf(emptySet<String>()) }
     var ring by remember { mutableStateOf<Offset?>(null) }
     // Gehaltene Form während des Strichs: Umriss in Seiteneinheiten, Farbe und Dicke.
     var shapeLive by remember { mutableStateOf<ShapePreview?>(null) }
@@ -71,11 +74,14 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
     LaunchedEffect(vm.overlayResetRev) {
         if (vm.overlayResetRev > 0) {
             pending.clear()
+            pieceRoots.clear()
             erased = emptySet()
         }
     }
     LaunchedEffect(savedIds) {
-        erased = erased.filterTo(HashSet()) { it in savedIds }
+        val gone = prevSavedIds - savedIds
+        prevSavedIds = savedIds
+        if (gone.isNotEmpty()) erased = erased - gone
         cache.retain(savedIds + pending.map { it.id })
     }
     val pendingSnapshot = pending.toList()
@@ -104,12 +110,25 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
             strokes = { visibleNow },
             radius = { vm.tools.eraserSize },
             mode = { vm.tools.eraserMode },
-            onStep = { removed, pieces ->
-                erased = erased + removed
-                pending.removeAll { it.id in removed }
+            onStep = { changes ->
+                val removedOrig = HashSet<String>()
+                val removedAll = HashSet<String>(changes.size)
+                val pieces = ArrayList<HeftStroke>()
+                for (c in changes) {
+                    removedAll += c.id
+                    val existingRoot = pieceRoots.remove(c.id)
+                    if (existingRoot == null) removedOrig += c.id
+                    val root = existingRoot ?: c.id
+                    for (p in c.pieces) {
+                        pieceRoots[p.id] = root
+                        pieces += p
+                    }
+                }
+                if (removedOrig.isNotEmpty()) erased = erased + removedOrig
+                pending.removeAll { it.id in removedAll }
                 pending += pieces
             },
-            onDone = { net -> ring = null; vm.commitErase(heftPageId, net) },
+            onDone = { net -> vm.commitErase(heftPageId, net) },
         )
     }
 
@@ -133,7 +152,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
             }
             override fun writing(on: Boolean) = vm.setWriting(on)
             override fun eraseMove(x: Float, y: Float) { ring = Offset(x, y); tracker.move(x, y) }
-            override fun eraseEnd() = tracker.end()
+            override fun eraseEnd() { ring = null; tracker.end() }
             override val lasso = gesture
             override fun lassoDismiss() = vm.dismissLasso()
             override val objects = objects
@@ -169,7 +188,11 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
         }
         val layer = rememberStrokeLayer(settled, cache, bmpW, pageH)
         LaunchedEffect(layer.drawnKeys, erased) {
-            if (pending.isNotEmpty()) pending.removeAll { it.id in layer.drawnKeys || it.id in erased }
+            if (pending.isNotEmpty()) {
+                pending.removeAll { it.id in layer.drawnKeys || it.id in erased }
+                val keep = pending.mapTo(HashSet()) { it.id }
+                pieceRoots.keys.retainAll(keep)
+            }
         }
         // Vektor-Ausschnitt: gesetzte Striche, die den sichtbaren Bereich berühren (Rahmen aus dem Cache).
         val detailStrokes = cull?.let { c ->
@@ -177,8 +200,13 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
         }
         // Noch nicht in der Bitmap (bzw. im Vektor-Ausschnitt: noch nicht gespeichert) – sonst doppelt gezeichnet.
         val shown = if (detailStrokes != null) savedIds else layer.drawnKeys.keys
-        val pendingStrokes = remember(pendingSnapshot, shown, erased, moving) {
-            pendingSnapshot.filter { it.id !in shown && it.id !in erased && it.id !in moving }.mapNotNull(cache::get)
+        val pendingStrokes = remember(pendingSnapshot, shown, erased, moving, detailStrokes != null) {
+            pendingSnapshot.filter { s ->
+                if (s.id in shown || s.id in erased || s.id in moving) return@filter false
+                // Teilstücke erst zeigen, wenn der ursprüngliche Strich aus der Bitmap raus ist (kein Marker-Doppeldruck).
+                val root = pieceRoots[s.id]
+                detailStrokes != null || root == null || root !in shown
+            }.mapNotNull(cache::get)
         }
         val paper = Paper.of(data?.paper.orEmpty())
         val eraserPx = vm.tools.eraserSize.toFloat() * k

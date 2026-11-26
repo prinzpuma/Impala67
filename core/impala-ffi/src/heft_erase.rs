@@ -61,11 +61,13 @@ impl HeftEraseGesture {
 
     /// Netto-Änderung seit Gestenbeginn (Zwischenstücke, die selbst wieder wegradiert wurden, fehlen).
     pub fn net(&self) -> HeftEraseResult {
-        let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let now: HashSet<&str> = st.strokes.iter().map(|s| s.id.as_str()).collect();
+        let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let State { strokes, eraser } = &mut *st;
+        eraser.finish(strokes);
+        let now: HashSet<&str> = strokes.iter().map(|s| s.id.as_str()).collect();
         let mut removed: Vec<String> = self.start.iter().filter(|id| !now.contains(id.as_str())).cloned().collect();
         removed.sort();
-        let added = st.strokes.iter().filter(|s| !self.start.contains(&s.id)).map(stroke_data).collect();
+        let added = strokes.iter().filter(|s| !self.start.contains(&s.id)).map(stroke_data).collect();
         HeftEraseResult { removed, added }
     }
 }
@@ -89,11 +91,11 @@ mod tests {
         assert_eq!(ch.len(), 1);
         assert_eq!(ch[0].pieces.len(), 2);
         assert!(ch[0].pieces.iter().all(|p| p.tool == "marker" && p.color == "#ff0"));
-        g.erase_at(90.0, 0.0); // die Bahn 50 → 90 kürzt das rechte Stück auf 96…100
+        g.erase_at(90.0, 0.0); // die Bahn 50 → 90 kürzt das rechte Stück auf 98…100 (Marker: 3× Breite)
         let net = g.net();
         assert_eq!(net.removed, ["a"]);
         assert_eq!(net.added.len(), 2);
-        assert!((net.added[1].points[0] - 96.0).abs() < 1e-3);
+        assert!((net.added[1].points[0] - 98.0).abs() < 1e-3);
         assert!(net.added.iter().all(|p| p.id != "a"));
     }
 }

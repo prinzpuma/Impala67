@@ -96,6 +96,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     /** Zweiter Tipp auf das aktive Werkzeug klappt die Optionen auf bzw. zu. */
     fun selectTool(tool: HeftTool, slot: Int = tools.penSlot) {
+        heldTool = null
         val same = tools.tool == tool && (tool != HeftTool.PEN || tools.penSlot == slot)
         // Das Lasso hat keine Optionen; ein anderes Werkzeug hebt die Auswahl auf (heft.js `dropLasso`).
         val expanded = tool.hasOptions && (if (same) !tools.expanded else true)
@@ -125,6 +126,8 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
             if (heldTool != null) return
             heldTool = tools.tool
             lasso = null
+            closeText(commit = true)
+            objSel = null
             tools = tools.copy(tool = HeftTool.ERASER, expanded = false)
         } else {
             val back = heldTool ?: return

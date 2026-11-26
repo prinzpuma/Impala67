@@ -319,13 +319,16 @@ private fun ToolButton(
                         held = false
                         val press = PressInteraction.Press(at)
                         interaction.emit(press)
-                        coroutineScope {
-                            val timer = launch { delay(ERASER_HOLD_MS); held = true; hold?.invoke(true) }
-                            tryAwaitRelease()
-                            timer.cancel()
+                        try {
+                            coroutineScope {
+                                val timer = launch { delay(ERASER_HOLD_MS); held = true; hold?.invoke(true) }
+                                tryAwaitRelease()
+                                timer.cancel()
+                            }
+                        } finally {
+                            interaction.tryEmit(PressInteraction.Release(press))
+                            if (held) hold?.invoke(false)
                         }
-                        interaction.emit(PressInteraction.Release(press))
-                        if (held) hold?.invoke(false)
                     },
                     onTap = { if (!held) click() },
                 )

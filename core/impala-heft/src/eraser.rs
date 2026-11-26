@@ -7,7 +7,7 @@
 //!
 //! Formen (Linie, Rechteck …) gehen auch präzise ganz weg: Ihre Geometrie lässt sich nicht teilen.
 
-use crate::doc::{Point, Stroke};
+use crate::doc::{Point, Stroke, Tool};
 use crate::json::js_hypot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +38,8 @@ pub struct StrokeEraser {
     pub radius: f64,
     pub mode: EraseMode,
     last: Option<[f64; 2]>,
+    /// Übersprungener Punkt (< 35 % Radius), der beim Beenden (`finish`) noch nachgeprüft wird.
+    pending: Option<[f64; 2]>,
     /// Präfix der IDs neuer Teilstriche (je Geste frisch, damit Geräte nie dieselbe ID erzeugen).
     seed: String,
     next: u32,
@@ -54,26 +56,42 @@ impl StrokeEraser {
 
     /// `seed`: eindeutiges Präfix für die IDs der Teilstriche (z. B. eine frische UUID).
     pub fn with_mode(radius: f64, mode: EraseMode, seed: String) -> Self {
-        StrokeEraser { radius, mode, last: None, seed, next: 0 }
+        StrokeEraser { radius, mode, last: None, pending: None, seed, next: 0 }
     }
 
     /// Radiert bis (x, y): ersetzt getroffene Striche in `strokes` an Ort und Stelle durch ihre Reste
     /// (präzise) bzw. entfernt sie (Strich). Leer, wenn nichts getroffen wurde oder der Schritt unter
-    /// 35 % des Radius lag – der nächste Schritt prüft die Bahn ab demselben Punkt, es fehlt also nichts.
+    /// 35 % des Radius lag – der nächste Schritt (oder `finish`) prüft die Bahn ab demselben Punkt.
     pub fn erase_at(&mut self, strokes: &mut Vec<Stroke>, x: f64, y: f64) -> Vec<EraseChange> {
-        let r = self.radius;
         let from = match self.last {
-            Some([lx, ly]) if js_hypot(x - lx, y - ly) < r * 0.35 => return Vec::new(),
+            Some([lx, ly]) if js_hypot(x - lx, y - ly) < self.radius * 0.35 => {
+                self.pending = Some([x, y]);
+                return Vec::new();
+            }
             Some(l) => l,
             None => [x, y],
         };
+        self.pending = None;
         self.last = Some([x, y]);
-        let cap = Capsule { a: from, b: [x, y] };
+        self.apply_capsule(strokes, Capsule { a: from, b: [x, y] })
+    }
+
+    /// Radiert eine letzte kleine Restbewegung (< 35 % Radius) vor dem Abheben nach.
+    pub fn finish(&mut self, strokes: &mut Vec<Stroke>) -> Vec<EraseChange> {
+        let (Some(from), Some(to)) = (self.last, self.pending.take()) else { return Vec::new() };
+        self.last = Some(to);
+        self.apply_capsule(strokes, Capsule { a: from, b: to })
+    }
+
+    fn apply_capsule(&mut self, strokes: &mut Vec<Stroke>, cap: Capsule) -> Vec<EraseChange> {
+        let r = self.radius;
         let mut changes = Vec::new();
         let mut i = 0;
         while i < strokes.len() {
             let s = &strokes[i];
-            let hit_r = r + s.size.filter(|s| *s != 0.0 && !s.is_nan()).unwrap_or(2.0) / 2.0;
+            let w = s.size.filter(|s| *s != 0.0 && !s.is_nan()).unwrap_or(2.0);
+            let half = if s.tool == Some(Tool::Marker) { w * 1.5 } else { w * 0.5 };
+            let hit_r = r + half;
             if !cap.near_bounds(s, hit_r) || !cap.hits(s, hit_r) {
                 i += 1;
                 continue;
@@ -284,5 +302,24 @@ mod tests {
         let mut e = StrokeEraser::with_mode(80.0, EraseMode::Precise, "h".into());
         e.erase_at(&mut list, 50.0, 0.0); // alles abgedeckt
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn restbewegung_und_marker_breite() {
+        // Kleiner Schritt (< 35 % Radius) wird erst bei finish() nachradiert.
+        let mut list = vec![line("a", 0.0)];
+        let mut e = StrokeEraser::with_mode(20.0, EraseMode::Stroke, "g".into());
+        assert!(e.erase_at(&mut list, 50.0, -25.0).is_empty()); // Abstand 25 > 20 + 1
+        assert!(e.erase_at(&mut list, 50.0, -20.0).is_empty()); // Schritt 5 < 7 (0.35 * 20)
+        assert_eq!(e.finish(&mut list).len(), 1);
+        assert!(list.is_empty());
+
+        // Marker hat dreifache Breite: size 4 → halbe Breite 6.
+        let mut m = line("m", 0.0);
+        m.tool = Some(Tool::Marker);
+        m.size = Some(4.0);
+        let mut list = vec![m];
+        let mut e = StrokeEraser::with_mode(5.0, EraseMode::Stroke, "g".into());
+        assert_eq!(e.erase_at(&mut list, 50.0, 10.5).len(), 1); // Abstand 10.5 <= 5 + 6
     }
 }

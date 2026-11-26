@@ -166,7 +166,7 @@ class PageInput(private val view: InProgressStrokesView, private val host: PageI
                 val type = ev.getToolType(i)
                 val finger = type == MotionEvent.TOOL_TYPE_FINGER
                 val lasso = tools.tool == HeftTool.LASSO && type != MotionEvent.TOOL_TYPE_ERASER
-                val picks = tools.tool != HeftTool.LASSO && tools.tool != HeftTool.LASER && type != MotionEvent.TOOL_TYPE_ERASER
+                val picks = tools.tool != HeftTool.LASSO && tools.tool != HeftTool.LASER && tools.tool != HeftTool.ERASER && type != MotionEvent.TOOL_TYPE_ERASER
                 // Eine bestehende Auswahl greift jeder Zeiger (auch der Finger bei „Nur Stift“).
                 if (picks && !(finger && penRecently()) && sink.objects.grab(px(ev.getX(i)), py(ev.getY(i)), finger)) {
                     pointerId = ev.getPointerId(i)
