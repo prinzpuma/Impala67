@@ -33,7 +33,7 @@ async function editTimeline(a) {
 	}
 	const out = ZS_CORE.applyEdit(before, edit);
 	if (out.error) return out;
-	const summary = { ok: true, timeline: out.timeline.title, id: out.timeline.id, created: !before, added: out.added, updated: out.updated, removed: out.removed, nodes: out.timeline.nodes.length, ...(out.warnings?.length ? { warnings: out.warnings } : {}) };
+	const summary = { ok: true, timeline: out.timeline.title, id: out.timeline.id, created: !before, added: out.added, updated: out.updated, removed: out.removed, nodes: out.timeline.nodes.length, ...(out.warnings?.length ? { warnings: out.warnings } : {}), ...(out.story?.length ? { story_todo: out.story } : {}) };
 	if (dryRun) return { ...summary, dryRun: true };
 	await ZS_STORE.put(out.timeline);
 	return summary;

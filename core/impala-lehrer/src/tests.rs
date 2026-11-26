@@ -392,6 +392,16 @@ fn zeitachse_jahre_straenge_und_klausur() {
     let back = edit(Some(tl.clone()), json!({ "title": "Z", "nodes": [{ "id": "ohm", "year": 1790 }] }));
     assert_eq!(back.warnings.len(), 1);
     assert!(back.warnings[0].contains("Volta"));
+    assert!(back.story.is_empty(), "Gerüste bekommen keine Story-Hinweise");
+    let body = "### Das Rätsel\nx\n### Der Weg\nx\n### Der Durchbruch\nx\n### Das Prinzip dahinter\nx\n### In der Klausur\nx";
+    let thin = edit(Some(tl.clone()), json!({ "title": "Z", "nodes": [{ "id": "ohm", "body": body, "quiz": [{ "type": "text", "q": "?", "solution": "!" }] }] }));
+    let s = thin.story.join(" | ");
+    assert!(s.contains("Offene Frage") && !s.contains("Rätsel,"), "{s}");
+    assert!(s.contains("nur 1 Quizfragen") && s.contains("ohne explain") && s.contains("pretest"), "{s}");
+    let open = edit(Some(tl.clone()), json!({ "title": "Z", "nodes": [{ "id": "ohm", "body": "### Das Rätsel\nx\n### Offene Frage\nWarum **fließt** das?\n\nNoch mehr.\n### Quellen\ny" }] })).timeline;
+    let ov = view(&open);
+    let ohm = ov["nodes"].as_array().unwrap().iter().find(|n| n["id"] == "ohm").unwrap();
+    assert_eq!(ohm["open_question"], "Warum fließt das? Noch mehr.");
     assert_eq!(v["exam"], "2027-02-14");
     assert_eq!(v["stats"]["drafts"], 5);
     // Lernpfad: Jahre egal, Spalte = Pfadlänge.

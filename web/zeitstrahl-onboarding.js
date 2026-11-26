@@ -46,6 +46,7 @@ function mcpPrompt(tl) {
 		tl.brief?.style ? `Stil: ${tl.brief.style}` : "",
 		tl.brief?.notes ? `Absprachen: ${tl.brief.notes}` : "",
 		mat ? `Verknüpfte Seiten in Impala67:\n${mat}` : "Lies passende Skripte aus meinem Projektordner oder Impala67.",
+		"Lektionen als Story im Aufbau aus der impala_edit_timeline-Beschreibung (Rätsel → Prinzip → Klausur → offene Frage zur nächsten Lektion); kommt story_todo zurück, nachbessern. Nichts erfinden: alle Fakten, Jahre und Formeln nur aus meinem Material oder Wikipedia, belegt in sources; Unbelegtes weglassen. Kein Klausurdatum raten.",
 		"Stelle mir gerne noch 1–2 gezielte Rückfragen (Grill-Me), bevor du das Gerüst mit impala_edit_timeline anlegst.",
 	].filter(Boolean).join("\n");
 }

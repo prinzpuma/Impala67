@@ -212,6 +212,26 @@ pub fn is_draft(n: &Node) -> bool {
     n.body.trim().is_empty() && n.quiz.is_empty() && n.worksheet.is_none() && n.images.is_empty() && n.svg.is_none()
 }
 
+/// Text unter „### Offene Frage“ (Story-Aufbau, tool_defs.json) bis zur nächsten Überschrift,
+/// ohne Markdown-Zeichen – verbindet in der Übersicht eine Lektion mit der nächsten.
+fn open_question(body: &str) -> String {
+    let mut lines = body.lines().skip_while(|l| {
+        let h = l.trim_start();
+        !(h.starts_with('#') && h.trim_start_matches('#').trim().to_lowercase().starts_with("offene frage"))
+    });
+    lines.next();
+    let text: String = lines
+        .take_while(|l| !l.trim_start().starts_with('#'))
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .filter(|c| !matches!(c, '*' | '_' | '`' | '>'))
+        .collect();
+    text.chars().take(400).collect::<String>().trim().to_string()
+}
+
 fn entry(n: &Node, state: State, (col, lane): (usize, usize), now: &str) -> Value {
     let answered = n.progress.quiz.as_ref().map_or(0, |q| q.results.len());
     let mastered = state == State::Mastered;
@@ -227,6 +247,9 @@ fn entry(n: &Node, state: State, (col, lane): (usize, usize), now: &str) -> Valu
         "year": n.year,
         "strand": n.strand,
         "summary": n.summary,
+        "svg": n.svg,
+        "image": n.images.first().map(|i| i.src.as_str()).filter(|s| s.starts_with("https://") || s.starts_with("data:image/")),
+        "open_question": open_question(&n.body),
         "draft": is_draft(n),
         "col": col,
         "lane": lane,

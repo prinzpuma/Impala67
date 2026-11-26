@@ -5,13 +5,13 @@ import { U } from "./util.js";
 import { BUS } from "./event-bus.js";
 import { icon, lead } from "./icons.js";
 import { ZS_STORE, ZS_CORE } from "./zeitstrahl-store.js";
-import { graphHtml, attachGraph, focusNext, fmtYear, examInfo, STATE_LABEL } from "./zeitstrahl-graph.js";
+import { overviewHtml, attachOverview, focusNext, orderedNodes, fmtYear, examInfo, STATE_LABEL, LAYOUTS } from "./zeitstrahl-graph.js";
 import { openTimelineDialog, openNodeDialog, sendAi, skeletonPrompt, fillPrompt, downloadJson } from "./zeitstrahl-dialogs.js";
 import { openOnboarding } from "./zeitstrahl-onboarding.js";
 import { openLightbox, openSourcePreview, lessonEditorHtml, wireLessonEditor } from "./zeitstrahl-edit.js";
 import { confidenceHtml, refreshHtml, submitRefresh, readInput } from "./zeitstrahl-refresh.js";
 
-// zeitstrahl.js — KI-Zeitstrahl: Übersicht der Lernwelten, Graph (zeitstrahl-graph.js) und
+// zeitstrahl.js — KI-Zeitstrahl: Übersicht der Lernwelten, Faden/Streifen (zeitstrahl-graph.js) und
 // Lektionsansicht. Konzept: docs/KI-LEHRERMODUS-PLAN.md §6.
 // Opt-in über Einstellungen → Lernen → Beta-Lernfunktionen (S.settings.experiments.zeitstrahl).
 // Daten: eigene Lehrer-Datenbank (zeitstrahl-store.js), Logik im Kern (core/impala-lehrer).
@@ -21,13 +21,12 @@ const enabled = () => !!S.settings?.experiments?.zeitstrahl;
 
 const UI_KEY = "impala67Zeitstrahl";
 const ui = (() => {
-	const base = { tl: null, node: null, zoom: 1, editing: false, treeFilter: "", phase: null, pretestResult: null, refresh: null, refreshOutcome: null };
-	try { const u = { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; return { ...u, editing: false, treeFilter: "", phase: null, pretestResult: null, refresh: null, refreshOutcome: null, zoom: Math.min(5, Math.max(1, Number(u.zoom) || 1)) }; } catch { return base; }
+	const base = { tl: null, node: null, layout: LAYOUTS[0], editing: false, treeFilter: "", phase: null, pretestResult: null, refresh: null, refreshOutcome: null };
+	try { const u = { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) || "{}") }; return { ...u, editing: false, treeFilter: "", phase: null, pretestResult: null, refresh: null, refreshOutcome: null, layout: LAYOUTS.includes(u.layout) ? u.layout : LAYOUTS[0] }; } catch { return base; }
 })();
-function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tl: ui.tl, node: ui.node, zoom: ui.zoom })); } catch {} }
+function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tl: ui.tl, node: ui.node, layout: ui.layout })); } catch {} }
 
 const rerender = () => BUS.emit("ui:render");
-let graphWidth = 900;
 
 /** Offener Zeitstrahl; ohne Auswahl die Übersicht (null). */
 function currentTimeline() {
@@ -96,6 +95,8 @@ function heroHtml(tl, v) {
 		`<button type="button" class="zs-iconbtn" data-zshome="1" aria-label="Alle Zeitstrahlen" title="Alle Zeitstrahlen">${icon("chevron-left")}</button>` +
 		`<div class="zs-hero-copy"><h1 class="zs-title">${esc(tl.title)}</h1><p class="zs-sub">${esc(meta)}</p></div>` +
 		`<div class="zs-hero-actions">` +
+		`<div class="zs-vseg" role="group" aria-label="Ansicht">` +
+		[["faden", "Faden"], ["reel", "Streifen"]].map(([k, l]) => `<button type="button" data-zslayout="${k}" aria-pressed="${ui.layout === k}">${l}</button>`).join("") + `</div>` +
 		`<button type="button" class="zs-iconbtn" data-zsadd="1" aria-label="Lektion hinzufügen" title="Lektion hinzufügen">${icon("plus")}</button>` +
 		`<button type="button" class="zs-iconbtn" data-zsedit="tl" aria-label="Zeitstrahl bearbeiten" title="Zeitstrahl bearbeiten">${icon("gear")}</button>` +
 		(next ? `<button type="button" class="zs-btn primary" data-zsnode="${esc(next.id)}">${lead("play")}Weiterlernen</button>` : "") +
@@ -134,7 +135,7 @@ function graphViewHtml(tl, v) {
 			`<div class="zs-actions center"><button type="button" class="zs-btn primary" data-zsask="build">${lead("sparkles")}Gerüst bauen lassen</button>` +
 			`<button type="button" class="zs-btn" data-zsadd="1">${lead("plus")}Lektion anlegen</button></div></div>`;
 	}
-	return heroHtml(tl, v) + todayBandHtml(v) + graphHtml(v, { width: graphWidth, zoom: ui.zoom });
+	return heroHtml(tl, v) + todayBandHtml(v) + overviewHtml(v, ui.layout);
 }
 
 // ---------- Lektion ----------
@@ -281,12 +282,6 @@ function nextCards(kids) {
 		`<span class="zs-next-go">${esc(STATE_LABEL[n.state] || "")}${icon("chevron-right")}</span></button>`).join("")}</div></section>`;
 }
 
-function orderedNodes(v) {
-	const history = v.kind !== "path" && v.nodes.some((n) => n.year != null);
-	return v.nodes.slice().sort((a, b) =>
-		history ? (a.year ?? Infinity) - (b.year ?? Infinity) || a.col - b.col : a.col - b.col || a.lane - b.lane);
-}
-
 function lessonHtml(tl, node, entry, v) {
 	const seq = orderedNodes(v);
 	const pos = seq.findIndex((n) => n.id === node.id);
@@ -296,11 +291,11 @@ function lessonHtml(tl, node, entry, v) {
 	const parents = (node.parents || []).map((id) => v.nodes.find((n) => n.id === id)).filter(Boolean);
 	const imgs = (node.images || []).map((img) => ({ ...img, src: imageSrc(img) })).filter((img) => img.src);
 	const svg = typeof node.svg === "string" && node.svg.trim().startsWith("<svg") ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(node.svg)}` : "";
-	const gallery = imgs.length || svg
-		? `<div class="zs-gallery${imgs.length + (svg ? 1 : 0) === 1 ? " single" : ""}">${svg ? `<figure class="zs-fig"><img src="${svg}" alt="" data-zslb="1" title="Klicken zum Vergrößern"></figure>` : ""}${imgs.map((img) =>
+	const gallery = imgs.length
+		? `<div class="zs-gallery${imgs.length === 1 ? " single" : ""}">${imgs.map((img) =>
 			`<figure class="zs-fig"><img src="${esc(img.src)}" alt="${esc(img.caption || "")}" data-zslb="1" data-cap="${esc(img.caption || "")}" title="Klicken zum Vergrößern" loading="lazy" referrerpolicy="no-referrer">${img.caption || img.credit ? `<figcaption>${esc(img.caption || "")}${img.credit ? ` <span class="hint">${esc(img.credit)}</span>` : ""}</figcaption>` : ""}</figure>`).join("")}</div>`
 		: "";
-	const meta = [node.year != null ? `<b>${esc(fmtYear(node.year))}</b>` : "", node.era ? `<span>${esc(node.era)}</span>` : "",
+	const meta = [node.era ? `<span>${esc(node.era)}</span>` : "",
 		node.strand ? `<span class="zs-strand-chip">${esc(node.strand)}</span>` : ""].filter(Boolean).join("");
 	const draft = entry?.draft
 		? `<div class="zs-draft-box">${icon("pen-tool", "", 22)}<div><b>Diese Lektion ist noch ein Entwurf.</b><p>Prüfe Titel, Jahr und Verbindungen – dann schreibt die KI Story, Bilder und Kontrollfragen.</p>` +
@@ -343,7 +338,10 @@ function lessonHtml(tl, node, entry, v) {
 		`<button type="button" class="zs-btn quiet" data-zsedtoggle="1" title="Text und Quiz direkt bearbeiten">${lead("pen")}${ui.editing ? "Fertig" : "Inhalt"}</button>` +
 		`<button type="button" class="zs-iconbtn" data-zsedit="node" aria-label="Metadaten bearbeiten" title="Titel, Jahr & Verbindungen bearbeiten">${icon("gear")}</button></header>` +
 		`<article class="zs-lesson">` +
-		`<div class="zs-lesson-hero">${meta ? `<div class="zs-node-meta big">${meta}</div>` : ""}` +
+		`<div class="zs-lesson-hero">` +
+		(node.year != null || svg ? `<div class="zs-lesson-head">${node.year != null ? `<div class="zs-lesson-year">${esc(fmtYear(node.year))}</div>` : ""}` +
+			(svg ? `<img class="zs-lesson-art" src="${svg}" alt="" data-zslb="1" title="Klicken zum Vergrößern">` : "") + `</div>` : "") +
+		(meta ? `<div class="zs-node-meta big">${meta}</div>` : "") +
 		`<h1 class="zs-lesson-title">${esc(node.title)}</h1>` +
 		(node.summary && !ui.editing ? `<p class="zs-lead">${esc(node.summary)}</p>` : "") + prev + `</div>` +
 		phaseBar +
@@ -371,21 +369,18 @@ function render(main) {
 	const node = tl && ui.node ? nodeOf(tl, ui.node) : null;
 	if (ui.node && !node) ui.node = null;
 	// Nur bei echten Änderungen neu aufbauen – sonst gingen Eingaben im Quiz bei jedem App-Render verloren.
-	graphWidth = Math.max(320, (main.clientWidth || 900) - 56);
-	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}|${ui.phase || ""}|${ui.pretestResult ? "pt" : ""}|${ui.refresh ? "ref" : ""}|${ui.refreshOutcome ? "ro" : ""}|${ui.editing ? "ed" : ""}|${ui.zoom}|${node || ui.refresh ? "" : Math.round(graphWidth / 24)}` : `home|${ZS_STORE.all().map((t) => t.id + t.updated).join(",")}`;
+	const key = tl ? `${tl.id}|${tl.updated}|${node?.id || ""}|${ui.phase || ""}|${ui.pretestResult ? "pt" : ""}|${ui.refresh ? "ref" : ""}|${ui.refreshOutcome ? "ro" : ""}|${ui.editing ? "ed" : ""}|${ui.layout}` : `home|${ZS_STORE.all().map((t) => t.id + t.updated).join(",")}`;
 	if (main.dataset.zsKey === key && main.querySelector(".zs-world")) return;
-	// Scrollstand des Graphen über Neuaufbauten hinweg halten (bei Zoom mitskaliert).
-	const prevScroll = main.querySelector("[data-zsscroll]");
-	const sameGraph = !!tl && !node && !ui.refresh && main.dataset.zsTl === tl.id && !!prevScroll;
-	const ratio = ui.zoom / (Number(main.dataset.zsZoom) || ui.zoom);
-	const scrollPos = sameGraph ? { l: prevScroll.scrollLeft * ratio, t: prevScroll.scrollTop * ratio } : null;
+	// Gleiche Übersicht neu aufgebaut (Daten geändert): Scrollstand halten.
+	const sameOverview = !!tl && !node && !ui.refresh && main.dataset.zsTl === tl.id && main.dataset.zsLayout === ui.layout && !!main.querySelector(".zs-world.is-graph");
+	const scrollPos = sameOverview ? { t: main.scrollTop, l: main.querySelector("[data-zsreel]")?.scrollLeft || 0 } : null;
 	// Gleiche Lektion neu aufgebaut (Quiz geprüft, KI hat bewertet): Lesestelle und Eingaben behalten.
 	const sameLesson = !!node && main.dataset.zsNode === node.id && !!main.querySelector(".zs-lesson");
 	const keep = sameLesson ? { top: main.scrollTop, inputs: snapshotInputs(main) } : null;
 	main.dataset.zsKey = key;
 	main.dataset.zsNode = node?.id || "";
 	main.dataset.zsTl = tl?.id || "";
-	main.dataset.zsZoom = String(ui.zoom);
+	main.dataset.zsLayout = node ? "" : ui.layout;
 	if (!tl) { main.innerHTML = `<div class="zs-world is-home" data-key="zs">${homeHtml()}</div>`; main.scrollTop = 0; return; }
 	const v = ZS_CORE.view(tl);
 	const acc = String(tl.theme?.accent || "");
@@ -409,10 +404,12 @@ function render(main) {
 		return;
 	}
 	main.scrollTop = 0;
-	attachGraph(main, zoomBy);
-	const scroll = main.querySelector("[data-zsscroll]");
-	if (scroll && scrollPos) { scroll.scrollLeft = scrollPos.l; scroll.scrollTop = scrollPos.t; }
-	else requestAnimationFrame(() => focusNext(main));
+	attachOverview(main);
+	if (scrollPos) {
+		main.scrollTop = scrollPos.t;
+		const reel = main.querySelector("[data-zsreel]");
+		if (reel) reel.scrollLeft = scrollPos.l;
+	} else requestAnimationFrame(() => focusNext(main, main));
 }
 
 // Eingaben im Quiz je Feld (Name + Lücke bzw. Wert) – überleben so einen Neuaufbau der Lektion.
@@ -434,15 +431,6 @@ function restoreInputs(root, saved) {
 			if (v !== undefined) el.value = v;
 		}
 	}
-}
-
-// Zoom = Streckung der Linie (1 = passt in die Ansicht).
-function zoomBy(d) {
-	const z = Math.round(Math.min(5, Math.max(1, ui.zoom + d)) * 4) / 4;
-	if (z === ui.zoom) return;
-	ui.zoom = z;
-	saveUi();
-	rerender();
 }
 
 function treeHtml() {
@@ -613,7 +601,7 @@ function edit(what) {
 }
 
 // Klicks: eigene Delegation (wie library.js), nur für data-zs*-Ziele.
-const TARGETS = "[data-zsnode],[data-zstl],[data-zshome],[data-zsnew],[data-zsedit],[data-zsadd],[data-zsback],[data-zsquiz],[data-zsdone],[data-zsask],[data-zsopen],[data-zszoom],[data-zslb],[data-zsedtoggle],[data-zsimport],[data-zsexport],[data-zsphase],[data-zspretest],[data-zsrefresh],[data-zsrefsubmit],[data-zsweak]";
+const TARGETS = "[data-zsnode],[data-zstl],[data-zshome],[data-zsnew],[data-zsedit],[data-zsadd],[data-zsback],[data-zsquiz],[data-zsdone],[data-zsask],[data-zsopen],[data-zslayout],[data-zslb],[data-zsedtoggle],[data-zsimport],[data-zsexport],[data-zsphase],[data-zspretest],[data-zsrefresh],[data-zsrefsubmit],[data-zsweak]";
 if (typeof document !== "undefined") {
 	document.addEventListener("click", (e) => {
 		const t = e.target?.closest?.(TARGETS);
@@ -671,7 +659,7 @@ if (typeof document !== "undefined") {
 		if (d.zsback) return open(undefined, null);
 		if (d.zsedit) return edit(d.zsedit);
 		if (d.zsadd) return edit("new");
-		if (d.zszoom) return zoomBy(d.zszoom === "+" ? 0.5 : -0.5);
+		if (d.zslayout) { ui.layout = LAYOUTS.includes(d.zslayout) ? d.zslayout : LAYOUTS[0]; saveUi(); rerender(); return; }
 		if (d.zsquiz) return void submitQuiz(t.closest(".zs-world"));
 		if (d.zsdone) return void markDone(d.zsdone === "1");
 		if (d.zsask) return void ask(d.zsask);
@@ -697,9 +685,6 @@ if (typeof document !== "undefined") {
 		open(undefined, target.id);
 	});
 }
-
-// Breite der Ansicht ändert den Maßstab der Linie.
-if (typeof window !== "undefined") window.addEventListener("resize", U.debounce(() => { if (S.view === "zeitstrahl" && !ui.node) rerender(); }, 150));
 
 BUS.on("zs:changed", () => { if (S.view === "zeitstrahl" || S.sidebarMode === "files") rerender(); });
 BUS.provide("zs:workspace", workspace);

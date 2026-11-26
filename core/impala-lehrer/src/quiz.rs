@@ -214,12 +214,7 @@ pub fn record_pretest(tl: &Value, node: &str, answer: &Value, now: &str) -> Resu
         return Err(format!("Knoten „{}“ hat keine Einstiegsfrage.", n.title));
     };
     let g = grade_one(0, &q, answer);
-    let explain = match &q {
-        Question::Choice { explain, .. }
-        | Question::Text { explain, .. }
-        | Question::Number { explain, .. }
-        | Question::Cloze { explain, .. } => explain.clone(),
-    };
+    let explain = q.explain().to_string();
     n.progress.pretest_done = true;
     tl.updated = now.to_string();
     Ok(PretestOut { timeline: tl.to_value(), correct: g.correct, expected: g.expected, explain })

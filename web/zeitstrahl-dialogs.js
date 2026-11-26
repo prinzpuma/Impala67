@@ -118,9 +118,9 @@ export function skeletonPrompt(tl, { pages = [], wiki, focus = "" } = {}) {
 		focus ? `Mein Schwerpunkt: ${focus}` : "",
 		tl.exam ? `Klausur am ${tl.exam}: alle Wege sollen auf den Klausurstoff zulaufen.` : "",
 		history
-			? "Der Zeitstrahl ist eine Linie mit exakten Jahreszahlen: Jede Lektion ist ein echtes historisches Ereignis (Entdeckung, Erfindung, Veröffentlichung – mit Person im Titel, z. B. „1947: Bardeen, Brattain und Shockley bauen den Transistor“), das Jahr belegst du mit wikipedia. Keine erfundenen Jahre, nicht einfach die Kapitel des Skripts durchnummerieren; den Klausurstoff ordnest du dem passenden Ereignis zu."
-			: "",
-		`Lege mit edit_timeline (title „${tl.title}“) 8–20 Lektionen an, NUR als Gerüst: title, ${history ? "year (echtes Jahr), era (Epoche), " : ""}summary (ein Satz: welcher Klausurstoff hier gelernt wird) und parents (nur echte fachliche Voraussetzungen${history ? ", nie mit späterem Jahr" : ""}).`,
+			? "Der Zeitstrahl ist eine Linie mit exakten Jahreszahlen: Jede Lektion ist ein echtes historisches Ereignis (Entdeckung, Erfindung, Veröffentlichung – mit Person im Titel, z. B. „1947: Bardeen, Brattain und Shockley bauen den Transistor“), das Jahr belegst du mit wikipedia. Keine erfundenen Jahre, nicht einfach die Kapitel des Skripts durchnummerieren; den Klausurstoff ordnest du dem passenden Ereignis zu. Die Reihenfolge erzählt eine durchgehende Geschichte: Jede Lektion löst ein Problem, das die vorige offen gelassen hat."
+			: "Die Reihenfolge erzählt eine durchgehende Geschichte: Jede Lektion löst ein Problem, das die vorige offen gelassen hat.",
+		`Lege mit edit_timeline (title „${tl.title}“) 8–20 Lektionen an, NUR als Gerüst: title, ${history ? "year (echtes Jahr), era (Epoche), " : ""}summary (Leitfrage der Lektion als ein Satz, z. B. „Wie verstärkt man ohne heiße Röhre?“) und parents (nur echte fachliche Voraussetzungen${history ? ", nie mit späterem Jahr" : ""}).`,
 		"Noch KEINE body, quiz, images oder worksheet – ich prüfe das Gerüst zuerst und lasse die Lektionen dann ausarbeiten. Fasse am Ende kurz zusammen, wie der Zeitstrahl aufgebaut ist.",
 	].filter(Boolean).join("\n\n");
 }
@@ -134,10 +134,10 @@ export function fillPrompt(tl, nodes) {
 		`Arbeite bitte im Zeitstrahl „${tl.title}“ diese Entwurfs-Lektionen aus: ${list}.`,
 		mat,
 		...meta,
-		"Je Lektion mit edit_timeline: pretest (1 kurze Einstiegsfrage vor dem Lesen zum Vorwissen-Aktivieren), " +
-			"body (spannende Story als Einstieg, dann der Klausurstoff klar gegliedert mit Formeln/Notation aus meinen Skripten), " +
+		"Je Lektion mit edit_timeline: pretest (das Rätsel als Vorhersage-Frage vor dem Lesen), " +
+			"body als Story im Aufbau aus der edit_timeline-Beschreibung (Das Rätsel → " + (tl?.kind === "path" ? "" : "Der Weg → Der Durchbruch → ") + "Das Prinzip dahinter → In der Klausur → Offene Frage; jedes Detail erklärt das Konzept, Formeln/Notation aus meinen Skripten), " +
 			(useWiki ? "images (Wikipedia-Bilder), sources (Skriptseiten und Wikipedia) " : "sources (Skriptseiten) ") +
-			"und quiz (Fragen-Pool mit 6–8 abwechslungsreichen Fragen inkl. Anwendungs-/Transferfragen und kurzer explain-Begründung).",
+			"und quiz (6–8 Fragen, überwiegend Anwendung/Rechnen wie in der Klausur, jede mit kurzer explain-Begründung). Kommt story_todo zurück, die Punkte gleich nachbessern.",
 		useWiki
 			? "WICHTIG: Verwende für alle Inhalte, Fakten, Formeln, Bilder und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) oder Wikipedia (wikipedia) — kein allgemeines Vorwissen."
 			: "WICHTIG: Verwende für alle Inhalte, Fakten, Formeln und Quizfragen ausschließlich meine eigenen Notizen (search, read_pages) — kein allgemeines Vorwissen und kein Wikipedia.",

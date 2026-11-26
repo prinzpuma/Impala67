@@ -331,6 +331,15 @@ pub enum Question {
 }
 
 impl Question {
+    pub fn explain(&self) -> &str {
+        match self {
+            Question::Choice { explain, .. }
+            | Question::Text { explain, .. }
+            | Question::Number { explain, .. }
+            | Question::Cloze { explain, .. } => explain,
+        }
+    }
+
     /// Liest eine Frage und gleicht Eingabevarianten an: `answer: idx` bei `choice`, Zahlen als Text.
     pub fn from_value(v: &Value) -> Result<Question, String> {
         let Some(obj) = v.as_object() else { return Err("Frage muss ein Objekt sein.".into()) };

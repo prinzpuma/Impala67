@@ -3,15 +3,17 @@
 import { U } from "./util.js";
 import { icon } from "./icons.js";
 
-// zeitstrahl-graph.js — Zeitstrahl als eine Linie: Markierungen an den exakten Jahren
-// (maßstabsgetreu), Beschriftung abwechselnd oben und unten, Zustand nur am Punkt.
-// Lernpfad (ohne Jahre): gleichmäßige Abstände in der Reihenfolge des Kerns (Spalte, Spur).
+// zeitstrahl-graph.js — Übersicht eines Zeitstrahls in zwei Ansichten:
+// „Faden“ (senkrecht wie ein Longread, zwischen den Kapiteln die offene Frage zur nächsten Lektion)
+// und „Streifen“ (große Kapitel-Karten zum Wischen, Epochen als Farbbänder, Zeitsprünge als Streifen).
+// Aussehen je Zeitstrahl über die Thema-Variablen (--zs-*, siehe css/zeitstrahl.css).
 
 const esc = (s) => U.esc(String(s ?? ""));
-
-const PAD = 70, MIN_GAP = 18, LABEL_W = 150, ROW_H = 54, STEM = 20, LINE_GAP = 26;
+const ERA_COLORS = 6;
+const GAP_YEARS = 20;
 
 export const STATE_LABEL = { mastered: "Geschafft", next: "Als Nächstes", later: "Später" };
+export const LAYOUTS = ["faden", "reel"];
 
 export function fmtYear(y) {
 	if (y == null || !Number.isFinite(Number(y))) return "";
@@ -28,125 +30,127 @@ export function examInfo(exam) {
 	return { days, rel };
 }
 
-// Runde Jahre für die Skala: Schrittweite passend zur Spanne.
-function ticks(min, max) {
-	const span = Math.max(1, max - min);
-	const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find((s) => span / s <= 8) || 1000;
-	const out = [];
-	for (let y = Math.ceil(min / step) * step; y <= max; y += step) out.push(y);
-	return out;
-}
+const isHistory = (v) => v.kind !== "path" && v.nodes.some((n) => n.year != null);
 
-// x je Knoten: Jahre maßstabsgetreu; zu dicht liegende Punkte rücken minimal auseinander.
-function place(v, width) {
-	const history = v.kind !== "path" && v.nodes.some((n) => n.year != null);
-	const list = v.nodes.slice().sort((a, b) =>
+/** Lernreihenfolge: Geschichte nach Jahr, Lernpfad nach Spalte und Spur des Kerns. */
+export function orderedNodes(v) {
+	const history = isHistory(v);
+	return v.nodes.slice().sort((a, b) =>
 		history ? (a.year ?? Infinity) - (b.year ?? Infinity) || a.col - b.col : a.col - b.col || a.lane - b.lane);
-	const dated = history ? list.filter((n) => n.year != null) : [];
-	const min = dated.length ? dated[0].year : 0, max = dated.length ? dated[dated.length - 1].year : 0;
-	const inner = Math.max(width - 2 * PAD, (list.length - 1) * MIN_GAP);
-	let last = -Infinity;
-	const pts = list.map((n, i) => {
-		let x = history && n.year != null
-			? PAD + (max > min ? ((n.year - min) / (max - min)) * inner : inner / 2)
-			: history ? PAD + inner + MIN_GAP * 2 : PAD + (list.length > 1 ? (i / (list.length - 1)) * inner : inner / 2);
-		x = Math.max(x, last + MIN_GAP);
-		last = x;
-		return { n, x };
-	});
-	return { pts, history, min, max, inner, end: Math.max(PAD + inner, last) + PAD };
 }
 
-// Beschriftungen: abwechselnd oben/unten, bei Platzmangel eine Reihe weiter weg.
-function rows(pts) {
-	const right = { up: [], down: [] };
-	return pts.map((p, i) => {
-		const pref = i % 2 ? "down" : "up";
-		const pick = (side) => {
-			const r = right[side].findIndex((edge) => p.x - LABEL_W / 2 > edge + 6);
-			return r < 0 ? right[side].length : r;
-		};
-		const other = pref === "up" ? "down" : "up";
-		const a = pick(pref), b = pick(other);
-		const side = b < a ? other : pref, row = Math.min(a, b);
-		right[side][row] = p.x + LABEL_W / 2;
-		return { ...p, side, row };
-	});
+/** Epochen in der Reihenfolge ihres ersten Auftretens → Farbe --zs-era-1 … --zs-era-6. */
+function eraColors(seq) {
+	const idx = new Map();
+	for (const n of seq) if (n.era && !idx.has(n.era)) idx.set(n.era, (idx.size % ERA_COLORS) + 1);
+	return (n) => `--era:var(--zs-era-${idx.get(n.era) || 1})`;
 }
 
-export function graphHtml(v, { width, zoom }) {
-	const { pts, history, min, max, inner, end } = place(v, width * zoom);
-	const labeled = rows(pts);
-	const up = Math.max(0, ...labeled.filter((p) => p.side === "up").map((p) => p.row + 1));
-	const down = Math.max(0, ...labeled.filter((p) => p.side === "down").map((p) => p.row + 1));
-	const lineY = 24 + up * ROW_H + STEM;
-	const h = lineY + STEM + down * ROW_H + LINE_GAP + 10;
-	const next = labeled.filter((p) => p.n.state === "next").sort((a, b) => a.x - b.x)[0];
-	const doneTo = next ? next.x : labeled.every((p) => p.n.state === "mastered") && labeled.length ? labeled[labeled.length - 1].x : PAD;
+/** Skizze der KI (als Bild, Skripte laufen darin nicht) oder das erste Bild der Lektion. */
+function artHtml(n, cls) {
+	const svg = typeof n.svg === "string" && n.svg.trim().toLowerCase().startsWith("<svg") ? n.svg : "";
+	if (svg) return `<img class="${cls}" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" alt="" aria-hidden="true">`;
+	if (n.image) return `<img class="${cls} is-photo" src="${esc(n.image)}" alt="" aria-hidden="true" loading="lazy" referrerpolicy="no-referrer">`;
+	return "";
+}
 
-	const scale = history && max > min
-		? ticks(min, max).map((y) => {
-			const x = PAD + ((y - min) / (max - min)) * inner;
-			return `<line class="zs-tick" x1="${x}" y1="${lineY - 4}" x2="${x}" y2="${lineY + 4}"/><text class="zs-tick-txt" x="${x}" y="${h - 8}" text-anchor="middle">${esc(fmtYear(y))}</text>`;
-		}).join("")
-		: "";
-	const memCls = (n) => n.memory_state && n.memory_state !== "fresh" ? ` mem-${esc(n.memory_state)}` : "";
-	const stems = labeled.map((p) => {
-		const len = STEM + p.row * ROW_H;
-		const y2 = p.side === "up" ? lineY - len : lineY + len;
-		return `<line class="zs-stem is-${esc(p.n.state)}${memCls(p.n)}" x1="${p.x}" y1="${lineY}" x2="${p.x}" y2="${y2}"/>`;
+const memCls = (n) => n.memory_state && n.memory_state !== "fresh" ? ` mem-${esc(n.memory_state)}` : "";
+
+function stateHint(n) {
+	if (n.draft) return "Entwurf";
+	if (n.state === "mastered") return n.freshness ? `Geschafft · Frische ${n.freshness}%` : "Geschafft";
+	return n.state === "next" ? "Als Nächstes" : "";
+}
+
+function threadHtml(v) {
+	const seq = orderedNodes(v);
+	const history = isHistory(v);
+	const era = eraColors(seq);
+	const parts = seq.map((n, i) => {
+		const nx = seq[i + 1];
+		const when = history ? fmtYear(n.year) : String(i + 1);
+		const ch = `<article class="zs-ch is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsch="${esc(n.id)}">` +
+			`<div class="zs-ch-year">${esc(when)}</div>` +
+			`<div class="zs-ch-body">${artHtml(n, "zs-ch-art")}` +
+			(n.era ? `<div class="zs-ch-era">${esc(n.era)}</div>` : "") +
+			`<h2 class="zs-ch-title">${esc(n.title)}</h2>` +
+			(n.summary ? `<p class="zs-ch-hook">${esc(n.summary)}</p>` : "") +
+			`<div class="zs-ch-act"><button type="button" class="zs-btn${n.state === "next" ? " primary" : ""}" data-zsnode="${esc(n.id)}">${n.state === "mastered" ? "Nochmal lesen" : "Kapitel lesen"}</button>` +
+			`<span class="zs-ch-state">${esc(stateHint(n))}</span></div></div></article>`;
+		if (!nx) return ch;
+		const gap = history && n.year != null && nx.year != null && nx.year > n.year
+			? `${Math.round(nx.year - n.year)} ${Math.round(nx.year - n.year) === 1 ? "Jahr" : "Jahre"} später` : "";
+		const q = n.open_question
+			? `<p class="zs-link-q"><b>Offene Frage</b><span class="zs-link-txt">${esc(n.open_question)}</span></p>`
+			: `<p class="zs-link-q is-empty"></p>`;
+		return ch + `<div class="zs-link"><div class="zs-link-gap">${esc(gap)}</div>${q}</div>`;
+	});
+	return `<div class="zs-thread"><div class="zs-pulse" aria-hidden="true"></div>${parts.join("")}</div>`;
+}
+
+function reelHtml(v) {
+	const seq = orderedNodes(v);
+	const history = isHistory(v);
+	const era = eraColors(seq);
+	const frames = seq.map((n, i) => {
+		const prev = seq[i - 1];
+		const years = history && prev && n.year != null && prev.year != null ? Math.round(n.year - prev.year) : 0;
+		const gap = years >= GAP_YEARS ? `<div class="zs-gap" aria-hidden="true">${years} Jahre</div>` : "";
+		const cont = prev && prev.era === n.era && !gap;
+		const when = history ? fmtYear(n.year) : String(i + 1);
+		return gap + `<button type="button" class="zs-frame is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsnode="${esc(n.id)}">` +
+			`<span class="zs-frame-band${cont ? " is-cont" : ""}">${esc(n.era || "")}</span>` +
+			`<span class="zs-frame-in"><span class="zs-frame-year">${esc(when)}</span>${artHtml(n, "zs-frame-art")}` +
+			`<span class="zs-frame-title">${esc(n.title)}</span>` +
+			(n.summary ? `<span class="zs-frame-hook">${esc(n.summary)}</span>` : "") +
+			`<span class="zs-frame-foot"><span class="zs-dot"></span>${esc(stateHint(n) || "Noch offen")}</span></span></button>`;
 	}).join("");
-	const dots = labeled.map((p) =>
-		`<circle class="zs-dotmark is-${esc(p.n.state)}${memCls(p.n)}" cx="${p.x}" cy="${lineY}" r="${p.n.state === "next" ? 8 : 6}"/>` +
-		(p.n.state === "next" ? `<circle class="zs-halo" cx="${p.x}" cy="${lineY}" r="15"/>` : "")).join("");
-	const labels = labeled.map((p) => {
-		const len = STEM + p.row * ROW_H;
-		// Oben am unteren Rand ausgerichtet (wächst nach oben), unten am oberen.
-		const pos = p.side === "up" ? `bottom:${h - (lineY - len) + 2}px` : `top:${lineY + len + 2}px`;
-		const when = history ? fmtYear(p.n.year) : `${labeled.indexOf(p) + 1}.`;
-		const freshHint = p.n.state === "mastered" && p.n.freshness ? ` · Frische ${p.n.freshness}%` : "";
-		return `<button type="button" class="zs-mark is-${esc(p.n.state)}${memCls(p.n)}${p.n.draft ? " is-draft" : ""} ${p.side}" data-zsnode="${esc(p.n.id)}" ` +
-			`style="left:${p.x - LABEL_W / 2}px;${pos};width:${LABEL_W}px" title="${esc(p.n.title)}${p.n.summary ? " – " + esc(p.n.summary) : ""}${freshHint}">` +
-			`<b>${esc(when)}</b><span>${esc(p.n.title)}</span></button>`;
-	}).join("");
-
-	return `<div class="zs-graph"><div class="zs-scroll" data-zsscroll="1"><div class="zs-canvas" style="width:${end}px;height:${h}px">` +
-		`<svg class="zs-line-svg" width="${end}" height="${h}" aria-hidden="true">` +
-		`<line class="zs-line" x1="${PAD / 2}" y1="${lineY}" x2="${end - PAD / 2}" y2="${lineY}"/>` +
-		`<line class="zs-line-done" x1="${PAD / 2}" y1="${lineY}" x2="${doneTo}" y2="${lineY}"/>` +
-		scale + stems + dots + `</svg>${labels}</div></div>` +
-		`<div class="zs-tools" role="toolbar" aria-label="Ansicht">` +
-		`<button type="button" class="zs-tool" data-zszoom="-" aria-label="Verkleinern">${icon("minus")}</button>` +
-		`<button type="button" class="zs-tool" data-zszoom="+" aria-label="Vergrößern">${icon("plus")}</button>` +
-		`</div></div>`;
+	return `<div class="zs-reel-wrap"><div class="zs-reel" data-zsreel="1">${frames}</div>` +
+		`<div class="zs-reel-nav"><button type="button" class="zs-iconbtn" data-zsreelnav="-1" aria-label="Zurück">${icon("chevron-left")}</button>` +
+		`<button type="button" class="zs-iconbtn" data-zsreelnav="1" aria-label="Weiter">${icon("chevron-right")}</button></div></div>`;
 }
 
-/** Scrollt die nächste Lektion ins linke Drittel (nur wenn der Strahl breiter ist als die Ansicht). */
-export function focusNext(root) {
-	const scroll = root.querySelector("[data-zsscroll]");
-	const el = root.querySelector(".zs-mark.is-next");
-	if (!scroll || !el || scroll.scrollWidth <= scroll.clientWidth) return;
-	scroll.scrollTo({ left: Math.max(0, parseFloat(el.style.left) - scroll.clientWidth / 3), behavior: "smooth" });
+export function overviewHtml(v, layout) {
+	return layout === "reel" ? reelHtml(v) : threadHtml(v);
 }
 
-/** Ziehen mit der Maus verschiebt den Strahl; Strg/⌘ + Mausrad zoomt. */
-export function attachGraph(root, onZoom) {
-	const scroll = root.querySelector("[data-zsscroll]");
-	if (!scroll) return;
-	let drag = null;
-	scroll.addEventListener("pointerdown", (e) => {
-		if (e.pointerType !== "mouse" || e.button !== 0 || e.target.closest("button")) return;
-		drag = { x: e.clientX, l: scroll.scrollLeft };
-		scroll.setPointerCapture(e.pointerId);
-		scroll.classList.add("is-dragging");
-	});
-	scroll.addEventListener("pointermove", (e) => { if (drag) scroll.scrollLeft = drag.l - (e.clientX - drag.x); });
-	const end = () => { drag = null; scroll.classList.remove("is-dragging"); };
-	scroll.addEventListener("pointerup", end);
-	scroll.addEventListener("pointercancel", end);
-	scroll.addEventListener("wheel", (e) => {
-		if (!e.ctrlKey && !e.metaKey) return;
-		e.preventDefault();
-		onZoom(e.deltaY < 0 ? 0.25 : -0.25);
-	}, { passive: false });
+/** Fortschrittslinie im Faden bis zur nächsten Lektion (ganz, wenn alles geschafft ist). */
+function placePulse(root) {
+	const thread = root.querySelector(".zs-thread");
+	const pulse = thread?.querySelector(".zs-pulse");
+	if (!pulse) return;
+	const chs = [...thread.querySelectorAll(".zs-ch")];
+	const next = thread.querySelector(".zs-ch.is-next") || (chs.every((c) => c.classList.contains("is-mastered")) ? chs.at(-1) : chs[0]);
+	const first = chs[0];
+	if (!next || !first) return;
+	pulse.style.top = `${first.offsetTop + 20}px`;
+	pulse.style.height = `${Math.max(0, next.offsetTop - first.offsetTop)}px`;
+}
+
+/** Nächste Lektion ins Bild holen (Faden: senkrecht in `main`, Streifen: waagrecht). */
+export function focusNext(root, main) {
+	const reel = root.querySelector("[data-zsreel]");
+	if (reel) {
+		const f = reel.querySelector(".zs-frame.is-next");
+		if (f) reel.scrollLeft = Math.max(0, f.offsetLeft - (reel.clientWidth - f.offsetWidth) / 2);
+		return;
+	}
+	const ch = root.querySelector(".zs-ch.is-next");
+	if (!ch || !main) return;
+	const top = ch.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop;
+	if (top > main.clientHeight * .6) main.scrollTop = top - 80;
+}
+
+export function attachOverview(root) {
+	placePulse(root);
+	const thread = root.querySelector(".zs-thread");
+	if (thread && typeof ResizeObserver !== "undefined") {
+		const ro = new ResizeObserver(() => { if (!thread.isConnected) ro.disconnect(); else placePulse(root); });
+		ro.observe(thread);
+	}
+	const reel = root.querySelector("[data-zsreel]");
+	root.querySelectorAll("[data-zsreelnav]").forEach((b) => b.addEventListener("click", (e) => {
+		e.stopPropagation();
+		reel?.scrollBy({ left: Number(b.dataset.zsreelnav) * Math.max(280, reel.clientWidth * .7), behavior: "smooth" });
+	}));
 }

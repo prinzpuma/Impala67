@@ -19,6 +19,8 @@ pub struct EditOut {
     pub removed: Vec<String>,
     /// Hinweise ohne Abbruch, z. B. Lektion früher datiert als ihre Voraussetzung.
     pub warnings: Vec<String>,
+    /// Qualitätshinweise an die KI zu ausgearbeiteten Lektionen (Story-Abschnitte, Quiz-Pool).
+    pub story: Vec<String>,
 }
 
 /// Gesendete Felder eines Knotens; `None` = nicht gesendet, `Some(None)` = ausdrücklich geleert.
@@ -386,7 +388,13 @@ pub fn apply_edit(tl: Option<Value>, edit: &Value, now: &str) -> Result<EditOut,
     }
     t.updated = now.to_string();
     let warnings = year_warnings(&t);
-    Ok(EditOut { timeline: t.to_value(), added, updated, removed, warnings })
+    let story = added
+        .iter()
+        .chain(&updated)
+        .filter_map(|id| t.nodes.iter().find(|n| &n.id == id))
+        .flat_map(|n| story_warnings(n, t.is_path()))
+        .collect();
+    Ok(EditOut { timeline: t.to_value(), added, updated, removed, warnings, story })
 }
 
 /// Lektionen, die früher datiert sind als eine ihrer Voraussetzungen (die Linie zeigt Jahre exakt).
@@ -405,6 +413,44 @@ fn year_warnings(t: &Timeline) -> Vec<String> {
                 ));
             }
         }
+    }
+    out
+}
+
+/// Story-Abschnitte, die jede ausgearbeitete Lektion braucht (Beschreibung in tool_defs.json).
+const STORY_SECTIONS: [&str; 6] = ["Das Rätsel", "Der Weg", "Der Durchbruch", "Das Prinzip dahinter", "In der Klausur", "Offene Frage"];
+const MIN_QUIZ: usize = 6;
+
+/// Hinweise für ausgearbeitete Lektionen (Gerüste bleiben still): fehlende Story-Abschnitte,
+/// zu kleiner Quiz-Pool, Fragen ohne Begründung, kein Rätsel vor dem Lesen.
+fn story_warnings(n: &Node, path: bool) -> Vec<String> {
+    if crate::layout::is_draft(n) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let headings: Vec<String> = n
+        .body
+        .lines()
+        .filter_map(|l| l.trim_start().strip_prefix('#').map(|h| h.trim_start_matches('#').trim().to_lowercase()))
+        .collect();
+    let missing: Vec<&str> = STORY_SECTIONS
+        .iter()
+        .filter(|s| !(path && matches!(**s, "Der Weg" | "Der Durchbruch")))
+        .filter(|s| !headings.iter().any(|h| h.starts_with(&s.to_lowercase())))
+        .copied()
+        .collect();
+    if !missing.is_empty() {
+        out.push(format!("„{}“: Story-Abschnitte fehlen im body: {}.", n.title, missing.join(", ")));
+    }
+    if n.quiz.len() < MIN_QUIZ {
+        out.push(format!("„{}“: nur {} Quizfragen – {MIN_QUIZ}–8 mit Anwendung/Rechnen ergänzen.", n.title, n.quiz.len()));
+    }
+    let bare = n.quiz.iter().filter(|q| q.explain().trim().is_empty()).count();
+    if bare > 0 {
+        out.push(format!("„{}“: {bare} Quizfragen ohne explain.", n.title));
+    }
+    if n.pretest.is_none() {
+        out.push(format!("„{}“: kein pretest – das Rätsel als Vorhersage-Frage vor dem Lesen.", n.title));
     }
     out
 }
