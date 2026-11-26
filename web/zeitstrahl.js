@@ -358,6 +358,9 @@ function themeStyle(tl) {
 }
 
 // ---------- Zeichnen ----------
+// #main scrollt nicht selbst; die Zeitstrahl-Welt ist ihr eigener Scroll-Container.
+const scroller = (main) => main.querySelector(".zs-world") || main;
+
 function render(main) {
 	main._lastPageShellHtml = null;
 	if (!ZS_STORE.ready()) {
@@ -373,10 +376,10 @@ function render(main) {
 	if (main.dataset.zsKey === key && main.querySelector(".zs-world")) return;
 	// Gleiche Übersicht neu aufgebaut (Daten geändert): Scrollstand halten.
 	const sameOverview = !!tl && !node && !ui.refresh && main.dataset.zsTl === tl.id && main.dataset.zsLayout === ui.layout && !!main.querySelector(".zs-world.is-graph");
-	const scrollPos = sameOverview ? { t: main.scrollTop, l: main.querySelector("[data-zsreel]")?.scrollLeft || 0 } : null;
+	const scrollPos = sameOverview ? { t: scroller(main).scrollTop, l: main.querySelector("[data-zsreel]")?.scrollLeft || 0 } : null;
 	// Gleiche Lektion neu aufgebaut (Quiz geprüft, KI hat bewertet): Lesestelle und Eingaben behalten.
 	const sameLesson = !!node && main.dataset.zsNode === node.id && !!main.querySelector(".zs-lesson");
-	const keep = sameLesson ? { top: main.scrollTop, inputs: snapshotInputs(main) } : null;
+	const keep = sameLesson ? { top: scroller(main).scrollTop, inputs: snapshotInputs(main) } : null;
 	main.dataset.zsKey = key;
 	main.dataset.zsNode = node?.id || "";
 	main.dataset.zsTl = tl?.id || "";
@@ -394,22 +397,21 @@ function render(main) {
 		themeStyle(tl) + bodyHtml + `</div>`;
 	if (ui.refresh) {
 		U.renderMath?.(main.querySelector(".zs-lesson"));
-		main.scrollTop = 0;
+		scroller(main).scrollTop = 0;
 		return;
 	}
 	if (node) {
 		if (ui.editing) wireLessonEditor(main, tl, node, { onDone: () => { ui.editing = false; rerender(); } });
 		else U.renderMath?.(main.querySelector(".zs-lesson"));
-		if (keep && !ui.editing) { restoreInputs(main, keep.inputs); main.scrollTop = keep.top; } else main.scrollTop = 0;
+		if (keep && !ui.editing) { restoreInputs(main, keep.inputs); scroller(main).scrollTop = keep.top; } else scroller(main).scrollTop = 0;
 		return;
 	}
-	main.scrollTop = 0;
 	attachOverview(main);
 	if (scrollPos) {
-		main.scrollTop = scrollPos.t;
+		scroller(main).scrollTop = scrollPos.t;
 		const reel = main.querySelector("[data-zsreel]");
 		if (reel) reel.scrollLeft = scrollPos.l;
-	} else requestAnimationFrame(() => focusNext(main, main));
+	} else requestAnimationFrame(() => focusNext(main, scroller(main)));
 }
 
 // Eingaben im Quiz je Feld (Name + Lücke bzw. Wert) – überleben so einen Neuaufbau der Lektion.

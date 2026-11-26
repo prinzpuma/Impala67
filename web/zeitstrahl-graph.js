@@ -5,7 +5,7 @@ import { icon } from "./icons.js";
 
 // zeitstrahl-graph.js — Übersicht eines Zeitstrahls in zwei Ansichten:
 // „Faden“ (senkrecht wie ein Longread, zwischen den Kapiteln die offene Frage zur nächsten Lektion)
-// und „Streifen“ (große Kapitel-Karten zum Wischen, Epochen als Farbbänder, Zeitsprünge als Streifen).
+// und „Streifen“ (Kapitel-Karten zum Wischen, Epochen als Farbleiste, Zeitsprünge als schmale Streifen).
 // Aussehen je Zeitstrahl über die Thema-Variablen (--zs-*, siehe css/zeitstrahl.css).
 
 const esc = (s) => U.esc(String(s ?? ""));
@@ -71,12 +71,12 @@ function threadHtml(v) {
 		const when = history ? fmtYear(n.year) : String(i + 1);
 		const ch = `<article class="zs-ch is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsch="${esc(n.id)}">` +
 			`<div class="zs-ch-year">${esc(when)}</div>` +
-			`<div class="zs-ch-body">${artHtml(n, "zs-ch-art")}` +
+			`<div class="zs-ch-body"><div class="zs-ch-card">${artHtml(n, "zs-ch-art")}` +
 			(n.era ? `<div class="zs-ch-era">${esc(n.era)}</div>` : "") +
 			`<h2 class="zs-ch-title">${esc(n.title)}</h2>` +
 			(n.summary ? `<p class="zs-ch-hook">${esc(n.summary)}</p>` : "") +
 			`<div class="zs-ch-act"><button type="button" class="zs-btn${n.state === "next" ? " primary" : ""}" data-zsnode="${esc(n.id)}">${n.state === "mastered" ? "Nochmal lesen" : "Kapitel lesen"}</button>` +
-			`<span class="zs-ch-state">${esc(stateHint(n))}</span></div></div></article>`;
+			`<span class="zs-ch-state">${esc(stateHint(n))}</span></div></div></div></article>`;
 		if (!nx) return ch;
 		const gap = history && n.year != null && nx.year != null && nx.year > n.year
 			? `${Math.round(nx.year - n.year)} ${Math.round(nx.year - n.year) === 1 ? "Jahr" : "Jahre"} später` : "";
@@ -95,12 +95,11 @@ function reelHtml(v) {
 	const frames = seq.map((n, i) => {
 		const prev = seq[i - 1];
 		const years = history && prev && n.year != null && prev.year != null ? Math.round(n.year - prev.year) : 0;
-		const gap = years >= GAP_YEARS ? `<div class="zs-gap" aria-hidden="true">${years} Jahre</div>` : "";
-		const cont = prev && prev.era === n.era && !gap;
+		const gap = years >= GAP_YEARS ? `<div class="zs-jump" aria-hidden="true"><span>${years} Jahre</span></div>` : "";
 		const when = history ? fmtYear(n.year) : String(i + 1);
 		return gap + `<button type="button" class="zs-frame is-${esc(n.state)}${memCls(n)}${n.draft ? " is-draft" : ""}" style="${era(n)}" data-zsnode="${esc(n.id)}">` +
-			`<span class="zs-frame-band${cont ? " is-cont" : ""}">${esc(n.era || "")}</span>` +
-			`<span class="zs-frame-in"><span class="zs-frame-year">${esc(when)}</span>${artHtml(n, "zs-frame-art")}` +
+			`<span class="zs-frame-band"></span>` +
+			`<span class="zs-frame-in">${n.era ? `<span class="zs-frame-era">${esc(n.era)}</span>` : ""}<span class="zs-frame-year">${esc(when)}</span>${artHtml(n, "zs-frame-art")}` +
 			`<span class="zs-frame-title">${esc(n.title)}</span>` +
 			(n.summary ? `<span class="zs-frame-hook">${esc(n.summary)}</span>` : "") +
 			`<span class="zs-frame-foot"><span class="zs-dot"></span>${esc(stateHint(n) || "Noch offen")}</span></span></button>`;
