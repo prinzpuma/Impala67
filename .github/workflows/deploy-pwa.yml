@@ -15,12 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-and-deploy:
-    name: PWA prüfen und auf GitHub Pages bereitstellen
+  build:
+    name: PWA prüfen und Artefakt bauen
     runs-on: ubuntu-26.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,6 +61,14 @@ jobs:
         with:
           path: web
 
+  deploy:
+    name: Auf GitHub Pages ausrollen
+    needs: build
+    runs-on: ubuntu-26.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Auf GitHub Pages ausrollen
         id: deployment
         uses: actions/deploy-pages@v5
