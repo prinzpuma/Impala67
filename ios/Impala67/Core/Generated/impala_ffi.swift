@@ -3826,6 +3826,16 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftCommitStrokes(pageId: String, heftPageId: String, add: [HeftStroke], remove: [String]) throws 
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt löschen.
+     */
+    func heftDeleteLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String]) throws  -> HeftEdit
+    
+    /**
+     * Gemischte Lasso-Auswahl 28 Einheiten versetzt duplizieren; liefert die neuen IDs + Grenzen.
+     */
+    func heftDuplicateLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String]) throws  -> HeftLassoSelection
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
     func heftDuplicateStrokes(pageId: String, heftPageId: String, ids: [String]) throws  -> HeftEdit
@@ -3866,6 +3876,16 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Hefte direkt in `folder_id` (`None`: im Stamm), nach Regal-Reihenfolge; ohne Papierkorb und Archiv.
      */
     func heftInFolder(folderId: String?)  -> [PageSummary]
+    
+    /**
+     * Gemeinsame Grenzen einer gemischten Lasso-Auswahl (Striche + Bilder + Textfelder).
+     */
+    func heftLassoBounds(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String]) throws  -> HeftRect?
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt verschieben.
+     */
+    func heftMoveLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], dx: Double, dy: Double) throws  -> HeftEdit
     
     /**
      * Seite `heft_page_id` an Position `to` schieben.
@@ -3944,6 +3964,16 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
     func heftRestore(pageId: String, snapshot: String) throws  -> HeftEdit
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt um `(cx, cy)` drehen (`angle` in Radiant).
+     */
+    func heftRotateLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], cx: Double, cy: Double, angle: Double) throws  -> HeftEdit
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
+     */
+    func heftScaleLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], ax: Double, ay: Double, factor: Double) throws  -> HeftEdit
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
     func heftScaleStrokes(pageId: String, heftPageId: String, ids: [String], ax: Double, ay: Double, factor: Double) throws  -> HeftEdit
@@ -3952,6 +3982,11 @@ public protocol ImpalaCoreProtocol: AnyObject, Sendable {
      * Striche, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
      */
     func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float]) throws  -> [String]
+    
+    /**
+     * Striche, Bilder und Textfelder, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
+     */
+    func heftSelectLasso(pageId: String, heftPageId: String, polygon: [Float]) throws  -> HeftLassoSelection
     
     /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
@@ -5328,6 +5363,36 @@ open func heftCommitStrokes(pageId: String, heftPageId: String, add: [HeftStroke
 }
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt löschen.
+     */
+open func heftDeleteLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String])throws  -> HeftEdit  {
+    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_delete_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),$0
+    )
+})
+}
+    
+    /**
+     * Gemischte Lasso-Auswahl 28 Einheiten versetzt duplizieren; liefert die neuen IDs + Grenzen.
+     */
+open func heftDuplicateLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String])throws  -> HeftLassoSelection  {
+    return try  FfiConverterTypeHeftLassoSelection_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),$0
+    )
+})
+}
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
 open func heftDuplicateStrokes(pageId: String, heftPageId: String, ids: [String])throws  -> HeftEdit  {
@@ -5418,6 +5483,38 @@ open func heftInFolder(folderId: String?) -> [PageSummary]  {
     return try!  FfiConverterSequenceTypePageSummary.lift(try! rustCall() {
     uniffi_impala_ffi_fn_method_impalacore_heft_in_folder(self.uniffiClonePointer(),
         FfiConverterOptionString.lower(folderId),$0
+    )
+})
+}
+    
+    /**
+     * Gemeinsame Grenzen einer gemischten Lasso-Auswahl (Striche + Bilder + Textfelder).
+     */
+open func heftLassoBounds(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String])throws  -> HeftRect?  {
+    return try  FfiConverterOptionTypeHeftRect.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_lasso_bounds(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),$0
+    )
+})
+}
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt verschieben.
+     */
+open func heftMoveLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], dx: Double, dy: Double)throws  -> HeftEdit  {
+    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_move_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),
+        FfiConverterDouble.lower(dx),
+        FfiConverterDouble.lower(dy),$0
     )
 })
 }
@@ -5612,6 +5709,42 @@ open func heftRestore(pageId: String, snapshot: String)throws  -> HeftEdit  {
 }
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt um `(cx, cy)` drehen (`angle` in Radiant).
+     */
+open func heftRotateLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], cx: Double, cy: Double, angle: Double)throws  -> HeftEdit  {
+    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_rotate_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),
+        FfiConverterDouble.lower(cx),
+        FfiConverterDouble.lower(cy),
+        FfiConverterDouble.lower(angle),$0
+    )
+})
+}
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
+     */
+open func heftScaleLasso(pageId: String, heftPageId: String, strokeIds: [String], imageIds: [String], textIds: [String], ax: Double, ay: Double, factor: Double)throws  -> HeftEdit  {
+    return try  FfiConverterTypeHeftEdit_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_scale_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceString.lower(strokeIds),
+        FfiConverterSequenceString.lower(imageIds),
+        FfiConverterSequenceString.lower(textIds),
+        FfiConverterDouble.lower(ax),
+        FfiConverterDouble.lower(ay),
+        FfiConverterDouble.lower(factor),$0
+    )
+})
+}
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
 open func heftScaleStrokes(pageId: String, heftPageId: String, ids: [String], ax: Double, ay: Double, factor: Double)throws  -> HeftEdit  {
@@ -5633,6 +5766,19 @@ open func heftScaleStrokes(pageId: String, heftPageId: String, ids: [String], ax
 open func heftSelectByLasso(pageId: String, heftPageId: String, polygon: [Float])throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(self.uniffiClonePointer(),
+        FfiConverterString.lower(pageId),
+        FfiConverterString.lower(heftPageId),
+        FfiConverterSequenceFloat.lower(polygon),$0
+    )
+})
+}
+    
+    /**
+     * Striche, Bilder und Textfelder, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
+     */
+open func heftSelectLasso(pageId: String, heftPageId: String, polygon: [Float])throws  -> HeftLassoSelection  {
+    return try  FfiConverterTypeHeftLassoSelection_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_impala_ffi_fn_method_impalacore_heft_select_lasso(self.uniffiClonePointer(),
         FfiConverterString.lower(pageId),
         FfiConverterString.lower(heftPageId),
         FfiConverterSequenceFloat.lower(polygon),$0
@@ -13549,6 +13695,184 @@ public func FfiConverterTypeHeftLassoHandle_lift(_ buf: RustBuffer) throws -> He
 #endif
 public func FfiConverterTypeHeftLassoHandle_lower(_ value: HeftLassoHandle) -> RustBuffer {
     return FfiConverterTypeHeftLassoHandle.lower(value)
+}
+
+
+/**
+ * Drehgriff mittig über dem Auswahlrahmen samt Drehpunkt `(cx, cy)`.
+ */
+public struct HeftLassoRotateHandle {
+    public var x: Double
+    public var y: Double
+    public var cx: Double
+    public var cy: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(x: Double, y: Double, cx: Double, cy: Double) {
+        self.x = x
+        self.y = y
+        self.cx = cx
+        self.cy = cy
+    }
+}
+
+#if compiler(>=6)
+extension HeftLassoRotateHandle: Sendable {}
+#endif
+
+
+extension HeftLassoRotateHandle: Equatable, Hashable {
+    public static func ==(lhs: HeftLassoRotateHandle, rhs: HeftLassoRotateHandle) -> Bool {
+        if lhs.x != rhs.x {
+            return false
+        }
+        if lhs.y != rhs.y {
+            return false
+        }
+        if lhs.cx != rhs.cx {
+            return false
+        }
+        if lhs.cy != rhs.cy {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(x)
+        hasher.combine(y)
+        hasher.combine(cx)
+        hasher.combine(cy)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftLassoRotateHandle: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftLassoRotateHandle {
+        return
+            try HeftLassoRotateHandle(
+                x: FfiConverterDouble.read(from: &buf), 
+                y: FfiConverterDouble.read(from: &buf), 
+                cx: FfiConverterDouble.read(from: &buf), 
+                cy: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftLassoRotateHandle, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.x, into: &buf)
+        FfiConverterDouble.write(value.y, into: &buf)
+        FfiConverterDouble.write(value.cx, into: &buf)
+        FfiConverterDouble.write(value.cy, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftLassoRotateHandle_lift(_ buf: RustBuffer) throws -> HeftLassoRotateHandle {
+    return try FfiConverterTypeHeftLassoRotateHandle.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftLassoRotateHandle_lower(_ value: HeftLassoRotateHandle) -> RustBuffer {
+    return FfiConverterTypeHeftLassoRotateHandle.lower(value)
+}
+
+
+/**
+ * Ergebnis einer Lasso-Auswahl (Striche, Bilder und Textfelder einer Seite samt Rahmen).
+ */
+public struct HeftLassoSelection {
+    public var strokeIds: [String]
+    public var imageIds: [String]
+    public var textIds: [String]
+    public var bounds: HeftRect?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(strokeIds: [String], imageIds: [String], textIds: [String], bounds: HeftRect?) {
+        self.strokeIds = strokeIds
+        self.imageIds = imageIds
+        self.textIds = textIds
+        self.bounds = bounds
+    }
+}
+
+#if compiler(>=6)
+extension HeftLassoSelection: Sendable {}
+#endif
+
+
+extension HeftLassoSelection: Equatable, Hashable {
+    public static func ==(lhs: HeftLassoSelection, rhs: HeftLassoSelection) -> Bool {
+        if lhs.strokeIds != rhs.strokeIds {
+            return false
+        }
+        if lhs.imageIds != rhs.imageIds {
+            return false
+        }
+        if lhs.textIds != rhs.textIds {
+            return false
+        }
+        if lhs.bounds != rhs.bounds {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(strokeIds)
+        hasher.combine(imageIds)
+        hasher.combine(textIds)
+        hasher.combine(bounds)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHeftLassoSelection: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HeftLassoSelection {
+        return
+            try HeftLassoSelection(
+                strokeIds: FfiConverterSequenceString.read(from: &buf), 
+                imageIds: FfiConverterSequenceString.read(from: &buf), 
+                textIds: FfiConverterSequenceString.read(from: &buf), 
+                bounds: FfiConverterOptionTypeHeftRect.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HeftLassoSelection, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.strokeIds, into: &buf)
+        FfiConverterSequenceString.write(value.imageIds, into: &buf)
+        FfiConverterSequenceString.write(value.textIds, into: &buf)
+        FfiConverterOptionTypeHeftRect.write(value.bounds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftLassoSelection_lift(_ buf: RustBuffer) throws -> HeftLassoSelection {
+    return try FfiConverterTypeHeftLassoSelection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHeftLassoSelection_lower(_ value: HeftLassoSelection) -> RustBuffer {
+    return FfiConverterTypeHeftLassoSelection.lower(value)
 }
 
 
@@ -26508,6 +26832,19 @@ public func heftHitLassoHandle(x: Double, y: Double, bounds: HeftRect, hitRadius
 })
 }
 /**
+ * Trifft `(x, y)` den Drehgriff (Finger 24, Stift 18 Einheiten)?
+ */
+public func heftHitLassoRotateHandle(x: Double, y: Double, bounds: HeftRect, hitRadius: Double) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_heft_hit_lasso_rotate_handle(
+        FfiConverterDouble.lower(x),
+        FfiConverterDouble.lower(y),
+        FfiConverterTypeHeftRect_lower(bounds),
+        FfiConverterDouble.lower(hitRadius),$0
+    )
+})
+}
+/**
  * Liegt der Punkt im um `tolerance` erweiterten Auswahlrahmen (`isLassoBodyHit`)?
  */
 public func heftIsLassoBodyHit(x: Double, y: Double, bounds: HeftRect, tolerance: Double) -> Bool  {
@@ -26557,6 +26894,16 @@ public func heftLassoResizeStartDist(anchorX: Double, anchorY: Double, startX: D
         FfiConverterDouble.lower(anchorY),
         FfiConverterDouble.lower(startX),
         FfiConverterDouble.lower(startY),$0
+    )
+})
+}
+/**
+ * Drehgriff über dem Auswahlrahmen zum Zeichnen.
+ */
+public func heftLassoRotateHandle(bounds: HeftRect) -> HeftLassoRotateHandle  {
+    return try!  FfiConverterTypeHeftLassoRotateHandle_lift(try! rustCall() {
+    uniffi_impala_ffi_fn_func_heft_lasso_rotate_handle(
+        FfiConverterTypeHeftRect_lower(bounds),$0
     )
 })
 }
@@ -27108,6 +27455,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle() != 3312) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_func_heft_hit_lasso_rotate_handle() != 9235) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit() != 37787) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27118,6 +27468,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist() != 25306) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_func_heft_lasso_rotate_handle() != 6889) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_func_heft_lasso_touch_action() != 36480) {
@@ -27591,6 +27944,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes() != 59468) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_delete_lasso() != 63779) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_lasso() != 19826) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes() != 20887) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27613,6 +27972,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_in_folder() != 16081) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_lasso_bounds() != 16080) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_move_lasso() != 14285) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_move_page() != 26399) {
@@ -27660,10 +28025,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_restore() != 21338) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_rotate_lasso() != 14774) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_scale_lasso() != 5764) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes() != 16014) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_impala_ffi_checksum_method_impalacore_heft_select_lasso() != 17261) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412) {

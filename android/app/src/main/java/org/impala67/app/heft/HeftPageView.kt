@@ -214,12 +214,26 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
         val bitmaps = rememberHeftImages(vm.store, vm.pageId, data?.id, stored, maxSide = imageSide(shownW.roundToInt()))
         val liveImg = obj?.live?.takeIf { obj.kind == ObjKind.IMAGE }
         val liveTxt = obj?.live?.takeIf { obj.kind == ObjKind.TEXT }
-        val images = if (liveImg == null) stored
-        else stored.map { if (it.id == obj?.id) it.copy(x = liveImg.x, y = liveImg.y, w = liveImg.w, h = liveImg.h) else it }
+        val lassoImgIds = if (drag?.live == true && sel.imageIds.isNotEmpty()) sel.imageIds.toHashSet() else emptySet()
+        val lassoTxtIds = if (drag?.live == true && sel.textIds.isNotEmpty()) sel.textIds.toHashSet() else emptySet()
+        val images = stored.map { im ->
+            when {
+                liveImg != null && im.id == obj?.id -> im.copy(x = liveImg.x, y = liveImg.y, w = liveImg.w, h = liveImg.h)
+                drag != null && im.id in lassoImgIds -> {
+                    val r = drag.mapRect(im.x, im.y, im.w, im.h, 24.0, 24.0)
+                    im.copy(x = r[0], y = r[1], w = r[2], h = r[3])
+                }
+                else -> im
+            }
+        }
         val texts = data?.texts.orEmpty().mapNotNull { t ->
             when {
                 t.id == editing?.text?.id -> null
                 liveTxt != null && t.id == obj?.id -> t.copy(x = liveTxt.x, y = liveTxt.y, w = liveTxt.w)
+                drag != null && t.id in lassoTxtIds -> {
+                    val r = drag.mapRect(t.x, t.y, t.w ?: 200.0, t.h ?: 36.0, 60.0, 20.0)
+                    t.copy(x = r[0], y = r[1], w = r[2], h = if (t.h != null) r[3] else null)
+                }
                 else -> t
             }
         }
@@ -248,6 +262,7 @@ fun HeftPageView(vm: HeftViewModel, heftPageId: String, camera: HeftCamera, targ
                     scale(k, k, Offset.Zero)
                     translate(drag.dx, drag.dy)
                     scale(drag.factor, drag.factor, Offset(drag.ax, drag.ay))
+                    if (drag.angleRad != 0f) rotate(drag.angleDeg, Offset(drag.cx, drag.cy))
                 }) { drawInkStrokes(moved, 1f) }
             }
             drawHeftTexts(texts, k)

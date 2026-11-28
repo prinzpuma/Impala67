@@ -413,3 +413,68 @@ fn seiten_diff_gleicht_vollem_diff() {
     // Neue Seite nicht mitgeschickt: kein Teil-Diff möglich.
     assert!(diff_pages(&shadow, &order, &changed[1..]).is_none());
 }
+
+#[test]
+fn lasso_mit_bildern_textfeldern_und_drehen() {
+    use impala_heft::doc::{Image, Point, Shape, Stroke, TextBox};
+    use impala_heft::lasso::{
+        LassoTransformOp, duplicate_images, duplicate_texts, hit_lasso_rotate_handle, lasso_rotate_handle,
+        lasso_selection_bounds, select_images_by_lasso, select_texts_by_lasso, transform_image, transform_text,
+    };
+
+    let mut stroke = Stroke {
+        id: "s1".into(),
+        pts: vec![Point::new(100.0, 100.0, 0.5), Point::new(200.0, 100.0, 0.5)],
+        size: Some(3.0),
+        ..Default::default()
+    };
+    stroke.refresh_bounds();
+    let mut rect_stroke = Stroke {
+        id: "s2".into(),
+        pts: vec![Point::new(100.0, 100.0, 0.5), Point::new(180.0, 160.0, 0.5)],
+        shape: Some(Shape::Rect { x1: 100.0, y1: 100.0, x2: 180.0, y2: 160.0 }),
+        size: Some(2.0),
+        ..Default::default()
+    };
+    rect_stroke.refresh_bounds();
+
+    let mut img = Image { id: "i1".into(), r#ref: Some("b1".into()), x: Some(120.0), y: Some(120.0), w: Some(80.0), h: Some(60.0), ..Default::default() };
+    let mut tb = TextBox { id: "t1".into(), x: Some(110.0), y: Some(190.0), w: Some(120.0), text: Some("Hallo".into()), size: Some(20.0), ..Default::default() };
+
+    let poly = [[80.0, 80.0], [260.0, 80.0], [260.0, 260.0], [80.0, 260.0]];
+    assert_eq!(select_images_by_lasso(std::slice::from_ref(&img), &poly), vec![0]);
+    assert_eq!(select_texts_by_lasso(std::slice::from_ref(&tb), &poly), vec![0]);
+
+    let bb = lasso_selection_bounds([&stroke], [&img], [&tb]).expect("Grenzen");
+    assert_eq!(bb.min_x, 100.0);
+    assert_eq!(bb.max_x, 230.0);
+    let [rx, ry] = lasso_rotate_handle(&bb);
+    assert!(hit_lasso_rotate_handle(rx, ry, &bb, 18.0));
+    assert!(!hit_lasso_rotate_handle(rx + 50.0, ry, &bb, 18.0));
+
+    // 90° um (150, 100) drehen: (200, 100) → (150, 150)
+    let g = stroke.geometry();
+    stroke.rotate_from(&g, 150.0, 100.0, std::f64::consts::FRAC_PI_2);
+    assert!((stroke.pts[1].x - 150.0).abs() < 1e-6);
+    assert!((stroke.pts[1].y - 150.0).abs() < 1e-6);
+
+    // Gedrehtes Rechteck wird rückwärtskompatibel in Punkte aufgelöst.
+    let rg = rect_stroke.geometry();
+    rect_stroke.rotate_from(&rg, 140.0, 130.0, 0.5);
+    assert!(rect_stroke.shape.is_none());
+    assert!(rect_stroke.pts.len() >= 16);
+
+    // Bild & Textfeld verschieben, skalieren, drehen und duplizieren.
+    transform_image(&mut img, LassoTransformOp::Move { dx: 10.0, dy: -20.0 });
+    assert_eq!((img.x, img.y), (Some(130.0), Some(100.0)));
+    transform_text(&mut tb, LassoTransformOp::Scale { ax: 110.0, ay: 190.0, factor: 1.5 });
+    assert_eq!(tb.w, Some(180.0));
+    assert_eq!(tb.size, Some(30.0));
+
+    let mut n = 0;
+    let mut id = || { n += 1; format!("copy{n}") };
+    let ic = duplicate_images([&img], &mut id);
+    let tc = duplicate_texts([&tb], &mut id);
+    assert_eq!(ic[0].x, Some(158.0));
+    assert_eq!(tc[0].x, Some(138.0));
+}

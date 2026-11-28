@@ -11,7 +11,11 @@ import { U } from "./util.js";
 import { PAGE_W, PAGE_H, pageHeight } from "./heft-document-core.js";
 import { fitStrokeShape, hitBox, strokeBounds, strokeGeometry, applyGeometries, packStrokes, nearPoint } from "./heft-geometry.js";
 import { CORE } from "./rust-core.js";
-import { lassoBounds, selectStrokesByLasso, lassoTouchAction, hitLassoHandle, isLassoBodyHit, drawLassoPath } from "./heft-lasso.js";
+import {
+	lassoBounds, lassoSelectionBounds, selectStrokesByLasso, selectItemsByLasso,
+	lassoTouchAction, hitLassoHandle, isLassoBodyHit, getLassoRotateHandle, hitLassoRotateHandle,
+	transformLassoItem, itemSnapshot, drawLassoPath,
+} from "./heft-lasso.js";
 
 export function createHeftInput(H) {
 	const { vp, imagesOf, textsOf, hitText, redrawPage, updateChrome, dropLasso, pushUndo, refresh, openTextEditor, setWriting, drawStroke, scheduleSave, renderThumb } = H;
@@ -145,8 +149,8 @@ export function createHeftInput(H) {
 		const pg = H.doc.pages[pi];
 		if (!pg) return;
 		const p = pos(e, cv);
-		const activeLassoBox = H.lassoSel && H.lassoSel.pageIdx === pi ? (H.lassoSel.bounds || lassoBounds(H.lassoSel.strokes)) : null;
-		const onLasso = !!activeLassoBox && isLassoBodyHit(p, activeLassoBox, 20);
+		const activeLassoBox = H.lassoSel && H.lassoSel.pageIdx === pi ? (H.lassoSel.bounds || lassoSelectionBounds(H.lassoSel.strokes, H.lassoSel.images, H.lassoSel.texts)) : null;
+		const onLasso = !!activeLassoBox && (isLassoBodyHit(p, activeLassoBox, 20) || hitLassoRotateHandle(p, activeLassoBox, 24));
 		// Ein Fingertipp außerhalb beendet Auswahl UND Lasso-Modus. Der Nur-Stift-
 		// Schalter darf dagegen Verschieben/Skalieren einer Auswahl per Finger zulassen.
 		const touchLasso = lassoTouchAction(e.pointerType, H.tool, onLasso);
@@ -173,9 +177,27 @@ export function createHeftInput(H) {
 
 		const x = liveInkCtx(pi);
 		if (H.tool === "lasso") {
-
-			if (H.lassoSel && H.lassoSel.pageIdx === pi && H.lassoSel.strokes.length) {
-				const bb = H.lassoSel.bounds || lassoBounds(H.lassoSel.strokes);
+			const hasLasso = H.lassoSel && H.lassoSel.pageIdx === pi && ((H.lassoSel.strokes?.length || 0) + (H.lassoSel.images?.length || 0) + (H.lassoSel.texts?.length || 0) > 0);
+			if (hasLasso) {
+				const selStrokes = H.lassoSel.strokes || [];
+				const selImages = H.lassoSel.images || [];
+				const selTexts = H.lassoSel.texts || [];
+				const bb = H.lassoSel.bounds || lassoSelectionBounds(selStrokes, selImages, selTexts);
+				if (bb && hitLassoRotateHandle(p, bb, e.pointerType === "touch" ? 24 : 18)) {
+					const rot = getLassoRotateHandle(bb);
+					H.drawing = {
+						pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id,
+						lassoRotate: true, byTouch: e.pointerType === "touch",
+						strokes: selStrokes, images: selImages, texts: selTexts,
+						originals: selStrokes.map(strokeGeometry),
+						origImages: selImages.map((im) => itemSnapshot(im, 1)),
+						origTexts: selTexts.map((tb) => itemSnapshot(tb, 36)),
+						transform: selStrokes.length ? new CORE.HeftTransform(...packStrokes(selStrokes)) : null,
+						cv, pageIdx: pi, cx: rot.cx, cy: rot.cy,
+						startAngle: Math.atan2(p[1] - rot.cy, p[0] - rot.cx), angle: 0,
+					};
+					return;
+				}
 				const handle = bb && hitLassoHandle(p, bb, e.pointerType === "touch" ? 22 : 18);
 				if (handle) {
 					const anchor = handle.anchor;
@@ -184,9 +206,11 @@ export function createHeftInput(H) {
 						pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id,
 						lassoResize: true,
 						byTouch: e.pointerType === "touch",
-						strokes: H.lassoSel.strokes,
-						originals: H.lassoSel.strokes.map(strokeGeometry),
-						transform: new CORE.HeftTransform(...packStrokes(H.lassoSel.strokes)),
+						strokes: selStrokes, images: selImages, texts: selTexts,
+						originals: selStrokes.map(strokeGeometry),
+						origImages: selImages.map((im) => itemSnapshot(im, 1)),
+						origTexts: selTexts.map((tb) => itemSnapshot(tb, 36)),
+						transform: selStrokes.length ? new CORE.HeftTransform(...packStrokes(selStrokes)) : null,
 						cv,
 						pageIdx: pi,
 						anchor,
@@ -198,7 +222,15 @@ export function createHeftInput(H) {
 					return;
 				}
 				if (bb && isLassoBodyHit(p, bb, 12)) {
-					H.drawing = { pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id, lassoMove: true, byTouch: e.pointerType === "touch", strokes: H.lassoSel.strokes, transform: new CORE.HeftTransform(...packStrokes(H.lassoSel.strokes)), bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0 };
+					H.drawing = {
+						pointerId: e.pointerId, pointerType: e.pointerType, pageId: pg.id,
+						lassoMove: true, byTouch: e.pointerType === "touch",
+						strokes: selStrokes, images: selImages, texts: selTexts,
+						origImages: selImages.map((im) => itemSnapshot(im, 1)),
+						origTexts: selTexts.map((tb) => itemSnapshot(tb, 36)),
+						transform: selStrokes.length ? new CORE.HeftTransform(...packStrokes(selStrokes)) : null,
+						bounds0: { ...bb }, cv, pageIdx: pi, start: p, dx: 0, dy: 0,
+					};
 					return;
 				}
 			}
@@ -369,18 +401,32 @@ export function createHeftInput(H) {
 			return;
 		}
 		if (H.drawing.lassoMove) {
-
 			const pm = pos(e, H.drawing.cv);
 			const dx = pm[0] - H.drawing.start[0], dy = pm[1] - H.drawing.start[1];
 			if (dx !== H.drawing.dx || dy !== H.drawing.dy) {
 				const b = H.drawing.bounds0, at = (ox, oy) => ({ minX: b.minX + ox, maxX: b.maxX + ox, minY: b.minY + oy, maxY: b.maxY + oy });
 				const before = at(H.drawing.dx, H.drawing.dy), after = at(dx, dy);
-				applyGeometries(H.drawing.strokes, H.drawing.transform.moveBy(dx, dy));
+				if (H.drawing.transform) applyGeometries(H.drawing.strokes, H.drawing.transform.moveBy(dx, dy));
+				H.drawing.images.forEach((im, i) => transformLassoItem(im, H.drawing.origImages[i], { kind: "move", dx, dy }, false));
+				H.drawing.texts.forEach((tb, i) => transformLassoItem(tb, H.drawing.origTexts[i], { kind: "move", dx, dy }, true));
 				H.drawing.dx = dx; H.drawing.dy = dy;
 				if (H.lassoSel) H.lassoSel.bounds = after;
 				// PERF: pro Frame statt pro Pointer-Event, nur alte und neue Lage der Auswahl.
-				redrawNextFrame(H.drawing.pageIdx, lassoRect(before, after));
+				redrawNextFrame(H.drawing.pageIdx, H.drawing.images.length || H.drawing.texts.length ? null : lassoRect(before, after));
 			}
+			return;
+		}
+		if (H.drawing.lassoRotate) {
+			const pm = pos(e, H.drawing.cv);
+			const angle = Math.atan2(pm[1] - H.drawing.cy, pm[0] - H.drawing.cx) - H.drawing.startAngle;
+			const before = H.lassoSel && H.lassoSel.bounds;
+			if (H.drawing.transform) applyGeometries(H.drawing.strokes, H.drawing.transform.rotateBy(H.drawing.cx, H.drawing.cy, angle));
+			const op = { kind: "rotate", cx: H.drawing.cx, cy: H.drawing.cy, angle };
+			H.drawing.images.forEach((im, i) => transformLassoItem(im, H.drawing.origImages[i], op, false));
+			H.drawing.texts.forEach((tb, i) => transformLassoItem(tb, H.drawing.origTexts[i], op, true));
+			H.drawing.angle = angle;
+			if (H.lassoSel) H.lassoSel.bounds = lassoSelectionBounds(H.drawing.strokes, H.drawing.images, H.drawing.texts);
+			redrawNextFrame(H.drawing.pageIdx, before && H.lassoSel && !H.drawing.images.length && !H.drawing.texts.length ? lassoRect(before, H.lassoSel.bounds) : null);
 			return;
 		}
 		if (H.drawing.lassoResize) {
@@ -413,10 +459,13 @@ export function createHeftInput(H) {
 			const factor = Math.max(0.15, Math.min(6.0, maxFactor, currentDist / startDist));
 
 			const before = H.lassoSel && H.lassoSel.bounds;
-			applyGeometries(H.drawing.strokes, H.drawing.transform.scaleBy(anchor[0], anchor[1], factor));
+			if (H.drawing.transform) applyGeometries(H.drawing.strokes, H.drawing.transform.scaleBy(anchor[0], anchor[1], factor));
+			const op = { kind: "scale", ax: anchor[0], ay: anchor[1], factor };
+			H.drawing.images.forEach((im, i) => transformLassoItem(im, H.drawing.origImages[i], op, false));
+			H.drawing.texts.forEach((tb, i) => transformLassoItem(tb, H.drawing.origTexts[i], op, true));
 			H.drawing.factor = factor;
-			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
-			redrawNextFrame(H.drawing.pageIdx, before && H.lassoSel ? lassoRect(before, H.lassoSel.bounds) : null);
+			if (H.lassoSel) H.lassoSel.bounds = lassoSelectionBounds(H.drawing.strokes, H.drawing.images, H.drawing.texts);
+			redrawNextFrame(H.drawing.pageIdx, before && H.lassoSel && !H.drawing.images.length && !H.drawing.texts.length ? lassoRect(before, H.lassoSel.bounds) : null);
 			return;
 		}
 		if (H.drawing.snapped) {
@@ -488,23 +537,42 @@ export function createHeftInput(H) {
 			clearLiveInk(pi);
 			const poly = H.drawing.pts;
 			const hits = selectStrokesByLasso(pg.strokes, poly);
-			H.lassoSel = hits.length ? { pageIdx: pi, strokes: hits, bounds: lassoBounds(hits) } : null;
+			const imgHits = selectItemsByLasso(pg.images || [], poly, 1);
+			const txtHits = selectItemsByLasso(pg.texts || [], poly, 36);
+			const total = hits.length + imgHits.length + txtHits.length;
+			H.lassoSel = total ? { pageIdx: pi, strokes: hits, images: imgHits, texts: txtHits, bounds: lassoSelectionBounds(hits, imgHits, txtHits) } : null;
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (H.drawing.lassoMove) {
 			if (H.drawing.dx || H.drawing.dy) {
-				pushUndo({ kind: "lassoMove", strokes: H.drawing.strokes, dx: H.drawing.dx, dy: H.drawing.dy, pageIdx: pi });
+				pushUndo({ kind: "lassoMove", strokes: H.drawing.strokes, images: H.drawing.images, texts: H.drawing.texts, dx: H.drawing.dx, dy: H.drawing.dy, pageIdx: pi });
 				scheduleSave(pg.id); renderThumb(pi);
 			}
-			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
+			if (H.lassoSel) H.lassoSel.bounds = lassoSelectionBounds(H.drawing.strokes, H.drawing.images, H.drawing.texts);
+			H.drawing = null; redrawPage(pi); updateChrome(); return;
+		}
+		if (H.drawing.lassoRotate) {
+			if (Math.abs(H.drawing.angle) > 0.001) {
+				pushUndo({
+					kind: "lassoResize", strokes: H.drawing.strokes, prev: H.drawing.originals,
+					images: H.drawing.images, prevImages: H.drawing.origImages,
+					texts: H.drawing.texts, prevTexts: H.drawing.origTexts, pageIdx: pi,
+				});
+				scheduleSave(pg.id); renderThumb(pi);
+			}
+			if (H.lassoSel) H.lassoSel.bounds = lassoSelectionBounds(H.drawing.strokes, H.drawing.images, H.drawing.texts);
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (H.drawing.lassoResize) {
 			if (Math.abs(H.drawing.factor - 1) > 0.001) {
-				pushUndo({ kind: "lassoResize", strokes: H.drawing.strokes, prev: H.drawing.originals, pageIdx: pi });
+				pushUndo({
+					kind: "lassoResize", strokes: H.drawing.strokes, prev: H.drawing.originals,
+					images: H.drawing.images, prevImages: H.drawing.origImages,
+					texts: H.drawing.texts, prevTexts: H.drawing.origTexts, pageIdx: pi,
+				});
 				scheduleSave(pg.id); renderThumb(pi);
 			}
-			if (H.lassoSel) H.lassoSel.bounds = lassoBounds(H.drawing.strokes);
+			if (H.lassoSel) H.lassoSel.bounds = lassoSelectionBounds(H.drawing.strokes, H.drawing.images, H.drawing.texts);
 			H.drawing = null; redrawPage(pi); updateChrome(); return;
 		}
 		if (H.drawing.laser) {

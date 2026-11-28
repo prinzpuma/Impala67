@@ -89,8 +89,7 @@ Notiz-Speichern in eigener Warteschlange (P8), ferne Heftseiten entladen (P9), B
 |---|---|---|
 | Radierer wie GoodNotes: präzise schneidet nur die überfahrene Stelle aus dem Strich, ganze Bahn ohne Lücken, Ring in echter Größe | ✅ | 🟡 am Gerät prüfen |
 | Radierer-Menü: Präzise / Strich (ganze Striche), gemerkt | ✅ | 🟡 am Gerät prüfen |
-| Lasso: Bilder/Textfelder mitnehmen, Drehen | prüfen | 🟡 am Gerät prüfen |
-| Entf/Rücktaste löscht Lasso-Auswahl | ❌ | 🟡 nur Leiste |
+| Entf/Rücktaste löscht Lasso-Auswahl | ✅ | 🟡 nur Leiste |
 | Optionsleiste verschiebbar (⠿) | ❌ | prüfen |
 | Seitenübersicht: Wischen wählt mehrere, Auto-Scroll, Export/Import aus Auswahl | 🟡 | ❌ |
 | PDF-Export aus dem Seitenkopf/Teilen-Menü | 🟡 Dialog da, Kopf-Menü Stub | ✅ |

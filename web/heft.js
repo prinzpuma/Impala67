@@ -23,6 +23,8 @@ import {
 import { hitBox, strokeBounds, translateStroke, strokeGeometry, applyStrokeGeometry, scaleStrokeFrom } from "./heft-geometry.js";
 import {
 	lassoBounds,
+	lassoSelectionBounds,
+	itemSnapshot,
 	lassoTouchAction,
 	drawLassoSelection,
 	updateLassoBarUI,
@@ -317,16 +319,25 @@ export const HEFT = (() => {
 	// das zweite Verschieben/Skalieren bewegte Striche, die gar nicht mehr auf der Seite
 	// lagen. Darum hier per ID auf den aktuellen Stand umhängen.
 	function relinkLasso(d) {
-		const liveOf = (pi) => new Map((d.pages[pi]?.strokes || []).map((s) => [s.id, s]));
+		const liveOf = (pi, key) => new Map((d.pages[pi]?.[key] || []).map((o) => [o.id, o]));
 		if (lassoSel) {
-			const live = liveOf(lassoSel.pageIdx);
-			const strokes = lassoSel.strokes.map((s) => live.get(s.id)).filter(Boolean);
-			lassoSel = strokes.length ? { pageIdx: lassoSel.pageIdx, strokes, bounds: lassoBounds(strokes) } : null;
+			const liveS = liveOf(lassoSel.pageIdx, "strokes");
+			const liveI = liveOf(lassoSel.pageIdx, "images");
+			const liveT = liveOf(lassoSel.pageIdx, "texts");
+			const strokes = (lassoSel.strokes || []).map((s) => liveS.get(s.id)).filter(Boolean);
+			const images = (lassoSel.images || []).map((im) => liveI.get(im.id)).filter(Boolean);
+			const texts = (lassoSel.texts || []).map((tb) => liveT.get(tb.id)).filter(Boolean);
+			lassoSel = strokes.length + images.length + texts.length
+				? { pageIdx: lassoSel.pageIdx, strokes, images, texts, bounds: lassoSelectionBounds(strokes, images, texts) }
+				: null;
 		}
-		if (drawing && (drawing.lassoMove || drawing.lassoResize)) {
-			const live = liveOf(drawing.pageIdx);
-			// Reihenfolge halten: originals[i] gehört zu strokes[i].
-			drawing.strokes = drawing.strokes.map((s) => live.get(s.id) || s);
+		if (drawing && (drawing.lassoMove || drawing.lassoResize || drawing.lassoRotate)) {
+			const liveS = liveOf(drawing.pageIdx, "strokes");
+			const liveI = liveOf(drawing.pageIdx, "images");
+			const liveT = liveOf(drawing.pageIdx, "texts");
+			drawing.strokes = (drawing.strokes || []).map((s) => liveS.get(s.id) || s);
+			drawing.images = (drawing.images || []).map((im) => liveI.get(im.id) || im);
+			drawing.texts = (drawing.texts || []).map((tb) => liveT.get(tb.id) || tb);
 		}
 	}
 	// unsaved: die Arbeitskopie hat Änderungen, die noch nicht im Log stehen (jede Bearbeitung plant
@@ -723,16 +734,34 @@ export const HEFT = (() => {
 			// Lasso-Einträge ebenfalls über IDs auflösen: nach einem Sync-Import sind die
 			// gemerkten Objekte nicht mehr die auf der Seite (Undo lief sonst ins Leere).
 			const live = a.kind === "lassoMove" || a.kind === "lassoResize" ? new Map(pg.strokes.map((s) => [s.id, s])) : null;
+			const liveImg = a.kind === "lassoMove" || a.kind === "lassoResize" ? new Map((pg.images || []).map((o) => [o.id, o])) : null;
+			const liveTxt = a.kind === "lassoMove" || a.kind === "lassoResize" ? new Map((pg.texts || []).map((o) => [o.id, o])) : null;
 			if (a.kind === "lassoMove") {
 				const d = isRedo ? 1 : -1;
-				a.strokes = a.strokes.map((s) => live.get(s.id) || s);
+				a.strokes = (a.strokes || []).map((s) => live.get(s.id) || s);
 				a.strokes.forEach((s) => { if (live.has(s.id)) translateStroke(s, d * a.dx, d * a.dy); });
+				a.images = (a.images || []).map((im) => liveImg.get(im.id) || im);
+				a.images.forEach((im) => { if (liveImg.has(im.id)) { im.x = (Number(im.x) || 0) + d * a.dx; im.y = (Number(im.y) || 0) + d * a.dy; } });
+				a.texts = (a.texts || []).map((tb) => liveTxt.get(tb.id) || tb);
+				a.texts.forEach((tb) => { if (liveTxt.has(tb.id)) { tb.x = (Number(tb.x) || 0) + d * a.dx; tb.y = (Number(tb.y) || 0) + d * a.dy; } });
 			}
 			else if (a.kind === "lassoResize") {
-				a.strokes = a.strokes.map((s) => live.get(s.id) || s);
+				a.strokes = (a.strokes || []).map((s) => live.get(s.id) || s);
 				const current = a.strokes.map(strokeGeometry);
 				a.strokes.forEach((stroke, i) => { if (live.has(stroke.id)) applyStrokeGeometry(stroke, a.prev[i]); });
 				a.prev = current;
+				if (a.images?.length && a.prevImages) {
+					a.images = a.images.map((im) => liveImg.get(im.id) || im);
+					const curImg = a.images.map((im) => itemSnapshot(im, 1));
+					a.images.forEach((im, i) => { if (liveImg.has(im.id)) { const p = a.prevImages[i]; im.x = p.x; im.y = p.y; im.w = p.w; im.h = p.h; } });
+					a.prevImages = curImg;
+				}
+				if (a.texts?.length && a.prevTexts) {
+					a.texts = a.texts.map((tb) => liveTxt.get(tb.id) || tb);
+					const curTxt = a.texts.map((tb) => itemSnapshot(tb, 36));
+					a.texts.forEach((tb, i) => { if (liveTxt.has(tb.id)) { const p = a.prevTexts[i]; tb.x = p.x; tb.y = p.y; tb.w = p.w; if (p.hasH) tb.h = p.h; if (p.size != null) tb.size = p.size; } });
+					a.prevTexts = curTxt;
+				}
 			}
 			else if (a.kind === "imgMod") {
 				// Bild ODER Textfeld (Verschieben nutzt denselben Eintrag), per ID aufgelöst.
@@ -752,12 +781,25 @@ export const HEFT = (() => {
 				back.forEach((s) => { if (!have.has(s.id)) pg.strokes.push(s); });
 				if (lassoSel && lassoSel.strokes.some((s) => drop.has(s.id))) lassoSel = null;
 			}
+			else if (a.kind === "lassoDel" || a.kind === "lassoDup") {
+				const addsOnRedo = a.kind === "lassoDup";
+				for (const [key, items] of [["strokes", a.strokes || []], ["images", a.images || []], ["texts", a.texts || []]]) {
+					if (!items.length) continue;
+					const arr = pg[key] || (pg[key] = []);
+					const ids = new Set(items.map((o) => o.id));
+					if (isRedo === addsOnRedo) {
+						const have = new Set(arr.map((o) => o.id));
+						items.forEach((o) => { if (!have.has(o.id)) arr.push(o); });
+					} else {
+						pg[key] = arr.filter((o) => !ids.has(o.id));
+						if (lassoSel && (lassoSel[key] || []).some((o) => ids.has(o.id))) lassoSel = null;
+					}
+				}
+			}
 			else {
 
 				const spec = {
 					add: ["strokes", [a.stroke], true],
-					lassoDel: ["strokes", a.strokes, false],
-					lassoDup: ["strokes", a.strokes, true],
 					imgAdd: ["images", [a.img], true], imgDel: ["images", [a.img], false],
 					txtAdd: ["texts", [a.txt], true], txtDel: ["texts", [a.txt], false],
 				}[a.kind];
@@ -774,12 +816,11 @@ export const HEFT = (() => {
 				} else {
 					pg[key] = arr.filter((o) => !ids.has(o.id));
 					if (sel && (ids.has(sel.imgId) || ids.has(sel.txtId))) sel = null;
-					if (lassoSel && lassoSel.strokes.some((s) => ids.has(s.id))) lassoSel = null;
+					if (lassoSel && (lassoSel.strokes || []).some((s) => ids.has(s.id))) lassoSel = null;
 				}
 			}
-			// Rahmen folgt den Strichen: sonst blieb er nach Undo von Verschieben/Skalieren
-			// an der alten Stelle stehen und griff ins Leere.
-			if (lassoSel) lassoSel.bounds = lassoBounds(lassoSel.strokes);
+			// Rahmen folgt den Strichen, Bildern und Textfeldern.
+			if (lassoSel) lassoSel.bounds = lassoSelectionBounds(lassoSel.strokes, lassoSel.images, lassoSel.texts);
 			toStack.push(a);
 			refresh(pi);
 		}, { isRedo }, 16);

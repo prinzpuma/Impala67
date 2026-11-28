@@ -1686,6 +1686,24 @@ internal open class UniffiVTableCallbackInterfaceTextEmbedder(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1783,6 +1801,8 @@ fun uniffi_impala_ffi_checksum_func_heft_fit_shape(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle(
 ): Short
+fun uniffi_impala_ffi_checksum_func_heft_hit_lasso_rotate_handle(
+): Short
 fun uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_lasso_handles(
@@ -1790,6 +1810,8 @@ fun uniffi_impala_ffi_checksum_func_heft_lasso_handles(
 fun uniffi_impala_ffi_checksum_func_heft_lasso_resize_factor(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist(
+): Short
+fun uniffi_impala_ffi_checksum_func_heft_lasso_rotate_handle(
 ): Short
 fun uniffi_impala_ffi_checksum_func_heft_lasso_touch_action(
 ): Short
@@ -2105,6 +2127,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_apply_ops(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_delete_lasso(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_lasso(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_folder_create(
@@ -2120,6 +2146,10 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_folders(
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_image_data(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_in_folder(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_lasso_bounds(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_move_lasso(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_move_page(
 ): Short
@@ -2151,9 +2181,15 @@ fun uniffi_impala_ffi_checksum_method_impalacore_heft_remove_texts(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_restore(
 ): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_rotate_lasso(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_scale_lasso(
+): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(
+): Short
+fun uniffi_impala_ffi_checksum_method_impalacore_heft_select_lasso(
 ): Short
 fun uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame(
 ): Short
@@ -2753,6 +2789,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_apply_ops(`ptr`: Pointer,`pageId
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`add`: RustBuffer.ByValue,`remove`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_impala_ffi_fn_method_impalacore_heft_delete_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_folder_create(`ptr`: Pointer,`title`: RustBuffer.ByValue,`parentId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -2768,6 +2808,10 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_folders(`ptr`: Pointer,`parentId
 fun uniffi_impala_ffi_fn_method_impalacore_heft_image_data(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`imageId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_in_folder(`ptr`: Pointer,`folderId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_lasso_bounds(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_move_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,`dx`: Double,`dy`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_move_page(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`to`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2799,9 +2843,15 @@ fun uniffi_impala_ffi_fn_method_impalacore_heft_remove_texts(`ptr`: Pointer,`pag
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_restore(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`snapshot`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_rotate_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,`cx`: Double,`cy`: Double,`angle`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_scale_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`strokeIds`: RustBuffer.ByValue,`imageIds`: RustBuffer.ByValue,`textIds`: RustBuffer.ByValue,`ax`: Double,`ay`: Double,`factor`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`ids`: RustBuffer.ByValue,`ax`: Double,`ay`: Double,`factor`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`polygon`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_method_impalacore_heft_select_lasso(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`polygon`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_method_impalacore_heft_set_image_frame(`ptr`: Pointer,`pageId`: RustBuffer.ByValue,`heftPageId`: RustBuffer.ByValue,`imageId`: RustBuffer.ByValue,`x`: Double,`y`: Double,`w`: Double,`h`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -3117,6 +3167,8 @@ fun uniffi_impala_ffi_fn_func_heft_fit_shape(`points`: RustBuffer.ByValue,uniffi
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_hit_lasso_handle(`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,`hitRadius`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_impala_ffi_fn_func_heft_hit_lasso_rotate_handle(`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,`hitRadius`: Double,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_impala_ffi_fn_func_heft_is_lasso_body_hit(`x`: Double,`y`: Double,`bounds`: RustBuffer.ByValue,`tolerance`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun uniffi_impala_ffi_fn_func_heft_lasso_handles(`bounds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -3125,6 +3177,8 @@ fun uniffi_impala_ffi_fn_func_heft_lasso_resize_factor(`anchorX`: Double,`anchor
 ): Double
 fun uniffi_impala_ffi_fn_func_heft_lasso_resize_start_dist(`anchorX`: Double,`anchorY`: Double,`startX`: Double,`startY`: Double,uniffi_out_err: UniffiRustCallStatus, 
 ): Double
+fun uniffi_impala_ffi_fn_func_heft_lasso_rotate_handle(`bounds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_lasso_touch_action(`isTouch`: Byte,`lassoTool`: Byte,`onLasso`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_impala_ffi_fn_func_heft_new_id(uniffi_out_err: UniffiRustCallStatus, 
@@ -3458,6 +3512,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle() != 3312.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_hit_lasso_rotate_handle() != 9235.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit() != 37787.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3468,6 +3525,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist() != 25306.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_rotate_handle() != 6889.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_func_heft_lasso_touch_action() != 36480.toShort()) {
@@ -3941,6 +4001,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes() != 59468.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_delete_lasso() != 63779.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_lasso() != 19826.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes() != 20887.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3963,6 +4029,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_in_folder() != 16081.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_lasso_bounds() != 16080.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_move_lasso() != 14285.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_move_page() != 26399.toShort()) {
@@ -4010,10 +4082,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_restore() != 21338.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_rotate_lasso() != 14774.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_scale_lasso() != 5764.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes() != 16014.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso() != 52656.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_select_lasso() != 17261.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_impala_ffi_checksum_method_impalacore_heft_set_image_frame() != 34412.toShort()) {
@@ -9393,6 +9474,16 @@ public interface ImpalaCoreInterface {
     fun `heftCommitStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `add`: List<HeftStroke>, `remove`: List<kotlin.String>)
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt löschen.
+     */
+    fun `heftDeleteLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftEdit
+    
+    /**
+     * Gemischte Lasso-Auswahl 28 Einheiten versetzt duplizieren; liefert die neuen IDs + Grenzen.
+     */
+    fun `heftDuplicateLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftLassoSelection
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
     fun `heftDuplicateStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit
@@ -9433,6 +9524,16 @@ public interface ImpalaCoreInterface {
      * Hefte direkt in `folder_id` (`None`: im Stamm), nach Regal-Reihenfolge; ohne Papierkorb und Archiv.
      */
     fun `heftInFolder`(`folderId`: kotlin.String?): List<PageSummary>
+    
+    /**
+     * Gemeinsame Grenzen einer gemischten Lasso-Auswahl (Striche + Bilder + Textfelder).
+     */
+    fun `heftLassoBounds`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftRect?
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt verschieben.
+     */
+    fun `heftMoveLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `dx`: kotlin.Double, `dy`: kotlin.Double): HeftEdit
     
     /**
      * Seite `heft_page_id` an Position `to` schieben.
@@ -9511,6 +9612,16 @@ public interface ImpalaCoreInterface {
     fun `heftRestore`(`pageId`: kotlin.String, `snapshot`: kotlin.String): HeftEdit
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt um `(cx, cy)` drehen (`angle` in Radiant).
+     */
+    fun `heftRotateLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `cx`: kotlin.Double, `cy`: kotlin.Double, `angle`: kotlin.Double): HeftEdit
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
+     */
+    fun `heftScaleLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
     fun `heftScaleStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit
@@ -9519,6 +9630,11 @@ public interface ImpalaCoreInterface {
      * Striche, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
      */
     fun `heftSelectByLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `polygon`: List<kotlin.Float>): List<kotlin.String>
+    
+    /**
+     * Striche, Bilder und Textfelder, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
+     */
+    fun `heftSelectLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `polygon`: List<kotlin.Float>): HeftLassoSelection
     
     /**
      * Rahmen eines Bilds ändern (Verschieben, Skalieren).
@@ -11181,6 +11297,38 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt löschen.
+     */
+    @Throws(CoreException::class)override fun `heftDeleteLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_delete_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gemischte Lasso-Auswahl 28 Einheiten versetzt duplizieren; liefert die neuen IDs + Grenzen.
+     */
+    @Throws(CoreException::class)override fun `heftDuplicateLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftLassoSelection {
+            return FfiConverterTypeHeftLassoSelection.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Kopien der Striche, um 28 Einheiten versetzt; `ids` der Antwort sind die neuen Striche.
      */
     @Throws(CoreException::class)override fun `heftDuplicateStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>): HeftEdit {
@@ -11298,6 +11446,38 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_in_folder(
         it, FfiConverterOptionalString.lower(`folderId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gemeinsame Grenzen einer gemischten Lasso-Auswahl (Striche + Bilder + Textfelder).
+     */
+    @Throws(CoreException::class)override fun `heftLassoBounds`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>): HeftRect? {
+            return FfiConverterOptionalTypeHeftRect.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_lasso_bounds(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt verschieben.
+     */
+    @Throws(CoreException::class)override fun `heftMoveLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `dx`: kotlin.Double, `dy`: kotlin.Double): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_move_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),FfiConverterDouble.lower(`dx`),FfiConverterDouble.lower(`dy`),_status)
 }
     }
     )
@@ -11541,6 +11721,38 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
 
     
     /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt um `(cx, cy)` drehen (`angle` in Radiant).
+     */
+    @Throws(CoreException::class)override fun `heftRotateLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `cx`: kotlin.Double, `cy`: kotlin.Double, `angle`: kotlin.Double): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_rotate_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),FfiConverterDouble.lower(`cx`),FfiConverterDouble.lower(`cy`),FfiConverterDouble.lower(`angle`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
+     */
+    @Throws(CoreException::class)override fun `heftScaleLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `strokeIds`: List<kotlin.String>, `imageIds`: List<kotlin.String>, `textIds`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit {
+            return FfiConverterTypeHeftEdit.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_scale_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceString.lower(`strokeIds`),FfiConverterSequenceString.lower(`imageIds`),FfiConverterSequenceString.lower(`textIds`),FfiConverterDouble.lower(`ax`),FfiConverterDouble.lower(`ay`),FfiConverterDouble.lower(`factor`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Striche um den Anker (`ax`, `ay`) skalieren; die Dicke wächst mit (Lasso-Eckgriff).
      */
     @Throws(CoreException::class)override fun `heftScaleStrokes`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `ids`: List<kotlin.String>, `ax`: kotlin.Double, `ay`: kotlin.Double, `factor`: kotlin.Double): HeftEdit {
@@ -11564,6 +11776,22 @@ open class ImpalaCore: Disposable, AutoCloseable, ImpalaCoreInterface
     callWithPointer {
     uniffiRustCallWithError(CoreException) { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(
+        it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceFloat.lower(`polygon`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Striche, Bilder und Textfelder, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
+     */
+    @Throws(CoreException::class)override fun `heftSelectLasso`(`pageId`: kotlin.String, `heftPageId`: kotlin.String, `polygon`: List<kotlin.Float>): HeftLassoSelection {
+            return FfiConverterTypeHeftLassoSelection.lift(
+    callWithPointer {
+    uniffiRustCallWithError(CoreException) { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_method_impalacore_heft_select_lasso(
         it, FfiConverterString.lower(`pageId`),FfiConverterString.lower(`heftPageId`),FfiConverterSequenceFloat.lower(`polygon`),_status)
 }
     }
@@ -17049,6 +17277,92 @@ public object FfiConverterTypeHeftLassoHandle: FfiConverterRustBuffer<HeftLassoH
             FfiConverterDouble.write(value.`y`, buf)
             FfiConverterDouble.write(value.`anchorX`, buf)
             FfiConverterDouble.write(value.`anchorY`, buf)
+    }
+}
+
+
+
+/**
+ * Drehgriff mittig über dem Auswahlrahmen samt Drehpunkt `(cx, cy)`.
+ */
+data class HeftLassoRotateHandle (
+    var `x`: kotlin.Double, 
+    var `y`: kotlin.Double, 
+    var `cx`: kotlin.Double, 
+    var `cy`: kotlin.Double
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftLassoRotateHandle: FfiConverterRustBuffer<HeftLassoRotateHandle> {
+    override fun read(buf: ByteBuffer): HeftLassoRotateHandle {
+        return HeftLassoRotateHandle(
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftLassoRotateHandle) = (
+            FfiConverterDouble.allocationSize(value.`x`) +
+            FfiConverterDouble.allocationSize(value.`y`) +
+            FfiConverterDouble.allocationSize(value.`cx`) +
+            FfiConverterDouble.allocationSize(value.`cy`)
+    )
+
+    override fun write(value: HeftLassoRotateHandle, buf: ByteBuffer) {
+            FfiConverterDouble.write(value.`x`, buf)
+            FfiConverterDouble.write(value.`y`, buf)
+            FfiConverterDouble.write(value.`cx`, buf)
+            FfiConverterDouble.write(value.`cy`, buf)
+    }
+}
+
+
+
+/**
+ * Ergebnis einer Lasso-Auswahl (Striche, Bilder und Textfelder einer Seite samt Rahmen).
+ */
+data class HeftLassoSelection (
+    var `strokeIds`: List<kotlin.String>, 
+    var `imageIds`: List<kotlin.String>, 
+    var `textIds`: List<kotlin.String>, 
+    var `bounds`: HeftRect?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHeftLassoSelection: FfiConverterRustBuffer<HeftLassoSelection> {
+    override fun read(buf: ByteBuffer): HeftLassoSelection {
+        return HeftLassoSelection(
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalTypeHeftRect.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: HeftLassoSelection) = (
+            FfiConverterSequenceString.allocationSize(value.`strokeIds`) +
+            FfiConverterSequenceString.allocationSize(value.`imageIds`) +
+            FfiConverterSequenceString.allocationSize(value.`textIds`) +
+            FfiConverterOptionalTypeHeftRect.allocationSize(value.`bounds`)
+    )
+
+    override fun write(value: HeftLassoSelection, buf: ByteBuffer) {
+            FfiConverterSequenceString.write(value.`strokeIds`, buf)
+            FfiConverterSequenceString.write(value.`imageIds`, buf)
+            FfiConverterSequenceString.write(value.`textIds`, buf)
+            FfiConverterOptionalTypeHeftRect.write(value.`bounds`, buf)
     }
 }
 
@@ -27088,6 +27402,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
 
         /**
+         * Trifft `(x, y)` den Drehgriff (Finger 24, Stift 18 Einheiten)?
+         */ fun `heftHitLassoRotateHandle`(`x`: kotlin.Double, `y`: kotlin.Double, `bounds`: HeftRect, `hitRadius`: kotlin.Double): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_hit_lasso_rotate_handle(
+        FfiConverterDouble.lower(`x`),FfiConverterDouble.lower(`y`),FfiConverterTypeHeftRect.lower(`bounds`),FfiConverterDouble.lower(`hitRadius`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Liegt der Punkt im um `tolerance` erweiterten Auswahlrahmen (`isLassoBodyHit`)?
          */ fun `heftIsLassoBodyHit`(`x`: kotlin.Double, `y`: kotlin.Double, `bounds`: HeftRect, `tolerance`: kotlin.Double): kotlin.Boolean {
             return FfiConverterBoolean.lift(
@@ -27130,6 +27456,18 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_resize_start_dist(
         FfiConverterDouble.lower(`anchorX`),FfiConverterDouble.lower(`anchorY`),FfiConverterDouble.lower(`startX`),FfiConverterDouble.lower(`startY`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Drehgriff über dem Auswahlrahmen zum Zeichnen.
+         */ fun `heftLassoRotateHandle`(`bounds`: HeftRect): HeftLassoRotateHandle {
+            return FfiConverterTypeHeftLassoRotateHandle.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_impala_ffi_fn_func_heft_lasso_rotate_handle(
+        FfiConverterTypeHeftRect.lower(`bounds`),_status)
 }
     )
     }

@@ -1267,6 +1267,16 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_apply_ops(void*_Nonnull p
 void uniffi_impala_ffi_fn_method_impalacore_heft_commit_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer add, RustBuffer remove, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DELETE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DELETE_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_delete_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_duplicate_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer ids, RustCallStatus *_Nonnull out_status
@@ -1305,6 +1315,16 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_image_data(void*_Nonnull 
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_IN_FOLDER
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_IN_FOLDER
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_in_folder(void*_Nonnull ptr, RustBuffer folder_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_LASSO_BOUNDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_LASSO_BOUNDS
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_lasso_bounds(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_MOVE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_MOVE_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_move_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, double dx, double dy, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_MOVE_PAGE
@@ -1382,6 +1402,16 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_remove_texts(void*_Nonnul
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_restore(void*_Nonnull ptr, RustBuffer page_id, RustBuffer snapshot, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ROTATE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_ROTATE_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_rotate_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, double cx, double cy, double angle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SCALE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SCALE_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_scale_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer stroke_ids, RustBuffer image_ids, RustBuffer text_ids, double ax, double ay, double factor, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SCALE_STROKES
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SCALE_STROKES
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer ids, double ax, double ay, double factor, RustCallStatus *_Nonnull out_status
@@ -1390,6 +1420,11 @@ RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_scale_strokes(void*_Nonnu
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_select_by_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer polygon, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SELECT_LASSO
+RustBuffer uniffi_impala_ffi_fn_method_impalacore_heft_select_lasso(void*_Nonnull ptr, RustBuffer page_id, RustBuffer heft_page_id, RustBuffer polygon, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_METHOD_IMPALACORE_HEFT_SET_IMAGE_FRAME
@@ -2183,6 +2218,11 @@ RustBuffer uniffi_impala_ffi_fn_func_heft_fit_shape(RustBuffer points, RustCallS
 RustBuffer uniffi_impala_ffi_fn_func_heft_hit_lasso_handle(double x, double y, RustBuffer bounds, double hit_radius, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_HIT_LASSO_ROTATE_HANDLE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_HIT_LASSO_ROTATE_HANDLE
+int8_t uniffi_impala_ffi_fn_func_heft_hit_lasso_rotate_handle(double x, double y, RustBuffer bounds, double hit_radius, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_IS_LASSO_BODY_HIT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_IS_LASSO_BODY_HIT
 int8_t uniffi_impala_ffi_fn_func_heft_is_lasso_body_hit(double x, double y, RustBuffer bounds, double tolerance, RustCallStatus *_Nonnull out_status
@@ -2201,6 +2241,11 @@ double uniffi_impala_ffi_fn_func_heft_lasso_resize_factor(double anchor_x, doubl
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_LASSO_RESIZE_START_DIST
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_LASSO_RESIZE_START_DIST
 double uniffi_impala_ffi_fn_func_heft_lasso_resize_start_dist(double anchor_x, double anchor_y, double start_x, double start_y, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_LASSO_ROTATE_HANDLE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_LASSO_ROTATE_HANDLE
+RustBuffer uniffi_impala_ffi_fn_func_heft_lasso_rotate_handle(RustBuffer bounds, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_FN_FUNC_HEFT_LASSO_TOUCH_ACTION
@@ -2944,6 +2989,12 @@ uint16_t uniffi_impala_ffi_checksum_func_heft_hit_lasso_handle(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_HIT_LASSO_ROTATE_HANDLE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_HIT_LASSO_ROTATE_HANDLE
+uint16_t uniffi_impala_ffi_checksum_func_heft_hit_lasso_rotate_handle(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_IS_LASSO_BODY_HIT
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_IS_LASSO_BODY_HIT
 uint16_t uniffi_impala_ffi_checksum_func_heft_is_lasso_body_hit(void
@@ -2965,6 +3016,12 @@ uint16_t uniffi_impala_ffi_checksum_func_heft_lasso_resize_factor(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_LASSO_RESIZE_START_DIST
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_LASSO_RESIZE_START_DIST
 uint16_t uniffi_impala_ffi_checksum_func_heft_lasso_resize_start_dist(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_LASSO_ROTATE_HANDLE
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_FUNC_HEFT_LASSO_ROTATE_HANDLE
+uint16_t uniffi_impala_ffi_checksum_func_heft_lasso_rotate_handle(void
     
 );
 #endif
@@ -3910,6 +3967,18 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_commit_strokes(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DELETE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DELETE_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_delete_lasso(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DUPLICATE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DUPLICATE_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_lasso(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_DUPLICATE_STROKES
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_duplicate_strokes(void
@@ -3955,6 +4024,18 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_image_data(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_IN_FOLDER
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_IN_FOLDER
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_in_folder(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_LASSO_BOUNDS
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_LASSO_BOUNDS
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_lasso_bounds(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_MOVE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_MOVE_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_move_lasso(void
     
 );
 #endif
@@ -4048,6 +4129,18 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_restore(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ROTATE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_ROTATE_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_rotate_lasso(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SCALE_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SCALE_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_scale_lasso(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SCALE_STROKES
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SCALE_STROKES
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(void
@@ -4057,6 +4150,12 @@ uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_scale_strokes(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 #define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_BY_LASSO
 uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_select_by_lasso(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_LASSO
+#define UNIFFI_FFIDEF_UNIFFI_IMPALA_FFI_CHECKSUM_METHOD_IMPALACORE_HEFT_SELECT_LASSO
+uint16_t uniffi_impala_ffi_checksum_method_impalacore_heft_select_lasso(void
     
 );
 #endif

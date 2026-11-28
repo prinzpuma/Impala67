@@ -72,6 +72,29 @@ pub fn heft_lasso_resize_start_dist(anchor_x: f64, anchor_y: f64, start_x: f64, 
     lasso::lasso_resize_start_dist([anchor_x, anchor_y], [start_x, start_y])
 }
 
+/// Drehgriff mittig über dem Auswahlrahmen samt Drehpunkt `(cx, cy)`.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftLassoRotateHandle {
+    pub x: f64,
+    pub y: f64,
+    pub cx: f64,
+    pub cy: f64,
+}
+
+/// Drehgriff über dem Auswahlrahmen zum Zeichnen.
+#[uniffi::export]
+pub fn heft_lasso_rotate_handle(bounds: HeftRect) -> HeftLassoRotateHandle {
+    let b = bbox(&bounds);
+    let [x, y] = lasso::lasso_rotate_handle(&b);
+    HeftLassoRotateHandle { x, y, cx: (b.min_x + b.max_x) / 2.0, cy: (b.min_y + b.max_y) / 2.0 }
+}
+
+/// Trifft `(x, y)` den Drehgriff (Finger 24, Stift 18 Einheiten)?
+#[uniffi::export]
+pub fn heft_hit_lasso_rotate_handle(x: f64, y: f64, bounds: HeftRect, hit_radius: f64) -> bool {
+    lasso::hit_lasso_rotate_handle(x, y, &bbox(&bounds), hit_radius)
+}
+
 /// Skalierfaktor beim Ziehen am Griff: 0,15…6 und so, dass die Auswahl auf der Seite bleibt.
 #[uniffi::export]
 #[allow(clippy::too_many_arguments)]

@@ -425,6 +425,17 @@ export class HeftTransform {
         }
     }
     /**
+     * Nach Drehen um `(cx, cy)` um `angle` (Radiant).
+     * @param {number} cx
+     * @param {number} cy
+     * @param {number} angle
+     * @returns {any}
+     */
+    rotateBy(cx, cy, angle) {
+        const ret = wasm.hefttransform_rotateBy(this.__wbg_ptr, cx, cy, angle);
+        return takeObject(ret);
+    }
+    /**
      * Nach Skalieren um den Anker (`scaleStrokeFrom`); die Dicke wächst mit.
      * @param {number} ax
      * @param {number} ay
@@ -4515,6 +4526,31 @@ export function heftHitLassoHandle(x, y, bounds, hit_radius) {
 }
 
 /**
+ * Trifft `(x, y)` den Drehgriff des Auswahlrahmens?
+ * @param {number} x
+ * @param {number} y
+ * @param {any} bounds
+ * @param {number} hit_radius
+ * @returns {boolean}
+ */
+export function heftHitLassoRotateHandle(x, y, bounds, hit_radius) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftHitLassoRotateHandle(retptr, x, y, addBorrowedObject(bounds), hit_radius);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return r0 !== 0;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
  * Einfügeposition (`start`, `before`, `after`, sonst Ende).
  * @param {string} position
  * @param {number} current
@@ -4597,6 +4633,28 @@ export function heftLassoHandles(bounds) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
         wasm.heftLassoHandles(retptr, addBorrowedObject(bounds));
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        heap[stack_pointer++] = undefined;
+    }
+}
+
+/**
+ * Position `{ x, y, cx, cy }` des Drehgriffs über dem Auswahlrahmen.
+ * @param {any} bounds
+ * @returns {any}
+ */
+export function heftLassoRotateHandle(bounds) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.heftLassoRotateHandle(retptr, addBorrowedObject(bounds));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -4830,6 +4888,30 @@ export function heftSelectByLasso(coords, counts, sizes, bboxes, shapes, poly) {
         var v7 = getArrayU32FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export5(r0, r1 * 4, 4);
         return v7;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * Indizes der Rechtecke (`rects` flach `[x, y, w, h, …]`), die im Lasso-Polygon liegen.
+ * @param {Float64Array} rects
+ * @param {Float64Array} poly
+ * @returns {Uint32Array}
+ */
+export function heftSelectRectsByLasso(rects, poly) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArrayF64ToWasm0(rects, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArrayF64ToWasm0(poly, wasm.__wbindgen_export);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.heftSelectRectsByLasso(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v3 = getArrayU32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export5(r0, r1 * 4, 4);
+        return v3;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -6584,7 +6666,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5756(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5764(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6630,7 +6712,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5756(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5764(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6723,7 +6805,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 213, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5700);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5708);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6750,14 +6832,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5756(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5756(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5764(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5764(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5700(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5708(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5700(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5708(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

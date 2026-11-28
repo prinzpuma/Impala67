@@ -210,6 +210,8 @@ struct HeftCanvas: UIViewRepresentable {
         private var panDefaults: (types: [NSNumber], min: Int)?
         /// Mit dem Lasso ausgewählte Striche (PencilKit-Schlüssel).
         private var lassoSeeds: Set<UInt32> = []
+        private var lassoImageIds: [(page: String, id: String)] = []
+        private var lassoTextIds: [(page: String, id: String)] = []
         /// Kopierte Striche (alle Hefte dieser Sitzung), mit ihren Kerndaten.
         private static var clipboard: [(stroke: PKStroke, data: HeftStroke)] = []
         private var papers: [String: HeftPaperView] = [:]
@@ -1191,7 +1193,7 @@ struct HeftCanvas: UIViewRepresentable {
 
         // MARK: Lasso (HeftLasso.swift)
 
-        /// Striche, die überwiegend im Lasso liegen, auswählen.
+        /// Striche, Bilder und Textfelder, die überwiegend im Lasso liegen, auswählen.
         private func lassoSelect(_ polygon: [CGPoint]) {
             guard let canvas else { return }
             var minX = CGFloat.infinity, minY = CGFloat.infinity, maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
@@ -1202,6 +1204,19 @@ struct HeftCanvas: UIViewRepresentable {
             lassoSeeds = Set(canvas.drawing.strokes.filter { stroke in
                 known[stroke.randomSeed] != nil && stroke.renderBounds.intersects(bounds) && HeftLassoLayer.contains(polygon, stroke: stroke)
             }.map(\.randomSeed))
+            lassoImageIds = []
+            lassoTextIds = []
+            for (page, data) in loaded {
+                let o = origin(of: page)
+                for im in data.images where !im.background {
+                    let r = CGRect(x: o.x + im.x, y: o.y + im.y, width: max(1, im.w), height: max(1, im.h))
+                    if r.intersects(bounds), HeftLassoLayer.containsRect(polygon, r) { lassoImageIds.append((page, im.id)) }
+                }
+                for tb in data.texts {
+                    let r = CGRect(x: o.x + tb.x, y: o.y + tb.y, width: max(1, tb.w ?? 200), height: max(1, tb.h ?? 36))
+                    if r.intersects(bounds), HeftLassoLayer.containsRect(polygon, r) { lassoTextIds.append((page, tb.id)) }
+                }
+            }
             refreshLasso()
         }
 
@@ -1213,17 +1228,33 @@ struct HeftCanvas: UIViewRepresentable {
             return canvas.drawing.strokes.filter { lassoSeeds.contains($0.randomSeed) }
         }
 
-        /// Rahmen um die ausgewählten Striche zeigen und die Leiste nachführen.
+        /// Rahmen um die ausgewählten Striche, Bilder und Textfelder zeigen und die Leiste nachführen.
         private func refreshLasso() {
             let list = lassoStrokes()
             lassoSeeds = Set(list.map(\.randomSeed))
-            lasso.show(list.isEmpty ? nil : list.reduce(CGRect.null) { $0.union($1.renderBounds) })
-            if link?.lassoCount != list.count { link?.lassoCount = list.count }
+            var rect = list.reduce(CGRect.null) { $0.union($1.renderBounds) }
+            lassoImageIds = lassoImageIds.filter { item in
+                guard let im = loaded[item.page]?.images.first(where: { $0.id == item.id }) else { return false }
+                let o = origin(of: item.page)
+                rect = rect.union(CGRect(x: o.x + im.x, y: o.y + im.y, width: max(1, im.w), height: max(1, im.h)))
+                return true
+            }
+            lassoTextIds = lassoTextIds.filter { item in
+                guard let tb = loaded[item.page]?.texts.first(where: { $0.id == item.id }) else { return false }
+                let o = origin(of: item.page)
+                rect = rect.union(CGRect(x: o.x + tb.x, y: o.y + tb.y, width: max(1, tb.w ?? 200), height: max(1, tb.h ?? 36)))
+                return true
+            }
+            let total = list.count + lassoImageIds.count + lassoTextIds.count
+            lasso.show(total == 0 || rect.isNull ? nil : rect)
+            if link?.lassoCount != total { link?.lassoCount = total }
         }
 
         func clearLasso() {
-            guard !lassoSeeds.isEmpty || lasso.box != nil else { return }
+            guard !lassoSeeds.isEmpty || !lassoImageIds.isEmpty || !lassoTextIds.isEmpty || lasso.box != nil else { return }
             lassoSeeds = []
+            lassoImageIds = []
+            lassoTextIds = []
             lasso.show(nil)
             if link?.lassoCount != 0 { link?.lassoCount = 0 }
         }
@@ -1245,7 +1276,7 @@ struct HeftCanvas: UIViewRepresentable {
             return image
         }
 
-        /// Verschieben/Skalieren übernehmen: über die Zeichnung, damit der Abgleich schreibt und Rückgängig greift.
+        /// Verschieben/Skalieren/Drehen übernehmen: Striche über die Zeichnung, Bilder/Textfelder über den Kern.
         private func lassoCommit(_ t: CGAffineTransform) {
             guard let canvas else { return }
             guard !t.isIdentity else {
@@ -1253,11 +1284,44 @@ struct HeftCanvas: UIViewRepresentable {
                 refreshLasso()
                 return
             }
-            var all = canvas.drawing.strokes
-            for i in all.indices where lassoSeeds.contains(all[i].randomSeed) {
-                all[i].transform = all[i].transform.concatenating(t)
+            if !lassoSeeds.isEmpty {
+                var all = canvas.drawing.strokes
+                for i in all.indices where lassoSeeds.contains(all[i].randomSeed) {
+                    all[i].transform = all[i].transform.concatenating(t)
+                }
+                setDrawing(PKDrawing(strokes: all))
             }
-            setDrawing(PKDrawing(strokes: all))
+            if !lassoImageIds.isEmpty || !lassoTextIds.isEmpty {
+                let s = hypot(t.a, t.b)
+                let changedPages = Set(lassoImageIds.map(\.page) + lassoTextIds.map(\.page))
+                for item in lassoImageIds {
+                    guard let im = loaded[item.page]?.images.first(where: { $0.id == item.id }) else { continue }
+                    let o = origin(of: item.page)
+                    let center = CGPoint(x: o.x + im.x + im.w / 2, y: o.y + im.y + im.h / 2).applying(t)
+                    let nw = max(24.0, im.w * Double(s))
+                    let nh = max(24.0, im.h * Double(s))
+                    _ = attempt("heftSetImageFrame", {
+                        try core.heftSetImageFrame(pageId: pageId, heftPageId: item.page, imageId: im.id,
+                                                   x: Double(center.x - o.x) - nw / 2, y: Double(center.y - o.y) - nh / 2, w: nw, h: nh)
+                    })
+                }
+                for item in lassoTextIds {
+                    guard var tb = loaded[item.page]?.texts.first(where: { $0.id == item.id }) else { continue }
+                    let o = origin(of: item.page)
+                    let w = tb.w ?? 200, h = tb.h ?? 36
+                    let center = CGPoint(x: o.x + tb.x + w / 2, y: o.y + tb.y + h / 2).applying(t)
+                    let nw = max(60.0, w * Double(s))
+                    let nh = max(20.0, h * Double(s))
+                    tb.x = Double(center.x - o.x) - nw / 2
+                    tb.y = Double(center.y - o.y) - nh / 2
+                    tb.w = nw
+                    if tb.h != nil { tb.h = nh }
+                    if abs(s - 1) > 0.001, let sz = tb.size { tb.size = min(96, max(10, sz * Double(s))) }
+                    _ = attempt("heftSetText", { try core.heftSetText(pageId: pageId, heftPageId: item.page, text: tb) })
+                }
+                for p in changedPages { if let d = try? core.heftPageData(pageId: pageId, heftPageId: p) { loaded[p] = d } }
+                updateObjects()
+            }
             refreshLasso()
         }
 
@@ -1270,10 +1334,27 @@ struct HeftCanvas: UIViewRepresentable {
         }
 
         func lassoDelete() {
-            guard let canvas, !lassoSeeds.isEmpty else { return }
-            let keep = canvas.drawing.strokes.filter { !lassoSeeds.contains($0.randomSeed) }
+            guard let canvas, !lassoSeeds.isEmpty || !lassoImageIds.isEmpty || !lassoTextIds.isEmpty else { return }
+            let seeds = lassoSeeds
+            let imgsByPage = Dictionary(grouping: lassoImageIds, by: \.page).mapValues { $0.map(\.id) }
+            let txtsByPage = Dictionary(grouping: lassoTextIds, by: \.page).mapValues { $0.map(\.id) }
             clearLasso()
-            setDrawing(PKDrawing(strokes: keep))
+            if !seeds.isEmpty {
+                let keep = canvas.drawing.strokes.filter { !seeds.contains($0.randomSeed) }
+                setDrawing(PKDrawing(strokes: keep))
+            }
+            for (page, ids) in imgsByPage {
+                _ = attempt("heftRemoveImages", { try core.heftRemoveImages(pageId: pageId, heftPageId: page, ids: ids) })
+            }
+            for (page, ids) in txtsByPage {
+                _ = attempt("heftRemoveTexts", { try core.heftRemoveTexts(pageId: pageId, heftPageId: page, ids: ids) })
+            }
+            if !imgsByPage.isEmpty || !txtsByPage.isEmpty {
+                for p in Set(imgsByPage.keys).union(txtsByPage.keys) {
+                    if let d = try? core.heftPageData(pageId: pageId, heftPageId: p) { loaded[p] = d }
+                }
+                updateObjects()
+            }
         }
 
         func lassoCopy() {
@@ -1289,7 +1370,28 @@ struct HeftCanvas: UIViewRepresentable {
         /// Auswahl versetzt kopieren; die Kopie ist danach ausgewählt.
         func lassoDuplicate() {
             let items = lassoStrokes().compactMap { s in known[s.randomSeed].map { (stroke: s, data: $0.data) } }
-            insert(items, by: CGPoint(x: 30, y: 30))
+            let imgsByPage = Dictionary(grouping: lassoImageIds, by: \.page).mapValues { $0.map(\.id) }
+            let txtsByPage = Dictionary(grouping: lassoTextIds, by: \.page).mapValues { $0.map(\.id) }
+            if !items.isEmpty { insert(items, by: CGPoint(x: 28, y: 28)) }
+            var newImgs: [(page: String, id: String)] = []
+            var newTxts: [(page: String, id: String)] = []
+            let objPages = Set(imgsByPage.keys).union(txtsByPage.keys)
+            for page in objPages {
+                if let dup = attempt("heftDuplicateLasso", {
+                    try core.heftDuplicateLasso(pageId: pageId, heftPageId: page, strokeIds: [],
+                                                imageIds: imgsByPage[page] ?? [], textIds: txtsByPage[page] ?? [])
+                }) {
+                    newImgs.append(contentsOf: dup.imageIds.map { (page, $0) })
+                    newTxts.append(contentsOf: dup.textIds.map { (page, $0) })
+                    if let d = try? core.heftPageData(pageId: pageId, heftPageId: page) { loaded[page] = d }
+                }
+            }
+            if !objPages.isEmpty {
+                lassoImageIds = newImgs
+                lassoTextIds = newTxts
+                updateObjects()
+                refreshLasso()
+            }
         }
 
         /// Kopierte Striche mittig in den sichtbaren Ausschnitt einfügen.

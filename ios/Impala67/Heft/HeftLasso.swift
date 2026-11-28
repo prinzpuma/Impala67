@@ -2,11 +2,11 @@ import PencilKit
 import UIKit
 
 /// Eigenes Lasso wie in GoodNotes (statt `PKLassoTool`, dessen Auswahl bei den hier fast durchsichtigen
-/// PencilKit-Strichen unsichtbar blieb): Umkreisen wählt Striche aus, die überwiegend innerhalb liegen.
-/// Die Auswahl zeigt einen gestrichelten Rahmen mit Griffen an den Ecken; Ziehen im Rahmen verschiebt,
-/// Ziehen an einer Ecke skaliert (Seitenverhältnis fest, um die gegenüberliegende Ecke). Während des
-/// Ziehens bewegt sich ein Bild der Auswahl; geschrieben wird erst beim Loslassen (über die Leinwand).
+/// PencilKit-Strichen unsichtbar blieb): Umkreisen wählt Striche, Bilder und Textfelder aus, die überwiegend
+/// innerhalb liegen. Die Auswahl zeigt einen gestrichelten Rahmen mit Griffen an den Ecken und einem Drehgriff
+/// darüber; Ziehen im Rahmen verschiebt, Ziehen an einer Ecke skaliert, Ziehen am Drehgriff dreht.
 /// Liegt in Inhaltskoordinaten der Leinwand über allen Ebenen.
+// funktion: heft.lasso-objekte
 final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
     /// Lasso geschlossen: Umriss in Inhaltskoordinaten.
     var onLasso: (([CGPoint]) -> Void)?
@@ -43,6 +43,9 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
     private let handles = CAShapeLayer()
     private let snapshot = CALayer()
     private var corner: Int?
+    private var rotating = false
+    private var pivot = CGPoint.zero
+    private var startAngle: CGFloat = 0
     private var start = CGPoint.zero
     private var drag = CGAffineTransform.identity
 
@@ -107,17 +110,23 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
         CATransaction.commit()
     }
 
-    /// Nur der Auswahlrahmen samt Griffen fängt Berührungen; sonst gehen sie an die Leinwand.
+    /// Nur der Auswahlrahmen samt Eck- und Drehgriffen fängt Berührungen; sonst gehen sie an die Leinwand.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         guard active, let box else { return false }
         let pad = 22 / zoom
-        return box.insetBy(dx: -pad, dy: -pad).contains(point)
+        if box.insetBy(dx: -pad, dy: -pad).contains(point) { return true }
+        let rot = rotateHandle(box)
+        return hypot(point.x - rot.x, point.y - rot.y) <= pad
     }
 
     private var shown: CGRect? { box?.applying(drag) }
 
     private func corners(_ r: CGRect) -> [CGPoint] {
         [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY)]
+    }
+
+    private func rotateHandle(_ r: CGRect) -> CGPoint {
+        CGPoint(x: r.midX, y: r.minY - 26 / zoom)
     }
 
     private func redraw() {
@@ -143,6 +152,11 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
         let h = 7 / zoom
         let hp = CGMutablePath()
         for c in corners(r) { hp.addEllipse(in: CGRect(x: c.x - h, y: c.y - h, width: 2 * h, height: 2 * h)) }
+        let rot = rotateHandle(r)
+        hp.move(to: CGPoint(x: r.midX, y: r.minY))
+        hp.addLine(to: rot)
+        let rh = 8 / zoom
+        hp.addEllipse(in: CGRect(x: rot.x - rh, y: rot.y - rh, width: 2 * rh, height: 2 * rh))
         handles.lineWidth = line
         handles.path = hp
     }
@@ -186,7 +200,16 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
         case .began:
             start = p
             let pad = 22 / zoom
-            corner = corners(box).firstIndex { hypot($0.x - p.x, $0.y - p.y) <= pad }
+            let rot = rotateHandle(box)
+            if hypot(p.x - rot.x, p.y - rot.y) <= pad {
+                rotating = true
+                corner = nil
+                pivot = CGPoint(x: box.midX, y: box.midY)
+                startAngle = atan2(p.y - pivot.y, p.x - pivot.x)
+            } else {
+                rotating = false
+                corner = corners(box).firstIndex { hypot($0.x - p.x, $0.y - p.y) <= pad }
+            }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             snapshot.setAffineTransform(.identity)
@@ -217,6 +240,12 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
     }
 
     private func currentTransform(_ p: CGPoint, _ box: CGRect) -> CGAffineTransform {
+        if rotating {
+            let angle = atan2(p.y - pivot.y, p.x - pivot.x) - startAngle
+            return CGAffineTransform(translationX: -pivot.x, y: -pivot.y)
+                .concatenating(CGAffineTransform(rotationAngle: angle))
+                .concatenating(CGAffineTransform(translationX: pivot.x, y: pivot.y))
+        }
         guard let corner else { return CGAffineTransform(translationX: p.x - start.x, y: p.y - start.y) }
         // Gegenüberliegende Ecke bleibt; Maßstab aus dem Abstand zur Ecke (mindestens 10 %).
         let cs = corners(box)
@@ -234,8 +263,8 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         if g === draw {
             guard active else { return false }
-            // Auf der Auswahl verschiebt `pan`, nicht ein neues Lasso.
-            if let box, box.insetBy(dx: -22 / zoom, dy: -22 / zoom).contains(g.location(in: self)) { return false }
+            // Auf der Auswahl (inkl. Drehgriff) arbeitet `pan`, nicht ein neues Lasso.
+            if point(inside: g.location(in: self), with: nil) { return false }
             return true
         }
         return active
@@ -256,6 +285,14 @@ final class HeftLassoLayer: UIView, UIGestureRecognizerDelegate {
         }
         if total == 0, let first = stroke.path.first { return contains(polygon, first.location.applying(t)) }
         return total > 0 && inside * 2 > total
+    }
+
+    /// Ob ein Rechteck (Bild/Textfeld) im Lasso liegt: Mittelpunkt oder ≥ 2 Ecken innen.
+    static func containsRect(_ polygon: [CGPoint], _ r: CGRect) -> Bool {
+        if contains(polygon, CGPoint(x: r.midX, y: r.midY)) { return true }
+        let pts = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                   CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY)]
+        return pts.filter { contains(polygon, $0) }.count >= 2
     }
 
     /// Punkt im Polygon (Strahlverfahren).

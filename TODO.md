@@ -5,8 +5,8 @@ Stand: 28.11.2026.
 
 ## 1. Am Gerät prüfen (gebaut, ungetestet)
 
-- **iPad** (Wunschliste 12.11., Ziel: Heft so gut wie GoodNotes): Lasso (`Heft/HeftLasso.swift`; offen: Bilder/Textfelder
-  mitnehmen, Drehen), Text-Werkzeug „T“, Laserpointer, Notiz-Cover, Mehrfachauswahl im Editor, Aktivitäts-Heatmap,
+- **iPad** (Wunschliste 12.11., Ziel: Heft so gut wie GoodNotes): Lasso (`Heft/HeftLasso.swift`; Bilder/Textfelder
+  mitnehmen & Drehen jetzt gebaut), Text-Werkzeug „T“, Laserpointer, Notiz-Cover, Mehrfachauswahl im Editor, Aktivitäts-Heatmap,
   Kartenbrowser-Sortierung, Verlauf (Notizen und Hefte), Bridge-Inhaltswerkzeuge über `ImpalaCore.runMcpTool` auf dem Gerät prüfen, „Verwandt“ über `NLEmbedding` (Schwelle 0,5 passend?).
 - **iPad-Leistung nachmessen**: Einstellungen „Darstellung“ (258 ms) und Kern-Sperre nach Sync (429 ms) seit `bf594f7`
   behoben; Kartenübersicht (193 ms) und Kaltstart (789 ms) messen;

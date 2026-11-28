@@ -419,6 +419,57 @@ impl Stroke {
         self.refresh_bounds();
     }
 
+    /// Dreht um `(cx, cy)` um `angle` (Radiant), von der Ausgangsgeometrie aus.
+    /// Achsenparallele Formen (`Rect`/`Ellipse`) werden bei echter Drehung in gedrehte Punkte
+    /// aufgelöst, damit das gespeicherte Format rückwärtskompatibel bleibt.
+    pub fn rotate_from(&mut self, g: &StrokeGeometry, cx: f64, cy: f64, angle: f64) {
+        let (sin, cos) = angle.sin_cos();
+        let rot = |x: f64, y: f64| -> (f64, f64) {
+            let (dx, dy) = (x - cx, y - cy);
+            (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
+        };
+        let mut shape = g.shape.clone();
+        let mut pts: Vec<Point> = g
+            .pts
+            .iter()
+            .map(|p| {
+                let (x, y) = rot(p.x, p.y);
+                Point { x, y, ..*p }
+            })
+            .collect();
+        match &mut shape {
+            Some(Shape::Circle { cx: ox, cy: oy, .. }) => {
+                let (nx, ny) = rot(*ox, *oy);
+                *ox = nx;
+                *oy = ny;
+            }
+            Some(s @ (Shape::Line { .. } | Shape::Triangle { .. } | Shape::Arrow { .. })) => {
+                for (x, y) in s.corner_points_mut() {
+                    let (nx, ny) = rot(*x, *y);
+                    *x = nx;
+                    *y = ny;
+                }
+            }
+            Some(s) if angle.abs() > 1e-4 => {
+                if let Some(outline) = shape_outline(s) {
+                    pts = outline
+                        .into_iter()
+                        .map(|[x, y]| {
+                            let (nx, ny) = rot(x, y);
+                            Point::new(nx, ny, 0.5)
+                        })
+                        .collect();
+                    shape = None;
+                }
+            }
+            _ => {}
+        }
+        self.pts = pts;
+        self.shape = shape;
+        self.size = Some(g.size);
+        self.refresh_bounds();
+    }
+
     /// Trifft ein Kreis mit `radius` um (x, y) den Strich (`strokeHitAt`)? Die halbe
     /// Strichdicke zählt zum Radius.
     pub fn hit_at(&self, x: f64, y: f64, radius: f64) -> bool {

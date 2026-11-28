@@ -1,6 +1,6 @@
 //! Lasso-Auswahl (`heft-lasso.js`, nur die Logik; Zeichnen bleibt in JS).
 
-use crate::doc::{BBox, Stroke};
+use crate::doc::{BBox, Image, Stroke, TextBox};
 use crate::geometry::{Xy, point_in_polygon};
 
 fn grow(b: &mut [f64; 4], x: f64, y: f64) {
@@ -233,4 +233,178 @@ pub fn lasso_resize_factor(anchor: [f64; 2], start: [f64; 2], start_dist: f64, p
 /// Abstand für den Griff-Start (`Math.max(12, hypot(p - anchor))`).
 pub fn lasso_resize_start_dist(anchor: [f64; 2], start: [f64; 2]) -> f64 {
     crate::json::js_hypot(start[0] - anchor[0], start[1] - anchor[1]).max(12.0)
+}
+
+// ---------- Drehen + Bilder & Textfelder (Parität PWA / Android / iPad) ----------
+
+/// Abstand des Drehgriffs über dem oberen Rand des Auswahlrahmens.
+pub const LASSO_ROTATE_OFFSET: f64 = 26.0;
+
+/// Position `[x, y]` des Drehgriffs mittig über dem Auswahlrahmen.
+pub fn lasso_rotate_handle(b: &BBox) -> [f64; 2] {
+    [(b.min_x + b.max_x) / 2.0, b.min_y - LASSO_HANDLE_OFFSET - LASSO_ROTATE_OFFSET]
+}
+
+/// Trifft `(x, y)` den Drehgriff?
+pub fn hit_lasso_rotate_handle(x: f64, y: f64, b: &BBox, hit_radius: f64) -> bool {
+    let [hx, hy] = lasso_rotate_handle(b);
+    let (dx, dy) = (x - hx, y - hy);
+    dx * dx + dy * dy <= hit_radius * hit_radius
+}
+
+/// Rechteck (Bild oder Textfeld) im Lasso-Polygon: Mittelpunkt innen ODER mindestens 2 Ecken innen.
+pub fn rect_in_polygon<P: Xy>(x: f64, y: f64, w: f64, h: f64, poly: &[P], poly_box: &BBox) -> bool {
+    let rbox = BBox { min_x: x, min_y: y, max_x: x + w, max_y: y + h };
+    if !rbox.intersects(poly_box) {
+        return false;
+    }
+    if point_in_polygon(x + w / 2.0, y + h / 2.0, poly) {
+        return true;
+    }
+    let corners = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    corners.into_iter().filter(|[cx, cy]| point_in_polygon(*cx, *cy, poly)).count() >= 2
+}
+
+/// Rechteck eines Bildes `(x, y, w, h)` mit Fallback auf 0.
+pub fn image_rect(img: &Image) -> [f64; 4] {
+    [img.x.unwrap_or(0.0), img.y.unwrap_or(0.0), img.w.unwrap_or(0.0).max(1.0), img.h.unwrap_or(0.0).max(1.0)]
+}
+
+/// Rechteck eines Textfeldes `(x, y, w, h)`; fehlendes `h` (abgeleitete Höhe) gilt als 36.
+pub fn text_rect(tb: &TextBox) -> [f64; 4] {
+    [tb.x.unwrap_or(0.0), tb.y.unwrap_or(0.0), tb.w.unwrap_or(200.0).max(1.0), tb.h.filter(|v| *v > 0.0).unwrap_or(36.0)]
+}
+
+/// Indizes der Bilder, die das Lasso umschließt.
+pub fn select_images_by_lasso<P: Xy>(images: &[Image], poly: &[P]) -> Vec<usize> {
+    if images.is_empty() || poly.len() < 3 {
+        return Vec::new();
+    }
+    let Some(poly_box) = polygon_bounds(poly) else { return Vec::new() };
+    (0..images.len())
+        .filter(|&i| {
+            let [x, y, w, h] = image_rect(&images[i]);
+            rect_in_polygon(x, y, w, h, poly, &poly_box)
+        })
+        .collect()
+}
+
+/// Indizes der Textfelder, die das Lasso umschließt.
+pub fn select_texts_by_lasso<P: Xy>(texts: &[TextBox], poly: &[P]) -> Vec<usize> {
+    if texts.is_empty() || poly.len() < 3 {
+        return Vec::new();
+    }
+    let Some(poly_box) = polygon_bounds(poly) else { return Vec::new() };
+    (0..texts.len())
+        .filter(|&i| {
+            let [x, y, w, h] = text_rect(&texts[i]);
+            rect_in_polygon(x, y, w, h, poly, &poly_box)
+        })
+        .collect()
+}
+
+/// Gemeinsame Grenzen aus Strichen, Bildern und Textfeldern.
+pub fn lasso_selection_bounds<'a>(
+    strokes: impl IntoIterator<Item = &'a Stroke>,
+    images: impl IntoIterator<Item = &'a Image>,
+    texts: impl IntoIterator<Item = &'a TextBox>,
+) -> Option<BBox> {
+    let mut b = EMPTY;
+    if let Some(sb) = lasso_bounds(strokes) {
+        grow(&mut b, sb.min_x, sb.min_y);
+        grow(&mut b, sb.max_x, sb.max_y);
+    }
+    for img in images {
+        let [x, y, w, h] = image_rect(img);
+        grow(&mut b, x, y);
+        grow(&mut b, x + w, y + h);
+    }
+    for tb in texts {
+        let [x, y, w, h] = text_rect(tb);
+        grow(&mut b, x, y);
+        grow(&mut b, x + w, y + h);
+    }
+    finish(b)
+}
+
+/// Transformation einer Lasso-Auswahl.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LassoTransformOp {
+    Move { dx: f64, dy: f64 },
+    Scale { ax: f64, ay: f64, factor: f64 },
+    Rotate { cx: f64, cy: f64, angle: f64 },
+}
+
+/// Verschiebt, skaliert oder dreht ein Rechteck `(x, y, w, h)`. Beim Drehen kreist der
+/// Mittelpunkt um `(cx, cy)`, das Rechteck bleibt aufrecht (Format bleibt kompatibel).
+pub fn transform_rect([x, y, w, h]: [f64; 4], op: LassoTransformOp, min_w: f64, min_h: f64) -> [f64; 4] {
+    match op {
+        LassoTransformOp::Move { dx, dy } => [x + dx, y + dy, w, h],
+        LassoTransformOp::Scale { ax, ay, factor } => {
+            [ax + (x - ax) * factor, ay + (y - ay) * factor, (w * factor).max(min_w), (h * factor).max(min_h)]
+        }
+        LassoTransformOp::Rotate { cx, cy, angle } => {
+            let (sin, cos) = angle.sin_cos();
+            let (mx, my) = (x + w / 2.0 - cx, y + h / 2.0 - cy);
+            let (nx, ny) = (cx + mx * cos - my * sin, cy + mx * sin + my * cos);
+            [nx - w / 2.0, ny - h / 2.0, w, h]
+        }
+    }
+}
+
+pub fn transform_image(img: &mut Image, op: LassoTransformOp) {
+    let [nx, ny, nw, nh] = transform_rect(image_rect(img), op, 24.0, 24.0);
+    img.x = Some(nx);
+    img.y = Some(ny);
+    img.w = Some(nw);
+    img.h = Some(nh);
+}
+
+pub fn transform_text(tb: &mut TextBox, op: LassoTransformOp) {
+    let [nx, ny, nw, nh] = transform_rect(text_rect(tb), op, 60.0, 20.0);
+    tb.x = Some(nx);
+    tb.y = Some(ny);
+    tb.w = Some(nw);
+    if tb.h.is_some() {
+        tb.h = Some(nh);
+    }
+    if let LassoTransformOp::Scale { factor, .. } = op
+        && let Some(sz) = tb.size
+    {
+        tb.size = Some((sz * factor).clamp(10.0, 96.0));
+    }
+}
+
+/// Kopien von Bildern, 28 Einheiten versetzt.
+pub fn duplicate_images<'a>(
+    images: impl IntoIterator<Item = &'a Image>,
+    new_id: &mut dyn FnMut() -> String,
+) -> Vec<Image> {
+    images
+        .into_iter()
+        .map(|img| {
+            let mut c = img.clone();
+            c.id = new_id();
+            c.x = Some(c.x.unwrap_or(0.0) + 28.0);
+            c.y = Some(c.y.unwrap_or(0.0) + 28.0);
+            c
+        })
+        .collect()
+}
+
+/// Kopien von Textfeldern, 28 Einheiten versetzt.
+pub fn duplicate_texts<'a>(
+    texts: impl IntoIterator<Item = &'a TextBox>,
+    new_id: &mut dyn FnMut() -> String,
+) -> Vec<TextBox> {
+    texts
+        .into_iter()
+        .map(|tb| {
+            let mut c = tb.clone();
+            c.id = new_id();
+            c.x = Some(c.x.unwrap_or(0.0) + 28.0);
+            c.y = Some(c.y.unwrap_or(0.0) + 28.0);
+            c
+        })
+        .collect()
 }

@@ -194,6 +194,7 @@ fun HeftScreen(
                 else -> false
             }
             e.key == Key.Delete || e.key == Key.Backspace -> when {
+                // funktion: heft.lasso-loeschen
                 vm.lasso != null -> { vm.lassoDelete(); true }
                 vm.objSel != null -> { vm.removeObject(); true }
                 else -> false

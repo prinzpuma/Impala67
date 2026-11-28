@@ -10,7 +10,10 @@ use std::collections::HashSet;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use impala_heft::lasso::duplicate_strokes;
+use impala_heft::lasso::{
+    LassoTransformOp, duplicate_images, duplicate_strokes, duplicate_texts, lasso_selection_bounds,
+    select_images_by_lasso, select_texts_by_lasso, transform_image, transform_text,
+};
 use impala_heft::{
     BBox, HeftOp, Image, Item, ItemKind, Point, Shape, Stroke, TextBox, Tool, blob_id, fit_stroke_shape, lasso_bounds,
     select_strokes_by_lasso,
@@ -20,6 +23,15 @@ use serde_json::{Value, json};
 use crate::heft::{HeftImage, HeftPageData, HeftShape, HeftStroke, HeftText, image_data, page_data, parse_paper};
 use crate::heft_undo::inverse;
 use crate::{CoreError, ImpalaCore, Inner, invalid};
+
+/// Ergebnis einer Lasso-Auswahl (Striche, Bilder und Textfelder einer Seite samt Rahmen).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct HeftLassoSelection {
+    pub stroke_ids: Vec<String>,
+    pub image_ids: Vec<String>,
+    pub text_ids: Vec<String>,
+    pub bounds: Option<HeftRect>,
+}
 
 /// Eine einzelne Änderung an einem Heft. Mehrere davon gehen als ein Event hinein
 /// ([`ImpalaCore::heft_apply`]). `page` ist immer die Heftseite, nicht das Heft.
@@ -441,6 +453,46 @@ pub fn heft_new_id() -> String {
     new_id()
 }
 
+impl ImpalaCore {
+    fn transform_lasso(
+        &self,
+        page_id: &str,
+        heft_page_id: &str,
+        stroke_ids: &[String],
+        image_ids: &[String],
+        text_ids: &[String],
+        op: LassoTransformOp,
+    ) -> Result<HeftEdit, CoreError> {
+        let mut inner = self.lock();
+        let want_s: HashSet<&str> = stroke_ids.iter().map(String::as_str).collect();
+        let want_i: HashSet<&str> = image_ids.iter().map(String::as_str).collect();
+        let want_t: HashSet<&str> = text_ids.iter().map(String::as_str).collect();
+        let pg = inner.heft_page(page_id, heft_page_id)?;
+        let mut ops = Vec::with_capacity(want_s.len() + want_i.len() + want_t.len());
+        for s in pg.strokes.iter().filter(|s| want_s.contains(s.id.as_str())) {
+            let mut next = s.clone();
+            let g = next.geometry();
+            match op {
+                LassoTransformOp::Move { dx, dy } => next.move_from(&g, dx, dy),
+                LassoTransformOp::Scale { ax, ay, factor } => next.scale_from(&g, ax, ay, factor),
+                LassoTransformOp::Rotate { cx, cy, angle } => next.rotate_from(&g, cx, cy, angle),
+            }
+            ops.push(HeftOp::Set { page: heft_page_id.to_owned(), item: Item::Stroke(next) });
+        }
+        for img in pg.images.iter().filter(|i| want_i.contains(i.id.as_str())) {
+            let mut next = img.clone();
+            transform_image(&mut next, op);
+            ops.push(HeftOp::Set { page: heft_page_id.to_owned(), item: Item::Image(next) });
+        }
+        for tb in pg.texts.iter().filter(|t| want_t.contains(t.id.as_str())) {
+            let mut next = tb.clone();
+            transform_text(&mut next, op);
+            ops.push(HeftOp::Set { page: heft_page_id.to_owned(), item: Item::Text(next) });
+        }
+        inner.heft_edit(page_id, ops, Vec::new())
+    }
+}
+
 #[uniffi::export]
 impl ImpalaCore {
     /// Mehrere Änderungen als EIN Event (eine Geste). Liefert neue IDs und die Umkehr.
@@ -614,6 +666,176 @@ impl ImpalaCore {
         let inner = self.lock();
         let pg = inner.heft_page(&page_id, &heft_page_id)?;
         Ok(lasso_bounds(pg.strokes.iter().filter(|s| want.contains(s.id.as_str()))).map(HeftRect::from))
+    }
+
+    /// Striche, Bilder und Textfelder, die das Lasso (`polygon`: `[x, y, …]`) umschließt.
+    pub fn heft_select_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        polygon: Vec<f32>,
+    ) -> Result<HeftLassoSelection, CoreError> {
+        let poly: Vec<[f64; 2]> =
+            polygon.as_chunks::<2>().0.iter().map(|&[x, y]| [f64::from(x), f64::from(y)]).collect();
+        let inner = self.lock();
+        let pg = inner.heft_page(&page_id, &heft_page_id)?;
+        let s_idx = select_strokes_by_lasso(&pg.strokes, &poly);
+        let i_idx = select_images_by_lasso(&pg.images, &poly);
+        let t_idx = select_texts_by_lasso(&pg.texts, &poly);
+        let bounds = lasso_selection_bounds(
+            s_idx.iter().map(|&i| &pg.strokes[i]),
+            i_idx.iter().map(|&i| &pg.images[i]),
+            t_idx.iter().map(|&i| &pg.texts[i]),
+        )
+        .map(HeftRect::from);
+        Ok(HeftLassoSelection {
+            stroke_ids: s_idx.into_iter().map(|i| pg.strokes[i].id.clone()).collect(),
+            image_ids: i_idx.into_iter().map(|i| pg.images[i].id.clone()).collect(),
+            text_ids: t_idx.into_iter().map(|i| pg.texts[i].id.clone()).collect(),
+            bounds,
+        })
+    }
+
+    /// Gemeinsame Grenzen einer gemischten Lasso-Auswahl (Striche + Bilder + Textfelder).
+    pub fn heft_lasso_bounds(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+    ) -> Result<Option<HeftRect>, CoreError> {
+        let want_s: HashSet<&str> = stroke_ids.iter().map(String::as_str).collect();
+        let want_i: HashSet<&str> = image_ids.iter().map(String::as_str).collect();
+        let want_t: HashSet<&str> = text_ids.iter().map(String::as_str).collect();
+        let inner = self.lock();
+        let pg = inner.heft_page(&page_id, &heft_page_id)?;
+        Ok(lasso_selection_bounds(
+            pg.strokes.iter().filter(|s| want_s.contains(s.id.as_str())),
+            pg.images.iter().filter(|i| want_i.contains(i.id.as_str())),
+            pg.texts.iter().filter(|t| want_t.contains(t.id.as_str())),
+        )
+        .map(HeftRect::from))
+    }
+
+    /// Gemischte Lasso-Auswahl in einem Undo-Schritt verschieben.
+    #[allow(clippy::too_many_arguments)]
+    pub fn heft_move_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+        dx: f64,
+        dy: f64,
+    ) -> Result<HeftEdit, CoreError> {
+        self.transform_lasso(&page_id, &heft_page_id, &stroke_ids, &image_ids, &text_ids, LassoTransformOp::Move { dx, dy })
+    }
+
+    /// Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
+    #[allow(clippy::too_many_arguments)]
+    pub fn heft_scale_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+        ax: f64,
+        ay: f64,
+        factor: f64,
+    ) -> Result<HeftEdit, CoreError> {
+        if !factor.is_finite() || factor <= 0.0 {
+            return Err(invalid("Skalierungsfaktor muss positiv sein"));
+        }
+        self.transform_lasso(
+            &page_id,
+            &heft_page_id,
+            &stroke_ids,
+            &image_ids,
+            &text_ids,
+            LassoTransformOp::Scale { ax, ay, factor },
+        )
+    }
+
+    /// Gemischte Lasso-Auswahl in einem Undo-Schritt um `(cx, cy)` drehen (`angle` in Radiant).
+    #[allow(clippy::too_many_arguments)]
+    pub fn heft_rotate_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+        cx: f64,
+        cy: f64,
+        angle: f64,
+    ) -> Result<HeftEdit, CoreError> {
+        if !angle.is_finite() {
+            return Err(invalid("Drehwinkel ungültig"));
+        }
+        self.transform_lasso(
+            &page_id,
+            &heft_page_id,
+            &stroke_ids,
+            &image_ids,
+            &text_ids,
+            LassoTransformOp::Rotate { cx, cy, angle },
+        )
+    }
+
+    /// Gemischte Lasso-Auswahl 28 Einheiten versetzt duplizieren; liefert die neuen IDs + Grenzen.
+    pub fn heft_duplicate_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+    ) -> Result<HeftLassoSelection, CoreError> {
+        let mut inner = self.lock();
+        let want_s: HashSet<&str> = stroke_ids.iter().map(String::as_str).collect();
+        let want_i: HashSet<&str> = image_ids.iter().map(String::as_str).collect();
+        let want_t: HashSet<&str> = text_ids.iter().map(String::as_str).collect();
+        let pg = inner.heft_page(&page_id, &heft_page_id)?;
+        let s_copies = duplicate_strokes(pg.strokes.iter().filter(|s| want_s.contains(s.id.as_str())), &mut new_id);
+        let i_copies = duplicate_images(pg.images.iter().filter(|i| want_i.contains(i.id.as_str())), &mut new_id);
+        let t_copies = duplicate_texts(pg.texts.iter().filter(|t| want_t.contains(t.id.as_str())), &mut new_id);
+        let bounds = lasso_selection_bounds(s_copies.iter(), i_copies.iter(), t_copies.iter()).map(HeftRect::from);
+        let new_s: Vec<String> = s_copies.iter().map(|s| s.id.clone()).collect();
+        let new_i: Vec<String> = i_copies.iter().map(|i| i.id.clone()).collect();
+        let new_t: Vec<String> = t_copies.iter().map(|t| t.id.clone()).collect();
+        let mut ops = Vec::with_capacity(s_copies.len() + i_copies.len() + t_copies.len());
+        ops.extend(s_copies.into_iter().map(|s| HeftOp::Add { page: heft_page_id.clone(), item: Item::Stroke(s) }));
+        ops.extend(i_copies.into_iter().map(|i| HeftOp::Add { page: heft_page_id.clone(), item: Item::Image(i) }));
+        ops.extend(t_copies.into_iter().map(|t| HeftOp::Add { page: heft_page_id.clone(), item: Item::Text(t) }));
+        inner.heft_edit(&page_id, ops, Vec::new())?;
+        Ok(HeftLassoSelection { stroke_ids: new_s, image_ids: new_i, text_ids: new_t, bounds })
+    }
+
+    /// Gemischte Lasso-Auswahl in einem Undo-Schritt löschen.
+    pub fn heft_delete_lasso(
+        &self,
+        page_id: String,
+        heft_page_id: String,
+        stroke_ids: Vec<String>,
+        image_ids: Vec<String>,
+        text_ids: Vec<String>,
+    ) -> Result<HeftEdit, CoreError> {
+        let mut inner = self.lock();
+        inner.heft_page(&page_id, &heft_page_id)?;
+        let mut ops = Vec::new();
+        if !stroke_ids.is_empty() {
+            ops.push(HeftOp::Remove { page: heft_page_id.clone(), kind: ItemKind::Stroke, ids: stroke_ids });
+        }
+        if !image_ids.is_empty() {
+            ops.push(HeftOp::Remove { page: heft_page_id.clone(), kind: ItemKind::Image, ids: image_ids });
+        }
+        if !text_ids.is_empty() {
+            ops.push(HeftOp::Remove { page: heft_page_id, kind: ItemKind::Text, ids: text_ids });
+        }
+        inner.heft_edit(&page_id, ops, Vec::new())
     }
 
     // ---------- Bilder ----------

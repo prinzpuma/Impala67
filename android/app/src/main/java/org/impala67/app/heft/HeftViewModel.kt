@@ -375,11 +375,13 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         tools = tools.copy(tool = HeftTool.PEN, expanded = true)
     }
 
-    /** Striche im Lasso-Polygon (`[x, y, …]`) auswählen. */
+    /** Striche, Bilder und Textfelder im Lasso-Polygon (`[x, y, …]`) auswählen. */
     fun lassoSelect(heftPageId: String, polygon: List<Float>) {
         viewModelScope.launch {
-            val ids = store.write { runCatching { it.heftSelectByLasso(pageId, heftPageId, polygon) }.getOrDefault(emptyList()) }
-            lasso = selection(heftPageId, ids)
+            val hit = store.write { runCatching { it.heftSelectLasso(pageId, heftPageId, polygon) }.getOrNull() }
+            lasso = hit?.bounds?.let { b ->
+                LassoSel(heftPageId, hit.strokeIds, b, hit.imageIds, hit.textIds).takeIf { it.hasItems }
+            }
         }
     }
 
@@ -398,14 +400,26 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
         lasso = sel.copy(drag = change(drag))
     }
 
-    /** Geste fertig: ein Event (Verschieben oder Skalieren), ein Rückgängig-Schritt. */
+    /** Geste fertig: ein Event (Verschieben, Skalieren oder Drehen), ein Rückgängig-Schritt. */
     fun lassoRelease() {
         val sel = lasso ?: return
         val drag = sel.drag ?: return
         if (drag.isIdentity) { lasso = sel.copy(drag = null); return }
-        write(after = { refreshLasso(sel.heftPageId, sel.ids, drag) }) { core ->
-            if (drag.factor != 1f) core.heftScaleStrokes(pageId, sel.heftPageId, sel.ids, drag.ax.toDouble(), drag.ay.toDouble(), drag.factor.toDouble())
-            else core.heftMoveStrokes(pageId, sel.heftPageId, sel.ids, drag.dx.toDouble(), drag.dy.toDouble())
+        write(after = { refreshLasso(sel, drag) }) { core ->
+            when {
+                drag.angleRad != 0f -> core.heftRotateLasso(
+                    pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds,
+                    drag.cx.toDouble(), drag.cy.toDouble(), drag.angleRad.toDouble(),
+                )
+                drag.factor != 1f -> core.heftScaleLasso(
+                    pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds,
+                    drag.ax.toDouble(), drag.ay.toDouble(), drag.factor.toDouble(),
+                )
+                else -> core.heftMoveLasso(
+                    pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds,
+                    drag.dx.toDouble(), drag.dy.toDouble(),
+                )
+            }
         }
         indexer.schedule(sel.heftPageId)
     }
@@ -413,26 +427,35 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
     /** Kopien 28 Einheiten versetzt; die Auswahl wandert auf die Kopien. */
     fun lassoDuplicate() {
         val sel = lasso ?: return
-        write(after = { lasso = selection(sel.heftPageId, it.ids) }) { it.heftDuplicateStrokes(pageId, sel.heftPageId, sel.ids) }
-        indexer.schedule(sel.heftPageId)
+        viewModelScope.launch {
+            val next = store.write {
+                runCatching { it.heftDuplicateLasso(pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds) }.getOrNull()
+            }
+            if (next != null) {
+                lasso = next.bounds?.let { b ->
+                    LassoSel(sel.heftPageId, next.strokeIds, b, next.imageIds, next.textIds).takeIf { it.hasItems }
+                }
+                changed()
+                indexer.schedule(sel.heftPageId)
+            }
+        }
     }
 
     fun lassoDelete() {
         val sel = lasso ?: return
         lasso = null
-        removeStrokes(sel.heftPageId, sel.ids)
-    }
-
-    private suspend fun selection(heftPageId: String, ids: List<String>): LassoSel? {
-        if (ids.isEmpty()) return null
-        val bounds = store.write { runCatching { it.heftStrokesBounds(pageId, heftPageId, ids) }.getOrNull() } ?: return null
-        return LassoSel(heftPageId, ids, bounds)
+        write { it.heftDeleteLasso(pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds) }
+        indexer.schedule(sel.heftPageId)
     }
 
     /** Neue Grenzen aus dem Kern; die Vorschau bleibt, bis die Seite die neue Fassung zeigt. */
-    private suspend fun refreshLasso(heftPageId: String, ids: List<String>, drag: LassoDrag) {
-        val fresh = selection(heftPageId, ids) ?: return
-        if (lasso?.ids == ids) lasso = fresh.copy(drag = drag.copy(live = false))
+    private suspend fun refreshLasso(sel: LassoSel, drag: LassoDrag) {
+        val bounds = store.write {
+            runCatching { it.heftLassoBounds(pageId, sel.heftPageId, sel.ids, sel.imageIds, sel.textIds) }.getOrNull()
+        } ?: return
+        if (lasso?.ids == sel.ids && lasso?.imageIds == sel.imageIds && lasso?.textIds == sel.textIds) {
+            lasso = sel.copy(bounds = bounds, drag = drag.copy(live = false))
+        }
     }
 
     // ---- Bilder und Textfelder (heft.js `sel`, `openTextEditor`, heft-import.js `insertImageFile`) ----

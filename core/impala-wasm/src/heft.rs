@@ -219,6 +219,13 @@ impl HeftTransform {
         self.items.iter_mut().for_each(|(s, g)| s.scale_from(g, ax, ay, factor));
         self.packed()
     }
+
+    /// Nach Drehen um `(cx, cy)` um `angle` (Radiant).
+    #[wasm_bindgen(js_name = rotateBy)]
+    pub fn rotate_by(&mut self, cx: f64, cy: f64, angle: f64) -> JsValue {
+        self.items.iter_mut().for_each(|(s, g)| s.rotate_from(g, cx, cy, angle));
+        self.packed()
+    }
 }
 
 /// Radierer einer Geste: kennt die Striche der Seite (mit ihren IDs) und schneidet bzw. entfernt sie
@@ -333,6 +340,36 @@ pub fn heft_hit_lasso_handle(x: f64, y: f64, bounds: &JsValue, hit_radius: f64) 
 #[wasm_bindgen(js_name = heftIsLassoBodyHit)]
 pub fn heft_is_lasso_body_hit(x: f64, y: f64, bounds: &JsValue, tolerance: f64) -> Result<bool, JsError> {
     Ok(bbox_from(bounds)?.is_some_and(|b| is_lasso_body_hit(x, y, &b, tolerance)))
+}
+
+/// Position `{ x, y, cx, cy }` des Drehgriffs über dem Auswahlrahmen.
+#[wasm_bindgen(js_name = heftLassoRotateHandle)]
+pub fn heft_lasso_rotate_handle(bounds: &JsValue) -> Result<JsValue, JsError> {
+    let Some(b) = bbox_from(bounds)? else { return Ok(JsValue::NULL) };
+    let [x, y] = impala_heft::lasso::lasso_rotate_handle(&b);
+    Ok(to_js(&json!({ "x": x, "y": y, "cx": (b.min_x + b.max_x) / 2.0, "cy": (b.min_y + b.max_y) / 2.0 })))
+}
+
+/// Trifft `(x, y)` den Drehgriff des Auswahlrahmens?
+#[wasm_bindgen(js_name = heftHitLassoRotateHandle)]
+pub fn heft_hit_lasso_rotate_handle(x: f64, y: f64, bounds: &JsValue, hit_radius: f64) -> Result<bool, JsError> {
+    Ok(bbox_from(bounds)?.is_some_and(|b| impala_heft::lasso::hit_lasso_rotate_handle(x, y, &b, hit_radius)))
+}
+
+/// Indizes der Rechtecke (`rects` flach `[x, y, w, h, …]`), die im Lasso-Polygon liegen.
+#[wasm_bindgen(js_name = heftSelectRectsByLasso)]
+pub fn heft_select_rects_by_lasso(rects: &[f64], poly: &[f64]) -> Vec<u32> {
+    let poly = polygon(poly);
+    let Some(poly_box) = impala_heft::lasso::polygon_bounds(&poly) else { return Vec::new() };
+    if poly.len() < 3 {
+        return Vec::new();
+    }
+    rects
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(_, r)| impala_heft::lasso::rect_in_polygon(r[0], r[1], r[2], r[3], &poly, &poly_box))
+        .map(|(i, _)| i as u32)
+        .collect()
 }
 
 /// Kopien der Striche, 28 Einheiten versetzt; `uid` liefert die neuen IDs.
