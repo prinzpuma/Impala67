@@ -37,6 +37,11 @@ let lastContext = null;
 let pendingStalls = [];
 let stallTimer = 0;
 let recentOperations = [];
+// Lange Frames mit verursachenden Skripten (long-animation-frame): Long-Task allein sagt nur, DASS der
+// Hauptthread blockiert war. Ohne laufende benannte Operation blieb ein Hänger sonst ohne Ursache.
+let recentFrames = [], framesSupported = false, lastFrameEndMs = 0;
+// Chrome meldet den langen Frame oft erst nach dem Long-Task: so lange (höchstens) auf ihn warten.
+const FRAME_WAIT_MS = 2500;
 
 const storage = () => typeof localStorage !== "undefined" ? localStorage : null;
 const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
@@ -198,7 +203,9 @@ function anomalySignature(kind, meta = {}, context = null) {
 		const op = (context?.operations || []).reduce((top, entry) => (!top || entry.overlapMs > top.overlapMs ? entry : top), null)?.name || "";
 		if (input) return "stall:input:" + input + (op ? ":" + op : "");
 		if (op) return "stall:op:" + op;
-		return "stall:task";
+		// Ohne benannte Operation: nach dem teuersten Skript des langen Frames (Funktion + Datei).
+		const script = typeof meta.scripts === "string" ? meta.scripts.split(";")[0].replace(/\s\d+ ms$/, "").split(" [")[0].replace(/@\d+$/, "").trim() : "";
+		return script ? "stall:script:" + script.slice(0, 60) : "stall:task";
 	}
 	if (kind === "operation") {
 		return "op:" + (meta.name || "") + ":" + (meta.failed ? "failed" : "slow");
@@ -400,8 +407,14 @@ function mergeStall(target, source) {
 function flushStalls() {
 	clearTimeout(stallTimer);
 	stallTimer = 0;
-	const stalls = pendingStalls.sort((a, b) => a.startMs - b.startMs);
-	pendingStalls = [];
+	const waitUntil = now() - FRAME_WAIT_MS;
+	const ready = (stall) => !framesSupported || stall.endMs <= lastFrameEndMs || stall.endMs < waitUntil;
+	const stalls = pendingStalls.filter(ready).sort((a, b) => a.startMs - b.startMs);
+	pendingStalls = pendingStalls.filter((stall) => !ready(stall));
+	if (pendingStalls.length) {
+		stallTimer = setTimeout(flushStalls, STALL_FLUSH_MS);
+		if (typeof stallTimer?.unref === "function") stallTimer.unref();
+	}
 	for (const stall of stalls) {
 		const meta = {
 			startMs: round(stall.startMs),
@@ -414,11 +427,45 @@ function flushStalls() {
 			interactionCount: stall.interactionIds.size || undefined,
 			events: stall.eventNames.size ? [...stall.eventNames].sort().join(",").slice(0, 120) : undefined,
 		};
+		const scripts = scriptsDuring(stall.startMs, stall.endMs);
+		if (scripts) meta.scripts = scripts;
 		const context = { ...(stall.context || currentContext()) };
 		delete context.active;
 		context.operations = operationsDuring(stall.startMs, stall.endMs);
 		recordAt("main-thread-stall", stall.endMs - stall.startMs, meta, performanceWallTime(stall.startMs), context);
 	}
+}
+
+// Die teuersten Skripte (und Rendern/Layout) der langen Frames im Zeitraum, z. B.
+// "purgeOrphanBlobs boot.js@2310 [Promise.then] 812 ms; Rendern/Layout 95 ms".
+function scriptsDuring(startMs, endMs) {
+	const current = now();
+	recentFrames = recentFrames.filter((frame) => current - frame.endMs <= OPERATION_HISTORY_MS);
+	const total = new Map();
+	for (const frame of recentFrames) {
+		if (frame.startMs >= endMs || frame.endMs <= startMs) continue;
+		for (const [name, ms] of frame.parts) total.set(name, (total.get(name) || 0) + ms);
+	}
+	if (!total.size) return undefined;
+	return [...total].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, ms]) => `${name} ${Math.round(ms)} ms`).join("; ").slice(0, 240);
+}
+
+function frameParts(entry) {
+	const parts = [];
+	for (const script of entry.scripts || []) {
+		if (!(script.duration >= 10)) continue;
+		const file = String(script.sourceURL || "").split("/").pop().split("?")[0];
+		const at = file ? ` ${file}${script.sourceCharPosition >= 0 ? "@" + script.sourceCharPosition : ""}` : "";
+		const invoker = script.invoker ? ` [${String(script.invoker).slice(0, 40)}]` : "";
+		parts.push([`${script.sourceFunctionName || "(anonym)"}${at}${invoker}`, script.duration]);
+		if (script.forcedStyleAndLayoutDuration >= 10) parts.push(["erzwungenes Layout", script.forcedStyleAndLayoutDuration]);
+	}
+	const renderStart = entry.renderStart || entry.styleAndLayoutStart || 0;
+	if (renderStart > 0) {
+		const renderMs = entry.startTime + entry.duration - renderStart;
+		if (renderMs >= 10) parts.push(["Rendern/Layout", renderMs]);
+	}
+	return parts;
 }
 
 function queueStall(source, startMs, durationMs, meta = {}) {
@@ -521,6 +568,22 @@ function watchLongTasks() {
 			observer.observe(type === "event" ? { type, durationThreshold: 40 } : { type });
 			observers.push(observer);
 		} catch { /* Browser unterstützt den Entry-Typ nur teilweise. */ }
+	}
+	if (supported.includes("long-animation-frame")) {
+		try {
+			const observer = new PerformanceObserver((list) => {
+				for (const entry of list.getEntries()) {
+					if (!(entry.blockingDuration > 0)) continue;
+					const endMs = entry.startTime + entry.duration;
+					lastFrameEndMs = Math.max(lastFrameEndMs, endMs);
+					recentFrames.push({ startMs: entry.startTime, endMs, parts: frameParts(entry) });
+				}
+				if (recentFrames.length > 64) recentFrames.splice(0, recentFrames.length - 64);
+			});
+			observer.observe({ type: "long-animation-frame" });
+			observers.push(observer);
+			framesSupported = true;
+		} catch { /* nur Chrome/Edge */ }
 	}
 }
 
