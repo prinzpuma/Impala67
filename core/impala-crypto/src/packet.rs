@@ -50,11 +50,12 @@ pub struct BlobRecord {
     pub data: Vec<u8>,
 }
 
-/// gzip (Standardstufe). Andere Bytes als `CompressionStream`, aber gleiches Format (RFC 1952):
+/// gzip (Stufe 1 / fast: ~3–4× schneller in `miniz_oxide` bei fast gleicher Paketgröße).
+/// Andere Bytes als `CompressionStream`, aber gleiches Format (RFC 1952):
 /// Beide Seiten lesen nur, niemand vergleicht komprimierte Bytes.
 pub fn gzip(bytes: &[u8]) -> Vec<u8> {
     use std::io::Write;
-    let mut enc = GzEncoder::new(Vec::with_capacity(bytes.len() / 3 + 64), Compression::default());
+    let mut enc = GzEncoder::new(Vec::with_capacity(bytes.len() / 3 + 64), Compression::fast());
     // In einen Vec zu schreiben schlägt nie fehl.
     let _ = enc.write_all(bytes);
     enc.finish().unwrap_or_default()

@@ -378,7 +378,7 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
 
     /// Holt alle neuen Pakete. Liefert die Zahl übernommener Events.
     pub async fn pull(&mut self) -> Result<usize, SyncError> {
-        let (mut received, progress_start) = (0, self.state.last_synced_seq);
+        let (mut received, mut progress_start) = (0, self.state.last_synced_seq);
         // Höchstens EINE automatische Reparatur je Abruf: Meldet der Server danach weiter 410,
         // würde die Cloud sonst endlos geleert.
         let mut repaired = false;
@@ -395,20 +395,27 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                     // Ein anderes Gerät baut die Cloud gerade neu auf: dessen Generation übernehmen.
                     if let Some(g) = generation.filter(|g| *g != self.state.generation) {
                         self.clear_cursors(g).await?;
+                        progress_start = 0;
                         continue;
                     }
                     self.reset_cloud().await?;
+                    progress_start = 0;
                     repaired = true;
                     continue;
                 }
             };
             if page.generation != self.state.generation || page.max_seq < since as f64 {
                 self.clear_cursors(page.generation).await?;
+                progress_start = 0;
                 continue;
             }
             let max_seq = page.max_seq.max(since as f64) as u64;
             if max_seq > progress_start {
-                self.report("Empfange Notizen…", since - progress_start, max_seq - progress_start);
+                self.report(
+                    "Empfange Notizen…",
+                    since.saturating_sub(progress_start),
+                    max_seq.saturating_sub(progress_start),
+                );
             }
             if page.packets.is_empty() {
                 if let Some(usage) = page.usage {
@@ -428,7 +435,11 @@ impl<H: HttpClient, S: SyncStore> SyncClient<H, S> {
                 self.state.last_synced_seq = last_seq;
                 self.save().await?;
                 if max_seq > progress_start {
-                    self.report("Empfange Notizen…", last_seq - progress_start, max_seq - progress_start);
+                    self.report(
+                        "Empfange Notizen…",
+                        last_seq.saturating_sub(progress_start),
+                        max_seq.saturating_sub(progress_start),
+                    );
                 }
             }
             if let Some(usage) = page.usage {

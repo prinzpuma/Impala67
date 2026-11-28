@@ -235,6 +235,18 @@ fn build_text(existing: Option<&TextBox>, t: &HeftText) -> Result<TextBox, CoreE
         return Err(invalid("Textfeld ohne ID"));
     }
     finite(&[t.x, t.y], "Textposition")?;
+    if let Some(w) = t.w {
+        finite(&[w], "Textbreite")?;
+    }
+    if let Some(h) = t.h {
+        finite(&[h], "Texthöhe")?;
+    }
+    if let Some(size) = t.size {
+        finite(&[size], "Schriftgröße")?;
+        if size <= 0.0 {
+            return Err(invalid("Schriftgröße muss positiv sein"));
+        }
+    }
     let mut text = existing.cloned().unwrap_or_default();
     text.id.clone_from(&t.id);
     (text.x, text.y, text.w, text.h) = (Some(t.x), Some(t.y), t.w, t.h);
@@ -361,8 +373,28 @@ impl Inner {
 
     fn change_ops(&self, page_id: &str, changes: Vec<HeftChange>) -> Result<Vec<HeftOp>, CoreError> {
         let mut ops = Vec::with_capacity(changes.len());
+        let mut added_pages: HashSet<String> = HashSet::new();
+        let mut removed_pages: HashSet<String> = HashSet::new();
         for change in changes {
-            ops.extend(self.change_op(page_id, change)?);
+            if let Some(op) = self.change_op(page_id, change)? {
+                match &op {
+                    HeftOp::PageAdd { page, .. } => {
+                        removed_pages.remove(page);
+                        added_pages.insert(page.clone());
+                    }
+                    HeftOp::PageRemove { page } if !added_pages.remove(page) => {
+                        removed_pages.insert(page.clone());
+                    }
+                    _ => {}
+                }
+                ops.push(op);
+            }
+        }
+        if !removed_pages.is_empty() {
+            let total = self.heft(page_id)?.pages.len() + added_pages.len();
+            if !impala_heft::pages::can_delete_pages(total, removed_pages.len()) {
+                return Err(invalid("Die letzte Seite eines Hefts lässt sich nicht löschen"));
+            }
         }
         Ok(ops)
     }
@@ -730,7 +762,15 @@ impl ImpalaCore {
         dx: f64,
         dy: f64,
     ) -> Result<HeftEdit, CoreError> {
-        self.transform_lasso(&page_id, &heft_page_id, &stroke_ids, &image_ids, &text_ids, LassoTransformOp::Move { dx, dy })
+        finite(&[dx, dy], "Verschiebung")?;
+        self.transform_lasso(
+            &page_id,
+            &heft_page_id,
+            &stroke_ids,
+            &image_ids,
+            &text_ids,
+            LassoTransformOp::Move { dx, dy },
+        )
     }
 
     /// Gemischte Lasso-Auswahl in einem Undo-Schritt skalieren.
@@ -746,7 +786,8 @@ impl ImpalaCore {
         ay: f64,
         factor: f64,
     ) -> Result<HeftEdit, CoreError> {
-        if !factor.is_finite() || factor <= 0.0 {
+        finite(&[ax, ay, factor], "Skalierung")?;
+        if factor <= 0.0 {
             return Err(invalid("Skalierungsfaktor muss positiv sein"));
         }
         self.transform_lasso(
@@ -772,9 +813,7 @@ impl ImpalaCore {
         cy: f64,
         angle: f64,
     ) -> Result<HeftEdit, CoreError> {
-        if !angle.is_finite() {
-            return Err(invalid("Drehwinkel ungültig"));
-        }
+        finite(&[cx, cy, angle], "Drehung")?;
         self.transform_lasso(
             &page_id,
             &heft_page_id,
@@ -862,7 +901,8 @@ impl ImpalaCore {
         let image_id = new_id();
         let mut inner = self.lock();
         inner.heft_page(&page_id, &heft_page_id)?;
-        let image = HeftImage { id: image_id.clone(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None, background: false };
+        let image =
+            HeftImage { id: image_id.clone(), blob_id: Some(hash.clone()), x, y, w, h, ocr: None, background: false };
         let ops = inner.change_ops(&page_id, vec![HeftChange::AddImage { page: heft_page_id, image }])?;
         // Erst das Bild, dann das Element: Fremdgeräte sehen es so nie ohne Daten. Ein im Checkpoint
         // schon bekanntes Bild braucht kein zweites (mehrere MB großes) Event.
@@ -906,11 +946,21 @@ impl ImpalaCore {
             ocr: ocr.map(|o| o.trim().to_owned()).filter(|o| !o.is_empty()),
             ..Default::default()
         });
-        let mut ops = vec![HeftOp::PageAdd { at: at.map(f64::from), page: id.clone(), paper: Some(impala_heft::Paper::Blank), height: Some(page_h) }];
+        let mut ops = vec![HeftOp::PageAdd {
+            at: at.map(f64::from),
+            page: id.clone(),
+            paper: Some(impala_heft::Paper::Blank),
+            height: Some(page_h),
+        }];
         ops.extend(impala_heft::background::background_ops(&id, false, page.background.clone()));
         let text = impala_heft::compose_page_text("", &page);
         if !text.is_empty() {
-            ops.push(HeftOp::Ocr { page: id.clone(), text, src: String::new(), key: impala_heft::ocr::content_key(&page) });
+            ops.push(HeftOp::Ocr {
+                page: id.clone(),
+                text,
+                src: String::new(),
+                key: impala_heft::ocr::content_key(&page),
+            });
         }
         let mut inner = self.lock();
         inner.heft(&page_id)?;
@@ -1076,7 +1126,8 @@ impl ImpalaCore {
     ) -> Result<bool, CoreError> {
         let mut inner = self.lock();
         let pg = inner.heft_page(&page_id, &heft_page_id)?;
-        let ops = impala_heft::ocr::record_ops(pg, &stroke_text, background_text.as_deref(), &src, expected_key.as_deref());
+        let ops =
+            impala_heft::ocr::record_ops(pg, &stroke_text, background_text.as_deref(), &src, expected_key.as_deref());
         if ops.is_empty() {
             return Ok(false);
         }

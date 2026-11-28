@@ -238,8 +238,20 @@ impl Inner {
     }
 
     pub(crate) fn heft_ops(&mut self, page_id: &str, ops: Vec<HeftOp>) -> Result<(), CoreError> {
-        let ops = serde_json::to_value(&ops).map_err(|e| invalid(e.to_string()))?;
-        self.dispatch("heftOps", json!({ "pageId": page_id, "ops": ops }))?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = self.clock.now();
+        let probe = crate::changes::probe_event("heftOps", &now, &id, &json!({ "pageId": page_id }));
+        let seq = self.model.dispatch_heft_ops(&mut self.storage, page_id, ops, &id, &now)?;
+        self.note_as(&probe, false, false);
+        if let Some((_, tx)) = &self.sync_tx {
+            let _ = tx.send(crate::sync::Cmd::Local(json!({
+                "id": id,
+                "t": now,
+                "type": "heftOps",
+                "seq": seq,
+                "payload": { "pageId": page_id }
+            })));
+        }
         Ok(())
     }
 }

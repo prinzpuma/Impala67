@@ -211,8 +211,14 @@ pub fn duplicate_strokes<'a>(
 /// der Seite bleibt (mindestens 1, wenn sie schon über den Rand ragt).
 pub fn lasso_resize_factor(anchor: [f64; 2], start: [f64; 2], start_dist: f64, pointer: [f64; 2], bb: &BBox) -> f64 {
     use crate::doc::{PAGE_H, PAGE_W};
+    if !start_dist.is_finite() || start_dist <= 0.0 {
+        return 1.0;
+    }
     let (vx, vy) = ((start[0] - anchor[0]) / start_dist, (start[1] - anchor[1]) / start_dist);
     let current = (pointer[0] - anchor[0]) * vx + (pointer[1] - anchor[1]) * vy;
+    if !current.is_finite() {
+        return 1.0;
+    }
     let mut max_factor = f64::INFINITY;
     if bb.min_x < anchor[0] {
         max_factor = max_factor.min(anchor[0] / (anchor[0] - bb.min_x));
@@ -272,7 +278,12 @@ pub fn image_rect(img: &Image) -> [f64; 4] {
 
 /// Rechteck eines Textfeldes `(x, y, w, h)`; fehlendes `h` (abgeleitete Höhe) gilt als 36.
 pub fn text_rect(tb: &TextBox) -> [f64; 4] {
-    [tb.x.unwrap_or(0.0), tb.y.unwrap_or(0.0), tb.w.unwrap_or(200.0).max(1.0), tb.h.filter(|v| *v > 0.0).unwrap_or(36.0)]
+    [
+        tb.x.unwrap_or(0.0),
+        tb.y.unwrap_or(0.0),
+        tb.w.unwrap_or(200.0).max(1.0),
+        tb.h.filter(|v| *v > 0.0).unwrap_or(36.0),
+    ]
 }
 
 /// Indizes der Bilder, die das Lasso umschließt.

@@ -444,6 +444,51 @@ impl Model {
         Ok(Dispatched { id: id.to_owned(), object })
     }
 
+    /// Schneller Pfad für eigene `heftOps`-Events: schreibt das serialisierte Event direkt in den
+    /// Speicher (ohne doppeltes Klonen großer Strich-JSON-Bäume) und wendet die bereits typisierten
+    /// Operationen ohne erneutes Parsen auf den Zustand an.
+    pub fn dispatch_heft_ops<S: Storage + ?Sized>(
+        &mut self,
+        storage: &mut S,
+        page_id: &str,
+        ops: Vec<impala_heft::HeftOp>,
+        id: &str,
+        now: &str,
+    ) -> Result<u64, Error> {
+        let ops_val = serde_json::to_value(&ops).map_err(|e| Error::Json(e.to_string()))?;
+        let mut object = Object::new();
+        object.insert("id".into(), Value::from(id));
+        object.insert("t".into(), Value::from(now));
+        object.insert("type".into(), Value::from("heftOps"));
+        object.insert("payload".into(), serde_json::json!({ "pageId": page_id, "ops": ops_val }));
+        let seqs = storage.add_events(vec![object])?;
+        let seq = seqs.first().copied().unwrap_or(0);
+
+        self.applied_after_load.insert(id.to_owned());
+        self.revision = next_revision();
+        let probe = LogEvent::new(id, now, "heftOps", serde_json::json!({ "pageId": page_id }));
+        if js::lt(&probe.t, &self.loaded_time)
+            && !(self.order_complete && order::reorder_safe(&probe, Some(&self.order)))
+        {
+            self.replay_ordered = false;
+        }
+        order::note_event_order(&mut self.order, &probe);
+        if js::lt(&self.loaded_time, &probe.t) {
+            self.loaded_time.clone_from(&probe.t);
+        }
+        if !page_id.is_empty() && !ops.is_empty() {
+            let changed = self.state.hefte.apply(impala_heft::HeftEvent::Ops { page_id: page_id.to_owned(), ops });
+            if changed {
+                if let Some(cur) = self.heft_updated.get_mut(page_id) {
+                    now.clone_into(cur);
+                } else {
+                    self.heft_updated.insert(page_id.to_owned(), now.to_owned());
+                }
+            }
+        }
+        Ok(seq)
+    }
+
     /// Folgenummer, bis zu der der letzte Checkpoint (oder der Start) reicht.
     pub fn base_seq(&self) -> u64 {
         self.base_seq
@@ -775,9 +820,7 @@ fn is_heft_content_event(ev: &LogEvent) -> bool {
                 if kind == "ocr" {
                     return false;
                 }
-                if kind == "pgb"
-                    && op.get("bg").and_then(|b| b.get("ocr")).and_then(Value::as_str).is_some()
-                {
+                if kind == "pgb" && op.get("bg").and_then(|b| b.get("ocr")).and_then(Value::as_str).is_some() {
                     return false;
                 }
                 true

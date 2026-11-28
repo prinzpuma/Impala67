@@ -415,15 +415,70 @@ impl HeftDoc {
     /// Wendet ein `heftOps`-Event an wie der Reducer: alle Operationen in Reihenfolge, danach
     /// `rev + 1`. Eine leere Liste ändert nichts (auch `rev` nicht) und liefert `false`.
     pub fn apply_ops(&mut self, ops: impl IntoIterator<Item = HeftOp>) -> bool {
-        let mut any = false;
-        for op in ops {
-            any = true;
-            self.apply_op(op);
-        }
-        if any {
+        let mut iter = ops.into_iter();
+        let Some(first) = iter.next() else {
+            return false;
+        };
+        let Some(second) = iter.next() else {
+            self.apply_op(first);
             self.rev += 1;
+            return true;
+        };
+        // Mehrere Operationen (z. B. Lasso mit 300 Strichen oder großer Replay): auf großen
+        // Seiten Strich-IDs einmalig indizieren, damit `s+`/`s=` in O(1) statt O(N) laufen.
+        let mut idx: Option<(String, HashMap<String, usize>)> = None;
+        for op in [first, second].into_iter().chain(iter) {
+            match op {
+                HeftOp::Add { page, item: Item::Stroke(s) } if !s.id.is_empty() => {
+                    let Some(pg) = self.page_mut(&page) else { continue };
+                    if pg.strokes.len() >= 32 {
+                        let map = match &mut idx {
+                            Some((p, m)) if p == &page => m,
+                            slot => {
+                                let m = pg.strokes.iter().enumerate().map(|(i, x)| (x.id.clone(), i)).collect();
+                                &mut slot.insert((page, m)).1
+                            }
+                        };
+                        if !map.contains_key(&s.id) {
+                            let pos = pg.strokes.len();
+                            map.insert(s.id.clone(), pos);
+                            pg.strokes.push(s);
+                        }
+                    } else if !pg.strokes.iter().any(|x| x.id == s.id) {
+                        pg.strokes.push(s);
+                    }
+                }
+                HeftOp::Set { page, item: Item::Stroke(s) } if !s.id.is_empty() => {
+                    let Some(pg) = self.page_mut(&page) else { continue };
+                    if pg.strokes.len() >= 32 {
+                        let map = match &mut idx {
+                            Some((p, m)) if p == &page => m,
+                            slot => {
+                                let m = pg.strokes.iter().enumerate().map(|(i, x)| (x.id.clone(), i)).collect();
+                                &mut slot.insert((page, m)).1
+                            }
+                        };
+                        if let Some(&pos) = map.get(&s.id) {
+                            pg.strokes[pos] = s;
+                        } else {
+                            let pos = pg.strokes.len();
+                            map.insert(s.id.clone(), pos);
+                            pg.strokes.push(s);
+                        }
+                    } else {
+                        replace_or_push(&mut pg.strokes, s, |x| &x.id);
+                    }
+                }
+                other => {
+                    if matches!(other, HeftOp::Remove { kind: ItemKind::Stroke, .. } | HeftOp::PageRemove { .. }) {
+                        idx = None;
+                    }
+                    self.apply_op(other);
+                }
+            }
         }
-        any
+        self.rev += 1;
+        true
     }
 
     /// Operationen, die ein leeres Heft in dieses überführen (`heftBaselineOps`, Sync-Basis).

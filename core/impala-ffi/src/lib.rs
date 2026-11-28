@@ -20,23 +20,29 @@ mod database;
 mod decks;
 mod drive;
 mod heft;
+mod heft_erase;
 mod heft_export;
 mod heft_history;
-mod heft_erase;
 mod heft_items;
 mod heft_lasso;
 mod heft_library;
 mod heft_undo;
+#[cfg(test)]
+mod heft_workflow_tests;
 mod markdown;
 mod pages;
 mod palette;
 mod rag;
 mod scan;
+#[cfg(test)]
+mod start_workflow_tests;
 mod stats;
 mod storage_care;
 mod study_records;
 mod subjects;
 mod sync;
+#[cfg(test)]
+mod sync_workflow_tests;
 mod ui;
 mod zone;
 

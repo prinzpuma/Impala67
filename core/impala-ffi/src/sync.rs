@@ -412,17 +412,15 @@ fn run<H: HttpClient>(
     // Ein Durchgang zur Zeit; `stop()` gilt nur für den laufenden.
     let stop = client.stop_flag();
     for cmd in rx {
-        let imports = !matches!(cmd, Cmd::Local(_));
         match cmd {
             Cmd::Sync(force_all, reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.sync(force_all));
-                if r.is_ok() {
-                    // Verdichtet wird nicht hier, sondern mit dem Checkpoint beim Wechsel in den
-                    // Hintergrund ([`ImpalaCore::save_checkpoint`]): Unter der Kern-Sperre hielt das
-                    // die Oberfläche bis 0,8 s an.
-                    settle_remote(&client.store_mut().core);
-                }
+                // Vor dem Freigeben des Aufrufers sortiert nachladen (auch bei Teil-Import vor Fehler).
+                // Verdichtet wird nicht hier, sondern mit dem Checkpoint beim Wechsel in den
+                // Hintergrund ([`ImpalaCore::save_checkpoint`]): Unter der Kern-Sperre hielt das
+                // die Oberfläche bis 0,8 s an.
+                settle_remote(&client.store_mut().core);
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);
@@ -430,6 +428,7 @@ fn run<H: HttpClient>(
             Cmd::Compact(bypass, reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.compact_cloud(bypass));
+                settle_remote(&client.store_mut().core);
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);
@@ -437,6 +436,7 @@ fn run<H: HttpClient>(
             Cmd::Refetch(reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.refetch_all());
+                settle_remote(&client.store_mut().core);
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);
@@ -444,12 +444,14 @@ fn run<H: HttpClient>(
             Cmd::Reset(reply) => {
                 stop.store(false, Ordering::Relaxed);
                 let r = block_on(client.reset_cloud());
+                settle_remote(&client.store_mut().core);
                 publish(&mut client);
                 out.busy.store(false, Ordering::Release);
                 let _ = reply.send(r);
             }
             Cmd::Message(text, reply) => {
                 let r = block_on(client.handle_server_message(&text));
+                settle_remote(&client.store_mut().core);
                 publish(&mut client);
                 if let Some(reply) = reply {
                     let _ = reply.send(r);
@@ -462,9 +464,6 @@ fn run<H: HttpClient>(
                     l.on_sync_needed();
                 }
             }
-        }
-        if imports {
-            settle_remote(&client.store_mut().core);
         }
     }
 }
@@ -520,15 +519,7 @@ impl CloudSync {
         let stop = stop_rx.recv().unwrap_or_default();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         crate::lock(&shared).sync_tx = Some((id, tx.clone()));
-        Arc::new(CloudSync {
-            id,
-            core: shared,
-            tx,
-            out,
-            stop,
-            client_id,
-            endpoint,
-        })
+        Arc::new(CloudSync { id, core: shared, tx, out, stop, client_id, endpoint })
     }
 
     fn call<T>(&self, cmd: impl FnOnce(Reply<T>) -> Cmd) -> Result<T, SyncFailure> {
