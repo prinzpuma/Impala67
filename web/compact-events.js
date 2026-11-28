@@ -6,7 +6,12 @@
 // referenzierte Heft-Bilder) siehe dort. db.js (Sync/Export) und compact-worker.js nutzen dies.
 import { CORE } from "./rust-core.js";
 
-const byLogOrder = (a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0);
+// Lokaler Zähler für DB.eventLogInfo() im blobs-Store: { count, maxSeq } = genau count Events mit
+// seq ≤ maxSeq. Neue Events bekommen immer eine höhere seq; wer Events löscht, entfernt ihn in
+// DERSELBEN Transaktion (dann zählt der nächste Aufruf einmal voll).
+export const EVENT_LOG_COUNT_KEY = "__impala67_state_checkpoint_logcount__";
+
+const byLogOrder =(a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0);
 
 // Behaltene Events in Log-Reihenfolge. Hat ein Event eine Form, die der Kern nicht sicher
 // beurteilen kann, wird diesmal nichts verworfen (verlustfrei, nur größer).
@@ -29,7 +34,7 @@ export function compactEvents(events, blobKeep = null) {
 // droppedBlobs: Hashes weggefallener Heft-Bilder (der geladene Zustand vergisst sie dann).
 export function compactEventStore(db, minDrop, blobKeep = null) {
 	return new Promise((resolve, reject) => {
-		const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
+		const tx = db.transaction(["events", "blobs"], "readwrite"), store = tx.objectStore("events");
 		const req = store.getAll();
 		let dropped = 0, floor = "";
 		const droppedBlobs = [];
@@ -43,6 +48,7 @@ export function compactEventStore(db, minDrop, blobKeep = null) {
 				dropped++;
 				if (ev.type === "heftBlob" && ev.payload?.hash) droppedBlobs.push(String(ev.payload.hash));
 			}
+			if (dropped) tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY);
 			floor = compacted.length ? compacted[0].t : "";
 		};
 		req.onerror = () => { try { tx.abort(); } catch {} };

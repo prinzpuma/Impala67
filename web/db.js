@@ -2,7 +2,7 @@
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { compactEvents, compactEventStore } from "./compact-events.js";
+import { compactEvents, compactEventStore, EVENT_LOG_COUNT_KEY } from "./compact-events.js";
 import { yieldToMain } from "./cooperative.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
@@ -59,12 +59,13 @@ export const DB = (() => {
 
 	// Einmalige Migration der Alt-DB "notion"; die Alt-DB bleibt als Sicherheitsnetz liegen.
 	async function migrateLegacy() {
-		if (await ro("events", (s) => s.count())) return;
+		// Nur „gibt es schon ein Event?“: count() liest in Chrome den ganzen Store (67k Events ≈ 300 ms warm).
+		if (await ro("events", (s) => s.openKeyCursor())) return;
 		let legacy = null;
 		try { legacy = await openRaw("notion"); } catch { return; }
 		if (!legacy || !legacy.objectStoreNames.contains("events")) { legacy?.close(); return; }
 		// "events" bewusst ZULETZT: jeder Store kopiert atomar in EINER Transaktion, und
-		// der Migrations-Check oben schaut auf events.count(). Bricht die Migration mitten-
+		// der Migrations-Check oben schaut, ob events leer ist. Bricht die Migration mitten-
 		// drin ab (Tab zu, Crash), ist events noch leer und der nächste Start setzt die
 		// Kopie einfach fort — vorher blockierte ein teilmigrierter Stand für immer.
 		for (const store of ["blobs", "vecs", "events"]) {
@@ -180,8 +181,15 @@ export const DB = (() => {
 	const addEvent = (ev) => addEvents([ev]);
 	const allEvents = () => ro("events", (s) => s.getAll());
 	const eventAtSeq = (seq) => ro("events", (s) => s.get(Number(seq) || 0));
+	// Anzahl, höchste seq und letzte id des Logs (Gültigkeit des Start-Checkpoints).
+	// PERF: count() liest in Chrome den ganzen Store (67k Events ≈ 300 ms) und hält so lange JEDE
+	// andere IndexedDB-Anfrage auf. Deshalb nur die Events über dem Zähler EVENT_LOG_COUNT_KEY
+	// zählen und ihn in derselben Transaktion fortschreiben; voll gezählt wird nur ohne Zähler.
 	function eventLogInfo() {
 		ensureOpen();
+		return eventLogInfoCounted().catch(() => eventLogInfoFull());
+	}
+	function eventLogInfoFull() { // Rückfall ohne Schreiben (z. B. Speicher voll): voll zählen
 		return new Promise((resolve, reject) => {
 			const store = db.transaction("events").objectStore("events");
 			const countReq = store.count(), lastReq = store.openCursor(null, "prev");
@@ -195,6 +203,33 @@ export const DB = (() => {
 			lastReq.onsuccess = () => { last = lastReq.result || null; doneInfo(); };
 			countReq.onerror = () => fail(countReq);
 			lastReq.onerror = () => fail(lastReq);
+		});
+	}
+	function eventLogInfoCounted() {
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction(["events", "blobs"], "readwrite");
+			const store = tx.objectStore("events"), blobs = tx.objectStore("blobs");
+			let info = null;
+			const markReq = blobs.get(EVENT_LOG_COUNT_KEY);
+			markReq.onsuccess = () => {
+				const lastReq = store.openCursor(null, "prev");
+				lastReq.onsuccess = () => {
+					const last = lastReq.result || null, maxSeq = last ? Number(last.key) || 0 : 0;
+					const mark = markReq.result;
+					const usable = mark && Number.isFinite(mark.count) && Number.isFinite(mark.maxSeq) && mark.maxSeq <= maxSeq;
+					const countReq = usable ? store.count(IDBKeyRange.lowerBound(mark.maxSeq, true)) : store.count();
+					countReq.onsuccess = () => {
+						const count = (usable ? mark.count : 0) + (Number(countReq.result) || 0);
+						info = { count, maxSeq, lastEventId: String(last?.value?.id || "") };
+						if (!usable || mark.count !== count || mark.maxSeq !== maxSeq) {
+							// Fortschreiben ist nur eine Abkürzung: scheitert es (Speicher voll), Ergebnis trotzdem liefern.
+							blobs.put({ count, maxSeq }, EVENT_LOG_COUNT_KEY).onerror = (e) => e.preventDefault();
+						}
+					};
+				};
+			};
+			tx.oncomplete = () => resolve(info);
+			tx.onerror = tx.onabort = () => reject(tx.error || new Error("Event-Log-Info abgebrochen."));
 		});
 	}
 	// Cursor/Batch liest nur das begrenzte Delta oberhalb des Sync-Wasserstands. Jeder
@@ -219,7 +254,7 @@ export const DB = (() => {
 	const STATE_CHECKPOINT_BLOB_PREFIX = "__impala67_state_checkpoint_v2_blob__:";
 	// Heft-Striche je Heft als eigener, inhaltsadressierter Eintrag (JSON-Text, Schlüssel = Hash).
 	const STATE_CHECKPOINT_HEFT_PREFIX = "__impala67_state_checkpoint_v3_heft__:";
-	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY
+	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY || key === EVENT_LOG_COUNT_KEY
 		|| String(key).startsWith(STATE_CHECKPOINT_BLOB_PREFIX) || String(key).startsWith(STATE_CHECKPOINT_HEFT_PREFIX);
 	async function getStateCheckpoint() {
 		const current = await ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
@@ -554,10 +589,11 @@ export const DB = (() => {
 		list.forEach(validateEvent);
 		const cutoff = Number(upToSeq || 0);
 		return new Promise((resolve, reject) => {
-			const tx = db.transaction("events", "readwrite"), store = tx.objectStore("events");
+			const tx = db.transaction(["events", "blobs"], "readwrite"), store = tx.objectStore("events");
 			const req = store.getAll();
 			req.onsuccess = () => {
 				forgetKnownEventIds();
+				tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY); // löscht Events: Zähler neu aufbauen
 				for (const ev of req.result || []) {
 					if ((ev.type === "heftOps" || ev.type === "heftSnap") && cutoff > 0 && ev.seq && ev.seq <= cutoff) {
 						store.delete(ev.seq);
