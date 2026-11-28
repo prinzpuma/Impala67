@@ -36,12 +36,16 @@ export const DB = (() => {
 	// Generische Store-Zugriffe — ersetzen 8 fast identische Funktionsrümpfe.
 	const rw = (name, fn) => { ensureOpen(); const t = db.transaction(name, "readwrite"); fn(t.objectStore(name)); return done(t); };
 	const ro = (name, fn) => { ensureOpen(); return val(fn(db.transaction(name).objectStore(name))); };
-	const dump = async (name) => { // Keys+Werte konsistent aus DERSELBEN readonly-Transaktion
+	// Große Lesezugriffe als benannte Profiler-Operation: Das Auspacken der Werte (bei 67k Events
+	// ~200 MB) und der Code direkt danach laufen im onsuccess-Rückruf. Ein Hänger dort hieß sonst
+	// nur „db.js onsuccess“; so trägt er den Namen des Lesezugriffs.
+	const named = (op, fn) => PERF_PROFILER.run(op, fn, {}, 50);
+	const dump = (name) => named("db.dump-" + name, async () => { // Keys+Werte konsistent aus DERSELBEN readonly-Transaktion
 		ensureOpen();
 		const s = db.transaction(name).objectStore(name);
 		const [keys, vals] = await Promise.all([val(s.getAllKeys()), val(s.getAll())]);
 		return keys.map((k, i) => [k, vals[i]]);
-	};
+	});
 
 	function openRaw(name, version) {
 		return new Promise((resolve, reject) => {
@@ -208,7 +212,7 @@ export const DB = (() => {
 		return result;
 	}
 	const addEvent = (ev) => addEvents([ev]);
-	const allEvents = () => ro("events", (s) => s.getAll());
+	const allEvents = () => named("db.all-events", () => ro("events", (s) => s.getAll()));
 	const eventAtSeq = (seq) => ro("events", (s) => s.get(Number(seq) || 0));
 	// Anzahl, höchste seq und letzte id des Logs (Gültigkeit des Start-Checkpoints).
 	// PERF: count() liest in Chrome den ganzen Store (67k Events ≈ 300 ms) und hält so lange JEDE
@@ -270,11 +274,11 @@ export const DB = (() => {
 		const range = Number.isFinite(upper)
 			? IDBKeyRange.bound(lower, upper, true, false)
 			: IDBKeyRange.lowerBound(lower, true);
-		return ro("events", (s) => (limit ? s.getAll(range, limit) : s.getAll(range))).then((all) => all || []);
+		return named("db.events-after", () => ro("events", (s) => (limit ? s.getAll(range, limit) : s.getAll(range)))).then((all) => all || []);
 	}
 
 	const putBlob = (id, buf, meta) => rw("blobs", (s) => s.put({ buf, meta }, id));
-	const getBlob = (id) => ro("blobs", (s) => s.get(id));
+	const getBlob = (id) => named("db.get-blob", () => ro("blobs", (s) => s.get(id)));
 	const allBlobKeys = () => ro("blobs", (s) => s.getAllKeys());
 	// Abgeleiteter Start-Checkpoint: lokal, versioniert und jederzeit aus dem Event-Log
 	// neu erzeugbar. Der reservierte Blob-Schlüssel erfüllt bewusst kein Sync-ID-Muster.
