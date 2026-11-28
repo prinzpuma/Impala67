@@ -164,10 +164,12 @@ export const HEFT_INDEXER = (() => {
 
 	// Aktuelle Fassung einer Heftseite: aus dem offenen Heft (auch Ungespeichertes), sonst aus dem Kern.
 	function pageOf(job) {
-		const open = HEFT.openDoc && HEFT.openDoc(job.pageId);
-		if (open) return open.pages.find((pg) => pg.id === job.pageKey) || null;
-		const pg = STATE.heftPage(job.pageId, job.pageIdx);
-		return pg && pg.id === job.pageKey ? pg : (STATE.heftDoc(job.pageId)?.pages || []).find((p) => p.id === job.pageKey) || null;
+		return PERF_PROFILER.measure("heft-index.page", () => {
+			const open = HEFT.openDoc && HEFT.openDoc(job.pageId);
+			if (open) return open.pages.find((pg) => pg.id === job.pageKey) || null;
+			const pg = STATE.heftPage(job.pageId, job.pageIdx);
+			return pg && pg.id === job.pageKey ? pg : (STATE.heftDoc(job.pageId)?.pages || []).find((p) => p.id === job.pageKey) || null;
+		}, {}, 16);
 	}
 
 	// true = Seite ist erkannt (auch ohne Text, z. B. reine Skizze); false = später erneut versuchen.
@@ -318,7 +320,7 @@ export const HEFT_INDEXER = (() => {
 		// 2. Falls ein Hintergrund-Scan aktiv ist: unindizierten Bestand abarbeiten
 		if (!scanRunning) return;
 
-		const unindexed = findUnindexedPages();
+		const unindexed = PERF_PROFILER.measure("heft-index.find", findUnindexedPages, {}, 16);
 		flushRag(new Set(unindexed.map((job) => job.pageId)));
 		if (!unindexed.length) {
 			// Erst nach einem vollständigen Durchlauf merken; bricht die App vorher ab, geht es beim nächsten Start weiter

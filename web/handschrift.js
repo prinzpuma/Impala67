@@ -133,7 +133,7 @@ export const HANDSCHRIFT = (() => {
 				reject: (err) => { done(); reject(err); },
 			});
 			writeInflight({ source, strokes: strokes.length, phase: "queued", line: 0, lines: 0, width: 0 });
-			worker.postMessage({ type: "recognize_strokes", id, strokes, options, known: Object.fromEntries(lineCache) });
+			PERF_PROFILER.measure("handwriting.post", () => worker.postMessage({ type: "recognize_strokes", id, strokes, options, known: Object.fromEntries(lineCache) }), { strokes: strokes.length, cached: lineCache.size }, 16);
 		}), { strokes: strokes.length, source }, 50);
 	}
 

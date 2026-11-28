@@ -201,10 +201,15 @@ function anomalySignature(kind, meta = {}, context = null) {
 		// Nach der Operation mit dem größten Anteil benennen, nicht nach der ersten: Sonst hieß ein
 		// Start-Hänger "checkpoint-restore", obwohl die nur 0,6 ms der 300 ms ausmachte.
 		const op = (context?.operations || []).reduce((top, entry) => (!top || entry.overlapMs > top.overlapMs ? entry : top), null)?.name || "";
-		if (input) return "stall:input:" + input + (op ? ":" + op : "");
-		if (op) return "stall:op:" + op;
-		// Ohne benannte Operation: nach dem teuersten Skript des langen Frames (Funktion + Datei).
+		// Teuerstes Skript des langen Frames (Funktion + Datei), z. B. "processNextBatch heft-indexer.js".
 		const script = typeof meta.scripts === "string" ? meta.scripts.split(";")[0].replace(/\s\d+ ms$/, "").split(" [")[0].replace(/@\d+$/, "").trim() : "";
+		// Ein benanntes Skript, das mindestens den halben Hänger ausmacht, schlägt eine bloß gleichzeitig
+		// laufende Operation: Sonst hieß der Heft-Indexer „stall:op:cloudflare.sync“, weil der Sync
+		// gerade asynchron unterwegs war.
+		const namedScript = script && !script.startsWith("(anonym)") && !/^(Rendern|erzwungenes)/.test(script) && (meta.scriptShare || 0) >= 0.5;
+		if (input) return "stall:input:" + input + (op ? ":" + op : "");
+		if (namedScript) return "stall:script:" + script.slice(0, 60);
+		if (op) return "stall:op:" + op;
 		return script ? "stall:script:" + script.slice(0, 60) : "stall:task";
 	}
 	if (kind === "operation") {
@@ -428,7 +433,13 @@ function flushStalls() {
 			events: stall.eventNames.size ? [...stall.eventNames].sort().join(",").slice(0, 120) : undefined,
 		};
 		const scripts = scriptsDuring(stall.startMs, stall.endMs);
-		if (scripts) meta.scripts = scripts;
+		if (scripts) {
+			meta.scripts = scripts;
+			// Anteil des teuersten Skripts am Hänger: entscheidet die Benennung (anomalySignature).
+			const topMs = Number(/(\d+) ms$/.exec(scripts.split(";")[0])?.[1]) || 0;
+			const stallMs = stall.endMs - stall.startMs;
+			if (stallMs > 0) meta.scriptShare = Math.round((topMs / stallMs) * 100) / 100;
+		}
 		const context = { ...(stall.context || currentContext()) };
 		delete context.active;
 		context.operations = operationsDuring(stall.startMs, stall.endMs);
