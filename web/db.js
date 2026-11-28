@@ -2,7 +2,7 @@
 import { U } from "./util.js";
 import { SETTINGS_SYNC } from "./settings-sync.js";
 import { PERF_PROFILER } from "./performance-profiler.js";
-import { compactEvents, compactEventStore, EVENT_LOG_COUNT_KEY } from "./compact-events.js";
+import { compactEvents, compactEventStore, EVENT_LOG_COUNT_KEY, EVENT_KNOWN_IDS_KEY } from "./compact-events.js";
 import { yieldToMain } from "./cooperative.js";
 // IndexedDB-Persistenz für Events, Blobs und lokale Suchdaten.
 // Wichtige Regeln: Events sind unveränderlich und per ID zusammenführbar; der Replay ist
@@ -124,17 +124,27 @@ export const DB = (() => {
 	// Alle lokal vorhandenen Event-ids (für die Dublettenprüfung in importAll, wenn der Aufrufer
 	// nur ein Delta des Logs mitgibt). Inkrementell: nur Events oberhalb der zuletzt gelesenen seq
 	// werden nachgeladen — das erfasst auch Events, die ein anderer Tab geschrieben hat.
-	// PERF: in Häppchen mit Pause dazwischen. Der erste Aufruf nach dem Start liest den GANZEN
-	// Log — am Stück war das ein einziger Main-Thread-Block (86k Events: 660 ms am PC, auf
-	// alten Geräten Sekunden). Gleiche Gesamtarbeit, aber die Oberfläche bleibt bedienbar.
-	const KNOWN_IDS_CHUNK = 1000;
+	// PERF: Der erste Aufruf nach dem Start las früher den GANZEN Log samt Inhalt (67k Events, beim
+	// Nutzer 2,2 s mit Hängern bis 530 ms), nur für die ids. Deshalb liegt die Liste als lokaler
+	// Schnappschuss EVENT_KNOWN_IDS_KEY = { maxSeq, ids } im blobs-Store: gelesen werden nur die Events
+	// darüber, in Häppchen mit Pause dazwischen. Wer Events löscht, entfernt ihn in derselben
+	// Transaktion (wie den Zähler); ohne Schnappschuss wird einmal voll gelesen und neu gespeichert.
+	const KNOWN_IDS_CHUNK = 1000, KNOWN_IDS_SAVE_AFTER = 2000;
 	let _knownEventIds = null, _knownMaxSeq = 0, _knownScan = null;
 	function ensureKnownEventIds() {
 		return (_knownScan ??= scanKnownEventIds().finally(() => { _knownScan = null; }));
 	}
 	async function scanKnownEventIds() {
+		let snapshot, unsaved = 0;
 		for (;;) {
-			if (!_knownEventIds) { _knownEventIds = new Set(); _knownMaxSeq = 0; }
+			if (!_knownEventIds) {
+				snapshot = await ro("blobs", (s) => s.get(EVENT_KNOWN_IDS_KEY)).catch(() => undefined);
+				const usable = snapshot && Array.isArray(snapshot.ids) && Number.isFinite(snapshot.maxSeq);
+				if (!usable) snapshot = null;
+				_knownEventIds = new Set(usable ? snapshot.ids : []);
+				_knownMaxSeq = usable ? snapshot.maxSeq : 0;
+				unsaved = usable ? 0 : Infinity;
+			}
 			const ids = _knownEventIds;
 			const delta = await eventsAfterSeqAll(_knownMaxSeq, Infinity, KNOWN_IDS_CHUNK);
 			if (ids !== _knownEventIds) continue; // währenddessen verworfen (Kompaktierung) → neu
@@ -142,9 +152,28 @@ export const DB = (() => {
 				if (ev?.id) ids.add(ev.id);
 				_knownMaxSeq = Math.max(_knownMaxSeq, Number(ev?.seq) || 0);
 			}
-			if (delta.length < KNOWN_IDS_CHUNK) return ids;
+			unsaved += delta.length;
+			if (delta.length < KNOWN_IDS_CHUNK) {
+				if (unsaved >= KNOWN_IDS_SAVE_AFTER) saveKnownIds(ids, _knownMaxSeq, snapshot).catch(() => {});
+				return ids;
+			}
 			await yieldToMain();
 		}
+	}
+	// Nur schreiben, wenn der gespeicherte Stand noch der gelesene ist: Hat inzwischen jemand Events
+	// gelöscht (und den Schnappschuss entfernt), bleibt er weg und der nächste Start liest voll.
+	function saveKnownIds(ids, maxSeq, readFrom) {
+		ensureOpen();
+		return new Promise((resolve) => {
+			const tx = db.transaction("blobs", "readwrite"), s = tx.objectStore("blobs");
+			const req = s.get(EVENT_KNOWN_IDS_KEY);
+			req.onsuccess = () => {
+				const cur = req.result;
+				const same = readFrom ? cur?.maxSeq === readFrom.maxSeq : cur === undefined;
+				if (same && ids === _knownEventIds) s.put({ maxSeq, ids: [...ids] }, EVENT_KNOWN_IDS_KEY);
+			};
+			tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+		});
 	}
 	const forgetKnownEventIds = () => {
 		_knownEventIds = null; _knownMaxSeq = 0;
@@ -254,7 +283,7 @@ export const DB = (() => {
 	const STATE_CHECKPOINT_BLOB_PREFIX = "__impala67_state_checkpoint_v2_blob__:";
 	// Heft-Striche je Heft als eigener, inhaltsadressierter Eintrag (JSON-Text, Schlüssel = Hash).
 	const STATE_CHECKPOINT_HEFT_PREFIX = "__impala67_state_checkpoint_v3_heft__:";
-	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY || key === EVENT_LOG_COUNT_KEY
+	const isStateCheckpointKey = (key) => key === LEGACY_STATE_CHECKPOINT_KEY || key === STATE_CHECKPOINT_KEY || key === EVENT_LOG_COUNT_KEY || key === EVENT_KNOWN_IDS_KEY
 		|| String(key).startsWith(STATE_CHECKPOINT_BLOB_PREFIX) || String(key).startsWith(STATE_CHECKPOINT_HEFT_PREFIX);
 	async function getStateCheckpoint() {
 		const current = await ro("blobs", (s) => s.get(STATE_CHECKPOINT_KEY));
@@ -593,7 +622,9 @@ export const DB = (() => {
 			const req = store.getAll();
 			req.onsuccess = () => {
 				forgetKnownEventIds();
-				tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY); // löscht Events: Zähler neu aufbauen
+				// löscht Events: Zähler und id-Schnappschuss neu aufbauen
+				tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY);
+				tx.objectStore("blobs").delete(EVENT_KNOWN_IDS_KEY);
 				for (const ev of req.result || []) {
 					if ((ev.type === "heftOps" || ev.type === "heftSnap") && cutoff > 0 && ev.seq && ev.seq <= cutoff) {
 						store.delete(ev.seq);

@@ -10,8 +10,10 @@ import { CORE } from "./rust-core.js";
 // seq ≤ maxSeq. Neue Events bekommen immer eine höhere seq; wer Events löscht, entfernt ihn in
 // DERSELBEN Transaktion (dann zählt der nächste Aufruf einmal voll).
 export const EVENT_LOG_COUNT_KEY = "__impala67_state_checkpoint_logcount__";
+// Ebenso lokal: { maxSeq, ids } = alle Event-ids mit seq ≤ maxSeq (Dublettenprüfung beim Import).
+export const EVENT_KNOWN_IDS_KEY = "__impala67_state_checkpoint_knownids__";
 
-const byLogOrder =(a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0);
+const byLogOrder = (a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || (a.seq || 0) - (b.seq || 0);
 
 // Behaltene Events in Log-Reihenfolge. Hat ein Event eine Form, die der Kern nicht sicher
 // beurteilen kann, wird diesmal nichts verworfen (verlustfrei, nur größer).
@@ -48,7 +50,7 @@ export function compactEventStore(db, minDrop, blobKeep = null) {
 				dropped++;
 				if (ev.type === "heftBlob" && ev.payload?.hash) droppedBlobs.push(String(ev.payload.hash));
 			}
-			if (dropped) tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY);
+			if (dropped) { tx.objectStore("blobs").delete(EVENT_LOG_COUNT_KEY); tx.objectStore("blobs").delete(EVENT_KNOWN_IDS_KEY); }
 			floor = compacted.length ? compacted[0].t : "";
 		};
 		req.onerror = () => { try { tx.abort(); } catch {} };
