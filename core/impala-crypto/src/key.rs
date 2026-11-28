@@ -54,10 +54,21 @@ impl SyncKey {
 
     /// User-ID, Auth-Token und AES-Schlüssel. Teuer (100 000 PBKDF2-Runden): einmal je Schlüssel.
     pub fn derive(&self) -> SyncCredentials {
+        self.credentials_with(self.derive_key_bytes())
+    }
+
+    /// Nur der teure Teil von [`derive`](Self::derive): die AES-Schlüsselbytes. Die PWA rechnet ihn
+    /// in einem Worker, damit der Hauptthread beim Start nicht ~200 ms blockiert.
+    pub fn derive_key_bytes(&self) -> [u8; 32] {
         let key = &self.0;
         let salt = sha256(format!("impala67_e2ee_salt:{key}").as_bytes());
         let mut raw = [0u8; 32];
         pbkdf2::pbkdf2_hmac::<sha2::Sha256>(key.as_bytes(), &salt, SYNC_KEY_ITERATIONS, &mut raw);
+        raw
+    }
+
+    /// Zugangsdaten mit schon abgeleiteten Schlüsselbytes ([`derive_key_bytes`](Self::derive_key_bytes)).
+    pub fn credentials_with(&self, raw: [u8; 32]) -> SyncCredentials {
         SyncCredentials { user_id: self.user_id(), auth_token: self.auth_token(), key: CipherKey::from_bytes(raw) }
     }
 }
@@ -122,6 +133,15 @@ mod tests {
             assert_eq!(SyncKey::parse(bad), Err(CryptoError::InvalidSyncKey), "{bad}");
         }
         assert!(SyncKey::parse("impalä-0123-4567-89ab-cdef-0123-4567-89ab-cde").is_err());
+    }
+
+    #[test]
+    fn split_derivation_matches_derive() {
+        // Worker-Weg der PWA (derive_key_bytes → credentials_with) muss genau derive() ergeben.
+        let key = SyncKey::parse("impala-0123-4567-89ab-cdef-0123-4567-89ab-cdef").unwrap();
+        let (whole, split) = (key.derive(), key.credentials_with(key.derive_key_bytes()));
+        assert_eq!(whole.key.to_bytes(), split.key.to_bytes());
+        assert_eq!((whole.user_id, whole.auth_token), (split.user_id, split.auth_token));
     }
 
     #[test]

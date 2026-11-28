@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use impala_crypto::{OsRandom, StorageUsage, SyncKey};
+use impala_crypto::{OsRandom, StorageUsage, SyncKey, hex_decode, hex_encode};
 use impala_sync::api::{ServerMessage, WS_PING_INTERVAL_MS, WS_PING_MESSAGE, parse_server_message};
 use impala_sync::{
     Endpoint, LocalBlob, PageTexts, PassReport, StoreError, SyncClient, SyncError, SyncState, SyncStore, WsAction, is_uploadable,
@@ -213,10 +213,19 @@ fn action_json(a: WsAction) -> Value {
     }
 }
 
+/// Teurer Teil der Schlüsselableitung (100 000 PBKDF2-Runden) als Hex-Text, für einen Worker:
+/// Das Ergebnis geht als `derived_key` an [`SyncCore::open`].
+#[wasm_bindgen(js_name = deriveSyncKey)]
+pub fn derive_sync_key(sync_key: &str) -> Result<String, JsError> {
+    let key = SyncKey::parse(sync_key).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(hex_encode(&key.derive_key_bytes()))
+}
+
 #[wasm_bindgen]
 impl SyncCore {
     /// Leitet den Schlüssel ab (PBKDF2), lädt den Sync-Zustand und liefert den Client.
-    /// `on_progress(label, current, total)` darf `undefined` sein.
+    /// `on_progress(label, current, total)` darf `undefined` sein. `derived_key` = Ergebnis von
+    /// [`derive_sync_key`] (im Worker gerechnet); fehlt es oder passt es nicht, leitet `open` selbst ab.
     pub async fn open(
         base_url: String,
         sync_key: String,
@@ -224,9 +233,16 @@ impl SyncCore {
         http: JsValue,
         store: JsValue,
         on_progress: JsValue,
+        derived_key: Option<String>,
     ) -> Result<SyncCore, JsError> {
         let key = SyncKey::parse(&sync_key).map_err(|e| JsError::new(&e.to_string()))?;
-        let creds = key.derive();
+        let raw = derived_key
+            .and_then(|hex| hex_decode(&hex))
+            .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok());
+        let creds = match raw {
+            Some(raw) => key.credentials_with(raw),
+            None => key.derive(),
+        };
         let store = JsStore(store);
         let mut client = SyncClient::new(JsHttp(http), store.clone(), &base_url, &creds, &client_id).await;
         if let Ok(f) = on_progress.dyn_into::<Function>() {

@@ -3003,23 +3003,27 @@ export class SyncCore {
     }
     /**
      * Leitet den Schlüssel ab (PBKDF2), lädt den Sync-Zustand und liefert den Client.
-     * `on_progress(label, current, total)` darf `undefined` sein.
+     * `on_progress(label, current, total)` darf `undefined` sein. `derived_key` = Ergebnis von
+     * [`derive_sync_key`] (im Worker gerechnet); fehlt es oder passt es nicht, leitet `open` selbst ab.
      * @param {string} base_url
      * @param {string} sync_key
      * @param {string} client_id
      * @param {any} http
      * @param {any} store
      * @param {any} on_progress
+     * @param {string | null} [derived_key]
      * @returns {Promise<SyncCore>}
      */
-    static open(base_url, sync_key, client_id, http, store, on_progress) {
+    static open(base_url, sync_key, client_id, http, store, on_progress, derived_key) {
         const ptr0 = passStringToWasm0(base_url, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(sync_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len1 = WASM_VECTOR_LEN;
         const ptr2 = passStringToWasm0(client_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len2 = WASM_VECTOR_LEN;
-        const ret = wasm.synccore_open(ptr0, len0, ptr1, len1, ptr2, len2, addHeapObject(http), addHeapObject(store), addHeapObject(on_progress));
+        var ptr3 = isLikeNone(derived_key) ? 0 : passStringToWasm0(derived_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        var len3 = WASM_VECTOR_LEN;
+        const ret = wasm.synccore_open(ptr0, len0, ptr1, len1, ptr2, len2, addHeapObject(http), addHeapObject(store), addHeapObject(on_progress), ptr3, len3);
         return takeObject(ret);
     }
     /**
@@ -4036,6 +4040,39 @@ export function defaultCover(title, id) {
         deferred3_0 = r0;
         deferred3_1 = r1;
         return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Teurer Teil der Schlüsselableitung (100 000 PBKDF2-Runden) als Hex-Text, für einen Worker:
+ * Das Ergebnis geht als `derived_key` an [`SyncCore::open`].
+ * @param {string} sync_key
+ * @returns {string}
+ */
+export function deriveSyncKey(sync_key) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(sync_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.deriveSyncKey(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr2 = r0;
+        var len2 = r1;
+        if (r3) {
+            ptr2 = 0; len2 = 0;
+            throw takeObject(r2);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         wasm.__wbindgen_export5(deferred3_0, deferred3_1, 1);
@@ -6666,7 +6703,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5738(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5742(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6712,7 +6749,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_5738(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_5742(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -6805,7 +6842,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 211, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5682);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_5686);
             return addHeapObject(ret);
         },
         __wbindgen_generic_0000000000000002: function(arg0) {
@@ -6832,14 +6869,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_5738(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_5738(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_5742(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_5742(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_5682(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_5686(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_5682(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_5686(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {

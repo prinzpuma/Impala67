@@ -84,6 +84,7 @@ const APP_FILES = [
 	"./sync-crypto.js",
 	"./sync-transfer.js",
 	"./sync-cloudflare.js",
+	"./sync-key-worker.js",
 	"./sync-maintenance.js",
 	"./rust-core.js",
 	"./core/impala_core.js",

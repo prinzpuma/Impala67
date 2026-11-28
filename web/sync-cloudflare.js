@@ -347,6 +347,25 @@ export const CLOUDFLARE_SYNC = (() => {
 		old?.free();
 	}
 
+	// Teure Schlüsselableitung im Worker (sync-key-worker.js). Ohne Worker oder bei Fehler/Zeitlimit
+	// undefined: Dann leitet SyncCore.open wie bisher selbst ab (gleiches Ergebnis, nur im Hauptthread).
+	const DERIVE_TIMEOUT_MS = 10_000;
+	function deriveKeyInWorker(syncKey) {
+		return new Promise((resolve) => {
+			let worker = null;
+			const finish = (key) => { clearTimeout(timer); worker?.terminate(); resolve(key || undefined); };
+			const timer = setTimeout(() => finish(), DERIVE_TIMEOUT_MS);
+			try { worker = new Worker(new URL("./sync-key-worker.js", import.meta.url), { type: "module" }); }
+			catch { finish(); return; }
+			worker.onmessage = ({ data }) => {
+				if (data?.error) console.warn("[cf-sync] Schlüssel im Worker nicht abgeleitet:", data.error);
+				finish(typeof data?.key === "string" ? data.key : undefined);
+			};
+			worker.onerror = (e) => { e.preventDefault?.(); finish(); };
+			worker.postMessage(syncKey);
+		});
+	}
+
 	async function configure(url, syncKey) {
 		const cleanUrl = String(url || "").trim().replace(/\/+$/, ""), cleanKey = String(syncKey || "").trim();
 		if (SANDBOX.on) { setStatus("disconnected", "Spielwiese", "In der Benchmark-Spielwiese ist der Sync aus."); return false; }
@@ -360,9 +379,11 @@ export const CLOUDFLARE_SYNC = (() => {
 		try {
 			setStatus("connecting", "Verbindung wird aufgebaut…");
 			const id = CORE.syncAuth(cleanKey).userId;
+			const derived = await deriveKeyInWorker(cleanKey);
+			if (generation !== configureGeneration) return false;
 			const next = await CORE.SyncCore.open(cleanUrl, cleanKey, CLIENT_ID, http, storeFor(id), (label, current, total) => {
 				if (generation === configureGeneration) setProgress(label, current, total);
-			});
+			}, derived);
 			if (generation !== configureGeneration) { next.free(); return false; }
 			core = next;
 			refreshState();
