@@ -1,5 +1,6 @@
 // Start-Benchmark der PWA mit realistisch großem Event-Log (eigenes Chrome-Profil, keine Nutzerdaten).
 //   node tools/bench-start.mjs [--runs 5] [--events 67000] [--out datei.json] [--compare vorher.json]
+//   node tools/bench-start.mjs --cpu    (zusätzlich Long Tasks + CPU-Eigenzeit des letzten Starts)
 //   node tools/bench-start.mjs --sync [--runs 5]   (Sync mit Upload gegen lokalen Wrangler-Server)
 // Legt beim ersten Lauf ein Log an (kleine Events + große Bild-Events wie im echten Bestand),
 // lässt die App einen Checkpoint schreiben und misst danach jeden Kaltstart in einem neuen
@@ -30,6 +31,7 @@ const POINTS = ["boot-ready", "db.open", "state.load", "state.event-info", "stat
 	"heft.mount", "heft.load", "heft.hydrate-images", "state.checkpoint-heft-read", "heft.fetch", "heft.mount-view", "heft-ready"];
 
 const SYNC = process.argv.includes("--sync");
+const CPU = process.argv.includes("--cpu");
 const server = spawn(process.execPath, [path.join(ROOT, "tools/serve.mjs"), String(PORT)], { stdio: "ignore" });
 await new Promise((r) => setTimeout(r, 400));
 
@@ -109,13 +111,26 @@ async function prepare() {
 	fs.writeFileSync(path.join(PROFILE, ".bench-ready"), new Date().toISOString());
 }
 
+let lastCpu = "";
 async function measureOnce() {
 	const browser = await launch();
 	try {
 		const page = await browser.newPage();
+		await page.evaluateOnNewDocument(() => {
+			window.__benchTasks = [];
+			new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__benchTasks.push([Math.round(e.startTime), Math.round(e.duration)]))).observe({ type: "longtask", buffered: true });
+		});
+		const cdp = CPU ? await page.createCDPSession() : null;
+		if (cdp) { await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 200 }); await cdp.send("Profiler.start"); }
 		await page.goto(URL, { waitUntil: "domcontentloaded" });
 		await waitBoot(page);
 		await new Promise((r) => setTimeout(r, 1500));
+		if (cdp) {
+			const { profile } = await cdp.send("Profiler.stop");
+			if (process.env.BENCH_CPU_FILE) fs.writeFileSync(process.env.BENCH_CPU_FILE, JSON.stringify(profile));
+			const tasks = await page.evaluate(() => window.__benchTasks);
+			lastCpu = `Long Tasks [Start, Dauer]: ${JSON.stringify(tasks)}\n` + topFunctions(profile, 20).join("\n");
+		}
 		return await page.evaluate((points) => {
 			const marks = performance.getEntriesByName("impala67:boot-ready");
 			const out = { "boot-ready": Math.round(marks[0].startTime) };
@@ -258,6 +273,7 @@ try {
 	await prepare();
 	const runs = SYNC ? await measureSync() : [];
 	if (!SYNC) for (let i = 0; i < RUNS; i++) { const r = await measureOnce(); runs.push(r); console.log(`Lauf ${i + 1}:`, JSON.stringify(r)); }
+	if (lastCpu) console.log("\nCPU letzter Start (Eigenzeit):\n" + lastCpu);
 	const points = SYNC ? SYNC_POINTS : POINTS;
 	const summary = Object.fromEntries(points.map((p) => { const v = runs.map((r) => r[p]).filter((x) => x != null); return [p, { median: median(v), min: Math.min(...v), max: Math.max(...v) }]; }).filter(([, v]) => v.median != null));
 	const result = { at: new Date().toISOString(), events: EVENTS, runs: RUNS, summary };

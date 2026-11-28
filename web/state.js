@@ -6,6 +6,7 @@ import { PERF_PROFILER } from "./performance-profiler.js";
 import { createCheckpointScheduler } from "./checkpoint-scheduler.js";
 import { CORE } from "./rust-core.js";
 import { installViews } from "./state-views.js";
+import { yieldToMain } from "./cooperative.js";
 // state.js — Zustand der App. Das Datenmodell (Zustand, Reducer, Laden aus Checkpoint und Log,
 // Reihenfolge, Checkpoints, Abfragen) liegt im Rust-Kern (core/impala-model, hier ModelCore).
 // Jede Änderung ist ein Event: dispatch() speichert es in IndexedDB und lässt es den Kern
@@ -537,6 +538,9 @@ export const STATE = (() => {
 				// Nach einem vollen Neueinlesen liegen die Bilder vor dem Wasserstand: im Log nachschlagen.
 				const unknown = Object.keys(res.blobs).filter((hash) => !blobSeqs[hash]);
 				if (unknown.length) Object.assign(blobSeqs, await DB.heftBlobSeqs(unknown).catch(() => ({})));
+				// Aufbau (Kern) und Schreiben (IndexedDB kopiert den mehrere MB großen Text) nicht am Stück:
+				// zwei kurze Tasks statt eines langen, dazwischen kommen Eingaben durch.
+				await yieldToMain();
 				try {
 					await PERF_PROFILER.run("state.checkpoint-write", () => DB.putStateCheckpoint({ ...res.checkpointMeta, json: res.checkpoint }, res.blobs, res.hefte, blobSeqs), {
 						eventCount: current.count, newHeftBlobs: Object.keys(res.blobs).length, newHefte: Object.keys(res.hefte).length,
