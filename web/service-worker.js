@@ -113,6 +113,7 @@ const APP_FILES = [
 	"./editor-menus.js",
 	"./diagram.js",
 	"./render.js",
+	"./conflict-flow.js",
 	"./conflict-ui.js",
 	"./library.js",
 	"./export-media.js",

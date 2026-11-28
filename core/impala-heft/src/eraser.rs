@@ -130,8 +130,9 @@ struct Capsule {
 }
 
 impl Capsule {
-    fn dist(&self, p: [f64; 2]) -> f64 {
-        seg_dist(p, self.a, self.b)
+    #[inline]
+    fn dist2(&self, p: [f64; 2]) -> f64 {
+        seg_dist2(p, self.a, self.b)
     }
 
     fn near_bounds(&self, s: &Stroke, r: f64) -> bool {
@@ -142,26 +143,37 @@ impl Capsule {
     }
 
     fn hits(&self, s: &Stroke, r: f64) -> bool {
-        let pts: Vec<[f64; 2]> = match s.outline() {
-            crate::geometry::Outline::Points(p) => p.iter().map(|p| [p.x, p.y]).collect(),
-            crate::geometry::Outline::Shape(p) => p,
-        };
-        match pts.as_slice() {
-            [] => false,
-            [p] => self.dist(*p) <= r,
-            _ => pts.windows(2).any(|w| self.seg_min(w[0], w[1]) <= r),
+        let r2 = r * r;
+        match s.outline() {
+            crate::geometry::Outline::Points([]) => false,
+            crate::geometry::Outline::Points([p]) => self.dist2([p.x, p.y]) <= r2,
+            crate::geometry::Outline::Points(pts) => {
+                pts.windows(2).any(|w| self.seg_min_dist2([w[0].x, w[0].y], [w[1].x, w[1].y]) <= r2)
+            }
+            crate::geometry::Outline::Shape(pts) => match pts.as_slice() {
+                [] => false,
+                [p] => self.dist2(*p) <= r2,
+                _ => pts.windows(2).any(|w| self.seg_min_dist2(w[0], w[1]) <= r2),
+            },
         }
     }
 
-    /// Kleinster Abstand der Strecke p→q zur Bahn.
-    fn seg_min(&self, p: [f64; 2], q: [f64; 2]) -> f64 {
-        let t = self.argmin(p, q);
-        self.dist(lerp2(p, q, t))
+    /// Exakter quadrierter Minimalabstand der 2D-Strecke p→q zur Bahn a→b in O(1):
+    /// 0 bei Schnitt, sonst Minimum der vier Endpunkt-zu-Strecke-Abstände.
+    #[inline]
+    fn seg_min_dist2(&self, p: [f64; 2], q: [f64; 2]) -> f64 {
+        if segments_intersect(p, q, self.a, self.b) {
+            return 0.0;
+        }
+        seg_dist2(p, self.a, self.b)
+            .min(seg_dist2(q, self.a, self.b))
+            .min(seg_dist2(self.a, p, q))
+            .min(seg_dist2(self.b, p, q))
     }
 
     /// `t` in [0, 1] mit kleinstem Abstand (der Abstand ist entlang der Strecke konvex).
     fn argmin(&self, p: [f64; 2], q: [f64; 2]) -> f64 {
-        let f = |t: f64| self.dist(lerp2(p, q, t));
+        let f = |t: f64| self.dist2(lerp2(p, q, t));
         let (mut lo, mut hi) = (0.0, 1.0);
         for _ in 0..40 {
             let (m1, m2) = (lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0);
@@ -171,10 +183,10 @@ impl Capsule {
     }
 
     /// Grenze zwischen `inside` (bei `tin`) und außerhalb (bei `tout`).
-    fn edge(&self, p: [f64; 2], q: [f64; 2], mut tin: f64, mut tout: f64, r: f64) -> f64 {
+    fn edge(&self, p: [f64; 2], q: [f64; 2], mut tin: f64, mut tout: f64, r2: f64) -> f64 {
         for _ in 0..30 {
             let m = (tin + tout) / 2.0;
-            if self.dist(lerp2(p, q, m)) <= r { tin = m } else { tout = m }
+            if self.dist2(lerp2(p, q, m)) <= r2 { tin = m } else { tout = m }
         }
         tout
     }
@@ -182,8 +194,9 @@ impl Capsule {
 
 /// Teilt einen Linienzug an der Bahn: liefert die Stücke außerhalb (Schnittpunkte genau auf dem Rand).
 fn cut(pts: &[Point], cap: &Capsule, r: f64) -> Vec<Vec<Point>> {
+    let r2 = r * r;
     let xy = |p: &Point| [p.x, p.y];
-    let inside: Vec<bool> = pts.iter().map(|p| cap.dist(xy(p)) <= r).collect();
+    let inside: Vec<bool> = pts.iter().map(|p| cap.dist2(xy(p)) <= r2).collect();
     let mut out = Vec::new();
     let mut cur: Option<Vec<Point>> = (!inside.first().copied().unwrap_or(true)).then(|| vec![pts[0]]);
     for i in 0..pts.len().saturating_sub(1) {
@@ -192,22 +205,22 @@ fn cut(pts: &[Point], cap: &Capsule, r: f64) -> Vec<Vec<Point>> {
         match (inside[i], inside[i + 1]) {
             (true, true) => {}
             (false, true) => {
-                let t = cap.edge(a, b, 1.0, 0.0, r);
+                let t = cap.edge(a, b, 1.0, 0.0, r2);
                 let piece = cur.get_or_insert_with(Vec::new);
                 piece.push(lerp_point(p, q, t));
                 out.extend(cur.take());
             }
             (true, false) => {
-                let t = cap.edge(a, b, 0.0, 1.0, r);
+                let t = cap.edge(a, b, 0.0, 1.0, r2);
                 cur = Some(vec![lerp_point(p, q, t), *q]);
             }
             (false, false) => {
-                let tm = cap.argmin(a, b);
-                if cap.dist(lerp2(a, b, tm)) <= r {
+                if cap.seg_min_dist2(a, b) <= r2 {
+                    let tm = cap.argmin(a, b);
                     let piece = cur.get_or_insert_with(Vec::new);
-                    piece.push(lerp_point(p, q, cap.edge(a, b, tm, 0.0, r)));
+                    piece.push(lerp_point(p, q, cap.edge(a, b, tm, 0.0, r2)));
                     out.extend(cur.take());
-                    cur = Some(vec![lerp_point(p, q, cap.edge(a, b, tm, 1.0, r)), *q]);
+                    cur = Some(vec![lerp_point(p, q, cap.edge(a, b, tm, 1.0, r2)), *q]);
                 } else {
                     cur.get_or_insert_with(Vec::new).push(*q);
                 }
@@ -235,11 +248,29 @@ fn lerp_point(a: &Point, b: &Point, t: f64) -> Point {
     Point { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, p, t: None }
 }
 
-fn seg_dist(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+#[inline]
+fn seg_dist2(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let len2 = dx * dx + dy * dy;
     let t = if len2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-    js_hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy))
+    let (rx, ry) = (p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+    rx * rx + ry * ry
+}
+
+/// Schneiden sich die beiden 2D-Strecken `p→q` und `a→b` (echter Schnitt)?
+/// Kollineare Überlappung wird über die Endpunkt-Abstände in `seg_min_dist2` abgedeckt (ergibt 0).
+#[inline]
+fn segments_intersect(p: [f64; 2], q: [f64; 2], a: [f64; 2], b: [f64; 2]) -> bool {
+    let (rx, ry) = (q[0] - p[0], q[1] - p[1]);
+    let (sx, sy) = (b[0] - a[0], b[1] - a[1]);
+    let denom = rx * sy - ry * sx;
+    if denom == 0.0 {
+        return false;
+    }
+    let (qx, qy) = (a[0] - p[0], a[1] - p[1]);
+    let t = (qx * sy - qy * sx) / denom;
+    let u = (qx * ry - qy * rx) / denom;
+    (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)
 }
 
 #[cfg(test)]
@@ -321,5 +352,50 @@ mod tests {
         let mut list = vec![m];
         let mut e = StrokeEraser::with_mode(5.0, EraseMode::Stroke, "g".into());
         assert_eq!(e.erase_at(&mut list, 50.0, 10.5).len(), 1); // Abstand 10.5 <= 5 + 6
+    }
+
+    #[test]
+    fn radierer_leistung_und_genauigkeit() {
+        use std::time::Instant;
+
+        // 400 Striche mit je 40 Punkten (= 16.000 Punkte, typische volle Heftseite)
+        let make_strokes = || -> Vec<Stroke> {
+            (0..400usize)
+                .map(|i| {
+                    let y = (i as f64) * 3.5;
+                    let mut s = Stroke {
+                        id: format!("s{i}"),
+                        size: Some(2.5),
+                        pts: (0..40)
+                            .map(|j| Point::new(f64::from(j) * 24.0, y + ((j as f64) * 0.4).sin() * 6.0, 0.5))
+                            .collect(),
+                        ..Default::default()
+                    };
+                    s.refresh_bounds();
+                    s
+                })
+                .collect()
+        };
+
+        // 60 Radier-Bewegungen quer über die Seite (präziser Modus)
+        let t0 = Instant::now();
+        let mut total_changes = 0usize;
+        for _ in 0..5 {
+            let mut strokes = make_strokes();
+            let mut e = StrokeEraser::with_mode(18.0, EraseMode::Precise, "g".into());
+            for step in 0..60 {
+                let x = 50.0 + f64::from(step) * 14.0;
+                let y = 100.0 + f64::from(step) * 18.0;
+                total_changes += e.erase_at(&mut strokes, x, y).len();
+            }
+            total_changes += e.finish(&mut strokes).len();
+        }
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert!(total_changes > 0);
+        eprintln!(
+            "eraser (400 strokes x 40 pts, 60 steps, precise): 5 runs = {ms:.2} ms ({:.2} ms/run, {} changes)",
+            ms / 5.0,
+            total_changes / 5
+        );
     }
 }

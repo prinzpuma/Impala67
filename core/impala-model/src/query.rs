@@ -13,10 +13,11 @@ use crate::order;
 use crate::tree::deck_in_tree;
 use crate::types::{Card, Page, State};
 
-/// Neueste zuerst nach einem Zeitfeld (stabil).
-fn newest_first<T>(mut list: Vec<&T>, at: impl Fn(&T) -> String) -> Vec<&T> {
-    list.sort_small_by(|a, b| js::cmp(&at(b), &at(a)));
-    list
+/// Neueste zuerst nach einem Zeitfeld (stabil); Schlüssel einmalig berechnet statt O(N log N).
+fn newest_first<T>(list: Vec<&T>, at: impl Fn(&T) -> String) -> Vec<&T> {
+    let mut keyed: Vec<(String, &T)> = list.into_iter().map(|item| (at(item), item)).collect();
+    keyed.sort_small_by(|a, b| js::cmp(&b.0, &a.0));
+    keyed.into_iter().map(|(_, item)| item).collect()
 }
 
 /// Sidebar-Reihenfolge: explizites `order`, sonst Erstellzeit (`sortKeyOf`).
@@ -24,12 +25,20 @@ pub fn sort_key_of(pg: &Page) -> f64 {
     pg.order.unwrap_or_else(|| impala_srs::Timestamp::parse_iso(pg.created_at()).map_or(0.0, |t| t.millis() as f64))
 }
 
-fn by_sidebar(a: &&Page, b: &&Page) -> Ordering {
-    let d = sort_key_of(a) - sort_key_of(b);
-    if d != 0.0 && !d.is_nan() {
-        return if d < 0.0 { Ordering::Less } else { Ordering::Greater };
+fn sort_by_sidebar(list: &mut Vec<&Page>) {
+    if list.len() <= 1 {
+        return;
     }
-    js::cmp(a.created_at(), b.created_at())
+    let mut keyed: Vec<(f64, &Page)> = list.iter().map(|&p| (sort_key_of(p), p)).collect();
+    keyed.sort_small_by(|a, b| {
+        let d = a.0 - b.0;
+        if d != 0.0 && !d.is_nan() {
+            return if d < 0.0 { Ordering::Less } else { Ordering::Greater };
+        }
+        js::cmp(a.1.created_at(), b.1.created_at())
+    });
+    list.clear();
+    list.extend(keyed.into_iter().map(|(_, p)| p));
 }
 
 /// Eine Version im Seitenverlauf.
@@ -103,7 +112,7 @@ impl State {
             .filter(|p| p.parent().unwrap_or("") == id.unwrap_or(""))
             .filter(|p| !p.is_trashed() && !p.is_archived() && p.workspace() == ws)
             .collect();
-        kids.sort_small_by(by_sidebar);
+        sort_by_sidebar(&mut kids);
         kids
     }
 
@@ -132,7 +141,7 @@ impl State {
             index.entry((p.parent().unwrap_or(""), p.workspace())).or_default().push(p);
         }
         for kids in index.values_mut() {
-            kids.sort_small_by(by_sidebar);
+            sort_by_sidebar(kids);
         }
         index
     }

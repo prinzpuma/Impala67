@@ -185,10 +185,6 @@ fn known(state: &State, name: &str) -> bool {
     state.decks.keys().any(|k| deck_in_tree(k, name)) || state.cards.values().any(|c| deck_in_tree(c.deck_name(), name))
 }
 
-fn order_of(state: &State, name: &str) -> Option<f64> {
-    state.decks.get(name).and_then(|d| d.order)
-}
-
 fn conf_number(v: &Value, default: u32) -> u32 {
     let n = js::to_number(Some(v));
     if n.is_finite() { n.clamp(0.0, f64::from(u32::MAX)) as u32 } else { default }
@@ -374,33 +370,21 @@ impl ImpalaCore {
         let inner = self.lock();
         let state = inner.model.state();
         let now = wall_now();
-        let names = state.active_deck_names(None);
-        let active = state.active_cards();
-        names
-            .into_iter()
-            .map(|name| {
-                let mut opts = StudyOptions::with_offset(Some(&name), now, i64::from(utc_offset_minutes));
+        state
+            .deck_overview_entries(|name| {
+                let mut opts = StudyOptions::with_offset(Some(name), now, i64::from(utc_offset_minutes));
                 opts.mix = mix;
-                let counts = state.study_snapshot(&opts).counts;
-                let mut total = 0u64;
-                let mut suspended = 0u64;
-                for c in &active {
-                    if deck_in_tree(c.deck_name(), &name) {
-                        total += 1;
-                        if c.is_suspended() {
-                            suspended += 1;
-                        }
-                    }
-                }
-                DeckOverview {
-                    order: order_of(state, &name),
-                    total,
-                    suspended,
-                    new: counts.new as u64,
-                    learn: counts.learn as u64,
-                    review: counts.review as u64,
-                    name,
-                }
+                opts
+            })
+            .into_iter()
+            .map(|e| DeckOverview {
+                order: e.order,
+                total: e.total,
+                suspended: e.suspended,
+                new: e.new,
+                learn: e.learn,
+                review: e.review,
+                name: e.name,
             })
             .collect()
     }

@@ -53,47 +53,36 @@ pub struct DeckTreeEntry {
 /// Eingeklappte Knoten (`collapsed`) blenden ihre Unteräste aus.
 pub fn flatten_tree_entries(entries: Vec<DeckTreeEntry>, collapsed: &HashSet<String>) -> Vec<DeckTreeEntry> {
     let all_names: HashSet<&str> = entries.iter().map(|d| d.name.as_str()).collect();
-    let is_root = |d: &DeckTreeEntry| match d.parent.as_deref() {
-        None => true,
-        Some(p) => !all_names.contains(p),
-    };
+    let mut children: HashMap<Option<&str>, Vec<usize>> = HashMap::with_capacity(entries.len() + 1);
+    for (i, d) in entries.iter().enumerate() {
+        let key = d.parent.as_deref().filter(|p| all_names.contains(p));
+        children.entry(key).or_default().push(i);
+    }
 
-    let kids = |parent: Option<&str>| -> Vec<usize> {
-        entries
-            .iter()
-            .enumerate()
-            .filter(|(_, d)| match parent {
-                None => is_root(d),
-                Some(p) => d.parent.as_deref() == Some(p),
-            })
-            .map(|(i, _)| i)
-            .collect()
-    };
-
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(entries.len());
     fn walk(
         parent: Option<&str>,
         depth: i32,
         entries: &[DeckTreeEntry],
-        kids: &impl Fn(Option<&str>) -> Vec<usize>,
+        children: &HashMap<Option<&str>, Vec<usize>>,
         collapsed: &HashSet<String>,
         out: &mut Vec<DeckTreeEntry>,
     ) {
-        for idx in kids(parent) {
+        let Some(indices) = children.get(&parent) else { return };
+        for &idx in indices {
             let mut entry = entries[idx].clone();
-            let child_indices = kids(Some(&entry.name));
-            let has_kids = !child_indices.is_empty();
+            let has_kids = children.get(&Some(entry.name.as_str())).is_some_and(|v| !v.is_empty());
             let is_collapsed = has_kids && collapsed.contains(&entry.name);
             entry.depth = depth;
             entry.has_kids = has_kids;
             entry.collapsed = is_collapsed;
             out.push(entry);
             if !is_collapsed {
-                walk(Some(&entries[idx].name), depth + 1, entries, kids, collapsed, out);
+                walk(Some(&entries[idx].name), depth + 1, entries, children, collapsed, out);
             }
         }
     }
-    walk(None, 0, &entries, &kids, collapsed, &mut out);
+    walk(None, 0, &entries, &children, collapsed, &mut out);
     out
 }
 
@@ -290,30 +279,35 @@ impl State {
         names
     }
 
-    /// Berechnet den vollständigen Stapelbaum mit Kennzahlen je Knoten und klappt Äste ein.
-    pub fn deck_tree(
+    /// Berechnet die flache Stapel-Übersicht mit Kennzahlen je Knoten in einem Durchlauf (O(C + D·Tiefe)).
+    pub fn deck_overview_entries(
         &self,
-        collapsed: &HashSet<String>,
         study_opts_fn: impl Fn(&str) -> crate::study::StudyOptions<'_>,
     ) -> Vec<DeckTreeEntry> {
         let names = self.active_deck_names(None);
-        let active = self.active_cards();
         let all_counts = self.deck_tree_counts(&names, study_opts_fn);
 
-        let entries: Vec<DeckTreeEntry> = names
+        let mut totals: HashMap<&str, (u64, u64)> = HashMap::with_capacity(names.len());
+        for c in self.cards.values() {
+            if c.is_trashed() || self.is_card_archived(c) {
+                continue;
+            }
+            let susp = u64::from(c.is_suspended());
+            let d = c.deck_name();
+            let mut cur = (!d.is_empty()).then_some(d);
+            while let Some(anc) = cur {
+                let e = totals.entry(anc).or_default();
+                e.0 += 1;
+                e.1 += susp;
+                cur = deck_parent(anc);
+            }
+        }
+
+        names
             .into_iter()
             .zip(all_counts)
             .map(|(name, (counts, done))| {
-                let mut total = 0u64;
-                let mut suspended = 0u64;
-                for c in &active {
-                    if deck_in_tree(c.deck_name(), &name) {
-                        total += 1;
-                        if c.is_suspended() {
-                            suspended += 1;
-                        }
-                    }
-                }
+                let (total, suspended) = totals.get(name.as_str()).copied().unwrap_or((0, 0));
                 let new_cnt = counts.new as u64;
                 let learn_cnt = counts.learn as u64;
                 let learn_now_cnt = counts.learn_now as u64;
@@ -343,9 +337,16 @@ impl State {
                     order,
                 }
             })
-            .collect();
+            .collect()
+    }
 
-        flatten_tree_entries(entries, collapsed)
+    /// Berechnet den vollständigen Stapelbaum mit Kennzahlen je Knoten und klappt Äste ein.
+    pub fn deck_tree(
+        &self,
+        collapsed: &HashSet<String>,
+        study_opts_fn: impl Fn(&str) -> crate::study::StudyOptions<'_>,
+    ) -> Vec<DeckTreeEntry> {
+        flatten_tree_entries(self.deck_overview_entries(study_opts_fn), collapsed)
     }
 }
 
@@ -452,5 +453,104 @@ mod tests {
         assert_eq!(flat_orphan.len(), 1);
         assert_eq!(flat_orphan[0].name, "Waisenkind::Kind");
         assert_eq!(flat_orphan[0].depth, 0);
+    }
+
+    #[test]
+    fn deck_tree_aequivalenz_und_leistung() {
+        use crate::study::StudyOptions;
+        use crate::types::{Deck, Review};
+        use impala_srs::Timestamp;
+        use serde_json::json;
+        use std::time::Instant;
+
+        let mut st = State::default();
+        let mut deck_names = Vec::new();
+        for f in 0..8 {
+            let root = format!("Fach{f}");
+            deck_names.push(root.clone());
+            st.decks.insert(root.clone(), Deck::new(&root, "2026-01-01T00:00:00Z"));
+            for s in 0..3 {
+                let sub = format!("{root}::Kapitel{s}");
+                deck_names.push(sub.clone());
+                st.decks.insert(sub.clone(), Deck::new(&sub, "2026-01-01T00:00:00Z"));
+                for u in 0..2 {
+                    let leaf = format!("{sub}::Thema{u}");
+                    deck_names.push(leaf.clone());
+                    st.decks.insert(leaf.clone(), Deck::new(&leaf, "2026-01-01T00:00:00Z"));
+                }
+            }
+        }
+        // 8 * (1 + 3 + 6) = 80 Stapel + Standard
+        st.settings.deck_conf = Some(
+            json!({
+                "*": { "newPerDay": 20, "revPerDay": 100 },
+                "Fach0::Kapitel0::Thema0": { "newPerDay": 3, "revPerDay": 5 },
+                "Fach1::Kapitel1": { "newPerDay": 5, "revPerDay": 10 }
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+
+        let now = Timestamp::parse_iso("2026-11-04T12:00:00Z").unwrap();
+        let states = ["review", "new", "learning", "relearning"];
+        let dues = [
+            "2026-11-04T08:00:00Z",
+            "2026-11-04T11:55:00Z",
+            "2026-11-04T12:10:00Z",
+            "2026-11-04T17:00:00Z",
+            "2026-11-06T00:00:00Z",
+        ];
+        for i in 0..4000usize {
+            let id = format!("c{i}");
+            let deck = &deck_names[i % deck_names.len()];
+            let mut c = Card {
+                id: Some(id.clone()),
+                deck: Some(deck.clone()),
+                suspended: (i % 19 == 0).then_some(true),
+                trashed: (i % 41 == 0).then_some(true),
+                ..Default::default()
+            };
+            c.extra.insert("srs".into(), json!({ "state": states[i % states.len()], "due": dues[i % dues.len()] }));
+            st.cards.insert(id, c);
+        }
+        for i in 0..2000usize {
+            let deck = &deck_names[i % deck_names.len()];
+            st.reviews.push(Review {
+                id: Some(format!("r{i}")),
+                card_id: Some(format!("c{}", i % 4000)),
+                deck: Some(deck.clone()),
+                t: Some(if i % 5 == 0 { "2026-11-04T11:56:00Z" } else { "2026-11-04T09:00:00Z" }.into()),
+                first: (i % 4 == 0).then_some(true),
+                learning: (i % 7 == 0).then_some(true),
+                ..Default::default()
+            });
+        }
+
+        let collapsed: HashSet<String> = ["Fach2::Kapitel1".to_owned()].into_iter().collect();
+        let tree = st.deck_tree(&collapsed, |d| StudyOptions::with_offset(Some(d), now, 60));
+
+        // 1. Korrektheit: jeder Knoten im Baum stimmt exakt mit einzelnem `study_snapshot` überein.
+        for e in &tree {
+            let snap = st.study_snapshot(&StudyOptions::with_offset(Some(&e.name), now, 60));
+            assert_eq!(e.new as usize, snap.counts.new, "new mismatch for {}", e.name);
+            assert_eq!(e.learn as usize, snap.counts.learn, "learn mismatch for {}", e.name);
+            assert_eq!(e.learn_now as usize, snap.counts.learn_now, "learn_now mismatch for {}", e.name);
+            assert_eq!(e.review as usize, snap.counts.review, "review mismatch for {}", e.name);
+            assert_eq!(e.due as usize, snap.counts.review + snap.counts.learn, "due mismatch for {}", e.name);
+            assert_eq!(e.due_now as usize, snap.counts.review + snap.counts.learn_now, "due_now mismatch for {}", e.name);
+            assert_eq!(e.open, !snap.done, "open mismatch for {}", e.name);
+        }
+
+        // 2. Zeitmessung (20 Durchläufe über 80 Stapel, 4.000 Karten, 2.000 Reviews)
+        let t0 = Instant::now();
+        let mut checksum = 0u64;
+        for _ in 0..20 {
+            let t = st.deck_tree(&collapsed, |d| StudyOptions::with_offset(Some(d), now, 60));
+            checksum += t.iter().map(|e| e.total + e.due).sum::<u64>();
+        }
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert!(checksum > 0);
+        eprintln!("deck_tree (80 decks, 4000 cards, 2000 reviews): 20 runs = {elapsed_ms:.2} ms ({:.2} ms/run)", elapsed_ms / 20.0);
     }
 }

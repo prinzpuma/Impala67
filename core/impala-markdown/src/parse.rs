@@ -10,7 +10,11 @@ pub(crate) const FENCE: &str = "```";
 /// Parst Markdown in Blöcke. `uid` liefert neue Block-IDs, in derselben Reihenfolge wie im JS
 /// (Kinder vor dem umschließenden Block).
 pub fn parse(md: &str, uid: &mut dyn FnMut() -> String) -> Vec<Block> {
-    let norm = md.replace("\r\n", "\n").replace('\r', "\n");
+    let norm: std::borrow::Cow<'_, str> = if md.contains('\r') {
+        std::borrow::Cow::Owned(md.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(md)
+    };
     let lines: Vec<&str> = norm.split('\n').collect();
     parse_lines(&lines, uid)
 }
@@ -509,4 +513,35 @@ fn starts_block(line: &str) -> bool {
         || line.starts_with(FENCE)
         || color_meta(trim(line)).is_some()
         || image(line).is_some()
+}
+
+#[cfg(test)]
+mod bench_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn parse_leistung_und_roundtrip() {
+        let mut md = String::new();
+        for s in 0..25 {
+            md.push_str(&format!("# Abschnitt {s}\n\nDies ist ein normaler Absatz mit **fett**, *kursiv* und `Code` sowie einer [[Verlinkung]].\n\n"));
+            md.push_str("- Punkt eins\n  - Unterpunkt A\n  - Unterpunkt B\n- [x] Erledigt\n- [ ] Offen\n\n");
+            md.push_str("```rust\nfn demo(x: i32) -> i32 { x * 2 }\n```\n\n");
+            md.push_str("$$\n\\int_0^1 x^2 \\, dx = \\frac{1}{3}\n$$\n\n");
+            md.push_str("| Spalte A | Spalte B |\n|---|---|\n| Wert 1 | Wert 2 |\n\n");
+        }
+        let mut n = 0usize;
+        let blocks = parse(&md, &mut || { n += 1; format!("b{n}") });
+        assert!(blocks.len() > 100);
+
+        let t0 = Instant::now();
+        let mut total = 0usize;
+        for _ in 0..50 {
+            let mut k = 0usize;
+            total += parse(&md, &mut || { k += 1; format!("b{k}") }).len();
+        }
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert!(total > 0);
+        eprintln!("markdown::parse (~{} lines): 50 runs = {ms:.2} ms ({:.2} ms/run)", md.lines().count(), ms / 50.0);
+    }
 }

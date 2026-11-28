@@ -120,42 +120,13 @@ fn review_root_deck(r: &Review) -> &str {
 }
 
 #[derive(Default)]
-struct SubjectBucket {
+struct SubjectBucket<'a> {
     total: usize,
     pass: usize,
-    decks: HashMap<String, usize>,
+    decks: HashMap<&'a str, usize>,
 }
 
-pub fn compute_subjects(reviews: &[Review], now_ms: i64) -> SubjectsAnalysis {
-    let d14 = 14 * 86_400_000i64;
-    let mut cur: HashMap<String, SubjectBucket> = HashMap::new();
-    let mut prev: HashMap<String, SubjectBucket> = HashMap::new();
-
-    for r in reviews {
-        let grade = r.grade.unwrap_or(0.0);
-        if grade <= 0.0 {
-            continue;
-        }
-        let Some(ts) = Timestamp::parse_iso(r.t()) else {
-            continue;
-        };
-        let t = ts.millis();
-        let subj = review_subject(r).to_string();
-        let deck = review_root_deck(r).to_string();
-        let pass = if grade > 1.0 { 1 } else { 0 };
-
-        if t >= now_ms - d14 && t <= now_ms {
-            let b = cur.entry(subj).or_default();
-            b.total += 1;
-            b.pass += pass;
-            *b.decks.entry(deck).or_default() += 1;
-        } else if t >= now_ms - 2 * d14 && t < now_ms - d14 {
-            let b = prev.entry(subj).or_default();
-            b.total += 1;
-            b.pass += pass;
-        }
-    }
-
+fn finish_subjects(cur: HashMap<&str, SubjectBucket<'_>>, prev: HashMap<&str, SubjectBucket<'_>>) -> SubjectsAnalysis {
     let mut rows: Vec<SubjectRow> = Vec::new();
     for (subj, c) in &cur {
         let Some(p) = prev.get(subj) else {
@@ -168,11 +139,14 @@ pub fn compute_subjects(reviews: &[Review], now_ms: i64) -> SubjectsAnalysis {
         let before_rate = p.pass as f64 / p.total as f64;
         let delta = (now_rate * 100.0).round() as i32 - (before_rate * 100.0).round() as i32;
 
-        let mut sorted_decks: Vec<(&String, &usize)> = c.decks.iter().collect();
-        sorted_decks.sort_small_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
-        let deck = sorted_decks.first().map(|(d, _)| (*d).clone()).unwrap_or_else(|| subj.clone());
+        let deck = c
+            .decks
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+            .map(|(d, _)| (*d).to_owned())
+            .unwrap_or_else(|| (*subj).to_owned());
 
-        rows.push(SubjectRow { subject: subj.clone(), now: now_rate, before: before_rate, delta, deck });
+        rows.push(SubjectRow { subject: (*subj).to_owned(), now: now_rate, before: before_rate, delta, deck });
     }
 
     rows.sort_small_by(|a, b| a.delta.cmp(&b.delta).then_with(|| a.subject.cmp(&b.subject)));
@@ -200,6 +174,43 @@ pub fn compute_subjects(reviews: &[Review], now_ms: i64) -> SubjectsAnalysis {
     SubjectsAnalysis { rows, worst, text, tone }
 }
 
+pub fn compute_subjects(reviews: &[Review], now_ms: i64) -> SubjectsAnalysis {
+    let d14 = 14 * 86_400_000i64;
+    let cur_start = now_ms - d14;
+    let prev_start = now_ms - 2 * d14;
+    let mut cur: HashMap<&str, SubjectBucket<'_>> = HashMap::new();
+    let mut prev: HashMap<&str, SubjectBucket<'_>> = HashMap::new();
+
+    for r in reviews {
+        let grade = r.grade.unwrap_or(0.0);
+        if grade <= 0.0 {
+            continue;
+        }
+        let Some(ts) = Timestamp::parse_iso(r.t()) else {
+            continue;
+        };
+        let t = ts.millis();
+        if t < prev_start || t > now_ms {
+            continue;
+        }
+        let subj = review_subject(r);
+        let pass = usize::from(grade > 1.0);
+
+        if t >= cur_start {
+            let b = cur.entry(subj).or_default();
+            b.total += 1;
+            b.pass += pass;
+            *b.decks.entry(review_root_deck(r)).or_default() += 1;
+        } else {
+            let b = prev.entry(subj).or_default();
+            b.total += 1;
+            b.pass += pass;
+        }
+    }
+
+    finish_subjects(cur, prev)
+}
+
 // ── 3) Beste Lernzeit ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -220,40 +231,9 @@ pub struct BestTimeAnalysis {
     pub tone: String,
 }
 
-pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) -> BestTimeAnalysis {
-    let cut = now_ms - 56 * 86_400_000i64;
-
+fn finish_best_time(n: [u32; 4], ok: [u32; 4]) -> BestTimeAnalysis {
     let slot_meta =
         [("Morgens", "5–12 Uhr"), ("Mittags", "12–17 Uhr"), ("Abends", "17–22 Uhr"), ("Nachts", "22–5 Uhr")];
-
-    let mut n = [0u32; 4];
-    let mut ok = [0u32; 4];
-
-    for r in reviews {
-        let grade = r.grade.unwrap_or(0.0);
-        if grade <= 0.0 {
-            continue;
-        }
-        let Some(ts) = Timestamp::parse_iso(r.t()) else {
-            continue;
-        };
-        let t = ts.millis();
-        if t < cut {
-            continue;
-        }
-        let hour = (ts.local_millis(zone).rem_euclid(86_400_000) / 3_600_000) as u8;
-
-        let slot_idx = match hour {
-            5..12 => 0,
-            12..17 => 1,
-            17..22 => 2,
-            _ => 3,
-        };
-        n[slot_idx] += 1;
-        if grade > 1.0 {
-            ok[slot_idx] += 1;
-        }
-    }
 
     let slots: Vec<TimeSlot> = slot_meta
         .iter()
@@ -293,6 +273,98 @@ pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) 
     };
 
     BestTimeAnalysis { slots, best, text, tone: "ok".to_string() }
+}
+
+pub fn compute_best_time(reviews: &[Review], now_ms: i64, zone: &dyn LocalZone) -> BestTimeAnalysis {
+    let cut = now_ms - 56 * 86_400_000i64;
+    let mut n = [0u32; 4];
+    let mut ok = [0u32; 4];
+
+    for r in reviews {
+        let grade = r.grade.unwrap_or(0.0);
+        if grade <= 0.0 {
+            continue;
+        }
+        let Some(ts) = Timestamp::parse_iso(r.t()) else {
+            continue;
+        };
+        if ts.millis() < cut {
+            continue;
+        }
+        let hour = (ts.local_millis(zone).rem_euclid(86_400_000) / 3_600_000) as u8;
+        let slot_idx = match hour {
+            5..12 => 0,
+            12..17 => 1,
+            17..22 => 2,
+            _ => 3,
+        };
+        n[slot_idx] += 1;
+        if grade > 1.0 {
+            ok[slot_idx] += 1;
+        }
+    }
+
+    finish_best_time(n, ok)
+}
+
+/// Fächer-Trend und beste Lernzeit in einem Durchlauf (einmaliges ISO-Parsen je Review).
+fn compute_subjects_and_best_time(
+    reviews: &[Review],
+    now_ms: i64,
+    zone: &dyn LocalZone,
+) -> (SubjectsAnalysis, BestTimeAnalysis) {
+    let d14 = 14 * 86_400_000i64;
+    let cur_start = now_ms - d14;
+    let prev_start = now_ms - 2 * d14;
+    let time_cut = now_ms - 56 * 86_400_000i64;
+
+    let mut cur: HashMap<&str, SubjectBucket<'_>> = HashMap::new();
+    let mut prev: HashMap<&str, SubjectBucket<'_>> = HashMap::new();
+    let mut n = [0u32; 4];
+    let mut ok = [0u32; 4];
+
+    for r in reviews {
+        let grade = r.grade.unwrap_or(0.0);
+        if grade <= 0.0 {
+            continue;
+        }
+        let Some(ts) = Timestamp::parse_iso(r.t()) else {
+            continue;
+        };
+        let t = ts.millis();
+        if t < time_cut {
+            continue;
+        }
+        let passed = grade > 1.0;
+        let hour = (ts.local_millis(zone).rem_euclid(86_400_000) / 3_600_000) as u8;
+        let slot_idx = match hour {
+            5..12 => 0,
+            12..17 => 1,
+            17..22 => 2,
+            _ => 3,
+        };
+        n[slot_idx] += 1;
+        if passed {
+            ok[slot_idx] += 1;
+        }
+
+        if t >= prev_start && t <= now_ms {
+            let subj = review_subject(r);
+            let pass = usize::from(passed);
+            if t >= cur_start {
+                let b = cur.entry(subj).or_default();
+                b.total += 1;
+                b.pass += pass;
+                *b.decks.entry(review_root_deck(r)).or_default() += 1;
+            } else {
+                let b = prev.entry(subj).or_default();
+                b.total += 1;
+                b.pass += pass;
+            }
+        }
+    }
+
+    (finish_subjects(cur, prev), finish_best_time(n, ok))
 }
 
 // ── 4) Fälligkeiten der nächsten 7 Tage ──────────────────────────────────────
@@ -395,8 +467,7 @@ impl State {
         let today = ((Timestamp(now_ms).local_days(zone) + 3).rem_euclid(7)) as u8;
 
         let goal = compute_goal(goal_min, days, today, pace);
-        let subjects = compute_subjects(&self.reviews, now_ms);
-        let time = compute_best_time(&self.reviews, now_ms, zone);
+        let (subjects, time) = compute_subjects_and_best_time(&self.reviews, now_ms, zone);
         let forecast = compute_forecast(&self.active_cards(), now_ms, zone, today);
 
         let (headline, action, action_deck) = if let Some(worst) = &subjects.worst {
@@ -462,20 +533,22 @@ pub struct PatternData {
     pub empty: bool,
 }
 
-struct ValidReview {
+struct ValidReview<'a> {
     grade: u8,
     pos: u32,
     hour: Option<u8>,
     timer: Option<bool>,
-    exp: Vec<String>,
-    review_id: Option<String>,
+    /// Bitmaske für feynman/scaffolding/variation/mc.
+    exp_mask: u8,
+    exp_empty: bool,
+    review_id: Option<&'a str>,
 }
 
-fn extract_review_events(telemetry: &[Telemetry]) -> Vec<ValidReview> {
-    let mut out: Vec<ValidReview> = Vec::new();
+fn extract_review_events(telemetry: &[Telemetry]) -> Vec<ValidReview<'_>> {
+    let mut out: Vec<ValidReview<'_>> = Vec::new();
     for e in telemetry {
         let kind = e.kind.as_deref().unwrap_or("");
-        let Some(serde_json::Value::Object(data)) = e.get("data") else {
+        let Some(serde_json::Value::Object(data)) = e.extra.get("data") else {
             continue;
         };
 
@@ -485,26 +558,36 @@ fn extract_review_events(telemetry: &[Telemetry]) -> Vec<ValidReview> {
                 let pos = data.get("pos").and_then(serde_json::Value::as_f64).unwrap_or(-1.0) as i64;
                 let hour = data.get("hour").and_then(serde_json::Value::as_f64).unwrap_or(-1.0) as i64;
                 let timer = data.get("timer").and_then(serde_json::Value::as_bool);
-                let exp = data
-                    .get("exp")
-                    .and_then(serde_json::Value::as_array)
-                    .map(|a| a.iter().filter_map(serde_json::Value::as_str).map(ToString::to_string).collect())
-                    .unwrap_or_default();
-                let review_id = data.get("reviewId").and_then(serde_json::Value::as_str).map(ToString::to_string);
+                let mut exp_mask = 0u8;
+                let mut exp_empty = true;
+                if let Some(arr) = data.get("exp").and_then(serde_json::Value::as_array) {
+                    for s in arr.iter().filter_map(serde_json::Value::as_str) {
+                        exp_empty = false;
+                        match s {
+                            "feynman" => exp_mask |= 1,
+                            "scaffolding" => exp_mask |= 2,
+                            "variation" => exp_mask |= 4,
+                            "mc" => exp_mask |= 8,
+                            _ => {}
+                        }
+                    }
+                }
+                let review_id = data.get("reviewId").and_then(serde_json::Value::as_str);
 
                 out.push(ValidReview {
                     grade,
                     pos: if pos >= 0 { pos as u32 } else { 0 },
                     hour: if (0..24).contains(&hour) { Some(hour as u8) } else { None },
                     timer,
-                    exp,
+                    exp_mask,
+                    exp_empty,
                     review_id,
                 });
             }
         } else if kind == "reviewUndo" {
             let rid = data.get("reviewId").and_then(serde_json::Value::as_str).unwrap_or("");
             if !rid.is_empty() {
-                if let Some(idx) = out.iter().position(|item| item.review_id.as_deref() == Some(rid)) {
+                if let Some(idx) = out.iter().position(|item| item.review_id == Some(rid)) {
                     out.remove(idx);
                 }
             } else if !out.is_empty() {
@@ -515,30 +598,88 @@ fn extract_review_events(telemetry: &[Telemetry]) -> Vec<ValidReview> {
     out
 }
 
-fn pass_rate(list: &[&ValidReview]) -> f64 {
-    if list.is_empty() { 0.0 } else { list.iter().filter(|e| e.grade > 1).count() as f64 / list.len() as f64 }
-}
-
 pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -> PatternData {
     let rs = extract_review_events(telemetry);
 
-    // 1) Position & Timer
-    let pos_defs: [(&str, u32, u32); 4] =
-        [("Karte 1–10", 0, 10), ("Karte 11–25", 10, 25), ("Karte 26–40", 25, 40), ("Karte 41+", 40, u32::MAX)];
-    let mut position = Vec::new();
-    for (label, from, to) in pos_defs {
-        let list: Vec<&ValidReview> = rs.iter().filter(|e| e.pos >= from && e.pos < to).collect();
-        if list.len() >= 12 {
-            position.push(RateRow { label: label.to_string(), n: list.len() as u32, rate: pass_rate(&list) });
+    // Ein Durchlauf über alle gültigen Reviews statt 35 Einzelfilterungen + Vec-Allokationen.
+    let mut pos_n = [0u32; 4];
+    let mut pos_ok = [0u32; 4];
+    let mut timer_on = (0u32, 0u32);
+    let mut timer_off = (0u32, 0u32);
+    let mut hour_n = [0u32; 24];
+    let mut hour_ok = [0u32; 24];
+    let mut exp_n = [0u32; 4];
+    let mut exp_valid = [0u32; 4];
+    let mut exp_sum = [0u32; 4];
+    let mut base_n = 0u32;
+    let mut base_valid = 0u32;
+    let mut base_sum = 0u32;
+
+    for e in &rs {
+        let ok = u32::from(e.grade > 1);
+        let p_idx = match e.pos {
+            0..10 => 0,
+            10..25 => 1,
+            25..40 => 2,
+            _ => 3,
+        };
+        pos_n[p_idx] += 1;
+        pos_ok[p_idx] += ok;
+
+        match e.timer {
+            Some(true) => {
+                timer_on.0 += 1;
+                timer_on.1 += ok;
+            }
+            Some(false) => {
+                timer_off.0 += 1;
+                timer_off.1 += ok;
+            }
+            None => {}
+        }
+
+        if let Some(h) = e.hour {
+            let hi = h as usize;
+            hour_n[hi] += 1;
+            hour_ok[hi] += ok;
+        }
+
+        let valid_grade = (1..=4).contains(&e.grade);
+        if e.exp_empty {
+            base_n += 1;
+            if valid_grade {
+                base_valid += 1;
+                base_sum += u32::from(e.grade);
+            }
+        }
+        if e.exp_mask != 0 {
+            for i in 0..4 {
+                if (e.exp_mask & (1 << i)) != 0 {
+                    exp_n[i] += 1;
+                    if valid_grade {
+                        exp_valid[i] += 1;
+                        exp_sum[i] += u32::from(e.grade);
+                    }
+                }
+            }
         }
     }
 
-    let on: Vec<&ValidReview> = rs.iter().filter(|e| e.timer == Some(true)).collect();
-    let off: Vec<&ValidReview> = rs.iter().filter(|e| e.timer == Some(false)).collect();
-    let timer = if on.len() >= 15 && off.len() >= 15 {
+    let rate_of = |n: u32, ok: u32| if n == 0 { 0.0 } else { ok as f64 / n as f64 };
+
+    // 1) Position & Timer
+    let pos_labels = ["Karte 1–10", "Karte 11–25", "Karte 26–40", "Karte 41+"];
+    let mut position = Vec::with_capacity(4);
+    for (i, label) in pos_labels.iter().enumerate() {
+        if pos_n[i] >= 12 {
+            position.push(RateRow { label: (*label).to_string(), n: pos_n[i], rate: rate_of(pos_n[i], pos_ok[i]) });
+        }
+    }
+
+    let timer = if timer_on.0 >= 15 && timer_off.0 >= 15 {
         vec![
-            RateRow { label: "mit Lerntimer".to_string(), n: on.len() as u32, rate: pass_rate(&on) },
-            RateRow { label: "ohne Timer".to_string(), n: off.len() as u32, rate: pass_rate(&off) },
+            RateRow { label: "mit Lerntimer".to_string(), n: timer_on.0, rate: rate_of(timer_on.0, timer_on.1) },
+            RateRow { label: "ohne Timer".to_string(), n: timer_off.0, rate: rate_of(timer_off.0, timer_off.1) },
         ]
     } else {
         Vec::new()
@@ -547,45 +688,39 @@ pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -
     // 2) Chronobiologie (0..23)
     let hours = if rs.len() < 60 {
         None
+    } else if hour_n.iter().filter(|&&n| n >= 8).count() >= 3 {
+        Some(
+            (0..24)
+                .map(|h| HourRate { hour: h as u8, n: hour_n[h], rate: rate_of(hour_n[h], hour_ok[h]) })
+                .collect(),
+        )
     } else {
-        let all_hours: Vec<HourRate> = (0..24)
-            .map(|h| {
-                let list: Vec<&ValidReview> = rs.iter().filter(|e| e.hour == Some(h)).collect();
-                HourRate { hour: h, n: list.len() as u32, rate: pass_rate(&list) }
-            })
-            .collect();
-        if all_hours.iter().filter(|x| x.n >= 8).count() >= 3 { Some(all_hours) } else { None }
+        None
     };
 
     // 3) Experimente
-    let exp_names = [("feynman", "Feynman"), ("scaffolding", "Hinweise"), ("variation", "Variation"), ("mc", "Quiz")];
-    let avg = |list: &[&ValidReview]| -> f64 {
-        let valid_grades: Vec<f64> =
-            list.iter().filter(|e| (1..=4).contains(&e.grade)).map(|e| e.grade as f64).collect();
-        if valid_grades.is_empty() { 0.0 } else { valid_grades.iter().sum::<f64>() / valid_grades.len() as f64 }
-    };
-    let base: Vec<&ValidReview> = rs.iter().filter(|e| e.exp.is_empty()).collect();
-    let mut exp_rows: Vec<ExpRow> = Vec::new();
-    for (k, label) in exp_names {
-        let list: Vec<&ValidReview> = rs.iter().filter(|e| e.exp.iter().any(|x| x == k)).collect();
-        if list.len() >= 15 {
-            exp_rows.push(ExpRow { label: label.to_string(), n: list.len() as u32, average: avg(&list) });
+    let exp_labels = ["Feynman", "Hinweise", "Variation", "Quiz"];
+    let avg_of = |valid: u32, sum: u32| if valid == 0 { 0.0 } else { sum as f64 / valid as f64 };
+    let mut exp_rows: Vec<ExpRow> = Vec::with_capacity(5);
+    for (i, label) in exp_labels.iter().enumerate() {
+        if exp_n[i] >= 15 {
+            exp_rows.push(ExpRow { label: (*label).to_string(), n: exp_n[i], average: avg_of(exp_valid[i], exp_sum[i]) });
         }
     }
-    let experiments = if exp_rows.is_empty() || base.len() < 30 {
+    let experiments = if exp_rows.is_empty() || base_n < 30 {
         Vec::new()
     } else {
-        exp_rows.push(ExpRow { label: "ohne Experimente".to_string(), n: base.len() as u32, average: avg(&base) });
+        exp_rows.push(ExpRow { label: "ohne Experimente".to_string(), n: base_n, average: avg_of(base_valid, base_sum) });
         exp_rows
     };
 
     // 4) Problemzonen (dwell)
-    let mut dwell: HashMap<String, (u64, u64)> = HashMap::new();
+    let mut dwell: HashMap<&str, (u64, u64)> = HashMap::new();
     for e in telemetry {
         if e.kind.as_deref() != Some("dwell") {
             continue;
         }
-        let Some(serde_json::Value::Object(data)) = e.get("data") else {
+        let Some(serde_json::Value::Object(data)) = e.extra.get("data") else {
             continue;
         };
         let pid = data.get("pageId").and_then(serde_json::Value::as_str).unwrap_or("");
@@ -594,22 +729,22 @@ pub fn compute_patterns(telemetry: &[Telemetry], live_pages: &HashSet<String>) -
         }
         let ms = data.get("ms").and_then(serde_json::Value::as_f64).unwrap_or(0.0) as u64;
         let lost = data.get("lost").and_then(serde_json::Value::as_f64).unwrap_or(0.0) as u64;
-        let entry = dwell.entry(pid.to_string()).or_default();
+        let entry = dwell.entry(pid).or_default();
         entry.0 += ms;
         entry.1 += lost;
     }
 
-    let mut problem_candidates: Vec<(&String, &(u64, u64))> =
-        dwell.iter().filter(|(id, v)| live_pages.contains(*id) && v.0 >= 5 * 60_000).collect();
+    let mut problem_candidates: Vec<(&str, (u64, u64))> =
+        dwell.into_iter().filter(|(id, v)| live_pages.contains(*id) && v.0 >= 5 * 60_000).collect();
     problem_candidates.sort_small_by(|a, b| {
-        let score_b = (b.1).0 + (b.1).1 * 60_000;
-        let score_a = (a.1).0 + (a.1).1 * 60_000;
+        let score_b = b.1.0 + b.1.1 * 60_000;
+        let score_a = a.1.0 + a.1.1 * 60_000;
         score_b.cmp(&score_a).then_with(|| a.0.cmp(b.0))
     });
     let problems: Vec<ProblemPage> = problem_candidates
         .into_iter()
         .take(5)
-        .map(|(id, v)| ProblemPage { page_id: id.clone(), minutes: (v.0 / 60_000) as u32, lost: v.1 as u32 })
+        .map(|(id, v)| ProblemPage { page_id: id.to_owned(), minutes: (v.0 / 60_000) as u32, lost: v.1 as u32 })
         .collect();
 
     let empty =
@@ -914,5 +1049,108 @@ mod tests {
         let res = compute_patterns(&telemetry, &HashSet::new());
         // Keine Stunde vorhanden -> keine Chronobiologie
         assert_eq!(res.hours, None);
+    }
+
+    #[test]
+    fn analysis_und_patterns_leistung() {
+        use std::time::Instant;
+
+        let now_ms = Timestamp::parse_iso("2026-11-04T12:00:00Z").unwrap().millis();
+        let mut st = State::default();
+        let subjects = ["Mathe", "Physik", "Informatik", "Biologie", "Chemie", "Geschichte"];
+        for i in 0..4000usize {
+            let id = format!("c{i}");
+            let subj = subjects[i % subjects.len()];
+            let due_ms = now_ms + ((i as i64 % 10) - 2) * 86_400_000;
+            let mut c = Card { id: Some(id.clone()), deck: Some(format!("{subj}::Kap{}", i % 5)), ..Default::default() };
+            c.extra.insert(
+                "srs".into(),
+                serde_json::json!({ "state": if i % 5 == 0 { "new" } else { "review" }, "due": Timestamp(due_ms).to_iso() }),
+            );
+            st.cards.insert(id, c);
+        }
+        for i in 0..5000usize {
+            let subj = subjects[i % subjects.len()];
+            let t_ms = now_ms - ((i as i64 % 50) * 86_400_000) - ((i as i64 % 24) * 3_600_000);
+            st.reviews.push(Review {
+                id: Some(format!("r{i}")),
+                card_id: Some(format!("c{}", i % 4000)),
+                deck: Some(format!("{subj}::Kap{}", i % 5)),
+                subject: Some(subj.to_string()),
+                t: Some(Timestamp(t_ms).to_iso()),
+                grade: Some(((i % 4) + 1) as f64),
+                ..Default::default()
+            });
+        }
+
+        let mut telemetry = Vec::with_capacity(4000);
+        let exps = ["feynman", "scaffolding", "variation", "mc"];
+        let mut live_pages = HashSet::new();
+        for p in 0..20 {
+            live_pages.insert(format!("p{p}"));
+        }
+        for i in 0..3500usize {
+            let mut t = Telemetry { kind: Some("review".to_string()), ..Default::default() };
+            let exp_val = if i % 3 == 0 {
+                serde_json::json!([exps[i % exps.len()]])
+            } else {
+                serde_json::json!([])
+            };
+            t.set(
+                "data",
+                serde_json::json!({
+                    "grade": (i % 4) + 1,
+                    "pos": i % 60,
+                    "hour": i % 24,
+                    "timer": i % 2 == 0,
+                    "exp": exp_val,
+                    "reviewId": format!("rev_{i}")
+                }),
+            );
+            telemetry.push(t);
+        }
+        for i in 0..500usize {
+            let mut t = Telemetry { kind: Some("dwell".to_string()), ..Default::default() };
+            t.set("data", serde_json::json!({ "pageId": format!("p{}", i % 20), "ms": 45_000, "lost": i % 3 }));
+            telemetry.push(t);
+        }
+
+        let zone = 60i64;
+        let days = [30.0, 25.0, 40.0, 15.0, 0.0, 0.0, 0.0];
+
+        // Basis-Korrektheit prüfen
+        let ha = st.home_analysis(now_ms, &zone, 180, &days, 25.0).unwrap();
+        assert_eq!(ha.subjects, compute_subjects(&st.reviews, now_ms));
+        assert_eq!(ha.time, compute_best_time(&st.reviews, now_ms, &zone));
+        let pat = compute_patterns(&telemetry, &live_pages);
+        assert!(!pat.empty);
+        assert!(pat.hours.is_some());
+        assert!(!pat.experiments.is_empty());
+        assert_eq!(pat.problems.len(), 5);
+
+        let t0 = Instant::now();
+        let mut acc = 0usize;
+        for _ in 0..20 {
+            let h = st.home_analysis(now_ms, &zone, 180, &days, 25.0).unwrap();
+            acc += h.subjects.rows.len() + h.forecast.counts.iter().sum::<u32>() as usize;
+        }
+        let ha_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let t1 = Instant::now();
+        for _ in 0..20 {
+            let p = compute_patterns(&telemetry, &live_pages);
+            acc += p.position.len() + p.experiments.len() + p.problems.len();
+        }
+        let pat_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        assert!(acc > 0);
+        eprintln!(
+            "home_analysis (4000 cards, 5000 reviews): 20 runs = {ha_ms:.2} ms ({:.2} ms/run)",
+            ha_ms / 20.0
+        );
+        eprintln!(
+            "compute_patterns (4000 telemetry events): 20 runs = {pat_ms:.2} ms ({:.2} ms/run)",
+            pat_ms / 20.0
+        );
     }
 }

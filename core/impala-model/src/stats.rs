@@ -146,17 +146,8 @@ fn review_deck<'a>(r: &'a Review, cards_by_id: &HashMap<&str, &'a Card>) -> &'a 
     }
 }
 
-fn hit_rate(reviews: &[&Review]) -> Option<f64> {
-    let graded: Vec<_> = reviews
-        .iter()
-        .filter(|r| r.grade.unwrap_or(0.0) > 0.0 && !r.first.unwrap_or(false) && !r.learning.unwrap_or(false))
-        .collect();
-    if graded.len() >= MIN_N {
-        let passed = graded.iter().filter(|r| r.grade.unwrap_or(0.0) > 1.0).count();
-        Some(passed as f64 / graded.len() as f64)
-    } else {
-        None
-    }
+fn rate_from_counts(graded: usize, passed: usize) -> Option<f64> {
+    if graded >= MIN_N { Some(passed as f64 / graded as f64) } else { None }
 }
 
 fn review_events(telemetry: &[Telemetry]) -> Vec<&Value> {
@@ -237,28 +228,32 @@ pub fn compute_retention(all_reviews: &[Review], filtered_review_ids: &HashSet<&
         }
     }
 
-    let bucket = |target_days: f64| -> RetentionBucket {
-        let min = if target_days == 1.0 { 0.5 } else { target_days * 0.6 };
-        let max = if target_days == 1.0 { 2.0 } else { target_days * 1.6 };
-        let eligible: Vec<_> = rows
-            .iter()
-            .filter(|row| {
-                !row.review.first.unwrap_or(false)
-                    && !row.review.learning.unwrap_or(false)
-                    && row.gap_days.is_some_and(|g| g >= min && g <= max)
-            })
-            .collect();
-        let n = eligible.len();
-        let rate = if n > 0 {
-            let passed = eligible.iter().filter(|row| row.review.grade.unwrap_or(0.0) > 1.0).count();
-            Some(passed as f64 / n as f64)
-        } else {
-            None
-        };
-        RetentionBucket { n, rate }
+    const RANGES: [(f64, f64); 4] = [(0.5, 2.0), (1.8, 4.8), (4.2, 11.2), (8.4, 22.4)];
+    let mut counts = [(0usize, 0usize); 4];
+    for row in &rows {
+        if row.review.first.unwrap_or(false) || row.review.learning.unwrap_or(false) {
+            continue;
+        }
+        let Some(g) = row.gap_days else { continue };
+        let passed = usize::from(row.review.grade.unwrap_or(0.0) > 1.0);
+        for (i, &(min, max)) in RANGES.iter().enumerate() {
+            if g >= min && g <= max {
+                counts[i].0 += 1;
+                counts[i].1 += passed;
+            }
+        }
+    }
+    let to_bucket = |(n, passed): (usize, usize)| RetentionBucket {
+        n,
+        rate: if n > 0 { Some(passed as f64 / n as f64) } else { None },
     };
 
-    RetentionStats { day1: bucket(1.0), day3: bucket(3.0), day7: bucket(7.0), day14: bucket(14.0) }
+    RetentionStats {
+        day1: to_bucket(counts[0]),
+        day3: to_bucket(counts[1]),
+        day7: to_bucket(counts[2]),
+        day14: to_bucket(counts[3]),
+    }
 }
 
 fn parse_date_parts(k: &str) -> Option<(i64, i64, i64)> {
@@ -275,53 +270,94 @@ pub fn compute_stats(
     telemetry: &[Telemetry],
     options: &StatsOptions,
 ) -> StatsData {
-    let cards_by_id: HashMap<&str, &Card> = cards.iter().map(|c| (c.id(), c)).collect();
+    let refs: Vec<&Card> = cards.iter().collect();
+    compute_stats_refs(&refs, all_reviews, telemetry, options)
+}
+
+fn compute_stats_refs(
+    cards: &[&Card],
+    all_reviews: &[Review],
+    telemetry: &[Telemetry],
+    options: &StatsOptions,
+) -> StatsData {
+    let cards_by_id: HashMap<&str, &Card> = cards.iter().map(|&c| (c.id(), c)).collect();
 
     let filtered_cards: Vec<&Card> =
-        cards.iter().filter(|c| options.deck.is_none_or(|root| deck_in_tree(c.deck_name(), root))).collect();
+        cards.iter().copied().filter(|c| options.deck.is_none_or(|root| deck_in_tree(c.deck_name(), root))).collect();
 
-    let filtered_reviews: Vec<&Review> = all_reviews
-        .iter()
-        .filter(|r| {
-            options.deck.is_none_or(|root| {
-                let d = review_deck(r, &cards_by_id);
-                deck_in_tree(d, root)
-            })
-        })
-        .collect();
+    let now_ms = options.now.millis();
+    let wochen_f = WOCHEN as f64;
+    let two_wochen_f = (2 * WOCHEN) as f64;
 
-    let filtered_review_ids: HashSet<&str> = filtered_reviews.iter().filter_map(|r| r.id.as_deref()).collect();
+    let mut reviews_all = 0usize;
+    let mut last_count = 0usize;
+    let mut last_graded = 0usize;
+    let mut last_passed = 0usize;
+    let mut before_graded = 0usize;
+    let mut before_passed = 0usize;
+    let mut deck_last_rate: HashMap<&str, (usize, usize)> = HashMap::new();
+    let mut per_day: HashMap<String, usize> = HashMap::new();
+    let mut filtered_review_ids: HashSet<&str> = HashSet::with_capacity(all_reviews.len());
 
-    let ago_days = |r: &Review| -> f64 {
-        let t = Timestamp::parse_iso(r.t()).unwrap_or(options.now);
-        (options.now.millis() - t.millis()) as f64 / MS_PER_DAY as f64
-    };
+    for r in all_reviews {
+        let deck_opt = options.deck.map(|root| (root, review_deck(r, &cards_by_id)));
+        if let Some((root, d)) = deck_opt
+            && !deck_in_tree(d, root)
+        {
+            continue;
+        }
+        reviews_all += 1;
+        if let Some(id) = r.id.as_deref() {
+            filtered_review_ids.insert(id);
+        }
+        let parsed_t = Timestamp::parse_iso(r.t());
+        if let Some(t) = parsed_t {
+            let k = t.day_key(options.zone);
+            *per_day.entry(k).or_default() += 1;
+        }
+        let t_ms = parsed_t.unwrap_or(options.now).millis();
+        let ago = (now_ms - t_ms) as f64 / MS_PER_DAY as f64;
+        let graded = r.grade.unwrap_or(0.0) > 0.0 && !r.first.unwrap_or(false) && !r.learning.unwrap_or(false);
+        let passed = graded && r.grade.unwrap_or(0.0) > 1.0;
 
-    let last_reviews: Vec<&Review> = filtered_reviews
-        .iter()
-        .copied()
-        .filter(|r| {
-            let a = ago_days(r);
-            a >= 0.0 && a < WOCHEN as f64
-        })
-        .collect();
+        if ago >= 0.0 && ago < wochen_f {
+            last_count += 1;
+            if graded {
+                last_graded += 1;
+                if passed {
+                    last_passed += 1;
+                }
+                let d = deck_opt.map(|(_, d)| d).unwrap_or_else(|| review_deck(r, &cards_by_id));
+                let entry = deck_last_rate.entry(d).or_default();
+                entry.0 += 1;
+                if passed {
+                    entry.1 += 1;
+                }
+            }
+        } else if ago >= wochen_f && ago < two_wochen_f && graded {
+            before_graded += 1;
+            if passed {
+                before_passed += 1;
+            }
+        }
+    }
 
-    let before_reviews: Vec<&Review> = filtered_reviews
-        .iter()
-        .copied()
-        .filter(|r| {
-            let a = ago_days(r);
-            a >= WOCHEN as f64 && a < (2 * WOCHEN) as f64
-        })
-        .collect();
-
-    let rate = hit_rate(&last_reviews);
-    let rate_before = hit_rate(&before_reviews);
+    let rate = rate_from_counts(last_graded, last_passed);
+    let rate_before = rate_from_counts(before_graded, before_passed);
     let trend = match (rate, rate_before) {
         (Some(r), Some(rb)) => Some(((r - rb) * 100.0).round() as i32),
         _ => None,
     };
-    let avg = last_reviews.len() as f64 / WOCHEN as f64;
+    let avg = last_count as f64 / wochen_f;
+
+    let end_day = options.now.local_days(options.zone);
+    let mut forecast_bounds = [(0i64, 0i64); 7];
+    for (i, slot) in forecast_bounds.iter_mut().enumerate() {
+        let d0 = local_midnight(end_day + i as i64, options.zone);
+        let d1 = local_midnight(end_day + i as i64 + 1, options.zone);
+        *slot = (if i == 0 { 0 } else { d0 }, d1);
+    }
+    let mut forecast_counts = [0usize; 7];
 
     let mut bestand = Bestand { neu: 0, lernen: 0, wiederholen: 0, ausgesetzt: 0 };
     let mut faellig = 0;
@@ -329,16 +365,20 @@ pub fn compute_stats(
     let mut gelernt = 0;
 
     struct DeckAccum {
-        name: String,
         n: usize,
         due: usize,
         reif: usize,
     }
-    let mut deck_map: IndexMap<String, DeckAccum> = IndexMap::new();
+    let mut deck_map: IndexMap<&str, DeckAccum> = IndexMap::new();
+    let mut hard_candidates: Vec<(i64, usize)> = Vec::new();
 
-    for c in &filtered_cards {
-        let name = c.deck_name().to_string();
-        let entry = deck_map.entry(name.clone()).or_insert_with(|| DeckAccum { name, n: 0, due: 0, reif: 0 });
+    for (idx, &c) in filtered_cards.iter().enumerate() {
+        let lapses = c.srs().and_then(|s| s.get("lapses")).and_then(Value::as_i64).unwrap_or(0);
+        if lapses > 0 {
+            hard_candidates.push((lapses, idx));
+        }
+
+        let entry = deck_map.entry(c.deck_name()).or_insert(DeckAccum { n: 0, due: 0, reif: 0 });
         entry.n += 1;
         if c.is_suspended() {
             bestand.ausgesetzt += 1;
@@ -355,37 +395,34 @@ pub fn compute_stats(
         }
 
         let stability = c.srs().and_then(|s| s.get("stability")).and_then(Value::as_f64).unwrap_or(0.0);
-        let ist_reif = state == "review" && stability >= REIF_TAGE;
-        if ist_reif {
+        if state == "review" && stability >= REIF_TAGE {
             reif += 1;
             entry.reif += 1;
         }
-        if card_due(c).is_some_and(|due| due <= options.now) {
-            faellig += 1;
-            entry.due += 1;
+        if let Some(due) = card_due(c) {
+            if due <= options.now {
+                faellig += 1;
+                entry.due += 1;
+            }
+            let ms = due.millis();
+            for (i, &(from_ms, to_ms)) in forecast_bounds.iter().enumerate() {
+                if ms >= from_ms && ms < to_ms {
+                    forecast_counts[i] += 1;
+                    break;
+                }
+            }
         }
     }
 
     let mut decks: Vec<DeckRow> = deck_map
-        .into_values()
-        .map(|row| {
-            let deck_last: Vec<&Review> =
-                last_reviews.iter().copied().filter(|r| review_deck(r, &cards_by_id) == row.name).collect();
-            let rate = hit_rate(&deck_last);
-            DeckRow { name: row.name, n: row.n, due: row.due, reif: row.reif, rate }
+        .into_iter()
+        .map(|(name, row)| {
+            let rate = deck_last_rate.get(name).and_then(|&(g, p)| rate_from_counts(g, p));
+            DeckRow { name: name.to_owned(), n: row.n, due: row.due, reif: row.reif, rate }
         })
         .collect();
     decks.sort_small_by(|a, b| b.due.cmp(&a.due).then_with(|| a.name.cmp(&b.name)));
 
-    let mut per_day: HashMap<String, usize> = HashMap::new();
-    for r in &filtered_reviews {
-        if let Some(t) = Timestamp::parse_iso(r.t()) {
-            let k = t.day_key(options.zone);
-            *per_day.entry(k).or_default() += 1;
-        }
-    }
-
-    let end_day = options.now.local_days(options.zone);
     let mut series = Vec::with_capacity(WOCHEN as usize);
     for i in (0..WOCHEN).rev() {
         let day = end_day - i;
@@ -401,29 +438,10 @@ pub fn compute_stats(
         }
     }
 
-    let mut forecast = Vec::with_capacity(7);
-    for i in 0..7 {
-        let d0_ms = local_midnight(end_day + i, options.zone);
-        let d1_ms = local_midnight(end_day + i + 1, options.zone);
-        let from_ms = if i == 0 { 0 } else { d0_ms };
-        let n = filtered_cards
-            .iter()
-            .filter(|c| {
-                if c.is_suspended() {
-                    return false;
-                }
-                if let Some(due) = card_due(c) {
-                    let ms = due.millis();
-                    ms >= from_ms && ms < d1_ms
-                } else {
-                    false
-                }
-            })
-            .count();
-        forecast.push(ForecastDay { day_offset: i as usize, n });
-    }
+    let forecast: Vec<ForecastDay> =
+        forecast_counts.into_iter().enumerate().map(|(day_offset, n)| ForecastDay { day_offset, n }).collect();
 
-    let mut keys: Vec<String> = per_day.keys().cloned().collect();
+    let mut keys: Vec<&str> = per_day.keys().map(String::as_str).collect();
     keys.sort_small();
     let mut streak_longest = 0;
     let mut run = 0;
@@ -455,21 +473,17 @@ pub fn compute_stats(
         }
     }
 
-    let mut hard_cards: Vec<HardCard> = filtered_cards
-        .iter()
-        .filter_map(|c| {
-            let lapses = c.srs().and_then(|s| s.get("lapses")).and_then(Value::as_i64).unwrap_or(0);
-            if lapses > 0 {
-                let stability = c.srs().and_then(|s| s.get("stability")).and_then(Value::as_f64).unwrap_or(0.0);
-                let front = c.extra.get("front").and_then(Value::as_str).unwrap_or("").to_string();
-                Some(HardCard { id: c.id().to_string(), front, deck: c.deck_name().to_string(), lapses, stability })
-            } else {
-                None
-            }
+    hard_candidates.sort_small_by_key(|&(lapses, _)| std::cmp::Reverse(lapses));
+    hard_candidates.truncate(5);
+    let hard_cards: Vec<HardCard> = hard_candidates
+        .into_iter()
+        .map(|(lapses, idx)| {
+            let c = filtered_cards[idx];
+            let stability = c.srs().and_then(|s| s.get("stability")).and_then(Value::as_f64).unwrap_or(0.0);
+            let front = c.extra.get("front").and_then(Value::as_str).unwrap_or("").to_string();
+            HardCard { id: c.id().to_string(), front, deck: c.deck_name().to_string(), lapses, stability }
         })
         .collect();
-    hard_cards.sort_small_by_key(|a| std::cmp::Reverse(a.lapses));
-    hard_cards.truncate(5);
 
     let think_ms = options.think_ms.unwrap_or_else(|| compute_think_median(telemetry));
 
@@ -493,8 +507,8 @@ pub fn compute_stats(
     }
 
     StatsData {
-        reviews_all: filtered_reviews.len(),
-        last: last_reviews.len(),
+        reviews_all,
+        last: last_count,
         rate,
         trend,
         avg,
@@ -520,8 +534,7 @@ pub fn compute_stats(
 impl State {
     pub fn learning_stats(&self, options: &StatsOptions) -> StatsData {
         let active = self.active_cards();
-        let cards: Vec<Card> = active.into_iter().cloned().collect();
-        compute_stats(&cards, &self.reviews, &self.telemetry, options)
+        compute_stats_refs(&active, &self.reviews, &self.telemetry, options)
     }
 
     pub fn think_median(&self) -> i64 {
@@ -534,5 +547,89 @@ impl State {
             None => self.reviews.iter().filter_map(|r| r.id.as_deref()).collect(),
         };
         compute_retention(&self.reviews, &set)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Deck;
+    use serde_json::json;
+    use std::time::Instant;
+
+    #[test]
+    fn learning_stats_leistung_und_konsistenz() {
+        let mut st = State::default();
+        let mut deck_names = Vec::new();
+        for f in 0..8 {
+            let root = format!("Fach{f}");
+            deck_names.push(root.clone());
+            st.decks.insert(root.clone(), Deck::new(&root, "2026-01-01T00:00:00Z"));
+            for s in 0..9 {
+                let sub = format!("{root}::Kap{s}");
+                deck_names.push(sub.clone());
+                st.decks.insert(sub.clone(), Deck::new(&sub, "2026-01-01T00:00:00Z"));
+            }
+        }
+        let now = Timestamp::parse_iso("2026-11-04T12:00:00Z").unwrap();
+        let states = ["review", "new", "learning", "relearning"];
+        for i in 0..4000usize {
+            let id = format!("c{i}");
+            let deck = &deck_names[i % deck_names.len()];
+            let due_ms = now.millis() + ((i as i64 % 14) - 4) * MS_PER_DAY;
+            let mut c = Card {
+                id: Some(id.clone()),
+                deck: Some(deck.clone()),
+                suspended: (i % 19 == 0).then_some(true),
+                ..Default::default()
+            };
+            c.extra.insert("front".into(), json!(format!("Frage Nummer {i}")));
+            c.extra.insert(
+                "srs".into(),
+                json!({
+                    "state": states[i % states.len()],
+                    "due": Timestamp(due_ms).to_iso(),
+                    "stability": (i % 40) as f64,
+                    "lapses": (i % 9) as i64
+                }),
+            );
+            st.cards.insert(id, c);
+        }
+        for i in 0..5000usize {
+            let deck = &deck_names[i % deck_names.len()];
+            let t_ms = now.millis() - ((i as i64 % 90) * MS_PER_DAY) - 3_600_000;
+            st.reviews.push(Review {
+                id: Some(format!("r{i}")),
+                card_id: Some(format!("c{}", i % 4000)),
+                deck: Some(deck.clone()),
+                t: Some(Timestamp(t_ms).to_iso()),
+                grade: Some(((i % 4) + 1) as f64),
+                first: (i % 7 == 0).then_some(true),
+                learning: (i % 11 == 0).then_some(true),
+                interval_days: Some([1.0, 3.0, 7.0, 14.0][i % 4]),
+                ..Default::default()
+            });
+        }
+        let zone = 60i64;
+        let opts = StatsOptions { deck: None, now, zone: &zone, think_ms: None };
+        let res = st.learning_stats(&opts);
+        assert_eq!(res.n, 4000);
+        assert_eq!(res.reviews_all, 5000);
+        assert_eq!(res.decks.len(), deck_names.len());
+        assert_eq!(res.hard.len(), 5);
+        assert_eq!(res.forecast.len(), 7);
+
+        let t0 = Instant::now();
+        let mut checksum = 0usize;
+        for _ in 0..10 {
+            let s = st.learning_stats(&opts);
+            checksum += s.faellig + s.reif + s.last + s.forecast.iter().map(|f| f.n).sum::<usize>();
+        }
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert!(checksum > 0);
+        eprintln!(
+            "learning_stats (80 decks, 4000 cards, 5000 reviews): 10 runs = {elapsed_ms:.2} ms ({:.2} ms/run)",
+            elapsed_ms / 10.0
+        );
     }
 }

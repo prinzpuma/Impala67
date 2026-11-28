@@ -56,7 +56,7 @@ class ImpalaApp : Application() {
         store = scope.async(Dispatchers.IO) {
             // Derselbe Dateiname wie in der vorigen App-Version, damit vorhandene Daten erhalten bleiben.
             val db = File(filesDir, "impala67.db")
-            ImpalaStore(ImpalaCore.open(db.absolutePath), scope)
+            org.impala67.app.diag.Profiler.measure("boot", "coreOpen") { ImpalaStore(ImpalaCore.open(db.absolutePath), scope) }
         }
         semantic = SemanticIndex(filesDir, store, scope)
         // Gemini-Notebook-Anbindung entfernt: ihre alten lokalen Dateien verwerfen (no-op, wenn leer).

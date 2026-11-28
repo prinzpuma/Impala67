@@ -274,7 +274,11 @@ final class SyncController {
                 let all = forceAll
                 forceAll = false
                 do {
-                    let report = try await Task.detached { try current.sync(forceAll: all) }.value
+                    let report = try await Task.detached {
+                        let done = Profiler.shared.begin("cloudflare.sync", thresholdMs: 500)
+                        defer { done() }
+                        return try current.sync(forceAll: all)
+                    }.value
                     state = socket != nil ? .connected : .connecting
                     label = socket != nil ? "Verbunden" : "Synchronisiert"
                     detail = report.conflicts > 0 ? "\(report.conflicts) Konflikt(e) – siehe Konflikte" : "Alle Geräte auf demselben Stand"

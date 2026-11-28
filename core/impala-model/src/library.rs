@@ -74,13 +74,17 @@ fn page_tags(p: &Page) -> Vec<&str> {
 /// Passt eine Seite zur Suchanfrage (Titel oder Schlagwort enthält `query`)?
 pub fn page_matches_query(p: &Page, query: &str) -> bool {
     let q = query.trim().to_lowercase();
-    if q.is_empty() {
-        return true;
-    }
-    p.title().to_lowercase().contains(&q) || page_tags(p).iter().any(|t| t.to_lowercase().contains(&q))
+    page_matches_query_lower(p, &q)
 }
 
-fn own_match_notion(p: &Page, smart: Option<&str>, tag: Option<&str>, query: &str) -> bool {
+fn page_matches_query_lower(p: &Page, q_lower: &str) -> bool {
+    if q_lower.is_empty() {
+        return true;
+    }
+    p.title().to_lowercase().contains(q_lower) || page_tags(p).iter().any(|t| t.to_lowercase().contains(q_lower))
+}
+
+fn own_match_notion(p: &Page, smart: Option<&str>, tag: Option<&str>, q_lower: &str) -> bool {
     let smart_ok = match smart {
         None | Some("") | Some("all") => true,
         Some("fav") => page_favorite(p),
@@ -97,7 +101,7 @@ fn own_match_notion(p: &Page, smart: Option<&str>, tag: Option<&str>, query: &st
     {
         return false;
     }
-    page_matches_query(p, query)
+    page_matches_query_lower(p, q_lower)
 }
 
 // ---- Notion-Seitenbaum in der Bibliothek ---------------------------------------------------
@@ -152,59 +156,67 @@ pub fn notion_tree(state: &State, smart: Option<&str>, tag: Option<&str>, query:
         }
     }
 
-    let mut visible_memo: HashMap<String, bool> = HashMap::new();
+    // Kinderindex einmalig in O(N log N) statt O(N²)-Scans über `children_of` je Knoten.
+    let children = state.sidebar_children();
+    let q_lower = query.trim().to_lowercase();
+    let mut visible_memo: HashMap<&str, bool> = HashMap::with_capacity(all);
+
     #[allow(clippy::too_many_arguments)]
-    fn is_visible(
-        state: &State,
-        p: &Page,
-        ws_id: &str,
+    fn is_visible<'a>(
+        children: &HashMap<(&'a str, &'a str), Vec<&'a Page>>,
+        p: &'a Page,
+        ws_id: &'a str,
         smart: Option<&str>,
         tag: Option<&str>,
-        query: &str,
-        memo: &mut HashMap<String, bool>,
-        visiting: &mut HashSet<String>,
+        q_lower: &str,
+        memo: &mut HashMap<&'a str, bool>,
+        visiting: &mut HashSet<&'a str>,
     ) -> bool {
-        let id = p.id().to_owned();
-        if let Some(&v) = memo.get(&id) {
+        let id = p.id();
+        if let Some(&v) = memo.get(id) {
             return v;
         }
-        if !visiting.insert(id.clone()) {
+        if !visiting.insert(id) {
             return false;
         }
-        let own = own_match_notion(p, smart, tag, query);
-        let kids_vis = state
-            .children_of(Some(&id), Some(ws_id), None)
-            .into_iter()
-            .any(|k| is_visible(state, k, ws_id, smart, tag, query, memo, visiting));
-        visiting.remove(&id);
+        let own = own_match_notion(p, smart, tag, q_lower);
+        let kids_vis = children
+            .get(&(id, ws_id))
+            .is_some_and(|list| list.iter().any(|k| is_visible(children, k, ws_id, smart, tag, q_lower, memo, visiting)));
+        visiting.remove(id);
         let v = own || kids_vis;
         memo.insert(id, v);
         v
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn build_branch(
+    fn build_branch<'a>(
         state: &State,
-        list: Vec<&Page>,
-        ws_id: &str,
+        children: &HashMap<(&'a str, &'a str), Vec<&'a Page>>,
+        list: &[&'a Page],
+        ws_id: &'a str,
         depth: usize,
         smart: Option<&str>,
         tag: Option<&str>,
-        query: &str,
-        memo: &mut HashMap<String, bool>,
-        visiting: &mut HashSet<String>,
+        q_lower: &str,
+        memo: &mut HashMap<&'a str, bool>,
+        visiting: &mut HashSet<&'a str>,
         rows: &mut Vec<LibraryTreeRow>,
     ) {
-        for p in list {
-            if !is_visible(state, p, ws_id, smart, tag, query, memo, visiting) {
+        for &p in list {
+            if !is_visible(children, p, ws_id, smart, tag, q_lower, memo, visiting) {
                 continue;
             }
-            let kids: Vec<&Page> = if depth < MAX_TREE_DEPTH {
-                state
-                    .children_of(Some(p.id()), Some(ws_id), None)
-                    .into_iter()
-                    .filter(|k| is_visible(state, k, ws_id, smart, tag, query, memo, visiting))
-                    .collect()
+            let kids: Vec<&'a Page> = if depth < MAX_TREE_DEPTH {
+                children
+                    .get(&(p.id(), ws_id))
+                    .map(|ks| {
+                        ks.iter()
+                            .copied()
+                            .filter(|k| is_visible(children, k, ws_id, smart, tag, q_lower, memo, visiting))
+                            .collect()
+                    })
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             };
@@ -212,17 +224,31 @@ pub fn notion_tree(state: &State, smart: Option<&str>, tag: Option<&str>, query:
             let collapsed = has_kids && is_tree_collapsed(state, p.id());
             rows.push(LibraryTreeRow { id: p.id().to_owned(), depth, has_kids, collapsed });
             if !collapsed {
-                build_branch(state, kids, ws_id, depth + 1, smart, tag, query, memo, visiting, rows);
+                build_branch(state, children, &kids, ws_id, depth + 1, smart, tag, q_lower, memo, visiting, rows);
             }
         }
     }
 
     let mut sections = Vec::new();
-    let mut visiting = HashSet::new();
+    let mut visiting: HashSet<&str> = HashSet::new();
     for ws_id in ws_ids {
-        let roots = state.children_of(None, Some(&ws_id), None);
         let mut rows = Vec::new();
-        build_branch(state, roots, &ws_id, 0, smart, tag, query, &mut visible_memo, &mut visiting, &mut rows);
+        if let Some(roots) = children.get(&("", ws_id.as_str())) {
+            let ws_ref = roots.first().map(|p| p.workspace()).unwrap_or("default");
+            build_branch(
+                state,
+                &children,
+                roots,
+                ws_ref,
+                0,
+                smart,
+                tag,
+                &q_lower,
+                &mut visible_memo,
+                &mut visiting,
+                &mut rows,
+            );
+        }
         if !rows.is_empty() {
             let ws_name = state
                 .workspaces
@@ -551,15 +577,19 @@ pub fn sidebar_tree_rows(state: &State) -> Vec<SidebarTreeRowData> {
         }
     }
 
-    fn branch(
-        state: &State,
-        parent: Option<&str>,
-        ws: Option<&str>,
+    let children = state.sidebar_children();
+
+    fn branch<'a>(
+        state: &'a State,
+        children: &HashMap<(&'a str, &'a str), Vec<&'a Page>>,
+        parent: &'a str,
+        ws: &'a str,
         depth: usize,
         parent_ids: &HashSet<&str>,
         rows: &mut Vec<SidebarTreeRowData>,
     ) {
-        for p in state.children_of(parent, ws, None) {
+        let Some(list) = children.get(&(parent, ws)) else { return };
+        for &p in list {
             let kids = depth < MAX_TREE_DEPTH && parent_ids.contains(p.id());
             let collapsed = is_tree_collapsed(state, p.id());
             rows.push(SidebarTreeRowData {
@@ -575,7 +605,7 @@ pub fn sidebar_tree_rows(state: &State) -> Vec<SidebarTreeRowData> {
                 section: "tree".into(),
             });
             if kids && !collapsed {
-                branch(state, Some(p.id()), None, depth + 1, parent_ids, rows);
+                branch(state, children, p.id(), p.workspace(), depth + 1, parent_ids, rows);
             }
         }
     }
@@ -600,7 +630,7 @@ pub fn sidebar_tree_rows(state: &State) -> Vec<SidebarTreeRowData> {
             continue;
         }
         let before = rows.len();
-        branch(state, None, Some(ws_id), 0, &parent_ids, &mut rows);
+        branch(state, &children, "", ws_id, 0, &parent_ids, &mut rows);
         if rows.len() == before {
             rows.push(SidebarTreeRowData {
                 row_id: format!("empty:{ws_id}"),
@@ -618,4 +648,70 @@ pub fn sidebar_tree_rows(state: &State) -> Vec<SidebarTreeRowData> {
     }
 
     rows
+}
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use crate::types::Workspace;
+    use std::time::Instant;
+
+    #[test]
+    fn library_und_sidebar_leistung() {
+        let mut st = State::default();
+        st.workspaces.insert("default".into(), Workspace { id: Some("default".into()), name: Some("Privat".into()), ..Default::default() });
+        st.workspaces.insert("uni".into(), Workspace { id: Some("uni".into()), name: Some("Uni".into()), ..Default::default() });
+
+        // 800 Seiten in 3 Ebenen über 2 Workspaces
+        for i in 0..800usize {
+            let id = format!("p{i}");
+            let ws = if i % 2 == 0 { "default" } else { "uni" };
+            let parent = if i < 40 {
+                None
+            } else if i < 200 {
+                Some(format!("p{}", (i % 40) - (i % 2) + (i % 2)))
+            } else {
+                Some(format!("p{}", 40 + ((i - 200) % 160)))
+            };
+            // Sicherstellen, dass Eltern im selben Workspace liegen
+            let parent = parent.map(|p| {
+                let n: usize = p[1..].parse().unwrap();
+                format!("p{}", if n % 2 == i % 2 { n } else { n.saturating_sub(1) })
+            });
+            let mut pg = Page {
+                id: Some(id.clone()),
+                title: Some(format!("Vorlesung {i} Analysis")),
+                parent_id: parent,
+                workspace_id: Some(ws.into()),
+                created: Some(format!("2026-10-{:02}T{:02}:{:02}:00Z", (i % 28) + 1, i % 24, i % 60)),
+                ..Default::default()
+            };
+            if i < 200 {
+                st.tree_open.insert(id.clone(), true);
+            }
+            if i % 10 == 0 {
+                pg.extra.insert("favorite".into(), Value::Bool(true));
+            }
+            st.pages.insert(id, pg);
+        }
+
+        let t0 = Instant::now();
+        let mut acc = 0usize;
+        for _ in 0..5 {
+            let res = notion_tree(&st, Some("all"), None, "");
+            acc += res.sections.iter().map(|s| s.rows.len()).sum::<usize>();
+        }
+        let notion_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let t1 = Instant::now();
+        for _ in 0..5 {
+            let rows = sidebar_tree_rows(&st);
+            acc += rows.len();
+        }
+        let sidebar_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        assert!(acc > 0);
+        eprintln!("notion_tree (800 pages): 5 runs = {notion_ms:.2} ms ({:.2} ms/run)", notion_ms / 5.0);
+        eprintln!("sidebar_tree_rows (800 pages): 5 runs = {sidebar_ms:.2} ms ({:.2} ms/run)", sidebar_ms / 5.0);
+    }
 }

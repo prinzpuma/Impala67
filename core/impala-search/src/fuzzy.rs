@@ -100,19 +100,38 @@ pub enum Quality {
     Exact = 3,
 }
 
-fn quality(term: &[u16], word: &[u16]) -> Quality {
+/// 64-Bit-Zeichenmaske: Jede Edit-Operation (Einfügen/Löschen/Ersetzen/Vertauschen) beseitigt
+/// höchstens 1 fehlendes Zeichen. Ist `(term_mask & !word_mask).count_ones() > max`, ist weder
+/// Exakt-, Präfix- noch Tippfehler-Treffer möglich (0 falsch-negative).
+#[inline]
+fn char_mask(units: &[u16]) -> u64 {
+    units.iter().fold(0u64, |m, &u| m | (1u64 << (u & 63)))
+}
+
+#[inline]
+fn max_typos(len: usize) -> usize {
+    match len {
+        8.. => 2,
+        4.. => 1,
+        _ => 0,
+    }
+}
+
+fn quality_masked(term: &[u16], term_mask: u64, word: &[u16], word_mask: u64) -> Quality {
+    let max = max_typos(term.len());
+    if (term_mask & !word_mask).count_ones() as usize > max {
+        return Quality::None;
+    }
     if word == term {
         return Quality::Exact;
     }
     if word.starts_with(term) {
         return Quality::Prefix;
     }
-    let max = match term.len() {
-        8.. => 2,
-        4.. => 1,
-        _ => return Quality::None,
-    };
-    if typo_distance(term, word, max, word.len()) <= max {
+    if max == 0 {
+        return Quality::None;
+    }
+    if (word_mask & !term_mask).count_ones() as usize <= max && typo_distance(term, word, max, word.len()) <= max {
         return Quality::Typo;
     }
     // Wort wird noch getippt: Tippfehler im Anfang („fotosint“ → „fotosintese“).
@@ -132,6 +151,7 @@ pub struct FuzzyHit {
 
 struct Word {
     key: Vec<u16>,
+    mask: u64,
     /// Seiten in Einfügereihenfolge.
     pages: Vec<u32>,
     /// Wortformen in Einfügereihenfolge (bleiben, solange das Wort existiert).
@@ -186,8 +206,11 @@ impl FuzzyIndex {
             let slot = match self.slot_of.get(&key) {
                 Some(&s) => s,
                 None => {
+                    let units: Vec<u16> = key.encode_utf16().collect();
+                    let mask = char_mask(&units);
                     self.words.push(Some(Word {
-                        key: key.encode_utf16().collect(),
+                        key: units,
+                        mask,
                         pages: Vec::new(),
                         forms: Vec::new(),
                     }));
@@ -247,10 +270,11 @@ impl FuzzyIndex {
         }
         let mut hits: Option<(Vec<u32>, FxMap<u32, Hit>)> = None;
         for term in &terms {
+            let term_mask = char_mask(term);
             let mut order: Vec<u32> = Vec::new();
             let mut next: FxMap<u32, Hit> = FxMap::default();
             for word in self.words.iter().flatten() {
-                let q = quality(term, &word.key);
+                let q = quality_masked(term, term_mask, &word.key, word.mask);
                 if q == Quality::None {
                     continue;
                 }
@@ -323,10 +347,11 @@ impl FuzzyIndex {
         let mut order: Vec<u32> = Vec::new();
         let mut acc: FxMap<u32, Partial> = FxMap::default();
         for term in terms {
+            let term_mask = char_mask(term);
             let mut term_order: Vec<u32> = Vec::new();
             let mut term_hits: FxMap<u32, (Quality, Vec<&str>)> = FxMap::default();
             for word in self.words.iter().flatten() {
-                let q = quality(term, &word.key);
+                let q = quality_masked(term, term_mask, &word.key, word.mask);
                 if q == Quality::None {
                     continue;
                 }
@@ -461,5 +486,85 @@ mod tests {
         // 2-Wort-Suche mit max. 1 Treffer liefert die 1-Wort-Treffer.
         let one = ix.search("schwingkreis unbekannt", |_| true);
         assert_eq!(one.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), vec!["c"]);
+    }
+
+    #[test]
+    fn fuzzy_search_leistung_und_aequivalenz() {
+        use std::time::Instant;
+
+        let mut ix = FuzzyIndex::new();
+        let roots = [
+            "photosynthese", "zellatmung", "differentialgleichung", "eigenwert", "schwingkreis",
+            "transistor", "algorithmen", "datenstruktur", "wahrscheinlichkeit", "thermodynamik",
+            "elektrodynamik", "quantenmechanik", "matrixmultiplikation", "komplexitaet", "rekursion",
+            "optimierung", "stochastik", "analysis", "lineare", "algebra",
+        ];
+        // 400 Seiten mit ~12.000 eindeutigen Wörtern
+        for p in 0..400usize {
+            let mut text = String::new();
+            for w in 0..35usize {
+                let r = roots[(p + w) % roots.len()];
+                text.push_str(&format!("{r}_{} ", (p * 31 + w * 17) % 600));
+            }
+            if p % 25 == 0 {
+                text.push_str("Photosynthese Zellatmung Differentialgleichung");
+            }
+            ix.set_page(&format!("p{p}"), &text);
+        }
+
+        let queries = [
+            "fotosintese",
+            "zellatmun",
+            "diferentialgleichung",
+            "schwingkries transistor",
+            "eignewert matrix",
+            "quantenmechanik unbekannteswort",
+            "algoritmen datenstruktur",
+            "thermodinamik",
+        ];
+
+        // Korrektheitsbeweis: quality_masked liefert für jedes (Suchwort, Vokabel)-Paar exakt dasselbe
+        // Ergebnis wie der ungefilterte Vergleich ohne Bitmaske.
+        let reference_quality = |term: &[u16], word: &[u16]| -> Quality {
+            if word == term { return Quality::Exact; }
+            if word.starts_with(term) { return Quality::Prefix; }
+            let max = max_typos(term.len());
+            if max == 0 { return Quality::None; }
+            if typo_distance(term, word, max, word.len()) <= max { return Quality::Typo; }
+            if term.len() >= 5 && word.len() > term.len() && typo_distance(term, word, max, term.len()) <= max {
+                return Quality::Typo;
+            }
+            Quality::None
+        };
+        for q in &queries {
+            for (_, key) in words(q) {
+                let term: Vec<u16> = key.encode_utf16().collect();
+                let tm = char_mask(&term);
+                for w in ix.words.iter().flatten() {
+                    assert_eq!(
+                        quality_masked(&term, tm, &w.key, w.mask),
+                        reference_quality(&term, &w.key),
+                        "bitmask mismatch for query {q}"
+                    );
+                }
+            }
+            let hits = ix.search(q, |_| true);
+            assert!(!hits.is_empty(), "query {q} should match");
+        }
+
+        let t0 = Instant::now();
+        let mut total_hits = 0usize;
+        for _ in 0..20 {
+            for q in &queries {
+                total_hits += ix.search(q, |_| true).len();
+            }
+        }
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert!(total_hits > 0);
+        eprintln!(
+            "fuzzy_search (400 pages, {} words, 160 queries): {elapsed_ms:.2} ms ({:.2} ms/query)",
+            ix.live,
+            elapsed_ms / 160.0
+        );
     }
 }

@@ -338,8 +338,8 @@ impl State {
         }
     }
 
-    /// Zähler und `done` für viele Stapel auf einmal (für [`State::deck_tree`]): filtert und
-    /// sortiert aktive Karten sowie Reviews einmalig statt pro Stapel.
+    /// Zähler und `done` für viele Stapel auf einmal (für [`State::deck_tree`]): wertet Karten,
+    /// Reviews und Tageslimits genau einmal in O(C + D·Tiefe) aus und summiert je Teilbaum auf.
     pub(crate) fn deck_tree_counts<'a>(
         &'a self,
         decks: &[String],
@@ -360,43 +360,106 @@ impl State {
                 })
                 .collect();
         }
-        let prep = self.prepare_study(first.now, first.day_end, None);
+
+        #[derive(Default, Clone, Copy)]
+        struct Bucket {
+            learn_due: usize,
+            learn_waiting: usize,
+            ahead_free: usize,
+            raw_rev: usize,
+            raw_new: usize,
+            limited_rev: usize,
+            limited_new: usize,
+        }
+        impl Bucket {
+            fn add_counts(&mut self, other: Bucket) {
+                self.learn_due += other.learn_due;
+                self.learn_waiting += other.learn_waiting;
+                self.ahead_free += other.ahead_free;
+                self.limited_rev += other.limited_rev;
+                self.limited_new += other.limited_new;
+            }
+        }
+
+        let t_iso = Value::from(first.now.to_iso());
+        let eod_iso = Value::from(first.day_end.to_iso());
+        let ahead_iso = Value::from(first.now.add_millis(LEARN_AHEAD_MS).to_iso());
         let ReviewUsage { used_new, used_rev, fresh } =
             self.collect_review_usage(first.day_start, first.now, first.overlearn_lock);
-        let mut conf_cache: HashMap<&'a str, DeckConf> = HashMap::new();
+
+        let mut per_deck: HashMap<&'a str, Bucket> = HashMap::new();
+        for c in self.cards.values() {
+            if c.is_trashed()
+                || self.is_card_archived(c)
+                || c.is_suspended()
+                || !c.srs().is_some_and(js::truthy)
+            {
+                continue;
+            }
+            let d = due_ref(c);
+            let deck = c.deck_name();
+            match c.srs_state() {
+                Some("learning" | "relearning") => {
+                    if le(d, &t_iso) {
+                        per_deck.entry(deck).or_default().learn_due += 1;
+                    } else if js::value_lt(&t_iso, d) && js::value_lt(d, &eod_iso) {
+                        let b = per_deck.entry(deck).or_default();
+                        b.learn_waiting += 1;
+                        if le(d, &ahead_iso) && (!first.overlearn_lock || !fresh.contains(c.id())) {
+                            b.ahead_free += 1;
+                        }
+                    }
+                }
+                Some("review") if js::value_lt(d, &eod_iso) => per_deck.entry(deck).or_default().raw_rev += 1,
+                Some("new") if le(d, &t_iso) => per_deck.entry(deck).or_default().raw_new += 1,
+                _ => {}
+            }
+        }
+
+        // Tageslimits gelten je eigenem Stapel der Karte und sind unabhängig vom abgefragten Elternstapel.
+        let mut total_all = Bucket::default();
+        let mut subtree: HashMap<&'a str, Bucket> = HashMap::with_capacity(per_deck.len() * 2);
+        for (deck, mut b) in per_deck {
+            if b.raw_rev > 0 || b.raw_new > 0 {
+                let conf = self.deck_conf(deck);
+                let rev_limit = conf.rev_per_day();
+                let mut u_rev = used_rev.get(deck).copied().unwrap_or(0.0);
+                for _ in 0..b.raw_rev {
+                    if js::value_ge(&Value::from(u_rev), rev_limit) {
+                        break;
+                    }
+                    u_rev += 1.0;
+                    b.limited_rev += 1;
+                }
+                if b.raw_new > 0 && !js::value_ge(&Value::from(u_rev), rev_limit) {
+                    let new_limit = conf.new_per_day();
+                    let mut u_new = used_new.get(deck).copied().unwrap_or(0.0);
+                    for _ in 0..b.raw_new {
+                        if js::value_ge(&Value::from(u_new), new_limit) {
+                            break;
+                        }
+                        u_new += 1.0;
+                        b.limited_new += 1;
+                    }
+                }
+            }
+            total_all.add_counts(b);
+            let mut cur = (!deck.is_empty()).then_some(deck);
+            while let Some(anc) = cur {
+                subtree.entry(anc).or_default().add_counts(b);
+                cur = crate::tree::deck_parent(anc);
+            }
+        }
+
         all_opts
             .into_iter()
             .map(|o| {
-                let in_deck = |c: &&Card| o.deck.is_none_or(|d| deck_in_tree(c.deck_name(), d));
-                let (mut d_new, mut d_rev) = (used_new.clone(), used_rev.clone());
-                let mut limited_rev = 0usize;
-                self.take_limited(
-                    prep.reviews_raw.iter().copied().filter(in_deck),
-                    false,
-                    &mut d_new,
-                    &mut d_rev,
-                    &mut conf_cache,
-                    |_| limited_rev += 1,
-                );
-                let mut limited_new = 0usize;
-                self.take_limited(
-                    prep.new_raw.iter().copied().filter(in_deck),
-                    true,
-                    &mut d_new,
-                    &mut d_rev,
-                    &mut conf_cache,
-                    |_| limited_new += 1,
-                );
-                let learn_due_cnt = prep.learn_due.iter().filter(|c| in_deck(c)).count();
-                let (mut learn_waiting_cnt, mut ahead_free_cnt) = (0usize, 0usize);
-                for &c in prep.learn_waiting.iter().filter(|c| in_deck(c)) {
-                    learn_waiting_cnt += 1;
-                    if le(due_ref(c), &prep.ahead_iso) && (!o.overlearn_lock || !fresh.contains(c.id())) {
-                        ahead_free_cnt += 1;
-                    }
-                }
+                let b = match o.deck {
+                    None => total_all,
+                    Some(d) => subtree.get(d).copied().unwrap_or_default(),
+                };
                 let (counts, _, done) =
-                    finalize_counts(learn_due_cnt, learn_waiting_cnt, limited_rev, limited_new, ahead_free_cnt);
+                    finalize_counts(b.learn_due, b.learn_waiting, b.limited_rev, b.limited_new, b.ahead_free);
                 (counts, done)
             })
             .collect()

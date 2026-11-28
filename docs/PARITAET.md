@@ -158,11 +158,11 @@ Gleiches Ziel für alle Versionen; gemessen über den Profiler der jeweiligen Ap
 
 | Funktion | Budget | PWA | Android | iPad |
 |---|---|---|---|---|
-| Kaltstart bis zur bedienbaren Oberfläche | ≤ 1000 ms | `state.load` | – | `boot.core-open` |
-| Seite im Editor öffnen | ≤ 100 ms | `editor.mount` | – | – |
-| Heft öffnen | ≤ 300 ms | `heft.mount` | – | `heft.load` |
-| Strich zeichnen (ein Bild pro Frame) | ≤ 16 ms | `heft.stroke` | `heft:strokeLayer` | – |
-| Heft speichern | ≤ 50 ms | `heft.save` | – | `heft.commit` |
-| Cloudflare-Sync-Durchlauf | ≤ 500 ms | `cloudflare.sync` | – | – |
+| Kaltstart bis zur bedienbaren Oberfläche | ≤ 1000 ms | `state.load` | `boot:coreOpen` | `boot.core-open` |
+| Seite im Editor öffnen | ≤ 100 ms | `editor.mount` | `editor:mount` | `editor.mount` |
+| Heft öffnen | ≤ 300 ms | `heft.mount` | `heft:load` | `heft.load` |
+| Strich zeichnen (ein Bild pro Frame) | ≤ 16 ms | `heft.stroke` | `heft:strokeLayer` | `heft.drawing-diff` |
+| Heft speichern | ≤ 50 ms | `heft.save` | `heft:save` | `heft.commit` |
+| Cloudflare-Sync-Durchlauf | ≤ 500 ms | `cloudflare.sync` | `cloudflare:sync` | `cloudflare.sync` |
 
 <!-- funktionen:end -->

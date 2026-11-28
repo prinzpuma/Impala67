@@ -103,6 +103,8 @@ final class NoteModel {
     nonisolated static func load(core: ImpalaCore, pageId: String) async -> Loaded? {
         await withCheckedContinuation { cont in
             writer.async {
+                let done = Profiler.shared.begin("editor.mount", thresholdMs: 100)
+                defer { done() }
                 guard let page = core.page(id: pageId) else { return cont.resume(returning: nil) }
                 cont.resume(returning: Loaded(title: page.summary.title, content: page.content,
                                               blocks: markdownToBlocks(markdown: page.content)))

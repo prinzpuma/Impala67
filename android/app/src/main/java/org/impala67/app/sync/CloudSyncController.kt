@@ -22,6 +22,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.impala67.app.core.ImpalaStore
+import org.impala67.app.diag.Profiler
 import org.impala67.app.heft.HeftActivity
 import org.impala67.app.settings.DevicePrefs
 import org.json.JSONObject
@@ -264,7 +265,9 @@ class CloudSyncController(
             var attempt = 0u
             while (scope.isActive) {
                 try {
-                    val report = withContext(Dispatchers.IO) { current.sync(forceAll.getAndSet(false)) }
+                    val report = withContext(Dispatchers.IO) {
+                        Profiler.measure("cloudflare", "sync") { current.sync(forceAll.getAndSet(false)) }
+                    }
                     val detail = if (report.conflicts > 0uL) "${report.conflicts} Konflikt(e) – siehe Konflikte" else "Alle Geräte auf demselben Stand"
                     _ui.update {
                         it.copy(

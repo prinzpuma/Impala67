@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.diag.Profiler
 import org.impala67.app.heft.ink.HeftIndexer
 import org.impala67.app.heft.scan.ScannedPage
 import org.impala67.app.heft.scan.insertScannedPages
@@ -61,7 +62,9 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     /** Eine Heftseite zum Zeichnen; liest bei jeder Änderung des Hefts neu, solange sie sichtbar ist. */
     fun page(heftPageId: String): StateFlow<HeftPageData?> = pages.getOrPut(heftPageId) {
-        store.query(touched) { core -> runCatching { core.heftPage(pageId, heftPageId) }.getOrNull() }
+        store.query(touched) { core ->
+            Profiler.measure("heft", "load") { runCatching { core.heftPage(pageId, heftPageId) }.getOrNull() }
+        }
     }
 
     var tools by mutableStateOf(HeftTools())
@@ -616,7 +619,7 @@ class HeftViewModel(val store: ImpalaStore, val pageId: String, private val pref
 
     private suspend fun commitBatchLocked(pending: StrokeBatch?, scheduleOcr: Boolean = true) {
         if (pending == null) return
-        runCatching { store.write { it.heftApply(pageId, pending.changes) } }
+        runCatching { store.write { Profiler.measure("heft", "save") { it.heftApply(pageId, pending.changes) } } }
             .onSuccess { edit ->
                 record(edit)
                 if (scheduleOcr) pending.pages.forEach(indexer::schedule)

@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.impala67.app.core.ImpalaStore
 import org.impala67.app.core.Touches
+import org.impala67.app.diag.Profiler
 import uniffi.impala_ffi.MdBlock
 import uniffi.impala_ffi.MdBlockKind
 import uniffi.impala_ffi.PageDetail
@@ -100,7 +101,9 @@ internal class EditorViewModel(internal val store: ImpalaStore, internal val pag
         if (page == null) { if (!loaded) missing = true; return }
         if (!loaded) {
             val content = page.content
-            val parsed = withContext(Dispatchers.Default) { markdownToBlocks(content) }
+            val parsed = withContext(Dispatchers.Default) {
+                Profiler.measure("editor", "mount") { markdownToBlocks(content) }
+            }
             if (!loaded) {
                 title = page.summary.title; lastTitle = title
                 blocks = parsed; lastMarkdown = content
