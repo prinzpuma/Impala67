@@ -127,6 +127,9 @@ pub struct Signatures {
 }
 
 impl Signatures {
+    fn with_capacity(cap: usize) -> Self {
+        Signatures { keys: Vec::with_capacity(cap), map: HashMap::with_capacity(cap) }
+    }
     pub fn get(&self, id: &str) -> Option<&Signature> {
         self.map.get(id)
     }
@@ -189,11 +192,11 @@ pub struct Shadow {
 }
 
 fn signatures<'a, T: 'a>(
-    items: impl IntoIterator<Item = &'a T>,
+    items: &'a [T],
     id: impl Fn(&T) -> &str,
     sig: impl Fn(&T) -> Signature,
 ) -> Signatures {
-    let mut out = Signatures::default();
+    let mut out = Signatures::with_capacity(items.len());
     for item in items {
         let id = id(item);
         if !id.is_empty() {
@@ -336,8 +339,8 @@ fn diff_items<T: DiffItem>(
     previous: Option<&Signatures>,
     items: &[T],
 ) -> Signatures {
-    let mut current = Signatures::default();
-    let mut kept: HashSet<&str> = HashSet::new();
+    let mut current = Signatures::with_capacity(items.len());
+    let mut kept: HashSet<&str> = HashSet::with_capacity(previous.map_or(0, |p| p.len().min(items.len())));
     for item in items {
         let item_id = item.id();
         if item_id.is_empty() {
@@ -355,7 +358,9 @@ fn diff_items<T: DiffItem>(
         }
         current.set(item_id, s);
     }
-    if let Some(prev) = previous {
+    if let Some(prev) = previous
+        && kept.len() < prev.len()
+    {
         let removed: Vec<String> = prev.ids().filter(|id| !kept.contains(id)).map(str::to_owned).collect();
         if !removed.is_empty() {
             ops.push(HeftOp::Remove { page: page.to_owned(), kind: T::KIND, ids: removed });

@@ -39,6 +39,14 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+# Heiße Pfade (JSON-Parsing beim Start/Sync und Heft-Geometrie/Diff) auf Geschwindigkeit
+# optimieren, während der Rest des Workspace für kleines WASM auf `opt-level = "z"` bleibt.
+[profile.release.package.serde_json]
+opt-level = 3
+
+[profile.release.package.impala-heft]
+opt-level = 3
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

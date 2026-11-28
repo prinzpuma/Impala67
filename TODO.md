@@ -23,7 +23,6 @@ Stand: 28.11.2026.
 
 ## 3. Kern und Leistung
 
-- WASM-Größe vs. Startzeit: `opt-level` abwägen (`z` ≈ 2,5 MB vs. `3` ≈ 4,4 MB).
 - Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 
 ## 4. Optional / bewusst offen (gemessen unkritisch)
