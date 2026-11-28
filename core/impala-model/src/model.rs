@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use impala_heft::HeftDoc;
 use impala_storage::checkpoint::HeftPart;
-use impala_storage::checkpoint::{self, HeftJson, LoadedRaw, Reject};
+use impala_storage::checkpoint::{self, HeftJson, LoadedTyped, Reject};
 use impala_storage::{Error, PartKind, Storage, StorageExt};
 use serde_json::Value;
 
@@ -136,11 +136,10 @@ fn blob_sizes_of(state: &State) -> BTreeMap<String, usize> {
 }
 
 impl State {
-    /// Gespeicherten Zustand übernehmen (`restorePersistedState`) samt Altlast-Reparaturen:
-    /// alter Name der Cloudflare-Quelle, Seiten ohne `created` (`now` als letzter Ausweg).
-    pub fn restore(saved: Object, now: &str) -> State {
-        let mut s = State::from_object(saved);
-        for pr in s.settings.ai_providers.iter_mut().flatten() {
+    /// Altlast-Reparaturen nach dem Laden eines Checkpoints: alter Name der Cloudflare-Quelle,
+    /// Seiten ohne `created` (`now` als letzter Ausweg).
+    pub fn repair(&mut self, now: &str) {
+        for pr in self.settings.ai_providers.iter_mut().flatten() {
             if let Some(o) = pr.as_object_mut()
                 && o.get("id").and_then(Value::as_str) == Some("cloudflare")
                 && o.get("name").is_none_or(|n| !js::truthy(n) || n.as_str() == Some("Cloudflare (Groq)"))
@@ -148,12 +147,18 @@ impl State {
                 o.insert("name".into(), Value::from("Impala AI"));
             }
         }
-        for pg in s.pages.values_mut() {
+        for pg in self.pages.values_mut() {
             if !pg.truthy("created") {
                 let created = js::or(pg.get("updated").as_ref()).cloned().unwrap_or_else(|| Value::from(now));
                 pg.set("created", created);
             }
         }
+    }
+
+    /// Gespeicherten Zustand übernehmen (`restorePersistedState`) samt Altlast-Reparaturen.
+    pub fn restore(saved: Object, now: &str) -> State {
+        let mut s = State::from_object(saved);
+        s.repair(now);
         s
     }
 }
@@ -254,23 +259,24 @@ impl Model {
     pub fn load<S: Storage + ?Sized>(storage: &mut S, now: &str) -> Result<(Model, LoadReport), Error> {
         let mut m = Model::default();
         let mut info = storage.log_info()?;
-        let (loaded, had_checkpoint) = match checkpoint::load_raw(storage, order::reorder_safe_object) {
-            Ok(LoadedRaw::Rejected(r)) => (Err(r.as_str()), r != Reject::Missing),
+        let (loaded, had_checkpoint) = match checkpoint::load_typed::<State, _>(storage, order::reorder_safe_object) {
+            Ok(LoadedTyped::Rejected(r)) => (Err(r.as_str()), r != Reject::Missing),
             // Hefte bleiben Text, bis sie gebraucht werden; ein kaputtes verwirft den Checkpoint.
-            Ok(LoadedRaw::Usable { checkpoint, state, hefte, tail }) => match read_hefte(hefte) {
+            Ok(LoadedTyped::Usable { checkpoint, state, hefte, tail }) => match read_hefte(hefte) {
                 Some(docs) => (Ok((checkpoint, state, docs, tail)), true),
                 None => (Err(Reject::HeftDocs.as_str()), true),
             },
             Err(_) => (Err("read-error"), false),
         };
         let (replayed, reject) = match loaded {
-            Ok((mut cp, saved, docs, tail)) => {
+            Ok((mut cp, mut state, docs, tail)) => {
                 let format = cp.get("format").and_then(Value::as_u64).unwrap_or(0);
                 let partitioned = format == checkpoint::FORMAT || format == checkpoint::HEFT_JSON_FORMAT;
                 let max_seq = impala_storage::js::seq_of(cp.get("maxSeq"));
                 let event_count = impala_storage::js::seq_of(cp.get("eventCount"));
                 let reconciled = cp.get("reconciledArchive").is_some_and(js::truthy);
-                m.state = State::restore(saved, now);
+                state.repair(now);
+                m.state = state;
                 match docs {
                     Some(StoredHefte::Text(parts)) => {
                         for (page, hash, json) in parts {

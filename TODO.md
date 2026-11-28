@@ -1,7 +1,7 @@
 # Impala67 – Offene Punkte
 
 Nur Offenes, nach Priorität. Erledigtes steht im Git-Log, Lücken der nativen Apps in `docs/PARITAET.md`.
-Stand: 15.11.2026.
+Stand: 28.11.2026.
 
 ## 1. Am Gerät prüfen (gebaut, ungetestet)
 
@@ -18,18 +18,12 @@ Stand: 15.11.2026.
 
 ## 2. Nächste Schritte
 
-- **Heft-KI**: Aktionen auf Basis von `ocrText` und Seitenbildern, z. B. „Lernzettel aus diesem Heft“, „Karteikarten
-  aus Heft-Seite“.
-- **Handschrift schärfen**: lange Sätze, Skizzen-Abgrenzung, Mathe (`handwriting/evaluate_notes_benchmark.py`).
 - **iPad-Semantik**: Suche nach Bedeutung, RAG-Quellen im Chat, Fach-Einordnung per Embedding; SwiftUI-Menüs barrierefrei.
 - **Android-Semantik**: „Verwandt“-Leiste und RAG-Quellen (semantischer Index auf Android).
 
 ## 3. Kern und Leistung
 
-- Heft-Speichern übergibt die ganze Arbeitskopie für den Diff (≈ 50 ms bei 2000 Strichen) → nur geänderte Seiten.
-- Start vom Checkpoint ≈ 15–30 % langsamer als früher in JS (Text-Übergabe an WASM, `opt-level = "z"`):
-  Binärformat oder Teile je Sammlung prüfen.
-- WASM-Größe (≈ 2,4 MB): `opt-level` abwägen (`3` → 4,4 MB, Start ≈ 25 % schneller), `regex` in `impala-ai` ersetzen.
+- WASM-Größe vs. Startzeit: `opt-level` abwägen (`z` ≈ 2,5 MB vs. `3` ≈ 4,4 MB).
 - Bekko-Embedding mit tract Ende-zu-Ende prüfen; `ort`-Feature oder Plattform-Erkenner statt tract.
 
 ## 4. Optional / bewusst offen (gemessen unkritisch)

@@ -8,8 +8,11 @@
 
 use std::borrow::{Borrow, Cow};
 use std::collections::HashSet;
+use std::fmt;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
+use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -45,6 +48,22 @@ pub const KEYS: [&str; 17] = [
 /// Kernzustand ab Format 2: ohne `heftBlobs` (die liegen als Teile daneben).
 pub fn core_keys() -> impl Iterator<Item = &'static str> {
     KEYS.into_iter().filter(|k| *k != "heftBlobs")
+}
+
+/// Bitmaske für einen Top-Level-Schlüssel aus [`KEYS`] (0 für unbekannte Schlüssel).
+pub fn key_bit(key: &str) -> u32 {
+    KEYS.iter().position(|k| *k == key).map_or(0, |i| 1u32 << i)
+}
+
+/// Direkt aus dem JSON-Strom gelesener Zustand samt Bitmaske der vorhandenen [`KEYS`].
+pub struct ParsedState<S> {
+    pub state: S,
+    pub keys_mask: u32,
+}
+
+/// Direktes Deserialisieren des Checkpoint-`state`-Objekts ohne Umweg über `serde_json::Value`.
+pub trait StateDeserialize: Sized {
+    fn deserialize_state<'de, D: Deserializer<'de>>(d: D) -> Result<ParsedState<Self>, D::Error>;
 }
 
 /// Reservierte Schlüssel im IndexedDB-Store `blobs` (für den Web-Adapter und den Import).
@@ -122,8 +141,26 @@ pub fn reject_reason(
     reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
 ) -> Option<Reject> {
     let Some(cp) = cp else { return Some(Reject::Missing) };
-    let Some(state) = cp.get("state").filter(|s| js::truthy(s)) else { return Some(Reject::NoState) };
-    let own = |key: &str| state.as_object().is_some_and(|s| s.contains_key(key));
+    let state_keys = match cp.get("state").filter(|s| js::truthy(s)) {
+        None => None,
+        Some(Value::Object(o)) => Some(o.keys().fold(0u32, |m, k| m | key_bit(k))),
+        Some(_) => Some(0),
+    };
+    reject_reason_head(cp, state_keys, current, boundary, tail, reorder_safe)
+}
+
+/// Gemeinsame Prüfung für [`reject_reason`] und [`load_typed`]: `state_keys` ist `None`, wenn
+/// `state` fehlt oder falsy ist, sonst die Bitmaske der vorhandenen [`KEYS`].
+fn reject_reason_head(
+    cp: &Object,
+    state_keys: Option<u32>,
+    current: &LogInfo,
+    boundary: Option<&Object>,
+    tail: &[Object],
+    reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
+) -> Option<Reject> {
+    let Some(mask) = state_keys else { return Some(Reject::NoState) };
+    let own = |key: &str| (mask & key_bit(key)) != 0;
     match format_of(cp) {
         Some(f @ (FORMAT | HEFT_JSON_FORMAT)) => {
             let docs_stored = if f == FORMAT {
@@ -491,6 +528,128 @@ pub enum LoadedRaw {
         tail: Vec<Object>,
     },
     Rejected(Reject),
+}
+
+/// Ergebnis von [`load_typed`].
+pub enum LoadedTyped<S> {
+    Usable {
+        checkpoint: Object,
+        state: S,
+        hefte: Option<HeftJson>,
+        tail: Vec<Object>,
+    },
+    Rejected(Reject),
+}
+
+enum StateSlot<S> {
+    MissingOrFalsy,
+    TruthyNonObject,
+    Object(ParsedState<S>),
+}
+
+impl<'de, S: StateDeserialize> Deserialize<'de> for StateSlot<S> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V<S>(PhantomData<S>);
+        impl<'de, S: StateDeserialize> Visitor<'de> for V<S> {
+            type Value = StateSlot<S>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Checkpoint-Zustand")
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(StateSlot::MissingOrFalsy)
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(if v { StateSlot::TruthyNonObject } else { StateSlot::MissingOrFalsy })
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(if v != 0 { StateSlot::TruthyNonObject } else { StateSlot::MissingOrFalsy })
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(if v != 0 { StateSlot::TruthyNonObject } else { StateSlot::MissingOrFalsy })
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(if v != 0.0 && !v.is_nan() { StateSlot::TruthyNonObject } else { StateSlot::MissingOrFalsy })
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(if v.is_empty() { StateSlot::MissingOrFalsy } else { StateSlot::TruthyNonObject })
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(StateSlot::TruthyNonObject)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                let de = serde::de::value::MapAccessDeserializer::new(a);
+                S::deserialize_state(de).map(StateSlot::Object)
+            }
+        }
+        d.deserialize_any(V(PhantomData))
+    }
+}
+
+struct SplitCheckpoint<S> {
+    head: Object,
+    state: StateSlot<S>,
+}
+
+impl<'de, S: StateDeserialize> Deserialize<'de> for SplitCheckpoint<S> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V<S>(PhantomData<S>);
+        impl<'de, S: StateDeserialize> Visitor<'de> for V<S> {
+            type Value = SplitCheckpoint<S>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Checkpoint-Objekt")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                let mut head = Object::new();
+                let mut state = StateSlot::MissingOrFalsy;
+                while let Some(k) = a.next_key::<Cow<'de, str>>()? {
+                    if k.as_ref() == "state" {
+                        state = a.next_value()?;
+                    } else {
+                        head.insert(k.into_owned(), a.next_value()?);
+                    }
+                }
+                Ok(SplitCheckpoint { head, state })
+            }
+        }
+        d.deserialize_map(V(PhantomData))
+    }
+}
+
+/// Liest den Checkpoint-Text (aktueller Platz, sonst Alt-Format).
+fn read_json<S: Storage + ?Sized>(storage: &S) -> Result<Option<String>, Error> {
+    match storage.checkpoint_json(CheckpointSlot::Current)? {
+        Some(cp) => Ok(Some(cp)),
+        None => storage.checkpoint_json(CheckpointSlot::Legacy),
+    }
+}
+
+/// Wie [`load_raw`], aber der `state`-Teil wird direkt aus dem JSON-Strom in `S` deserialisiert
+/// – ohne den gesamten Zustand zuerst als `serde_json::Value`-Baum anzulegen.
+pub fn load_typed<S: StateDeserialize, St: Storage + ?Sized>(
+    storage: &St,
+    reorder_safe: impl Fn(&Object, Option<&Object>) -> bool,
+) -> Result<LoadedTyped<S>, Error> {
+    let info = storage.log_info()?;
+    let Some(json) = read_json(storage)? else { return Ok(LoadedTyped::Rejected(Reject::Missing)) };
+    let split: SplitCheckpoint<S> = serde_json::from_str(&json).map_err(|e| Error::Json(e.to_string()))?;
+    let max_seq = num(split.head.get("maxSeq")) as u64;
+    let boundary = if max_seq > 0 { storage.event_at(max_seq)? } else { None };
+    let tail = storage.events_after(max_seq, Some(info.max_seq), None)?;
+    let state_keys = match &split.state {
+        StateSlot::MissingOrFalsy => None,
+        StateSlot::TruthyNonObject => Some(0),
+        StateSlot::Object(p) => Some(p.keys_mask),
+    };
+    if let Some(reason) = reject_reason_head(&split.head, state_keys, &info, boundary.as_ref(), &tail, reorder_safe) {
+        return Ok(LoadedTyped::Rejected(reason));
+    }
+    let hefte = match hefte_raw(storage, &split.head)? {
+        Ok(hefte) => hefte,
+        Err(reason) => return Ok(LoadedTyped::Rejected(reason)),
+    };
+    let StateSlot::Object(parsed) = split.state else { return Ok(LoadedTyped::Rejected(Reject::NoState)) };
+    Ok(LoadedTyped::Usable { checkpoint: split.head, state: parsed.state, hefte, tail })
 }
 
 /// Checkpoint lesen und prüfen; liefert ihn samt Rest des Logs.

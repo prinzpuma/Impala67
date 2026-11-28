@@ -139,3 +139,17 @@ fn sqlite_survives_reopen() {
         let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
     }
 }
+
+#[test]
+fn sqlite_checkpoint_json_matches_object() {
+    let mut s = SqliteStorage::open_in_memory().unwrap();
+    let rec = impala_storage::CheckpointRecord {
+        head: serde_json::json!({ "format": 3, "maxSeq": 7 }).as_object().unwrap().clone(),
+        raw: vec![("state", r#"{"pages":{"p1":{"id":"p1","title":"A"}}}"#.into())],
+    };
+    s.apply(vec![Write::PutCheckpoint(impala_storage::CheckpointSlot::Current, rec)]).unwrap();
+    let json = s.checkpoint_json(impala_storage::CheckpointSlot::Current).unwrap().expect("JSON vorhanden");
+    let obj = s.checkpoint(impala_storage::CheckpointSlot::Current).unwrap().expect("Objekt vorhanden");
+    let parsed: impala_storage::Object = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed, obj);
+}

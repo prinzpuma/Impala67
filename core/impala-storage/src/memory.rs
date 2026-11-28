@@ -95,6 +95,10 @@ impl Storage for MemoryStorage {
         self.checkpoints.get(&slot).map(CheckpointRecord::to_object).transpose()
     }
 
+    fn checkpoint_json(&self, slot: CheckpointSlot) -> Result<Option<String>, Error> {
+        Ok(self.checkpoints.get(&slot).map(CheckpointRecord::to_json))
+    }
+
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error> {
         Ok(self.parts.get(&kind).and_then(|p| p.get(hash)).cloned())
     }

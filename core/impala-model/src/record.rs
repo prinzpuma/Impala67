@@ -5,14 +5,119 @@
 //! sind typisiert (`Some` = vorhanden mit passendem Typ); alles andere – auch `null` und bekannte
 //! Felder mit fremdem Typ – liegt unverändert in `extra`. So bleibt jeder Datensatz exakt erhalten.
 
+use std::borrow::Cow;
+use std::fmt;
+use std::marker::PhantomData;
+
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value;
 
 use crate::js::{self, Object};
+
+/// Geliehener JSON-Schlüssel: bei normalen ASCII-Feldnamen ohne Escape keine Heap-Allokation.
+pub(crate) struct BorrowKey<'de>(pub Cow<'de, str>);
+
+impl<'de> Deserialize<'de> for BorrowKey<'de> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = BorrowKey<'de>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("JSON-Schlüssel")
+            }
+            fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
+                Ok(BorrowKey(Cow::Borrowed(v)))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(BorrowKey(Cow::Owned(v.to_owned())))
+            }
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(BorrowKey(Cow::Owned(v)))
+            }
+        }
+        d.deserialize_str(V)
+    }
+}
+
+/// Fehlertolerantes direktes Deserialisieren: ungültige Einträge (z. B. `null` statt Objekt)
+/// werden übersprungen (`None`), ohne gültige Einträge erst als `serde_json::Value` anzulegen.
+pub(crate) trait TryDeserialize<'de>: Sized {
+    fn try_deserialize<D: Deserializer<'de>>(d: D) -> Result<Option<Self>, D::Error>;
+}
+
+impl<'de> TryDeserialize<'de> for bool {
+    fn try_deserialize<D: Deserializer<'de>>(d: D) -> Result<Option<Self>, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Option<bool>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("bool")
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(Some(v))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(None)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(None)
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+/// Wrapper, um [`Field::from_de`] direkt über `MapAccess::next_value_seed` aufzurufen.
+pub(crate) struct FieldSeed<T>(pub PhantomData<T>);
+
+impl<'de, T: Field> DeserializeSeed<'de> for FieldSeed<T> {
+    type Value = Result<T, Value>;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        T::from_de(d)
+    }
+}
+
+fn seq_to_value<'de, A: SeqAccess<'de>>(mut a: A) -> Result<Value, A::Error> {
+    let mut out = Vec::new();
+    while let Some(v) = a.next_element::<Value>()? {
+        out.push(v);
+    }
+    Ok(Value::Array(out))
+}
+
+fn map_to_value<'de, A: MapAccess<'de>>(mut a: A) -> Result<Value, A::Error> {
+    let mut out = Object::new();
+    while let Some((k, v)) = a.next_entry::<String, Value>()? {
+        out.insert(k, v);
+    }
+    Ok(Value::Object(out))
+}
 
 /// Typ eines festen Feldes.
 pub trait Field: Sized {
     /// `Err(v)`: passt nicht, `v` geht unverändert nach `extra`.
     fn from_json(v: Value) -> Result<Self, Value>;
+    /// Direkt aus dem JSON-Strom ohne `Value`-Umweg im Regelfall.
+    fn from_de<'de, D: Deserializer<'de>>(d: D) -> Result<Result<Self, Value>, D::Error> {
+        Ok(Self::from_json(Value::deserialize(d)?))
+    }
     fn to_json(&self) -> Value;
     /// Gleichheit mit einem JSON-Wert (`===` für Strings, Zahlen, Booleans).
     fn same(&self, v: &Value) -> bool;
@@ -67,6 +172,43 @@ impl Field for String {
             v => Err(v),
         }
     }
+    fn from_de<'de, D: Deserializer<'de>>(d: D) -> Result<Result<Self, Value>, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Result<String, Value>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("String oder JSON-Wert")
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Ok(v.to_owned()))
+            }
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(Ok(v))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Err(Value::Null))
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(Err(Value::Bool(v)))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(Err(Value::from(v)))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(Err(Value::from(v)))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(Err(js::num(v)))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                seq_to_value(a).map(Err)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                map_to_value(a).map(Err)
+            }
+        }
+        d.deserialize_any(V)
+    }
     fn to_json(&self) -> Value {
         Value::String(self.clone())
     }
@@ -88,6 +230,43 @@ impl Field for f64 {
             None => Err(v),
         }
     }
+    fn from_de<'de, D: Deserializer<'de>>(d: D) -> Result<Result<Self, Value>, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Result<f64, Value>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Zahl oder JSON-Wert")
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(Ok(v as f64))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(Ok(v as f64))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(Ok(v))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Err(Value::Null))
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(Err(Value::Bool(v)))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Err(Value::String(v.to_owned())))
+            }
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(Err(Value::String(v)))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                seq_to_value(a).map(Err)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                map_to_value(a).map(Err)
+            }
+        }
+        d.deserialize_any(V)
+    }
     fn to_json(&self) -> Value {
         js::num(*self)
     }
@@ -105,6 +284,43 @@ impl Field for bool {
             Value::Bool(b) => Ok(b),
             v => Err(v),
         }
+    }
+    fn from_de<'de, D: Deserializer<'de>>(d: D) -> Result<Result<Self, Value>, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Result<bool, Value>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Bool oder JSON-Wert")
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(Ok(v))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Err(Value::Null))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(Err(Value::from(v)))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(Err(Value::from(v)))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(Err(js::num(v)))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Err(Value::String(v.to_owned())))
+            }
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(Err(Value::String(v)))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                seq_to_value(a).map(Err)
+            }
+            fn visit_map<A: MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                map_to_value(a).map(Err)
+            }
+        }
+        d.deserialize_any(V)
     }
     fn to_json(&self) -> Value {
         Value::Bool(*self)
@@ -244,12 +460,83 @@ macro_rules! record {
             }
         }
 
+        impl $name {
+            fn from_map<'de, A: serde::de::MapAccess<'de>>(mut a: A) -> Result<Self, A::Error> {
+                let mut r = Self::default();
+                while let Some($crate::record::BorrowKey(k)) = a.next_key::<$crate::record::BorrowKey<'de>>()? {
+                    match k.as_ref() {
+                        $($key => match a.next_value_seed($crate::record::FieldSeed::<$ty>(std::marker::PhantomData))? {
+                            Ok(v) => {
+                                r.$field = Some(v);
+                                if !r.extra.is_empty() {
+                                    r.extra.shift_remove($key);
+                                }
+                            }
+                            Err(v) => {
+                                r.$field = None;
+                                r.extra.insert(k.into_owned(), v);
+                            }
+                        },)*
+                        _ => {
+                            r.extra.insert(k.into_owned(), a.next_value()?);
+                        }
+                    }
+                }
+                Ok(r)
+            }
+        }
+
         impl<'de> serde::Deserialize<'de> for $name {
             fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-                match serde_json::Value::deserialize(d)? {
-                    serde_json::Value::Object(o) => Ok(Self::from_object(o)),
-                    _ => Err(serde::de::Error::custom(concat!(stringify!($name), ": kein Objekt"))),
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = $name;
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        f.write_str(concat!(stringify!($name), ": kein Objekt"))
+                    }
+                    fn visit_map<A: serde::de::MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                        $name::from_map(a)
+                    }
                 }
+                d.deserialize_map(V)
+            }
+        }
+
+        impl<'de> $crate::record::TryDeserialize<'de> for $name {
+            fn try_deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Option<Self>, D::Error> {
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = Option<$name>;
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        f.write_str(concat!(stringify!($name), " oder fremder Wert"))
+                    }
+                    fn visit_map<A: serde::de::MapAccess<'de>>(self, a: A) -> Result<Self::Value, A::Error> {
+                        $name::from_map(a).map(Some)
+                    }
+                    fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                        Ok(None)
+                    }
+                    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                        while a.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                        Ok(None)
+                    }
+                }
+                d.deserialize_any(V)
             }
         }
     };

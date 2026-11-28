@@ -57,9 +57,9 @@ impl From<Object> for CheckpointRecord {
 }
 
 impl CheckpointRecord {
-    /// Der gespeicherte JSON-Text.
-    pub fn into_json(self) -> String {
-        let head = Value::Object(self.head).to_string();
+    /// Der gespeicherte JSON-Text (ohne `self` zu verbrauchen).
+    pub fn to_json(&self) -> String {
+        let head = serde_json::to_string(&self.head).unwrap_or_else(|_| "{}".into());
         if self.raw.is_empty() {
             return head;
         }
@@ -79,6 +79,11 @@ impl CheckpointRecord {
         }
         out.push('}');
         out
+    }
+
+    /// Der gespeicherte JSON-Text.
+    pub fn into_json(self) -> String {
+        self.to_json()
     }
 
     /// Als Objekt, wie ein Leser den gespeicherten Text sieht.
@@ -176,6 +181,10 @@ pub trait Storage {
     }
 
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error>;
+    /// Roh-JSON des Checkpoints ohne Umweg über `serde_json::Value`.
+    fn checkpoint_json(&self, slot: CheckpointSlot) -> Result<Option<String>, Error> {
+        Ok(self.checkpoint(slot)?.map(|o| Value::Object(o).to_string()))
+    }
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error>;
     fn part_hashes(&self, kind: PartKind) -> Result<Vec<String>, Error>;
 

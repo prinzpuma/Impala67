@@ -467,12 +467,14 @@ impl Storage for SqliteStorage {
     }
 
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error> {
-        let rec: Option<String> = self
-            .conn
+        self.checkpoint_json(slot)?.map(|r| parse_object(&r)).transpose()
+    }
+
+    fn checkpoint_json(&self, slot: CheckpointSlot) -> Result<Option<String>, Error> {
+        self.conn
             .prepare_cached("SELECT rec FROM checkpoints WHERE slot = ?1")
             .and_then(|mut s| s.query_row([slot_id(slot)], |r| r.get(0)).optional())
-            .map_err(db)?;
-        rec.map(|r| parse_object(&r)).transpose()
+            .map_err(db)
     }
 
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error> {

@@ -1,14 +1,18 @@
 //! Der gespeicherte Zustand `S` (`INITIAL_PERSISTED_STATE` in `web/state.js`): genau die Teile,
 //! die ein Checkpoint sichert. Flüchtiger UI-Zustand (Ansicht, Chat-Entwürfe …) gehört nicht hierher.
 
+use std::fmt;
+use std::marker::PhantomData;
+
 use impala_heft::{HeftDoc, Hefte};
-use serde::de::{Deserialize, Deserializer};
+use impala_storage::checkpoint::{self, ParsedState, StateDeserialize};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Value, json};
 
 use crate::js::{self, Object};
-use crate::jsmap::JsMap;
-use crate::record::record;
+use crate::jsmap::{DirectJsMap, JsMap};
+use crate::record::{BorrowKey, TryDeserialize, record};
 
 /// Teile des gespeicherten Zustands in Checkpoint-Reihenfolge (`STATE_CHECKPOINT_KEYS`).
 pub const STATE_KEYS: [&str; 17] = impala_storage::checkpoint::KEYS;
@@ -486,6 +490,291 @@ impl State {
 
     pub fn page(&self, id: &str) -> Option<&Page> {
         self.pages.get(id)
+    }
+}
+
+struct DirectVec<T>(Vec<T>);
+
+impl<'de, T: TryDeserialize<'de>> Deserialize<'de> for DirectVec<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct Elem<T>(PhantomData<T>);
+        impl<'de, T: TryDeserialize<'de>> DeserializeSeed<'de> for Elem<T> {
+            type Value = Option<T>;
+            fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+                T::try_deserialize(d)
+            }
+        }
+        struct V<T>(PhantomData<T>);
+        impl<'de, T: TryDeserialize<'de>> Visitor<'de> for V<T> {
+            type Value = DirectVec<T>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Liste")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                let mut out = Vec::with_capacity(a.size_hint().unwrap_or(0));
+                while let Some(item) = a.next_element_seed(Elem::<T>(PhantomData))? {
+                    if let Some(item) = item {
+                        out.push(item);
+                    }
+                }
+                Ok(DirectVec(out))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(DirectVec(Vec::new()))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(DirectVec(Vec::new()))
+            }
+        }
+        d.deserialize_any(V(PhantomData))
+    }
+}
+
+struct OptString(Option<String>);
+
+impl<'de> Deserialize<'de> for OptString {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = OptString;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("String oder beliebiger Wert")
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(OptString(Some(v.to_owned())))
+            }
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(OptString(Some(v)))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(OptString(None))
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(OptString(None))
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(OptString(None))
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(OptString(None))
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(OptString(None))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(OptString(None))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(OptString(None))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+struct TabsVec(Vec<String>);
+
+impl<'de> Deserialize<'de> for TabsVec {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = TabsVec;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("Tab-Liste")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                let mut out = Vec::new();
+                while let Some(OptString(s)) = a.next_element::<OptString>()? {
+                    if let Some(s) = s {
+                        out.push(s);
+                    }
+                }
+                Ok(TabsVec(out))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(TabsVec(Vec::new()))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+                Ok(TabsVec(Vec::new()))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+struct SettingsOrDefault(Settings);
+
+impl<'de> Deserialize<'de> for SettingsOrDefault {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(SettingsOrDefault(Settings::try_deserialize(d)?.unwrap_or_default()))
+    }
+}
+
+struct HeftDocsInto<'a>(&'a mut Hefte);
+
+impl<'de> DeserializeSeed<'de> for HeftDocsInto<'_> {
+    type Value = ();
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        struct V<'a>(&'a mut Hefte);
+        impl<'de> Visitor<'de> for V<'_> {
+            type Value = ();
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("heftDocs-Objekt")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while let Some((k, d)) = a.next_entry::<String, HeftDoc>()? {
+                    self.0.insert(k, d);
+                }
+                Ok(())
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(())
+            }
+        }
+        d.deserialize_any(V(self.0))
+    }
+}
+
+struct HeftBlobsInto<'a>(&'a mut std::collections::BTreeMap<String, String>);
+
+impl<'de> DeserializeSeed<'de> for HeftBlobsInto<'_> {
+    type Value = ();
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        struct V<'a>(&'a mut std::collections::BTreeMap<String, String>);
+        impl<'de> Visitor<'de> for V<'_> {
+            type Value = ();
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("heftBlobs-Objekt")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                self.0.clear();
+                while let Some((k, OptString(v))) = a.next_entry::<String, OptString>()? {
+                    if let Some(v) = v {
+                        self.0.insert(k, v);
+                    }
+                }
+                Ok(())
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(())
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(())
+            }
+        }
+        d.deserialize_any(V(self.0))
+    }
+}
+
+impl StateDeserialize for State {
+    fn deserialize_state<'de, D: Deserializer<'de>>(d: D) -> Result<ParsedState<Self>, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = ParsedState<State>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("State-Objekt")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                let mut s = State::default();
+                let mut keys_mask = 0u32;
+                while let Some(BorrowKey(k)) = a.next_key::<BorrowKey<'de>>()? {
+                    keys_mask |= checkpoint::key_bit(&k);
+                    match k.as_ref() {
+                        "pages" => s.pages = a.next_value::<DirectJsMap<Page>>()?.0,
+                        "cards" => s.cards = a.next_value::<DirectJsMap<Card>>()?.0,
+                        "grades" => s.grades = a.next_value::<DirectJsMap<Grade>>()?.0,
+                        "learningSessions" => s.learning_sessions = a.next_value::<DirectJsMap<LearningSession>>()?.0,
+                        "chatSessions" => s.chat_sessions = a.next_value::<DirectJsMap<ChatSession>>()?.0,
+                        "homeArticles" => s.home_articles = a.next_value::<DirectJsMap<HomeArticle>>()?.0,
+                        "settings" => s.settings = a.next_value::<SettingsOrDefault>()?.0,
+                        "decks" => s.decks = a.next_value::<DirectJsMap<Deck>>()?.0,
+                        "workspaces" => s.workspaces = a.next_value::<DirectJsMap<Workspace>>()?.0,
+                        "gnFolders" => s.gn_folders = a.next_value::<DirectJsMap<GnFolder>>()?.0,
+                        "treeOpen" => s.tree_open = a.next_value::<DirectJsMap<bool>>()?.0,
+                        "tabs" => s.tabs = a.next_value::<TabsVec>()?.0,
+                        "activeTabId" => s.active_tab_id = a.next_value::<OptString>()?.0,
+                        "reviews" => s.reviews = a.next_value::<DirectVec<Review>>()?.0,
+                        "telemetry" => s.telemetry = a.next_value::<DirectVec<Telemetry>>()?.0,
+                        "heftDocs" => a.next_value_seed(HeftDocsInto(&mut s.hefte))?,
+                        "heftBlobs" => a.next_value_seed(HeftBlobsInto(&mut s.hefte.blobs))?,
+                        _ => {
+                            let _: IgnoredAny = a.next_value()?;
+                        }
+                    }
+                }
+                Ok(ParsedState { state: s, keys_mask })
+            }
+        }
+        d.deserialize_map(V)
     }
 }
 

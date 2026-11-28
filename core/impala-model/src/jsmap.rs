@@ -195,6 +195,61 @@ impl<'de, V: Deserialize<'de>> Deserialize<'de> for JsMap<V> {
     }
 }
 
+/// Wie `JsMap::deserialize`, aber direkt über [`crate::record::TryDeserialize`] ohne
+/// Zwischen-`serde_json::Value` je Eintrag.
+pub(crate) struct DirectJsMap<V>(pub JsMap<V>);
+
+impl<'de, V: crate::record::TryDeserialize<'de>> Deserialize<'de> for DirectJsMap<V> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct Entry<V>(std::marker::PhantomData<V>);
+        impl<'de, V: crate::record::TryDeserialize<'de>> serde::de::DeserializeSeed<'de> for Entry<V> {
+            type Value = Option<V>;
+            fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+                V::try_deserialize(d)
+            }
+        }
+        struct V2<V>(std::marker::PhantomData<V>);
+        impl<'de, V: crate::record::TryDeserialize<'de>> Visitor<'de> for V2<V> {
+            type Value = DirectJsMap<V>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("ein Objekt")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                let mut m = JsMap::new();
+                while let Some(k) = a.next_key::<String>()? {
+                    if let Some(v) = a.next_value_seed(Entry::<V>(std::marker::PhantomData))? {
+                        m.insert(k, v);
+                    }
+                }
+                Ok(DirectJsMap(m))
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
+                while a.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(DirectJsMap(JsMap::new()))
+            }
+        }
+        d.deserialize_any(V2(std::marker::PhantomData))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

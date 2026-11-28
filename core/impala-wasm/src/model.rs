@@ -127,13 +127,35 @@ impl EventVec {
     }
 }
 
+/// Liest `maxSeq` aus dem Checkpoint-Kopf ohne das ganze JSON in `Value` zu parsen.
+fn peek_max_seq(text: &str) -> Option<u64> {
+    // CheckpointRecord schreibt Kopfdaten vor `"state"`: schneller Direkt-Scan für den Regelfall.
+    let head_end = text.find("\"state\"").unwrap_or(text.len());
+    if let Some(pos) = text[..head_end].find("\"maxSeq\"") {
+        let rest = text[pos + 8..head_end].trim_start();
+        if let Some(rest) = rest.strip_prefix(':') {
+            let rest = rest.trim_start();
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() && rest[digits.len()..].starts_with([',', '}', ' ', '\t', '\r', '\n']) {
+                return digits.parse::<u64>().ok();
+            }
+        }
+    }
+    #[derive(serde::Deserialize)]
+    struct Head {
+        #[serde(rename = "maxSeq", default)]
+        max_seq: Option<Value>,
+    }
+    serde_json::from_str::<Head>(text).ok().map(|h| seq_of(h.max_seq.as_ref()))
+}
+
 /// Speicher aus vorab gelesenen Teilen. Was fehlt, ist ein Fehler ([`NEED_ALL`] für das Log);
 /// Schreibvorgänge werden nur gesammelt.
 #[derive(Default)]
 struct Prefetched {
     info: LogInfo,
-    /// Wird beim ersten Lesen herausgegeben (der Start liest ihn genau einmal).
-    checkpoint: std::cell::RefCell<Option<Object>>,
+    /// Roh-JSON des Checkpoints: wird beim Start direkt typisiert gelesen (ohne `Value`-Baum).
+    checkpoint_json: std::cell::RefCell<Option<String>>,
     boundary: Option<Object>,
     /// Events nach `tail_after` (in `seq`-Reihenfolge).
     tail_after: u64,
@@ -194,7 +216,15 @@ impl Storage for Prefetched {
     }
 
     fn checkpoint(&self, slot: CheckpointSlot) -> Result<Option<Object>, Error> {
-        Ok(if slot == CheckpointSlot::Current { self.checkpoint.borrow_mut().take() } else { None })
+        Ok(if slot == CheckpointSlot::Current {
+            self.checkpoint_json.borrow_mut().take().and_then(|text| serde_json::from_str::<Object>(&text).ok())
+        } else {
+            None
+        })
+    }
+
+    fn checkpoint_json(&self, slot: CheckpointSlot) -> Result<Option<String>, Error> {
+        Ok(if slot == CheckpointSlot::Current { self.checkpoint_json.borrow_mut().take() } else { None })
     }
 
     fn part(&self, kind: PartKind, hash: &str) -> Result<Option<String>, Error> {
@@ -260,13 +290,18 @@ impl ModelCore {
     #[wasm_bindgen(js_name = loadBegin)]
     pub fn load_begin(&mut self, meta: &str, checkpoint: Option<String>) -> Result<(), JsError> {
         let meta: Value = parse(meta)?;
-        let checkpoint = checkpoint.and_then(|text| serde_json::from_str::<Object>(&text).ok());
         // Ohne Checkpoint gibt es keinen Rest: der Start braucht das ganze Log.
-        let tail_after = checkpoint.as_ref().map_or(u64::MAX, |c| seq_of(c.get("maxSeq")));
+        let (checkpoint_json, tail_after) = match checkpoint {
+            Some(text) => match peek_max_seq(&text) {
+                Some(seq) => (Some(text), seq),
+                None => (None, u64::MAX),
+            },
+            None => (None, u64::MAX),
+        };
         self.load = Some(Prefetched {
             info: log_info(meta.get("info")),
             boundary: meta.get("boundary").and_then(Value::as_object).cloned(),
-            checkpoint: std::cell::RefCell::new(checkpoint),
+            checkpoint_json: std::cell::RefCell::new(checkpoint_json),
             tail_after,
             ..Prefetched::default()
         });
